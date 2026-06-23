@@ -30,16 +30,24 @@ CHANNEL_TABLE_ROWS_PER_GROUP = 4
 UPGRADE_PROJECT_OPTIONS = ("基线", "Play", "Viettel", "Claro")
 UPGRADE_MODEL_OPTIONS = ("NPE3039GB", "NPE3036GV", "NP3609G", "NME5410", "NP3081GC", "NM3615BE", "NP7287XGS")
 FONT_FAMILY = "Microsoft YaHei UI"
-COLOR_BG = "#f3f6fa"
+COLOR_BG = "#eef2f5"
 COLOR_SURFACE = "#ffffff"
-COLOR_BORDER = "#dce3ec"
-COLOR_TEXT = "#172033"
-COLOR_MUTED = "#667085"
-COLOR_PRIMARY = "#2563eb"
-COLOR_PRIMARY_DARK = "#1d4ed8"
+COLOR_SURFACE_SUBTLE = "#f7f9fb"
+COLOR_BORDER = "#d5dce3"
+COLOR_TEXT = "#17202a"
+COLOR_MUTED = "#65717f"
+COLOR_PRIMARY = "#0f766e"
+COLOR_PRIMARY_DARK = "#115e59"
+COLOR_PRIMARY_SOFT = "#d9f0ed"
+COLOR_SECONDARY = "#e7ecef"
+COLOR_SECONDARY_HOVER = "#dbe3e8"
+COLOR_LOG_BG = "#f9fbfc"
 COLOR_SUCCESS = "#047857"
-COLOR_WARNING = "#b45309"
+COLOR_SUCCESS_BG = "#e8f5ef"
+COLOR_WARNING = "#a16207"
+COLOR_WARNING_BG = "#f8f0dd"
 COLOR_DANGER = "#b42318"
+COLOR_DANGER_BG = "#fbe9e7"
 
 
 class LineCheckAssistant(Tk):
@@ -106,18 +114,18 @@ class LineCheckAssistant(Tk):
         style.configure("CardHint.TLabel", background=COLOR_SURFACE, foreground=COLOR_MUTED, font=(FONT_FAMILY, 9))
         style.configure("Surface.TLabel", background=COLOR_SURFACE, foreground=COLOR_TEXT)
         style.configure("Muted.TLabel", background=COLOR_SURFACE, foreground=COLOR_MUTED)
-        style.configure("Success.TLabel", background="#ecfdf3", foreground=COLOR_SUCCESS, padding=(10, 6), font=(FONT_FAMILY, 9, "bold"))
-        style.configure("Danger.TLabel", background="#fef3f2", foreground=COLOR_DANGER, padding=(10, 6), font=(FONT_FAMILY, 9, "bold"))
+        style.configure("Success.TLabel", background=COLOR_SUCCESS_BG, foreground=COLOR_SUCCESS, padding=(10, 6), font=(FONT_FAMILY, 9, "bold"))
+        style.configure("Danger.TLabel", background=COLOR_DANGER_BG, foreground=COLOR_DANGER, padding=(10, 6), font=(FONT_FAMILY, 9, "bold"))
         style.configure("TButton", padding=(12, 7), font=(FONT_FAMILY, 9))
         style.configure("Primary.TButton", background=COLOR_PRIMARY, foreground="#ffffff", padding=(16, 9), font=(FONT_FAMILY, 10, "bold"))
         style.map("Primary.TButton", background=[("active", COLOR_PRIMARY_DARK), ("pressed", COLOR_PRIMARY_DARK)])
-        style.configure("Secondary.TButton", background="#eef2f7", foreground=COLOR_TEXT)
-        style.map("Secondary.TButton", background=[("active", "#e2e8f0")])
+        style.configure("Secondary.TButton", background=COLOR_SECONDARY, foreground=COLOR_TEXT)
+        style.map("Secondary.TButton", background=[("active", COLOR_SECONDARY_HOVER)])
         style.configure("Tool.TButton", background=COLOR_SURFACE, foreground=COLOR_TEXT, padding=(12, 8))
-        style.map("Tool.TButton", background=[("active", "#eff6ff")], foreground=[("active", COLOR_PRIMARY_DARK)])
+        style.map("Tool.TButton", background=[("active", COLOR_PRIMARY_SOFT)], foreground=[("active", COLOR_PRIMARY_DARK)])
         style.configure("TEntry", fieldbackground="#ffffff", bordercolor=COLOR_BORDER, padding=6)
         style.configure("TCombobox", fieldbackground="#ffffff", background="#ffffff", bordercolor=COLOR_BORDER, padding=5)
-        style.configure("Horizontal.TProgressbar", background=COLOR_PRIMARY, troughcolor="#e8edf4", bordercolor="#e8edf4")
+        style.configure("Horizontal.TProgressbar", background=COLOR_PRIMARY, troughcolor=COLOR_SECONDARY, bordercolor=COLOR_SECONDARY)
         style.configure("TLabelframe", background=COLOR_SURFACE, bordercolor=COLOR_BORDER, relief="solid")
         style.configure("TLabelframe.Label", background=COLOR_SURFACE, foreground=COLOR_TEXT, font=(FONT_FAMILY, 10, "bold"))
 
@@ -157,10 +165,10 @@ class LineCheckAssistant(Tk):
             height=16,
             exportselection=False,
             font=CHANNEL_LIST_FONT,
-            background="#f8fafc",
+            background=COLOR_SURFACE_SUBTLE,
             foreground=COLOR_TEXT,
-            selectbackground="#dbeafe",
-            selectforeground="#1e40af",
+            selectbackground=COLOR_PRIMARY_SOFT,
+            selectforeground=COLOR_PRIMARY_DARK,
             activestyle="none",
             relief="flat",
             borderwidth=0,
@@ -261,9 +269,9 @@ class LineCheckAssistant(Tk):
             height=18,
             wrap="word",
             font=("Consolas", 10),
-            background="#f8fafc",
-            foreground="#1f2937",
-            insertbackground="#1f2937",
+            background=COLOR_LOG_BG,
+            foreground=COLOR_TEXT,
+            insertbackground=COLOR_TEXT,
             relief="flat",
             borderwidth=0,
             highlightthickness=1,
@@ -373,7 +381,7 @@ class LineCheckAssistant(Tk):
         Label(
             overview,
             textvariable=self.upgrade_targets_var,
-            foreground="#374151",
+            foreground=COLOR_TEXT,
             anchor="w",
             justify="left",
             wraplength=590,
@@ -383,7 +391,7 @@ class LineCheckAssistant(Tk):
         Label(
             overview,
             textvariable=self.upgrade_status_var,
-            foreground="#374151",
+            foreground=COLOR_TEXT,
             anchor="w",
         ).grid(row=4, column=1, columnspan=3, sticky="ew", padx=(0, 12), pady=8)
         self.upgrade_progress = ttk.Progressbar(
@@ -592,7 +600,7 @@ class LineCheckAssistant(Tk):
         ]
         for row, (label, value) in enumerate(rows):
             Label(overview, text=label, width=16, anchor="w").grid(row=row, column=0, sticky="w", padx=12, pady=7)
-            Label(overview, text=value, foreground="#374151", anchor="w").grid(row=row, column=1, sticky="w", padx=12, pady=7)
+            Label(overview, text=value, foreground=COLOR_TEXT, anchor="w").grid(row=row, column=1, sticky="w", padx=12, pady=7)
         overview.columnconfigure(1, weight=1)
 
         Label(
@@ -1108,12 +1116,12 @@ class LineCheckAssistant(Tk):
         self.after(200, self._drain_log_queue)
 
     def _configure_log_tags(self) -> None:
-        self.log_text.tag_configure("time", foreground="#6b7280")
-        self.log_text.tag_configure("section", foreground="#111827", font=("Consolas", 10, "bold"))
-        self.log_text.tag_configure("success", foreground="#047857")
-        self.log_text.tag_configure("error", foreground="#b91c1c")
-        self.log_text.tag_configure("warning", foreground="#b45309")
-        self.log_text.tag_configure("muted", foreground="#6b7280")
+        self.log_text.tag_configure("time", foreground=COLOR_MUTED)
+        self.log_text.tag_configure("section", foreground=COLOR_TEXT, font=("Consolas", 10, "bold"))
+        self.log_text.tag_configure("success", foreground=COLOR_SUCCESS)
+        self.log_text.tag_configure("error", foreground=COLOR_DANGER)
+        self.log_text.tag_configure("warning", foreground=COLOR_WARNING)
+        self.log_text.tag_configure("muted", foreground=COLOR_MUTED)
         self.log_text.configure(state="disabled")
 
     def _log_tag_for(self, message: str) -> str:
