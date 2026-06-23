@@ -1,0 +1,1 @@
+"""Line check assistant package."""

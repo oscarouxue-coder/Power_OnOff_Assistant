@@ -1,0 +1,76 @@
+{
+  "targets": [
+    {
+      "vlan": "vlan101",
+      "port": "COM1",
+      "log_path": "F:\\Aouxue\\开关机环境搭建工具\\开关机执行工具\\样机串口日志\\vlan101_20260621_160735.log",
+      "baud": 115200,
+      "data_bits": 8,
+      "parity": "NONE",
+      "stop_bits": 0
+    },
+    {
+      "vlan": "vlan102",
+      "port": "COM2",
+      "log_path": "F:\\Aouxue\\开关机环境搭建工具\\开关机执行工具\\样机串口日志\\vlan102_20260621_160735.log",
+      "baud": 115200,
+      "data_bits": 8,
+      "parity": "NONE",
+      "stop_bits": 0
+    },
+    {
+      "vlan": "vlan103",
+      "port": "COM3",
+      "log_path": "F:\\Aouxue\\开关机环境搭建工具\\开关机执行工具\\样机串口日志\\vlan103_20260621_160735.log",
+      "baud": 115200,
+      "data_bits": 8,
+      "parity": "NONE",
+      "stop_bits": 0
+    },
+    {
+      "vlan": "vlan104",
+      "port": "COM4",
+      "log_path": "F:\\Aouxue\\开关机环境搭建工具\\开关机执行工具\\样机串口日志\\vlan104_20260621_160735.log",
+      "baud": 115200,
+      "data_bits": 8,
+      "parity": "NONE",
+      "stop_bits": 0
+    },
+    {
+      "vlan": "vlan105",
+      "port": "COM5",
+      "log_path": "F:\\Aouxue\\开关机环境搭建工具\\开关机执行工具\\样机串口日志\\vlan105_20260621_160735.log",
+      "baud": 115200,
+      "data_bits": 8,
+      "parity": "NONE",
+      "stop_bits": 0
+    },
+    {
+      "vlan": "vlan106",
+      "port": "COM6",
+      "log_path": "F:\\Aouxue\\开关机环境搭建工具\\开关机执行工具\\样机串口日志\\vlan106_20260621_160735.log",
+      "baud": 115200,
+      "data_bits": 8,
+      "parity": "NONE",
+      "stop_bits": 0
+    },
+    {
+      "vlan": "vlan107",
+      "port": "COM7",
+      "log_path": "F:\\Aouxue\\开关机环境搭建工具\\开关机执行工具\\样机串口日志\\vlan107_20260621_160735.log",
+      "baud": 115200,
+      "data_bits": 8,
+      "parity": "NONE",
+      "stop_bits": 0
+    },
+    {
+      "vlan": "vlan108",
+      "port": "COM8",
+      "log_path": "F:\\Aouxue\\开关机环境搭建工具\\开关机执行工具\\样机串口日志\\vlan108_20260621_160735.log",
+      "baud": 115200,
+      "data_bits": 8,
+      "parity": "NONE",
+      "stop_bits": 0
+    }
+  ]
+}
