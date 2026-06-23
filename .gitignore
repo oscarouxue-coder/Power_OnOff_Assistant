@@ -1,2 +1,13 @@
 # Runtime logs
 *.log
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local build and run outputs
+开关机执行工具/build_pending/
+开关机执行工具/dist_pending/
+开关机执行工具/assistant_logs/
+开关机执行工具/test_results/

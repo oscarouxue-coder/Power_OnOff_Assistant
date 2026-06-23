@@ -92,7 +92,7 @@ function Test-SchemeSelected {{
     return ($content -match "on_scheme_selected\\s+Fully_powered_on_config\\.ini")
 }}
 
-function Select-FirstRealProfile {{
+function Open-ProfileDropdown {{
     param($combo, [string]$reason)
     try {{
         $comboRect = $combo.Current.BoundingRectangle
@@ -112,19 +112,15 @@ function Select-FirstRealProfile {{
     }}
     try {{
         $expandPattern = $combo.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
-        $expandPattern.Expand()
+        if ($expandPattern.Current.ExpandCollapseState -ne [System.Windows.Automation.ExpandCollapseState]::Expanded) {{
+            $expandPattern.Expand()
+            Start-Sleep -Milliseconds 250
+        }}
     }} catch {{
-        Write-Output "ExpandCollapse 展开失败，使用 Alt+Down"
+        Write-Output "ExpandCollapse 展开失败，保留鼠标点击后的下拉状态"
     }}
-    [System.Windows.Forms.SendKeys]::SendWait("%{{DOWN}}")
-    Start-Sleep -Milliseconds 300
-    [System.Windows.Forms.SendKeys]::SendWait("{{HOME}}")
-    Start-Sleep -Milliseconds 120
-    [System.Windows.Forms.SendKeys]::SendWait("{{DOWN}}")
-    Start-Sleep -Milliseconds 120
-    [System.Windows.Forms.SendKeys]::SendWait("{{ENTER}}")
-    Start-Sleep -Seconds 1
-    Write-Output "已通过键盘选择第一条真实配置：$reason"
+    Start-Sleep -Milliseconds 700
+    Write-Output "已展开配置下拉框，等待列表项出现：$reason"
 }}
 
 function Find-TextLabel {{
@@ -186,11 +182,13 @@ function Select-ComboValue {{
     }}
     try {{
         $expandPattern = $combo.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
-        $expandPattern.Expand()
+        if ($expandPattern.Current.ExpandCollapseState -ne [System.Windows.Automation.ExpandCollapseState]::Expanded) {{
+            $expandPattern.Expand()
+            Start-Sleep -Milliseconds 250
+        }}
     }} catch {{
-        Write-Output "$label 下拉框 ExpandCollapse 失败，使用 Alt+Down"
+        Write-Output "$label 下拉框 ExpandCollapse 失败，保留鼠标点击后的下拉状态"
     }}
-    [System.Windows.Forms.SendKeys]::SendWait("%{{DOWN}}")
     Start-Sleep -Milliseconds 300
 
     if ($label.ToLower().Contains("serial")) {{
@@ -225,23 +223,19 @@ function Select-ComboValue {{
         }}
         $sortedItems = @($visualItems | Sort-Object Top, Left)
         Write-Output "$label 可见 COM 列表项: $(($sortedItems | ForEach-Object {{ $_.Name }}) -join ', ')"
-        $targetIndex = -1
+        $targetItem = $null
         for ($k = 0; $k -lt $sortedItems.Count; $k++) {{
             if ($sortedItems[$k].Name.ToUpper() -eq $value.ToUpper()) {{
-                $targetIndex = $k
+                $targetItem = $sortedItems[$k]
                 break
             }}
         }}
-        if ($targetIndex -ge 0) {{
-            [System.Windows.Forms.SendKeys]::SendWait("{{HOME}}")
-            Start-Sleep -Milliseconds 120
-            for ($k = 0; $k -lt $targetIndex; $k++) {{
-                [System.Windows.Forms.SendKeys]::SendWait("{{DOWN}}")
-                Start-Sleep -Milliseconds 80
-            }}
-            [System.Windows.Forms.SendKeys]::SendWait("{{ENTER}}")
+        if ($targetItem -ne $null) {{
+            $itemX = [int]($targetItem.Left + (($targetItem.Right - $targetItem.Left) / 2))
+            $itemY = [int]($targetItem.Top + (($targetItem.Bottom - $targetItem.Top) / 2))
+            Click-Point $itemX $itemY
             Start-Sleep -Milliseconds 250
-            Write-Output "Selected $($label) by keyboard: $value index=$targetIndex"
+            Write-Output "已点击 $label 可见选项: $value x=$itemX y=$itemY"
         }} else {{
             [System.Windows.Forms.SendKeys]::SendWait($value)
             Start-Sleep -Milliseconds 200
@@ -280,6 +274,58 @@ function Select-ComboValue {{
     Start-Sleep -Seconds 1
 }}
 
+function Confirm-ExitDialog {{
+    param([int]$targetProcessId)
+    $dialogWindowCondition = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [System.Windows.Automation.ControlType]::Window
+    )
+    $dialogButtonCondition = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [System.Windows.Automation.ControlType]::Button
+    )
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {{
+        $dialogWindows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
+            [System.Windows.Automation.TreeScope]::Children,
+            $dialogWindowCondition
+        )
+        for ($w = 0; $w -lt $dialogWindows.Count; $w++) {{
+            $dialogWindow = $dialogWindows.Item($w)
+            if ($dialogWindow.Current.ProcessId -ne $targetProcessId) {{
+                continue
+            }}
+            $dialogButtons = $dialogWindow.FindAll(
+                [System.Windows.Automation.TreeScope]::Descendants,
+                $dialogButtonCondition
+            )
+            for ($b = 0; $b -lt $dialogButtons.Count; $b++) {{
+                $dialogButton = $dialogButtons.Item($b)
+                $buttonName = $dialogButton.Current.Name
+                $normalizedName = if ($buttonName) {{ ($buttonName -replace '\\s+', '').ToLower() }} else {{ "" }}
+                if ($normalizedName -in @("confirm", "ok", "yes", "确定", "是")) {{
+                    try {{
+                        $invokeConfirm = $dialogButton.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+                        $invokeConfirm.Invoke()
+                    }} catch {{
+                        $buttonRect = $dialogButton.Current.BoundingRectangle
+                        if ($buttonRect.Width -gt 0 -and $buttonRect.Height -gt 0) {{
+                            $buttonX = [int]($buttonRect.Left + ($buttonRect.Width / 2))
+                            $buttonY = [int]($buttonRect.Top + ($buttonRect.Height / 2))
+                            Click-Point $buttonX $buttonY
+                        }} else {{
+                            throw
+                        }}
+                    }}
+                    Write-Output "已点击退出确认按钮: $buttonName"
+                    return $true
+                }}
+            }}
+        }}
+        Start-Sleep -Milliseconds 100
+    }}
+    return $false
+}}
+
 Write-Output "启动旧软件: $toolPath"
 $process = Start-Process -FilePath $toolPath -WorkingDirectory $workDir -PassThru
 
@@ -291,6 +337,7 @@ $windowCondition = New-Object System.Windows.Automation.PropertyCondition(
 $window = $null
 $windowProcess = $process
 $expectedExe = [System.IO.Path]::GetFileNameWithoutExtension($toolPath).ToLower()
+$expectedToolPath = [System.IO.Path]::GetFullPath($toolPath).ToLower()
 for ($i = 0; $i -lt 100; $i++) {{
     $windows = $root.FindAll([System.Windows.Automation.TreeScope]::Children, $windowCondition)
     $bestScore = 0
@@ -307,6 +354,7 @@ for ($i = 0; $i -lt 100; $i++) {{
         $titleLower = if ($title) {{ $title.ToLower() }} else {{ "" }}
         $procNameLower = if ($procName) {{ $procName.ToLower() }} else {{ "" }}
         $procPathLower = if ($procPath) {{ $procPath.ToLower() }} else {{ "" }}
+        $isExpectedProcess = ($candidatePid -eq $process.Id -or $procPathLower -eq $expectedToolPath)
         if (
             $procNameLower.Contains("powershell") -or
             $titleLower.Contains("powershell") -or
@@ -314,11 +362,14 @@ for ($i = 0; $i -lt 100; $i++) {{
         ) {{
             continue
         }}
+        if (-not $isExpectedProcess) {{
+            continue
+        }}
         $score = 0
         if ($titleLower.Contains("auto_power_on_off_tool_v3.0_20260130")) {{ $score += 120 }}
         if ($titleLower.Contains("auto_power_on_off_tool")) {{ $score += 100 }}
         if ($titleLower.Contains("auto_power")) {{ $score += 80 }}
-        if ($procPathLower -eq $toolPath.ToLower()) {{ $score += 100 }}
+        if ($procPathLower -eq $expectedToolPath) {{ $score += 100 }}
         if ($procNameLower.Contains("auto_power_on_off_tool")) {{ $score += 90 }}
         if ($procNameLower.Contains("auto_power")) {{ $score += 70 }}
         if ($candidatePid -eq $process.Id) {{ $score += 20 }}
@@ -365,6 +416,7 @@ $comboCondition = New-Object System.Windows.Automation.PropertyCondition(
 )
 $combos = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $comboCondition)
 $selected = $false
+$schemeConfirmed = $false
 $profileLabel = $null
 $textCondition = New-Object System.Windows.Automation.PropertyCondition(
     [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
@@ -446,22 +498,27 @@ foreach ($comboIndex in $comboIndexes) {{
     if ($selected) {{ break }}
     $i = $comboIndex
     $combo = $combos.Item($i)
+    $profileDropdownAlreadyOpen = $false
     if ($profileLabel -ne $null -and $i -eq $comboIndexes.Item(0)) {{
-        Select-FirstRealProfile $combo "Select profile 同行下拉框 index=$i"
+        Open-ProfileDropdown $combo "Select profile 同行下拉框 index=$i"
+        $profileDropdownAlreadyOpen = $true
         if (Test-SchemeSelected) {{
             $selected = $true
+            $schemeConfirmed = $true
             Write-Output "已确认旧工具选择配置: $expectedSchemeFile"
             break
         }}
-        Write-Output "键盘选择后未在旧工具日志中确认配置，继续尝试控件列表项"
+        Write-Output "配置下拉框已展开，继续尝试控件列表项"
     }}
-    try {{
-        $combo.SetFocus()
-        $expandPattern = $combo.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
-        $expandPattern.Expand()
-        Start-Sleep -Milliseconds 500
-    }} catch {{
-        Write-Output "下拉框 $i 无法展开，尝试键盘输入"
+    if (-not $profileDropdownAlreadyOpen) {{
+        try {{
+            $combo.SetFocus()
+            $expandPattern = $combo.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
+            $expandPattern.Expand()
+            Start-Sleep -Milliseconds 500
+        }} catch {{
+            Write-Output "下拉框 $i 无法展开，尝试键盘输入"
+        }}
     }}
 
     $itemCondition = New-Object System.Windows.Automation.PropertyCondition(
@@ -488,13 +545,13 @@ foreach ($comboIndex in $comboIndexes) {{
                 $invokePattern.Invoke()
             }}
             Start-Sleep -Milliseconds 300
-            [System.Windows.Forms.SendKeys]::SendWait("{{ENTER}}")
             $selected = $true
+            $schemeConfirmed = $true
             Write-Output "已点击并确认配置: $name"
             if (Test-SchemeSelected) {{
                 Write-Output "已确认旧工具选择配置: $expectedSchemeFile"
             }} else {{
-                Write-Output "点击列表项后未在旧工具日志中确认配置"
+                Write-Output "点击列表项后未在旧工具日志中确认配置，已按控件项名称继续"
             }}
             break
         }}
@@ -520,8 +577,15 @@ foreach ($comboIndex in $comboIndexes) {{
 if (-not $selected) {{
     throw "未能在下拉框中选择 $schemeName"
 }}
-if (-not (Test-SchemeSelected)) {{
-    throw "未确认旧工具已选择 Fully_powered_on_config.ini，停止点击 Start ALL"
+if (-not $schemeConfirmed) {{
+    if (Test-SchemeSelected) {{
+        $schemeConfirmed = $true
+        Write-Output "已确认旧工具选择配置: $expectedSchemeFile"
+    }} else {{
+        throw "未确认旧工具已选择 Fully_powered_on_config.ini，停止点击 Start ALL"
+    }}
+}} elseif (-not (Test-SchemeSelected)) {{
+    Write-Output "旧工具日志未输出配置确认项，已按控件选择结果继续点击 Start ALL"
 }}
 
 Start-Sleep -Seconds 1
@@ -555,16 +619,32 @@ Write-Output "已点击 Start ALL，等待 $waitSeconds 秒"
 Start-Sleep -Seconds $waitSeconds
 
 try {{
-    if ($windowProcess -ne $null -and -not $windowProcess.HasExited) {{
+    $canCloseWindowProcess = $false
+    if ($windowProcess -ne $null) {{
+        $windowProcessPath = ""
+        try {{ $windowProcessPath = $windowProcess.Path }} catch {{ }}
+        $windowProcessPathLower = if ($windowProcessPath) {{ $windowProcessPath.ToLower() }} else {{ "" }}
+        $canCloseWindowProcess = ($windowProcess.Id -eq $process.Id -or $windowProcessPathLower -eq $expectedToolPath)
+    }}
+    if ($canCloseWindowProcess -and -not $windowProcess.HasExited) {{
         [void]$windowProcess.CloseMainWindow()
-        Start-Sleep -Seconds 5
+        if (Confirm-ExitDialog $windowProcess.Id) {{
+            Start-Sleep -Milliseconds 700
+        }} else {{
+            Write-Output "未检测到退出确认弹窗，短暂等待旧软件退出"
+            Start-Sleep -Seconds 2
+        }}
+    }} elseif ($windowProcess -ne $null) {{
+        Write-Output "跳过关闭非本次启动的旧软件进程：pid=$($windowProcess.Id)"
     }}
 }} catch {{
 }}
-if ($windowProcess -ne $null -and -not $windowProcess.HasExited) {{
+if ($canCloseWindowProcess -and $windowProcess -ne $null -and -not $windowProcess.HasExited) {{
     $windowProcess.Kill()
 }}
-Write-Output "旧软件已关闭"
+if ($canCloseWindowProcess) {{
+    Write-Output "旧软件已关闭"
+}}
 """
 
 
