@@ -147,6 +147,55 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         context.store.save.assert_called_once_with([channels[0]], "COM101")
 
+    def test_launch_old_tool_passes_wait_seconds_by_enabled_channel_count(self):
+        channels = [
+            ChannelConfig(section="channel_1", enabled=True),
+            ChannelConfig(section="channel_2", enabled=True),
+            ChannelConfig(section="channel_3", enabled=True),
+        ]
+        context = SimpleNamespace(
+            power_on_running=False,
+            _capture_current_channel=Mock(),
+            _selected_channels=Mock(return_value=channels),
+            _power_on_wait_seconds=Mock(return_value=15),
+            _select_power_com_port=Mock(return_value="COM106"),
+            power_serial_var=Mock(),
+            _power_on_worker=Mock(),
+        )
+
+        with patch("line_check_assistant.app.threading.Thread") as thread:
+            LineCheckAssistant._launch_old_tool(context)
+
+        context._power_on_wait_seconds.assert_called_once_with(channels)
+        context._select_power_com_port.assert_called_once_with()
+        context.power_serial_var.set.assert_called_once_with("COM106")
+        thread.assert_called_once_with(target=context._power_on_worker, args=("COM106", 15), daemon=True)
+        thread.return_value.start.assert_called_once_with()
+        self.assertTrue(context.power_on_running)
+
+    def test_launch_old_tool_warns_when_no_channel_enabled(self):
+        context = SimpleNamespace(
+            power_on_running=False,
+            _capture_current_channel=Mock(),
+            _selected_channels=Mock(return_value=[]),
+            _select_power_com_port=Mock(),
+        )
+
+        with patch("line_check_assistant.app.messagebox.showwarning") as showwarning:
+            LineCheckAssistant._launch_old_tool(context)
+
+        showwarning.assert_called_once()
+        context._select_power_com_port.assert_not_called()
+        self.assertFalse(context.power_on_running)
+
+    def test_power_on_wait_seconds_uses_five_seconds_per_channel(self):
+        channels = [
+            ChannelConfig(section="channel_1", enabled=True),
+            ChannelConfig(section="channel_2", enabled=True),
+        ]
+
+        self.assertEqual(LineCheckAssistant._power_on_wait_seconds(None, channels), 10)
+
     def test_select_channel_index_syncs_internal_and_list_selection(self):
         context = SimpleNamespace(
             channels=[ChannelConfig(section="channel_1"), ChannelConfig(section="channel_2")],

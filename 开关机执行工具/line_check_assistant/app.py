@@ -22,6 +22,7 @@ OLD_TOOL_PATH = APP_DIR / OLD_TOOL_NAME
 LOG_DIR = APP_DIR / "assistant_logs"
 POWER_SUPPLY_COUNT = 6
 TOTAL_CHANNEL_COUNT = 16
+POWER_ON_WAIT_SECONDS_PER_CHANNEL = 5
 CHANNEL_LIST_FONT = ("Microsoft YaHei UI", 11)
 CHANNEL_FIELD_WIDTH = 42
 CHANNEL_TABLE_COMBO_WIDTH = 32
@@ -29,6 +30,7 @@ CHANNEL_TABLE_GROUP_GAP = 24
 CHANNEL_TABLE_ROWS_PER_GROUP = 4
 UPGRADE_PROJECT_OPTIONS = ("基线", "Play", "Viettel", "Claro")
 UPGRADE_MODEL_OPTIONS = ("NPE3039GB", "NPE3036GV", "NP3609G", "NME5410", "NP3081GC", "NM3615BE", "NP7287XGS")
+UPGRADE_MODE_OPTIONS = ("页面升级", "全包升级")
 FONT_FAMILY = "Microsoft YaHei UI"
 COLOR_BG = "#eef2f5"
 COLOR_SURFACE = "#ffffff"
@@ -77,6 +79,7 @@ class LineCheckAssistant(Tk):
         self.test_item_config_window = None
         self.upgrade_project_var = StringVar()
         self.upgrade_model_var = StringVar()
+        self.upgrade_mode_var = StringVar(value="全包升级")
         self.upgrade_username_var = StringVar()
         self.upgrade_password_var = StringVar()
         self.upgrade_password_visible = False
@@ -148,6 +151,7 @@ class LineCheckAssistant(Tk):
         ttk.Label(toolbar, text="常用工具", style="CardTitle.TLabel").pack(side="left", padx=(2, 16))
         ttk.Button(toolbar, text="自动上电", command=self._launch_old_tool, style="Primary.TButton").pack(side="left")
         ttk.Button(toolbar, text="样机升级", command=self._open_upgrade_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(toolbar, text="写样机参数", command=self._open_sample_parameter_writer, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="串口日志", command=self._open_serial_log_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="刷新网卡", command=self._refresh_adapters, style="Secondary.TButton").pack(side="right", padx=(0, 8))
         ttk.Button(toolbar, text="刷新串口", command=self._refresh_power_serial_ports, style="Secondary.TButton").pack(side="right", padx=(0, 8))
@@ -307,6 +311,9 @@ class LineCheckAssistant(Tk):
             widget.bind("<<ComboboxSelected>>", self._on_vlan_changed)
             widget.bind("<FocusOut>", self._on_vlan_changed)
 
+    def _open_sample_parameter_writer(self) -> None:
+        messagebox.showinfo("写样机参数", "写样机参数功能入口已预留，具体实现待完善。", parent=self)
+
     def _open_upgrade_module(self) -> None:
         if self.upgrade_window is not None and self.upgrade_window.winfo_exists():
             self._refresh_upgrade_targets()
@@ -369,15 +376,26 @@ class LineCheckAssistant(Tk):
         )
         self.upgrade_password_toggle.pack(side="right", padx=(5, 0))
 
-        Label(overview, text="升级全包", anchor="w").grid(row=2, column=0, sticky="w", padx=(12, 8), pady=8)
+        Label(overview, text="升级方式", anchor="w").grid(row=2, column=0, sticky="w", padx=(12, 8), pady=8)
+        mode_options = ttk.Frame(overview)
+        mode_options.grid(row=2, column=1, columnspan=3, sticky="w", padx=(0, 12), pady=8)
+        for mode in UPGRADE_MODE_OPTIONS:
+            ttk.Radiobutton(
+                mode_options,
+                text=mode,
+                value=mode,
+                variable=self.upgrade_mode_var,
+            ).pack(side="left", padx=(0, 18))
+
+        Label(overview, text="升级文件", anchor="w").grid(row=3, column=0, sticky="w", padx=(12, 8), pady=8)
         ttk.Entry(overview, textvariable=self.upgrade_firmware_var, state="readonly").grid(
-            row=2, column=1, columnspan=2, sticky="ew", padx=(0, 8), pady=8
+            row=3, column=1, columnspan=2, sticky="ew", padx=(0, 8), pady=8
         )
         Button(overview, text="选择固件...", command=self._select_upgrade_firmware).grid(
-            row=2, column=3, sticky="e", padx=(0, 12), pady=8
+            row=3, column=3, sticky="e", padx=(0, 12), pady=8
         )
 
-        Label(overview, text="目标样机", anchor="w").grid(row=3, column=0, sticky="nw", padx=(12, 8), pady=8)
+        Label(overview, text="目标样机", anchor="w").grid(row=4, column=0, sticky="nw", padx=(12, 8), pady=8)
         Label(
             overview,
             textvariable=self.upgrade_targets_var,
@@ -385,22 +403,22 @@ class LineCheckAssistant(Tk):
             anchor="w",
             justify="left",
             wraplength=590,
-        ).grid(row=3, column=1, columnspan=3, sticky="ew", padx=(0, 12), pady=8)
+        ).grid(row=4, column=1, columnspan=3, sticky="ew", padx=(0, 12), pady=8)
 
-        Label(overview, text="执行状态", anchor="w").grid(row=4, column=0, sticky="nw", padx=(12, 8), pady=8)
+        Label(overview, text="执行状态", anchor="w").grid(row=5, column=0, sticky="nw", padx=(12, 8), pady=8)
         Label(
             overview,
             textvariable=self.upgrade_status_var,
             foreground=COLOR_TEXT,
             anchor="w",
-        ).grid(row=4, column=1, columnspan=3, sticky="ew", padx=(0, 12), pady=8)
+        ).grid(row=5, column=1, columnspan=3, sticky="ew", padx=(0, 12), pady=8)
         self.upgrade_progress = ttk.Progressbar(
             overview,
             variable=self.upgrade_progress_var,
             maximum=100,
             mode="determinate",
         )
-        self.upgrade_progress.grid(row=5, column=1, columnspan=3, sticky="ew", padx=(0, 12), pady=(0, 10))
+        self.upgrade_progress.grid(row=6, column=1, columnspan=3, sticky="ew", padx=(0, 12), pady=(0, 10))
         overview.columnconfigure(1, weight=1)
         overview.columnconfigure(3, weight=1)
         self._refresh_upgrade_targets()
@@ -904,12 +922,17 @@ class LineCheckAssistant(Tk):
         if self.power_on_running:
             return
         self._capture_current_channel()
+        enabled_channels = self._selected_channels()
+        if not enabled_channels:
+            messagebox.showwarning("没有启用通道", "请至少启用一个通道后再自动上电。", parent=self)
+            return
+        wait_seconds = self._power_on_wait_seconds(enabled_channels)
         selected_com = self._select_power_com_port()
         if not selected_com:
             return
         self.power_serial_var.set(selected_com)
         self.power_on_running = True
-        thread = threading.Thread(target=self._power_on_worker, args=(selected_com,), daemon=True)
+        thread = threading.Thread(target=self._power_on_worker, args=(selected_com, wait_seconds), daemon=True)
         thread.start()
 
     def _select_power_com_port(self) -> str:
@@ -966,7 +989,10 @@ class LineCheckAssistant(Tk):
         self.wait_window(dialog)
         return result["port"]
 
-    def _power_on_worker(self, selected_com: str) -> None:
+    def _power_on_wait_seconds(self, channels) -> int:
+        return len(channels) * POWER_ON_WAIT_SECONDS_PER_CHANNEL
+
+    def _power_on_worker(self, selected_com: str, wait_seconds: int) -> None:
         try:
             try:
                 message = prepare_power_on_default(CONFIG_DIR)
@@ -974,11 +1000,14 @@ class LineCheckAssistant(Tk):
             except OSError as exc:
                 self.log_queue.put(f"准备 Fully_powered_on 默认配置失败：{exc}")
                 return
-            self.log_queue.put(f"开始自动打开旧软件、选择程控电源串口 {selected_com}、选择 Fully_powered_on、点击 Start ALL。")
+            self.log_queue.put(
+                f"开始自动打开旧软件、选择程控电源串口 {selected_com}、选择 Fully_powered_on、点击 Start ALL，"
+                f"按启用通道数等待 {wait_seconds} 秒。"
+            )
             result = automate_power_on(
                 OLD_TOOL_PATH,
                 serial_port=selected_com,
-                wait_seconds=60,
+                wait_seconds=wait_seconds,
                 on_output=lambda line: self.log_queue.put(line),
             )
             self.log_queue.put(result.message)
