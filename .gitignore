@@ -10,4 +10,7 @@ __pycache__/
 开关机执行工具/build_pending/
 开关机执行工具/dist_pending/
 开关机执行工具/assistant_logs/
+开关机执行工具/script_logs/
+开关机执行工具/securecrt_runtime/
+开关机执行工具/样机串口日志/
 开关机执行工具/test_results/
