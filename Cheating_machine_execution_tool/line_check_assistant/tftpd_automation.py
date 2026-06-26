@@ -50,11 +50,9 @@ def prepare_tftpd_server(
     return CommandResult(False, f"Tftpd64 准备失败：{output.strip() or return_code}", output)
 
 
-def _build_prepare_tftpd_script(tftpd_path: Path, current_directory: Path, server_interface: str, server_ip: str) -> str:
+def _build_prepare_tftpd_script(tftpd_path: Path, current_directory: Path, _server_interface: str, _server_ip: str) -> str:
     tool = _ps_quote(str(tftpd_path))
     directory = _ps_quote(str(current_directory))
-    interface = _ps_quote(server_interface)
-    ip_address = _ps_quote(server_ip)
     return f"""
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -98,12 +96,19 @@ public class NativeWindow {{
 
 $toolPath = {tool}
 $currentDirectory = {directory}
-$serverInterface = {interface}
-$serverIp = {ip_address}
-$process = Get-Process | Where-Object {{ $_.Path -eq $toolPath }} | Select-Object -First 1
-if ($null -eq $process) {{
-    $process = Start-Process -FilePath $toolPath -WorkingDirectory $currentDirectory -PassThru
+$existingProcesses = @(Get-Process | Where-Object {{ $_.Path -eq $toolPath }})
+foreach ($existingProcess in $existingProcesses) {{
+    try {{
+        Stop-Process -Id $existingProcess.Id -Force -ErrorAction Stop
+        Write-Output "已关闭旧的 Tftpd64 进程：$($existingProcess.Id)"
+    }} catch {{
+        throw "关闭旧的 Tftpd64 进程失败：$($_.Exception.Message)"
+    }}
 }}
+if ($existingProcesses.Count -gt 0) {{
+    Start-Sleep -Milliseconds 800
+}}
+$process = Start-Process -FilePath $toolPath -WorkingDirectory $currentDirectory -PassThru
 
 $deadline = (Get-Date).AddSeconds(15)
 do {{
@@ -337,20 +342,6 @@ if ($nativeFields.Count -lt 1) {{
 Set-ControlTextRobust $nativeFields[0] $currentDirectory
 Assert-DirectoryApplied $nativeFields[0] $currentDirectory
 Write-Output "已设置 Tftpd64 Current Directory：$currentDirectory"
-
-if (-not [string]::IsNullOrWhiteSpace($serverInterface)) {{
-    $fallbackValue = if ([string]::IsNullOrWhiteSpace($serverIp)) {{ $serverInterface }} else {{ $serverIp }}
-    if ($nativeFields.Count -lt 2) {{
-        $nativeFields = @(Get-NativeTftpdFieldControls ([IntPtr]$process.MainWindowHandle))
-    }}
-    if ($nativeFields.Count -ge 2) {{
-        Set-ControlTextRobust $nativeFields[1] $fallbackValue
-        $actualInterface = Get-ControlText $nativeFields[1]
-        Write-Output "已设置 Tftpd64 Server interfaces：$actualInterface"
-    }} else {{
-        Write-Output "未找到 Server interfaces 输入框，跳过网卡下拉框设置"
-    }}
-}}
 
 $tabCondition = New-Object System.Windows.Automation.PropertyCondition(
     [System.Windows.Automation.AutomationElement]::ControlTypeProperty,

@@ -60,6 +60,8 @@ class SecureCRTUpgradeTarget:
     stop_bits: int = 0
     username: str = BOOT_USERNAME
     password: str = BOOT_PASSWORD
+    final_username: str = ""
+    final_password: str = ""
     factory_reset_command: str = FACTORY_RESET_COMMAND
 
 
@@ -293,6 +295,8 @@ def build_tftp_copy_upgrade_target(
     tftp_server_ip: str,
     log_dir: Path,
     restore_factory: bool = False,
+    final_username: str = "",
+    final_password: str = "",
 ) -> SecureCRTUpgradeTarget:
     normalized_vlan = (vlan or "").strip().lower()
     port = vlan_to_serial_port(normalized_vlan)
@@ -313,6 +317,8 @@ def build_tftp_copy_upgrade_target(
         final_login_signal_path=str(final_login_signal_path),
         tftp_command=command,
         restore_factory=restore_factory,
+        final_username=final_username,
+        final_password=final_password,
     )
 
 
@@ -346,6 +352,8 @@ def launch_securecrt_tftp_copy_upgrade(tool_root: Path, target: SecureCRTUpgrade
             target.boot_enter_signal_path,
             target.command_signal_path,
             target.final_login_signal_path,
+            target.final_username,
+            target.final_password,
         ]
     )
     manifest_path.write_text(manifest_line, encoding="utf-16")
@@ -549,6 +557,14 @@ Function PressEnterUntilLogin(tab, timeoutSeconds)
     PressEnterUntilLogin = False
 End Function
 
+Sub SetLiveMonitorMode(tab)
+    tab.Screen.Synchronous = False
+End Sub
+
+Sub SetScriptWaitMode(tab)
+    tab.Screen.Synchronous = True
+End Sub
+
 Function PressEnterUntilBootUserName(tab, timeoutSeconds)
     Dim startTime, foundIndex
     startTime = Timer
@@ -608,6 +624,25 @@ Function WaitForBootShellReady(tab, timeoutSeconds)
     WaitForBootShellReady = "TIMEOUT"
 End Function
 
+Function WaitForFinalShellReady(tab, timeoutSeconds)
+    Dim startTime, foundIndex
+    startTime = Timer
+    Do
+        foundIndex = tab.Screen.WaitForStrings("#", ">", "Login incorrect", "incorrect", 1)
+        If foundIndex >= 1 And foundIndex <= 2 Then
+            WaitForFinalShellReady = "READY"
+            Exit Function
+        ElseIf foundIndex >= 3 And foundIndex <= 4 Then
+            WaitForFinalShellReady = "FAILED"
+            Exit Function
+        End If
+        If Timer < startTime Then
+            startTime = startTime - 86400
+        End If
+    Loop While Timer - startTime < timeoutSeconds
+    WaitForFinalShellReady = "TIMEOUT"
+End Function
+
 Function WaitForFile(fso, filePath, timeoutSeconds)
     Dim startTime
     startTime = Timer
@@ -624,6 +659,62 @@ Function WaitForFile(fso, filePath, timeoutSeconds)
     WaitForFile = False
 End Function
 
+Function WaitForFinalLoginSignalOrBootReset(tab, fso, finalLoginSignalPath, statusPath, timeoutSeconds)
+    Dim startTime, foundIndex, resetSent
+    startTime = Timer
+    resetSent = False
+    Do
+        If fso.FileExists(finalLoginSignalPath) Then
+            WaitForFinalLoginSignalOrBootReset = True
+            Exit Function
+        End If
+        foundIndex = tab.Screen.WaitForStrings("Boot", "Bood", 1)
+        If foundIndex > 0 And Not resetSent Then
+            crt.Sleep 1000
+            tab.Screen.Send "reset" & vbCr
+            WriteStatus fso, statusPath, "POST_TFTP_BOOT_RESET_SENT"
+            resetSent = True
+        End If
+        If Timer < startTime Then
+            startTime = startTime - 86400
+        End If
+    Loop While Timer - startTime < timeoutSeconds
+    WaitForFinalLoginSignalOrBootReset = False
+End Function
+
+Function LoginFinalSystemWithRetry(tab, fso, statusPath, username, password)
+    Dim finalLoginAttempt, finalLoginResult, loginTimeout
+    For finalLoginAttempt = 1 To 5
+        WriteStatus fso, statusPath, "FINAL_LOGIN_ATTEMPT_" & CStr(finalLoginAttempt)
+        If finalLoginAttempt > 1 Then
+            crt.Sleep 2000
+        End If
+        If finalLoginAttempt = 1 Then
+            loginTimeout = 900
+        Else
+            loginTimeout = 2
+        End If
+        If Not PressEnterUntilLogin(tab, loginTimeout) Then
+            WriteStatus fso, statusPath, "FINAL_LOGIN_PROMPT_MISSED_" & CStr(finalLoginAttempt)
+        Else
+            crt.Sleep 1000
+            tab.Screen.Send username & vbCr
+            If WaitForAnyText(tab, "Password", "password", 60) = 0 Then
+                WriteStatus fso, statusPath, "FINAL_PASSWORD_PROMPT_MISSED_" & CStr(finalLoginAttempt)
+            Else
+                tab.Screen.Send password & vbCr
+                finalLoginResult = WaitForFinalShellReady(tab, 60)
+                WriteStatus fso, statusPath, "FINAL_LOGIN_RESULT_" & finalLoginResult
+                If finalLoginResult = "READY" Then
+                    LoginFinalSystemWithRetry = True
+                    Exit Function
+                End If
+            End If
+        End If
+    Next
+    LoginFinalSystemWithRetry = False
+End Function
+
 Sub Main
     If crt.Arguments.Count < 1 Then
         crt.Dialog.MessageBox "Missing upgrade target manifest.", "Sample Upgrade"
@@ -632,13 +723,13 @@ Sub Main
 
     Dim fso, manifestFile, line, fields, sessionName, sessionConfig, tab
     Dim loginAttempt, loginResult, bootLoginComplete
-    Dim statusPath, tftpCommand, username, password, restoreFactory, factoryResetCommand, bootEnterSignalPath, commandSignalPath, finalLoginSignalPath
+    Dim statusPath, tftpCommand, username, password, finalUsername, finalPassword, restoreFactory, factoryResetCommand, bootEnterSignalPath, commandSignalPath, finalLoginSignalPath
     Set fso = CreateObject("Scripting.FileSystemObject")
     Set manifestFile = fso.OpenTextFile(crt.Arguments.GetArg(0), 1, False, -1)
     line = manifestFile.ReadLine
     manifestFile.Close
     fields = Split(line, vbTab)
-    If UBound(fields) < 15 Then
+    If UBound(fields) < 17 Then
         crt.Dialog.MessageBox "Invalid upgrade target manifest.", "Sample Upgrade"
         Exit Sub
     End If
@@ -653,6 +744,8 @@ Sub Main
     bootEnterSignalPath = fields(13)
     commandSignalPath = fields(14)
     finalLoginSignalPath = fields(15)
+    finalUsername = fields(16)
+    finalPassword = fields(17)
     WriteStatus fso, statusPath, "START"
 
     On Error Resume Next
@@ -693,7 +786,7 @@ Sub Main
     End If
     On Error GoTo 0
 
-    tab.Screen.Synchronous = True
+    SetLiveMonitorMode tab
     tab.Session.SetStatusText fields(0) & " / " & fields(1) & " / upgrading"
     WriteStatus fso, statusPath, "SERIAL_CONNECTED"
 
@@ -702,6 +795,7 @@ Sub Main
         WriteStatus fso, statusPath, "ERROR_BOOT_ENTER_SIGNAL_TIMEOUT"
         Exit Sub
     End If
+    SetScriptWaitMode tab
     WriteStatus fso, statusPath, "BOOT_ENTER_RETRY_STARTED"
     If Not PressEnterUntilBootUserName(tab, 240) Then
         WriteStatus fso, statusPath, "ERROR_BOOT_INTERRUPT_TIMEOUT"
@@ -717,7 +811,7 @@ Sub Main
             End If
         End If
         WriteStatus fso, statusPath, "BOOT_USERNAME_PROMPT_FOUND"
-        crt.Sleep 300
+        crt.Sleep 1000
         If Not SendUserNameAndConfirmEcho(tab, username) Then
             WriteStatus fso, statusPath, "BOOT_USERNAME_ECHO_MISSED"
         Else
@@ -745,11 +839,13 @@ Sub Main
     WriteStatus fso, statusPath, "BOOT_SHELL_READY"
     WriteStatus fso, statusPath, "BOOT_LOGIN_COMPLETE"
 
+    SetLiveMonitorMode tab
     If Not WaitForFile(fso, commandSignalPath, 300) Then
         WriteStatus fso, statusPath, "ERROR_TFTP_READY_TIMEOUT"
         Exit Sub
     End If
 
+    SetScriptWaitMode tab
     crt.Sleep 1000
     tab.Screen.Send tftpCommand & vbCr
     WriteStatus fso, statusPath, "TFTP_COMMAND_SENT"
@@ -760,21 +856,18 @@ Sub Main
     End If
     WriteStatus fso, statusPath, "TFTP_COMPLETE"
 
-    If Not WaitForFile(fso, finalLoginSignalPath, 1200) Then
+    SetLiveMonitorMode tab
+    WriteStatus fso, statusPath, "FINAL_LOGIN_MONITORING_STARTED"
+    If Not WaitForFinalLoginSignalOrBootReset(tab, fso, finalLoginSignalPath, statusPath, 1200) Then
         WriteStatus fso, statusPath, "ERROR_FINAL_LOGIN_READY_TIMEOUT"
         Exit Sub
     End If
 
-    If Not PressEnterUntilLogin(tab, 900) Then
-        WriteStatus fso, statusPath, "ERROR_FINAL_LOGIN_TIMEOUT"
+    SetScriptWaitMode tab
+    If Not LoginFinalSystemWithRetry(tab, fso, statusPath, finalUsername, finalPassword) Then
+        WriteStatus fso, statusPath, "ERROR_FINAL_LOGIN_RETRY_EXHAUSTED"
         Exit Sub
     End If
-    tab.Screen.Send username & vbCr
-    If WaitForAnyText(tab, "Password", "password", 60) = 0 Then
-        WriteStatus fso, statusPath, "ERROR_FINAL_PASSWORD_TIMEOUT"
-        Exit Sub
-    End If
-    tab.Screen.Send password & vbCr
     WriteStatus fso, statusPath, "FINAL_LOGIN_COMPLETE"
 
     If restoreFactory = "1" Then

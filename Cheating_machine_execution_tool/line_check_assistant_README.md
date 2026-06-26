@@ -7,7 +7,10 @@
 - 读取和实时维护 `config/network_card_ip.ini` 的通道配置。
 - 主界面顶部提供“样机升级”入口，当前打开独立的升级模块占位窗口，后续扩展各项目升级流程。
 - 样机升级窗口支持自定义项目/型号、输入超级用户凭据、选择升级固件、同步主界面目标 VLAN，并预留开始升级入口、实时状态和进度显示。
-- 点击“开始升级”会先调用安装版 SecureCRT 9.7，按 `vlan101 -> COM1` 的规则打开已勾选目标的串口标签页；F 盘存在时日志写入 `F:\Aouxue\开关机环境搭建工具\开关机执行工具\样机串口日志`，否则写入自动创建的 `D:\样机串口日志`；具体升级命令后续实现。
+- 选择“全包升级 + Tftp拷贝命令”后，点击“开始升级”会按单个目标 VLAN 打开 SecureCRT 串口日志，自动上电并进入 boot，先把 Windows 对应 VLAN 网卡设置为通道 IP，再启动项目目录下的 `tftpd64.exe`；Tftpd64 软件内仅设置固件所在目录并保持 `Tftp Server` 页签，然后由 SecureCRT 下发 `tftp <通道对应VLAN的IP>:tclinux_allinone`。
+- Tftp 传输完成后会先等待 1.5 分钟并持续监控 SecureCRT 串口；如果期间看到 `Boot`/`Bood` 字符，SecureCRT 会发送 `reset`，随后跳过自动重新上电，等待 3 分钟后继续在当前串口窗口等待 `login` 并登录。
+- Tftp 传输完成后，重新上电和等待最终 `login` 期间 SecureCRT 保持实时串口监控；只有在需要捕获关键字或自动输入账号密码时才切回脚本同步等待模式。
+- 最终系统登录阶段看到 `login` 后，会输入样机升级页面中的“超级用户名”和“密码”；如果登录失败，会间隔 2 秒继续重试，总共尝试 5 次后才判定失败。
 - 启动 SecureCRT 后会等待可见窗口并尝试恢复、置前；未检测到窗口时明确报错，不再误报“串口日志已启动”。
 - SecureCRT 自动化使用 Windows 自带的 VBScript 引擎，不要求目标 PC 额外安装 Python；标题仅为“SecureCRT”的错误对话框不会被误判为主窗口。
 - SecureCRT 日志关闭内置紧凑时间戳，使用 `[%Y-%M-%D %h:%m:%s]` 行前缀输出本机时区的完整年月日时分秒；脚本会在连接前基于 `Default_Serial` 建立临时会话并预先配置日志，`Start log upon connect` 默认开启，因此首次连接即可写入时间戳。
@@ -66,6 +69,6 @@ python .\run_line_check_assistant.py
 生成的 EXE 位于 `dist\LineCheckAssistant.exe`。
 生成的 `.spec` 文件统一保存到 `line_check_assistant\packaging_specs`。
 
-每次重新打包出最新版 EXE 后，需要直接运行 `dist\LineCheckAssistant.exe`，完成界面/功能验收，并把验收结果反馈给用户。
+每次重新打包出最新版 EXE 后，不在当前 PC 直接运行 `dist\LineCheckAssistant.exe`；只确认打包成功，并向用户报告输出路径。
 
 打包后程序会自动从 EXE 所在目录、上级目录中查找 `config` 文件夹和 `Auto_Power_On_Off_Tool(2).exe`，因此可以放在 `开关机执行工具\dist` 目录运行。

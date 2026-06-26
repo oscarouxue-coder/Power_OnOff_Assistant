@@ -164,6 +164,30 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         context._start_single_tftp_copy_upgrade.assert_called_once_with()
         thread_class.assert_not_called()
 
+    @patch("line_check_assistant.app.Path.is_file", return_value=True)
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_single_tftp_copy_request_uses_page_credentials(self, thread_class, _is_file):
+        channel = ChannelConfig(section="channel_1", vlan_name="VLAN101", enabled=True)
+        context = SimpleNamespace(
+            upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\tclinux_allinone")),
+            upgrade_username_var=Mock(get=Mock(return_value="root")),
+            upgrade_password_var=Mock(get=Mock(return_value="secret")),
+            upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
+            upgrade_window=Mock(),
+            _selected_single_upgrade_channel=Mock(return_value=channel),
+            _tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
+            _selected_power_serial_port=Mock(return_value="COM106"),
+            _set_upgrade_status=Mock(),
+            _single_tftp_copy_upgrade_worker=Mock(),
+        )
+
+        LineCheckAssistant._start_single_tftp_copy_upgrade(context)
+
+        request = thread_class.call_args.kwargs["args"][0]
+        self.assertEqual(request.final_username, "root")
+        self.assertEqual(request.final_password, "secret")
+        self.assertEqual(request.tftp_server_ip, "192.168.1.101")
+
     def test_upgrade_required_fields_warn_when_missing(self):
         context = SimpleNamespace(
             upgrade_window=Mock(),

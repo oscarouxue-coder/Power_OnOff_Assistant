@@ -8,7 +8,7 @@ from line_check_assistant.tftpd_automation import _build_prepare_tftpd_script
 
 
 class TftpdAutomationTests(unittest.TestCase):
-    def test_prepare_script_sets_current_directory_and_server_interface(self):
+    def test_prepare_script_sets_current_directory_and_tftp_server_tab_only(self):
         script = _build_prepare_tftpd_script(
             Path(r"F:\tool\tftpd64.exe"),
             Path(r"F:\firmware"),
@@ -17,8 +17,7 @@ class TftpdAutomationTests(unittest.TestCase):
         )
 
         self.assertIn("$currentDirectory = 'F:\\firmware'", script)
-        self.assertIn("$serverInterface = 'VLAN101'", script)
-        self.assertIn("$serverIp = '192.168.1.101'", script)
+        self.assertIn("Stop-Process -Id $existingProcess.Id -Force", script)
         self.assertIn("Start-Process -FilePath $toolPath -WorkingDirectory $currentDirectory", script)
         self.assertIn("Set-ControlTextRobust $nativeFields[0] $currentDirectory", script)
         self.assertIn("Set-ControlTextByAutomation $control $value", script)
@@ -27,7 +26,11 @@ class TftpdAutomationTests(unittest.TestCase):
         self.assertIn("Assert-DirectoryApplied $nativeFields[0] $currentDirectory", script)
         self.assertIn("Tftpd64 Current Directory 设置失败", script)
         self.assertIn("已设置 Tftpd64 Current Directory", script)
-        self.assertIn("已设置 Tftpd64 Server interfaces", script)
+        self.assertIn('$tab.Current.Name -eq "Tftp Server"', script)
+        self.assertIn("已切换到 Tftp Server", script)
+        self.assertNotIn("Server interfaces", script)
+        self.assertNotIn("Find-ServerInterfaceComboItem", script)
+        self.assertNotIn("Select-ComboBoxItem", script)
         self.assertIn("[NativeWindow]::GetWindow($parentHandle, 5)", script)
         self.assertIn("[NativeWindow]::GetWindow($childHandle, 2)", script)
         self.assertNotIn("EnumChildWindows", script)

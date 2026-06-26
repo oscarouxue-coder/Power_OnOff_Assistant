@@ -519,6 +519,8 @@ class LineCheckAssistant(Tk):
             tftp_server_ip=tftp_server_ip,
             firmware_path=firmware_path,
             power_serial_port=self._selected_power_serial_port(),
+            final_username=self.upgrade_username_var.get().strip(),
+            final_password=self.upgrade_password_var.get().strip(),
             restore_factory=bool(self.upgrade_restore_factory_var.get()),
         )
         self._set_upgrade_status(vlan, "启动 SecureCRT、准备串口日志", 0)

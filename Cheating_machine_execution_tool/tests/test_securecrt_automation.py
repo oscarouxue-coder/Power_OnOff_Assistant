@@ -118,12 +118,21 @@ class SecureCRTSerialLogTests(unittest.TestCase):
         self.assertNotIn("Python3", SECURECRT_SCRIPT)
 
     def test_builds_tftp_copy_upgrade_target(self):
-        target = build_tftp_copy_upgrade_target("VLAN148", "192.168.1.148", Path("logs"), restore_factory=True)
+        target = build_tftp_copy_upgrade_target(
+            "VLAN148",
+            "192.168.1.148",
+            Path("logs"),
+            restore_factory=True,
+            final_username="root",
+            final_password="secret",
+        )
 
         self.assertEqual(target.vlan, "vlan148")
         self.assertEqual(target.port, "COM48")
         self.assertEqual(target.tftp_command, "tftp 192.168.1.148:tclinux_allinone")
         self.assertTrue(target.restore_factory)
+        self.assertEqual(target.final_username, "root")
+        self.assertEqual(target.final_password, "secret")
         self.assertTrue(target.log_path.endswith(".log"))
         self.assertTrue(target.status_path.endswith(".status"))
         self.assertTrue(target.boot_enter_signal_path.endswith(".boot_enter.signal"))
@@ -183,6 +192,16 @@ class SecureCRTSerialLogTests(unittest.TestCase):
 
     def test_tftp_copy_upgrade_script_waits_for_boot_and_transfer_markers(self):
         self.assertIn('Function PressEnterUntilBootUserName', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('Sub SetLiveMonitorMode(tab)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('Sub SetScriptWaitMode(tab)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('Function WaitForFinalLoginSignalOrBootReset', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('tab.Screen.WaitForStrings("Boot", "Bood", 1)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('tab.Screen.Send "reset" & vbCr', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('"POST_TFTP_BOOT_RESET_SENT"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        boot_wait_index = SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('tab.Screen.WaitForStrings("Boot", "Bood", 1)')
+        reset_sleep_index = SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index("crt.Sleep 1000", boot_wait_index)
+        reset_send_index = SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('tab.Screen.Send "reset" & vbCr', boot_wait_index)
+        self.assertLess(reset_sleep_index, reset_send_index)
         self.assertIn(
             'WaitForStrings("UserName:", "Username:", "User Name:", 1)',
             SECURECRT_TFTP_COPY_UPGRADE_SCRIPT,
@@ -198,12 +217,21 @@ class SecureCRTSerialLogTests(unittest.TestCase):
         self.assertIn('bootEnterSignalPath = fields(13)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('commandSignalPath = fields(14)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('finalLoginSignalPath = fields(15)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('finalUsername = fields(16)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('finalPassword = fields(17)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('"BOOT_ENTER_SIGNAL_WAITING"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('WaitForFile(fso, bootEnterSignalPath, 1200)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('PressEnterUntilBootUserName(tab, 240)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertNotIn('WaitForString("1", 240)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('"BOOT_ENTER_RETRY_STARTED"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('"BOOT_USERNAME_PROMPT_FOUND"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        username_prompt_index = SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('"BOOT_USERNAME_PROMPT_FOUND"')
+        username_sleep_index = SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index("crt.Sleep 1000", username_prompt_index)
+        username_send_index = SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index(
+            "SendUserNameAndConfirmEcho(tab, username)",
+            username_prompt_index,
+        )
+        self.assertLess(username_sleep_index, username_send_index)
         self.assertIn('username = "telecomadmin"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('password = "nE7jA%5m"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertNotIn('Sub ClearInputLine(tab)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
@@ -218,6 +246,18 @@ class SecureCRTSerialLogTests(unittest.TestCase):
         self.assertIn('Sub SendPasswordAndEnter(tab, value)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('SendPasswordAndEnter tab, password', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertNotIn('SendTextSlow', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('Function LoginFinalSystemWithRetry', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('Function WaitForFinalShellReady', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('WaitForStrings("#", ">", "Login incorrect", "incorrect", 1)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertNotIn('WaitForStrings("#", ">", "Login incorrect", "incorrect", "login", "Login", 1)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('For finalLoginAttempt = 1 To 5', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('crt.Sleep 2000', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('loginTimeout = 900', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('loginTimeout = 2', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('"FINAL_LOGIN_ATTEMPT_" & CStr(finalLoginAttempt)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('"FINAL_LOGIN_RESULT_" & finalLoginResult', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('"ERROR_FINAL_LOGIN_RETRY_EXHAUSTED"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('LoginFinalSystemWithRetry(tab, fso, statusPath, finalUsername, finalPassword)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('For loginAttempt = 1 To 3', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('"BOOT_LOGIN_ATTEMPT_" & CStr(loginAttempt)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('"BOOT_USERNAME_SENT"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
@@ -239,7 +279,16 @@ class SecureCRTSerialLogTests(unittest.TestCase):
         self.assertIn('WaitForFile(fso, commandSignalPath, 300)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('WaitForStrings("done", "write", 1)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('"TFTP_COMPLETE"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
-        self.assertIn('WaitForFile(fso, finalLoginSignalPath, 1200)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('"FINAL_LOGIN_MONITORING_STARTED"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertLess(
+            SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('SetLiveMonitorMode tab', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('"TFTP_COMPLETE"')),
+            SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('WaitForFinalLoginSignalOrBootReset(tab, fso, finalLoginSignalPath, statusPath, 1200)'),
+        )
+        self.assertLess(
+            SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('WaitForFinalLoginSignalOrBootReset(tab, fso, finalLoginSignalPath, statusPath, 1200)'),
+            SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('SetScriptWaitMode tab', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('WaitForFinalLoginSignalOrBootReset(tab, fso, finalLoginSignalPath, statusPath, 1200)')),
+        )
+        self.assertIn('WaitForFinalLoginSignalOrBootReset(tab, fso, finalLoginSignalPath, statusPath, 1200)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('factoryResetCommand & vbCr', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('SetOption "Emulation", "ANSI"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('SetOption "Output Transformer Name", "Default"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)

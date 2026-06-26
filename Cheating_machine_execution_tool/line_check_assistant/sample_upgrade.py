@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-from .network_ops import CommandResult
+from .network_ops import CommandResult, enable_adapter, set_static_ip
 from .old_tool_automation import automate_power_on
 from .securecrt_automation import (
     build_tftp_copy_upgrade_target,
@@ -15,12 +15,18 @@ from .securecrt_automation import (
 from .tftpd_automation import prepare_tftpd_server
 
 
-POWER_RECYCLE_AFTER_UPGRADE_SECONDS = 180
+POWER_RECYCLE_AFTER_UPGRADE_SECONDS = 90
 POWER_ON_SETTLE_SECONDS = 180
 BOOT_LOGIN_TIMEOUT_SECONDS = 600
 TFTP_COMPLETE_TIMEOUT_SECONDS = 2400
 FINAL_LOGIN_TIMEOUT_SECONDS = 1200
 POWER_ON_WAIT_SECONDS = 5
+TFTP_SUBNET_MASK = "255.255.255.0"
+POST_TFTP_BOOT_RESET_STATUS = "POST_TFTP_BOOT_RESET_SENT"
+VISIBLE_SECURECRT_STATUSES = {
+    "ERROR_",
+    POST_TFTP_BOOT_RESET_STATUS,
+}
 
 
 @dataclass(frozen=True)
@@ -30,6 +36,8 @@ class SingleTftpCopyUpgradeRequest:
     tftp_server_ip: str
     firmware_path: Path
     power_serial_port: str
+    final_username: str
+    final_password: str
     restore_factory: bool = False
 
 
@@ -50,6 +58,8 @@ def run_single_tftp_copy_upgrade(
         request.tftp_server_ip,
         log_dir,
         restore_factory=request.restore_factory,
+        final_username=request.final_username,
+        final_password=request.final_password,
     )
     launch_result = launch_securecrt_tftp_copy_upgrade(tool_root, securecrt_target)
     if not launch_result.success:
@@ -81,6 +91,15 @@ def run_single_tftp_copy_upgrade(
         return boot_status
 
     emit("boot 登录完成，准备 Tftpd64 传输环境。")
+    network_result = prepare_tftp_network(
+        request.server_interface,
+        request.tftp_server_ip,
+        on_output=emit,
+        sleep_fn=sleep_fn,
+    )
+    if not network_result.ok:
+        return network_result
+
     tftpd_result = prepare_tftpd_server(
         tool_root,
         request.firmware_path,
@@ -103,19 +122,26 @@ def run_single_tftp_copy_upgrade(
     if not tftp_status.ok:
         return tftp_status
 
-    emit("Tftp 传输完成，等待 3 分钟后重新上电。")
+    emit("Tftp 传输完成，等待 1.5 分钟观察是否回到 boot。")
     sleep_fn(POWER_RECYCLE_AFTER_UPGRADE_SECONDS)
-    repower_result = automate_power_on(
-        old_tool_path,
-        serial_port=request.power_serial_port,
-        wait_seconds=POWER_ON_WAIT_SECONDS,
-        on_output=emit,
-    )
-    if not repower_result.ok:
-        return repower_result
 
-    emit("已重新上电，等待 3 分钟后确认登录。")
-    sleep_fn(POWER_ON_SETTLE_SECONDS)
+    if _has_status(Path(securecrt_target.status_path), POST_TFTP_BOOT_RESET_STATUS):
+        emit("检测到 SecureCRT 已在 boot 阶段发送 reset，等待 3 分钟后确认登录。")
+        sleep_fn(POWER_ON_SETTLE_SECONDS)
+    else:
+        emit("未检测到 boot reset，开始重新上电。")
+        repower_result = automate_power_on(
+            old_tool_path,
+            serial_port=request.power_serial_port,
+            wait_seconds=POWER_ON_WAIT_SECONDS,
+            on_output=emit,
+        )
+        if not repower_result.ok:
+            return repower_result
+
+        emit("已重新上电，等待 3 分钟后确认登录。")
+        sleep_fn(POWER_ON_SETTLE_SECONDS)
+
     _write_signal_file(securecrt_target.final_login_signal_path)
     emit("已允许 SecureCRT 开始确认重启后的登录提示。")
     final_status = wait_for_upgrade_status(
@@ -129,6 +155,31 @@ def run_single_tftp_copy_upgrade(
         return final_status
 
     return CommandResult(True, f"{request.vlan} 全包升级流程完成。")
+
+
+def prepare_tftp_network(
+    server_interface: str,
+    tftp_server_ip: str,
+    on_output: Optional[Callable[[str], None]] = None,
+    sleep_fn: Callable[[float], None] = time.sleep,
+) -> CommandResult:
+    def emit(message: str) -> None:
+        if on_output:
+            on_output(message)
+
+    emit(f"准备 TFTP 网卡：{server_interface} -> {tftp_server_ip}")
+    enable_result = enable_adapter(server_interface)
+    if not enable_result.ok:
+        return enable_result
+    emit(enable_result.message)
+    sleep_fn(1)
+
+    set_result = set_static_ip(server_interface, tftp_server_ip, TFTP_SUBNET_MASK)
+    if not set_result.ok:
+        return set_result
+    emit(set_result.message)
+    sleep_fn(1)
+    return CommandResult(True, f"TFTP 网卡已准备好：{server_interface} / {tftp_server_ip}")
 
 
 def wait_for_upgrade_status(
@@ -145,7 +196,7 @@ def wait_for_upgrade_status(
         for status in statuses:
             if status not in seen:
                 seen.add(status)
-                if on_output:
+                if on_output and _should_show_securecrt_status(status):
                     on_output(f"SecureCRT 状态：{status}")
             if status.startswith("ERROR_"):
                 return CommandResult(False, f"SecureCRT 升级脚本失败：{status}")
@@ -174,6 +225,14 @@ def _read_statuses(status_path: Path) -> list[str]:
         if status:
             statuses.append(status)
     return statuses
+
+
+def _has_status(status_path: Path, expected_status: str) -> bool:
+    return expected_status in _read_statuses(status_path)
+
+
+def _should_show_securecrt_status(status: str) -> bool:
+    return any(status.startswith(prefix) for prefix in VISIBLE_SECURECRT_STATUSES)
 
 
 def _write_signal_file(path: str) -> None:
