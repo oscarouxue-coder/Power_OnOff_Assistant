@@ -85,6 +85,8 @@ public class NativeWindow {{
     public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)]
     public static extern bool SetWindowText(IntPtr hWnd, string lpString);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode, EntryPoint="SendMessage")]
+    public static extern IntPtr SendMessageText(IntPtr hWnd, int Msg, IntPtr wParam, string lParam);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)]
     public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)]
@@ -100,7 +102,7 @@ $serverInterface = {interface}
 $serverIp = {ip_address}
 $process = Get-Process | Where-Object {{ $_.Path -eq $toolPath }} | Select-Object -First 1
 if ($null -eq $process) {{
-    $process = Start-Process -FilePath $toolPath -WorkingDirectory (Split-Path -Parent $toolPath) -PassThru
+    $process = Start-Process -FilePath $toolPath -WorkingDirectory $currentDirectory -PassThru
 }}
 
 $deadline = (Get-Date).AddSeconds(15)
@@ -190,13 +192,79 @@ function Get-ControlEditHandle([object]$control) {{
     return $control.Handle
 }}
 
+function Get-UiaValueText([IntPtr]$handle) {{
+    try {{
+        $element = [System.Windows.Automation.AutomationElement]::FromHandle($handle)
+        if ($null -eq $element) {{
+            return ""
+        }}
+        $valuePattern = $null
+        if ($element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$valuePattern)) {{
+            $value = $valuePattern.Current.Value
+            if (-not [string]::IsNullOrWhiteSpace($value)) {{
+                return $value
+            }}
+        }}
+        if (-not [string]::IsNullOrWhiteSpace($element.Current.Name)) {{
+            return $element.Current.Name
+        }}
+    }} catch {{
+        return ""
+    }}
+    return ""
+}}
+
 function Get-ControlText([object]$control) {{
     $editHandle = Get-ControlEditHandle $control
-    $text = Get-NativeWindowText $editHandle
+    $text = Get-UiaValueText $editHandle
+    if ([string]::IsNullOrWhiteSpace($text)) {{
+        $text = Get-UiaValueText $control.Handle
+    }}
+    if ([string]::IsNullOrWhiteSpace($text)) {{
+        $text = Get-NativeWindowText $editHandle
+    }}
     if ([string]::IsNullOrWhiteSpace($text)) {{
         $text = Get-NativeWindowText $control.Handle
     }}
     return $text
+}}
+
+function Set-ControlTextByNativeApi([object]$control, [string]$value) {{
+    $targetHandle = Get-ControlEditHandle $control
+    $WM_SETTEXT = 0x000C
+
+    [NativeWindow]::SetWindowText($control.Handle, $value) | Out-Null
+    [NativeWindow]::SendMessageText($control.Handle, $WM_SETTEXT, [IntPtr]::Zero, $value) | Out-Null
+    if ($targetHandle -ne $control.Handle) {{
+        [NativeWindow]::SetWindowText($targetHandle, $value) | Out-Null
+        [NativeWindow]::SendMessageText($targetHandle, $WM_SETTEXT, [IntPtr]::Zero, $value) | Out-Null
+    }}
+    [NativeWindow]::SetFocus($targetHandle) | Out-Null
+    Start-Sleep -Milliseconds 150
+    [System.Windows.Forms.SendKeys]::SendWait("{{ENTER}}")
+    Start-Sleep -Milliseconds 300
+}}
+
+function Set-ControlTextByAutomation([object]$control, [string]$value) {{
+    foreach ($handle in @((Get-ControlEditHandle $control), $control.Handle)) {{
+        try {{
+            $element = [System.Windows.Automation.AutomationElement]::FromHandle($handle)
+            if ($null -eq $element) {{
+                continue
+            }}
+            $valuePattern = $null
+            if ($element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$valuePattern)) {{
+                if (-not $valuePattern.Current.IsReadOnly) {{
+                    $valuePattern.SetValue($value)
+                    Start-Sleep -Milliseconds 300
+                    return $true
+                }}
+            }}
+        }} catch {{
+            continue
+        }}
+    }}
+    return $false
 }}
 
 function Set-ControlTextByKeyboard([object]$control, [string]$value) {{
@@ -223,6 +291,25 @@ function Set-ControlTextByKeyboard([object]$control, [string]$value) {{
     }}
 }}
 
+function Test-ControlText([object]$control, [string]$expectedValue) {{
+    $actual = Get-ControlText $control
+    return (Normalize-PathText $actual).ToLowerInvariant() -eq (Normalize-PathText $expectedValue).ToLowerInvariant()
+}}
+
+function Set-ControlTextRobust([object]$control, [string]$value) {{
+    Set-ControlTextByAutomation $control $value | Out-Null
+    if (Test-ControlText $control $value) {{
+        return
+    }}
+
+    Set-ControlTextByNativeApi $control $value
+    if (Test-ControlText $control $value) {{
+        return
+    }}
+
+    Set-ControlTextByKeyboard $control $value
+}}
+
 function Normalize-PathText([string]$value) {{
     if ($null -eq $value) {{
         $value = ""
@@ -247,7 +334,7 @@ if ($nativeFields.Count -lt 1) {{
     throw "未找到 Current Directory 输入框"
 }}
 
-Set-ControlTextByKeyboard $nativeFields[0] $currentDirectory
+Set-ControlTextRobust $nativeFields[0] $currentDirectory
 Assert-DirectoryApplied $nativeFields[0] $currentDirectory
 Write-Output "已设置 Tftpd64 Current Directory：$currentDirectory"
 
@@ -257,7 +344,7 @@ if (-not [string]::IsNullOrWhiteSpace($serverInterface)) {{
         $nativeFields = @(Get-NativeTftpdFieldControls ([IntPtr]$process.MainWindowHandle))
     }}
     if ($nativeFields.Count -ge 2) {{
-        Set-ControlTextByKeyboard $nativeFields[1] $fallbackValue
+        Set-ControlTextRobust $nativeFields[1] $fallbackValue
         $actualInterface = Get-ControlText $nativeFields[1]
         Write-Output "已设置 Tftpd64 Server interfaces：$actualInterface"
     }} else {{
