@@ -7,7 +7,8 @@
 - 读取和实时维护 `config/network_card_ip.ini` 的通道配置。
 - 主界面顶部提供“样机升级”入口，当前打开独立的升级模块占位窗口，后续扩展各项目升级流程。
 - 样机升级窗口支持自定义项目/型号、输入超级用户凭据、选择升级固件、同步主界面目标 VLAN，并预留开始升级入口、实时状态和进度显示。
-- 选择“全包升级 + Tftp拷贝命令”后，点击“开始升级”会按单个目标 VLAN 打开 SecureCRT 串口日志，自动上电并进入 boot，先把 Windows 对应 VLAN 网卡设置为通道 IP，再启动项目目录下的 `tftpd64.exe`；Tftpd64 软件内仅设置固件所在目录并保持 `Tftp Server` 页签，然后由 SecureCRT 下发 `tftp <通道对应VLAN的IP>:tclinux_allinone`。
+- 选择“全包升级 + Tftp拷贝命令”后，点击“开始升级”会按已勾选目标 VLAN 串行升级；每台样机会依次打开 SecureCRT 串口日志，自动上电并进入 boot，先把 Windows 对应 VLAN 网卡设置为通道 IP，再启动项目目录下的 `tftpd64.exe`；Tftpd64 软件内仅设置固件所在目录并保持 `Tftp Server` 页签，然后由 SecureCRT 下发 `tftp <通道对应VLAN的IP>:tclinux_allinone`。
+- 多台样机串行升级会按主界面通道顺序执行，启动前弹出确认提示；每台开始前会临时改写 `config/network_card_ip.ini`，只保留当前上电通道，避免旧开关机工具 `Start ALL` 给其他通道上电；全部完成或失败退出后会恢复用户选择的完整通道配置，并自动关闭升级过程中打开的 SecureCRT 和项目目录下的 Tftpd64。
 - Tftp 传输完成后会先等待 1.5 分钟并持续监控 SecureCRT 串口；如果期间看到 `Boot`/`Bood` 字符，SecureCRT 会发送 `reset`，随后跳过自动重新上电，等待 120 秒后继续在当前串口窗口等待 `login` 并登录。
 - Tftp 传输完成后，如果未检测到 boot reset，会自动重新上电并等待 120 秒后确认登录；重新上电和等待最终 `login` 期间 SecureCRT 保持实时串口监控，只有在需要捕获关键字或自动输入账号密码时才切回脚本同步等待模式。
 - 最终系统登录阶段看到 `login` 后，会输入样机升级页面中的“超级用户名”和“密码”；如果登录失败，会间隔 2 秒继续重试，总共尝试 5 次后才判定失败。
@@ -19,7 +20,7 @@
 - 为每个通道选择实际接入的 Windows 网卡名称。
 - 网卡列表优先读取 `Get-NetAdapter -IncludeHidden`，可显示禁用、断开和隐藏网卡；界面显示状态，例如 `[Connected]`、`[Disconnected]`。
 - 保存每个通道的 PC 静态 IP、样机管理 IP、子网掩码、启用状态。
-- 自动启动旧软件，选择 `Fully_powered_on`，点击 `Start ALL`，等待 60 秒后关闭旧软件。
+- 自动启动旧软件，选择 `Fully_powered_on`，点击 `Start ALL`，按启用通道数每通道等待 10 秒后关闭旧软件；多台串行升级时每次只保留当前通道，因此每台上电等待 10 秒。
 - 自动上电过程会实时输出日志，便于判断卡在打开窗口、选择下拉框还是点击按钮。
 - 自动上电前会读取设备管理器 `端口(COM 和 LPT)` 中名称以 `Prolific` 开头的端口，让用户选择程控电源 COM 口，并同步到旧工具的 `Serial Num` 下拉框。
 - 启动旧软件前会把 `config/config.ini` 中的 `Fully_powered_on` 移到 `[config]` 第一项，让旧软件启动后默认选择上电配置。
@@ -52,7 +53,7 @@ python .\run_line_check_assistant.py
    - 旧软件启动前会自动准备 `Fully_powered_on` 默认配置。
    - 新软件会在旧工具中选择对应 `Serial Num`。
    - 新软件会尝试自动选择 `Fully_powered_on`，点击 `Start ALL`。
-   - 新软件会等待约 1 分钟，等程控电源完成上电动作，再关闭旧软件。
+   - 新软件会按启用通道数每通道等待 10 秒，等程控电源完成上电动作，再关闭旧软件。
 6. 回到新软件，点击“检查当前通道”或“已上电，开始检查全部启用通道”。
 7. 观察日志：
    - 通过：显示 `[通过] channel_x ping xxx 成功`。

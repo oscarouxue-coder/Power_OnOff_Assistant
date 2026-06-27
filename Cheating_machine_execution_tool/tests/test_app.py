@@ -2,7 +2,7 @@ import os
 import sys
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from line_check_assistant.app import LineCheckAssistant
@@ -147,7 +147,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         worker.start.assert_called_once_with()
 
     @patch("line_check_assistant.app.threading.Thread")
-    def test_full_package_tftp_copy_starts_single_upgrade_flow(self, thread_class):
+    def test_full_package_tftp_copy_starts_serial_upgrade_flow(self, thread_class):
         context = SimpleNamespace(
             upgrade_mode_var=Mock(get=Mock(return_value="全包升级")),
             upgrade_transfer_var=Mock(get=Mock(return_value="Tftp拷贝命令")),
@@ -156,37 +156,120 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\tclinux")),
             _capture_current_channel=Mock(),
             _validate_upgrade_required_fields=Mock(return_value=True),
-            _start_single_tftp_copy_upgrade=Mock(),
+            _start_serial_tftp_copy_upgrade=Mock(),
         )
 
         LineCheckAssistant._on_upgrade_start_clicked(context)
 
-        context._start_single_tftp_copy_upgrade.assert_called_once_with()
+        context._start_serial_tftp_copy_upgrade.assert_called_once_with()
         thread_class.assert_not_called()
 
+    @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
     @patch("line_check_assistant.app.Path.is_file", return_value=True)
     @patch("line_check_assistant.app.threading.Thread")
-    def test_single_tftp_copy_request_uses_page_credentials(self, thread_class, _is_file):
-        channel = ChannelConfig(section="channel_1", vlan_name="VLAN101", enabled=True)
+    def test_serial_tftp_copy_requests_use_page_credentials(self, thread_class, _is_file, _askyesno):
+        channels = [
+            ChannelConfig(section="channel_1", vlan_name="VLAN102", enabled=True),
+            ChannelConfig(section="channel_2", vlan_name="VLAN101", enabled=True),
+        ]
         context = SimpleNamespace(
             upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\tclinux_allinone")),
             upgrade_username_var=Mock(get=Mock(return_value="root")),
             upgrade_password_var=Mock(get=Mock(return_value="secret")),
             upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
             upgrade_window=Mock(),
-            _selected_single_upgrade_channel=Mock(return_value=channel),
-            _tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
+            _selected_tftp_copy_upgrade_channels=Mock(return_value=channels),
+            _tftp_server_ip_for_channel=Mock(side_effect=["192.168.1.102", "192.168.1.101"]),
             _selected_power_serial_port=Mock(return_value="COM106"),
             _set_upgrade_status=Mock(),
-            _single_tftp_copy_upgrade_worker=Mock(),
+            _serial_tftp_copy_upgrade_worker=Mock(),
         )
 
-        LineCheckAssistant._start_single_tftp_copy_upgrade(context)
+        LineCheckAssistant._start_serial_tftp_copy_upgrade(context)
 
-        request = thread_class.call_args.kwargs["args"][0]
-        self.assertEqual(request.final_username, "root")
-        self.assertEqual(request.final_password, "secret")
-        self.assertEqual(request.tftp_server_ip, "192.168.1.101")
+        upgrade_items = thread_class.call_args.kwargs["args"][0]
+        requests = [request for _channel, request in upgrade_items]
+        self.assertEqual([channel.section for channel, _request in upgrade_items], ["channel_1", "channel_2"])
+        self.assertEqual([request.vlan for request in requests], ["vlan102", "vlan101"])
+        self.assertEqual([request.tftp_server_ip for request in requests], ["192.168.1.102", "192.168.1.101"])
+        self.assertTrue(all(request.final_username == "root" for request in requests))
+        self.assertTrue(all(request.final_password == "secret" for request in requests))
+
+    def test_tftp_copy_channels_follow_main_channel_order_and_deduplicate(self):
+        context = SimpleNamespace(
+            channels=[
+                ChannelConfig(section="channel_1", vlan_name="VLAN108", enabled=True),
+                ChannelConfig(section="channel_2", vlan_name="VLAN101", enabled=True),
+                ChannelConfig(section="channel_3", vlan_name="vlan108", enabled=True),
+                ChannelConfig(section="channel_4", vlan_name="VLAN102", enabled=False),
+            ],
+            upgrade_window=Mock(),
+            _vlan_sort_key=lambda value: (int("".join(char for char in value if char.isdigit())), value),
+        )
+
+        channels = LineCheckAssistant._selected_tftp_copy_upgrade_channels(context)
+
+        self.assertEqual([channel.section for channel in channels], ["channel_1", "channel_2"])
+
+    @patch("line_check_assistant.app.close_upgrade_tools")
+    @patch("line_check_assistant.app.run_single_tftp_copy_upgrade")
+    def test_serial_tftp_copy_worker_stops_after_first_failure(self, run_upgrade, close_tools):
+        channels = [
+            ChannelConfig(section="channel_1", vlan_name="VLAN101", enabled=True),
+            ChannelConfig(section="channel_2", vlan_name="VLAN102", enabled=True),
+        ]
+        requests = [
+            Mock(vlan="vlan101", power_serial_port="COM106"),
+            Mock(vlan="vlan102", power_serial_port="COM106"),
+        ]
+        upgrade_items = list(zip(channels, requests))
+        run_upgrade.return_value = Mock(ok=False, message="vlan101 failed")
+        close_tools.return_value = Mock(ok=True, message="closed")
+        context = SimpleNamespace(
+            log_queue=Mock(),
+            after=Mock(side_effect=lambda _delay, callback: callback()),
+            store=Mock(),
+            _set_upgrade_status=Mock(),
+            _complete_serial_tftp_copy_upgrade=Mock(),
+        )
+
+        LineCheckAssistant._serial_tftp_copy_upgrade_worker(context, upgrade_items)
+
+        run_upgrade.assert_called_once()
+        self.assertEqual(
+            context.store.save.call_args_list,
+            [
+                call([channels[0]], "COM106"),
+                call(channels, "COM106"),
+            ],
+        )
+        close_tools.assert_called_once()
+        context._complete_serial_tftp_copy_upgrade.assert_called_once_with(2, 0, requests[0], run_upgrade.return_value)
+
+    @patch("line_check_assistant.app.close_upgrade_tools")
+    @patch("line_check_assistant.app.run_single_tftp_copy_upgrade")
+    def test_serial_tftp_copy_worker_closes_tools_after_restoring_config(self, run_upgrade, close_tools):
+        channel = ChannelConfig(section="channel_1", vlan_name="VLAN101", enabled=True)
+        request = Mock(vlan="vlan101", power_serial_port="COM106")
+        run_upgrade.return_value = Mock(ok=True, message="vlan101 ok")
+        close_tools.return_value = Mock(ok=True, message="closed")
+        events = []
+        store = Mock()
+        store.save.side_effect = lambda *_args: events.append("save")
+        close_tools.side_effect = lambda *_args, **_kwargs: events.append("close") or Mock(ok=True, message="closed")
+        context = SimpleNamespace(
+            log_queue=Mock(),
+            after=Mock(side_effect=lambda _delay, callback: callback()),
+            store=store,
+            _set_upgrade_status=Mock(),
+            _complete_serial_tftp_copy_upgrade=Mock(),
+        )
+
+        LineCheckAssistant._serial_tftp_copy_upgrade_worker(context, [(channel, request)])
+
+        self.assertEqual(events, ["save", "save", "close"])
+        context.log_queue.put.assert_any_call("已恢复 network_card_ip.ini 中用户选择的完整通道配置。")
+        close_tools.assert_called_once()
 
     def test_upgrade_required_fields_warn_when_missing(self):
         context = SimpleNamespace(
@@ -336,13 +419,13 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         context._select_power_com_port.assert_not_called()
         self.assertFalse(context.power_on_running)
 
-    def test_power_on_wait_seconds_uses_five_seconds_per_channel(self):
+    def test_power_on_wait_seconds_uses_ten_seconds_per_channel(self):
         channels = [
             ChannelConfig(section="channel_1", enabled=True),
             ChannelConfig(section="channel_2", enabled=True),
         ]
 
-        self.assertEqual(LineCheckAssistant._power_on_wait_seconds(None, channels), 10)
+        self.assertEqual(LineCheckAssistant._power_on_wait_seconds(None, channels), 20)
 
     def test_select_channel_index_syncs_internal_and_list_selection(self):
         context = SimpleNamespace(

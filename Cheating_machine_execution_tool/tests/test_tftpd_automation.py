@@ -5,6 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from line_check_assistant.tftpd_automation import _build_prepare_tftpd_script
+from line_check_assistant.upgrade_cleanup import _build_close_upgrade_tools_script
 
 
 class TftpdAutomationTests(unittest.TestCase):
@@ -35,6 +36,17 @@ class TftpdAutomationTests(unittest.TestCase):
         self.assertIn("[NativeWindow]::GetWindow($childHandle, 2)", script)
         self.assertNotIn("EnumChildWindows", script)
         self.assertNotIn("??", script)
+
+    def test_cleanup_script_closes_project_tftpd_and_securecrt(self):
+        script = _build_close_upgrade_tools_script(Path(r"F:\tool\tftpd64.exe"))
+
+        self.assertIn("$tftpdPath = 'F:\\tool\\tftpd64.exe'", script)
+        self.assertIn("try { $_.Path -eq $tftpdPath }", script)
+        self.assertIn('$_.ProcessName -ieq "SecureCRT"', script)
+        self.assertIn('Stop-ProcessGracefully $process "Tftpd64"', script)
+        self.assertIn('Stop-ProcessGracefully $process "SecureCRT"', script)
+        self.assertIn("CloseMainWindow()", script)
+        self.assertIn("Stop-Process -Id $process.Id -Force", script)
 
 
 if __name__ == "__main__":

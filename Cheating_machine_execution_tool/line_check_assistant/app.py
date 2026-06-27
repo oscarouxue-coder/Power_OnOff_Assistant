@@ -14,6 +14,7 @@ from .paths import OLD_TOOL_NAME, resolve_tool_root
 from .sample_upgrade import SingleTftpCopyUpgradeRequest, run_single_tftp_copy_upgrade
 from .securecrt_automation import SecureCRTLaunchResult, launch_securecrt_serial_logs
 from .serial_ports import list_prolific_ports, port_from_display
+from .upgrade_cleanup import close_upgrade_tools
 
 
 APP_DIR = resolve_tool_root()
@@ -23,7 +24,7 @@ OLD_TOOL_PATH = APP_DIR / OLD_TOOL_NAME
 LOG_DIR = APP_DIR / "assistant_logs"
 POWER_SUPPLY_COUNT = 6
 TOTAL_CHANNEL_COUNT = 16
-POWER_ON_WAIT_SECONDS_PER_CHANNEL = 5
+POWER_ON_WAIT_SECONDS_PER_CHANNEL = 10
 CHANNEL_LIST_FONT = ("Microsoft YaHei UI", 11)
 CHANNEL_FIELD_WIDTH = 42
 CHANNEL_TABLE_COMBO_WIDTH = 32
@@ -474,7 +475,7 @@ class LineCheckAssistant(Tk):
         if not self._validate_upgrade_required_fields():
             return
         if self.upgrade_mode_var.get() == "全包升级" and self.upgrade_transfer_var.get() == "Tftp拷贝命令":
-            self._start_single_tftp_copy_upgrade()
+            self._start_serial_tftp_copy_upgrade()
             return
 
         vlans = self._selected_upgrade_vlans()
@@ -497,51 +498,62 @@ class LineCheckAssistant(Tk):
             return False
         return True
 
-    def _start_single_tftp_copy_upgrade(self) -> None:
-        channel = self._selected_single_upgrade_channel()
-        if channel is None:
+    def _start_serial_tftp_copy_upgrade(self) -> None:
+        channels = self._selected_tftp_copy_upgrade_channels()
+        if not channels:
             return
         firmware_path = Path(self.upgrade_firmware_var.get().strip())
         if not firmware_path.is_file():
             messagebox.showwarning("未选择升级固件", "请先选择需要升级的固件文件。", parent=self.upgrade_window)
             return
-        try:
-            tftp_server_ip = self._tftp_server_ip_for_channel(channel)
-        except ValueError as exc:
-            messagebox.showwarning("VLAN IP 不正确", str(exc), parent=self.upgrade_window)
+
+        upgrade_items: list[tuple[ChannelConfig, SingleTftpCopyUpgradeRequest]] = []
+        power_serial_port = self._selected_power_serial_port()
+        for channel in channels:
+            try:
+                tftp_server_ip = self._tftp_server_ip_for_channel(channel)
+            except ValueError as exc:
+                messagebox.showwarning("VLAN IP 不正确", str(exc), parent=self.upgrade_window)
+                return
+
+            vlan_name = adapter_alias_from_display(channel.vlan_name or channel.adapter_alias).strip()
+            request = SingleTftpCopyUpgradeRequest(
+                vlan=vlan_name.lower(),
+                server_interface=vlan_name,
+                tftp_server_ip=tftp_server_ip,
+                firmware_path=firmware_path,
+                power_serial_port=power_serial_port,
+                final_username=self.upgrade_username_var.get().strip(),
+                final_password=self.upgrade_password_var.get().strip(),
+                restore_factory=bool(self.upgrade_restore_factory_var.get()),
+            )
+            upgrade_items.append((channel, request))
+
+        target_text = "、".join(request.vlan for _channel, request in upgrade_items)
+        if not messagebox.askyesno(
+            "确认串行升级",
+            f"将按主界面通道顺序升级 {len(upgrade_items)} 台样机：{target_text}\n\n升级过程会自动改写 network_card_ip.ini，仅保留当前上电通道，然后自动上电、进入 boot、下发 Tftp 拷贝命令并复位/重新上电。是否继续？",
+            parent=self.upgrade_window,
+        ):
             return
 
-        vlan = adapter_alias_from_display(channel.vlan_name or channel.adapter_alias).strip().lower()
-        server_interface = adapter_alias_from_display(channel.vlan_name or channel.adapter_alias).strip()
-        request = SingleTftpCopyUpgradeRequest(
-            vlan=vlan,
-            server_interface=server_interface,
-            tftp_server_ip=tftp_server_ip,
-            firmware_path=firmware_path,
-            power_serial_port=self._selected_power_serial_port(),
-            final_username=self.upgrade_username_var.get().strip(),
-            final_password=self.upgrade_password_var.get().strip(),
-            restore_factory=bool(self.upgrade_restore_factory_var.get()),
-        )
-        self._set_upgrade_status(vlan, "启动 SecureCRT、准备串口日志", 0)
-        thread = threading.Thread(target=self._single_tftp_copy_upgrade_worker, args=(request,), daemon=True)
+        self._set_upgrade_status("", f"准备串行升级 {len(upgrade_items)} 台样机", 0)
+        thread = threading.Thread(target=self._serial_tftp_copy_upgrade_worker, args=(upgrade_items,), daemon=True)
         thread.start()
 
-    def _selected_single_upgrade_channel(self):
-        channels = []
+    def _selected_tftp_copy_upgrade_channels(self) -> list[ChannelConfig]:
+        channels_by_vlan: dict[str, ChannelConfig] = {}
         for channel in self.channels:
             if not channel.enabled:
                 continue
             vlan = adapter_alias_from_display(channel.vlan_name or channel.adapter_alias).strip()
-            if vlan:
-                channels.append(channel)
+            if vlan and vlan.lower() not in channels_by_vlan:
+                channels_by_vlan[vlan.lower()] = channel
+        channels = list(channels_by_vlan.values())
         if not channels:
-            messagebox.showwarning("没有目标样机", "请先在主界面勾选 1 个通道并配置对应 VLAN。", parent=self.upgrade_window)
-            return None
-        if len(channels) > 1:
-            messagebox.showwarning("暂只支持单台升级", "当前先实现 1 台样机升级，请只勾选 1 个目标通道。", parent=self.upgrade_window)
-            return None
-        return channels[0]
+            messagebox.showwarning("没有目标样机", "请先在主界面勾选至少 1 个通道并配置对应 VLAN。", parent=self.upgrade_window)
+            return []
+        return channels
 
     def _tftp_server_ip_for_channel(self, channel: ChannelConfig) -> str:
         if channel.network_card_ip:
@@ -558,27 +570,77 @@ class LineCheckAssistant(Tk):
             raise ValueError(f"VLAN 主机号必须在 1-254 之间：{host_number}")
         return f"192.168.1.{host_number}"
 
-    def _single_tftp_copy_upgrade_worker(self, request: SingleTftpCopyUpgradeRequest) -> None:
+    def _serial_tftp_copy_upgrade_worker(self, upgrade_items: list[tuple[ChannelConfig, SingleTftpCopyUpgradeRequest]]) -> None:
+        total = len(upgrade_items)
+        completed = 0
+        failed_request = None
+        failed_result = None
+        restore_result = None
+        selected_channels = [channel for channel, _request in upgrade_items]
+        power_serial_port = upgrade_items[0][1].power_serial_port if upgrade_items else self._selected_power_serial_port()
         try:
-            result = run_single_tftp_copy_upgrade(
-                APP_DIR,
-                OLD_TOOL_PATH,
-                request,
-                on_output=lambda line: self.log_queue.put(line),
-            )
-        except Exception as exc:
-            result = CommandResult(False, f"单台升级流程异常：{exc}")
-        self.after(0, lambda: self._complete_single_tftp_copy_upgrade(request, result))
+            for index, (channel, request) in enumerate(upgrade_items, start=1):
+                start_progress = ((index - 1) / total) * 100 if total else 0
+                self.after(
+                    0,
+                    lambda request=request, index=index, total=total, progress=start_progress: self._set_upgrade_status(
+                        request.vlan,
+                        f"串行升级 {index}/{total}，更新通道配置并准备上电",
+                        progress,
+                    ),
+                )
+                self.log_queue.put(f"开始串行升级 {index}/{total}：{request.vlan}")
+                try:
+                    self.store.save([channel], request.power_serial_port)
+                    self.log_queue.put(f"已更新 network_card_ip.ini，仅保留当前上电通道：{channel.section} / {request.vlan}")
+                    result = run_single_tftp_copy_upgrade(
+                        APP_DIR,
+                        OLD_TOOL_PATH,
+                        request,
+                        on_output=lambda line: self.log_queue.put(line),
+                    )
+                except Exception as exc:
+                    result = CommandResult(False, f"{request.vlan} 升级流程异常：{exc}")
+                if not result.ok:
+                    failed_request = request
+                    failed_result = result
+                    break
+                completed = index
+                finish_progress = (completed / total) * 100 if total else 100
+                self.log_queue.put(result.message)
+                self.after(
+                    0,
+                    lambda request=request, index=index, total=total, progress=finish_progress: self._set_upgrade_status(
+                        request.vlan,
+                        f"串行升级 {index}/{total} 完成",
+                        progress,
+                    ),
+                )
+        finally:
+            if selected_channels:
+                try:
+                    self.store.save(selected_channels, power_serial_port)
+                    self.log_queue.put("已恢复 network_card_ip.ini 中用户选择的完整通道配置。")
+                except Exception as exc:
+                    restore_result = CommandResult(False, f"恢复 network_card_ip.ini 完整通道配置失败：{exc}")
+                    self.log_queue.put(restore_result.message)
+            cleanup_result = close_upgrade_tools(APP_DIR, on_output=lambda line: self.log_queue.put(line))
+            if not cleanup_result.ok:
+                self.log_queue.put(cleanup_result.message)
+        if failed_result is None and restore_result is not None:
+            failed_result = restore_result
+        self.after(0, lambda: self._complete_serial_tftp_copy_upgrade(total, completed, failed_request, failed_result))
 
-    def _complete_single_tftp_copy_upgrade(self, request: SingleTftpCopyUpgradeRequest, result) -> None:
-        if result.ok:
-            self._set_upgrade_status(request.vlan, "升级完成", 100)
-            self._log(result.message)
-            messagebox.showinfo("样机升级完成", result.message, parent=self.upgrade_window)
+    def _complete_serial_tftp_copy_upgrade(self, total: int, completed: int, failed_request, failed_result) -> None:
+        if failed_result is None:
+            self._set_upgrade_status("", f"串行升级完成：{completed}/{total} 台", 100)
+            messagebox.showinfo("样机升级完成", f"串行升级完成：{completed}/{total} 台样机已升级。", parent=self.upgrade_window)
             return
-        self._set_upgrade_status(request.vlan, "升级失败", 0)
-        self._log(result.message)
-        messagebox.showerror("样机升级失败", result.message, parent=self.upgrade_window)
+        progress = (completed / total) * 100 if total else 0
+        vlan = failed_request.vlan if failed_request is not None else ""
+        self._set_upgrade_status(vlan, f"升级失败，已停止后续样机（已完成 {completed}/{total} 台）", progress)
+        self._log(failed_result.message)
+        messagebox.showerror("样机升级失败", failed_result.message, parent=self.upgrade_window)
 
     def _securecrt_launch_worker(self, vlans: list[str]) -> None:
         try:
