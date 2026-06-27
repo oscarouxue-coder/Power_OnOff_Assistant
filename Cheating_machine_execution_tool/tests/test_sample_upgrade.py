@@ -125,7 +125,7 @@ class SampleUpgradeTests(unittest.TestCase):
             self.assertEqual(calls, ["enable", "set_ip", "tftpd"])
             has_status.assert_called_once_with(root / "vlan101.status", "POST_TFTP_BOOT_RESET_SENT")
             sleep.assert_any_call(90)
-            sleep.assert_any_call(180)
+            sleep.assert_any_call(120)
             wait_status.assert_any_call(
                 str(root / "vlan101.status"),
                 "BOOT_LOGIN_COMPLETE",
@@ -210,7 +210,7 @@ class SampleUpgradeTests(unittest.TestCase):
             has_status.assert_called_once_with(root / "vlan101.status", "POST_TFTP_BOOT_RESET_SENT")
             self.assertTrue((root / "vlan101.final_login.signal").is_file())
             sleep.assert_any_call(90)
-            sleep.assert_any_call(180)
+            sleep.assert_any_call(120)
 
 
 if __name__ == "__main__":

@@ -42,6 +42,7 @@
 
 ## 明日继续入口
 
+- 开发记录：`DEVELOPMENT_LOG.md`
 - 主程序：`开关机执行工具\line_check_assistant\app.py`
 - SecureCRT 自动化：`开关机执行工具\line_check_assistant\securecrt_automation.py`
 - SecureCRT 测试：`开关机执行工具\tests\test_securecrt_automation.py`

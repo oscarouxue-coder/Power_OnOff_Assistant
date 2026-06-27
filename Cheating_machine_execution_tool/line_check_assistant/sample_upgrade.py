@@ -16,7 +16,7 @@ from .tftpd_automation import prepare_tftpd_server
 
 
 POWER_RECYCLE_AFTER_UPGRADE_SECONDS = 90
-POWER_ON_SETTLE_SECONDS = 180
+POWER_ON_SETTLE_SECONDS = 120
 BOOT_LOGIN_TIMEOUT_SECONDS = 600
 TFTP_COMPLETE_TIMEOUT_SECONDS = 2400
 FINAL_LOGIN_TIMEOUT_SECONDS = 1200
@@ -126,7 +126,7 @@ def run_single_tftp_copy_upgrade(
     sleep_fn(POWER_RECYCLE_AFTER_UPGRADE_SECONDS)
 
     if _has_status(Path(securecrt_target.status_path), POST_TFTP_BOOT_RESET_STATUS):
-        emit("检测到 SecureCRT 已在 boot 阶段发送 reset，等待 3 分钟后确认登录。")
+        emit("检测到 SecureCRT 已在 boot 阶段发送 reset，等待 120 秒后确认登录。")
         sleep_fn(POWER_ON_SETTLE_SECONDS)
     else:
         emit("未检测到 boot reset，开始重新上电。")
@@ -139,7 +139,7 @@ def run_single_tftp_copy_upgrade(
         if not repower_result.ok:
             return repower_result
 
-        emit("已重新上电，等待 3 分钟后确认登录。")
+        emit("已重新上电，等待 120 秒后确认登录。")
         sleep_fn(POWER_ON_SETTLE_SECONDS)
 
     _write_signal_file(securecrt_target.final_login_signal_path)
