@@ -5,6 +5,7 @@ import ipaddress
 import locale
 import platform
 import re
+import socket
 import subprocess
 import time
 from dataclasses import dataclass
@@ -31,6 +32,43 @@ class AdapterInfo:
         return f"{self.alias} [{self.status}]" if self.status else self.alias
 
 
+@dataclass(frozen=True)
+class UnregisteredOnu:
+    onu_index: str
+    serial_number: str
+    state: str
+
+
+@dataclass(frozen=True)
+class RegisteredOnuState:
+    onu_index: str
+    admin_state: str
+    omcc_state: str
+    phase_state: str
+    channel: str = ""
+
+    @property
+    def interface_name(self) -> str:
+        return f"gpon-onu_{self.onu_index}"
+
+    @property
+    def is_reusable_offline(self) -> bool:
+        return self.admin_state.lower() == "enable" and (
+            self.omcc_state.lower() != "enable" or self.phase_state.lower() != "working"
+        )
+
+
+ONU_REGISTRATION_TYPE = "SD-41"
+ONU_REGISTRATION_SERVICE_PORTS = (
+    (1, 1, 200, "Internet"),
+    (2, 2, 46, "TR069"),
+    (3, 3, 335, "VOICE"),
+    (4, 4, 600, "IPTV"),
+    (5, 5, 171, "Internet2"),
+    (6, 6, 172, "Internet3"),
+)
+
+
 def is_windows() -> bool:
     return platform.system().lower() == "windows"
 
@@ -54,6 +92,399 @@ def list_adapter_display_names() -> List[str]:
 
 def adapter_alias_from_display(value: str) -> str:
     return re.sub(r"\s+\[[^\]]+\]\s*$", "", value or "").strip()
+
+
+def check_telnet_connection(host: str, port: int = 23, timeout: float = 3.0) -> CommandResult:
+    host = (host or "").strip()
+    if not host:
+        return CommandResult(False, "未填写 OLT IP")
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return CommandResult(False, f"OLT IP 格式无效：{host}")
+
+    endpoint = f"{host}:{port}"
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return CommandResult(True, f"Telnet 连通性测试通过：{endpoint}")
+    except socket.timeout:
+        return CommandResult(False, f"Telnet 连接超时：{endpoint}")
+    except OSError as exc:
+        return CommandResult(False, f"Telnet 连接失败：{endpoint}（{exc}）")
+
+
+def login_olt_and_enter_global_mode(
+    host: str,
+    username: str,
+    password: str,
+    port: int = 23,
+    timeout: float = 5.0,
+) -> CommandResult:
+    host = (host or "").strip()
+    username = (username or "").strip()
+    password = password or ""
+    if not host:
+        return CommandResult(False, "未填写 OLT IP")
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return CommandResult(False, f"OLT IP 格式无效：{host}")
+    if not username:
+        return CommandResult(False, "未填写 OLT 用户名")
+    if not password:
+        return CommandResult(False, "未填写 OLT 密码")
+
+    endpoint = f"{host}:{port}"
+    transcript = bytearray()
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as connection:
+            connection.settimeout(timeout)
+            output = _telnet_read_until(connection, (b"username", b"login:", b"password", b">", b"#"), timeout)
+            transcript.extend(output)
+            lowered = bytes(transcript).lower()
+
+            if b"username" in lowered or b"login:" in lowered:
+                _telnet_send_line(connection, username)
+                output = _telnet_read_until(connection, (b"password",), timeout)
+                transcript.extend(output)
+                lowered = bytes(transcript).lower()
+
+            if b"password" in lowered:
+                _telnet_send_line(connection, password)
+                output = _telnet_read_until(connection, (b">", b"#", b"incorrect", b"invalid", b"failed", b"denied"), timeout)
+                transcript.extend(output)
+                lowered = bytes(transcript).lower()
+
+            if _telnet_has_failure(lowered):
+                return CommandResult(False, f"OLT 登录失败：{endpoint}", _decode_telnet_output(bytes(transcript)))
+            if b">" not in lowered and b"#" not in lowered:
+                return CommandResult(False, f"OLT 登录失败：未检测到命令提示符 {endpoint}", _decode_telnet_output(bytes(transcript)))
+
+            _telnet_send_line(connection, "configure terminal")
+            output = _telnet_read_until(connection, (b"(config", b"config)#", b"#", b"invalid", b"error", b"failed"), timeout)
+            transcript.extend(output)
+            lowered = bytes(transcript).lower()
+            if _telnet_has_failure(lowered):
+                return CommandResult(False, "OLT 登录成功，但进入全局模式失败", _decode_telnet_output(bytes(transcript)))
+            if b"(config" in lowered or b"config)#" in lowered:
+                return CommandResult(True, "OLT 登录成功，已进入全局模式", _decode_telnet_output(bytes(transcript)))
+            return CommandResult(False, "OLT 登录成功，但未确认已进入全局模式", _decode_telnet_output(bytes(transcript)))
+    except socket.timeout:
+        return CommandResult(False, f"OLT 登录超时：{endpoint}", _decode_telnet_output(bytes(transcript)))
+    except OSError as exc:
+        return CommandResult(False, f"OLT 登录失败：{endpoint}（{exc}）", _decode_telnet_output(bytes(transcript)))
+
+
+def query_unregistered_onus(
+    host: str,
+    username: str,
+    password: str,
+    port: int = 23,
+    timeout: float = 5.0,
+) -> CommandResult:
+    host = (host or "").strip()
+    username = (username or "").strip()
+    password = password or ""
+    if not host:
+        return CommandResult(False, "未填写 OLT IP")
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return CommandResult(False, f"OLT IP 格式无效：{host}")
+    if not username:
+        return CommandResult(False, "未填写 OLT 用户名")
+    if not password:
+        return CommandResult(False, "未填写 OLT 密码")
+
+    endpoint = f"{host}:{port}"
+    transcript = bytearray()
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as connection:
+            connection.settimeout(timeout)
+            output = _telnet_read_until(connection, (b"username", b"login:", b"password", b">", b"#"), timeout)
+            transcript.extend(output)
+            lowered = bytes(transcript).lower()
+
+            if b"username" in lowered or b"login:" in lowered:
+                _telnet_send_line(connection, username)
+                output = _telnet_read_until(connection, (b"password",), timeout)
+                transcript.extend(output)
+                lowered = bytes(transcript).lower()
+
+            if b"password" in lowered:
+                _telnet_send_line(connection, password)
+                output = _telnet_read_until(connection, (b">", b"#", b"incorrect", b"invalid", b"failed", b"denied"), timeout)
+                transcript.extend(output)
+                lowered = bytes(transcript).lower()
+
+            if _telnet_has_failure(lowered):
+                return CommandResult(False, f"OLT 登录失败：{endpoint}", _decode_telnet_output(bytes(transcript)))
+            if b">" not in lowered and b"#" not in lowered:
+                return CommandResult(False, f"OLT 登录失败：未检测到命令提示符 {endpoint}", _decode_telnet_output(bytes(transcript)))
+
+            _telnet_send_line(connection, "terminal length 0")
+            transcript.extend(_telnet_read_until(connection, (b"#", b">"), timeout))
+            _telnet_send_line(connection, "show gpon onu uncfg")
+            output = _telnet_read_until(connection, (b"#", b">"), timeout)
+            transcript.extend(output)
+            raw_output = _decode_telnet_output(output)
+            onus = parse_unregistered_onus(raw_output)
+            if not onus:
+                if "No related information" in raw_output or "No relate information" in raw_output:
+                    return CommandResult(True, "未查询到未注册 ONU", raw_output)
+                return CommandResult(True, "未查询到未注册 ONU", raw_output)
+            lines = [f"查询到 {len(onus)} 个未注册 ONU："]
+            lines.extend(f"{onu.onu_index}  SN:{onu.serial_number}  状态:{onu.state}" for onu in onus)
+            return CommandResult(True, "\n".join(lines), raw_output)
+    except socket.timeout:
+        return CommandResult(False, f"查询未注册 ONU 超时：{endpoint}", _decode_telnet_output(bytes(transcript)))
+    except OSError as exc:
+        return CommandResult(False, f"查询未注册 ONU 失败：{endpoint}（{exc}）", _decode_telnet_output(bytes(transcript)))
+
+
+def save_olt_configuration(
+    host: str,
+    username: str,
+    password: str,
+    port: int = 23,
+    timeout: float = 8.0,
+) -> CommandResult:
+    host = (host or "").strip()
+    username = (username or "").strip()
+    password = password or ""
+    if not host:
+        return CommandResult(False, "未填写 OLT IP")
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return CommandResult(False, f"OLT IP 格式无效：{host}")
+    if not username:
+        return CommandResult(False, "未填写 OLT 用户名")
+    if not password:
+        return CommandResult(False, "未填写 OLT 密码")
+
+    endpoint = f"{host}:{port}"
+    transcript = bytearray()
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as connection:
+            connection.settimeout(timeout)
+            output = _telnet_read_until(connection, (b"username", b"login:", b"password", b">", b"#"), timeout)
+            transcript.extend(output)
+            lowered = bytes(transcript).lower()
+
+            if b"username" in lowered or b"login:" in lowered:
+                _telnet_send_line(connection, username)
+                output = _telnet_read_until(connection, (b"password",), timeout)
+                transcript.extend(output)
+                lowered = bytes(transcript).lower()
+
+            if b"password" in lowered:
+                _telnet_send_line(connection, password)
+                output = _telnet_read_until(connection, (b">", b"#", b"incorrect", b"invalid", b"failed", b"denied"), timeout)
+                transcript.extend(output)
+                lowered = bytes(transcript).lower()
+
+            if _telnet_has_failure(lowered):
+                return CommandResult(False, f"OLT 登录失败：{endpoint}", _decode_telnet_output(bytes(transcript)))
+            if b">" not in lowered and b"#" not in lowered:
+                return CommandResult(False, f"OLT 登录失败：未检测到命令提示符 {endpoint}", _decode_telnet_output(bytes(transcript)))
+
+            if b"(config" in lowered:
+                exit_result = _telnet_exit_to_exec_mode(connection, timeout, transcript, output)
+                if not exit_result.ok:
+                    return exit_result
+
+            _telnet_send_line(connection, "write")
+            output = _telnet_read_until(connection, (b"#", b">", b"invalid", b"error", b"failed", b"success", b"complete"), timeout)
+            transcript.extend(output)
+            if _telnet_has_failure(output.lower()):
+                return CommandResult(False, "OLT 配置保存失败", _decode_telnet_output(bytes(transcript)))
+            return CommandResult(True, "OLT 最新配置已写入启动配置", _decode_telnet_output(bytes(transcript)))
+    except socket.timeout:
+        return CommandResult(False, f"OLT 配置保存超时：{endpoint}", _decode_telnet_output(bytes(transcript)))
+    except OSError as exc:
+        return CommandResult(False, f"OLT 配置保存失败：{endpoint}（{exc}）", _decode_telnet_output(bytes(transcript)))
+
+
+def register_unregistered_onus(
+    host: str,
+    username: str,
+    password: str,
+    onus: Iterable[UnregisteredOnu],
+    onu_type: str = ONU_REGISTRATION_TYPE,
+    port: int = 23,
+    timeout: float = 5.0,
+) -> CommandResult:
+    host = (host or "").strip()
+    username = (username or "").strip()
+    password = password or ""
+    onu_type = (onu_type or "").strip() or ONU_REGISTRATION_TYPE
+    selected_onus = list(onus or [])
+    if not host:
+        return CommandResult(False, "未填写 OLT IP")
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return CommandResult(False, f"OLT IP 格式无效：{host}")
+    if not username:
+        return CommandResult(False, "未填写 OLT 用户名")
+    if not password:
+        return CommandResult(False, "未填写 OLT 密码")
+    if not selected_onus:
+        return CommandResult(False, "未选择要注册的 ONU")
+
+    try:
+        command_groups = [(onu, build_onu_registration_commands(onu, onu_type)) for onu in selected_onus]
+    except ValueError as exc:
+        return CommandResult(False, str(exc))
+
+    endpoint = f"{host}:{port}"
+    transcript = bytearray()
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as connection:
+            connection.settimeout(timeout)
+            output = _telnet_read_until(connection, (b"username", b"login:", b"password", b">", b"#"), timeout)
+            transcript.extend(output)
+            lowered = bytes(transcript).lower()
+
+            if b"username" in lowered or b"login:" in lowered:
+                _telnet_send_line(connection, username)
+                output = _telnet_read_until(connection, (b"password",), timeout)
+                transcript.extend(output)
+                lowered = bytes(transcript).lower()
+
+            if b"password" in lowered:
+                _telnet_send_line(connection, password)
+                output = _telnet_read_until(connection, (b">", b"#", b"incorrect", b"invalid", b"failed", b"denied"), timeout)
+                transcript.extend(output)
+                lowered = bytes(transcript).lower()
+
+            if _telnet_has_failure(lowered):
+                return CommandResult(False, f"OLT 登录失败：{endpoint}", _decode_telnet_output(bytes(transcript)))
+            if b">" not in lowered and b"#" not in lowered:
+                return CommandResult(False, f"OLT 登录失败：未检测到命令提示符 {endpoint}", _decode_telnet_output(bytes(transcript)))
+
+            _telnet_send_line(connection, "configure terminal")
+            output = _telnet_read_until(connection, (b"(config", b"config)#", b"#", b"invalid", b"error", b"failed"), timeout)
+            transcript.extend(output)
+            if _telnet_has_failure(output.lower()):
+                return CommandResult(False, "进入全局模式失败，未执行 ONU 注册", _decode_telnet_output(bytes(transcript)))
+
+            reusable_onus: List[RegisteredOnuState] = []
+            used_reusable_interfaces = set()
+            actions: List[str] = []
+            for onu, commands in command_groups:
+                for command in commands:
+                    _telnet_send_line(connection, command)
+                    output = _telnet_read_until(connection, (b"#", b">", b"invalid", b"error", b"failed"), timeout)
+                    transcript.extend(output)
+                    if _telnet_has_failure(output.lower()):
+                        fallback = _register_onu_by_reusing_offline_config(
+                            connection,
+                            timeout,
+                            transcript,
+                            onu,
+                            reusable_onus,
+                            used_reusable_interfaces,
+                        )
+                        if not fallback.ok:
+                            return CommandResult(
+                                False,
+                                f"ONU 新增注册失败，且复用旧 ONU 配置失败：{onu.onu_index} SN:{onu.serial_number} / {command}；{fallback.message}",
+                                _decode_telnet_output(bytes(transcript)),
+                            )
+                        actions.append(f"{onu.onu_index} SN:{onu.serial_number} 新增配置失败后复用 {fallback.message}")
+                        break
+                else:
+                    actions.append(f"{onu.onu_index} SN:{onu.serial_number} 新增配置成功")
+
+            _telnet_send_line(connection, "end")
+            transcript.extend(_telnet_read_until(connection, (b"#", b">"), timeout))
+            return CommandResult(
+                True,
+                f"已处理 {len(selected_onus)} 个 ONU 注册配置（未保存 OLT 配置，请重新查询确认上线）：{'；'.join(actions)}",
+                _decode_telnet_output(bytes(transcript)),
+            )
+    except socket.timeout:
+        return CommandResult(False, f"ONU 注册超时：{endpoint}", _decode_telnet_output(bytes(transcript)))
+    except OSError as exc:
+        return CommandResult(False, f"ONU 注册失败：{endpoint}（{exc}）", _decode_telnet_output(bytes(transcript)))
+
+
+def build_onu_registration_commands(onu: UnregisteredOnu, onu_type: str = ONU_REGISTRATION_TYPE) -> List[str]:
+    onu_index = (onu.onu_index or "").strip()
+    serial_number = (onu.serial_number or "").strip()
+    if not serial_number:
+        raise ValueError(f"ONU 缺少 SN：{onu_index or '未知接口'}")
+    match = re.match(r"^gpon-onu_(?P<pon>\d+/\d+/\d+):(?P<onu_id>\d+)$", onu_index, re.IGNORECASE)
+    if not match:
+        raise ValueError(f"ONU 接口格式无效：{onu_index or '未填写'}")
+
+    pon_path = match.group("pon")
+    onu_id = match.group("onu_id")
+    onu_interface = f"gpon-onu_{pon_path}:{onu_id}"
+    commands = [
+        f"interface gpon-olt_{pon_path}",
+        f"onu {onu_id} type {onu_type} sn {serial_number}",
+        "exit",
+        f"interface {onu_interface}",
+        "sn-bind enable sn",
+        "tcont 1 profile 1G",
+    ]
+    commands.extend(f"gemport {gemport} tcont 1" for gemport, _vport, _vlan, _service in ONU_REGISTRATION_SERVICE_PORTS)
+    commands.extend(
+        f"service-port {gemport} vport {vport} user-vlan {vlan} vlan {vlan}"
+        for gemport, vport, vlan, _service in ONU_REGISTRATION_SERVICE_PORTS
+    )
+    commands.extend(["exit", f"pon-onu-mng {onu_interface}"])
+    commands.extend(
+        f"service {service} gemport {gemport} vlan {vlan}"
+        for gemport, _vport, vlan, service in ONU_REGISTRATION_SERVICE_PORTS
+    )
+    commands.extend(["mvlan 600", "exit"])
+    return commands
+
+
+def _register_onu_by_reusing_offline_config(
+    connection,
+    timeout: float,
+    transcript: bytearray,
+    onu: UnregisteredOnu,
+    reusable_onus: List[RegisteredOnuState],
+    used_reusable_interfaces: set,
+) -> CommandResult:
+    if not reusable_onus:
+        _telnet_send_line(connection, "end")
+        transcript.extend(_telnet_read_until(connection, (b"#", b">"), timeout))
+        _telnet_send_line(connection, "terminal length 0")
+        transcript.extend(_telnet_read_until(connection, (b"#", b">"), timeout))
+        _telnet_send_line(connection, "show gpon onu state")
+        output = _telnet_read_until(connection, (b"#", b">"), timeout)
+        transcript.extend(output)
+        reusable_onus.extend(item for item in parse_registered_onu_states(_decode_telnet_output(output)) if item.is_reusable_offline)
+        _telnet_send_line(connection, "configure terminal")
+        output = _telnet_read_until(connection, (b"(config", b"config)#", b"#", b"invalid", b"error", b"failed"), timeout)
+        transcript.extend(output)
+        if _telnet_has_failure(output.lower()):
+            return CommandResult(False, "重新进入全局模式失败，未能复用旧 ONU 配置")
+
+    reusable = next((item for item in reusable_onus if item.interface_name not in used_reusable_interfaces), None)
+    if reusable is None:
+        return CommandResult(False, "未找到可复用的已注册未在线 ONU")
+
+    commands = [
+        f"interface {reusable.interface_name}",
+        f"registration-method sn {onu.serial_number}",
+        "exit",
+    ]
+    for command in commands:
+        _telnet_send_line(connection, command)
+        output = _telnet_read_until(connection, (b"#", b">", b"invalid", b"error", b"failed"), timeout)
+        transcript.extend(output)
+        if _telnet_has_failure(output.lower()):
+            return CommandResult(False, f"复用旧 ONU 配置命令失败：{reusable.interface_name} / {command}")
+    used_reusable_interfaces.add(reusable.interface_name)
+    return CommandResult(True, f"{reusable.interface_name} 替换 SN 为 {onu.serial_number}")
 
 
 def static_ip_for_vlan(vlan_name: str, device_manage_ip: str) -> str:
@@ -314,6 +745,92 @@ def _ping_has_reply(output: str) -> bool:
         or "字节=" in output
         or "bytes=" in lowered
     ) and "100% loss" not in lowered and "100% 丢失" not in output
+
+
+def _telnet_send_line(connection, value: str) -> None:
+    connection.sendall((value + "\r\n").encode("ascii", errors="ignore"))
+
+
+def _telnet_read_until(connection, patterns: Iterable[bytes], timeout: float) -> bytes:
+    expected = tuple(pattern.lower() for pattern in patterns)
+    chunks = bytearray()
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            chunk = connection.recv(4096)
+        except socket.timeout:
+            break
+        if not chunk:
+            break
+        chunks.extend(chunk)
+        lowered = bytes(chunks).lower()
+        if any(pattern in lowered for pattern in expected):
+            break
+    return bytes(chunks)
+
+
+def _telnet_has_failure(output: bytes) -> bool:
+    return any(keyword in output for keyword in (b"incorrect", b"invalid", b"failed", b"denied", b"error"))
+
+
+def _telnet_exit_to_exec_mode(connection, timeout: float, transcript: bytearray, prompt_output: bytes) -> CommandResult:
+    output = prompt_output
+    for _attempt in range(5):
+        if b"(config" not in output.lower():
+            return CommandResult(True, "已退出到 OLT 执行模式")
+        _telnet_send_line(connection, "exit")
+        output = _telnet_read_until(connection, (b"#", b">", b"invalid", b"error", b"failed"), timeout)
+        transcript.extend(output)
+        lowered = output.lower()
+        if _telnet_has_failure(lowered):
+            return CommandResult(False, "退出全局模式失败，未执行 write", _decode_telnet_output(bytes(transcript)))
+    return CommandResult(False, "多次 exit 后仍未退出全局模式，未执行 write", _decode_telnet_output(bytes(transcript)))
+
+
+def _decode_telnet_output(output: bytes) -> str:
+    for encoding in ("utf-8", "gbk", "latin-1"):
+        try:
+            return output.decode(encoding, errors="ignore")
+        except UnicodeError:
+            continue
+    return output.decode(errors="ignore")
+
+
+def parse_unregistered_onus(output: str) -> List[UnregisteredOnu]:
+    onus: List[UnregisteredOnu] = []
+    for raw_line in (output or "").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("-") or line.lower().startswith("onuindex"):
+            continue
+        match = re.match(r"^(gpon-onu_\S+)\s+(\S+)\s+(\S+)\s*$", line, re.IGNORECASE)
+        if match:
+            onus.append(UnregisteredOnu(onu_index=match.group(1), serial_number=match.group(2), state=match.group(3)))
+    return onus
+
+
+def parse_registered_onu_states(output: str) -> List[RegisteredOnuState]:
+    states: List[RegisteredOnuState] = []
+    for raw_line in (output or "").splitlines():
+        line = raw_line.strip()
+        if (
+            not line
+            or line.startswith("-")
+            or line.lower().startswith("onuindex")
+            or line.lower().startswith("onu number")
+        ):
+            continue
+        match = re.match(r"^(?P<onu>\d+/\d+/\d+:\d+)\s+(?P<admin>\S+)\s+(?P<omcc>\S+)\s+(?P<phase>\S+)(?:\s+(?P<channel>.+))?$", line)
+        if match:
+            states.append(
+                RegisteredOnuState(
+                    onu_index=match.group("onu"),
+                    admin_state=match.group("admin"),
+                    omcc_state=match.group("omcc"),
+                    phase_state=match.group("phase"),
+                    channel=(match.group("channel") or "").strip(),
+                )
+            )
+    return states
 
 
 def _console_encoding() -> Optional[str]:

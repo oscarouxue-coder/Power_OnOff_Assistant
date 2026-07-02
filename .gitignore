@@ -7,6 +7,9 @@ __pycache__/
 .pytest_cache/
 
 # Local build and run outputs
+# Local saved form state
+Cheating_machine_execution_tool/config/onu_registration.ini
+Cheating_machine_execution_tool/config/sample_upgrade_settings.ini
 开关机执行工具/build_pending/
 开关机执行工具/dist_pending/
 开关机执行工具/assistant_logs/

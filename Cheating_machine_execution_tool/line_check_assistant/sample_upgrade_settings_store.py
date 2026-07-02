@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+import configparser
+from dataclasses import dataclass
+from pathlib import Path
+
+
+DEFAULT_UPGRADE_MODE = "全包升级"
+DEFAULT_UPGRADE_TRANSFER = "Tftp Put"
+SAMPLE_UPGRADE_SECTION = "sample_upgrade"
+
+
+@dataclass
+class SampleUpgradeSettings:
+    upgrade_mode: str = DEFAULT_UPGRADE_MODE
+    transfer_method: str = DEFAULT_UPGRADE_TRANSFER
+    restore_factory: bool = False
+    username: str = ""
+    password: str = ""
+    firmware_path: str = ""
+
+
+class SampleUpgradeSettingsStore:
+    def __init__(self, config_path: Path):
+        self.config_path = config_path
+
+    def load(self) -> SampleUpgradeSettings:
+        parser = configparser.RawConfigParser()
+        parser.optionxform = str
+        parser.read(self.config_path, encoding="utf-8")
+
+        return SampleUpgradeSettings(
+            upgrade_mode=parser.get(SAMPLE_UPGRADE_SECTION, "upgrade_mode", fallback=DEFAULT_UPGRADE_MODE),
+            transfer_method=parser.get(SAMPLE_UPGRADE_SECTION, "transfer_method", fallback=DEFAULT_UPGRADE_TRANSFER),
+            restore_factory=parser.getboolean(SAMPLE_UPGRADE_SECTION, "restore_factory", fallback=False),
+            username=parser.get(SAMPLE_UPGRADE_SECTION, "username", fallback=""),
+            password=parser.get(SAMPLE_UPGRADE_SECTION, "password", fallback=""),
+            firmware_path=parser.get(SAMPLE_UPGRADE_SECTION, "firmware_path", fallback=""),
+        )
+
+    def save(self, settings: SampleUpgradeSettings) -> None:
+        parser = configparser.RawConfigParser()
+        parser.optionxform = str
+        parser[SAMPLE_UPGRADE_SECTION] = {
+            "upgrade_mode": settings.upgrade_mode or DEFAULT_UPGRADE_MODE,
+            "transfer_method": settings.transfer_method or DEFAULT_UPGRADE_TRANSFER,
+            "restore_factory": "1" if settings.restore_factory else "0",
+            "username": settings.username or "",
+            "password": settings.password or "",
+            "firmware_path": settings.firmware_path or "",
+        }
+
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.config_path.open("w", encoding="utf-8") as file:
+            parser.write(file)

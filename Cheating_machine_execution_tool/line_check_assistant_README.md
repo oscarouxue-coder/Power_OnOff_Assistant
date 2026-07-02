@@ -7,6 +7,7 @@
 - 读取和实时维护 `config/network_card_ip.ini` 的通道配置。
 - 主界面顶部提供“样机升级”入口，当前打开独立的升级模块占位窗口，后续扩展各项目升级流程。
 - 样机升级窗口支持自定义项目/型号、输入超级用户凭据、选择升级固件、同步主界面目标 VLAN，并预留开始升级入口、实时状态和进度显示。
+- 样机升级窗口会保存上一次关闭时的升级方式、固件传输方式、恢复出厂选项、超级用户名、密码和固件路径；状态保存到本机 `config/sample_upgrade_settings.ini`，该文件不提交 Git。
 - 选择“全包升级 + Tftp拷贝命令”后，点击“开始升级”会按已勾选目标 VLAN 串行升级；每台样机会依次打开 SecureCRT 串口日志，自动上电并进入 boot，先把 Windows 对应 VLAN 网卡设置为通道 IP，再启动项目目录下的 `tftpd64.exe`；Tftpd64 软件内仅设置固件所在目录并保持 `Tftp Server` 页签，然后由 SecureCRT 下发 `tftp <通道对应VLAN的IP>:tclinux_allinone`。
 - 多台样机串行升级会按主界面通道顺序执行，启动前弹出确认提示；每台开始前会临时改写 `config/network_card_ip.ini`，只保留当前上电通道，避免旧开关机工具 `Start ALL` 给其他通道上电；全部完成或失败退出后会恢复用户选择的完整通道配置，并自动关闭升级过程中打开的 SecureCRT 和项目目录下的 Tftpd64。
 - Tftp 传输完成后会先等待 1.5 分钟并持续监控 SecureCRT 串口；如果期间看到 `Boot`/`Bood` 字符，SecureCRT 会发送 `reset`，随后跳过自动重新上电，等待 120 秒后继续在当前串口窗口等待 `login` 并登录。
@@ -17,6 +18,7 @@
 - SecureCRT 日志关闭内置紧凑时间戳，使用 `[%Y-%M-%D %h:%m:%s]` 行前缀输出本机时区的完整年月日时分秒；脚本会在连接前基于 `Default_Serial` 建立临时会话并预先配置日志，`Start log upon connect` 默认开启，因此首次连接即可写入时间戳。
 - SecureCRT 会话名称直接使用主界面已勾选通道对应的 VLAN，例如 `vlan101`、`vlan102`。
 - 主界面顶部提供“串口日志记录”入口，当前打开独立的日志配置占位窗口，后续扩展串口采集流程。
+- 主界面顶部提供“ONU注册”入口，窗口默认尺寸为 `896x580`，支持输入 OLT IP（首次默认 `172.18.18.151`，后续恢复上一次关闭时保存的值）、用户名和密码，密码框支持小眼睛切换明文/密文显示；点击 Telnet 连通性测试并确认后，会先检查 OLT Telnet 23 端口，连通后使用用户填写的用户名和密码登录 OLT，并下发 `configure terminal` 进入全局模式；OLT IP 右侧只显示 Telnet 连通性结果，登录和全局模式状态显示在查询入口下方，查询/注册状态栏支持长结果自动换行；点击“开始查询”会登录 OLT 并执行 `show gpon onu uncfg`，以复选框列表显示所有 PON 口下未注册 ONU 的接口、SN 和状态，并支持全选/取消全选；勾选 ONU 后点击“开始注册”会二次确认并优先按已确认的 SD-41 模板下发注册配置、业务 VLAN 和 `pon-onu-mng` 服务配置，如新增业务配置命令报错，会自动查询已注册但未在线的旧 ONU，并通过 `interface gpon-onu_旧ONU接口` + `registration-method sn 新SN` 复用旧配置；注册完成后会询问是否保存 OLT 最新配置，用户确认后先退出到 `ZXAN#` 执行模式再执行 `write` 写入启动配置；ONU 注册输入框会保存到本机 `config/onu_registration.ini`，该文件不提交 Git；后续扩展结果导出流程。
 - 为每个通道选择实际接入的 Windows 网卡名称。
 - 网卡列表优先读取 `Get-NetAdapter -IncludeHidden`，可显示禁用、断开和隐藏网卡；界面显示状态，例如 `[Connected]`、`[Disconnected]`。
 - 保存每个通道的 PC 静态 IP、样机管理 IP、子网掩码、启用状态。
