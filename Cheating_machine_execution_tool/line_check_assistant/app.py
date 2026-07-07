@@ -24,7 +24,8 @@ from .network_ops import (
 from .old_tool_automation import automate_power_on
 from .old_tool_config import prepare_power_on_default
 from .onu_registration_store import DEFAULT_OLT_IP, OnuRegistrationConfig, OnuRegistrationStore
-from .paths import OLD_TOOL_NAME, resolve_tool_root
+from .page_upgrade import PageUpgradeRequest, run_page_upgrade_batch
+from .paths import resolve_old_tool_path, resolve_tool_root
 from .sample_upgrade_settings_store import DEFAULT_UPGRADE_MODE, DEFAULT_UPGRADE_TRANSFER, SampleUpgradeSettings, SampleUpgradeSettingsStore
 from .sample_upgrade import SingleTftpCopyUpgradeRequest, run_single_tftp_copy_upgrade
 from .securecrt_automation import SecureCRTLaunchResult, launch_securecrt_serial_logs
@@ -37,7 +38,7 @@ CONFIG_DIR = APP_DIR / "config"
 NETWORK_CONFIG_PATH = CONFIG_DIR / "network_card_ip.ini"
 ONU_REGISTRATION_CONFIG_PATH = CONFIG_DIR / "onu_registration.ini"
 SAMPLE_UPGRADE_SETTINGS_PATH = CONFIG_DIR / "sample_upgrade_settings.ini"
-OLD_TOOL_PATH = APP_DIR / OLD_TOOL_NAME
+OLD_TOOL_PATH = resolve_old_tool_path(APP_DIR)
 LOG_DIR = APP_DIR / "assistant_logs"
 POWER_SUPPLY_COUNT = 6
 TOTAL_CHANNEL_COUNT = 16
@@ -724,7 +725,8 @@ class LineCheckAssistant(Tk):
             "确认注册 ONU",
             f"将登录 OLT 并下发 {len(selected_onus)} 个 ONU 的注册配置，ONU 类型为 SD-41。\n"
             f"{onu_lines}\n\n如果新增 ONU 业务配置下发失败，软件会自动查找已注册但未在线的旧 ONU，"
-            "并用 registration-method sn 新SN 的方式复用旧 ONU 配置。\n"
+            "优先删除和新 ONU 同 PON 口的不在线 ONU，再删除其它 PON 口不在线 ONU，"
+            "删除后重新注册新 ONU。\n"
             "该操作会修改 OLT 当前配置，但不会自动保存配置。是否继续？",
             parent=self.onu_registration_window,
         )
@@ -875,7 +877,7 @@ class LineCheckAssistant(Tk):
         Label(content, text="样机升级", font=(FONT_FAMILY, 18, "bold"), background=COLOR_BG, foreground=COLOR_TEXT).pack(anchor="w")
         Label(
             content,
-            text="选择升级方式、升级固件和目标样机。具体升级命令与校验规则将在后续完善。",
+            text="选择升级方式、升级固件和目标样机。页面升级会通过 UBUS 批量执行。",
             foreground=COLOR_MUTED,
             background=COLOR_BG,
         ).pack(anchor="w", pady=(6, 16))
@@ -970,7 +972,7 @@ class LineCheckAssistant(Tk):
 
         Label(
             content,
-            text="当前版本仅保存本次窗口中的配置，不会下发升级命令或修改设备。",
+            text="页面升级会上传固件并触发设备升级；全包 Tftp 拷贝命令会操作旧开关机工具、SecureCRT 和 Tftpd64。",
             foreground=COLOR_WARNING,
             background=COLOR_BG,
         ).pack(anchor="w", pady=(16, 0))
@@ -1021,6 +1023,9 @@ class LineCheckAssistant(Tk):
         if self.upgrade_mode_var.get() == "全包升级" and self.upgrade_transfer_var.get() == "Tftp拷贝命令":
             self._start_serial_tftp_copy_upgrade()
             return
+        if self.upgrade_mode_var.get() == "页面升级":
+            self._start_page_upgrade()
+            return
 
         vlans = self._selected_upgrade_vlans()
         if not vlans:
@@ -1029,6 +1034,100 @@ class LineCheckAssistant(Tk):
         self._set_upgrade_status("", "正在启动 SecureCRT 并建立串口连接...", 0)
         thread = threading.Thread(target=self._securecrt_launch_worker, args=(vlans,), daemon=True)
         thread.start()
+
+    def _start_page_upgrade(self) -> None:
+        channels = self._selected_page_upgrade_channels()
+        if not channels:
+            return
+        firmware_path = Path(self.upgrade_firmware_var.get().strip())
+        if not firmware_path.is_file():
+            messagebox.showwarning("未选择升级固件", "请先选择需要升级的固件文件。", parent=self.upgrade_window)
+            return
+
+        requests: list[PageUpgradeRequest] = []
+        for channel in channels:
+            vlan_name = adapter_alias_from_display(channel.vlan_name or channel.adapter_alias).strip()
+            device_ip = (channel.device_manage_ip or self.device_ip_var.get().strip()).strip()
+            bind_ip = channel.network_card_ip.strip()
+            if not bind_ip:
+                try:
+                    bind_ip = self._tftp_server_ip_for_channel(channel)
+                except ValueError as exc:
+                    messagebox.showwarning("绑定 IP 不正确", str(exc), parent=self.upgrade_window)
+                    return
+            if not device_ip:
+                messagebox.showwarning("样机 IP 不完整", f"{channel.label} 未配置样机 IP。", parent=self.upgrade_window)
+                return
+            requests.append(
+                PageUpgradeRequest(
+                    vlan=vlan_name.lower() if vlan_name.lower().startswith("vlan") else vlan_name,
+                    adapter_alias=channel.adapter_alias or vlan_name,
+                    bind_ip=bind_ip,
+                    device_ip=device_ip,
+                    username=self.upgrade_username_var.get().strip(),
+                    password=self.upgrade_password_var.get().strip(),
+                    firmware_path=firmware_path,
+                )
+            )
+
+        target_text = "、".join(request.vlan or request.device_ip for request in requests)
+        if not messagebox.askyesno(
+            "确认页面升级",
+            f"将通过 UBUS 页面升级并行升级 {len(requests)} 台样机：{target_text}\n\n"
+            "该操作会上传固件、触发升级并等待设备重启上线。是否继续？",
+            parent=self.upgrade_window,
+        ):
+            return
+
+        self._set_upgrade_status("", f"准备页面升级 {len(requests)} 台样机", 0)
+        thread = threading.Thread(target=self._page_upgrade_worker, args=(requests,), daemon=True)
+        thread.start()
+
+    def _selected_page_upgrade_channels(self) -> list[ChannelConfig]:
+        channels_by_vlan: dict[str, ChannelConfig] = {}
+        for channel in self.channels:
+            if not channel.enabled:
+                continue
+            vlan = adapter_alias_from_display(channel.vlan_name or channel.adapter_alias).strip()
+            if vlan and vlan.lower() not in channels_by_vlan:
+                channels_by_vlan[vlan.lower()] = channel
+        channels = list(channels_by_vlan.values())
+        if not channels:
+            messagebox.showwarning("没有目标样机", "请先在主界面勾选至少 1 个通道并配置对应 VLAN。", parent=self.upgrade_window)
+            return []
+        return channels
+
+    def _page_upgrade_worker(self, requests: list[PageUpgradeRequest]) -> None:
+        total = len(requests)
+        completed = 0
+
+        def on_item_complete(item_result) -> None:
+            nonlocal completed
+            completed += 1
+            progress = (completed / total) * 100 if total else 100
+            stage = "页面升级完成" if item_result.result.ok else "页面升级失败"
+            self.after(0, lambda request=item_result.request, stage=stage, progress=progress: self._set_upgrade_status(request.vlan, stage, progress))
+            self.log_queue.put(item_result.result.message)
+
+        self.log_queue.put(f"开始 UBUS 页面升级，共 {total} 台样机。")
+        results = run_page_upgrade_batch(
+            requests,
+            on_output=lambda line: self.log_queue.put(line),
+            on_item_complete=on_item_complete,
+        )
+        self.after(0, lambda: self._complete_page_upgrade(results))
+
+    def _complete_page_upgrade(self, results) -> None:
+        total = len(results)
+        success_count = sum(1 for item in results if item.result.ok)
+        if success_count == total:
+            self._set_upgrade_status("", f"页面升级完成：{success_count}/{total} 台", 100)
+            messagebox.showinfo("样机升级完成", f"页面升级完成：{success_count}/{total} 台样机已升级。", parent=self.upgrade_window)
+            return
+        failed_messages = [item.result.message for item in results if not item.result.ok]
+        progress = (success_count / total) * 100 if total else 0
+        self._set_upgrade_status("", f"页面升级完成：{success_count}/{total} 台成功", progress)
+        messagebox.showerror("样机升级失败", "\n".join(failed_messages), parent=self.upgrade_window)
 
     def _validate_upgrade_required_fields(self) -> bool:
         required_fields = [
@@ -1205,7 +1304,7 @@ class LineCheckAssistant(Tk):
             "串口日志已启动",
             f"已检测到 SecureCRT 可见窗口，并按目标 VLAN 启动 {len(result.targets)} 个串口连接。\n"
             f"日志目录：{result.log_directory}\n\n"
-            "具体升级命令将在后续实现。",
+            "当前固件传输方式仅启动串口日志，未下发升级命令。",
             parent=self.upgrade_window,
         )
 

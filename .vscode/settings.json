@@ -1,0 +1,4 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv_serial_upgrade/Scripts/python.exe",
+  "python.terminal.executeInFileDir": true
+}

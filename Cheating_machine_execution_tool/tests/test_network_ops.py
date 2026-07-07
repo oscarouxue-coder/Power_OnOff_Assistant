@@ -285,6 +285,8 @@ class TelnetConnectionTests(unittest.TestCase):
             RegisteredOnuState("1/2/5:1", "enable", "disable", "DyingGasp", "1(GPON)"),
         )
         self.assertEqual(states[0].interface_name, "gpon-onu_1/2/5:1")
+        self.assertEqual(states[0].pon_path, "1/2/5")
+        self.assertEqual(states[0].onu_id, "1")
         self.assertTrue(states[0].is_reusable_offline)
         self.assertFalse(states[1].is_reusable_offline)
 
@@ -311,7 +313,7 @@ class TelnetConnectionTests(unittest.TestCase):
         self.assertEqual(sent_commands[-1], "end")
 
     @patch("line_check_assistant.network_ops.socket.create_connection")
-    def test_register_unregistered_onus_reuses_offline_onu_when_new_service_fails(self, create_connection):
+    def test_register_unregistered_onus_deletes_offline_onus_before_retry_when_new_service_fails(self, create_connection):
         connection = FakeTelnetSocket(
             [b"Username:", b"Password:", b"ZXAN#", b"configure terminal\r\nZXAN(config)#"],
             default_response=b"ZXAN(config)#",
@@ -322,6 +324,8 @@ class TelnetConnectionTests(unittest.TestCase):
                         b"OnuIndex   Admin State  OMCC State  Phase State  Channel\r\n"
                         b"--------------------------------------------------------------\r\n"
                         b"1/2/5:1     enable       disable     DyingGasp    1(GPON)\r\n"
+                        b"1/2/1:8     enable       disable     DyingGasp    1(GPON)\r\n"
+                        b"1/2/6:3     enable       disable     DyingGasp    1(GPON)\r\n"
                         b"1/2/5:2     enable       enable      working      1(GPON)\r\n"
                         b"ZXAN#"
                     )
@@ -334,12 +338,18 @@ class TelnetConnectionTests(unittest.TestCase):
         result = register_unregistered_onus("172.18.18.151", "zte", "zte", [onu])
 
         self.assertTrue(result.ok)
-        self.assertIn("新增配置失败后复用 gpon-onu_1/2/5:1 替换 SN 为 GPONA62D6F48", result.message)
+        self.assertIn("新增配置失败后删除 3 个离线 ONU 后重新注册成功（同 PON 1 个，其它 PON 2 个）", result.message)
         sent_commands = [item.decode("ascii").strip() for item in connection.sent]
         self.assertIn("service Internet gemport 1 vlan 200", sent_commands)
         self.assertIn("show gpon onu state", sent_commands)
-        self.assertIn("interface gpon-onu_1/2/5:1", sent_commands)
-        self.assertIn("registration-method sn GPONA62D6F48", sent_commands)
+        self.assertNotIn("registration-method sn GPONA62D6F48", sent_commands)
+        first_same_pon_delete = sent_commands.index("interface gpon-olt_1/2/1", sent_commands.index("show gpon onu state"))
+        first_other_pon_delete = sent_commands.index("interface gpon-olt_1/2/5", first_same_pon_delete)
+        self.assertLess(first_same_pon_delete, first_other_pon_delete)
+        self.assertIn("no onu 8", sent_commands)
+        self.assertIn("no onu 1", sent_commands)
+        self.assertIn("no onu 3", sent_commands)
+        self.assertGreater(sent_commands.count("onu 1 type SD-41 sn GPONA62D6F48"), 1)
         self.assertEqual(sent_commands[-1], "end")
 
     @patch("line_check_assistant.network_ops.socket.create_connection")

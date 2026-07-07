@@ -1,0 +1,4 @@
+pyserial>=3.5
+selenium>=4.0
+webdriver-manager>=4.0
+openpyxl>=3.0

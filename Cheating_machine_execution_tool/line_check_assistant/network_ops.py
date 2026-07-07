@@ -52,6 +52,16 @@ class RegisteredOnuState:
         return f"gpon-onu_{self.onu_index}"
 
     @property
+    def pon_path(self) -> str:
+        match = re.match(r"^(?P<pon>\d+/\d+/\d+):\d+$", self.onu_index)
+        return match.group("pon") if match else ""
+
+    @property
+    def onu_id(self) -> str:
+        match = re.match(r"^\d+/\d+/\d+:(?P<onu_id>\d+)$", self.onu_index)
+        return match.group("onu_id") if match else ""
+
+    @property
     def is_reusable_offline(self) -> bool:
         return self.admin_state.lower() == "enable" and (
             self.omcc_state.lower() != "enable" or self.phase_state.lower() != "working"
@@ -370,33 +380,27 @@ def register_unregistered_onus(
             if _telnet_has_failure(output.lower()):
                 return CommandResult(False, "进入全局模式失败，未执行 ONU 注册", _decode_telnet_output(bytes(transcript)))
 
-            reusable_onus: List[RegisteredOnuState] = []
-            used_reusable_interfaces = set()
             actions: List[str] = []
             for onu, commands in command_groups:
-                for command in commands:
-                    _telnet_send_line(connection, command)
-                    output = _telnet_read_until(connection, (b"#", b">", b"invalid", b"error", b"failed"), timeout)
-                    transcript.extend(output)
-                    if _telnet_has_failure(output.lower()):
-                        fallback = _register_onu_by_reusing_offline_config(
-                            connection,
-                            timeout,
-                            transcript,
-                            onu,
-                            reusable_onus,
-                            used_reusable_interfaces,
-                        )
-                        if not fallback.ok:
-                            return CommandResult(
-                                False,
-                                f"ONU 新增注册失败，且复用旧 ONU 配置失败：{onu.onu_index} SN:{onu.serial_number} / {command}；{fallback.message}",
-                                _decode_telnet_output(bytes(transcript)),
-                            )
-                        actions.append(f"{onu.onu_index} SN:{onu.serial_number} 新增配置失败后复用 {fallback.message}")
-                        break
-                else:
+                register_result = _run_onu_registration_commands(connection, timeout, transcript, commands)
+                if register_result.ok:
                     actions.append(f"{onu.onu_index} SN:{onu.serial_number} 新增配置成功")
+                    continue
+
+                cleanup = _delete_offline_onus_and_reregister(
+                    connection,
+                    timeout,
+                    transcript,
+                    onu,
+                    commands,
+                )
+                if not cleanup.ok:
+                    return CommandResult(
+                        False,
+                        f"ONU 新增注册失败，且清理离线 ONU 后重新注册失败：{onu.onu_index} SN:{onu.serial_number} / {register_result.message}；{cleanup.message}",
+                        _decode_telnet_output(bytes(transcript)),
+                    )
+                actions.append(f"{onu.onu_index} SN:{onu.serial_number} 新增配置失败后{cleanup.message}")
 
             _telnet_send_line(connection, "end")
             transcript.extend(_telnet_read_until(connection, (b"#", b">"), timeout))
@@ -445,46 +449,82 @@ def build_onu_registration_commands(onu: UnregisteredOnu, onu_type: str = ONU_RE
     return commands
 
 
-def _register_onu_by_reusing_offline_config(
+def _run_onu_registration_commands(
     connection,
     timeout: float,
     transcript: bytearray,
-    onu: UnregisteredOnu,
-    reusable_onus: List[RegisteredOnuState],
-    used_reusable_interfaces: set,
+    commands: Iterable[str],
 ) -> CommandResult:
-    if not reusable_onus:
-        _telnet_send_line(connection, "end")
-        transcript.extend(_telnet_read_until(connection, (b"#", b">"), timeout))
-        _telnet_send_line(connection, "terminal length 0")
-        transcript.extend(_telnet_read_until(connection, (b"#", b">"), timeout))
-        _telnet_send_line(connection, "show gpon onu state")
-        output = _telnet_read_until(connection, (b"#", b">"), timeout)
-        transcript.extend(output)
-        reusable_onus.extend(item for item in parse_registered_onu_states(_decode_telnet_output(output)) if item.is_reusable_offline)
-        _telnet_send_line(connection, "configure terminal")
-        output = _telnet_read_until(connection, (b"(config", b"config)#", b"#", b"invalid", b"error", b"failed"), timeout)
-        transcript.extend(output)
-        if _telnet_has_failure(output.lower()):
-            return CommandResult(False, "重新进入全局模式失败，未能复用旧 ONU 配置")
-
-    reusable = next((item for item in reusable_onus if item.interface_name not in used_reusable_interfaces), None)
-    if reusable is None:
-        return CommandResult(False, "未找到可复用的已注册未在线 ONU")
-
-    commands = [
-        f"interface {reusable.interface_name}",
-        f"registration-method sn {onu.serial_number}",
-        "exit",
-    ]
     for command in commands:
         _telnet_send_line(connection, command)
         output = _telnet_read_until(connection, (b"#", b">", b"invalid", b"error", b"failed"), timeout)
         transcript.extend(output)
         if _telnet_has_failure(output.lower()):
-            return CommandResult(False, f"复用旧 ONU 配置命令失败：{reusable.interface_name} / {command}")
-    used_reusable_interfaces.add(reusable.interface_name)
-    return CommandResult(True, f"{reusable.interface_name} 替换 SN 为 {onu.serial_number}")
+            return CommandResult(False, f"注册命令失败：{command}")
+    return CommandResult(True, "注册命令下发成功")
+
+
+def _delete_offline_onus_and_reregister(
+    connection,
+    timeout: float,
+    transcript: bytearray,
+    onu: UnregisteredOnu,
+    commands: Iterable[str],
+) -> CommandResult:
+    pon_path = _pon_path_from_onu_index(onu.onu_index)
+    if not pon_path:
+        return CommandResult(False, f"无法识别新 ONU 所在 PON 口：{onu.onu_index}")
+
+    _telnet_send_line(connection, "end")
+    transcript.extend(_telnet_read_until(connection, (b"#", b">"), timeout))
+    _telnet_send_line(connection, "terminal length 0")
+    transcript.extend(_telnet_read_until(connection, (b"#", b">"), timeout))
+    _telnet_send_line(connection, "show gpon onu state")
+    output = _telnet_read_until(connection, (b"#", b">"), timeout)
+    transcript.extend(output)
+    offline_onus = [item for item in parse_registered_onu_states(_decode_telnet_output(output)) if item.is_reusable_offline]
+    if not offline_onus:
+        return CommandResult(False, "未找到已注册但不在线的 ONU，无法清理后重试")
+
+    ordered_offline_onus = sorted(offline_onus, key=lambda item: 0 if item.pon_path == pon_path else 1)
+    _telnet_send_line(connection, "configure terminal")
+    output = _telnet_read_until(connection, (b"(config", b"config)#", b"#", b"invalid", b"error", b"failed"), timeout)
+    transcript.extend(output)
+    if _telnet_has_failure(output.lower()):
+        return CommandResult(False, "重新进入全局模式失败，未能删除离线 ONU")
+
+    deleted: List[str] = []
+    for offline_onu in ordered_offline_onus:
+        if not offline_onu.pon_path or not offline_onu.onu_id:
+            continue
+        delete_commands = [
+            f"interface gpon-olt_{offline_onu.pon_path}",
+            f"no onu {offline_onu.onu_id}",
+            "exit",
+        ]
+        for command in delete_commands:
+            _telnet_send_line(connection, command)
+            output = _telnet_read_until(connection, (b"#", b">", b"invalid", b"error", b"failed"), timeout)
+            transcript.extend(output)
+            if _telnet_has_failure(output.lower()):
+                return CommandResult(False, f"删除离线 ONU 失败：{offline_onu.interface_name} / {command}")
+        deleted.append(offline_onu.interface_name)
+
+    if not deleted:
+        return CommandResult(False, "未解析到可删除的离线 ONU 接口")
+
+    retry_result = _run_onu_registration_commands(connection, timeout, transcript, commands)
+    if not retry_result.ok:
+        return CommandResult(False, f"已删除离线 ONU，但重新注册失败：{retry_result.message}")
+
+    same_pon_count = sum(1 for item in ordered_offline_onus if item.interface_name in deleted and item.pon_path == pon_path)
+    other_pon_count = len(deleted) - same_pon_count
+    return CommandResult(True, f"删除 {len(deleted)} 个离线 ONU 后重新注册成功（同 PON {same_pon_count} 个，其它 PON {other_pon_count} 个）")
+
+
+def _pon_path_from_onu_index(onu_index: str) -> str:
+    match = re.match(r"^gpon-onu_(?P<pon>\d+/\d+/\d+):\d+$", (onu_index or "").strip(), re.IGNORECASE)
+    return match.group("pon") if match else ""
 
 
 def static_ip_for_vlan(vlan_name: str, device_manage_ip: str) -> str:

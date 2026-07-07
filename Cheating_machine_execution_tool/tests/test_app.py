@@ -15,6 +15,7 @@ from line_check_assistant.app import (
 from line_check_assistant.config_store import ChannelConfig
 from line_check_assistant.network_ops import CommandResult, UnregisteredOnu
 from line_check_assistant.onu_registration_store import OnuRegistrationConfig
+from line_check_assistant.page_upgrade import PageUpgradeItemResult, PageUpgradeRequest
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
 
 
@@ -540,8 +541,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         context.upgrade_restore_factory_text_var.set.assert_called_once_with("☑ 恢复出厂")
 
     @patch("line_check_assistant.app.threading.Thread")
-    def test_upgrade_start_queues_securecrt_serial_logs(self, thread_class):
-        worker = thread_class.return_value
+    def test_page_upgrade_start_routes_to_page_upgrade_flow(self, thread_class):
         context = SimpleNamespace(
             upgrade_mode_var=Mock(get=Mock(return_value="页面升级")),
             upgrade_transfer_var=Mock(get=Mock(return_value="Tftp Put")),
@@ -551,20 +551,13 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_window=Mock(),
             _capture_current_channel=Mock(),
             _validate_upgrade_required_fields=Mock(return_value=True),
-            _selected_upgrade_vlans=Mock(return_value=["vlan101", "vlan108"]),
-            _set_upgrade_status=Mock(),
-            _securecrt_launch_worker=Mock(),
+            _start_page_upgrade=Mock(),
         )
 
         LineCheckAssistant._on_upgrade_start_clicked(context)
 
-        context._set_upgrade_status.assert_called_once_with("", "正在启动 SecureCRT 并建立串口连接...", 0)
-        thread_class.assert_called_once_with(
-            target=context._securecrt_launch_worker,
-            args=(["vlan101", "vlan108"],),
-            daemon=True,
-        )
-        worker.start.assert_called_once_with()
+        context._start_page_upgrade.assert_called_once_with()
+        thread_class.assert_not_called()
 
     @patch("line_check_assistant.app.threading.Thread")
     def test_full_package_tftp_copy_starts_serial_upgrade_flow(self, thread_class):
@@ -583,6 +576,85 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         context._start_serial_tftp_copy_upgrade.assert_called_once_with()
         thread_class.assert_not_called()
+
+    @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
+    @patch("line_check_assistant.app.Path.is_file", return_value=True)
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_page_upgrade_requests_use_enabled_channel_ips(self, thread_class, _is_file, _askyesno):
+        channels = [
+            ChannelConfig(section="channel_1", vlan_name="VLAN102", adapter_alias="VLAN102", network_card_ip="172.18.18.3", device_manage_ip="192.168.29.1", enabled=True),
+            ChannelConfig(section="channel_2", vlan_name="VLAN101", network_card_ip="", device_manage_ip="192.168.30.1", enabled=True),
+        ]
+        context = SimpleNamespace(
+            upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\sdmc.bin")),
+            upgrade_username_var=Mock(get=Mock(return_value="sdmc")),
+            upgrade_password_var=Mock(get=Mock(return_value="1234")),
+            upgrade_window=Mock(),
+            device_ip_var=Mock(get=Mock(return_value="192.168.1.1")),
+            _selected_page_upgrade_channels=Mock(return_value=channels),
+            _tftp_server_ip_for_channel=Mock(return_value="172.18.18.4"),
+            _set_upgrade_status=Mock(),
+            _page_upgrade_worker=Mock(),
+        )
+
+        LineCheckAssistant._start_page_upgrade(context)
+
+        requests = thread_class.call_args.kwargs["args"][0]
+        self.assertEqual([request.vlan for request in requests], ["vlan102", "vlan101"])
+        self.assertEqual([request.adapter_alias for request in requests], ["VLAN102", "VLAN101"])
+        self.assertEqual([request.bind_ip for request in requests], ["172.18.18.3", "172.18.18.4"])
+        self.assertEqual([request.device_ip for request in requests], ["192.168.29.1", "192.168.30.1"])
+        self.assertTrue(all(request.username == "sdmc" for request in requests))
+        self.assertTrue(all(request.password == "1234" for request in requests))
+        thread_class.return_value.start.assert_called_once_with()
+
+    def test_page_upgrade_channels_follow_main_channel_order_and_deduplicate(self):
+        context = SimpleNamespace(
+            channels=[
+                ChannelConfig(section="channel_1", vlan_name="VLAN108", enabled=True),
+                ChannelConfig(section="channel_2", vlan_name="VLAN101", enabled=True),
+                ChannelConfig(section="channel_3", vlan_name="vlan108", enabled=True),
+                ChannelConfig(section="channel_4", vlan_name="VLAN102", enabled=False),
+            ],
+            upgrade_window=Mock(),
+        )
+
+        channels = LineCheckAssistant._selected_page_upgrade_channels(context)
+
+        self.assertEqual([channel.section for channel in channels], ["channel_1", "channel_2"])
+
+    @patch("line_check_assistant.app.run_page_upgrade_batch")
+    def test_page_upgrade_worker_reports_completion(self, run_batch):
+        request = PageUpgradeRequest(
+            vlan="vlan101",
+            bind_ip="172.18.18.3",
+            device_ip="192.168.29.1",
+            username="sdmc",
+            password="1234",
+            firmware_path=Mock(),
+        )
+        item_result = PageUpgradeItemResult(request=request, result=CommandResult(True, "vlan101 ok"))
+
+        def fake_batch(requests, on_output=None, on_item_complete=None):
+            on_output("log line")
+            on_item_complete(item_result)
+            return [item_result]
+
+        run_batch.side_effect = fake_batch
+        context = SimpleNamespace(
+            log_queue=Mock(),
+            after=Mock(side_effect=lambda _delay, callback: callback()),
+            _set_upgrade_status=Mock(),
+            _complete_page_upgrade=Mock(),
+        )
+
+        LineCheckAssistant._page_upgrade_worker(context, [request])
+
+        context.log_queue.put.assert_any_call("开始 UBUS 页面升级，共 1 台样机。")
+        context.log_queue.put.assert_any_call("log line")
+        context.log_queue.put.assert_any_call("vlan101 ok")
+        context._set_upgrade_status.assert_called_once_with("vlan101", "页面升级完成", 100)
+        context._complete_page_upgrade.assert_called_once_with([item_result])
 
     @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
     @patch("line_check_assistant.app.Path.is_file", return_value=True)

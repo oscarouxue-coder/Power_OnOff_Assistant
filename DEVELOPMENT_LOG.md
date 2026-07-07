@@ -24,6 +24,66 @@
 - 后续待办：
 ```
 
+## 2026-07-07 - 页面升级前自动启用目标网卡
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：用户实测 `vlan137`、`vlan138` 页面升级失败，原因为 PC 对应 VLAN 网卡未启用，导致无法登录 UBUS。
+- 完成内容：页面升级请求新增目标网卡字段；每台样机执行 UBUS 登录前先调用现有 `enable_adapter()` 启用对应网卡，启用失败则只标记该样机失败并保留日志，其它并行样机继续执行。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/page_upgrade.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_page_upgrade.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行页面升级单元测试、样机升级入口测试、编译检查和完整测试集。
+- 验证结果：编译检查通过；`test_page_upgrade.py` 5 项通过；`test_app.py` 52 项通过；完整单元测试 111 项全部 OK。
+- 后续待办：用真实 `vlan137`、`vlan138` 复测未启用网卡场景。
+
+## 2026-07-07 - 兼容 UBUS 触发升级 Access denied
+
+- 类型：BUG 修复 / 测试
+- 背景：用户实测页面升级时，`vlan139` 在触发 UBUS 升级阶段返回 `Access denied`；后续确认原因是浏览器仍登录样机 Web 管理界面，退出 Web 管理界面后升级成功。
+- 完成内容：为 UBUS RPC 错误增加调用点上下文；触发升级命令从单一 `bbfdm.operate` 改为依次尝试 `bbfdm.operate`、`bbfdm.operate(proto=web)` 和 `bbfdm.unauthenticated_operate`，遇到 `Access denied` 时自动尝试下一种兼容方式，并在日志中输出切换过程。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/page_upgrade.py`、`Cheating_machine_execution_tool/tests/test_page_upgrade.py`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行页面升级单元测试、样机升级入口测试、编译检查和完整测试集。
+- 验证结果：编译检查通过；`test_page_upgrade.py` 4 项通过；`test_app.py` 52 项通过；完整单元测试 110 项全部 OK。
+- 后续待办：页面升级操作前提醒退出样机 Web 管理界面；如后续仍出现 `Access denied`，再根据日志中的 UBUS 调用点排查账号权限或接口差异。
+
+## 2026-07-07 - 接入 UBUS 页面批量升级
+
+- 类型：功能 / 测试 / 文档
+- 背景：用户提供同事的 `ubus_upgrade_gui.py` / `ubus_upgrade.py`，要求将已验证的 UBUS 批量页面升级能力合并到现有“样机升级”的“页面升级”功能中。
+- 完成内容：新增页面升级业务模块，支持绑定本机 IP、HTTP/HTTPS 登录 UBUS、上传固件、触发升级、查询状态和等待重启上线；“页面升级”按钮改为按已勾选通道并行执行 UBUS 批量升级；保留“全包升级 + Tftp拷贝命令”现有串行流程。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/page_upgrade.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_page_upgrade.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行编译检查、页面升级单元测试、样机升级入口单元测试和完整测试集。
+- 验证结果：编译检查通过；`test_page_upgrade.py` 2 项通过；`test_app.py` 52 项通过；完整单元测试 108 项全部 OK。
+- 后续待办：使用真实样机验证页面升级的单台、多台并行和失败日志表现。
+
+## 2026-07-07 - 配置 serial_upgrade.py 的 VS Code 运行环境
+
+- 类型：配置 / 文档 / 测试
+- 背景：用户希望直接在 VS Code 中运行 `Cheating_machine_execution_tool/test_boot_upgrade/serial_upgrade.py`。
+- 完成内容：新增 VS Code 默认解释器与调试入口；新增 `test_boot_upgrade/requirements.txt`；将专用本地 Python 环境加入忽略列表；更新 `serial_upgrade` 使用指南和项目状态。
+- 修改文件：`.vscode/settings.json`、`.vscode/launch.json`、`.gitignore`、`Cheating_machine_execution_tool/test_boot_upgrade/requirements.txt`、`Cheating_machine_execution_tool/test_boot_upgrade/使用指南.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：创建本地 Python 环境，安装 `pyserial`、`selenium`、`webdriver-manager`、`openpyxl`；运行编译检查和依赖导入检查。
+- 验证结果：`python -m py_compile serial_upgrade.py` 通过；`serial`、`selenium`、`webdriver_manager`、`openpyxl` 导入通过。
+- 后续待办：首次选择“页面升级”时，若 `webdriver-manager` 下载 Edge WebDriver 被网络或证书拦截，需要按现场网络环境处理。
+
+## 2026-07-03 - 兼容旧工具 exe 新文件名
+
+- 类型：优化 / 测试 / 文档
+- 背景：用户将旧开关机工具从 `Auto_Power_On_Off_Tool(2).exe` 改名为 `Auto_Power_On_Off_Tool.exe`，要求程序只按 `Auto_Power_On_Off_Tool` 关键字识别。
+- 完成内容：新增旧工具路径解析函数，查找根目录下文件名包含 `Auto_Power_On_Off_Tool` 且后缀为 `.exe` 的旧工具，优先使用 `Auto_Power_On_Off_Tool.exe`，兼容原 `(2)` 文件名；主程序自动上电和样机升级流程共用解析后的旧工具路径。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/paths.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_paths.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行 `python -m py_compile .\line_check_assistant\app.py .\line_check_assistant\paths.py`、`python -m unittest discover -s tests -p test_paths.py -v`、`python -m unittest discover -s tests -v`。
+- 验证结果：编译检查通过；`test_paths.py` 3 项全部 OK；完整单元测试 103 项全部 OK。
+- 后续待办：无。
+
+## 2026-07-03 - ONU注册 清理离线 ONU 后重新注册
+
+- 类型：BUG 修复 / 安全提示 / 测试 / 文档
+- 背景：用户反馈原有 ONU 替换方式会替换到与新发现 ONU 不同 PON 口的旧 ONU，正确流程应删除不在线 ONU 后重新注册新 ONU。
+- 完成内容：ONU 注册新增配置失败后不再执行 `registration-method sn 新SN` 复用旧 ONU 配置；改为查询 `show gpon onu state`，筛选已注册但不在线 ONU，优先删除和新 ONU 同 PON 口的不在线 ONU，再删除其它 PON 口不在线 ONU，删除后重新下发新 ONU 注册模板；注册确认提示同步说明该删除和重试行为。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/network_ops.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_network_ops.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行 `python -m py_compile .\line_check_assistant\app.py .\line_check_assistant\network_ops.py`、`python -m unittest discover -s tests -p test_network_ops.py -v`、`python -m unittest discover -s tests -v`。
+- 验证结果：编译检查通过；`test_network_ops.py` 24 项全部 OK；完整单元测试 100 项全部 OK；新增回归覆盖新增配置失败后查询离线 ONU、优先删除同 PON 口离线 ONU、再删除其它 PON 口离线 ONU，并确认不再下发 `registration-method sn 新SN`。
+- 后续待办：无。
+
 ## 2026-07-02 - 优化 ONU注册 长状态栏显示
 
 - 类型：UI / 优化 / 测试 / 文档

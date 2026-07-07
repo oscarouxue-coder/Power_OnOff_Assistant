@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "serial_upgrade",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/Cheating_machine_execution_tool/test_boot_upgrade/serial_upgrade.py",
+      "cwd": "${workspaceFolder}/Cheating_machine_execution_tool/test_boot_upgrade",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}
