@@ -22,6 +22,8 @@ BOOT_USERNAME = "telecomadmin"
 BOOT_PASSWORD = "nE7jA%5m"
 FACTORY_RESET_COMMAND = "firstboot -y;reboot"
 TFTP_REMOTE_IMAGE = "tclinux_allinone"
+TRANSFER_TFTP_COMMAND = "Tftp指令"
+TRANSFER_TFTP_PUT = "Tftp Put"
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,7 @@ class SecureCRTUpgradeTarget:
     final_username: str = ""
     final_password: str = ""
     factory_reset_command: str = FACTORY_RESET_COMMAND
+    transfer_method: str = TRANSFER_TFTP_COMMAND
 
 
 @dataclass(frozen=True)
@@ -72,6 +75,7 @@ class SecureCRTUpgradeLaunchResult:
     target: SecureCRTUpgradeTarget | None = None
     log_directory: str = ""
     status_path: str = ""
+    securecrt_pids: tuple[int, ...] = ()
 
 
 def vlan_to_serial_port(vlan: str) -> str:
@@ -243,6 +247,14 @@ def _securecrt_window_handles() -> set[int]:
     return handles
 
 
+def _securecrt_process_id_for_window(handle: int) -> int:
+    if os.name != "nt" or not handle:
+        return 0
+    process_id = ctypes.c_ulong()
+    ctypes.windll.user32.GetWindowThreadProcessId(handle, ctypes.byref(process_id))
+    return int(process_id.value)
+
+
 def _activate_window(handle: int) -> None:
     user32 = ctypes.windll.user32
     user32.ShowWindow(handle, 9)
@@ -297,6 +309,7 @@ def build_tftp_copy_upgrade_target(
     restore_factory: bool = False,
     final_username: str = "",
     final_password: str = "",
+    transfer_method: str = TRANSFER_TFTP_COMMAND,
 ) -> SecureCRTUpgradeTarget:
     normalized_vlan = (vlan or "").strip().lower()
     port = vlan_to_serial_port(normalized_vlan)
@@ -319,6 +332,7 @@ def build_tftp_copy_upgrade_target(
         restore_factory=restore_factory,
         final_username=final_username,
         final_password=final_password,
+        transfer_method=transfer_method,
     )
 
 
@@ -354,9 +368,11 @@ def launch_securecrt_tftp_copy_upgrade(tool_root: Path, target: SecureCRTUpgrade
             target.final_login_signal_path,
             target.final_username,
             target.final_password,
+            target.transfer_method,
         ]
     )
     manifest_path.write_text(manifest_line, encoding="utf-16")
+    existing_windows = _securecrt_window_handles()
 
     try:
         process = subprocess.Popen(
@@ -376,12 +392,23 @@ def launch_securecrt_tftp_copy_upgrade(tool_root: Path, target: SecureCRTUpgrade
             target.status_path,
         )
 
+    securecrt_pids = tuple(
+        sorted(
+            {
+                process_id
+                for handle in (_securecrt_window_handles() - existing_windows)
+                for process_id in [_securecrt_process_id_for_window(handle)]
+                if process_id
+            }
+        )
+    )
     return SecureCRTUpgradeLaunchResult(
         True,
         f"已启动 SecureCRT 单台升级脚本：{target.vlan}→{target.port}",
         target,
         str(Path(target.log_path).parent),
         target.status_path,
+        securecrt_pids,
     )
 
 
@@ -500,6 +527,22 @@ Sub WriteStatus(fso, statusPath, statusText)
     Set statusFile = fso.OpenTextFile(statusPath, 8, True, -1)
     statusFile.WriteLine Now & vbTab & statusText
     statusFile.Close
+End Sub
+
+Sub CloseUpgradeTab(tab, fso, statusPath)
+    On Error Resume Next
+    Err.Clear
+    WriteStatus fso, statusPath, "SECURECRT_TAB_CLOSE_REQUESTED"
+    If tab.Session.Connected Then
+        tab.Session.Disconnect
+        crt.Sleep 500
+    End If
+    tab.Close
+    If Err.Number <> 0 Then
+        WriteStatus fso, statusPath, "SECURECRT_TAB_CLOSE_SKIPPED:" & Err.Description
+        Err.Clear
+    End If
+    On Error GoTo 0
 End Sub
 
 Function WaitForAnyText(tab, firstText, secondText, timeoutSeconds)
@@ -715,6 +758,27 @@ Function LoginFinalSystemWithRetry(tab, fso, statusPath, username, password)
     LoginFinalSystemWithRetry = False
 End Function
 
+Sub SendFactoryResetAndWait(tab, fso, statusPath, factoryResetCommand)
+    On Error Resume Next
+    Err.Clear
+    crt.Sleep 1000
+    tab.Screen.Send factoryResetCommand
+    If tab.Screen.WaitForString(factoryResetCommand, 5) Then
+        WriteStatus fso, statusPath, "RESTORE_FACTORY_ECHO_CONFIRMED"
+    Else
+        WriteStatus fso, statusPath, "RESTORE_FACTORY_ECHO_MISSED"
+    End If
+    crt.Sleep 300
+    tab.Screen.Send vbCr
+    WriteStatus fso, statusPath, "RESTORE_FACTORY_SENT"
+    crt.Sleep 8000
+    If Err.Number <> 0 Then
+        WriteStatus fso, statusPath, "RESTORE_FACTORY_SEND_WARNING:" & Err.Description
+        Err.Clear
+    End If
+    On Error GoTo 0
+End Sub
+
 Sub Main
     If crt.Arguments.Count < 1 Then
         crt.Dialog.MessageBox "Missing upgrade target manifest.", "Sample Upgrade"
@@ -723,13 +787,13 @@ Sub Main
 
     Dim fso, manifestFile, line, fields, sessionName, sessionConfig, tab
     Dim loginAttempt, loginResult, bootLoginComplete
-    Dim statusPath, tftpCommand, username, password, finalUsername, finalPassword, restoreFactory, factoryResetCommand, bootEnterSignalPath, commandSignalPath, finalLoginSignalPath
+    Dim statusPath, tftpCommand, username, password, finalUsername, finalPassword, restoreFactory, factoryResetCommand, bootEnterSignalPath, commandSignalPath, finalLoginSignalPath, transferMethod
     Set fso = CreateObject("Scripting.FileSystemObject")
     Set manifestFile = fso.OpenTextFile(crt.Arguments.GetArg(0), 1, False, -1)
     line = manifestFile.ReadLine
     manifestFile.Close
     fields = Split(line, vbTab)
-    If UBound(fields) < 17 Then
+    If UBound(fields) < 18 Then
         crt.Dialog.MessageBox "Invalid upgrade target manifest.", "Sample Upgrade"
         Exit Sub
     End If
@@ -746,6 +810,7 @@ Sub Main
     finalLoginSignalPath = fields(15)
     finalUsername = fields(16)
     finalPassword = fields(17)
+    transferMethod = fields(18)
     WriteStatus fso, statusPath, "START"
 
     On Error Resume Next
@@ -845,14 +910,18 @@ Sub Main
         Exit Sub
     End If
 
-    SetScriptWaitMode tab
-    crt.Sleep 1000
-    tab.Screen.Send tftpCommand & vbCr
-    WriteStatus fso, statusPath, "TFTP_COMMAND_SENT"
+    If transferMethod = "Tftp Put" Then
+        WriteStatus fso, statusPath, "TFTP_PUT_COMPLETE_SIGNAL_FOUND"
+    Else
+        SetScriptWaitMode tab
+        crt.Sleep 1000
+        tab.Screen.Send tftpCommand & vbCr
+        WriteStatus fso, statusPath, "TFTP_COMMAND_SENT"
 
-    If Not WaitForTransferComplete(tab, 1800) Then
-        WriteStatus fso, statusPath, "ERROR_TFTP_TIMEOUT"
-        Exit Sub
+        If Not WaitForTransferComplete(tab, 1800) Then
+            WriteStatus fso, statusPath, "ERROR_TFTP_TIMEOUT"
+            Exit Sub
+        End If
     End If
     WriteStatus fso, statusPath, "TFTP_COMPLETE"
 
@@ -871,11 +940,10 @@ Sub Main
     WriteStatus fso, statusPath, "FINAL_LOGIN_COMPLETE"
 
     If restoreFactory = "1" Then
-        crt.Sleep 1000
-        tab.Screen.Send factoryResetCommand & vbCr
-        WriteStatus fso, statusPath, "RESTORE_FACTORY_SENT"
+        SendFactoryResetAndWait tab, fso, statusPath, factoryResetCommand
     End If
 
     WriteStatus fso, statusPath, "DONE"
+    CloseUpgradeTab tab, fso, statusPath
 End Sub
 '''

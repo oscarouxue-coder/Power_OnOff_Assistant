@@ -7,13 +7,14 @@
 - 读取和实时维护 `config/network_card_ip.ini` 的通道配置。
 - 主界面顶部提供“样机升级”入口，支持“页面升级”和“全包升级”两类流程。
 - 样机升级窗口支持自定义项目/型号、输入超级用户凭据、选择升级固件、同步主界面目标 VLAN，并显示实时状态和进度。
-- 样机升级窗口会保存上一次关闭时的升级方式、固件传输方式、恢复出厂选项、超级用户名、密码和固件路径；状态保存到本机 `config/sample_upgrade_settings.ini`，该文件不提交 Git。
+- 样机升级窗口会保存上一次关闭时的升级方式、固件传输方式、恢复出厂选项、超级用户名、密码和固件路径；恢复出厂显示会按真实保存值刷新，开始升级确认框会明确显示“恢复出厂：开启/关闭”；状态保存到本机 `config/sample_upgrade_settings.ini`，该文件不提交 Git。
 - 选择“页面升级”后，点击“开始升级”会按主界面已勾选通道并行执行 UBUS 页面升级；每台样机会先启用通道对应网卡，再使用通道的 PC 静态 IP 作为请求绑定 IP、样机管理 IP 作为目标 IP，自动尝试 HTTP/HTTPS 登录 `/ubus/`，上传固件到 `/cgi-bin/cgi-upload`，调用 `Device.DeviceInfo.X_SDMC_Upgrade()`，查询升级状态并等待设备重启上线。
-- 选择“全包升级 + Tftp拷贝命令”后，点击“开始升级”会按已勾选目标 VLAN 串行升级；每台样机会依次打开 SecureCRT 串口日志，自动上电并进入 boot，先把 Windows 对应 VLAN 网卡设置为通道 IP，再启动项目目录下的 `tftpd64.exe`；Tftpd64 软件内仅设置固件所在目录并保持 `Tftp Server` 页签，然后由 SecureCRT 下发 `tftp <通道对应VLAN的IP>:tclinux_allinone`。
-- 多台样机串行升级会按主界面通道顺序执行，启动前弹出确认提示；每台开始前会临时改写 `config/network_card_ip.ini`，只保留当前上电通道，避免旧开关机工具 `Start ALL` 给其他通道上电；全部完成或失败退出后会恢复用户选择的完整通道配置，并自动关闭升级过程中打开的 SecureCRT 和项目目录下的 Tftpd64。
+- 选择“全包升级 + Tftp指令”后，点击“开始升级”会按已勾选目标 VLAN 串行升级；每台样机会依次打开 SecureCRT 串口日志，自动上电并进入 boot，先把 Windows 对应 VLAN 网卡设置为通道 IP，再启动项目目录下的 `tftpd64.exe`；Tftpd64 软件内仅设置固件所在目录并保持 `Tftp Server` 页签，然后由 SecureCRT 下发 `tftp <通道对应VLAN的IP>:tclinux_allinone`。
+- 选择“全包升级 + Tftp Put”后，点击“开始升级”会复用同一套串行升级流程；SecureCRT 进入 boot 后，软件会通过 Windows TFTP 客户端执行 `tftp -i 192.168.1.1 put <升级固件路径>`，不启动 Tftpd64。
+- 多台样机串行升级会按主界面通道顺序执行，启动前弹出确认提示；每台开始前会临时改写 `config/network_card_ip.ini`，只保留当前上电通道，避免旧开关机工具 `Start ALL` 给其他通道上电；旧工具点击 `Start ALL` 后会立即允许 SecureCRT 每隔 1 秒敲击回车，避免错过 boot 进入窗口；全部完成或失败退出后会恢复用户选择的完整通道配置，并自动关闭项目目录下的 Tftpd64；SecureCRT 升级脚本写入 `DONE` 后会自行请求关闭当前升级 Tab，Python 收尾只按本次登记到的新增窗口 PID 做兜底关闭，未识别到新增 PID 时不会扩大范围关闭用户其它 CRT 会话。
 - Tftp 传输完成后会先等待 1.5 分钟并持续监控 SecureCRT 串口；如果期间看到 `Boot`/`Bood` 字符，SecureCRT 会发送 `reset`，随后跳过自动重新上电，等待 120 秒后继续在当前串口窗口等待 `login` 并登录。
 - Tftp 传输完成后，如果未检测到 boot reset，会自动重新上电并等待 120 秒后确认登录；重新上电和等待最终 `login` 期间 SecureCRT 保持实时串口监控，只有在需要捕获关键字或自动输入账号密码时才切回脚本同步等待模式。
-- 最终系统登录阶段看到 `login` 后，会输入样机升级页面中的“超级用户名”和“密码”；如果登录失败，会间隔 2 秒继续重试，总共尝试 5 次后才判定失败。
+- 最终系统登录阶段看到 `login` 后，会输入样机升级页面中的“超级用户名”和“密码”；如果登录失败，会间隔 2 秒继续重试，总共尝试 5 次后才判定失败；勾选“恢复出厂”时，会在最终系统登录成功后发送 `firstboot -y;reboot`，等待命令回显或最多 5 秒后回车，并额外等待 8 秒再写入完成状态和关闭 SecureCRT 升级 Tab。
 - 启动 SecureCRT 后会等待可见窗口并尝试恢复、置前；未检测到窗口时明确报错，不再误报“串口日志已启动”。
 - SecureCRT 自动化使用 Windows 自带的 VBScript 引擎，不要求目标 PC 额外安装 Python；标题仅为“SecureCRT”的错误对话框不会被误判为主窗口。
 - SecureCRT 日志关闭内置紧凑时间戳，使用 `[%Y-%M-%D %h:%m:%s]` 行前缀输出本机时区的完整年月日时分秒；脚本会在连接前基于 `Default_Serial` 建立临时会话并预先配置日志，`Start log upon connect` 默认开启，因此首次连接即可写入时间戳。

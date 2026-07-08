@@ -24,6 +24,76 @@
 - 后续待办：
 ```
 
+## 2026-07-08 - 恢复出厂命令发送后延迟关闭 SecureCRT Tab
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：用户验证勾选“恢复出厂”时，最终系统只成功登录，随后 SecureCRT 升级窗口很快关闭，`firstboot -y;reboot` 可能未完整下发。
+- 完成内容：将恢复出厂发送逻辑从 `factoryResetCommand & vbCr` 后立即完成，改为先发送命令文本，等待命令回显或最多 5 秒，随后发送回车并记录 `RESTORE_FACTORY_SENT`，再额外等待 8 秒才写入 `DONE` 并关闭当前升级 Tab；回显未出现时记录 `RESTORE_FACTORY_ECHO_MISSED` 但继续发送回车，避免现场回显差异导致流程卡死。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/securecrt_automation.py`、`Cheating_machine_execution_tool/tests/test_securecrt_automation.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行编译检查、`test_securecrt_automation.py` 和完整单元测试。
+- 验证结果：编译检查通过；`test_securecrt_automation.py` 16 项全部 OK；完整单元测试 123 项全部 OK。
+- 后续待办：真实样机复测勾选“恢复出厂”时确认串口日志出现 `firstboot -y;reboot` 并触发重启。
+
+## 2026-07-08 - SecureCRT 升级脚本完成后自关闭当前 Tab
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：用户验证多台样机串行 `Tftp Put` 升级可成功，但收尾日志显示未检测到本次新增 SecureCRT 窗口 PID，导致本轮升级打开的 CRT 窗口没有关闭。
+- 完成内容：保留 Python 按本次新增 PID 兜底关闭的安全边界，避免误关用户手动 CRT；同时在 SecureCRT 升级脚本写入 `DONE` 后主动请求关闭当前脚本创建的升级 Tab，若关闭 API 不可用则写入 `SECURECRT_TAB_CLOSE_SKIPPED` 状态，避免因为窗口 PID 识别不到而无法关闭本轮升级 Tab；收尾日志改为说明脚本会自行请求关闭当前升级 Tab。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/securecrt_automation.py`、`Cheating_machine_execution_tool/line_check_assistant/upgrade_cleanup.py`、`Cheating_machine_execution_tool/tests/test_securecrt_automation.py`、`Cheating_machine_execution_tool/tests/test_tftpd_automation.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行编译检查、`test_securecrt_automation.py`、`test_tftpd_automation.py` 和完整单元测试。
+- 验证结果：编译检查通过；`test_securecrt_automation.py` 16 项全部 OK；`test_tftpd_automation.py` 3 项全部 OK；完整单元测试 123 项全部 OK。
+- 后续待办：用真实多台 `Tftp Put` 串行升级确认每台升级完成后当前 CRT Tab 能自动关闭。
+
+## 2026-07-08 - 修复恢复出厂选项显示与确认状态
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：用户反馈 `Tftp Put` 单台升级成功后，未勾选“恢复出厂”却实际执行了恢复出厂。
+- 完成内容：定位为样机升级窗口初始化时“恢复出厂”文字固定显示为未勾选，但底层布尔值会从 `config/sample_upgrade_settings.ini` 读取上次保存状态，可能出现界面显示未勾选而实际请求为开启；改为初始化文本直接按真实保存值生成，并在开始串行升级确认框中明确显示“恢复出厂：开启/关闭”。同时确认 SecureCRT 脚本仅在 manifest 字段为 `"1"` 时发送 `firstboot -y;reboot`。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_securecrt_automation.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行编译检查、`test_app.py`、`test_securecrt_automation.py` 和完整单元测试。
+- 验证结果：编译检查通过；`test_app.py` 55 项全部 OK；`test_securecrt_automation.py` 16 项全部 OK；完整单元测试 123 项全部 OK。
+- 后续待办：用真实样机再次确认未勾选恢复出厂时不会发送 `firstboot -y;reboot`。
+
+## 2026-07-08 - 收尾只关闭本次启动的 SecureCRT PID
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：用户反馈升级收尾日志中强制关闭了多个 SecureCRT 进程，其中部分是用户手动打开的其它 CRT 串口窗口。
+- 完成内容：定位为 `upgrade_cleanup.py` 按进程名关闭所有 `SecureCRT`，清理范围过宽；改为启动 SecureCRT 前后对比新增窗口句柄并反查真实 PID，单台升级把新增 PID 回传给串行 worker，收尾只按这些精确 PID 关闭本次启动的 SecureCRT，同时继续按精确路径关闭项目目录下的 `tftpd64.exe`；未识别到新增 PID 时保留现有 CRT 会话。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/securecrt_automation.py`、`Cheating_machine_execution_tool/line_check_assistant/sample_upgrade.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/upgrade_cleanup.py`、`Cheating_machine_execution_tool/tests/test_securecrt_automation.py`、`Cheating_machine_execution_tool/tests/test_sample_upgrade.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_tftpd_automation.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行编译检查、SecureCRT PID 获取测试、单台升级 PID 回传测试、串行 worker 收尾传参测试、Tftpd/收尾脚本测试和完整单元测试。
+- 验证结果：编译检查通过；完整单元测试 122 项全部 OK。
+- 后续待办：真实升级后确认只关闭本次升级启动的 SecureCRT 窗口，不影响用户手动打开的其它 CRT 会话。
+
+## 2026-07-08 - 提前 Tftp Put 进入 boot 敲回车时机
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：用户实测 `Tftp Put` 模式未成功进入 boot，原因是 SecureCRT 开始循环敲击回车的时间滞后，错过允许进入 boot 的窗口期。
+- 完成内容：将 `boot_enter.signal` 从旧工具完整上电流程返回后前移到旧工具输出“已点击 Start ALL”时立即写出，让 SecureCRT 在 Start ALL 后马上每隔 1 秒敲击回车；保留旧软件关闭后的兜底信号，避免旧工具未输出该行时流程卡住。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/sample_upgrade.py`、`Cheating_machine_execution_tool/tests/test_sample_upgrade.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行编译检查、`test_sample_upgrade.py` 和完整单元测试，并补充 Start ALL 输出时立即写 boot signal 的回归测试。
+- 验证结果：编译检查通过；`test_sample_upgrade.py` 11 项全部 OK；完整单元测试 121 项全部 OK。
+- 后续待办：用真实样机复测 `Tftp Put` 进入 boot 时序。
+
+## 2026-07-08 - 接入全包升级 Tftp Put 传输方式
+
+- 类型：功能 / 测试 / 文档
+- 背景：用户确认 `Tftp指令` 和 `Tftp Put` 是两种不同的固件传输方式，`Tftp Put` 目标设备 IP 固定为 `192.168.1.1`，需要在样机升级模块中都做适配。
+- 完成内容：`全包升级 + Tftp Put` 进入现有多台串行升级流程；单台流程在 SecureCRT 完成 boot 登录后执行 Windows `tftp -i 192.168.1.1 put <升级固件路径>`，不启动 Tftpd64；Put 成功后继续复用现有 boot reset/重新上电、120 秒等待和最终登录确认；SecureCRT manifest 增加传输方式字段，脚本按 `Tftp指令` / `Tftp Put` 分支同步状态。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/sample_upgrade.py`、`Cheating_machine_execution_tool/line_check_assistant/securecrt_automation.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_sample_upgrade.py`、`Cheating_machine_execution_tool/tests/test_securecrt_automation.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行编译检查、样机升级入口测试、单台升级编排测试、SecureCRT 自动化测试和完整单元测试。
+- 验证结果：编译检查通过；`test_app.py` 54 项通过；`test_sample_upgrade.py` 10 项通过；`test_securecrt_automation.py` 16 项通过；完整单元测试 120 项全部 OK。
+- 后续待办：用真实样机验收 `全包升级 + Tftp Put`。
+
+## 2026-07-08 - 样机升级 Tftp 文案调整
+
+- 类型：修改 / 测试 / 文档
+- 背景：用户要求将样机升级模块中的“Tftp拷贝命令”显示文案改为“Tftp指令”。
+- 完成内容：样机升级固件传输方式下拉框、提示文案和确认文案统一显示为“Tftp指令”；保留旧配置值“Tftp拷贝命令”的自动兼容映射，避免已保存本机配置影响串行升级入口。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行编译检查和样机升级入口相关单元测试。
+- 验证结果：编译检查通过；`test_app.py` 53 项全部 OK。
+- 后续待办：无。
+
 ## 2026-07-07 - 页面升级前自动启用目标网卡
 
 - 类型：BUG 修复 / 测试 / 文档

@@ -419,7 +419,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
     def test_current_sample_upgrade_settings_reads_all_inputs(self):
         context = SimpleNamespace(
             upgrade_mode_var=Mock(get=Mock(return_value="全包升级")),
-            upgrade_transfer_var=Mock(get=Mock(return_value="Tftp拷贝命令")),
+            upgrade_transfer_var=Mock(get=Mock(return_value="Tftp指令")),
             upgrade_restore_factory_var=Mock(get=Mock(return_value=True)),
             upgrade_username_var=Mock(get=Mock(return_value="root")),
             upgrade_password_var=Mock(get=Mock(return_value="secret")),
@@ -432,13 +432,27 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             settings,
             SampleUpgradeSettings(
                 upgrade_mode="全包升级",
-                transfer_method="Tftp拷贝命令",
+                transfer_method="Tftp指令",
                 restore_factory=True,
                 username="root",
                 password="secret",
                 firmware_path=r"F:\firmware\tclinux_allinone",
             ),
         )
+
+    def test_current_sample_upgrade_settings_normalizes_legacy_tftp_copy_label(self):
+        context = SimpleNamespace(
+            upgrade_mode_var=Mock(get=Mock(return_value="全包升级")),
+            upgrade_transfer_var=Mock(get=Mock(return_value="Tftp拷贝命令")),
+            upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
+            upgrade_username_var=Mock(get=Mock(return_value="root")),
+            upgrade_password_var=Mock(get=Mock(return_value="secret")),
+            upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\tclinux_allinone")),
+        )
+
+        settings = LineCheckAssistant._current_sample_upgrade_settings(context)
+
+        self.assertEqual(settings.transfer_method, "Tftp指令")
 
     def test_save_sample_upgrade_settings_writes_current_inputs(self):
         settings = SampleUpgradeSettings(upgrade_mode="页面升级", transfer_method="Tftp Put")
@@ -540,6 +554,18 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         context.upgrade_restore_factory_text_var.set.assert_called_once_with("☑ 恢复出厂")
 
+    def test_restore_factory_text_uses_empty_box_when_disabled(self):
+        context = SimpleNamespace(
+            upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
+            upgrade_restore_factory_text_var=Mock(),
+        )
+
+        LineCheckAssistant._refresh_upgrade_restore_factory_text(context)
+
+        context.upgrade_restore_factory_text_var.set.assert_called_once_with("☐ 恢复出厂")
+        self.assertEqual(LineCheckAssistant._restore_factory_text(True), "☑ 恢复出厂")
+        self.assertEqual(LineCheckAssistant._restore_factory_text(False), "☐ 恢复出厂")
+
     @patch("line_check_assistant.app.threading.Thread")
     def test_page_upgrade_start_routes_to_page_upgrade_flow(self, thread_class):
         context = SimpleNamespace(
@@ -563,7 +589,25 @@ class CurrentChannelSelectionTests(unittest.TestCase):
     def test_full_package_tftp_copy_starts_serial_upgrade_flow(self, thread_class):
         context = SimpleNamespace(
             upgrade_mode_var=Mock(get=Mock(return_value="全包升级")),
-            upgrade_transfer_var=Mock(get=Mock(return_value="Tftp拷贝命令")),
+            upgrade_transfer_var=Mock(get=Mock(return_value="Tftp指令")),
+            upgrade_username_var=Mock(get=Mock(return_value="admin")),
+            upgrade_password_var=Mock(get=Mock(return_value="password")),
+            upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\tclinux")),
+            _capture_current_channel=Mock(),
+            _validate_upgrade_required_fields=Mock(return_value=True),
+            _start_serial_tftp_copy_upgrade=Mock(),
+        )
+
+        LineCheckAssistant._on_upgrade_start_clicked(context)
+
+        context._start_serial_tftp_copy_upgrade.assert_called_once_with()
+        thread_class.assert_not_called()
+
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_full_package_tftp_put_starts_serial_upgrade_flow(self, thread_class):
+        context = SimpleNamespace(
+            upgrade_mode_var=Mock(get=Mock(return_value="全包升级")),
+            upgrade_transfer_var=Mock(get=Mock(return_value="Tftp Put")),
             upgrade_username_var=Mock(get=Mock(return_value="admin")),
             upgrade_password_var=Mock(get=Mock(return_value="password")),
             upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\tclinux")),
@@ -659,7 +703,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
     @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
     @patch("line_check_assistant.app.Path.is_file", return_value=True)
     @patch("line_check_assistant.app.threading.Thread")
-    def test_serial_tftp_copy_requests_use_page_credentials(self, thread_class, _is_file, _askyesno):
+    def test_serial_tftp_copy_requests_use_page_credentials(self, thread_class, _is_file, askyesno):
         channels = [
             ChannelConfig(section="channel_1", vlan_name="VLAN102", enabled=True),
             ChannelConfig(section="channel_2", vlan_name="VLAN101", enabled=True),
@@ -669,6 +713,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_username_var=Mock(get=Mock(return_value="root")),
             upgrade_password_var=Mock(get=Mock(return_value="secret")),
             upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
+            upgrade_transfer_var=Mock(get=Mock(return_value="Tftp Put")),
             upgrade_window=Mock(),
             _selected_tftp_copy_upgrade_channels=Mock(return_value=channels),
             _tftp_server_ip_for_channel=Mock(side_effect=["192.168.1.102", "192.168.1.101"]),
@@ -686,6 +731,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual([request.tftp_server_ip for request in requests], ["192.168.1.102", "192.168.1.101"])
         self.assertTrue(all(request.final_username == "root" for request in requests))
         self.assertTrue(all(request.final_password == "secret" for request in requests))
+        self.assertTrue(all(request.transfer_method == "Tftp Put" for request in requests))
+        self.assertIn("恢复出厂：关闭，不会执行恢复出厂", askyesno.call_args.args[1])
 
     def test_tftp_copy_channels_follow_main_channel_order_and_deduplicate(self):
         context = SimpleNamespace(
@@ -743,11 +790,11 @@ class CurrentChannelSelectionTests(unittest.TestCase):
     def test_serial_tftp_copy_worker_closes_tools_after_restoring_config(self, run_upgrade, close_tools):
         channel = ChannelConfig(section="channel_1", vlan_name="VLAN101", enabled=True)
         request = Mock(vlan="vlan101", power_serial_port="COM106")
-        run_upgrade.return_value = Mock(ok=True, message="vlan101 ok")
         close_tools.return_value = Mock(ok=True, message="closed")
         events = []
         store = Mock()
         store.save.side_effect = lambda *_args: events.append("save")
+        run_upgrade.side_effect = lambda *_args, **kwargs: kwargs["on_securecrt_pids"]((11160, 27788)) or Mock(ok=True, message="vlan101 ok")
         close_tools.side_effect = lambda *_args, **_kwargs: events.append("close") or Mock(ok=True, message="closed")
         context = SimpleNamespace(
             log_queue=Mock(),
@@ -762,6 +809,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(events, ["save", "save", "close"])
         context.log_queue.put.assert_any_call("已恢复 network_card_ip.ini 中用户选择的完整通道配置。")
         close_tools.assert_called_once()
+        self.assertEqual(close_tools.call_args.kwargs["securecrt_pids"], (11160, 27788))
 
     def test_upgrade_required_fields_warn_when_missing(self):
         context = SimpleNamespace(

@@ -16,6 +16,7 @@ from line_check_assistant.securecrt_automation import (
     _wait_for_securecrt_upgrade_started,
     build_tftp_copy_upgrade_target,
     build_serial_log_targets,
+    launch_securecrt_tftp_copy_upgrade,
     launch_securecrt_serial_logs,
     resolve_serial_log_directory,
     vlan_to_serial_port,
@@ -130,6 +131,7 @@ class SecureCRTSerialLogTests(unittest.TestCase):
         self.assertEqual(target.vlan, "vlan148")
         self.assertEqual(target.port, "COM48")
         self.assertEqual(target.tftp_command, "tftp 192.168.1.148:tclinux_allinone")
+        self.assertEqual(target.transfer_method, "Tftp指令")
         self.assertTrue(target.restore_factory)
         self.assertEqual(target.final_username, "root")
         self.assertEqual(target.final_password, "secret")
@@ -138,6 +140,47 @@ class SecureCRTSerialLogTests(unittest.TestCase):
         self.assertTrue(target.boot_enter_signal_path.endswith(".boot_enter.signal"))
         self.assertTrue(target.command_signal_path.endswith(".signal"))
         self.assertTrue(target.final_login_signal_path.endswith(".final_login.signal"))
+
+    def test_builds_tftp_put_upgrade_target(self):
+        target = build_tftp_copy_upgrade_target(
+            "VLAN101",
+            "192.168.1.101",
+            Path("logs"),
+            transfer_method="Tftp Put",
+        )
+
+        self.assertEqual(target.transfer_method, "Tftp Put")
+
+    @patch("line_check_assistant.securecrt_automation._securecrt_process_id_for_window", return_value=27788)
+    @patch("line_check_assistant.securecrt_automation._securecrt_window_handles", side_effect=[{101}, {101, 202}])
+    @patch("line_check_assistant.securecrt_automation.subprocess.Popen")
+    @patch("line_check_assistant.securecrt_automation._wait_for_securecrt_upgrade_started", return_value=True)
+    @patch("line_check_assistant.securecrt_automation.find_securecrt_executable")
+    def test_upgrade_launch_manifest_includes_transfer_method_and_new_window_pid(self, find_securecrt, _wait_started, popen, _window_handles, _process_id):
+        find_securecrt.return_value = Path(r"C:\Program Files\VanDyke Software\Clients\SecureCRT.exe")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            temp_root = root / "ascii_temp"
+            temp_root.mkdir()
+            target = build_tftp_copy_upgrade_target(
+                "VLAN101",
+                "192.168.1.101",
+                root,
+                transfer_method="Tftp Put",
+            )
+
+            with patch.dict(os.environ, {"TMP": str(temp_root), "TEMP": str(temp_root)}):
+                result = launch_securecrt_tftp_copy_upgrade(root, target)
+
+            self.assertTrue(result.success)
+            runtime_dir = temp_root / "LineCheckAssistant" / "securecrt_runtime"
+            manifests = list(runtime_dir.glob("tftp_copy_upgrade_*.txt"))
+            self.assertEqual(len(manifests), 1)
+            fields = manifests[0].read_text(encoding="utf-16").split("\t")
+            self.assertEqual(fields[11], "0")
+            self.assertEqual(fields[18], "Tftp Put")
+            self.assertEqual(result.securecrt_pids, (27788,))
+            popen.assert_called_once()
 
     def test_upgrade_launch_accepts_status_file_when_existing_securecrt_window_is_reused(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -219,6 +262,9 @@ class SecureCRTSerialLogTests(unittest.TestCase):
         self.assertIn('finalLoginSignalPath = fields(15)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('finalUsername = fields(16)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('finalPassword = fields(17)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('transferMethod = fields(18)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('Sub CloseUpgradeTab(tab, fso, statusPath)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('WriteStatus fso, statusPath, "SECURECRT_TAB_CLOSE_REQUESTED"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('"BOOT_ENTER_SIGNAL_WAITING"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('WaitForFile(fso, bootEnterSignalPath, 1200)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('PressEnterUntilBootUserName(tab, 240)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
@@ -278,7 +324,13 @@ class SecureCRTSerialLogTests(unittest.TestCase):
         self.assertIn('"BOOT_LOGIN_COMPLETE"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('WaitForFile(fso, commandSignalPath, 300)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('WaitForStrings("done", "write", 1)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('If transferMethod = "Tftp Put" Then', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('"TFTP_PUT_COMPLETE_SIGNAL_FOUND"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('"TFTP_COMPLETE"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        put_branch_index = SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('If transferMethod = "Tftp Put" Then')
+        command_send_index = SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('tab.Screen.Send tftpCommand & vbCr', put_branch_index)
+        else_index = SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index("Else", put_branch_index)
+        self.assertLess(else_index, command_send_index)
         self.assertIn('"FINAL_LOGIN_MONITORING_STARTED"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertLess(
             SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('SetLiveMonitorMode tab', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('"TFTP_COMPLETE"')),
@@ -289,7 +341,24 @@ class SecureCRTSerialLogTests(unittest.TestCase):
             SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('SetScriptWaitMode tab', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('WaitForFinalLoginSignalOrBootReset(tab, fso, finalLoginSignalPath, statusPath, 1200)')),
         )
         self.assertIn('WaitForFinalLoginSignalOrBootReset(tab, fso, finalLoginSignalPath, statusPath, 1200)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
-        self.assertIn('factoryResetCommand & vbCr', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('If restoreFactory = "1" Then', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('Sub SendFactoryResetAndWait(tab, fso, statusPath, factoryResetCommand)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('tab.Screen.Send factoryResetCommand', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('tab.Screen.WaitForString(factoryResetCommand, 5)', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('"RESTORE_FACTORY_ECHO_CONFIRMED"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('"RESTORE_FACTORY_ECHO_MISSED"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('tab.Screen.Send vbCr', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertIn('crt.Sleep 8000', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        self.assertNotIn('factoryResetCommand & vbCr', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
+        restore_sent_index = SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('"RESTORE_FACTORY_SENT"')
+        restore_done_index = SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('WriteStatus fso, statusPath, "DONE"')
+        close_index = SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('CloseUpgradeTab tab, fso, statusPath')
+        self.assertLess(restore_sent_index, restore_done_index)
+        self.assertLess(restore_done_index, close_index)
+        self.assertLess(
+            SECURECRT_TFTP_COPY_UPGRADE_SCRIPT.index('crt.Sleep 8000'),
+            restore_done_index,
+        )
         self.assertIn('SetOption "Emulation", "ANSI"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('SetOption "Output Transformer Name", "Default"', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)
         self.assertIn('SetOption "Use Unicode Line Drawing", False', SECURECRT_TFTP_COPY_UPGRADE_SCRIPT)

@@ -37,16 +37,26 @@ class TftpdAutomationTests(unittest.TestCase):
         self.assertNotIn("EnumChildWindows", script)
         self.assertNotIn("??", script)
 
-    def test_cleanup_script_closes_project_tftpd_and_securecrt(self):
+    def test_cleanup_script_closes_only_project_tftpd_and_skips_securecrt(self):
         script = _build_close_upgrade_tools_script(Path(r"F:\tool\tftpd64.exe"))
 
         self.assertIn("$tftpdPath = 'F:\\tool\\tftpd64.exe'", script)
+        self.assertIn("$secureCrtProcessIds = @()", script)
         self.assertIn("try { $_.Path -eq $tftpdPath }", script)
-        self.assertIn('$_.ProcessName -ieq "SecureCRT"', script)
         self.assertIn('Stop-ProcessGracefully $process "Tftpd64"', script)
-        self.assertIn('Stop-ProcessGracefully $process "SecureCRT"', script)
+        self.assertNotIn('$_.ProcessName -ieq "SecureCRT"', script)
+        self.assertIn("升级脚本完成时会自行请求关闭当前升级 Tab", script)
         self.assertIn("CloseMainWindow()", script)
         self.assertIn("Stop-Process -Id $process.Id -Force", script)
+
+    def test_cleanup_script_closes_only_tracked_securecrt_pids(self):
+        script = _build_close_upgrade_tools_script(Path(r"F:\tool\tftpd64.exe"), [27788, 11160, 27788])
+
+        self.assertIn("$secureCrtProcessIds = @(11160, 27788)", script)
+        self.assertIn("Get-Process -Id $secureCrtPid", script)
+        self.assertIn('$process.ProcessName -ine "SecureCRT"', script)
+        self.assertIn('Stop-ProcessGracefully $process "SecureCRT"', script)
+        self.assertNotIn('Where-Object {\n    $_.ProcessName -ieq "SecureCRT"', script)
 
 
 if __name__ == "__main__":

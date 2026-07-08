@@ -27,7 +27,7 @@ from .onu_registration_store import DEFAULT_OLT_IP, OnuRegistrationConfig, OnuRe
 from .page_upgrade import PageUpgradeRequest, run_page_upgrade_batch
 from .paths import resolve_old_tool_path, resolve_tool_root
 from .sample_upgrade_settings_store import DEFAULT_UPGRADE_MODE, DEFAULT_UPGRADE_TRANSFER, SampleUpgradeSettings, SampleUpgradeSettingsStore
-from .sample_upgrade import SingleTftpCopyUpgradeRequest, run_single_tftp_copy_upgrade
+from .sample_upgrade import SingleTftpCopyUpgradeRequest, TRANSFER_TFTP_COMMAND, TRANSFER_TFTP_PUT, run_single_tftp_copy_upgrade
 from .securecrt_automation import SecureCRTLaunchResult, launch_securecrt_serial_logs
 from .serial_ports import list_prolific_ports, port_from_display
 from .upgrade_cleanup import close_upgrade_tools
@@ -49,7 +49,11 @@ CHANNEL_TABLE_COMBO_WIDTH = 32
 CHANNEL_TABLE_GROUP_GAP = 24
 CHANNEL_TABLE_ROWS_PER_GROUP = 4
 UPGRADE_MODE_OPTIONS = ("页面升级", DEFAULT_UPGRADE_MODE)
-UPGRADE_TRANSFER_OPTIONS = (DEFAULT_UPGRADE_TRANSFER, "Tftp拷贝命令", "web打开网关")
+TFTP_COMMAND_TRANSFER = TRANSFER_TFTP_COMMAND
+TFTP_PUT_TRANSFER = TRANSFER_TFTP_PUT
+LEGACY_TFTP_COPY_TRANSFER = "Tftp拷贝命令"
+UPGRADE_TRANSFER_OPTIONS = (DEFAULT_UPGRADE_TRANSFER, TFTP_COMMAND_TRANSFER, "web打开网关")
+SERIAL_FULL_PACKAGE_TRANSFERS = {TFTP_COMMAND_TRANSFER, TFTP_PUT_TRANSFER}
 FONT_FAMILY = "Microsoft YaHei UI"
 COLOR_BG = "#eef2f5"
 COLOR_SURFACE = "#ffffff"
@@ -115,12 +119,14 @@ class LineCheckAssistant(Tk):
         self.onu_unregistered_selection_vars = []
         self._bind_onu_registration_autosave()
         upgrade_mode = self.sample_upgrade_settings.upgrade_mode if self.sample_upgrade_settings.upgrade_mode in UPGRADE_MODE_OPTIONS else DEFAULT_UPGRADE_MODE
-        transfer_method = self.sample_upgrade_settings.transfer_method if self.sample_upgrade_settings.transfer_method in UPGRADE_TRANSFER_OPTIONS else DEFAULT_UPGRADE_TRANSFER
+        saved_transfer_method = LineCheckAssistant._normalize_upgrade_transfer_method(self.sample_upgrade_settings.transfer_method)
+        transfer_method = saved_transfer_method if saved_transfer_method in UPGRADE_TRANSFER_OPTIONS else DEFAULT_UPGRADE_TRANSFER
         self.sample_upgrade_save_after_id = None
         self.upgrade_mode_var = StringVar(value=upgrade_mode)
         self.upgrade_transfer_var = StringVar(value=transfer_method)
-        self.upgrade_restore_factory_var = BooleanVar(value=bool(self.sample_upgrade_settings.restore_factory))
-        self.upgrade_restore_factory_text_var = StringVar(value="☐ 恢复出厂")
+        restore_factory_enabled = bool(self.sample_upgrade_settings.restore_factory)
+        self.upgrade_restore_factory_var = BooleanVar(value=restore_factory_enabled)
+        self.upgrade_restore_factory_text_var = StringVar(value=LineCheckAssistant._restore_factory_text(restore_factory_enabled))
         self.upgrade_username_var = StringVar(value=self.sample_upgrade_settings.username)
         self.upgrade_password_var = StringVar(value=self.sample_upgrade_settings.password)
         self.upgrade_password_visible = False
@@ -429,10 +435,16 @@ class LineCheckAssistant(Tk):
         ):
             variable.trace_add("write", lambda *_args: self._schedule_sample_upgrade_save())
 
+    @staticmethod
+    def _normalize_upgrade_transfer_method(transfer_method: str) -> str:
+        if transfer_method == LEGACY_TFTP_COPY_TRANSFER:
+            return TFTP_COMMAND_TRANSFER
+        return transfer_method
+
     def _current_sample_upgrade_settings(self) -> SampleUpgradeSettings:
         return SampleUpgradeSettings(
             upgrade_mode=self.upgrade_mode_var.get(),
-            transfer_method=self.upgrade_transfer_var.get(),
+            transfer_method=LineCheckAssistant._normalize_upgrade_transfer_method(self.upgrade_transfer_var.get()),
             restore_factory=bool(self.upgrade_restore_factory_var.get()),
             username=self.upgrade_username_var.get(),
             password=self.upgrade_password_var.get(),
@@ -972,7 +984,7 @@ class LineCheckAssistant(Tk):
 
         Label(
             content,
-            text="页面升级会上传固件并触发设备升级；全包 Tftp 拷贝命令会操作旧开关机工具、SecureCRT 和 Tftpd64。",
+            text="页面升级会上传固件并触发设备升级；全包 Tftp指令会操作旧开关机工具、SecureCRT 和 Tftpd64；全包 Tftp Put 会通过 Windows TFTP 客户端推送固件。",
             foreground=COLOR_WARNING,
             background=COLOR_BG,
         ).pack(anchor="w", pady=(16, 0))
@@ -1001,13 +1013,20 @@ class LineCheckAssistant(Tk):
     def _refresh_upgrade_restore_factory_text(self) -> None:
         if not hasattr(self, "upgrade_restore_factory_text_var"):
             return
-        marker = "☑" if self.upgrade_restore_factory_var.get() else "☐"
-        self.upgrade_restore_factory_text_var.set(f"{marker} 恢复出厂")
+        self.upgrade_restore_factory_text_var.set(LineCheckAssistant._restore_factory_text(bool(self.upgrade_restore_factory_var.get())))
+
+    @staticmethod
+    def _restore_factory_text(enabled: bool) -> str:
+        marker = "☑" if enabled else "☐"
+        return f"{marker} 恢复出厂"
 
     def _refresh_upgrade_transfer_visibility(self) -> None:
         if not hasattr(self, "upgrade_transfer_label") or not hasattr(self, "upgrade_transfer_combo"):
             return
-        if self.upgrade_transfer_var.get() not in UPGRADE_TRANSFER_OPTIONS:
+        current_transfer = LineCheckAssistant._normalize_upgrade_transfer_method(self.upgrade_transfer_var.get())
+        if current_transfer != self.upgrade_transfer_var.get():
+            self.upgrade_transfer_var.set(current_transfer)
+        if current_transfer not in UPGRADE_TRANSFER_OPTIONS:
             self.upgrade_transfer_var.set(UPGRADE_TRANSFER_OPTIONS[0])
         if self.upgrade_mode_var.get() == "全包升级":
             self.upgrade_transfer_label.grid()
@@ -1020,7 +1039,8 @@ class LineCheckAssistant(Tk):
         self._capture_current_channel()
         if not self._validate_upgrade_required_fields():
             return
-        if self.upgrade_mode_var.get() == "全包升级" and self.upgrade_transfer_var.get() == "Tftp拷贝命令":
+        transfer_method = LineCheckAssistant._normalize_upgrade_transfer_method(self.upgrade_transfer_var.get())
+        if self.upgrade_mode_var.get() == "全包升级" and transfer_method in SERIAL_FULL_PACKAGE_TRANSFERS:
             self._start_serial_tftp_copy_upgrade()
             return
         if self.upgrade_mode_var.get() == "页面升级":
@@ -1152,6 +1172,7 @@ class LineCheckAssistant(Tk):
 
         upgrade_items: list[tuple[ChannelConfig, SingleTftpCopyUpgradeRequest]] = []
         power_serial_port = self._selected_power_serial_port()
+        transfer_method = LineCheckAssistant._selected_upgrade_transfer_method(self)
         for channel in channels:
             try:
                 tftp_server_ip = self._tftp_server_ip_for_channel(channel)
@@ -1169,13 +1190,16 @@ class LineCheckAssistant(Tk):
                 final_username=self.upgrade_username_var.get().strip(),
                 final_password=self.upgrade_password_var.get().strip(),
                 restore_factory=bool(self.upgrade_restore_factory_var.get()),
+                transfer_method=transfer_method,
             )
             upgrade_items.append((channel, request))
 
         target_text = "、".join(request.vlan for _channel, request in upgrade_items)
+        transfer_action = "执行 Tftp Put" if transfer_method == TFTP_PUT_TRANSFER else "下发 Tftp指令"
+        restore_factory_text = "开启，会在最终系统登录后执行恢复出厂" if bool(self.upgrade_restore_factory_var.get()) else "关闭，不会执行恢复出厂"
         if not messagebox.askyesno(
             "确认串行升级",
-            f"将按主界面通道顺序升级 {len(upgrade_items)} 台样机：{target_text}\n\n升级过程会自动改写 network_card_ip.ini，仅保留当前上电通道，然后自动上电、进入 boot、下发 Tftp 拷贝命令并复位/重新上电。是否继续？",
+            f"将按主界面通道顺序升级 {len(upgrade_items)} 台样机：{target_text}\n\n升级过程会自动改写 network_card_ip.ini，仅保留当前上电通道，然后自动上电、进入 boot、{transfer_action}并复位/重新上电。\n恢复出厂：{restore_factory_text}\n\n是否继续？",
             parent=self.upgrade_window,
         ):
             return
@@ -1183,6 +1207,9 @@ class LineCheckAssistant(Tk):
         self._set_upgrade_status("", f"准备串行升级 {len(upgrade_items)} 台样机", 0)
         thread = threading.Thread(target=self._serial_tftp_copy_upgrade_worker, args=(upgrade_items,), daemon=True)
         thread.start()
+
+    def _selected_upgrade_transfer_method(self) -> str:
+        return LineCheckAssistant._normalize_upgrade_transfer_method(self.upgrade_transfer_var.get())
 
     def _selected_tftp_copy_upgrade_channels(self) -> list[ChannelConfig]:
         channels_by_vlan: dict[str, ChannelConfig] = {}
@@ -1221,6 +1248,11 @@ class LineCheckAssistant(Tk):
         restore_result = None
         selected_channels = [channel for channel, _request in upgrade_items]
         power_serial_port = upgrade_items[0][1].power_serial_port if upgrade_items else self._selected_power_serial_port()
+        securecrt_pids: set[int] = set()
+
+        def remember_securecrt_pids(pids: tuple[int, ...]) -> None:
+            securecrt_pids.update(pid for pid in pids if pid)
+
         try:
             for index, (channel, request) in enumerate(upgrade_items, start=1):
                 start_progress = ((index - 1) / total) * 100 if total else 0
@@ -1241,6 +1273,7 @@ class LineCheckAssistant(Tk):
                         OLD_TOOL_PATH,
                         request,
                         on_output=lambda line: self.log_queue.put(line),
+                        on_securecrt_pids=remember_securecrt_pids,
                     )
                 except Exception as exc:
                     result = CommandResult(False, f"{request.vlan} 升级流程异常：{exc}")
@@ -1267,7 +1300,7 @@ class LineCheckAssistant(Tk):
                 except Exception as exc:
                     restore_result = CommandResult(False, f"恢复 network_card_ip.ini 完整通道配置失败：{exc}")
                     self.log_queue.put(restore_result.message)
-            cleanup_result = close_upgrade_tools(APP_DIR, on_output=lambda line: self.log_queue.put(line))
+            cleanup_result = close_upgrade_tools(APP_DIR, securecrt_pids=tuple(sorted(securecrt_pids)), on_output=lambda line: self.log_queue.put(line))
             if not cleanup_result.ok:
                 self.log_queue.put(cleanup_result.message)
         if failed_result is None and restore_result is not None:
