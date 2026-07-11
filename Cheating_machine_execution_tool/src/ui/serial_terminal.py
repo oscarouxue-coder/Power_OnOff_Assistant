@@ -28,7 +28,7 @@ class SerialTerminalWindow:
             return
         self.window = Toplevel(self.master)
         self.window.title("串口日志记录")
-        self.window.geometry("900x620")
+        self.window.geometry("1000x650")
         toolbar = Frame(self.window)
         toolbar.pack(fill="x", padx=12, pady=8)
         ttk.Button(toolbar, text="打开全部", command=lambda: [self.open_monitor(v) for v in list(self.tabs)]).pack(side="left")
