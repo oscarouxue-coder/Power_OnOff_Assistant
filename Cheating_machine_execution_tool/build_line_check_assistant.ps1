@@ -4,6 +4,8 @@ $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $specDir = Join-Path $projectRoot "line_check_assistant\packaging_specs"
 $hookDir = Join-Path $projectRoot "line_check_assistant\packaging_hooks"
 $buildDir = Join-Path $projectRoot "build"
+$distDir = Join-Path $projectRoot "dist"
+$thirdPartyNotice = Join-Path $projectRoot "THIRD_PARTY_NOTICES.md"
 
 New-Item -ItemType Directory -Force -Path $specDir | Out-Null
 
@@ -16,7 +18,12 @@ try {
         --name LineCheckAssistant `
         --specpath $specDir `
         --additional-hooks-dir $hookDir `
+        --collect-submodules tftpy `
         .\run_line_check_assistant.py
+
+    if (Test-Path -LiteralPath $thirdPartyNotice) {
+        Copy-Item -LiteralPath $thirdPartyNotice -Destination (Join-Path $distDir "THIRD_PARTY_NOTICES.md") -Force
+    }
 
     $resolvedProjectRoot = [System.IO.Path]::GetFullPath($projectRoot).TrimEnd('\')
     $resolvedBuildDir = [System.IO.Path]::GetFullPath($buildDir).TrimEnd('\')

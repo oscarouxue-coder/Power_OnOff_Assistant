@@ -24,6 +24,36 @@
 - 后续待办：
 ```
 
+## 2026-07-11 - 修复主程序 VS Code 源码启动环境
+
+- 类型：BUG 修复 / 配置 / 文档 / 测试
+- 背景：用户在 VS Code 运行 `run_line_check_assistant.py` 时，专用 `.venv_serial_upgrade` 缺少主程序新增的 `tftpy`，启动期导入 `src.core.tftp_transport` 后报 `ModuleNotFoundError`；现有 F5 配置也只覆盖独立 `serial_upgrade.py`。
+- 完成内容：为 VS Code 新增 `LineCheckAssistant` 调试入口，固定以 `Cheating_machine_execution_tool` 为工作目录；主程序依赖清单补充 `requests` 并在 `.venv_serial_upgrade` 安装 `tftpy==0.8.7`；README 补充首次安装依赖和 VS Code 运行步骤；项目状态同步主程序源码运行入口。
+- 修改文件：`.vscode/launch.json`、`Cheating_machine_execution_tool/requirements.txt`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：使用 `.venv_serial_upgrade` 编译入口、主界面和 TFTP 模块；导入 `line_check_assistant.app`；执行 `pip check`；解析 `.vscode/launch.json`；运行 `test_tftp_transport.py`。
+- 验证结果：编译通过；`LineCheckAssistant import OK`；`tftpy=0.8.7`；`No broken requirements found.`；`launch.json JSON OK`；`test_tftp_transport.py` 2 项通过。
+- 后续待办：用户可在 VS Code 选择 `LineCheckAssistant` 后按 F5 完成界面与现场设备功能验证。
+
+## 2026-07-10 - 主程序内置 pySerial 与 TFTPy 串行升级
+
+- 类型：功能 / 重构 / 测试 / 文档
+- 背景：全包升级原先依赖 SecureCRT、Tftpd64 和 Windows TFTP 客户端，串口状态机不可执行测试且多网卡源 IP 不可控。
+- 完成内容：新增 `src/models`、`src/core`、`src/services`、`src/ui` 分层；pySerial 接管 VLAN→COM 的收发、状态 marker、终端显示与独占写锁；TFTPy Server 接管设备拉取并仅映射所选固件为 `tclinux_allinone`，TFTPy Client 接管 Put 并绑定当前通道源 IP；内置多通道终端替换占位窗口；保留两种 TFTP 语义、串行顺序、配置隔离、reset/登录/恢复出厂时序；移除旧 Python/VBS 自动化模块和旧实现测试。
+- 修改文件：主界面、`src` 新模块、测试、依赖清单、第三方声明、构建脚本、README、PROJECT_STATUS。
+- 验证方法：编译检查、完整单元测试、TFTPy 本机高端口上传/下载端到端测试。
+- 验证结果：`python -m py_compile` 通过；完整 `python -m unittest discover -s tests -v` 100 项通过。
+- 后续待办：在真实设备上分别验收两种传输、恢复出厂、多样机串行、端口占用、串口拔出、UDP 69 防火墙和多 `.1` 网卡源 IP。
+
+## 2026-07-09 - 修复 Tftp Put 恢复出厂提交和 CRT 主窗口残留
+
+- 类型：BUG 修复 / 优化 / 测试 / 文档
+- 背景：用户验证 `Tftp Put` 模式在固件传输完成、重启并登录最终系统后，恢复出厂命令停留在 CRT 窗口中未真正下发；同时样机升级收尾只关闭了升级 Tab，SecureCRT 主窗口仍残留。
+- 完成内容：恢复出厂逻辑改为发送 `firstboot -y;reboot` 后固定等待 1 秒再发送回车，不再等待命令回显；SecureCRT 升级脚本在关闭当前升级 Tab 后继续请求关闭 SecureCRT 主窗口，收尾日志同步说明 Tab 和主窗口都会由脚本请求关闭。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/securecrt_automation.py`、`Cheating_machine_execution_tool/line_check_assistant/upgrade_cleanup.py`、`Cheating_machine_execution_tool/tests/test_securecrt_automation.py`、`Cheating_machine_execution_tool/tests/test_tftpd_automation.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行编译检查、`test_securecrt_automation.py`、`test_tftpd_automation.py` 和完整单元测试。
+- 验证结果：编译检查通过；`test_securecrt_automation.py` 16 项全部 OK；`test_tftpd_automation.py` 3 项全部 OK；完整 `python -m unittest discover -s tests -v` 123 项全部 OK。
+- 后续待办：用真实 `Tftp Put + 恢复出厂` 样机升级复测，确认串口日志中命令 1 秒后下发并触发恢复出厂重启，且 SecureCRT 主窗口随升级结束关闭。
+
 ## 2026-07-08 - 恢复出厂命令发送后延迟关闭 SecureCRT Tab
 
 - 类型：BUG 修复 / 测试 / 文档

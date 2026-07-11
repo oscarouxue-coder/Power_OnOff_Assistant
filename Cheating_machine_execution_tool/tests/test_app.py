@@ -31,16 +31,12 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         config_window.lift.assert_called_once_with()
         config_window.focus_force.assert_called_once_with()
 
-    def test_serial_log_entry_reuses_open_window(self):
-        serial_log_window = Mock()
-        serial_log_window.winfo_exists.return_value = True
-        context = SimpleNamespace(serial_log_window=serial_log_window)
+    def test_serial_log_entry_opens_internal_terminal_for_selected_vlans(self):
+        context = SimpleNamespace(serial_terminal=Mock(), _selected_upgrade_vlans=Mock(return_value=["vlan101"]))
 
         LineCheckAssistant._open_serial_log_module(context)
 
-        serial_log_window.deiconify.assert_called_once_with()
-        serial_log_window.lift.assert_called_once_with()
-        serial_log_window.focus_force.assert_called_once_with()
+        context.serial_terminal.show.assert_called_once_with(["vlan101"])
 
     def test_onu_registration_entry_reuses_open_window(self):
         onu_registration_window = Mock()
@@ -750,9 +746,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         self.assertEqual([channel.section for channel in channels], ["channel_1", "channel_2"])
 
-    @patch("line_check_assistant.app.close_upgrade_tools")
-    @patch("line_check_assistant.app.run_single_tftp_copy_upgrade")
-    def test_serial_tftp_copy_worker_stops_after_first_failure(self, run_upgrade, close_tools):
+    @patch("line_check_assistant.app.run_single_full_package_upgrade")
+    def test_serial_tftp_copy_worker_stops_after_first_failure(self, run_upgrade):
         channels = [
             ChannelConfig(section="channel_1", vlan_name="VLAN101", enabled=True),
             ChannelConfig(section="channel_2", vlan_name="VLAN102", enabled=True),
@@ -763,13 +758,14 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         ]
         upgrade_items = list(zip(channels, requests))
         run_upgrade.return_value = Mock(ok=False, message="vlan101 failed")
-        close_tools.return_value = Mock(ok=True, message="closed")
         context = SimpleNamespace(
             log_queue=Mock(),
             after=Mock(side_effect=lambda _delay, callback: callback()),
             store=Mock(),
             _set_upgrade_status=Mock(),
             _complete_serial_tftp_copy_upgrade=Mock(),
+            serial_session_manager=Mock(),
+            serial_terminal=Mock(),
         )
 
         LineCheckAssistant._serial_tftp_copy_upgrade_worker(context, upgrade_items)
@@ -782,34 +778,30 @@ class CurrentChannelSelectionTests(unittest.TestCase):
                 call(channels, "COM106"),
             ],
         )
-        close_tools.assert_called_once()
         context._complete_serial_tftp_copy_upgrade.assert_called_once_with(2, 0, requests[0], run_upgrade.return_value)
 
-    @patch("line_check_assistant.app.close_upgrade_tools")
-    @patch("line_check_assistant.app.run_single_tftp_copy_upgrade")
-    def test_serial_tftp_copy_worker_closes_tools_after_restoring_config(self, run_upgrade, close_tools):
+    @patch("line_check_assistant.app.run_single_full_package_upgrade")
+    def test_serial_tftp_copy_worker_restores_config_without_external_cleanup(self, run_upgrade):
         channel = ChannelConfig(section="channel_1", vlan_name="VLAN101", enabled=True)
         request = Mock(vlan="vlan101", power_serial_port="COM106")
-        close_tools.return_value = Mock(ok=True, message="closed")
         events = []
         store = Mock()
         store.save.side_effect = lambda *_args: events.append("save")
-        run_upgrade.side_effect = lambda *_args, **kwargs: kwargs["on_securecrt_pids"]((11160, 27788)) or Mock(ok=True, message="vlan101 ok")
-        close_tools.side_effect = lambda *_args, **_kwargs: events.append("close") or Mock(ok=True, message="closed")
+        run_upgrade.return_value = Mock(ok=True, message="vlan101 ok")
         context = SimpleNamespace(
             log_queue=Mock(),
             after=Mock(side_effect=lambda _delay, callback: callback()),
             store=store,
             _set_upgrade_status=Mock(),
             _complete_serial_tftp_copy_upgrade=Mock(),
+            serial_session_manager=Mock(),
+            serial_terminal=Mock(),
         )
 
         LineCheckAssistant._serial_tftp_copy_upgrade_worker(context, [(channel, request)])
 
-        self.assertEqual(events, ["save", "save", "close"])
+        self.assertEqual(events, ["save", "save"])
         context.log_queue.put.assert_any_call("已恢复 network_card_ip.ini 中用户选择的完整通道配置。")
-        close_tools.assert_called_once()
-        self.assertEqual(close_tools.call_args.kwargs["securecrt_pids"], (11160, 27788))
 
     def test_upgrade_required_fields_warn_when_missing(self):
         context = SimpleNamespace(
@@ -858,17 +850,6 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         context = SimpleNamespace(device_ip_var=Mock(get=Mock(return_value="")))
 
         self.assertEqual(LineCheckAssistant._tftp_server_ip_for_channel(context, channel), "192.168.1.148")
-
-    @patch("line_check_assistant.app.messagebox.showinfo")
-    def test_success_is_reported_only_after_visible_securecrt_window(self, showinfo):
-        result = SimpleNamespace(success=True, message="started", targets=(Mock(), Mock()), log_directory=r"F:\logs")
-        context = SimpleNamespace(upgrade_window=Mock(), _set_upgrade_status=Mock(), _log=Mock())
-
-        LineCheckAssistant._complete_securecrt_launch(context, result)
-
-        context._set_upgrade_status.assert_called_once_with("", "SecureCRT 已打开 2 个目标串口，日志记录中", 0)
-        context._log.assert_called_once_with("started")
-        showinfo.assert_called_once()
 
     def test_password_eye_toggles_plain_text_display(self):
         context = SimpleNamespace(

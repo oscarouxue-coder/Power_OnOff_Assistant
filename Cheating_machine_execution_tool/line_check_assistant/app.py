@@ -27,10 +27,11 @@ from .onu_registration_store import DEFAULT_OLT_IP, OnuRegistrationConfig, OnuRe
 from .page_upgrade import PageUpgradeRequest, run_page_upgrade_batch
 from .paths import resolve_old_tool_path, resolve_tool_root
 from .sample_upgrade_settings_store import DEFAULT_UPGRADE_MODE, DEFAULT_UPGRADE_TRANSFER, SampleUpgradeSettings, SampleUpgradeSettingsStore
-from .sample_upgrade import SingleTftpCopyUpgradeRequest, TRANSFER_TFTP_COMMAND, TRANSFER_TFTP_PUT, run_single_tftp_copy_upgrade
-from .securecrt_automation import SecureCRTLaunchResult, launch_securecrt_serial_logs
 from .serial_ports import list_prolific_ports, port_from_display
-from .upgrade_cleanup import close_upgrade_tools
+from src.core import SerialSessionManager
+from src.models import FullPackageUpgradeRequest
+from src.services import TRANSFER_TFTP_COMMAND, TRANSFER_TFTP_PUT, run_single_full_package_upgrade
+from src.ui import SerialTerminalWindow
 
 
 APP_DIR = resolve_tool_root()
@@ -102,7 +103,8 @@ class LineCheckAssistant(Tk):
         self.running = False
         self.power_on_running = False
         self.upgrade_window = None
-        self.serial_log_window = None
+        self.serial_session_manager = SerialSessionManager()
+        self.serial_terminal = SerialTerminalWindow(self, self.serial_session_manager, self._serial_log_directory())
         self.test_item_config_window = None
         self.onu_registration_window = None
         self.onu_telnet_test_running = False
@@ -170,6 +172,9 @@ class LineCheckAssistant(Tk):
         except Exception:
             pass
         finally:
+            manager = getattr(self, "serial_session_manager", None)
+            if manager is not None:
+                manager.shutdown_all()
             self.destroy()
 
     def _cancel_pending_onu_registration_save(self) -> None:
@@ -984,7 +989,7 @@ class LineCheckAssistant(Tk):
 
         Label(
             content,
-            text="页面升级会上传固件并触发设备升级；全包 Tftp指令会操作旧开关机工具、SecureCRT 和 Tftpd64；全包 Tftp Put 会通过 Windows TFTP 客户端推送固件。",
+            text="页面升级会上传固件并触发设备升级；全包升级会使用内置 pySerial 串口状态机与 TFTPy 传输固件。",
             foreground=COLOR_WARNING,
             background=COLOR_BG,
         ).pack(anchor="w", pady=(16, 0))
@@ -1051,9 +1056,9 @@ class LineCheckAssistant(Tk):
         if not vlans:
             messagebox.showwarning("没有目标样机", "请先在主界面勾选通道并配置对应 VLAN。", parent=self.upgrade_window)
             return
-        self._set_upgrade_status("", "正在启动 SecureCRT 并建立串口连接...", 0)
-        thread = threading.Thread(target=self._securecrt_launch_worker, args=(vlans,), daemon=True)
-        thread.start()
+        self._open_serial_log_module(vlans)
+        self._set_upgrade_status("", f"已打开 {len(vlans)} 个内置串口监控，未下发升级命令", 0)
+        messagebox.showinfo("串口日志已启动", "已打开内置串口监控，当前未下发升级命令。", parent=self.upgrade_window)
 
     def _start_page_upgrade(self) -> None:
         channels = self._selected_page_upgrade_channels()
@@ -1170,7 +1175,7 @@ class LineCheckAssistant(Tk):
             messagebox.showwarning("未选择升级固件", "请先选择需要升级的固件文件。", parent=self.upgrade_window)
             return
 
-        upgrade_items: list[tuple[ChannelConfig, SingleTftpCopyUpgradeRequest]] = []
+        upgrade_items: list[tuple[ChannelConfig, FullPackageUpgradeRequest]] = []
         power_serial_port = self._selected_power_serial_port()
         transfer_method = LineCheckAssistant._selected_upgrade_transfer_method(self)
         for channel in channels:
@@ -1181,7 +1186,7 @@ class LineCheckAssistant(Tk):
                 return
 
             vlan_name = adapter_alias_from_display(channel.vlan_name or channel.adapter_alias).strip()
-            request = SingleTftpCopyUpgradeRequest(
+            request = FullPackageUpgradeRequest(
                 vlan=vlan_name.lower(),
                 server_interface=vlan_name,
                 tftp_server_ip=tftp_server_ip,
@@ -1240,7 +1245,7 @@ class LineCheckAssistant(Tk):
             raise ValueError(f"VLAN 主机号必须在 1-254 之间：{host_number}")
         return f"192.168.1.{host_number}"
 
-    def _serial_tftp_copy_upgrade_worker(self, upgrade_items: list[tuple[ChannelConfig, SingleTftpCopyUpgradeRequest]]) -> None:
+    def _serial_tftp_copy_upgrade_worker(self, upgrade_items: list[tuple[ChannelConfig, FullPackageUpgradeRequest]]) -> None:
         total = len(upgrade_items)
         completed = 0
         failed_request = None
@@ -1248,11 +1253,6 @@ class LineCheckAssistant(Tk):
         restore_result = None
         selected_channels = [channel for channel, _request in upgrade_items]
         power_serial_port = upgrade_items[0][1].power_serial_port if upgrade_items else self._selected_power_serial_port()
-        securecrt_pids: set[int] = set()
-
-        def remember_securecrt_pids(pids: tuple[int, ...]) -> None:
-            securecrt_pids.update(pid for pid in pids if pid)
-
         try:
             for index, (channel, request) in enumerate(upgrade_items, start=1):
                 start_progress = ((index - 1) / total) * 100 if total else 0
@@ -1268,12 +1268,15 @@ class LineCheckAssistant(Tk):
                 try:
                     self.store.save([channel], request.power_serial_port)
                     self.log_queue.put(f"已更新 network_card_ip.ini，仅保留当前上电通道：{channel.section} / {request.vlan}")
-                    result = run_single_tftp_copy_upgrade(
+                    result = run_single_full_package_upgrade(
                         APP_DIR,
                         OLD_TOOL_PATH,
                         request,
+                        self.serial_session_manager,
                         on_output=lambda line: self.log_queue.put(line),
-                        on_securecrt_pids=remember_securecrt_pids,
+                        on_session_ready=lambda vlan, session, log_path: self.after(
+                            0, lambda: self.serial_terminal.attach_upgrade(vlan, session, log_path)
+                        ),
                     )
                 except Exception as exc:
                     result = CommandResult(False, f"{request.vlan} 升级流程异常：{exc}")
@@ -1300,9 +1303,6 @@ class LineCheckAssistant(Tk):
                 except Exception as exc:
                     restore_result = CommandResult(False, f"恢复 network_card_ip.ini 完整通道配置失败：{exc}")
                     self.log_queue.put(restore_result.message)
-            cleanup_result = close_upgrade_tools(APP_DIR, securecrt_pids=tuple(sorted(securecrt_pids)), on_output=lambda line: self.log_queue.put(line))
-            if not cleanup_result.ok:
-                self.log_queue.put(cleanup_result.message)
         if failed_result is None and restore_result is not None:
             failed_result = restore_result
         self.after(0, lambda: self._complete_serial_tftp_copy_upgrade(total, completed, failed_request, failed_result))
@@ -1317,29 +1317,6 @@ class LineCheckAssistant(Tk):
         self._set_upgrade_status(vlan, f"升级失败，已停止后续样机（已完成 {completed}/{total} 台）", progress)
         self._log(failed_result.message)
         messagebox.showerror("样机升级失败", failed_result.message, parent=self.upgrade_window)
-
-    def _securecrt_launch_worker(self, vlans: list[str]) -> None:
-        try:
-            result = launch_securecrt_serial_logs(APP_DIR, vlans)
-        except Exception as exc:
-            result = SecureCRTLaunchResult(False, f"启动 SecureCRT 异常：{exc}")
-        self.after(0, lambda: self._complete_securecrt_launch(result))
-
-    def _complete_securecrt_launch(self, result: SecureCRTLaunchResult) -> None:
-        if not result.success:
-            messagebox.showerror("启动 SecureCRT 失败", result.message, parent=self.upgrade_window)
-            self._set_upgrade_status("", "SecureCRT 启动失败", 0)
-            return
-
-        self._set_upgrade_status("", f"SecureCRT 已打开 {len(result.targets)} 个目标串口，日志记录中", 0)
-        self._log(result.message)
-        messagebox.showinfo(
-            "串口日志已启动",
-            f"已检测到 SecureCRT 可见窗口，并按目标 VLAN 启动 {len(result.targets)} 个串口连接。\n"
-            f"日志目录：{result.log_directory}\n\n"
-            "当前固件传输方式仅启动串口日志，未下发升级命令。",
-            parent=self.upgrade_window,
-        )
 
     def _toggle_upgrade_password_visibility(self) -> None:
         self.upgrade_password_visible = not self.upgrade_password_visible
@@ -1448,60 +1425,16 @@ class LineCheckAssistant(Tk):
         )
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
 
-    def _open_serial_log_module(self) -> None:
-        if self.serial_log_window is not None and self.serial_log_window.winfo_exists():
-            self.serial_log_window.deiconify()
-            self.serial_log_window.lift()
-            self.serial_log_window.focus_force()
+    def _serial_log_directory(self) -> Path:
+        primary = Path(r"F:\Aouxue\开关机环境搭建工具\开关机执行工具\样机串口日志")
+        return primary if Path(primary.anchor).exists() else Path(r"D:\样机串口日志")
+
+    def _open_serial_log_module(self, vlans: list[str] | None = None) -> None:
+        targets = vlans or self._selected_upgrade_vlans()
+        if not targets:
+            messagebox.showwarning("没有目标样机", "请先在主界面勾选至少一个通道。", parent=self)
             return
-
-        dialog = Toplevel(self)
-        self.serial_log_window = dialog
-        dialog.title("串口日志记录")
-        dialog.geometry("820x580")
-        dialog.minsize(760, 530)
-        dialog.transient(self)
-        dialog.configure(background=COLOR_BG)
-
-        content = Frame(dialog, padx=20, pady=18, background=COLOR_BG)
-        content.pack(fill="both", expand=True)
-        Label(content, text="串口日志记录", font=(FONT_FAMILY, 18, "bold"), background=COLOR_BG, foreground=COLOR_TEXT).pack(anchor="w")
-        Label(
-            content,
-            text="功能配置入口已建立。串口采集、文件轮转和通道关联规则将在后续逐步完善。",
-            foreground=COLOR_MUTED,
-            background=COLOR_BG,
-        ).pack(anchor="w", pady=(6, 16))
-
-        overview = ttk.LabelFrame(content, text="日志记录配置")
-        overview.pack(fill="x")
-        rows = [
-            ("日志串口", "待选择"),
-            ("波特率", "待配置"),
-            ("串口参数", "数据位 / 校验位 / 停止位待配置"),
-            ("关联通道", "待配置"),
-            ("日志目录", "待选择"),
-            ("记录状态", "串口日志记录尚未启用"),
-        ]
-        for row, (label, value) in enumerate(rows):
-            Label(overview, text=label, width=16, anchor="w").grid(row=row, column=0, sticky="w", padx=12, pady=7)
-            Label(overview, text=value, foreground=COLOR_TEXT, anchor="w").grid(row=row, column=1, sticky="w", padx=12, pady=7)
-        overview.columnconfigure(1, weight=1)
-
-        Label(
-            content,
-            text="当前窗口仅作为配置入口，不会占用串口或生成日志文件。",
-            foreground=COLOR_WARNING,
-            background=COLOR_BG,
-        ).pack(anchor="w", pady=(16, 0))
-
-        def close_dialog() -> None:
-            dialog.destroy()
-            self.serial_log_window = None
-
-        ttk.Button(content, text="关闭", width=12, command=close_dialog, style="Secondary.TButton").pack(side="bottom", anchor="e", pady=(18, 0))
-
-        dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+        self.serial_terminal.show(targets)
 
     def _rebuild_channel_config_rows(self) -> None:
         for child in self.channel_table.winfo_children():

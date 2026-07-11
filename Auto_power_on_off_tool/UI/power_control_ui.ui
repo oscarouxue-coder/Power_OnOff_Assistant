@@ -1,0 +1,2542 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1184</width>
+    <height>825</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout_6">
+    <item>
+     <layout class="QHBoxLayout" name="horizontalLayout_8">
+      <item>
+       <layout class="QVBoxLayout" name="verticalLayout_5" stretch="10,40,0">
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_7">
+          <item>
+           <widget class="QGroupBox" name="groupBox_onu_communication_methods">
+            <property name="title">
+             <string>ONU 通讯方式</string>
+            </property>
+            <layout class="QHBoxLayout" name="horizontalLayout_2">
+             <item>
+              <layout class="QGridLayout" name="gridLayout_8">
+               <item row="0" column="0">
+                <widget class="QRadioButton" name="radioButton_telnet">
+                 <property name="minimumSize">
+                  <size>
+                   <width>60</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>60</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="text">
+                  <string>Telnet</string>
+                 </property>
+                 <property name="checked">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="0">
+                <widget class="QRadioButton" name="radioButton_ssh">
+                 <property name="minimumSize">
+                  <size>
+                   <width>60</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>60</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="text">
+                  <string>SSH</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="2" column="0">
+                <widget class="QCheckBox" name="checkBox_telnet_enable">
+                 <property name="text">
+                  <string>Telnet Enable</string>
+                 </property>
+                 <property name="checked">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QGroupBox" name="groupBox_serial_info">
+            <property name="title">
+             <string>程控电源 COM</string>
+            </property>
+            <layout class="QHBoxLayout" name="horizontalLayout_3">
+             <item>
+              <layout class="QGridLayout" name="gridLayout_6">
+               <item row="1" column="1">
+                <widget class="QComboBox" name="comboBox_band_rate">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                   <horstretch>80</horstretch>
+                   <verstretch>25</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="minimumSize">
+                  <size>
+                   <width>80</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">background-color: rgb(255, 255, 255);</string>
+                 </property>
+                 <item>
+                  <property name="text">
+                   <string>19200</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>38400</string>
+                  </property>
+                 </item>
+                </widget>
+               </item>
+               <item row="0" column="1">
+                <widget class="QComboBox" name="comboBox_serial_num">
+                 <property name="minimumSize">
+                  <size>
+                   <width>80</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>80</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">background-color: rgb(255, 255, 255);</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="0">
+                <widget class="QLabel" name="label_serial_num01_2">
+                 <property name="text">
+                  <string>Serial Num:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="0">
+                <widget class="QLabel" name="label_band_rate_2">
+                 <property name="text">
+                  <string>Baud Rate:</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_power_tip_2">
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QGroupBox" name="groupBox_device_infomation">
+            <property name="title">
+             <string>配置参数</string>
+            </property>
+            <layout class="QHBoxLayout" name="horizontalLayout_4">
+             <item>
+              <layout class="QGridLayout" name="gridLayout_7">
+               <property name="spacing">
+                <number>10</number>
+               </property>
+               <item row="2" column="1">
+                <widget class="QLineEdit" name="lineEdit_interval_time">
+                 <property name="minimumSize">
+                  <size>
+                   <width>0</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>60</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">background-color: rgb(255, 255, 255);</string>
+                 </property>
+                 <property name="text">
+                  <string>20</string>
+                 </property>
+                 <property name="readOnly">
+                  <bool>false</bool>
+                 </property>
+                 <property name="placeholderText">
+                  <string>S/unit</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="2" column="0">
+                <widget class="QLabel" name="label_interval_time_2">
+                 <property name="minimumSize">
+                  <size>
+                   <width>100</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>100</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="text">
+                  <string>Interval time:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="4" column="0">
+                <widget class="QLabel" name="label_wait_comman_done_2">
+                 <property name="minimumSize">
+                  <size>
+                   <width>107</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>107</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="text">
+                  <string>Wait command done:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="1">
+                <widget class="QComboBox" name="comboBox_schemes">
+                 <property name="minimumSize">
+                  <size>
+                   <width>120</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>120</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">QComboBox QAbstractItemView::item:hover {
+        background-color: blue; /* 设置下拉列表项hover时的背景色 */
+    }</string>
+                 </property>
+                 <item>
+                  <property name="text">
+                   <string>请选择配置文件</string>
+                  </property>
+                 </item>
+                </widget>
+               </item>
+               <item row="1" column="1">
+                <widget class="QLineEdit" name="lineEdit_start_need_times">
+                 <property name="minimumSize">
+                  <size>
+                   <width>60</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>60</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">background-color: rgb(255, 255, 255);</string>
+                 </property>
+                 <property name="text">
+                  <string>240</string>
+                 </property>
+                 <property name="readOnly">
+                  <bool>false</bool>
+                 </property>
+                 <property name="placeholderText">
+                  <string>S/unit</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="0">
+                <widget class="QLabel" name="label_product_type_2">
+                 <property name="minimumSize">
+                  <size>
+                   <width>100</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>100</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="text">
+                  <string>Startup time:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="0">
+                <widget class="QLabel" name="label_2">
+                 <property name="minimumSize">
+                  <size>
+                   <width>100</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>100</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="text">
+                  <string>Select profile：</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="3" column="1">
+                <widget class="QLineEdit" name="lineEdit_test_number">
+                 <property name="minimumSize">
+                  <size>
+                   <width>0</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>60</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">background-color: rgb(255, 255, 255);</string>
+                 </property>
+                 <property name="text">
+                  <string>500</string>
+                 </property>
+                 <property name="readOnly">
+                  <bool>false</bool>
+                 </property>
+                 <property name="placeholderText">
+                  <string>count/次数</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="4" column="1">
+                <widget class="QLineEdit" name="lineEdit_wait_command_done">
+                 <property name="minimumSize">
+                  <size>
+                   <width>0</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>60</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">background-color: rgb(255, 255, 255);</string>
+                 </property>
+                 <property name="text">
+                  <string>20</string>
+                 </property>
+                 <property name="readOnly">
+                  <bool>false</bool>
+                 </property>
+                 <property name="placeholderText">
+                  <string>S/unit</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="3" column="0">
+                <widget class="QLabel" name="label_test_number_2">
+                 <property name="minimumSize">
+                  <size>
+                   <width>100</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>100</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                 <property name="text">
+                  <string>Number of tests:</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="groupBox_power_on_off">
+          <property name="title">
+           <string>电源控制</string>
+          </property>
+          <layout class="QHBoxLayout" name="horizontalLayout_6">
+           <item>
+            <layout class="QGridLayout" name="gridLayout_10">
+             <property name="sizeConstraint">
+              <enum>QLayout::SetDefaultConstraint</enum>
+             </property>
+             <property name="rightMargin">
+              <number>0</number>
+             </property>
+             <property name="horizontalSpacing">
+              <number>40</number>
+             </property>
+             <property name="verticalSpacing">
+              <number>20</number>
+             </property>
+             <item row="2" column="2">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_11">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 11</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QPushButton" name="pushButton_power_1_channel_3">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_3 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_3:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 3 Start</string>
+               </property>
+               <property name="autoRepeatDelay">
+                <number>300</number>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="2">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_9">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 9</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="0">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_4">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 4</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="2">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_13">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 13</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="3">
+              <widget class="QPushButton" name="pushButton_power_1_channel_10">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_10 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_10:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 10 Start</string>
+               </property>
+              </widget>
+             </item>
+             <item row="6" column="3">
+              <widget class="QPushButton" name="pushButton_power_1_channel_15">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_15 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_15:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 15 Start</string>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="1">
+              <widget class="QPushButton" name="pushButton_power_1_channel_5">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_5 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_5:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 5 Start</string>
+               </property>
+               <property name="autoRepeatDelay">
+                <number>300</number>
+               </property>
+              </widget>
+             </item>
+             <item row="6" column="1">
+              <widget class="QPushButton" name="pushButton_power_1_channel_7">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_7 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_7:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 7 Start</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QPushButton" name="pushButton_power_1_channel_1">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_1 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_1:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 1 Start</string>
+               </property>
+               <property name="autoRepeatDelay">
+                <number>300</number>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="3">
+              <widget class="QPushButton" name="pushButton_power_1_channel_13">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_13 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_13:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 13 Start</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QPushButton" name="pushButton_power_1_channel_2">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_2 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_2:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 2 Start</string>
+               </property>
+               <property name="autoRepeatDelay">
+                <number>300</number>
+               </property>
+              </widget>
+             </item>
+             <item row="5" column="2">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_14">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 14</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="8" column="0">
+              <widget class="QPushButton" name="pushButton_power_1_start_all">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_start_all {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;}
+
+#pushButton_power_1_start_all:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Start All</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="0">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_1">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 1</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="3">
+              <widget class="QPushButton" name="pushButton_power_1_channel_11">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>120</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_11 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_11:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 11 Start</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="3">
+              <widget class="QPushButton" name="pushButton_power_1_channel_9">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_9 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_9:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 9 Start</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="3">
+              <widget class="QPushButton" name="pushButton_power_1_channel_12">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_12 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_12:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 12 Start</string>
+               </property>
+              </widget>
+             </item>
+             <item row="6" column="0">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_7">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 7</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="0">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_5">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 5</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="7" column="0">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_8">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 8</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="5" column="3">
+              <widget class="QPushButton" name="pushButton_power_1_channel_14">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_14 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_14:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 14 Start</string>
+               </property>
+              </widget>
+             </item>
+             <item row="7" column="3">
+              <widget class="QPushButton" name="pushButton_power_1_channel_16">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_16 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_16:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 16 Start</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="2">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_10">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 10</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_2">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 2</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="7" column="2">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_16">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 16</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="6" column="2">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_15">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 15</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="7" column="1">
+              <widget class="QPushButton" name="pushButton_power_1_channel_8">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_8 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_8:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 8 Start</string>
+               </property>
+              </widget>
+             </item>
+             <item row="5" column="0">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_6">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 6</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_3">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 3</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="5" column="1">
+              <widget class="QPushButton" name="pushButton_power_1_channel_6">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_6 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_6:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 6 Start</string>
+               </property>
+               <property name="autoRepeatDelay">
+                <number>300</number>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QPushButton" name="pushButton_power_1_channel_4">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>25</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_channel_4 {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_power_1_channel_4:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Channel 4 Start</string>
+               </property>
+               <property name="autoRepeatDelay">
+                <number>300</number>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="2">
+              <widget class="QCheckBox" name="checkBox_power_1_channel_12">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::RightToLeft</enum>
+               </property>
+               <property name="text">
+                <string>channel 12</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="8" column="3">
+              <widget class="QPushButton" name="pushButton_clear_logs">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_clear_logs {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}
+
+#pushButton_clear_logs:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Clear_logs</string>
+               </property>
+              </widget>
+             </item>
+             <item row="8" column="1">
+              <widget class="QPushButton" name="pushButton_selec_and_cancel_all">
+               <property name="minimumSize">
+                <size>
+                 <width>90</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_selec_and_cancel_all {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;}
+
+#pushButton_selec_and_cancel_all:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>全选/取消全选</string>
+               </property>
+              </widget>
+             </item>
+             <item row="8" column="2">
+              <widget class="QPushButton" name="pushButton_power_1_sstop_all">
+               <property name="minimumSize">
+                <size>
+                 <width>80</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>80</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">#pushButton_power_1_sstop_all {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;}
+
+#pushButton_power_1_sstop_all:pressed {
+background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+               </property>
+               <property name="text">
+                <string>Stop All</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="groupBox_4">
+          <property name="title">
+           <string>Email 收件人</string>
+          </property>
+          <layout class="QHBoxLayout" name="horizontalLayout_5">
+           <item>
+            <layout class="QGridLayout" name="gridLayout_13">
+             <property name="horizontalSpacing">
+              <number>20</number>
+             </property>
+             <property name="verticalSpacing">
+              <number>40</number>
+             </property>
+             <item row="0" column="1">
+              <widget class="QTextEdit" name="textEdit_email_list">
+               <property name="maximumSize">
+                <size>
+                 <width>600</width>
+                 <height>40</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">background-color: rgb(255, 255, 255);</string>
+               </property>
+               <property name="placeholderText">
+                <string>异常情况通过电子邮件通知，多个邮箱以英文逗号分开，默认接收邮箱：Ray_wang@sdmctech.com</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_email_3">
+               <property name="text">
+                <string>RecvEmails：</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QVBoxLayout" name="verticalLayout_4" stretch="1,3">
+        <item>
+         <widget class="QGroupBox" name="clear_files_groupBox">
+          <property name="title">
+           <string>冗余日志清除</string>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_3">
+           <item>
+            <layout class="QVBoxLayout" name="verticalLayout" stretch="10,2">
+             <property name="spacing">
+              <number>2</number>
+             </property>
+             <property name="leftMargin">
+              <number>2</number>
+             </property>
+             <property name="topMargin">
+              <number>2</number>
+             </property>
+             <property name="rightMargin">
+              <number>1</number>
+             </property>
+             <property name="bottomMargin">
+              <number>2</number>
+             </property>
+             <item>
+              <layout class="QGridLayout" name="gridLayout_9" rowstretch="1,0,0" columnstretch="0,0">
+               <property name="spacing">
+                <number>20</number>
+               </property>
+               <item row="0" column="1">
+                <widget class="QLineEdit" name="delete_file_path_lineEdit">
+                 <property name="placeholderText">
+                  <string>输入日志文件夹路径，如：F:\Common_soft\Wireshark</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="2" column="1">
+                <widget class="QLineEdit" name="lineEdit_3">
+                 <property name="focusPolicy">
+                  <enum>Qt::NoFocus</enum>
+                 </property>
+                 <property name="contextMenuPolicy">
+                  <enum>Qt::NoContextMenu</enum>
+                 </property>
+                 <property name="layoutDirection">
+                  <enum>Qt::LeftToRight</enum>
+                 </property>
+                 <property name="inputMethodHints">
+                  <set>Qt::ImhNone</set>
+                 </property>
+                 <property name="text">
+                  <string/>
+                 </property>
+                 <property name="readOnly">
+                  <bool>true</bool>
+                 </property>
+                 <property name="placeholderText">
+                  <string>会先清除一次路径下的文件，然后开启定时清除，默认24H</string>
+                 </property>
+                 <property name="clearButtonEnabled">
+                  <bool>false</bool>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="1">
+                <widget class="QLineEdit" name="file_suffix_lineEdit">
+                 <property name="text">
+                  <string/>
+                 </property>
+                 <property name="placeholderText">
+                  <string>如：pcapng，如果不加后缀则删除全部</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="0">
+                <widget class="QLabel" name="label_4">
+                 <property name="text">
+                  <string>文件路径：</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="2" column="0">
+                <widget class="QPushButton" name="manual_clear_pushButton">
+                 <property name="minimumSize">
+                  <size>
+                   <width>50</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">#manual_clear_pushButton {
+ background-color: #293847;
+color:rgb(255, 255, 255);
+border-radius: 10px;}
+
+#manual_clear_pushButton:pressed {
+    background-color: #C0C0C0;
+color:rgb(255, 255, 255);
+border-radius: 10px;
+}</string>
+                 </property>
+                 <property name="text">
+                  <string>开始清除</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="0">
+                <widget class="QLabel" name="label_3">
+                 <property name="text">
+                  <string>文件后缀：</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout" stretch="4,1,1,1,1,1,1">
+               <property name="spacing">
+                <number>40</number>
+               </property>
+               <property name="topMargin">
+                <number>10</number>
+               </property>
+               <item>
+                <widget class="QLabel" name="label_7">
+                 <property name="text">
+                  <string>自动清除定时：</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="label_6">
+                 <property name="text">
+                  <string>周</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QComboBox" name="month_comboBox">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                   <horstretch>40</horstretch>
+                   <verstretch>25</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="minimumSize">
+                  <size>
+                   <width>40</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">background-color: rgb(255, 255, 255);</string>
+                 </property>
+                 <item>
+                  <property name="text">
+                   <string>0</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>1</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>2</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>3</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>4</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>5</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>6</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>7</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>8</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>8</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>10</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>11</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>12</string>
+                  </property>
+                 </item>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="label_5">
+                 <property name="text">
+                  <string>日</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QComboBox" name="day_comboBox">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                   <horstretch>40</horstretch>
+                   <verstretch>25</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="minimumSize">
+                  <size>
+                   <width>40</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">background-color: rgb(255, 255, 255);</string>
+                 </property>
+                 <item>
+                  <property name="text">
+                   <string>0</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>1</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>2</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>3</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>4</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>5</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>6</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>7</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>8</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>8</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>10</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>11</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>12</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>13</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>14</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>15</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>16</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>17</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>18</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>19</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>20</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>21</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>22</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>23</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>24</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>25</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>26</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>27</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>28</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>29</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>30</string>
+                  </property>
+                 </item>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="label_8">
+                 <property name="text">
+                  <string>时</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QComboBox" name="hour_comboBox">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                   <horstretch>40</horstretch>
+                   <verstretch>25</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="minimumSize">
+                  <size>
+                   <width>40</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">background-color: rgb(255, 255, 255);</string>
+                 </property>
+                 <item>
+                  <property name="text">
+                   <string>0</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>1</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>2</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>3</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>4</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>5</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>6</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>7</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>8</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>8</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>10</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>11</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>12</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>13</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>14</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>15</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>16</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>17</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>18</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>19</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>20</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>21</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>22</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>23</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>24</string>
+                  </property>
+                 </item>
+                </widget>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="groupBox">
+          <property name="title">
+           <string>Logs</string>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_2">
+           <item>
+            <widget class="QTextBrowser" name="textBrowser_logs"/>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1184</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menu_WiFi">
+    <property name="title">
+     <string>配置连接WIFI</string>
+    </property>
+    <addaction name="config_wifi_test_param"/>
+    <addaction name="separator"/>
+   </widget>
+   <addaction name="menu_WiFi"/>
+  </widget>
+  <action name="config_wifi_test_param">
+   <property name="text">
+    <string>配置参数</string>
+   </property>
+   <property name="font">
+    <font>
+     <family>Arial Black</family>
+     <weight>75</weight>
+     <bold>true</bold>
+    </font>
+   </property>
+   <property name="shortcutContext">
+    <enum>Qt::WindowShortcut</enum>
+   </property>
+   <property name="priority">
+    <enum>QAction::NormalPriority</enum>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>pushButton_selec_and_cancel_all</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>select_and_cancel_all()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>263</x>
+     <y>705</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>255</x>
+     <y>669</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_clear_logs</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>clear_logs()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>545</x>
+     <y>705</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>488</x>
+     <y>668</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>manual_clear_pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>clear_files()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>656</x>
+     <y>156</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>588</x>
+     <y>25</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>config_wifi_test_param</sender>
+   <signal>triggered()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>config_device_wifi_param()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>-1</x>
+     <y>-1</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>556</x>
+     <y>378</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_start_all</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_run()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>58</x>
+     <y>688</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>4</x>
+     <y>714</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_sstop_all</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>stop_all_run()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>370</x>
+     <y>699</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>177</x>
+     <y>749</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_1</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_01_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>190</x>
+     <y>267</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>5</x>
+     <y>270</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_2</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_02_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>191</x>
+     <y>318</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>2</x>
+     <y>324</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_3</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_03_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>193</x>
+     <y>363</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>3</x>
+     <y>372</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_4</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_04_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>190</x>
+     <y>421</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>1</x>
+     <y>428</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_5</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_05_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>191</x>
+     <y>479</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>3</x>
+     <y>487</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_6</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_06_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>191</x>
+     <y>531</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>2</x>
+     <y>536</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_7</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_07_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>193</x>
+     <y>577</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>5</x>
+     <y>585</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_8</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_08_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>191</x>
+     <y>632</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>4</x>
+     <y>626</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_9</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_09_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>510</x>
+     <y>264</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>597</x>
+     <y>264</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_10</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_10_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>520</x>
+     <y>316</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>595</x>
+     <y>318</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_11</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_11_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>525</x>
+     <y>377</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>595</x>
+     <y>376</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_12</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_12_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>514</x>
+     <y>418</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>598</x>
+     <y>430</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_13</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_13_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>514</x>
+     <y>481</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>597</x>
+     <y>487</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_14</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_14_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>511</x>
+     <y>532</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>593</x>
+     <y>530</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_15</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_15_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>499</x>
+     <y>573</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>598</x>
+     <y>583</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_power_1_channel_16</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>power_control_01_channel_16_case()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>546</x>
+     <y>634</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>594</x>
+     <y>636</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>power_control_run()</slot>
+  <slot>power_control_channels()</slot>
+  <slot>clear_logs()</slot>
+  <slot>stop_all_run()</slot>
+  <slot>select_and_cancel_all()</slot>
+  <slot>clear_files()</slot>
+  <slot>config_device_wifi_param()</slot>
+  <slot>power_control_01_run()</slot>
+  <slot>power_control_01_channel_16_case()</slot>
+  <slot>power_control_01_channel_15_case()</slot>
+  <slot>power_control_01_channel_14_case()</slot>
+  <slot>power_control_01_channel_13_case()</slot>
+  <slot>power_control_01_channel_12_case()</slot>
+  <slot>power_control_01_channel_11_case()</slot>
+  <slot>power_control_01_channel_10_case()</slot>
+  <slot>power_control_01_channel_09_case()</slot>
+  <slot>power_control_01_channel_08_case()</slot>
+  <slot>power_control_01_channel_07_case()</slot>
+  <slot>power_control_01_channel_06_case()</slot>
+  <slot>power_control_01_channel_05_case()</slot>
+  <slot>power_control_01_channel_04_case()</slot>
+  <slot>power_control_01_channel_03_case()</slot>
+  <slot>power_control_01_channel_02_case()</slot>
+  <slot>power_control_01_channel_01_case()</slot>
+ </slots>
+</ui>

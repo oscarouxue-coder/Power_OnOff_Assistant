@@ -1,0 +1,150 @@
+2023.0925
+1.创建自己的类，继承 configparser.ConfigParser，重写 optionxform()方法，修复指令包含大写字符时自动转换为小写；
+2.优化telnet 密码错误时，报telnet_error
+3.登录失败，将日志打印到result文件
+4.命令执行失败，将日志打印到result文件
+5.修复ping3 返回结果0.0=False的问题，判断变成 is
+6.config文件里面带%的字符串，要用%%去代替，其他字符串异常情况还未知道
+7.电脑开机之后，可能要等待几分钟等待网卡完全启动，不然会大量的断开连接--也有可能跟网卡有关系，设备断电的时候也会影响到其他设备，发现ping包有断开的情况
+2023.1007
+1.修复正则表达式匹配问题  [0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}
+2.修复不控制电源的问题，selected_scheme_path 放到了正则表达式下面，匹配url失败
+
+20231010
+1.调整断电间隔时间的位置，之前放到了测试之后，与设计不符
+
+20231107
+1.打开telnet增加flag，区分产测和用户模式
+2.统计PCIE 错误，异常时不停止
+
+2023.11.21
+1.telnet_client  删除 self.tn.open()  初始化时会自动调用open函数
+2.增加全选/取消按钮
+
+2023.11.27
+1.增加对命令执行结果的长度判断，当为0时，再次执行，5次
+
+2024.01.08
+1.增加telnet_enable 设置项，勾选时为设备需要打开telnet使能，默认勾选
+
+2024.01.25
+1.增加打开 /ubus/xlink.firewall.TelnetSet 使能的功能，针对NME5410（后面新产品可以通过F12-network 抓取网页进行自行分析）；
+
+2024.02.21
+1.增加打印信息，查找 TypeError: unhashable type: 'list' 报错
+
+2024.03.05
+1.telnet 支持不需要登录的设备，如NP5436G:telnet_need_enter_password_flag = 0 表示不需要登录密码
+2.支持某些指令返回值返回时间过长，比如 u，执行之后需要等待5-15s的时间
+
+2024.03.07
+1.支持反向查询 ，比如 MAC不为零：00:00:00:00:00:00，需要在指令结果前面带上!，比如!00:00:00:00:00:00;
+
+2024.03.10
+1.支持一条指令查询多个内容，用&&关联，比如：lspci = 02:00.0 Class 0d80:&&01:00.0 Class 0d80:
+2.对于某些指令需要一定的延时才能获取到返回值，在指令前增加wait_time5，其中5对应执行指令后的延时；
+
+2024.03.14
+1.修复从配置文件读order的内容变成list的问题   例如： 'lspci': ['02:00.0 Class 0d80:&&01:00.0 Class 0d80:']
+2.把wait_time5 放到指令后面，之前在指令前面，当指令中间有空格，会导致分离指令失败；
+
+2024.03.16
+1.增加only_power_off_on = 0，加一行这个，当这个值为1的时候只做开关机，为零的时候会正常执行查询指令
+
+2024.03.19
+1.修复网关IP 192.168.1.254只取到192.168.1.2
+
+2024.03.21
+1.修复telnet timeout时没有把信号传到页面
+2.增加SSH连接功能
+
+2024.03.30
+1.修改wait_time5---->wait_time_5;
+2.支持单个指令增加测试次数  在指令后面增加 retry_times_5 就会在指令失败时执行5次，5次内有执行成功，会提前结果，
+例如：ifconfig wl0 wait_time_5 retry_times_5 = UP BROADCAST RUNNING；
+3.SSH修改  transport.banner_timeout = 300 ，防止出现banner超时，需要挂测进行验证；
+
+2024.04.07
+1.支持NME3015 写参指令，需要把 config 命名为 NME5410_T_config.ini
+2.支持设置指令随机等待时间  例如：wait_time_6-15
+
+2024.04.19
+1.修改打开 telnet_enable 次数，当失败的时候最多尝试5次，每次间隔10s；
+2.增加SSH连接次数，当失败的时候最多尝试10次，每次间隔10s；
+
+2024.04.20
+1. config.ini文件增加配置项：[other config] 可以配置 打开 telnet_enable 次数，失败次数，SHH连接次数和失败次数；
+
+2024.04.22
+1. 支持https请求打开telnet_enable
+
+2024.04.23
+1.增加telnet登录时的打印log，增加时间戳，输入密码后增加2s延时，防止获取不到登录成功的标志；
+
+2024.04.30
+1.telnet config文件增加 login_after_input_str 字段。以便匹配其他设备
+
+2024.06.06
+1.支持https请求；
+2.telnet打开后，等待5s再去连接telnet下发指令，NP1257GB下发指令过快会出现telnet断开的情况；
+3.SSH连接出现winerror错误后continue运行；
+
+2024.06.07
+1.enable_telnet 的http接口不同的设备请求方式不一样，当请求状态码是404的时候，就更换http请求方式再次请求
+
+2024.06.11
+1. telnet 增加指令执行失败之后 执行ps指令
+
+2024.07.19
+1.修改Fuzzy_Match函数里面的matches = re.findall(value, result)对于value中包含()或者其他特殊字符的时候匹配是的问题，改成 value in result;
+2.针对个别设备连接telnet之后，登录提示字符回显很慢的情况(超过10s)，调整timeout=60;
+3.修改order指令增加 &&0，&&！，&&2，来区分同一个指令，因为脚本读取指令后存储到字典，key不能相同，修改后如下：ifconfig&&0,ifconfig&&1,ifconfig&&2，可匹配不通的返回值
+
+2024.08.17
+1.支持只开关机模式统计测试次数，达到设置次数自动停止；
+2.增加IPV6 IP匹配规则；
+
+2024.11.11
+1.增加程控电源下发指令的间隔为5s，之前时1.5s左右，挂测能够解决指令下发太快导致程控电源卡死的情况；
+
+2025.0106
+1.支持钉钉发送错误消息
+2.config.ini 文件增加 [dingtalk_config] 对应钉钉机器人相关配置
+3.config.ini 文件增加：
+# 指令失败的重试间隔
+command_fail_retry_interval_time = 10
+# 指令失败多少次执行成功
+command_fail_retry_success_times = 10
+支持设置指令重试间隔和指令失败多少次才执行成功
+4.当指令重试次数=command_fail_retry_success_times，发送信息到Gui 界面
+
+2025.01.10
+1.config.ini 文件增加：
+# 是否启用钉钉机器人发送消息，1表示启用，0表示不启用
+dingtalk_flag = 1
+2.当指令尝试次数>2，则发送log到GUI界面，并将此类消息的颜色置为黄色
+3.取消自动删除工具日志
+
+2025.01.13
+1.优化删除log 代码，当文件被占用时也不影响工具运行
+2.合并telnet enable 代码，支持API里面包含 %
+3.优化钉钉消息通知，增加字体颜色
+
+2025.03.13
+1.解决telnet返回值包含中文，无法解码的问题：errors='replace'或者errors='ignore'
+
+2025.06.27
+1.测试设备 ini文件增加 连接WiFi的配置项
+[connect_wifi]
+;enable=1的时候表示连接WiFi，等于0的时候不连接WiFi
+enable = 1
+;产品方案product_solution:openwrt,bcm,mtk，对应了获取ssid和password的指令
+product_solution=openwrt
+
+2025.12.19
+1、修复5G WiFi连接失败的时候对应按钮不变异常；
+2、device.ini [telnet] 增加 telnet_no_user_password_flag=1 ,为1的时候表示不需要输入用户名和密码
+3、config.ini [other_config] 增加 指令集循环执行次数，特殊场景使用 commands_execute_times = 6，表示指令集循环执行6次，指令集执行测试的时间根据循环次数来确定；
+
+2026.01.19
+1、修复telnet_enable 时 url无效，导致工具进入死循环卡死
