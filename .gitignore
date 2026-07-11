@@ -18,3 +18,9 @@ Cheating_machine_execution_tool/config/sample_upgrade_settings.ini
 开关机执行工具/securecrt_runtime/
 开关机执行工具/样机串口日志/
 开关机执行工具/test_results/
+
+# Local log/output directories (matched by name at any depth)
+**/assistant_logs/
+**/Prototype_log/
+**/script_logs/
+**/test_results/
