@@ -91,8 +91,13 @@ class PySerialSession:
             self._subscribers.discard(subscriber)
 
     def write(self, data: bytes, sensitive: bool = False) -> None:
-        if self._serial is None or self._closed:
-            raise RuntimeError(f"串口 {self.settings.port} 未打开")
+        if self._serial is None:
+            raise RuntimeError(
+                f"串口 {self.settings.port} 未打开(open() 失败或从未调用,常见原因:"
+                "该 COM 端口不存在、PC 串口驱动异常或权限不足)"
+            )
+        if self._closed:
+            raise RuntimeError(f"串口 {self.settings.port} 已关闭")
         try:
             with self._write_lock:
                 self._serial.write(data)

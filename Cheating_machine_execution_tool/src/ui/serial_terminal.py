@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from tkinter import END, Frame, Label, StringVar, Text, Toplevel, filedialog, messagebox, ttk
 
+from src.config import DEFAULT_LOG_DIR
 from src.core import SerialSessionManager, vlan_to_serial_port
 from src.models import SerialSettings
 
@@ -14,7 +15,6 @@ from src.models import SerialSettings
 _DEFAULT_GEOMETRY = "1000x650"
 _MIN_WIDTH = 1000
 _MIN_HEIGHT = 650
-_DEFAULT_LOG_DIR = Path(r"D:\Serial_Log")
 _GEOMETRY_PATTERN = re.compile(r"^(?P<w>\d+)x(?P<h>\d+)(?P<x>[+-]\d+)(?P<y>[+-]\d+)$")
 _MIN_VISIBLE = 120  # 窗口在屏幕内至少要可见的像素,避免开屏外
 
@@ -248,16 +248,16 @@ class SerialTerminalWindow:
                 pass
         # 默认路径不存在时主动创建,首次运行也能直接用
         try:
-            _DEFAULT_LOG_DIR.mkdir(parents=True, exist_ok=True)
+            DEFAULT_LOG_DIR.mkdir(parents=True, exist_ok=True)
         except OSError:
             pass
-        return _DEFAULT_LOG_DIR
+        return DEFAULT_LOG_DIR
 
     def _choose_log_dir(self) -> None:
         """弹出目录选择框,选择后切换日志目录并立即持久化"""
         if self.window is None:
             return
-        initial = str(self.log_dir) if self.log_dir.exists() else str(_DEFAULT_LOG_DIR)
+        initial = str(self.log_dir) if self.log_dir.exists() else str(DEFAULT_LOG_DIR)
         try:
             chosen = filedialog.askdirectory(
                 title="选择串口日志保存目录",

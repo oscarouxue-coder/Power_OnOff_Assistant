@@ -27,6 +27,7 @@ from .paths import resolve_config_dir, resolve_tool_root
 from .sample_upgrade_settings_store import DEFAULT_UPGRADE_MODE, DEFAULT_UPGRADE_TRANSFER, SampleUpgradeSettings, SampleUpgradeSettingsStore
 from .serial_ports import list_prolific_ports, port_from_display
 from src.core import SerialSessionManager
+from src.config import DEFAULT_LOG_DIR
 from src.models import FullPackageUpgradeRequest
 from src.services import TRANSFER_TFTP_COMMAND, TRANSFER_TFTP_PUT, run_single_full_package_upgrade, turn_off_selected_channels, turn_on_selected_channels
 from src.ui import SerialTerminalWindow
@@ -1436,7 +1437,7 @@ class LineCheckAssistant(Tk):
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
 
     def _serial_log_directory(self) -> Path:
-        return Path(r"D:\Serial_Log")
+        return DEFAULT_LOG_DIR
 
     def _open_serial_log_module(self, vlans: list[str] | None = None) -> None:
         targets = vlans or self._selected_upgrade_vlans()
