@@ -26,13 +26,15 @@
 | 主程序框架 / UI / 持久化 | ✅ 完成 | Tkinter,`app.py` ~2055 行 |
 | 程控电源直连(自动上/下电) | ✅ 完成,真实样机验收通过 | 上电无额外等待,相邻帧 1s |
 | 页面升级(UBUS 并行) | ✅ 完成,真实样机验收通过 | UBUS 触发可能因浏览器仍登录 Web 报 `Access denied` |
-| 全包升级 + **Tftp指令**(拉取) | ✅ 代码完成 | **程控电源上电驱动**,电源完成后 1s 缓冲,boot 登录必须经过 UserName/Password 提示符 |
+| 全包升级 + **Tftp指令**(拉取) | ✅ 代码完成 | **程控电源上电驱动**,仅断开/开启当前升级通道、不发送全断电帧；电源完成后 1s 缓冲,boot 登录必须经过 UserName/Password 提示符 |
 | 全包升级 + **Tftp Put**(推送) | ✅ 代码完成 | 用户手动上电,reboot + 每秒回车中断,login 完成后发 tftp |
 | ONU 注册完整流程(ZTE OLT) | ✅ 完成 | 含离线清理后重注册、`write` 保存提示 |
 | 多 VLAN 串口终端 | ✅ 完成 | 几何持久化、最小尺寸、日志目录切换 |
-| 单元测试 | ✅ **121 项全过** | `python -m unittest discover -s tests` |
+| 单元测试 | ✅ **125 项全过** | `python -m unittest discover -s tests` |
 | **TFTP 服务 INADDR_ANY 回退** | ✅ 完成 | 配置 IP 不在本机时回退 `0.0.0.0`,避免 `[WinError 10049]` |
 | **boot 登录串口异常安全化** | ✅ 完成 | 串口未打开/已关闭时转 CommandResult 失败,daemon 线程不再裸抛异常 |
+| **boot 登录提示符严格握手** | ✅ 真实样机验证通过 | 上电完成后才启动探测；用户名稳定窗口会剔除夹带旧密码的过渡日志，密码提示符必须在用户名回车后出现 |
+| **串口终端目录写入错误提示** | ✅ 完成 | 默认日志目录或终端状态文件不可写时弹窗提示 |
 | 多台并发升级 | ❌ 未开始 | 当前为串行 |
 | 异常场景加固(超时/串口掉线) | ❌ 未开始 |
 | 差异化升级模板 | ❌ 未开始 |
@@ -76,7 +78,7 @@ f:\Aouxue\Power_OnOff_Assistant\
 │   │   │   ├── onu_registration.ini        # Git 忽略(本机凭据)
 │   │   │   └── sample_upgrade_settings.ini # Git 忽略
 │   │   └── Auto_Power_On_Off_Tool.py
-│   └── tests/                              # 单元测试 121 项
+│   └── tests/                              # 单元测试 125 项
 ├── ~/.aouxue_serial_terminal.json          # 串口终端几何 + 日志目录(Git 忽略)
 └── .vscode/launch.json                     # `LineCheckAssistant` 与 `serial_upgrade` 两个调试入口
 ```
@@ -164,13 +166,14 @@ sleep 120s → login_final_system → restore_factory
 - 页面升级 UBUS 并行(已真实样机验收)
 - 全包升级两条链路(Tftp指令 用电源 / Tftp Put 手动)
 - **TFTP 服务 INADDR_ANY 回退**:`network_card_ip` 配置与本机网卡不一致时(典型 vlan139→COM39 不存在的情况,vlan→COM 仅覆盖 101–116)改为 bind `0.0.0.0`,日志中显示实际监听 IP
-- **boot 登录时间收紧**:用户名/密码与回车间各 1.0s
+- **boot 登录首轮稳定化**:程控电源动作完成后等待 1 秒才启动探测；`UserName` 出现后仅接收串口 1 秒确认未夹带旧 `Password`，再提交用户名
+- **全包升级断电重启收敛**:仅向当前升级通道发送关闭、开启帧，不再执行“关闭全部程控电源通道”帧
 - **boot 登录 orphan 提示符剔除**:不再因瞬态 `# / >` 误判 boot 就绪,避免 `tftp ...` 被打到未登录的 UserName 提示符
 - **boot 登录串口异常安全化**:`wait_for_boot_login` / `_login_boot` / `boot_worker` 三层都包了 try/except,串口层 `RuntimeError` 转 `CommandResult(ok=False)`;`write()` 错误信息明确区分"未打开(可能端口不存在/驱动异常)"与"已关闭"
 - 电源 ON 后 1 秒再触发 worker 发送第一帧 `\r`(现场需求)
 - 多 VLAN 串口终端 + 几何持久化 + 日志目录切换 + 全局日志 `D:\Serial_Log`
 - ONU 注册(查询 / 注册 / 离线清理后重注册 / `write` 保存)
-- 单元测试 **121 项全过**,覆盖串口状态机、独占写锁、TFTPy 端到端、程控电源协议帧、上/下电顺序、升级编排、boot 登录异常路径
+- 单元测试 **125 项全过**,覆盖串口状态机、独占写锁、TFTPy 端到端、程控电源协议帧、上/下电顺序、升级编排、boot 登录异常路径、提示符新游标握手和串口终端目录写入异常提示
 
 ### ❌ 未完成
 - 多台并发 TFTP / 并发升级(目前只串行,经真实样机验证)
@@ -180,8 +183,7 @@ sleep 120s → login_final_system → restore_factory
 
 ### ⚠ 当前问题 / 已知风险
 - 仅 Windows;`os.startfile`,`Get-NetAdapter` 等用了 Win API
-- `~/.aouxue_serial_terminal.json` D 盘不可写时**当前是静默失败**,应改为弹错误框(优化项)
-- Tftp指令 链路在本次代码收紧后**尚未在真实样机上重新验收**:`wait_for_boot_login` 早退路径移除、电源后 1s 缓冲、orphan 提示符硬剔除均需要在 vlan101–vlan116 实物样机回归一次
+- `Tftp指令` 的 Boot 首轮登录错位已在真实样机验证通过；完整固件传输、重启和最终系统登录链路如涉及新的样机型号，仍需按常规流程回归。
 
 ---
 
@@ -215,7 +217,7 @@ VS Code 已有 `LineCheckAssistant` 调试入口(工作目录已固定)。
 ### 7.2 完整单元测试
 ```
 cd Cheating_machine_execution_tool/tests
-python -m unittest discover -s .        # 期望 121 项 OK
+python -m unittest discover -s .        # 期望 125 项 OK
 ```
 
 ### 7.3 打包
@@ -247,6 +249,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant
 
 1. 读本文件 → `DEVELOPMENT_LOG.md`(只看当天条目即可)→ `AGENTS.md`
 2. 看 `PROJECT_HANDOFF.md` 了解完整对话上下文(可选)
-3. 跑 `cd Cheating_machine_execution_tool/tests && python -m unittest discover -s .` → 期望 121 OK
+3. 跑 `cd Cheating_machine_execution_tool/tests && python -m unittest discover -s .` → 期望 125 OK
 4. 跑 `cd Cheating_machine_execution_tool && python -m py_compile run_line_check_assistant.py`(只编译,不启动 GUI)
 5. 不要自动 commit,等用户指示

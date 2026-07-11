@@ -27,6 +27,10 @@ TFTP_SUBNET_MASK = "255.255.255.0"
 BOOT_USERNAME = "telecomadmin"
 BOOT_PASSWORD = "nE7jA%5m"
 FACTORY_RESET_COMMAND = "firstboot -y;reboot"
+BOOT_USERNAME_PROMPTS = ("username:", "user name:")
+BOOT_PASSWORD_PROMPTS = ("passvord:", "password:")
+BOOT_LOGIN_RESULT_PROMPTS = ("#", ">", "login incorrect", "incorrect")
+BOOT_USERNAME_STABILITY_SECONDS = 1.0
 
 
 class SerialUpgradeController:
@@ -42,21 +46,13 @@ class SerialUpgradeController:
         if not power_started.wait(timeout_seconds):
             return CommandResult(False, "等待程控电源写入上电帧信号超时。")
         try:
-            start = self.session.cursor()
             deadline = time.monotonic() + timeout_seconds
             while time.monotonic() < deadline and not self._cancel.is_set():
-                self.session.write(b"\r")
-                found = self.session.wait_for_any(("username:", "user name:", "passvord:", "password:", "#", ">"), 1, start)
-                # 必须先看到 UserName / Password 提示符并完成 _login_boot，才能宣告进入 boot 模式。
-                # 之前看到 # / > 直接 return 的逻辑会把残余 shell 的提示符误判为 boot 已就绪，
-                # 现场表现为 tftp 命令被发到还没登录的 UserName 提示符上，变成 "UserName: ftp 192..."
-                # 这种半截状态，后续走不完密码输入。
-                if found in ("username:", "user name:", "passvord:", "password:"):
-                    result = self._login_boot()
-                    if result.ok:
-                        return result
-                    start = self.session.cursor()
-                # 看到 # / > 但没有先经过 user/password 提示符，继续轮询等待真正的登录提示符。
+                # 每轮只发送一个探测回车。_login_boot 命中完整、稳定的 UserName 后，
+                # 不会再进入本循环发送周期性回车。
+                result = self._login_boot(max_attempts=1, username_timeout_seconds=1)
+                if result.ok:
+                    return result
         except RuntimeError as exc:
             # 串口异常(未打开 / 已关闭 / 写入失败)，立即停掉 cancel 让上层清理。
             self._cancel.set()
@@ -66,25 +62,54 @@ class SerialUpgradeController:
             return CommandResult(False, f"boot 登录异常:{exc}")
         return CommandResult(False, "进入 boot 或 boot 登录超时。")
 
-    def _login_boot(self) -> CommandResult:
-        for _attempt in range(3):
+    def _wait_for_clean_boot_username(self, timeout_seconds: float) -> str | None:
+        """发送一次探测回车，等待未夹带旧 Password 的完整 UserName 提示符。"""
+        username_cursor = self.session.cursor()
+        self.session.write(b"\r")
+        username_prompt = self.session.wait_for_any(
+            BOOT_USERNAME_PROMPTS,
+            timeout_seconds,
+            username_cursor,
+        )
+        if username_prompt not in BOOT_USERNAME_PROMPTS:
+            return None
+
+        # 某些上电瞬态会一次性吐出上一轮的 UserName/Password。此时尚未填写用户名，
+        # 因而 Password 不可能是本轮用户名提交后的有效密码提示，必须整轮丢弃。
+        early_password = self.session.wait_for_any(
+            BOOT_PASSWORD_PROMPTS,
+            BOOT_USERNAME_STABILITY_SECONDS,
+            username_cursor,
+        )
+        if early_password in BOOT_PASSWORD_PROMPTS:
+            return None
+        return username_prompt
+
+    def _login_boot(self, max_attempts: int = 3, username_timeout_seconds: float = 5) -> CommandResult:
+        """按完整且稳定的 UserName/Password 提示符逐步登录 boot。"""
+        for _attempt in range(max_attempts):
             try:
-                cursor = self.session.cursor()
-                prompt = self.session.wait_for_any(("username:", "user name:", "passvord:", "password:"), 5, cursor)
-                if prompt is None:
-                    self.session.write(b"\r")
+                username_prompt = self._wait_for_clean_boot_username(username_timeout_seconds)
+                if username_prompt not in BOOT_USERNAME_PROMPTS:
                     continue
-                if prompt.startswith("user"):
-                    self.session.write(BOOT_USERNAME.encode("utf-8"))
-                    # 实测样机 boot 登录慢，每条指令间至少 1 秒，直接回车会让用户名“贴”在提示符里导致密码输入错位。
-                    self.sleep(1.0)
-                    self.session.write(b"\r")
-                    if self.session.wait_for_any(("passvord:", "password:"), 30, cursor) is None:
-                        continue
+
+                # 仅在完整 UserName: / User Name: 提示符稳定到达后发送用户名。
+                self.session.write(BOOT_USERNAME.encode("utf-8"))
+                self.sleep(1.0)
+                self.session.write(b"\r")
+
+                # 用户名回车后重新取游标；此前缓存中的 Password: 不得触发密码发送。
+                password_cursor = self.session.cursor()
+                password_prompt = self.session.wait_for_any(BOOT_PASSWORD_PROMPTS, 30, password_cursor)
+                if password_prompt not in BOOT_PASSWORD_PROMPTS:
+                    continue
+
+                # 仅在完整 Password: / Passvord: 提示符稳定到达后发送密码。
                 self.session.write(BOOT_PASSWORD.encode("utf-8"), sensitive=True)
                 self.sleep(1.0)
                 self.session.write(b"\r", sensitive=True)
-                result = self.session.wait_for_any(("#", ">", "login incorrect", "incorrect"), 20, cursor)
+                result_cursor = self.session.cursor()
+                result = self.session.wait_for_any(BOOT_LOGIN_RESULT_PROMPTS, 20, result_cursor)
                 if result in ("#", ">"):
                     return CommandResult(True, "boot 登录完成。")
             except RuntimeError as exc:
@@ -210,8 +235,7 @@ def _run_tftp_command_with_power_supply(
 
     def on_channel_powered(channel: int) -> None:
         if channel == request.power_channel:
-            power_started.set()
-            emit("程控电源已写入上电帧，已立即开始串口回车进入 boot。")
+            emit("程控电源已写入上电帧，等待电源动作完成后开始串口回车进入 boot。")
 
     power = power_on_selected_channels(
         request.power_serial_port,
@@ -225,9 +249,8 @@ def _run_tftp_command_with_power_supply(
         return power
     # 程控电源动作完成后间隔 1 秒再触发 worker 发送首帧 \r;
     # 现场需求:先让上电状态稳定,再开始串口交互,避免首帧 \r 与上电瞬态信号叠加。
-    # 这一秒的延后也通过 worker 的 power_started.wait 自然吸收(worker 在事件未 set 时空转)。
     sleep_fn(1.0)
-    # 兜底再设一次,避免 on_channel_powered 因通道号不匹配未触发而 worker 永久阻塞。
+    # 在电源函数返回且稳定等待结束后才放行 worker，避免 on_channel_powered 回调过早启动登录。
     power_started.set()
     worker.join(timeout=BOOT_LOGIN_TIMEOUT_SECONDS + 5)
     if not boot_result:

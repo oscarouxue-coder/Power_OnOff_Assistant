@@ -209,8 +209,12 @@ class SerialTerminalWindow:
                 json.dumps(payload, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
-        except OSError:
-            pass
+        except OSError as exc:
+            messagebox.showerror(
+                "保存串口终端设置失败",
+                f"无法保存窗口状态和日志目录设置：\n{self.state_file}\n\n{exc}",
+                parent=self.window or self.master,
+            )
 
     def _load_geometry(self) -> str | None:
         """读取上次保存的窗口尺寸和位置,验证仍在当前屏幕范围内,防止开屏外"""
@@ -249,8 +253,12 @@ class SerialTerminalWindow:
         # 默认路径不存在时主动创建,首次运行也能直接用
         try:
             DEFAULT_LOG_DIR.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            pass
+        except OSError as exc:
+            messagebox.showerror(
+                "日志目录不可用",
+                f"无法创建默认串口日志目录：\n{DEFAULT_LOG_DIR}\n\n{exc}\n\n请通过“浏览…”选择可写目录。",
+                parent=self.master,
+            )
         return DEFAULT_LOG_DIR
 
     def _choose_log_dir(self) -> None:

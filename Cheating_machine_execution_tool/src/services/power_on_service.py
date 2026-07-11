@@ -18,7 +18,7 @@ def power_on_selected_channels(
     sleep_fn: Callable[[float], None] = time.sleep,
     monotonic_fn: Callable[[], float] = time.monotonic,
 ) -> CommandResult:
-    """直接按旧工具协议上电指定通道，不启动 Auto_Power_On_Off_Tool GUI。"""
+    """仅对指定通道执行断电再上电，不发送全部断电帧。"""
 
     def emit(message: str) -> None:
         if on_output:

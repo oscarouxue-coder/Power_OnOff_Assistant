@@ -41,7 +41,7 @@ class PowerSupplyTests(unittest.TestCase):
         self.assertEqual(channel_power_frame(16, True), bytes((0x55, 0x01, 0xA0, 0x00, 0x10, 0xB1)))
         self.assertEqual(channel_power_frame(2, False), bytes((0x55, 0x01, 0xA1, 0x00, 0x02, 0xA2)))
 
-    def test_controller_closes_all_then_cycles_only_requested_channels(self):
+    def test_controller_cycles_only_requested_channels_without_all_off_frame(self):
         fake_serial = FakeSerial()
         sleeps = []
         powered = []
@@ -58,15 +58,15 @@ class PowerSupplyTests(unittest.TestCase):
         self.assertEqual(
             fake_serial.writes,
             [
-                ALL_CHANNELS_OFF_FRAME,
                 channel_power_frame(2, False),
                 channel_power_frame(2, True),
                 channel_power_frame(5, False),
                 channel_power_frame(5, True),
             ],
         )
+        self.assertNotIn(ALL_CHANNELS_OFF_FRAME, fake_serial.writes)
         self.assertEqual(powered, [2, 5])
-        self.assertEqual(sleeps, [0.5, 1.5, 3, 1.5, 3])
+        self.assertEqual(sleeps, [1.5, 3, 1.5, 3])
         self.assertTrue(fake_serial.closed)
 
     def test_controller_turns_on_all_requested_channels_one_second_apart_without_powering_off(self):
@@ -123,7 +123,7 @@ class PowerSupplyTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(powered, [2])
-        self.assertEqual(clock.sleeps, [0.5, 1.5, 3, 5.0])
+        self.assertEqual(clock.sleeps, [1.5, 3, 5.5])
         self.assertEqual(fake_serial.writes[-1], channel_power_frame(2, True))
         self.assertTrue(fake_serial.closed)
 

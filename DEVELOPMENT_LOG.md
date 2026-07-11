@@ -24,6 +24,26 @@
 - 后续待办：
 ```
 
+## 2026-07-11 - Boot 登录按新提示符逐步提交凭据
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：现场日志显示 `UserName:` 与 `Password:` 分段到达时，用户名后仍可能使用旧串口缓存中的密码提示符，导致账号密码提交错位。
+- 完成内容：Boot 登录仅在完整用户名提示符后发送用户名；用户名回车后重新取串口游标，只接受新到达的完整密码提示符才发送密码；登录结果也从密码回车后的新游标开始等待。
+- 修改文件：`src/services/serial_upgrade_service.py`、`tests/test_serial_upgrade_service.py`、`line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：编译串行升级服务，运行串行升级及完整单元测试。
+- 验证结果：串行升级专项 12 项通过；完整 `python -m unittest discover -s tests -v` 共 124 项通过；新增回归测试确认密码提示符的等待游标晚于用户名回车，不会命中用户名输入前的旧缓存。
+- 后续待办：使用真实 `Tftp指令` 样机复测分段 `UserName:` / `Password:` 回显。
+
+## 2026-07-11 - 串口终端目录写入失败改为明确提示
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：默认 `D:\Serial_Log` 或本机串口终端状态文件不可写时，原逻辑会吞掉异常，操作员无法判断日志或窗口设置未保存。
+- 完成内容：默认日志目录创建失败和终端状态文件写入失败均弹出明确错误信息，并提示可通过“浏览…”选择可写日志目录。
+- 修改文件：`src/ui/serial_terminal.py`、`tests/test_serial_terminal.py`、`line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行串口终端持久化测试和完整单元测试。
+- 验证结果：`python -m py_compile` 通过；完整 `python -m unittest discover -s tests -v` 共 123 项通过；新增测试覆盖默认日志目录创建失败及终端状态文件保存失败时的错误弹窗。
+- 后续待办：无。
+
 ## 2026-07-11 - 自动上/下电增加下电选择
 
 - 类型：功能 / 测试 / 文档
@@ -523,3 +543,28 @@
 - 验证方法：检查文档结构和链接入口。
 - 验证结果：已建立可持续追加的开发记录入口。
 - 后续待办：后续每次任务完成后，按模板在本文件顶部追加记录。
+## 2026-07-11 - 修复 Boot 首轮提示符导致账号密码错位
+
+- 类型：BUG 修复 / 串口时序 / 测试 / 文档
+- 背景：真实升级日志显示，程控电源上电后的首轮 `UserName:` / `Password:` 过渡输出可能被当作有效登录提示，导致账号和密码在第一阶段提前写入，后续重试才成功。
+- 完成内容：程控电源流程改为在电源动作返回并等待 1 秒后才放行 boot 登录线程；用户名提示符命中后增加仅接收串口的 1 秒稳定窗口，若用户名提交前已经收到 `Password:` / `Passvord:` 则丢弃整轮，不发送任何凭据；用户名回车后仍使用新游标等待本轮密码提示符。
+- 修改文件：`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：`python -m unittest discover -s tests -p test_serial_upgrade_service.py -v`、`python -m unittest discover -s tests -v`；真实设备需复测 `Tftp指令` 的首次上电进入 boot。
+- 验证结果：串口升级专项 13 项通过；完整 `python -m unittest discover -s tests -v` 共 125 项通过。新增回归覆盖“首轮 UserName/Password 同时出现时不发送账号密码”；后续真实设备首次上电进入 boot 验证已通过。
+
+## 2026-07-11 - Boot 首轮登录错位真实样机验证通过
+
+- 类型：真实设备验收 / 项目状态
+- 背景：修复上电初期 `UserName:` / `Password:` 过渡输出造成账号、密码错位后，需要确认实际样机首轮进入 boot 的登录行为。
+- 完成内容：用户已确认该问题解决，首次 Boot 登录不再出现账号或密码错位。
+- 修改文件：`DEVELOPMENT_LOG.md`、`PROJECT_STATUS.md`
+- 验证方法：用户在真实样机使用 `Tftp指令` 的首次上电进入 boot 流程验证。
+- 验证结果：通过。
+## 2026-07-11 - 全包升级断电重启不再关闭全部程控电源通道
+
+- 类型：流程优化 / 程控电源 / 测试 / 文档
+- 背景：全包升级当前通道断电再上电时，日志仍先发送 `55 00 AD 00 00 AD` 全部断电帧；用户要求去除该操作。
+- 完成内容：`power_on_selected_channels()` 保留当前升级通道的关闭帧、断电间隔和开启帧，移除“关闭全部程控电源通道”帧；主界面自动上/下电和 `Auto_power_on_off_tool/Auto_Power_On_Off_Tool.py` 的业务逻辑未改动。
+- 修改文件：`Cheating_machine_execution_tool/src/core/power_supply.py`、`Cheating_machine_execution_tool/src/services/power_on_service.py`、`Cheating_machine_execution_tool/tests/test_power_supply.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行程控电源专项测试和完整单元测试；真实样机观察全包升级首次/重新上电日志。
+- 验证结果：程控电源专项 8 项通过；完整 `python -m unittest discover -s tests -v` 共 125 项通过。真实样机需确认日志不再出现 `关闭全部程控电源通道：55 00 AD 00 00 AD`。

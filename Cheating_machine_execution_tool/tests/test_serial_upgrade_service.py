@@ -59,7 +59,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
     def test_boot_login_and_factory_reset_preserve_send_timing_order(self):
         event = threading.Event()
         event.set()
-        session = FakeSession(any_results=["username:", "username:", "password:", "#"])
+        session = FakeSession(any_results=["username:", None, "password:", "#"])
         sleeps = []
         controller = SerialUpgradeController(session, sleep_fn=sleeps.append)
 
@@ -70,6 +70,11 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         values = [item[0] for item in session.writes]
         self.assertIn(b"firstboot -y;reboot", values)
         factory_index = values.index(b"firstboot -y;reboot")
+        # 一旦稳定命中 UserName，周期探测即停止；其后的两个回车仅用于提交用户名和密码。
+        self.assertEqual(
+            values[:factory_index],
+            [b"\r", BOOT_USERNAME.encode("utf-8"), b"\r", BOOT_PASSWORD.encode("utf-8"), b"\r"],
+        )
         self.assertEqual(values[factory_index + 1], b"\r")
         self.assertEqual(sleeps[-2:], [1, 8])
 
@@ -94,13 +99,13 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         # wait_for_any 调用顺序:
         #   1. login_final_system(第 1 次):login / password / #
         #   2. interrupt_boot_with_enter:username:
-        #   3. _login_boot:username: / password: / #
+        #   3. _login_boot:username: / 稳定窗口 / password: / #
         #   4. login_final_system(第 2 次):login / password / #
         session = FakeSession(
             any_results=[
                 "login", "password", "#",
                 "username:",
-                "username:", "password:", "#",
+                "username:", None, "password:", "#",
                 "login", "password", "#",
             ]
         )
@@ -131,7 +136,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
             any_results=[
                 "login", "password", "#",
                 "username:",
-                "username:", "password:", "#",
+                "username:", None, "password:", "#",
                 "login", "password", "#",
             ]
         )
@@ -167,7 +172,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         现场：用户名输入太快会被 boot 菜单"吃掉"，表现为提示符一直停在
         "UserName: ftp 192..." 这种半截状态，无法进入密码提示符。
         """
-        session = FakeSession(any_results=["username:", "password:", "#"])
+        session = FakeSession(any_results=["username:", None, "password:", "#"])
         sleeps = []
         controller = SerialUpgradeController(session, sleep_fn=sleeps.append)
 
@@ -185,6 +190,53 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         password_bytes = [item[0] for item in session.writes if item[1]][0]
         self.assertEqual(password_bytes, BOOT_PASSWORD.encode("utf-8"))
 
+    def test_login_boot_waits_for_password_after_username_enter_using_fresh_cursor(self):
+        """回归：不能用用户名输入前缓存中的 Password: 提前发送密码。"""
+
+        class CursorSession(FakeSession):
+            def __init__(self):
+                super().__init__(any_results=["username:", None, "password:", "#"])
+                self.cursor_value = 0
+                self.wait_calls = []
+
+            def cursor(self):
+                self.cursor_value += 1
+                return self.cursor_value
+
+            def wait_for_any(self, markers, timeout, cursor):
+                self.wait_calls.append((tuple(markers), timeout, cursor))
+                return super().wait_for_any(markers, timeout, cursor)
+
+        session = CursorSession()
+        controller = SerialUpgradeController(session, sleep_fn=lambda _seconds: None)
+
+        result = controller._login_boot()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(session.wait_calls[0][2], 1)
+        self.assertEqual(session.wait_calls[1][2], 1)
+        self.assertEqual(session.wait_calls[2][2], 2)
+        self.assertEqual(session.wait_calls[3][2], 3)
+        values = [item[0] for item in session.writes]
+        self.assertEqual(values[:5], [b"\r", BOOT_USERNAME.encode("utf-8"), b"\r", BOOT_PASSWORD.encode("utf-8"), b"\r"])
+
+    def test_login_boot_rejects_password_received_before_username_submission(self):
+        """首轮 UserName/Password 同时出现时不能填写任何凭据。"""
+        session = FakeSession(
+            any_results=[
+                "username:", "password:",  # 上电过渡态：丢弃整轮
+                "username:", None, "password:", "#",  # 下一轮稳定登录
+            ]
+        )
+        controller = SerialUpgradeController(session, sleep_fn=lambda _seconds: None)
+
+        result = controller._login_boot(max_attempts=2)
+
+        self.assertTrue(result.ok)
+        values = [item[0] for item in session.writes]
+        self.assertEqual(values[:2], [b"\r", b"\r"])
+        self.assertEqual(values[2:], [BOOT_USERNAME.encode("utf-8"), b"\r", BOOT_PASSWORD.encode("utf-8"), b"\r"])
+
     def test_wait_for_boot_login_does_not_declare_success_on_orphan_prompt(self):
         """回归：wait_for_boot_login 不能仅凭残余的 # / > 直接宣告 boot 已就绪。
 
@@ -195,10 +247,10 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         # 模拟 FakeSession.pop 的顺序(每次 wait_for_any 消耗一个 marker):
         #   iter 1 wait_for_boot_login: >              ← 设备启动瞬态的 >,不能直接 return
         #   iter 2 wait_for_boot_login: username:      ← 真正的 boot 登录提示符
-        #   iter 1 _login_boot prompt: username:       ← cursor 推进,等下一个 5s 内的 user/pass
-        #   iter 1 _login_boot password: password:     ← 等密码提示符
-        #   iter 1 _login_boot result: >               ← 登录成功后看到 boot 菜单提示符
-        session = FakeSession(any_results=[">", "username:", "username:", "password:", ">"])
+        #   iter 2 _login_boot 稳定窗口: None
+        #   iter 2 _login_boot password: password:     ← 用户名回车后才开始等密码提示符
+        #   iter 2 _login_boot result: >               ← 登录成功后看到 boot 菜单提示符
+        session = FakeSession(any_results=[None, "username:", None, "password:", ">"])
         event = threading.Event()
         event.set()
         sleeps = []
@@ -273,16 +325,29 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         避免上电瞬态被误判为 boot 提示符。
         """
         sleeps: list[float] = []
+        writes_before_boot_release: list[tuple[bytes, bool]] = []
         # wait_for_any 调用顺序:
         #   wait_for_boot_login → _login_boot:username: / password: / #
         #   login_final_system:login / password / #
         session = FakeSession(
             any_results=[
-                "username:", "username:", "password:", "#",
+                "username:", None, "password:", "#",
                 "login", "password", "#",
             ]
         )
         manager = FakeSessionManager(session)
+
+        def fake_power_on(*_args, on_channel_powered=None, **_kwargs):
+            # 回调在电源函数尚未返回时触发，不能因此提前放行 boot 登录线程。
+            on_channel_powered(1)
+            return CommandResult(True, "powered")
+
+        def record_sleep(seconds: float) -> None:
+            if not sleeps:
+                writes_before_boot_release.extend(session.writes)
+            sleeps.append(seconds)
+
+        _power_on_selected_channels.side_effect = fake_power_on
         request = FullPackageUpgradeRequest(
             vlan="vlan101",
             server_interface="VLAN101",
@@ -296,13 +361,14 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         )
 
         result = run_single_full_package_upgrade(
-            request, manager, sleep_fn=sleeps.append, on_output=lambda _line: None
+            request, manager, sleep_fn=record_sleep, on_output=lambda _line: None
         )
 
         self.assertTrue(result.ok)
         # 第一笔 sleep 必须是程控电源完成后的 1.0 秒缓冲。
         self.assertGreaterEqual(len(sleeps), 1)
         self.assertEqual(sleeps[0], 1.0)
+        self.assertEqual(writes_before_boot_release, [])
         _power_on_selected_channels.assert_called()
 
     @patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=True)
@@ -324,7 +390,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         #   login_final_system:login / password / #
         session = FakeSession(
             any_results=[
-                "username:", "password:", "#",
+                "username:", None, "password:", "#",
                 "login", "password", "#",
             ]
         )

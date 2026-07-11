@@ -104,8 +104,6 @@ class ProgrammablePowerSupply:
     ) -> list[int]:
         selected = _normalize_channels(channels)
         self.open()
-        self._write_frame(ALL_CHANNELS_OFF_FRAME, "关闭全部程控电源通道")
-        self._sleep(0.5)
         for channel in selected:
             self._write_frame(channel_power_frame(channel, False), f"关闭通道 {channel}")
             self._sleep(1.5)
