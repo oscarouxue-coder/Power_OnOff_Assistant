@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Callable
 
 from line_check_assistant.network_ops import CommandResult, enable_adapter, set_static_ip
-from line_check_assistant.old_tool_automation import automate_power_on
 from src.core import SerialSessionManager, TftpServerHandle, upload_firmware, vlan_to_serial_port
 from src.models import FullPackageUpgradeRequest, SerialSettings
+from .power_on_service import power_on_selected_channels
 
 
 TRANSFER_TFTP_COMMAND = "Tftp指令"
@@ -39,7 +39,7 @@ class SerialUpgradeController:
 
     def wait_for_boot_login(self, power_started: threading.Event, timeout_seconds: float = BOOT_LOGIN_TIMEOUT_SECONDS) -> CommandResult:
         if not power_started.wait(timeout_seconds):
-            return CommandResult(False, "等待旧开关机工具 Start ALL 信号超时。")
+            return CommandResult(False, "等待程控电源写入上电帧信号超时。")
         start = self.session.cursor()
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline and not self._cancel.is_set():
@@ -140,8 +140,6 @@ def prepare_tftp_network(server_interface: str, server_ip: str, on_output: Calla
 
 
 def run_single_full_package_upgrade(
-    tool_root: Path,
-    old_tool_path: Path,
     request: FullPackageUpgradeRequest,
     session_manager: SerialSessionManager,
     on_output: Callable[[str], None] | None = None,
@@ -178,12 +176,23 @@ def run_single_full_package_upgrade(
 
         def on_power_output(line: str) -> None:
             emit(line)
-            if "已点击 Start ALL" in line:
-                power_started.set()
-                emit("旧工具已点击 Start ALL，已立即开始串口回车进入 boot。")
 
-        emit(f"开始调用自动上电模块，程控电源串口：{request.power_serial_port}")
-        power = automate_power_on(old_tool_path, serial_port=request.power_serial_port, wait_seconds=POWER_ON_WAIT_SECONDS, on_output=on_power_output)
+        def on_channel_powered(channel: int) -> None:
+            if channel == request.power_channel:
+                power_started.set()
+                emit("程控电源已写入上电帧，已立即开始串口回车进入 boot。")
+
+        emit(
+            f"开始直接控制程控电源，串口：{request.power_serial_port}，"
+            f"通道：{request.power_channel}。"
+        )
+        power = power_on_selected_channels(
+            request.power_serial_port,
+            [request.power_channel],
+            wait_seconds=POWER_ON_WAIT_SECONDS,
+            on_output=on_power_output,
+            on_channel_powered=on_channel_powered,
+        )
         if not power.ok:
             controller.cancel()
             return power
@@ -223,7 +232,12 @@ def run_single_full_package_upgrade(
             sleep_fn(POWER_ON_SETTLE_SECONDS)
         else:
             emit("未检测到 boot reset，开始重新上电。")
-            repower = automate_power_on(old_tool_path, serial_port=request.power_serial_port, wait_seconds=POWER_ON_WAIT_SECONDS, on_output=emit)
+            repower = power_on_selected_channels(
+                request.power_serial_port,
+                [request.power_channel],
+                wait_seconds=POWER_ON_WAIT_SECONDS,
+                on_output=emit,
+            )
             if not repower.ok:
                 return repower
             sleep_fn(POWER_ON_SETTLE_SECONDS)

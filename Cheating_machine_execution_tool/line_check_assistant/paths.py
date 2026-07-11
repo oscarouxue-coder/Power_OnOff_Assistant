@@ -6,14 +6,19 @@ from typing import Iterable, Optional
 
 
 OLD_TOOL_NAME_KEYWORD = "Auto_Power_On_Off_Tool"
+OLD_TOOL_SOURCE_DIR_NAME = "Auto_power_on_off_tool"
 CONFIG_DIR_NAME = "config"
 
 
 def resolve_tool_root() -> Path:
     for candidate in _candidate_roots():
-        if _find_old_tool_path(candidate) or (candidate / CONFIG_DIR_NAME).exists():
+        if _find_old_tool_path(candidate) or resolve_config_dir(candidate).is_dir():
             return candidate
     return Path.cwd()
+
+
+def resolve_config_dir(root: Path) -> Path:
+    return root / OLD_TOOL_SOURCE_DIR_NAME / CONFIG_DIR_NAME
 
 
 def resolve_old_tool_path(root: Path) -> Path:

@@ -2,7 +2,6 @@
 import configparser
 from configparser import RawConfigParser
 from configobj import ConfigObj
-import validate
 
 
 class myconf(configparser.ConfigParser):

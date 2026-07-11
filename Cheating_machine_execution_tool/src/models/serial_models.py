@@ -38,3 +38,4 @@ class FullPackageUpgradeRequest:
     final_password: str
     restore_factory: bool = False
     transfer_method: str = "Tftp指令"
+    power_channel: int = 0

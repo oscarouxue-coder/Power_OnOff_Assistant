@@ -725,6 +725,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual([channel.section for channel, _request in upgrade_items], ["channel_1", "channel_2"])
         self.assertEqual([request.vlan for request in requests], ["vlan102", "vlan101"])
         self.assertEqual([request.tftp_server_ip for request in requests], ["192.168.1.102", "192.168.1.101"])
+        self.assertEqual([request.power_channel for request in requests], [1, 2])
         self.assertTrue(all(request.final_username == "root" for request in requests))
         self.assertTrue(all(request.final_password == "secret" for request in requests))
         self.assertTrue(all(request.transfer_method == "Tftp Put" for request in requests))
@@ -899,7 +900,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         context.store.save.assert_called_once_with([channels[0]], "COM101")
 
-    def test_launch_old_tool_passes_wait_seconds_by_enabled_channel_count(self):
+    def test_launch_power_on_passes_selected_channels_and_wait_seconds(self):
         channels = [
             ChannelConfig(section="channel_1", enabled=True),
             ChannelConfig(section="channel_2", enabled=True),
@@ -910,22 +911,48 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             _capture_current_channel=Mock(),
             _selected_channels=Mock(return_value=channels),
             _power_on_wait_seconds=Mock(return_value=15),
-            _select_power_com_port=Mock(return_value="COM106"),
+            _select_power_com_port=Mock(return_value=("COM106", "上电")),
             power_serial_var=Mock(),
             _power_on_worker=Mock(),
         )
 
-        with patch("line_check_assistant.app.threading.Thread") as thread:
-            LineCheckAssistant._launch_old_tool(context)
+        with patch("line_check_assistant.app.messagebox.askyesno", return_value=True) as askyesno, patch("line_check_assistant.app.threading.Thread") as thread:
+            LineCheckAssistant._launch_power_on(context)
 
         context._power_on_wait_seconds.assert_called_once_with(channels)
         context._select_power_com_port.assert_called_once_with()
         context.power_serial_var.set.assert_called_once_with("COM106")
-        thread.assert_called_once_with(target=context._power_on_worker, args=("COM106", 15), daemon=True)
+        askyesno.assert_called_once()
+        confirmation = askyesno.call_args.args[1]
+        self.assertIn("相邻开启指令间隔 1 秒", confirmation)
+        self.assertIn("不会关闭任何程控电源通道", confirmation)
+        self.assertNotIn("先关闭全部", confirmation)
+        thread.assert_called_once_with(target=context._power_on_worker, args=("COM106", [1, 2, 3], "上电", 15), daemon=True)
         thread.return_value.start.assert_called_once_with()
         self.assertTrue(context.power_on_running)
 
-    def test_launch_old_tool_warns_when_no_channel_enabled(self):
+    def test_launch_power_on_routes_selected_channels_to_power_off(self):
+        channels = [ChannelConfig(section="channel_2", enabled=True), ChannelConfig(section="channel_5", enabled=True)]
+        context = SimpleNamespace(
+            power_on_running=False,
+            _capture_current_channel=Mock(),
+            _selected_channels=Mock(return_value=channels),
+            _power_on_wait_seconds=Mock(return_value=0),
+            _select_power_com_port=Mock(return_value=("COM106", "下电")),
+            power_serial_var=Mock(),
+            _power_on_worker=Mock(),
+        )
+
+        with patch("line_check_assistant.app.messagebox.askyesno", return_value=True) as askyesno, patch("line_check_assistant.app.threading.Thread") as thread:
+            LineCheckAssistant._launch_power_on(context)
+
+        confirmation = askyesno.call_args.args[1]
+        self.assertIn("关闭全部勾选通道", confirmation)
+        self.assertIn("不会执行全部断电", confirmation)
+        thread.assert_called_once_with(target=context._power_on_worker, args=("COM106", [2, 5], "下电", 0), daemon=True)
+        thread.return_value.start.assert_called_once_with()
+
+    def test_launch_power_on_warns_when_no_channel_enabled(self):
         context = SimpleNamespace(
             power_on_running=False,
             _capture_current_channel=Mock(),
@@ -934,19 +961,19 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         )
 
         with patch("line_check_assistant.app.messagebox.showwarning") as showwarning:
-            LineCheckAssistant._launch_old_tool(context)
+            LineCheckAssistant._launch_power_on(context)
 
         showwarning.assert_called_once()
         context._select_power_com_port.assert_not_called()
         self.assertFalse(context.power_on_running)
 
-    def test_power_on_wait_seconds_uses_ten_seconds_per_channel(self):
+    def test_power_on_wait_seconds_does_not_add_startup_wait(self):
         channels = [
             ChannelConfig(section="channel_1", enabled=True),
             ChannelConfig(section="channel_2", enabled=True),
         ]
 
-        self.assertEqual(LineCheckAssistant._power_on_wait_seconds(None, channels), 20)
+        self.assertEqual(LineCheckAssistant._power_on_wait_seconds(None, channels), 0)
 
     def test_select_channel_index_syncs_internal_and_list_selection(self):
         context = SimpleNamespace(

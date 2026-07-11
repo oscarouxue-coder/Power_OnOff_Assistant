@@ -2,16 +2,18 @@
 
 ## 当前实现
 
-这是现有文件名包含 `Auto_Power_On_Off_Tool` 的旧开关机工具 exe 的前置辅助工具，用于：
+这是用于配置测试通道、自动上/下电、检查线路和升级样机的桌面工具。
 
-- 读取和实时维护 `config/network_card_ip.ini` 的通道配置。
+本文后续出现的 `config/...` 均指 `Auto_power_on_off_tool/config/...`；主程序不再使用 `Cheating_machine_execution_tool/config`。
+
+- 读取和实时维护 `Auto_power_on_off_tool/config/network_card_ip.ini` 的通道配置。
 - 主界面顶部提供“样机升级”入口，支持“页面升级”和“全包升级”两类流程。
 - 样机升级窗口支持自定义项目/型号、输入超级用户凭据、选择升级固件、同步主界面目标 VLAN，并显示实时状态和进度。
-- 样机升级窗口会保存上一次关闭时的升级方式、固件传输方式、恢复出厂选项、超级用户名、密码和固件路径；恢复出厂显示会按真实保存值刷新，开始升级确认框会明确显示“恢复出厂：开启/关闭”；状态保存到本机 `config/sample_upgrade_settings.ini`，该文件不提交 Git。
+- 样机升级窗口会保存上一次关闭时的升级方式、固件传输方式、恢复出厂选项、超级用户名、密码和固件路径；恢复出厂显示会按真实保存值刷新，开始升级确认框会明确显示“恢复出厂：开启/关闭”；状态保存到本机 `Auto_power_on_off_tool/config/sample_upgrade_settings.ini`，该文件不提交 Git。
 - 选择“页面升级”后，点击“开始升级”会按主界面已勾选通道并行执行 UBUS 页面升级；每台样机会先启用通道对应网卡，再使用通道的 PC 静态 IP 作为请求绑定 IP、样机管理 IP 作为目标 IP，自动尝试 HTTP/HTTPS 登录 `/ubus/`，上传固件到 `/cgi-bin/cgi-upload`，调用 `Device.DeviceInfo.X_SDMC_Upgrade()`，查询升级状态并等待设备重启上线。
-- 选择“全包升级 + Tftp指令”后，软件按已勾选 VLAN 串行升级：内置 pySerial 打开 VLAN 对应 COM 口，旧开关机工具点击 `Start ALL` 后立即每秒回车进入 boot；TFTPy Server 明确绑定当前通道 IP 的 UDP 69，只将所选固件映射为设备固定请求名 `tclinux_allinone`，设备仍执行 `tftp <通道IP>:tclinux_allinone`。
+- 选择“全包升级 + Tftp指令”后，软件按已勾选 VLAN 串行升级：主程序直接以 pySerial 控制程控电源指定通道；写入上电帧后立即每秒回车进入 boot。TFTPy Server 明确绑定当前通道 IP 的 UDP 69，只将所选固件映射为设备固定请求名 `tclinux_allinone`，设备仍执行 `tftp <通道IP>:tclinux_allinone`。
 - 选择“全包升级 + Tftp Put”后，TFTPy Client 从当前通道 IP 上传到固定设备 `192.168.1.1:69`，并绑定该源 IP，避免多张 `.1` 网卡造成错误选路或启动变慢；远端文件名使用所选固件 basename。
-- 两种全包升级均按主界面通道顺序串行、首错即停。每台前仍临时改写 `config/network_card_ip.ini`，结束后恢复完整选择；所有串口和 TFTPy Server 都由本程序在 `finally` 中关闭，不查找或关闭外部 CRT/Tftpd 进程。
+- 两种全包升级均按主界面通道顺序串行、首错即停。每台前仍临时改写 `Auto_power_on_off_tool/config/network_card_ip.ini`，结束后恢复完整选择；所有串口和 TFTPy Server 都由本程序在 `finally` 中关闭，不查找或关闭外部 CRT/Tftpd 进程。
 - `Tftp指令` 仍以串口的 `done` 与 `write` 同时出现作为设备处理完成判据；`Tftp Put` 则以 TFTPy 上传成功作为传输完成判据。随后保留 90 秒 boot 观察、`Boot/Bood` 后延迟 1 秒发送一次 `reset`、120 秒等待或重新上电、最终系统五次登录重试，以及恢复出厂“命令→1 秒→回车→8 秒”时序。
 - 主界面“串口日志记录”已改为内置多通道终端：按 VLAN/COM 分页实时显示、开始/停止、清屏、手动命令发送和日志保存。自动升级占用某通道时仍显示输出，但手动发送被锁定；`reboot`、`reset`、`firstboot`、`tftp`、`upgrade` 类手动命令需要二次确认。
 - `web打开网关` 保持原有真实语义：仅打开内置串口监控，不下发升级命令。
@@ -19,10 +21,10 @@
 - 为每个通道选择实际接入的 Windows 网卡名称。
 - 网卡列表优先读取 `Get-NetAdapter -IncludeHidden`，可显示禁用、断开和隐藏网卡；界面显示状态，例如 `[Connected]`、`[Disconnected]`。
 - 保存每个通道的 PC 静态 IP、样机管理 IP、子网掩码、启用状态。
-- 自动启动旧软件，选择 `Fully_powered_on`，点击 `Start ALL`，按启用通道数每通道等待 10 秒后关闭旧软件；多台串行升级时每次只保留当前通道，因此每台上电等待 10 秒。
-- 自动上电过程会实时输出日志，便于判断卡在打开窗口、选择下拉框还是点击按钮。
-- 自动上电前会读取设备管理器 `端口(COM 和 LPT)` 中名称以 `Prolific` 开头的端口，让用户选择程控电源 COM 口，并同步到旧工具的 `Serial Num` 下拉框。
-- 启动旧软件前会把 `config/config.ini` 中的 `Fully_powered_on` 移到 `[config]` 第一项，让旧软件启动后默认选择上电配置。
+- 自动上电和全包升级均由主程序直接控制程控电源，不启动 `Auto_Power_On_Off_Tool.exe` 或其 GUI。
+- 程控电源使用所选 COM 口的 `19200 8N1` 串口参数；“自动上/下电”二级弹窗提供“上电/下电”下拉框，默认“上电”。
+- 自动上电会按勾选顺序发送 `channel_1` 到 `channel_16` 的开启帧，相邻帧间隔 1 秒；自动下电仅向勾选通道发送关闭帧，相邻帧同样间隔 1 秒；两种操作均不发送全断电帧。
+- 自动上/下电均在最后一条指令发送后立即结束，不额外预留启动等待；全包升级每次仍只直接操作当前升级通道，保留其独立断电重启逻辑。
 - 按通道切换指定网卡静态 IP，并 ping 样机管理 IP 判断线路是否正常。
 
 当前版本使用 Python 标准库 `tkinter` 实现桌面界面，不需要安装 PySide6；依赖见 `requirements.txt`（`pyserial==3.5`、`tftpy==0.8.7`、`requests>=2.31,<3`）。
@@ -61,12 +63,11 @@ python .\run_line_check_assistant.py
    - 样机管理 IP
    - 子网掩码
    - 是否启用
-4. 勾选或取消勾选通道，确认 `config/network_card_ip.ini` 立即更新，并且只保留已勾选通道的 `[channel_x]` 配置节。
-5. 人工接好线路后，点击“自动启动旧软件上电”，先选择程控电源 COM 口，再让新软件完成旧工具上电流程。
-   - 旧软件启动前会自动准备 `Fully_powered_on` 默认配置。
-   - 新软件会在旧工具中选择对应 `Serial Num`。
-   - 新软件会尝试自动选择 `Fully_powered_on`，点击 `Start ALL`。
-   - 新软件会按启用通道数每通道等待 10 秒，等程控电源完成上电动作，再关闭旧软件。
+4. 勾选或取消勾选通道，确认 `Auto_power_on_off_tool/config/network_card_ip.ini` 立即更新，并且只保留已勾选通道的 `[channel_x]` 配置节。
+5. 人工接好线路后，点击“自动上/下电”，选择程控电源 COM 口和操作类型（默认“上电”），并确认影响通道。
+   - 选择“上电”时，软件会按勾选顺序发送开启帧，相邻帧间隔 1 秒，且不会先关闭任何通道。
+   - 选择“下电”时，软件只会向勾选通道发送关闭帧，相邻帧间隔 1 秒，不会发送全部断电帧。
+   - 确认后主程序直接发送程控电源串口帧，不会启动旧 EXE 或点击外部 GUI；最后一条帧后不额外等待。
 6. 回到新软件，点击“检查当前通道”或“已上电，开始检查全部启用通道”。
 7. 观察日志：
    - 通过：显示 `[通过] channel_x ping xxx 成功`。
@@ -89,4 +90,4 @@ python .\run_line_check_assistant.py
 
 每次重新打包出最新版 EXE 后，不在当前 PC 直接运行 `dist\LineCheckAssistant.exe`；只确认打包成功，并向用户报告输出路径。
 
-打包后程序会自动从 EXE 所在目录、上级目录中查找 `config` 文件夹和文件名包含 `Auto_Power_On_Off_Tool` 的旧工具 exe，优先使用 `Auto_Power_On_Off_Tool.exe`，因此可以放在 `开关机执行工具\dist` 目录运行。
+打包后程序会从 EXE 所在目录、上级目录中查找 `Auto_power_on_off_tool/config` 文件夹；程控电源协议已内置，不再依赖 `Auto_Power_On_Off_Tool.exe`。

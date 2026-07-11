@@ -2,10 +2,14 @@ import os
 import sys
 import threading
 import unittest
+from pathlib import Path
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.services.serial_upgrade_service import SerialUpgradeController
+from line_check_assistant.network_ops import CommandResult
+from src.models import FullPackageUpgradeRequest
+from src.services.serial_upgrade_service import TRANSFER_TFTP_PUT, SerialUpgradeController, run_single_full_package_upgrade
 
 
 class FakeSession:
@@ -28,6 +32,18 @@ class FakeSession:
 
     def wait_for_all(self, _markers, _timeout, _cursor):
         return self.all_result
+
+
+class FakeSessionManager:
+    def __init__(self, session):
+        self.session = session
+        self.released = []
+
+    def acquire_control(self, _owner, _settings, _log_path):
+        return self.session
+
+    def release(self, owner, port):
+        self.released.append((owner, port))
 
 
 class SerialUpgradeControllerTests(unittest.TestCase):
@@ -63,3 +79,45 @@ class SerialUpgradeControllerTests(unittest.TestCase):
 
         self.assertTrue(controller.monitor_post_tftp(seconds=1))
         self.assertEqual(session.writes, [(b"reset\r", False)])
+
+    @patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=False)
+    @patch("src.services.serial_upgrade_service.upload_firmware")
+    @patch("src.services.serial_upgrade_service.prepare_tftp_network", return_value=CommandResult(True, "network ready"))
+    @patch("src.services.serial_upgrade_service.power_on_selected_channels")
+    def test_full_package_upgrade_uses_direct_power_channel_for_initial_and_repower(
+        self,
+        direct_power,
+        _prepare_network,
+        _upload_firmware,
+        _monitor_post_tftp,
+    ):
+        session = FakeSession(any_results=["#", "login", "password", "#"])
+        manager = FakeSessionManager(session)
+        request = FullPackageUpgradeRequest(
+            vlan="vlan102",
+            server_interface="VLAN102",
+            tftp_server_ip="192.168.1.102",
+            firmware_path=Path(r"F:\firmware\tclinux_allinone"),
+            power_serial_port="COM106",
+            final_username="root",
+            final_password="secret",
+            transfer_method=TRANSFER_TFTP_PUT,
+            power_channel=2,
+        )
+
+        def fake_power(*_args, **kwargs):
+            callback = kwargs.get("on_channel_powered")
+            if callback:
+                callback(2)
+            return CommandResult(True, "power ready")
+
+        direct_power.side_effect = fake_power
+
+        result = run_single_full_package_upgrade(request, manager, sleep_fn=lambda _seconds: None)
+
+        self.assertTrue(result.ok)
+        self.assertEqual(direct_power.call_count, 2)
+        self.assertEqual(direct_power.call_args_list[0].args[:2], ("COM106", [2]))
+        self.assertEqual(direct_power.call_args_list[1].args[:2], ("COM106", [2]))
+        self.assertIn("on_channel_powered", direct_power.call_args_list[0].kwargs)
+        self.assertEqual(len(manager.released), 1)

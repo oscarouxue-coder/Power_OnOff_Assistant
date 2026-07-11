@@ -5,10 +5,18 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from line_check_assistant.paths import resolve_old_tool_path
+from line_check_assistant.paths import resolve_config_dir, resolve_old_tool_path
 
 
 class PathsTests(unittest.TestCase):
+    def test_resolve_config_dir_uses_moved_old_tool_source_directory(self):
+        root = Path("C:/line-check")
+
+        self.assertEqual(
+            resolve_config_dir(root),
+            root / "Auto_power_on_off_tool" / "config",
+        )
+
     def test_resolve_old_tool_path_prefers_new_plain_name(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

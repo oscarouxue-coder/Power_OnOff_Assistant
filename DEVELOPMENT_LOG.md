@@ -24,6 +24,66 @@
 - 后续待办：
 ```
 
+## 2026-07-11 - 自动上/下电增加下电选择
+
+- 类型：功能 / 测试 / 文档
+- 背景：用户要求将“自动上电”扩展为“自动上/下电”，并在二级弹窗中用下拉框选择上电或下电，默认上电。
+- 完成内容：工具栏入口改为“自动上/下电”；COM 选择弹窗新增默认“上电”的操作下拉框；下电仅向勾选通道按顺序发送关闭帧、相邻间隔 1 秒，不发送全断电帧。全包升级和 `Auto_power_on_off_tool/Auto_Power_On_Off_Tool.py` 均未修改。
+- 修改文件：`src/core/power_supply.py`、`src/services/power_on_service.py`、`src/services/__init__.py`、`line_check_assistant/app.py`、`tests/test_power_supply.py`、`tests/test_app.py`、`line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：编译主程序和上下电服务；运行完整单元测试；核对旧工具源码哈希未变化。
+- 验证结果：编译通过，完整 `python -m unittest discover -s tests -v` 共 111 项通过；单元测试验证下电仅发送所选通道关闭帧、相邻帧间隔 1 秒且不含全断电帧；`Auto_power_on_off_tool/Auto_Power_On_Off_Tool.py` 哈希未变化。
+- 后续待办：在真实程控电源上验收下电操作的关闭帧顺序和 1 秒间隔。
+
+## 2026-07-11 - 取消自动上电后的启动等待
+
+- 类型：优化 / 测试 / 文档
+- 背景：用户要求最后一条自动上电开启帧发送后不再额外等待 10 秒。
+- 完成内容：主程序自动上电的启动等待改为 0 秒；相邻开启帧的 1 秒间隔保持不变。全包升级及旧工具源码均未修改。
+- 修改文件：`line_check_assistant/app.py`、`tests/test_app.py`、`tests/test_power_supply.py`、`line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：编译主程序；运行完整单元测试；确认旧工具源码哈希未变化。
+- 验证结果：编译通过，完整 `python -m unittest discover -s tests -v` 共 108 项通过；单元测试验证两条开启帧之间仅等待 1 秒、最后一条开启帧后无额外启动等待；`Auto_power_on_off_tool/Auto_Power_On_Off_Tool.py` 哈希未变化。用户已在真实程控电源完成新自动上电流程验收，结果通过。
+- 后续待办：无；全包升级的断电重启流程继续按独立路径验收。
+
+## 2026-07-11 - 自动上电开启帧按通道间隔 1 秒
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：现场日志显示通道 1-8 的开启帧在同一秒内连续发送；用户确认需要相邻开启指令间隔 1 秒。
+- 完成内容：主程序“自动上电”的仅开启路径改为首个通道立即开启、后续每个通道开启前等待 1 秒；全部开启帧完成后再统一等待 10 秒。未改变断电策略、全包升级路径或 `Auto_power_on_off_tool/Auto_Power_On_Off_Tool.py`。
+- 修改文件：`src/core/power_supply.py`、`src/services/power_on_service.py`、`line_check_assistant/app.py`、`tests/test_power_supply.py`、`tests/test_app.py`、`line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：编译主程序和上电服务；运行程控电源、主界面与串行升级单元测试；确认旧工具源码哈希未变化。
+- 验证结果：待本次改动完成后填写。
+- 后续待办：在真实程控电源上确认开启日志相邻时间约为 1 秒。
+
+## 2026-07-11 - 自动上电改为一次性开启勾选通道
+
+- 类型：优化 / 测试 / 文档
+- 背景：用户要求主程序“自动上电”确认后一次性开启所有勾选通道，不再先完全断电或按通道逐个断电/上电；同时明确不得影响 `Auto_power_on_off_tool/Auto_Power_On_Off_Tool.py` 业务逻辑。
+- 完成内容：主程序新增仅开启通道的程控电源服务，连续发送勾选通道的开启帧且不插入关闭帧；自动上电统一等待 10 秒；全包升级原有断电重启路径及旧工具源码均未修改。
+- 修改文件：`src/core/power_supply.py`、`src/services/power_on_service.py`、`src/services/__init__.py`、`line_check_assistant/app.py`、`tests/test_power_supply.py`、`tests/test_app.py`、`line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：编译主程序和上电服务；运行程控电源、主界面及串行升级相关单元测试；比对旧工具源码未改动。
+- 验证结果：`Auto_power_on_off_tool/Auto_Power_On_Off_Tool.py` 与移动前 Git 版本哈希一致；编译通过，完整 `python -m unittest discover -s tests -v` 共 108 项通过；单元测试验证自动上电只写入全部勾选通道的开启帧，不含全断电或关闭帧，且全包升级仍走原有独立上电服务。
+- 后续待办：使用真实程控电源确认多通道开启帧连续下发后，所有勾选通道可同时启动。
+
+## 2026-07-11 - 统一主程序配置目录到旧工具源码目录
+
+- 类型：重构 / 配置 / 文档 / 测试
+- 背景：用户将 `Auto_power_on_off_tool` 移入 `Cheating_machine_execution_tool`，要求所有原先读写同级 `config` 的主程序逻辑统一改为读写 `Auto_power_on_off_tool/config`，并删除旧目录。
+- 完成内容：新增统一配置目录解析；主界面通道、ONU 注册和样机升级状态均改写新目录；迁入现有通道配置和本机保存状态，保留旧工具已有的产品配置及原同级配置项；删除原同级 `config` 目录。
+- 修改文件：`line_check_assistant/paths.py`、`line_check_assistant/app.py`、`tests/test_paths.py`、`.gitignore`、`Auto_power_on_off_tool/config`、`line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：编译主程序与路径模块；运行路径和配置存储相关单元测试；确认旧目录不存在且主程序配置路径指向新目录。
+- 验证结果：旧目录确认不存在；主程序导入后四个配置路径均指向新目录；迁入的通道配置可解析为 16 个通道、程控电源端口为 `COM105`；`python -m py_compile` 通过，完整 `python -m unittest discover -s tests -v` 共 106 项通过。
+- 后续待办：真实设备流程继续以新目录中的 `network_card_ip.ini` 为唯一配置源。
+
+## 2026-07-11 - 主程序内置程控电源直连，移除旧 GUI 上电依赖
+
+- 类型：功能 / 重构 / 测试 / 文档
+- 背景：自动上电和全包升级原先启动 `Auto_Power_On_Off_Tool.exe` 并通过 UI Automation 选择 COM、配置和 `Start ALL`，窗口控件状态会造成不稳定；用户提供旧工具源码，要求改为主程序直接控制程控电源。
+- 完成内容：从旧源码提取 16 通道程控电源串口协议，新增无界面 `src/core/power_supply.py` 与上电服务；自动上电会二次确认“先关闭全部通道”，再按勾选的 `channel_x` 直接发送关闭/上电帧；全包升级从当前 `channel_x` 传递程控电源通道，写入上电帧后立即开始 boot 监听，重上电也走同一条直连路径；运行时主路径不再调用旧 EXE、PyQt 或 UI Automation。
+- 修改文件：`Cheating_machine_execution_tool/src/core/power_supply.py`、`src/services/power_on_service.py`、`src/services/serial_upgrade_service.py`、`src/models/serial_models.py`、`src/core/__init__.py`、`src/services/__init__.py`、`line_check_assistant/app.py`、`tests/test_power_supply.py`、`tests/test_app.py`、`line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：编译入口、主界面、直连核心和升级服务；导入主程序与上电服务；运行完整单元测试；检查运行时目录中不再存在旧 GUI 自动化调用。
+- 验证结果：编译和导入通过；完整 `python -m unittest discover -s tests -v` 共 105 项通过；新增 5 项程控电源测试验证旧协议帧、全关后指定通道开关顺序、串口关闭、启动等待、非法通道不打开串口，以及全包升级首次上电和重上电均使用当前 `channel_x`。
+- 后续待办：在真实程控电源上先验证 `COM` 口与 `19200 8N1` 参数、单通道断电/上电帧和通道映射；确认后再验收多通道自动上电及全包升级中的首次上电、重上电流程。
+
 ## 2026-07-11 - 修复主程序 VS Code 源码启动环境
 
 - 类型：BUG 修复 / 配置 / 文档 / 测试

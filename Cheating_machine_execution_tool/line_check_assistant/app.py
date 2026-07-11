@@ -21,31 +21,38 @@ from .network_ops import (
     save_olt_configuration,
     static_ip_for_vlan,
 )
-from .old_tool_automation import automate_power_on
-from .old_tool_config import prepare_power_on_default
 from .onu_registration_store import DEFAULT_OLT_IP, OnuRegistrationConfig, OnuRegistrationStore
 from .page_upgrade import PageUpgradeRequest, run_page_upgrade_batch
-from .paths import resolve_old_tool_path, resolve_tool_root
+from .paths import resolve_config_dir, resolve_tool_root
 from .sample_upgrade_settings_store import DEFAULT_UPGRADE_MODE, DEFAULT_UPGRADE_TRANSFER, SampleUpgradeSettings, SampleUpgradeSettingsStore
 from .serial_ports import list_prolific_ports, port_from_display
 from src.core import SerialSessionManager
 from src.models import FullPackageUpgradeRequest
-from src.services import TRANSFER_TFTP_COMMAND, TRANSFER_TFTP_PUT, run_single_full_package_upgrade
+from src.services import TRANSFER_TFTP_COMMAND, TRANSFER_TFTP_PUT, run_single_full_package_upgrade, turn_off_selected_channels, turn_on_selected_channels
 from src.ui import SerialTerminalWindow
 
 
 APP_DIR = resolve_tool_root()
-CONFIG_DIR = APP_DIR / "config"
+CONFIG_DIR = resolve_config_dir(APP_DIR)
 NETWORK_CONFIG_PATH = CONFIG_DIR / "network_card_ip.ini"
 ONU_REGISTRATION_CONFIG_PATH = CONFIG_DIR / "onu_registration.ini"
 SAMPLE_UPGRADE_SETTINGS_PATH = CONFIG_DIR / "sample_upgrade_settings.ini"
-OLD_TOOL_PATH = resolve_old_tool_path(APP_DIR)
 LOG_DIR = APP_DIR / "assistant_logs"
 POWER_SUPPLY_COUNT = 6
 TOTAL_CHANNEL_COUNT = 16
-POWER_ON_WAIT_SECONDS_PER_CHANNEL = 10
+POWER_ON_WAIT_SECONDS = 0
+POWER_ACTION_ON = "上电"
+POWER_ACTION_OFF = "下电"
+POWER_ACTION_OPTIONS = (POWER_ACTION_ON, POWER_ACTION_OFF)
 CHANNEL_LIST_FONT = ("Microsoft YaHei UI", 11)
 CHANNEL_FIELD_WIDTH = 42
+
+
+def power_channel_from_section(section: str) -> int:
+    try:
+        return int(section.lower().replace("channel_", ""))
+    except ValueError:
+        return 0
 CHANNEL_TABLE_COMBO_WIDTH = 32
 CHANNEL_TABLE_GROUP_GAP = 24
 CHANNEL_TABLE_ROWS_PER_GROUP = 4
@@ -232,7 +239,7 @@ class LineCheckAssistant(Tk):
         title_area = ttk.Frame(header, style="App.TFrame")
         title_area.pack(side="left", fill="x", expand=True)
         ttk.Label(title_area, text="开关机测试环境搭建助手", style="Header.TLabel").pack(anchor="w")
-        ttk.Label(title_area, text="配置测试通道、完成自动上电并检查全部线路", style="Subtitle.TLabel").pack(anchor="w", pady=(3, 0))
+        ttk.Label(title_area, text="配置测试通道、完成自动上/下电并检查全部线路", style="Subtitle.TLabel").pack(anchor="w", pady=(3, 0))
         admin_ok = is_admin()
         admin_text = "管理员权限已就绪" if admin_ok else "缺少管理员权限，请右键以管理员身份运行"
         ttk.Label(header, text=admin_text, style="Success.TLabel" if admin_ok else "Danger.TLabel").pack(side="right", anchor="n", pady=3)
@@ -240,7 +247,7 @@ class LineCheckAssistant(Tk):
         toolbar = ttk.Frame(root, style="Surface.TFrame", padding=(12, 10))
         toolbar.pack(fill="x", pady=(0, 14))
         ttk.Label(toolbar, text="常用工具", style="CardTitle.TLabel").pack(side="left", padx=(2, 16))
-        ttk.Button(toolbar, text="自动上电", command=self._launch_old_tool, style="Primary.TButton").pack(side="left")
+        ttk.Button(toolbar, text="自动上/下电", command=self._launch_power_on, style="Primary.TButton").pack(side="left")
         ttk.Button(toolbar, text="样机升级", command=self._open_upgrade_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="写样机参数", command=self._open_sample_parameter_writer, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="ONU注册", command=self._open_onu_registration_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
@@ -380,8 +387,8 @@ class LineCheckAssistant(Tk):
         self._log_section("操作步骤")
         self._log("1. 人工接好所有样机线路")
         self._log("2. 选择本次测试使用的程控电源串口，并确认通道对应的 VLAN")
-        self._log("3. 点击“自动启动旧软件上电”")
-        self._log("4. 等待旧软件自动选择 Fully_powered_on、点击 Start ALL、上电并关闭")
+        self._log("3. 点击“直接控制程控电源上电”")
+        self._log("4. 主程序通过程控电源串口按选中通道执行断电、上电")
         self._log("5. 回到本软件检查线路")
         self._log_blank()
         self._log_section("运行信息")
@@ -1186,6 +1193,10 @@ class LineCheckAssistant(Tk):
                 return
 
             vlan_name = adapter_alias_from_display(channel.vlan_name or channel.adapter_alias).strip()
+            power_channel = power_channel_from_section(channel.section)
+            if not 1 <= power_channel <= TOTAL_CHANNEL_COUNT:
+                messagebox.showwarning("程控电源通道不正确", f"无法从 {channel.section} 确定程控电源通道。", parent=self.upgrade_window)
+                return
             request = FullPackageUpgradeRequest(
                 vlan=vlan_name.lower(),
                 server_interface=vlan_name,
@@ -1196,6 +1207,7 @@ class LineCheckAssistant(Tk):
                 final_password=self.upgrade_password_var.get().strip(),
                 restore_factory=bool(self.upgrade_restore_factory_var.get()),
                 transfer_method=transfer_method,
+                power_channel=power_channel,
             )
             upgrade_items.append((channel, request))
 
@@ -1267,10 +1279,8 @@ class LineCheckAssistant(Tk):
                 self.log_queue.put(f"开始串行升级 {index}/{total}：{request.vlan}")
                 try:
                     self.store.save([channel], request.power_serial_port)
-                    self.log_queue.put(f"已更新 network_card_ip.ini，仅保留当前上电通道：{channel.section} / {request.vlan}")
+                    self.log_queue.put(f"已更新 network_card_ip.ini，仅保留当前升级通道：{channel.section} / {request.vlan}")
                     result = run_single_full_package_upgrade(
-                        APP_DIR,
-                        OLD_TOOL_PATH,
                         request,
                         self.serial_session_manager,
                         on_output=lambda line: self.log_queue.put(line),
@@ -1718,26 +1728,48 @@ class LineCheckAssistant(Tk):
         else:
             self._log("已刷新网卡：未识别到网卡")
 
-    def _launch_old_tool(self) -> None:
+    def _launch_power_on(self) -> None:
         if self.power_on_running:
             return
         self._capture_current_channel()
         enabled_channels = self._selected_channels()
         if not enabled_channels:
-            messagebox.showwarning("没有启用通道", "请至少启用一个通道后再自动上电。", parent=self)
+            messagebox.showwarning("没有启用通道", "请至少启用一个通道后再自动上/下电。", parent=self)
             return
         wait_seconds = self._power_on_wait_seconds(enabled_channels)
-        selected_com = self._select_power_com_port()
+        selected_com, power_action = self._select_power_com_port()
         if not selected_com:
+            return
+        if power_action not in POWER_ACTION_OPTIONS:
+            messagebox.showwarning("操作类型不正确", "程控电源操作只能选择上电或下电。", parent=self)
+            return
+        power_channels = [power_channel_from_section(channel.section) for channel in enabled_channels]
+        if any(not 1 <= channel <= TOTAL_CHANNEL_COUNT for channel in power_channels):
+            messagebox.showwarning("程控电源通道不正确", "存在无法识别的 channel 编号，已取消自动上/下电。", parent=self)
+            return
+        channel_text = "、".join(str(channel) for channel in power_channels)
+        action_description = (
+            "确认后会按勾选顺序开启全部通道，相邻开启指令间隔 1 秒；执行前不会关闭任何程控电源通道。"
+            if power_action == POWER_ACTION_ON
+            else "确认后会按勾选顺序关闭全部勾选通道，相邻关闭指令间隔 1 秒；只关闭勾选通道，不会执行全部断电。"
+        )
+        if not messagebox.askyesno(
+            f"确认自动{power_action}",
+            f"将直接通过程控电源串口 {selected_com} 操作通道 {channel_text}。\n\n"
+            f"{action_description}\n\n"
+            "不会启动旧的 Auto_Power_On_Off_Tool。\n\n"
+            "是否继续？",
+            parent=self,
+        ):
             return
         self.power_serial_var.set(selected_com)
         self.power_on_running = True
-        thread = threading.Thread(target=self._power_on_worker, args=(selected_com, wait_seconds), daemon=True)
+        thread = threading.Thread(target=self._power_on_worker, args=(selected_com, power_channels, power_action, wait_seconds), daemon=True)
         thread.start()
 
-    def _select_power_com_port(self) -> str:
+    def _select_power_com_port(self) -> tuple[str, str]:
         dialog = Toplevel(self)
-        dialog.title("选择程控电源 COM 口")
+        dialog.title("选择自动上/下电操作")
         dialog.transient(self)
         dialog.grab_set()
         dialog.resizable(False, False)
@@ -1745,14 +1777,19 @@ class LineCheckAssistant(Tk):
         options = self._build_power_serial_options()
         current = self._selected_power_serial_port()
         selected = StringVar(value=current if current in options else DEFAULT_POWER_SERIAL_PORT)
-        result = {"port": ""}
+        action = StringVar(value=POWER_ACTION_ON)
+        result = {"port": "", "action": POWER_ACTION_ON}
 
         Frame(dialog, padx=16, pady=12).pack(fill="both", expand=True)
         container = dialog.winfo_children()[0]
-        prompt = "请选择需要启动的程控电源 COM 口："
+        prompt = "请选择程控电源 COM 口："
         Label(container, text=prompt).pack(anchor="w", pady=(0, 8))
         combo = ttk.Combobox(container, textvariable=selected, values=options, width=58, state="readonly")
         combo.pack(fill="x", pady=(0, 12))
+
+        Label(container, text="请选择操作类型：").pack(anchor="w", pady=(0, 8))
+        action_combo = ttk.Combobox(container, textvariable=action, values=POWER_ACTION_OPTIONS, width=58, state="readonly")
+        action_combo.pack(fill="x", pady=(0, 12))
 
         buttons = Frame(container)
         buttons.pack(fill="x")
@@ -1764,8 +1801,13 @@ class LineCheckAssistant(Tk):
                 if selected_port not in options:
                     messagebox.showwarning("COM 口不正确", "程控电源串口只能选择 COM101 到 COM106。", parent=dialog)
                     return
+                selected_action = action.get().strip()
+                if selected_action not in POWER_ACTION_OPTIONS:
+                    messagebox.showwarning("操作类型不正确", "请选择上电或下电。", parent=dialog)
+                    return
                 result["port"] = selected_port
-                self._log(f"已选择程控电源串口：{selected_port}")
+                result["action"] = selected_action
+                self._log(f"已选择程控电源串口：{selected_port}，操作：{selected_action}")
                 dialog.grab_release()
                 dialog.destroy()
             except Exception as exc:
@@ -1783,36 +1825,38 @@ class LineCheckAssistant(Tk):
 
         self.update_idletasks()
         x = self.winfo_x() + max((self.winfo_width() - 460) // 2, 0)
-        y = self.winfo_y() + max((self.winfo_height() - 160) // 2, 0)
+        y = self.winfo_y() + max((self.winfo_height() - 215) // 2, 0)
         dialog.geometry(f"+{x}+{y}")
         combo.focus_set()
         self.wait_window(dialog)
-        return result["port"]
+        return result["port"], result["action"]
 
     def _power_on_wait_seconds(self, channels) -> int:
-        return len(channels) * POWER_ON_WAIT_SECONDS_PER_CHANNEL
+        return POWER_ON_WAIT_SECONDS
 
-    def _power_on_worker(self, selected_com: str, wait_seconds: int) -> None:
+    def _power_on_worker(self, selected_com: str, power_channels: list[int], power_action: str, wait_seconds: int) -> None:
         try:
-            try:
-                message = prepare_power_on_default(CONFIG_DIR)
-                self.log_queue.put(message)
-            except OSError as exc:
-                self.log_queue.put(f"准备 Fully_powered_on 默认配置失败：{exc}")
-                return
+            action_text = "开启" if power_action == POWER_ACTION_ON else "关闭"
             self.log_queue.put(
-                f"开始自动打开旧软件、选择程控电源串口 {selected_com}、选择 Fully_powered_on、点击 Start ALL，"
-                f"按启用通道数等待 {wait_seconds} 秒。"
+                f"开始直接控制程控电源，串口 {selected_com}，通道 {'、'.join(str(channel) for channel in power_channels)}；"
+                f"相邻{action_text}指令间隔 1 秒，全部{action_text}完成后不额外等待。"
             )
-            result = automate_power_on(
-                OLD_TOOL_PATH,
-                serial_port=selected_com,
-                wait_seconds=wait_seconds,
-                on_output=lambda line: self.log_queue.put(line),
-            )
+            if power_action == POWER_ACTION_ON:
+                result = turn_on_selected_channels(
+                    selected_com,
+                    power_channels,
+                    wait_seconds=wait_seconds,
+                    on_output=lambda line: self.log_queue.put(line),
+                )
+            else:
+                result = turn_off_selected_channels(
+                    selected_com,
+                    power_channels,
+                    on_output=lambda line: self.log_queue.put(line),
+                )
             self.log_queue.put(result.message)
         except Exception as exc:
-            self.log_queue.put(f"自动上电后台流程异常：{exc}")
+            self.log_queue.put(f"自动上/下电后台流程异常：{exc}")
         finally:
             self.log_queue.put("__POWER_DONE__")
 
