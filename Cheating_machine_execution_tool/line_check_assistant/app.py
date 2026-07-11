@@ -1436,8 +1436,7 @@ class LineCheckAssistant(Tk):
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
 
     def _serial_log_directory(self) -> Path:
-        primary = Path(r"F:\Aouxue\开关机环境搭建工具\开关机执行工具\样机串口日志")
-        return primary if Path(primary.anchor).exists() else Path(r"D:\样机串口日志")
+        return Path(r"D:\Serial_Log")
 
     def _open_serial_log_module(self, vlans: list[str] | None = None) -> None:
         targets = vlans or self._selected_upgrade_vlans()
