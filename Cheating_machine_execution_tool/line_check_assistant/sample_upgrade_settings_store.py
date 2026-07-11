@@ -7,6 +7,7 @@ from pathlib import Path
 
 DEFAULT_UPGRADE_MODE = "全包升级"
 DEFAULT_UPGRADE_TRANSFER = "Tftp Put"
+DEFAULT_UPGRADE_EXECUTION_MODE = "串行"
 SAMPLE_UPGRADE_SECTION = "sample_upgrade"
 
 
@@ -14,6 +15,7 @@ SAMPLE_UPGRADE_SECTION = "sample_upgrade"
 class SampleUpgradeSettings:
     upgrade_mode: str = DEFAULT_UPGRADE_MODE
     transfer_method: str = DEFAULT_UPGRADE_TRANSFER
+    execution_mode: str = DEFAULT_UPGRADE_EXECUTION_MODE
     restore_factory: bool = False
     username: str = ""
     password: str = ""
@@ -32,6 +34,7 @@ class SampleUpgradeSettingsStore:
         return SampleUpgradeSettings(
             upgrade_mode=parser.get(SAMPLE_UPGRADE_SECTION, "upgrade_mode", fallback=DEFAULT_UPGRADE_MODE),
             transfer_method=parser.get(SAMPLE_UPGRADE_SECTION, "transfer_method", fallback=DEFAULT_UPGRADE_TRANSFER),
+            execution_mode=parser.get(SAMPLE_UPGRADE_SECTION, "execution_mode", fallback=DEFAULT_UPGRADE_EXECUTION_MODE),
             restore_factory=parser.getboolean(SAMPLE_UPGRADE_SECTION, "restore_factory", fallback=False),
             username=parser.get(SAMPLE_UPGRADE_SECTION, "username", fallback=""),
             password=parser.get(SAMPLE_UPGRADE_SECTION, "password", fallback=""),
@@ -44,6 +47,7 @@ class SampleUpgradeSettingsStore:
         parser[SAMPLE_UPGRADE_SECTION] = {
             "upgrade_mode": settings.upgrade_mode or DEFAULT_UPGRADE_MODE,
             "transfer_method": settings.transfer_method or DEFAULT_UPGRADE_TRANSFER,
+            "execution_mode": settings.execution_mode or DEFAULT_UPGRADE_EXECUTION_MODE,
             "restore_factory": "1" if settings.restore_factory else "0",
             "username": settings.username or "",
             "password": settings.password or "",

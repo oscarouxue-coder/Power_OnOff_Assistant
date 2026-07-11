@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import socket
 import tempfile
 import threading
@@ -10,6 +11,30 @@ from typing import Callable
 
 import tftpy
 from tftpy.TftpShared import TftpException
+
+
+_tftp_server_module = importlib.import_module("tftpy.TftpServer")
+_original_tftp_context_server = _tftp_server_module.TftpContextServer
+_tftp_context_local = threading.local()
+
+
+class _VlanBoundTftpContextServer(_original_tftp_context_server):
+    """让 TFTPy 的传输数据 socket 使用监听该请求的 VLAN IP。"""
+
+    def __init__(self, host, port, timeout, *args, **kwargs) -> None:
+        super().__init__(host, port, timeout, *args, **kwargs)
+        local_ip = getattr(_tftp_context_local, "local_ip", "")
+        if not local_ip:
+            return
+        self.sock.close()
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind((local_ip, 0))
+        self.sock.settimeout(timeout)
+
+
+# TftpServer.listen() 没有提供 session 数据 socket 的 localip 参数。替换其上下文工厂，
+# 由每个监听线程通过 thread-local 提供当前 VLAN IP；没有设置时保持第三方库原有行为。
+_tftp_server_module.TftpContextServer = _VlanBoundTftpContextServer
 
 
 # Windows 上 bind 一个不在本机网卡上的 IP 会抛 WSAEADDRNOTAVAIL(10049);
@@ -44,6 +69,25 @@ def _ip_is_bindable_locally(ip: str) -> bool:
                 pass
 
 
+def wait_for_bindable_ip(
+    ip: str,
+    timeout_seconds: float = 15.0,
+    poll_seconds: float = 0.5,
+    *,
+    sleep_fn: Callable[[float], None] = time.sleep,
+    monotonic_fn: Callable[[], float] = time.monotonic,
+) -> bool:
+    """等待 Windows 将刚设置的网卡 IP 注册为可绑定地址。"""
+    deadline = monotonic_fn() + max(0.0, timeout_seconds)
+    while True:
+        if _ip_is_bindable_locally(ip):
+            return True
+        remaining = deadline - monotonic_fn()
+        if remaining <= 0:
+            return False
+        sleep_fn(min(max(0.01, poll_seconds), remaining))
+
+
 @dataclass(frozen=True)
 class TftpTransferResult:
     bytes_transferred: int = 0
@@ -51,11 +95,20 @@ class TftpTransferResult:
 
 
 class TftpServerHandle:
-    def __init__(self, bind_ip: str, firmware_path: Path, alias: str = "tclinux_allinone", port: int = 69) -> None:
+    def __init__(
+        self,
+        bind_ip: str,
+        firmware_path: Path,
+        alias: str = "tclinux_allinone",
+        port: int = 69,
+        *,
+        allow_any_fallback: bool = True,
+    ) -> None:
         self.bind_ip = bind_ip
         self.firmware_path = Path(firmware_path)
         self.alias = alias
         self.port = port
+        self.allow_any_fallback = allow_any_fallback
         self._temporary_root: tempfile.TemporaryDirectory | None = None
         self._server = None
         self._thread: threading.Thread | None = None
@@ -86,16 +139,21 @@ class TftpServerHandle:
         # 这里提前回退到 INADDR_ANY(""),由 OS 路由决定回应哪个接口,TFTP 客户端拿到固件不会受影响。
         bind_ip = self.bind_ip
         if bind_ip and not _ip_is_bindable_locally(bind_ip):
+            if not self.allow_any_fallback:
+                self.stop()
+                raise RuntimeError(f"TFTP 服务无法严格绑定本机 IP：{self.bind_ip}:{self.port}")
             self._bind_ip_actually_used = ""
             bind_ip = ""
 
         def run() -> None:
+            previous_local_ip = getattr(_tftp_context_local, "local_ip", None)
+            _tftp_context_local.local_ip = bind_ip
             try:
                 self._server.listen(bind_ip, self.port, timeout=1, retries=3)
             except OSError as exc:
                 # listen 阶段也可能因 IP 失效抛 WSAEADDRNOTAVAIL;
                 # 此时第二次尝试用 INADDR_ANY 兜底,避免现场踩到 ini 配置与实际网络状态不一致的情况。
-                if exc.errno in _BIND_UNAVAILABLE_ERRNOS and bind_ip:
+                if self.allow_any_fallback and exc.errno in _BIND_UNAVAILABLE_ERRNOS and bind_ip:
                     self._bind_ip_actually_used = ""
                     try:
                         self._server.listen("", self.port, timeout=1, retries=3)
@@ -106,6 +164,14 @@ class TftpServerHandle:
                 self._error = exc
             except Exception as exc:
                 self._error = exc
+            finally:
+                if previous_local_ip is None:
+                    try:
+                        del _tftp_context_local.local_ip
+                    except AttributeError:
+                        pass
+                else:
+                    _tftp_context_local.local_ip = previous_local_ip
 
         self._thread = threading.Thread(target=run, name=f"tftpy-server-{self.bind_ip}", daemon=True)
         self._thread.start()

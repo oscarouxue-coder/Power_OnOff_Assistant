@@ -3,12 +3,14 @@ from __future__ import annotations
 import threading
 import time
 import uuid
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterable
 
 from line_check_assistant.network_ops import CommandResult, enable_adapter, set_static_ip
 from src.config import DEFAULT_LOG_DIR
-from src.core import SerialSessionManager, TftpServerHandle, upload_firmware, vlan_to_serial_port
+from src.core import SerialSessionManager, TftpServerHandle, upload_firmware, vlan_to_serial_port, wait_for_bindable_ip
 from src.models import FullPackageUpgradeRequest, SerialSettings
 from .power_on_service import power_on_selected_channels
 
@@ -24,6 +26,7 @@ TFTP_COMMAND_TIMEOUT_SECONDS = 1800
 TFTP_PUT_TIMEOUT_SECONDS = 600
 FINAL_LOGIN_TIMEOUT_SECONDS = 1200
 TFTP_SUBNET_MASK = "255.255.255.0"
+TFTP_BIND_READY_TIMEOUT_SECONDS = 15.0
 BOOT_USERNAME = "telecomadmin"
 BOOT_PASSWORD = "nE7jA%5m"
 FACTORY_RESET_COMMAND = "firstboot -y;reboot"
@@ -31,6 +34,61 @@ BOOT_USERNAME_PROMPTS = ("username:", "user name:")
 BOOT_PASSWORD_PROMPTS = ("passvord:", "password:")
 BOOT_LOGIN_RESULT_PROMPTS = ("#", ">", "login incorrect", "incorrect")
 BOOT_USERNAME_STABILITY_SECONDS = 1.0
+
+
+@dataclass(frozen=True)
+class FullPackageUpgradeItemResult:
+    request: FullPackageUpgradeRequest
+    result: CommandResult
+
+
+class UpgradePowerCycleCoordinator:
+    """按程控电源 COM 口串行化短暂断电/上电帧，启动等待在锁外并行进行。"""
+
+    def __init__(
+        self,
+        *,
+        sleep_fn: Callable[[float], None] = time.sleep,
+        monotonic_fn: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._sleep = sleep_fn
+        self._monotonic = monotonic_fn
+        self._locks: dict[str, threading.Lock] = {}
+        self._locks_guard = threading.Lock()
+
+    def power_on_channel(
+        self,
+        serial_port: str,
+        channel: int,
+        *,
+        wait_seconds: float,
+        on_output: Callable[[str], None] | None = None,
+        on_channel_powered: Callable[[int], None] | None = None,
+    ) -> CommandResult:
+        port = serial_port.strip().upper()
+        with self._locks_guard:
+            lock = self._locks.setdefault(port, threading.Lock())
+
+        with lock:
+            command_started = self._monotonic()
+            result = power_on_selected_channels(
+                port,
+                [channel],
+                wait_seconds=0,
+                on_output=on_output,
+                on_channel_powered=on_channel_powered,
+                sleep_fn=self._sleep,
+                monotonic_fn=self._monotonic,
+            )
+            command_elapsed = self._monotonic() - command_started
+
+        if result.ok:
+            remaining = max(0.0, float(wait_seconds) - command_elapsed)
+            if remaining:
+                if on_output:
+                    on_output(f"程控电源通道 {channel} 指令完成，继续等待样机启动：{remaining:.1f} 秒。")
+                self._sleep(remaining)
+        return result
 
 
 class SerialUpgradeController:
@@ -182,7 +240,13 @@ class SerialUpgradeController:
         self.sleep(8)
 
 
-def prepare_tftp_network(server_interface: str, server_ip: str, on_output: Callable[[str], None] | None = None, sleep_fn=time.sleep) -> CommandResult:
+def prepare_tftp_network(
+    server_interface: str,
+    server_ip: str,
+    on_output: Callable[[str], None] | None = None,
+    sleep_fn=time.sleep,
+    bind_ready_fn: Callable[[str, float], bool] | None = None,
+) -> CommandResult:
     def emit(message: str) -> None:
         if on_output:
             on_output(message)
@@ -197,7 +261,14 @@ def prepare_tftp_network(server_interface: str, server_ip: str, on_output: Calla
     if not configured.ok:
         return configured
     emit(configured.message)
-    sleep_fn(1)
+    emit(f"等待 TFTP 网卡 IP {server_ip} 完成绑定（最长 {TFTP_BIND_READY_TIMEOUT_SECONDS:.0f} 秒）。")
+    ready = (bind_ready_fn or wait_for_bindable_ip)(server_ip, TFTP_BIND_READY_TIMEOUT_SECONDS)
+    if not ready:
+        return CommandResult(
+            False,
+            f"TFTP 网卡 IP 在 {TFTP_BIND_READY_TIMEOUT_SECONDS:.0f} 秒内仍不可绑定：{server_interface} / {server_ip}。"
+            "请检查网卡 IP 状态、重复 IP 或驱动。",
+        )
     return CommandResult(True, f"TFTP 网卡已准备好：{server_interface} / {server_ip}")
 
 
@@ -207,6 +278,8 @@ def _run_tftp_command_with_power_supply(
     port: str,
     emit: Callable[[str], None],
     sleep_fn: Callable[[float], None],
+    power_cycle_coordinator: UpgradePowerCycleCoordinator | None = None,
+    strict_tftp_bind: bool = False,
 ) -> CommandResult:
     """Tftp指令(样机主动拉固件)链路:程控电源上电中断 boot,TFTP 完成后未命中 reset 时再次上电复位。
 
@@ -237,13 +310,24 @@ def _run_tftp_command_with_power_supply(
         if channel == request.power_channel:
             emit("程控电源已写入上电帧，等待电源动作完成后开始串口回车进入 boot。")
 
-    power = power_on_selected_channels(
-        request.power_serial_port,
-        [request.power_channel],
-        wait_seconds=POWER_ON_WAIT_SECONDS,
-        on_output=emit,
-        on_channel_powered=on_channel_powered,
-    )
+    def power_on_current_channel(on_powered: Callable[[int], None] | None = None) -> CommandResult:
+        if power_cycle_coordinator is not None:
+            return power_cycle_coordinator.power_on_channel(
+                request.power_serial_port,
+                request.power_channel,
+                wait_seconds=POWER_ON_WAIT_SECONDS,
+                on_output=emit,
+                on_channel_powered=on_powered,
+            )
+        return power_on_selected_channels(
+            request.power_serial_port,
+            [request.power_channel],
+            wait_seconds=POWER_ON_WAIT_SECONDS,
+            on_output=emit,
+            on_channel_powered=on_powered,
+        )
+
+    power = power_on_current_channel(on_channel_powered)
     if not power.ok:
         controller.cancel()
         return power
@@ -263,18 +347,22 @@ def _run_tftp_command_with_power_supply(
     if not network.ok:
         return network
 
-    server = TftpServerHandle(request.tftp_server_ip, request.firmware_path)
-    server.start()
-    # 当配置的 IP 在本机网卡上不可绑定时(例如 network_card_ip.ini 与实际网络状态不一致),
-    # TftpServerHandle 会自动回退到 INADDR_ANY;这里使用实际监听值,便于现场排查。
-    listened_ip = server.bind_ip_actually_used or "0.0.0.0"
-    emit(f"TFTPy 服务已监听：{listened_ip}:{server.port}，文件映射为 tclinux_allinone。")
-    tftp_result = controller.send_tftp_command_and_wait(
-        f"tftp {request.tftp_server_ip}:tclinux_allinone"
+    server = TftpServerHandle(
+        request.tftp_server_ip,
+        request.firmware_path,
+        allow_any_fallback=not strict_tftp_bind,
     )
-    if not tftp_result.ok:
-        return tftp_result
-    server.stop()
+    try:
+        server.start()
+        listened_ip = server.bind_ip_actually_used or "0.0.0.0"
+        emit(f"TFTPy 服务已监听：{listened_ip}:{server.port}，文件映射为 tclinux_allinone。")
+        tftp_result = controller.send_tftp_command_and_wait(
+            f"tftp {request.tftp_server_ip}:tclinux_allinone"
+        )
+        if not tftp_result.ok:
+            return tftp_result
+    finally:
+        server.stop()
 
     emit("TFTP 传输完成，开始观察 boot 重启标记。")
     reset_sent = controller.monitor_post_tftp()
@@ -283,12 +371,7 @@ def _run_tftp_command_with_power_supply(
         sleep_fn(POWER_ON_SETTLE_SECONDS)
     else:
         emit("未检测到 boot reset，开始重新上电。")
-        repower = power_on_selected_channels(
-            request.power_serial_port,
-            [request.power_channel],
-            wait_seconds=POWER_ON_WAIT_SECONDS,
-            on_output=emit,
-        )
+        repower = power_on_current_channel()
         if not repower.ok:
             return repower
         sleep_fn(POWER_ON_SETTLE_SECONDS)
@@ -305,6 +388,8 @@ def run_single_full_package_upgrade(
     on_output: Callable[[str], None] | None = None,
     on_session_ready: Callable[[str, object, Path], None] | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
+    power_cycle_coordinator: UpgradePowerCycleCoordinator | None = None,
+    strict_tftp_bind: bool = False,
 ) -> CommandResult:
     def emit(message: str) -> None:
         if on_output:
@@ -339,6 +424,8 @@ def run_single_full_package_upgrade(
                 port=port,
                 emit=emit,
                 sleep_fn=sleep_fn,
+                power_cycle_coordinator=power_cycle_coordinator,
+                strict_tftp_bind=strict_tftp_bind,
             )
 
         # Tftp Put(本机推到 192.168.1.1):保持"手动上电 + reboot + 回车"流程,
@@ -406,3 +493,62 @@ def run_single_full_package_upgrade(
             controller.cancel()
         if session is not None:
             session_manager.release(owner, port)
+
+
+def run_parallel_tftp_command_upgrades(
+    requests: Iterable[FullPackageUpgradeRequest],
+    session_manager: SerialSessionManager,
+    *,
+    max_workers: int = 2,
+    on_output: Callable[[str, str], None] | None = None,
+    on_session_ready: Callable[[str, object, Path], None] | None = None,
+    on_item_started: Callable[[FullPackageUpgradeRequest], None] | None = None,
+    on_item_complete: Callable[[FullPackageUpgradeItemResult], None] | None = None,
+) -> list[FullPackageUpgradeItemResult]:
+    """以固定并行度执行样机主动拉取固件流程，单台失败不取消其它样机。"""
+    all_requests = list(requests)
+    pending = list(all_requests)
+    if max_workers < 1:
+        raise ValueError("并行升级数量必须至少为 1。")
+    if any(request.transfer_method != TRANSFER_TFTP_COMMAND for request in pending):
+        raise ValueError("并行升级仅支持 Tftp指令。")
+
+    coordinator = UpgradePowerCycleCoordinator()
+    active: dict[object, FullPackageUpgradeRequest] = {}
+    completed: dict[int, FullPackageUpgradeItemResult] = {}
+
+    def run_one(request: FullPackageUpgradeRequest) -> CommandResult:
+        def emit(message: str) -> None:
+            if on_output:
+                on_output(request.vlan, message)
+
+        return run_single_full_package_upgrade(
+            request,
+            session_manager,
+            on_output=emit,
+            on_session_ready=on_session_ready,
+            power_cycle_coordinator=coordinator,
+            strict_tftp_bind=True,
+        )
+
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="parallel-tftp") as executor:
+        while pending or active:
+            while pending and len(active) < max_workers:
+                request = pending.pop(0)
+                if on_item_started:
+                    on_item_started(request)
+                active[executor.submit(run_one, request)] = request
+
+            done, _pending_futures = wait(active, return_when=FIRST_COMPLETED)
+            for future in done:
+                request = active.pop(future)
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    result = CommandResult(False, f"{request.vlan} 并行升级异常：{exc}")
+                item = FullPackageUpgradeItemResult(request=request, result=result)
+                completed[id(request)] = item
+                if on_item_complete:
+                    on_item_complete(item)
+
+    return [completed[id(request)] for request in all_requests]

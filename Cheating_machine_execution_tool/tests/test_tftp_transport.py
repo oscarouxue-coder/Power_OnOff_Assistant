@@ -1,6 +1,7 @@
 import os
 import socket
 import sys
+import time
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -10,10 +11,30 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import tftpy
 
-from src.core.tftp_transport import TftpServerHandle, _ip_is_bindable_locally, upload_firmware
+from src.core.tftp_transport import TftpServerHandle, _ip_is_bindable_locally, upload_firmware, wait_for_bindable_ip
 
 
 class TftpTransportTests(unittest.TestCase):
+    def test_wait_for_bindable_ip_retries_until_windows_address_is_ready(self):
+        now = [0.0]
+        sleeps = []
+
+        def sleep(seconds):
+            sleeps.append(seconds)
+            now[0] += seconds
+
+        with patch("src.core.tftp_transport._ip_is_bindable_locally", side_effect=[False, False, True]):
+            result = wait_for_bindable_ip(
+                "192.168.1.139",
+                timeout_seconds=15,
+                poll_seconds=0.5,
+                sleep_fn=sleep,
+                monotonic_fn=lambda: now[0],
+            )
+
+        self.assertTrue(result)
+        self.assertEqual(sleeps, [0.5, 0.5])
+
     def test_server_serves_selected_file_only_under_fixed_alias(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -79,6 +100,63 @@ class TftpTransportTests(unittest.TestCase):
             try:
                 self.assertEqual(server.bind_ip_actually_used, "127.0.0.1")
             finally:
+                server.stop()
+
+    def test_strict_server_rejects_unbindable_ip_without_any_fallback(self):
+        with TemporaryDirectory() as directory:
+            firmware = Path(directory) / "firmware.bin"
+            firmware.write_bytes(b"strict-bind-test")
+            server = TftpServerHandle("203.0.113.1", firmware, allow_any_fallback=False)
+
+            with patch("src.core.tftp_transport._ip_is_bindable_locally", return_value=False):
+                with self.assertRaisesRegex(RuntimeError, "严格绑定"):
+                    server.start()
+
+            self.assertEqual(server.bind_ip_actually_used, "203.0.113.1")
+
+    def test_two_strict_servers_can_listen_on_distinct_ips_with_same_port(self):
+        with TemporaryDirectory() as directory:
+            firmware = Path(directory) / "firmware.bin"
+            firmware.write_bytes(b"two-server-test")
+            probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+            probe.close()
+            first = TftpServerHandle("127.0.0.1", firmware, port=port, allow_any_fallback=False)
+            second = TftpServerHandle("127.0.0.2", firmware, port=port, allow_any_fallback=False)
+            first.start()
+            try:
+                second.start()
+                self.assertEqual(first.bind_ip_actually_used, "127.0.0.1")
+                self.assertEqual(second.bind_ip_actually_used, "127.0.0.2")
+            finally:
+                second.stop()
+                first.stop()
+
+    def test_server_binds_transfer_data_socket_to_listening_vlan_ip(self):
+        with TemporaryDirectory() as directory:
+            firmware = Path(directory) / "firmware.bin"
+            firmware.write_bytes(b"bound-data-socket-test")
+            probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            probe.bind(("127.0.0.2", 0))
+            port = probe.getsockname()[1]
+            probe.close()
+            server = TftpServerHandle("127.0.0.2", firmware, port=port, allow_any_fallback=False)
+            client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            client.bind(("127.0.0.1", 0))
+            server.start()
+            try:
+                # RRQ 后服务端会创建新的 TFTP 数据传输 socket；不发送 ACK，
+                # 保留会话以便断言该 socket 的本地 IP。
+                client.sendto(b"\x00\x01tclinux_allinone\x00octet\x00", ("127.0.0.2", port))
+                deadline = time.monotonic() + 2
+                while not server._server.sessions and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                self.assertTrue(server._server.sessions)
+                session = next(iter(server._server.sessions.values()))
+                self.assertEqual(session.sock.getsockname()[0], "127.0.0.2")
+            finally:
+                client.close()
                 server.stop()
 
     def test_upload_binds_requested_source_ip_and_uses_requested_remote_name(self):

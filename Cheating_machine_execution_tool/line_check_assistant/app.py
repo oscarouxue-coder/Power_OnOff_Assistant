@@ -24,12 +24,25 @@ from .network_ops import (
 from .onu_registration_store import DEFAULT_OLT_IP, OnuRegistrationConfig, OnuRegistrationStore
 from .page_upgrade import PageUpgradeRequest, run_page_upgrade_batch
 from .paths import resolve_config_dir, resolve_tool_root
-from .sample_upgrade_settings_store import DEFAULT_UPGRADE_MODE, DEFAULT_UPGRADE_TRANSFER, SampleUpgradeSettings, SampleUpgradeSettingsStore
+from .sample_upgrade_settings_store import (
+    DEFAULT_UPGRADE_EXECUTION_MODE,
+    DEFAULT_UPGRADE_MODE,
+    DEFAULT_UPGRADE_TRANSFER,
+    SampleUpgradeSettings,
+    SampleUpgradeSettingsStore,
+)
 from .serial_ports import list_prolific_ports, port_from_display
 from src.core import SerialSessionManager
 from src.config import DEFAULT_LOG_DIR
 from src.models import FullPackageUpgradeRequest
-from src.services import TRANSFER_TFTP_COMMAND, TRANSFER_TFTP_PUT, run_single_full_package_upgrade, turn_off_selected_channels, turn_on_selected_channels
+from src.services import (
+    TRANSFER_TFTP_COMMAND,
+    TRANSFER_TFTP_PUT,
+    run_parallel_tftp_command_upgrades,
+    run_single_full_package_upgrade,
+    turn_off_selected_channels,
+    turn_on_selected_channels,
+)
 from src.ui import SerialTerminalWindow
 
 
@@ -63,6 +76,9 @@ TFTP_PUT_TRANSFER = TRANSFER_TFTP_PUT
 LEGACY_TFTP_COPY_TRANSFER = "Tftp拷贝命令"
 UPGRADE_TRANSFER_OPTIONS = (DEFAULT_UPGRADE_TRANSFER, TFTP_COMMAND_TRANSFER, "web打开网关")
 SERIAL_FULL_PACKAGE_TRANSFERS = {TFTP_COMMAND_TRANSFER, TFTP_PUT_TRANSFER}
+UPGRADE_EXECUTION_SERIAL = DEFAULT_UPGRADE_EXECUTION_MODE
+UPGRADE_EXECUTION_PARALLEL = "并行（最多 2 台）"
+UPGRADE_EXECUTION_OPTIONS = (UPGRADE_EXECUTION_SERIAL, UPGRADE_EXECUTION_PARALLEL)
 FONT_FAMILY = "Microsoft YaHei UI"
 COLOR_BG = "#eef2f5"
 COLOR_SURFACE = "#ffffff"
@@ -131,9 +147,13 @@ class LineCheckAssistant(Tk):
         upgrade_mode = self.sample_upgrade_settings.upgrade_mode if self.sample_upgrade_settings.upgrade_mode in UPGRADE_MODE_OPTIONS else DEFAULT_UPGRADE_MODE
         saved_transfer_method = LineCheckAssistant._normalize_upgrade_transfer_method(self.sample_upgrade_settings.transfer_method)
         transfer_method = saved_transfer_method if saved_transfer_method in UPGRADE_TRANSFER_OPTIONS else DEFAULT_UPGRADE_TRANSFER
+        execution_mode = self.sample_upgrade_settings.execution_mode
+        if execution_mode not in UPGRADE_EXECUTION_OPTIONS:
+            execution_mode = DEFAULT_UPGRADE_EXECUTION_MODE
         self.sample_upgrade_save_after_id = None
         self.upgrade_mode_var = StringVar(value=upgrade_mode)
         self.upgrade_transfer_var = StringVar(value=transfer_method)
+        self.upgrade_execution_var = StringVar(value=execution_mode)
         restore_factory_enabled = bool(self.sample_upgrade_settings.restore_factory)
         self.upgrade_restore_factory_var = BooleanVar(value=restore_factory_enabled)
         self.upgrade_restore_factory_text_var = StringVar(value=LineCheckAssistant._restore_factory_text(restore_factory_enabled))
@@ -441,6 +461,7 @@ class LineCheckAssistant(Tk):
         for variable in (
             self.upgrade_mode_var,
             self.upgrade_transfer_var,
+            self.upgrade_execution_var,
             self.upgrade_restore_factory_var,
             self.upgrade_username_var,
             self.upgrade_password_var,
@@ -454,10 +475,17 @@ class LineCheckAssistant(Tk):
             return TFTP_COMMAND_TRANSFER
         return transfer_method
 
+    @staticmethod
+    def _normalize_upgrade_execution_mode(execution_mode: str) -> str:
+        if execution_mode in UPGRADE_EXECUTION_OPTIONS:
+            return execution_mode
+        return UPGRADE_EXECUTION_SERIAL
+
     def _current_sample_upgrade_settings(self) -> SampleUpgradeSettings:
         return SampleUpgradeSettings(
             upgrade_mode=self.upgrade_mode_var.get(),
             transfer_method=LineCheckAssistant._normalize_upgrade_transfer_method(self.upgrade_transfer_var.get()),
+            execution_mode=LineCheckAssistant._normalize_upgrade_execution_mode(self.upgrade_execution_var.get()),
             restore_factory=bool(self.upgrade_restore_factory_var.get()),
             username=self.upgrade_username_var.get(),
             password=self.upgrade_password_var.get(),
@@ -932,6 +960,17 @@ class LineCheckAssistant(Tk):
             width=22,
         )
         self.upgrade_transfer_combo.grid(row=1, column=1, sticky="w", padx=(0, 18), pady=8)
+        self.upgrade_transfer_combo.bind("<<ComboboxSelected>>", lambda _event: self._refresh_upgrade_transfer_visibility())
+        self.upgrade_execution_label = Label(overview, text="执行方式", anchor="w")
+        self.upgrade_execution_label.grid(row=1, column=2, sticky="w", padx=(0, 8), pady=8)
+        self.upgrade_execution_combo = ttk.Combobox(
+            overview,
+            textvariable=self.upgrade_execution_var,
+            values=UPGRADE_EXECUTION_OPTIONS,
+            state="readonly",
+            width=18,
+        )
+        self.upgrade_execution_combo.grid(row=1, column=3, sticky="ew", padx=(0, 12), pady=8)
         self.upgrade_restore_factory_label = Label(
             overview,
             textvariable=self.upgrade_restore_factory_text_var,
@@ -1047,6 +1086,20 @@ class LineCheckAssistant(Tk):
         else:
             self.upgrade_transfer_label.grid_remove()
             self.upgrade_transfer_combo.grid_remove()
+
+        if not hasattr(self, "upgrade_execution_label") or not hasattr(self, "upgrade_execution_combo"):
+            return
+        show_execution_mode = (
+            self.upgrade_mode_var.get() == "全包升级"
+            and current_transfer == TFTP_COMMAND_TRANSFER
+        )
+        if show_execution_mode:
+            self.upgrade_execution_label.grid()
+            self.upgrade_execution_combo.grid()
+        else:
+            self.upgrade_execution_var.set(UPGRADE_EXECUTION_SERIAL)
+            self.upgrade_execution_label.grid_remove()
+            self.upgrade_execution_combo.grid_remove()
 
     def _on_upgrade_start_clicked(self) -> None:
         self._capture_current_channel()
@@ -1214,16 +1267,28 @@ class LineCheckAssistant(Tk):
 
         target_text = "、".join(request.vlan for _channel, request in upgrade_items)
         transfer_action = "执行 Tftp Put" if transfer_method == TFTP_PUT_TRANSFER else "下发 Tftp指令"
+        execution_mode = LineCheckAssistant._normalize_upgrade_execution_mode(self.upgrade_execution_var.get())
+        parallel_tftp_command = (
+            transfer_method == TFTP_COMMAND_TRANSFER
+            and execution_mode == UPGRADE_EXECUTION_PARALLEL
+        )
+        execution_text = "并行（最多 2 台，完成即补位）" if parallel_tftp_command else "串行"
         restore_factory_text = "开启，会在最终系统登录后执行恢复出厂" if bool(self.upgrade_restore_factory_var.get()) else "关闭，不会执行恢复出厂"
         if not messagebox.askyesno(
-            "确认串行升级",
-            f"将按主界面通道顺序升级 {len(upgrade_items)} 台样机：{target_text}\n\n升级过程会自动改写 network_card_ip.ini，仅保留当前上电通道，然后自动上电、进入 boot、{transfer_action}并复位/重新上电。\n恢复出厂：{restore_factory_text}\n\n是否继续？",
+            "确认样机升级",
+            f"将升级 {len(upgrade_items)} 台样机：{target_text}\n执行方式：{execution_text}\n\n"
+            f"升级过程不会改写 network_card_ip.ini；每台样机会自动上电、进入 boot、{transfer_action}并复位/重新上电。\n"
+            f"恢复出厂：{restore_factory_text}\n\n是否继续？",
             parent=self.upgrade_window,
         ):
             return
 
-        self._set_upgrade_status("", f"准备串行升级 {len(upgrade_items)} 台样机", 0)
-        thread = threading.Thread(target=self._serial_tftp_copy_upgrade_worker, args=(upgrade_items,), daemon=True)
+        if parallel_tftp_command:
+            self._set_upgrade_status("", f"准备并行升级 {len(upgrade_items)} 台样机（最多 2 台）", 0)
+            thread = threading.Thread(target=self._parallel_tftp_command_upgrade_worker, args=(upgrade_items,), daemon=True)
+        else:
+            self._set_upgrade_status("", f"准备串行升级 {len(upgrade_items)} 台样机", 0)
+            thread = threading.Thread(target=self._serial_tftp_copy_upgrade_worker, args=(upgrade_items,), daemon=True)
         thread.start()
 
     def _selected_upgrade_transfer_method(self) -> str:
@@ -1263,60 +1328,111 @@ class LineCheckAssistant(Tk):
         completed = 0
         failed_request = None
         failed_result = None
-        restore_result = None
-        selected_channels = [channel for channel, _request in upgrade_items]
-        power_serial_port = upgrade_items[0][1].power_serial_port if upgrade_items else self._selected_power_serial_port()
-        try:
-            for index, (channel, request) in enumerate(upgrade_items, start=1):
-                start_progress = ((index - 1) / total) * 100 if total else 0
-                self.after(
-                    0,
-                    lambda request=request, index=index, total=total, progress=start_progress: self._set_upgrade_status(
-                        request.vlan,
-                        f"串行升级 {index}/{total}，更新通道配置并准备上电",
-                        progress,
+        for index, (_channel, request) in enumerate(upgrade_items, start=1):
+            start_progress = ((index - 1) / total) * 100 if total else 0
+            self.after(
+                0,
+                lambda request=request, index=index, total=total, progress=start_progress: self._set_upgrade_status(
+                    request.vlan,
+                    f"串行升级 {index}/{total}，准备上电",
+                    progress,
+                ),
+            )
+            self.log_queue.put(f"开始串行升级 {index}/{total}：{request.vlan}")
+            try:
+                result = run_single_full_package_upgrade(
+                    request,
+                    self.serial_session_manager,
+                    on_output=lambda line: self.log_queue.put(line),
+                    on_session_ready=lambda vlan, session, log_path: self.after(
+                        0, lambda: self.serial_terminal.attach_upgrade(vlan, session, log_path)
                     ),
                 )
-                self.log_queue.put(f"开始串行升级 {index}/{total}：{request.vlan}")
-                try:
-                    self.store.save([channel], request.power_serial_port)
-                    self.log_queue.put(f"已更新 network_card_ip.ini，仅保留当前升级通道：{channel.section} / {request.vlan}")
-                    result = run_single_full_package_upgrade(
-                        request,
-                        self.serial_session_manager,
-                        on_output=lambda line: self.log_queue.put(line),
-                        on_session_ready=lambda vlan, session, log_path: self.after(
-                            0, lambda: self.serial_terminal.attach_upgrade(vlan, session, log_path)
-                        ),
-                    )
-                except Exception as exc:
-                    result = CommandResult(False, f"{request.vlan} 升级流程异常：{exc}")
-                if not result.ok:
-                    failed_request = request
-                    failed_result = result
-                    break
-                completed = index
-                finish_progress = (completed / total) * 100 if total else 100
-                self.log_queue.put(result.message)
-                self.after(
-                    0,
-                    lambda request=request, index=index, total=total, progress=finish_progress: self._set_upgrade_status(
-                        request.vlan,
-                        f"串行升级 {index}/{total} 完成",
-                        progress,
-                    ),
-                )
-        finally:
-            if selected_channels:
-                try:
-                    self.store.save(selected_channels, power_serial_port)
-                    self.log_queue.put("已恢复 network_card_ip.ini 中用户选择的完整通道配置。")
-                except Exception as exc:
-                    restore_result = CommandResult(False, f"恢复 network_card_ip.ini 完整通道配置失败：{exc}")
-                    self.log_queue.put(restore_result.message)
-        if failed_result is None and restore_result is not None:
-            failed_result = restore_result
+            except Exception as exc:
+                result = CommandResult(False, f"{request.vlan} 升级流程异常：{exc}")
+            if not result.ok:
+                failed_request = request
+                failed_result = result
+                break
+            completed = index
+            finish_progress = (completed / total) * 100 if total else 100
+            self.log_queue.put(result.message)
+            self.after(
+                0,
+                lambda request=request, index=index, total=total, progress=finish_progress: self._set_upgrade_status(
+                    request.vlan,
+                    f"串行升级 {index}/{total} 完成",
+                    progress,
+                ),
+            )
         self.after(0, lambda: self._complete_serial_tftp_copy_upgrade(total, completed, failed_request, failed_result))
+
+    def _parallel_tftp_command_upgrade_worker(self, upgrade_items: list[tuple[ChannelConfig, FullPackageUpgradeRequest]]) -> None:
+        requests = [request for _channel, request in upgrade_items]
+        total = len(requests)
+        started = succeeded = failed = 0
+
+        def refresh_status() -> None:
+            running = started - succeeded - failed
+            queued = total - started
+            progress = ((succeeded + failed) / total) * 100 if total else 100
+            self.after(
+                0,
+                lambda: self._set_upgrade_status(
+                    "",
+                    f"并行升级：运行中 {running} 台，已成功 {succeeded} 台，已失败 {failed} 台，排队 {queued} 台",
+                    progress,
+                ),
+            )
+
+        def on_item_started(request: FullPackageUpgradeRequest) -> None:
+            nonlocal started
+            started += 1
+            self.log_queue.put(f"开始并行升级：{request.vlan}")
+            refresh_status()
+
+        def on_item_complete(item) -> None:
+            nonlocal succeeded, failed
+            if item.result.ok:
+                succeeded += 1
+            else:
+                failed += 1
+            self.log_queue.put(item.result.message)
+            refresh_status()
+
+        try:
+            results = run_parallel_tftp_command_upgrades(
+                requests,
+                self.serial_session_manager,
+                max_workers=2,
+                on_output=lambda vlan, line: self.log_queue.put(f"[{vlan}] {line}"),
+                on_session_ready=lambda vlan, session, log_path: self.after(
+                    0, lambda: self.serial_terminal.attach_upgrade(vlan, session, log_path)
+                ),
+                on_item_started=on_item_started,
+                on_item_complete=on_item_complete,
+            )
+            self.after(0, lambda: self._complete_parallel_tftp_command_upgrade(total, results))
+        except Exception as exc:
+            self.after(0, lambda: self._complete_parallel_tftp_command_upgrade(total, [], str(exc)))
+
+    def _complete_parallel_tftp_command_upgrade(self, total: int, results, orchestration_error: str | None = None) -> None:
+        if orchestration_error:
+            self._set_upgrade_status("", "并行升级启动失败", 0)
+            self._log(orchestration_error)
+            messagebox.showerror("并行升级失败", orchestration_error, parent=self.upgrade_window)
+            return
+        succeeded = [item for item in results if item.result.ok]
+        failed = [item for item in results if not item.result.ok]
+        self._set_upgrade_status("", f"并行升级完成：成功 {len(succeeded)}/{total} 台，失败 {len(failed)} 台", 100)
+        detail = "\n".join(
+            f"{'成功' if item.result.ok else '失败'} {item.request.vlan}：{item.result.message}"
+            for item in results
+        )
+        if failed:
+            messagebox.showwarning("样机升级完成", detail, parent=self.upgrade_window)
+        else:
+            messagebox.showinfo("样机升级完成", detail, parent=self.upgrade_window)
 
     def _complete_serial_tftp_copy_upgrade(self, total: int, completed: int, failed_request, failed_result) -> None:
         if failed_result is None:

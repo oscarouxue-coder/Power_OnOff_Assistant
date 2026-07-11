@@ -1,6 +1,7 @@
 import os
 import sys
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -9,7 +10,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from line_check_assistant.network_ops import CommandResult
 from src.models import FullPackageUpgradeRequest
-from src.services.serial_upgrade_service import BOOT_PASSWORD, BOOT_USERNAME, TRANSFER_TFTP_COMMAND, TRANSFER_TFTP_PUT, SerialUpgradeController, run_single_full_package_upgrade
+from src.services.serial_upgrade_service import (
+    BOOT_PASSWORD,
+    BOOT_USERNAME,
+    TRANSFER_TFTP_COMMAND,
+    TRANSFER_TFTP_PUT,
+    SerialUpgradeController,
+    UpgradePowerCycleCoordinator,
+    prepare_tftp_network,
+    run_parallel_tftp_command_upgrades,
+    run_single_full_package_upgrade,
+)
 
 
 class FakeSession:
@@ -47,6 +58,130 @@ class FakeSessionManager:
 
 
 class SerialUpgradeControllerTests(unittest.TestCase):
+    @patch("src.services.serial_upgrade_service.set_static_ip", return_value=CommandResult(True, "ip set"))
+    @patch("src.services.serial_upgrade_service.enable_adapter", return_value=CommandResult(True, "adapter enabled"))
+    def test_prepare_tftp_network_waits_for_bindable_ip_before_strict_server(self, _enable_adapter, _set_static_ip):
+        messages = []
+
+        result = prepare_tftp_network(
+            "VLAN139",
+            "192.168.1.139",
+            on_output=messages.append,
+            sleep_fn=lambda _seconds: None,
+            bind_ready_fn=lambda ip, timeout: ip == "192.168.1.139" and timeout == 15.0,
+        )
+
+        self.assertTrue(result.ok)
+        self.assertIn("等待 TFTP 网卡 IP 192.168.1.139 完成绑定（最长 15 秒）。", messages)
+
+    @patch("src.services.serial_upgrade_service.set_static_ip", return_value=CommandResult(True, "ip set"))
+    @patch("src.services.serial_upgrade_service.enable_adapter", return_value=CommandResult(True, "adapter enabled"))
+    def test_prepare_tftp_network_reports_timeout_when_ip_never_becomes_bindable(self, _enable_adapter, _set_static_ip):
+        result = prepare_tftp_network(
+            "VLAN139",
+            "192.168.1.139",
+            sleep_fn=lambda _seconds: None,
+            bind_ready_fn=lambda _ip, _timeout: False,
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("15 秒内仍不可绑定", result.message)
+
+    @patch("src.services.serial_upgrade_service.power_on_selected_channels")
+    def test_parallel_power_cycle_coordinator_serializes_shared_power_port(self, power_on):
+        coordinator = UpgradePowerCycleCoordinator(sleep_fn=lambda _seconds: None)
+        active = []
+        peak_active = []
+        guard = threading.Lock()
+
+        def fake_power(*_args, **_kwargs):
+            with guard:
+                active.append(True)
+                peak_active.append(len(active))
+            time.sleep(0.05)
+            with guard:
+                active.pop()
+            return CommandResult(True, "powered")
+
+        power_on.side_effect = fake_power
+        workers = [
+            threading.Thread(
+                target=coordinator.power_on_channel,
+                args=("COM106", channel),
+                kwargs={"wait_seconds": 10},
+            )
+            for channel in (1, 2)
+        ]
+        for worker in workers:
+            worker.start()
+        for worker in workers:
+            worker.join(2)
+
+        self.assertTrue(all(not worker.is_alive() for worker in workers))
+        self.assertEqual(max(peak_active), 1)
+        self.assertEqual(power_on.call_count, 2)
+
+    @patch("src.services.serial_upgrade_service.run_single_full_package_upgrade")
+    def test_parallel_tftp_command_limits_running_workers_and_continues_after_failure(self, run_upgrade):
+        requests = [
+            FullPackageUpgradeRequest(
+                vlan=f"vlan10{index}",
+                server_interface=f"VLAN10{index}",
+                tftp_server_ip=f"192.168.1.10{index}",
+                firmware_path=Path(r"F:\firmware\tclinux_allinone"),
+                power_serial_port="COM106",
+                final_username="root",
+                final_password="secret",
+                transfer_method=TRANSFER_TFTP_COMMAND,
+                power_channel=index,
+            )
+            for index in (1, 2, 3)
+        ]
+        active = []
+        peak_active = []
+        active_lock = threading.Lock()
+        first_two_started = threading.Event()
+        release = threading.Event()
+
+        def fake_upgrade(request, *_args, **kwargs):
+            with active_lock:
+                active.append(request.vlan)
+                peak_active.append(len(active))
+                if len(active) == 2:
+                    first_two_started.set()
+            release.wait(2)
+            with active_lock:
+                active.remove(request.vlan)
+            return CommandResult(request.vlan != "vlan101", f"{request.vlan} completed")
+
+        run_upgrade.side_effect = fake_upgrade
+        completed_events = []
+        collected = []
+
+        def run_scheduler():
+            collected.extend(
+                run_parallel_tftp_command_upgrades(
+                    requests,
+                    Mock(),
+                    on_item_complete=lambda item: completed_events.append(item),
+                )
+            )
+
+        runner = threading.Thread(target=run_scheduler)
+        runner.start()
+        self.assertTrue(first_two_started.wait(1))
+        self.assertEqual(max(peak_active), 2)
+        release.set()
+        runner.join(3)
+
+        self.assertFalse(runner.is_alive())
+        self.assertEqual(run_upgrade.call_count, 3)
+        self.assertTrue(all(call.kwargs["strict_tftp_bind"] for call in run_upgrade.call_args_list))
+        self.assertEqual(len(completed_events), 3)
+        self.assertEqual(len(collected), 3)
+        self.assertFalse(next(item.result.ok for item in collected if item.request.vlan == "vlan101"))
+        self.assertTrue(next(item.result.ok for item in collected if item.request.vlan == "vlan103"))
+
     def test_tftp_command_requires_done_and_write_stage_result(self):
         session = FakeSession(all_result=True)
         controller = SerialUpgradeController(session, sleep_fn=lambda _seconds: None)

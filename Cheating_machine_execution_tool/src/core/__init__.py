@@ -1,6 +1,6 @@
 from .power_supply import POWER_SUPPLY_BAUDRATE, ProgrammablePowerSupply, PowerSupplyError, channel_power_frame
 from .serial_transport import PySerialSession, SerialSessionManager, vlan_to_serial_port
-from .tftp_transport import TftpServerHandle, upload_firmware
+from .tftp_transport import TftpServerHandle, upload_firmware, wait_for_bindable_ip
 
 __all__ = [
     "POWER_SUPPLY_BAUDRATE",
@@ -12,4 +12,5 @@ __all__ = [
     "channel_power_frame",
     "upload_firmware",
     "vlan_to_serial_port",
+    "wait_for_bindable_ip",
 ]

@@ -416,6 +416,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         context = SimpleNamespace(
             upgrade_mode_var=Mock(get=Mock(return_value="全包升级")),
             upgrade_transfer_var=Mock(get=Mock(return_value="Tftp指令")),
+            upgrade_execution_var=Mock(get=Mock(return_value="并行（最多 2 台）")),
             upgrade_restore_factory_var=Mock(get=Mock(return_value=True)),
             upgrade_username_var=Mock(get=Mock(return_value="root")),
             upgrade_password_var=Mock(get=Mock(return_value="secret")),
@@ -429,6 +430,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             SampleUpgradeSettings(
                 upgrade_mode="全包升级",
                 transfer_method="Tftp指令",
+                execution_mode="并行（最多 2 台）",
                 restore_factory=True,
                 username="root",
                 password="secret",
@@ -440,6 +442,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         context = SimpleNamespace(
             upgrade_mode_var=Mock(get=Mock(return_value="全包升级")),
             upgrade_transfer_var=Mock(get=Mock(return_value="Tftp拷贝命令")),
+            upgrade_execution_var=Mock(get=Mock(return_value="无效选项")),
             upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
             upgrade_username_var=Mock(get=Mock(return_value="root")),
             upgrade_password_var=Mock(get=Mock(return_value="secret")),
@@ -449,6 +452,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         settings = LineCheckAssistant._current_sample_upgrade_settings(context)
 
         self.assertEqual(settings.transfer_method, "Tftp指令")
+        self.assertEqual(settings.execution_mode, "串行")
 
     def test_save_sample_upgrade_settings_writes_current_inputs(self):
         settings = SampleUpgradeSettings(upgrade_mode="页面升级", transfer_method="Tftp Put")
@@ -710,12 +714,14 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_password_var=Mock(get=Mock(return_value="secret")),
             upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
             upgrade_transfer_var=Mock(get=Mock(return_value="Tftp Put")),
+            upgrade_execution_var=Mock(get=Mock(return_value="串行")),
             upgrade_window=Mock(),
             _selected_tftp_copy_upgrade_channels=Mock(return_value=channels),
             _tftp_server_ip_for_channel=Mock(side_effect=["192.168.1.102", "192.168.1.101"]),
             _selected_power_serial_port=Mock(return_value="COM106"),
             _set_upgrade_status=Mock(),
             _serial_tftp_copy_upgrade_worker=Mock(),
+            _parallel_tftp_command_upgrade_worker=Mock(),
         )
 
         LineCheckAssistant._start_serial_tftp_copy_upgrade(context)
@@ -730,6 +736,37 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertTrue(all(request.final_password == "secret" for request in requests))
         self.assertTrue(all(request.transfer_method == "Tftp Put" for request in requests))
         self.assertIn("恢复出厂：关闭，不会执行恢复出厂", askyesno.call_args.args[1])
+        self.assertIn("不会改写 network_card_ip.ini", askyesno.call_args.args[1])
+
+    @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
+    @patch("line_check_assistant.app.Path.is_file", return_value=True)
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_tftp_command_parallel_mode_uses_parallel_worker(self, thread_class, _is_file, _askyesno):
+        channel = ChannelConfig(section="channel_1", vlan_name="VLAN101", enabled=True)
+        context = SimpleNamespace(
+            upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\tclinux_allinone")),
+            upgrade_username_var=Mock(get=Mock(return_value="root")),
+            upgrade_password_var=Mock(get=Mock(return_value="secret")),
+            upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
+            upgrade_transfer_var=Mock(get=Mock(return_value="Tftp指令")),
+            upgrade_execution_var=Mock(get=Mock(return_value="并行（最多 2 台）")),
+            upgrade_window=Mock(),
+            _selected_tftp_copy_upgrade_channels=Mock(return_value=[channel]),
+            _tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
+            _selected_power_serial_port=Mock(return_value="COM106"),
+            _set_upgrade_status=Mock(),
+            _serial_tftp_copy_upgrade_worker=Mock(),
+            _parallel_tftp_command_upgrade_worker=Mock(),
+        )
+
+        LineCheckAssistant._start_serial_tftp_copy_upgrade(context)
+
+        thread_class.assert_called_once_with(
+            target=context._parallel_tftp_command_upgrade_worker,
+            args=(thread_class.call_args.kwargs["args"][0],),
+            daemon=True,
+        )
+        context._set_upgrade_status.assert_called_once_with("", "准备并行升级 1 台样机（最多 2 台）", 0)
 
     def test_tftp_copy_channels_follow_main_channel_order_and_deduplicate(self):
         context = SimpleNamespace(
@@ -762,7 +799,6 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         context = SimpleNamespace(
             log_queue=Mock(),
             after=Mock(side_effect=lambda _delay, callback: callback()),
-            store=Mock(),
             _set_upgrade_status=Mock(),
             _complete_serial_tftp_copy_upgrade=Mock(),
             serial_session_manager=Mock(),
@@ -772,27 +808,16 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         LineCheckAssistant._serial_tftp_copy_upgrade_worker(context, upgrade_items)
 
         run_upgrade.assert_called_once()
-        self.assertEqual(
-            context.store.save.call_args_list,
-            [
-                call([channels[0]], "COM106"),
-                call(channels, "COM106"),
-            ],
-        )
         context._complete_serial_tftp_copy_upgrade.assert_called_once_with(2, 0, requests[0], run_upgrade.return_value)
 
     @patch("line_check_assistant.app.run_single_full_package_upgrade")
-    def test_serial_tftp_copy_worker_restores_config_without_external_cleanup(self, run_upgrade):
+    def test_serial_tftp_copy_worker_does_not_rewrite_network_config(self, run_upgrade):
         channel = ChannelConfig(section="channel_1", vlan_name="VLAN101", enabled=True)
         request = Mock(vlan="vlan101", power_serial_port="COM106")
-        events = []
-        store = Mock()
-        store.save.side_effect = lambda *_args: events.append("save")
         run_upgrade.return_value = Mock(ok=True, message="vlan101 ok")
         context = SimpleNamespace(
             log_queue=Mock(),
             after=Mock(side_effect=lambda _delay, callback: callback()),
-            store=store,
             _set_upgrade_status=Mock(),
             _complete_serial_tftp_copy_upgrade=Mock(),
             serial_session_manager=Mock(),
@@ -801,8 +826,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         LineCheckAssistant._serial_tftp_copy_upgrade_worker(context, [(channel, request)])
 
-        self.assertEqual(events, ["save", "save"])
-        context.log_queue.put.assert_any_call("已恢复 network_card_ip.ini 中用户选择的完整通道配置。")
+        self.assertFalse(hasattr(context, "store"))
 
     def test_upgrade_required_fields_warn_when_missing(self):
         context = SimpleNamespace(

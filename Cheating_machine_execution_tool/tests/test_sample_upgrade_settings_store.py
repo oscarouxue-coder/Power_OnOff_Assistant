@@ -6,6 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from line_check_assistant.sample_upgrade_settings_store import (
+    DEFAULT_UPGRADE_EXECUTION_MODE,
     DEFAULT_UPGRADE_MODE,
     DEFAULT_UPGRADE_TRANSFER,
     SampleUpgradeSettings,
@@ -22,6 +23,7 @@ class SampleUpgradeSettingsStoreTests(unittest.TestCase):
 
             self.assertEqual(settings.upgrade_mode, DEFAULT_UPGRADE_MODE)
             self.assertEqual(settings.transfer_method, DEFAULT_UPGRADE_TRANSFER)
+            self.assertEqual(settings.execution_mode, DEFAULT_UPGRADE_EXECUTION_MODE)
             self.assertFalse(settings.restore_factory)
             self.assertEqual(settings.username, "")
             self.assertEqual(settings.password, "")
@@ -33,6 +35,7 @@ class SampleUpgradeSettingsStoreTests(unittest.TestCase):
             saved = SampleUpgradeSettings(
                 upgrade_mode="页面升级",
                 transfer_method="web打开网关",
+                execution_mode="并行（最多 2 台）",
                 restore_factory=True,
                 username="root",
                 password="secret",

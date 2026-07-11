@@ -568,3 +568,36 @@
 - 修改文件：`Cheating_machine_execution_tool/src/core/power_supply.py`、`Cheating_machine_execution_tool/src/services/power_on_service.py`、`Cheating_machine_execution_tool/tests/test_power_supply.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
 - 验证方法：运行程控电源专项测试和完整单元测试；真实样机观察全包升级首次/重新上电日志。
 - 验证结果：程控电源专项 8 项通过；完整 `python -m unittest discover -s tests -v` 共 125 项通过。真实样机需确认日志不再出现 `关闭全部程控电源通道：55 00 AD 00 00 AD`。
+
+## 2026-07-11 - 全包升级 Tftp指令 多台样机串行验收通过
+
+- 类型：真实设备验收 / 项目状态
+- 背景：主程序的 `全包升级 + Tftp指令` 采用程控电源按当前通道逐台执行，需要确认多台样机的串行升级完整流程。
+- 完成内容：用户确认多台样机串行升级验收通过；`Tftp指令` 流程标记为真实样机已验收。
+- 修改文件：`DEVELOPMENT_LOG.md`、`PROJECT_STATUS.md`
+- 验证方法：用户在真实设备执行“样机升级 → 全包升级 → Tftp指令”的多台样机串行升级。
+- 验证结果：通过。
+## 2026-07-11 - 全包升级 Tftp指令 支持两台受控并行
+
+- 类型：功能 / 并行编排 / 程控电源 / 测试 / 文档
+- 背景：用户要求在已验收的多台样机串行 `Tftp指令` 流程基础上，提供最多两台样机并行升级；主程序已不再使用旧工具 GUI，因此升级过程不应逐台改写 `network_card_ip.ini`。
+- 完成内容：样机升级窗口新增持久化的“串行 / 并行（最多 2 台）”选择，默认串行且仅对 `Tftp指令` 生效；并行模式完成即补位，单台失败不取消其它样机。新增共享电源协调器，仅串行化同一 COM 口的关闭/开启帧，将每台启动等待移到锁外；每台 TFTP 服务严格绑定各自 VLAN IP，不允许回退到 `0.0.0.0`。串行和并行全包升级均不再临时改写 `network_card_ip.ini`；`Tftp Put`、自动上/下电和 `Auto_power_on_off_tool/Auto_Power_On_Off_Tool.py` 保持原逻辑。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`line_check_assistant/sample_upgrade_settings_store.py`、`src/core/tftp_transport.py`、`src/services/serial_upgrade_service.py`、`src/services/__init__.py`、相关单元测试、`line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行升级设置、TFTP、串行升级服务、主界面专项测试及完整单元测试；真实设备以两台独立 VLAN、相同 Boot IP 的样机验证。
+- 验证结果：编译检查通过；完整 `python -m unittest discover -s tests -v` 共 130 项通过。新增严格双 IP 同端口 TFTP 监听、两台并行上限/失败继续、电源 COM 互斥与不改写升级配置的回归覆盖；真实两台并行升级待验收。
+## 2026-07-11 - 并行 TFTP 严格绑定前等待 VLAN IP 就绪
+
+- 类型：BUG 修复 / 网络时序 / 测试 / 文档
+- 背景：两台并行 `Tftp指令` 日志显示，`netsh` 已成功设置 VLAN139/VLAN138 的静态 IP，但约 1 秒后严格 TFTP 预检仍报告 IP 不可绑定；这是 Windows 刚配置网卡地址时地址注册尚未完成造成的时序问题。
+- 完成内容：设置静态 IP 后改为每 0.5 秒验证一次可绑定性，最长等待 15 秒；就绪后再启动严格绑定的 TFTP 服务。超时仅报告该 VLAN 的网卡 IP/重复 IP/驱动问题，仍不回退到 `0.0.0.0`，避免多 VLAN 同 Boot IP 的回包错路由。
+- 修改文件：`Cheating_machine_execution_tool/src/core/tftp_transport.py`、`src/core/__init__.py`、`src/services/serial_upgrade_service.py`、相关单元测试、`line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行 TFTP、串行升级服务专项测试和完整单元测试；真实设备重新执行两台并行 `Tftp指令`。
+- 验证结果：专项 25 项通过；完整 `python -m unittest discover -s tests -v` 共 133 项通过。真实设备待复测。
+## 2026-07-11 - 并行 TFTP 数据 socket 固定绑定 VLAN IP
+
+- 类型：BUG 修复 / 多网卡路由 / 测试 / 文档
+- 背景：两台样机的 UDP 69 服务都已成功监听，但只有一台开始传输。定位到 TFTPy 在收到 RRQ 后会创建未绑定本地 IP 的数据传输 socket；当多张 VLAN 网卡面对相同 Boot IP `192.168.1.1` 时，Windows 会把数据回包路由到其中一张网卡。
+- 完成内容：在主程序 TFTP 包装层替换 TFTPy 的会话上下文工厂。每个监听线程创建传输数据 socket 时，强制绑定该服务的 VLAN IP 和随机本地端口；不修改虚拟环境中的第三方源码。这样监听帧和后续固件数据帧均从同一 VLAN IP 返回样机。
+- 修改文件：`Cheating_machine_execution_tool/src/core/tftp_transport.py`、`tests/test_tftp_transport.py`、`line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：模拟 RRQ，断言 TFTPy 新建的数据 socket 绑定监听 VLAN IP；运行完整单元测试；真实设备执行两台并行 `Tftp指令`。
+- 验证结果：TFTP 专项 9 项通过；完整 `python -m unittest discover -s tests -v` 共 134 项通过。真实两台并行传输待复测。
