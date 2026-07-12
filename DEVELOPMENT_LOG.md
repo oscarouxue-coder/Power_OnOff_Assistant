@@ -24,6 +24,16 @@
 - 后续待办：
 ```
 
+## 2026-07-12 - 并行 Tftp 指令高频日志不再阻塞 Tk 界面
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：并行 `Tftp指令` 升级时，多路样机启动日志会高频进入串口终端；原终端每 80ms 逐条 Text 插入并滚动最多 200 次，主执行日志也会一次性清空队列，导致 Tk 主线程长期忙于渲染而显示“未响应”。
+- 完成内容：串口终端按 VLAN 合并每轮事件，每 Tab 只插入/滚动一次，并设置 120 条或 10ms 的单轮预算；主执行日志改为每轮最多处理 120 条，积压时立即续跑。串口原始文件日志、升级并行调度、TFTPy 和程控电源时序不变。
+- 修改文件：`Cheating_machine_execution_tool/src/ui/serial_terminal.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_serial_terminal.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行串口终端、主界面和完整单元测试；真实两台并行 `Tftp指令` 样机验证 UI 响应。
+- 验证结果：`python -m py_compile line_check_assistant/app.py src/ui/serial_terminal.py` 通过；串口终端专项 4 项、主界面专项 58 项通过；完整 `python -m unittest discover -s tests -v` 共 150 项通过。
+- 后续待办：真实两台独立 VLAN 样机复测并行 `Tftp指令`，确认升级窗口和串口终端在高频启动日志下持续可响应。
+
 ## 2026-07-12 - Tftp Put 多台串行全包升级真实样机验收通过
 
 - 类型：真实样机验收 / 状态更新

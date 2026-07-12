@@ -1,4 +1,5 @@
 import os
+import queue
 import sys
 import unittest
 from types import SimpleNamespace
@@ -11,6 +12,7 @@ from line_check_assistant.app import (
     COLOR_SUCCESS,
     COLOR_WARNING,
     LineCheckAssistant,
+    MAIN_LOG_EVENTS_PER_TICK,
 )
 from line_check_assistant.config_store import ChannelConfig
 from line_check_assistant.network_ops import CommandResult, UnregisteredOnu
@@ -20,6 +22,32 @@ from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSett
 
 
 class CurrentChannelSelectionTests(unittest.TestCase):
+    def test_drain_log_queue_limits_each_ui_tick_and_continues_when_backlogged(self):
+        log_queue = queue.Queue()
+        for index in range(MAIN_LOG_EVENTS_PER_TICK + 5):
+            log_queue.put(f"parallel log {index}")
+        context = SimpleNamespace(
+            log_queue=log_queue,
+            running=True,
+            power_on_running=True,
+            progress=Mock(),
+            _log=Mock(),
+            _drain_log_queue=Mock(),
+            after=Mock(),
+        )
+
+        LineCheckAssistant._drain_log_queue(context)
+
+        self.assertEqual(context._log.call_count, MAIN_LOG_EVENTS_PER_TICK)
+        self.assertEqual(log_queue.qsize(), 5)
+        self.assertEqual(context.after.call_args.args[0], 0)
+
+        LineCheckAssistant._drain_log_queue(context)
+
+        self.assertEqual(context._log.call_count, MAIN_LOG_EVENTS_PER_TICK + 5)
+        self.assertEqual(log_queue.qsize(), 0)
+        self.assertEqual(context.after.call_args.args[0], 200)
+
     def test_test_item_config_entry_reuses_open_window(self):
         config_window = Mock()
         config_window.winfo_exists.return_value = True

@@ -77,7 +77,7 @@ f:\Aouxue\Power_OnOff_Assistant\
 - **`Tftp Put` 升级前对当前通道执行下电 + 上电**(走 `_power_cycle_current_channel()`);等待 `UserName` 后登录 boot，再由 TFTPy 推送固件；**多台串行真实样机验收通过**
 - TFTP 服务 INADDR_ANY 回退(避免 `[WinError 10049]`);数据 socket 强制绑定 VLAN IP;严格绑定前等 IP 就绪(0.5 秒 × 15 秒)
 - boot 登录:程控电源动作完成 1 秒后才探测;`UserName` 稳定窗口 1 秒(剔除夹带旧密码);密码提示符新游标握手；`Tftp Put` 前置上电后也先等待 1 秒、循环回车确认 `UserName`，写 boot 用户名前先记录密码游标、写 boot 密码前先记录 shell 游标，以覆盖同批 `Password:` / `ECNT>`，随后按同事 `serial_upgrade.py` 的 boot 凭据时序登录，再继续主程序 TFTPy 上传
-- 多 VLAN 串口终端 + 几何持久化 + 日志目录切换(默认 `D:\Serial_Log`);目录不可写时弹窗；全包升级自动打开的终端在本批串口释放后自动关闭，手动终端不受影响
+- 多 VLAN 串口终端 + 几何持久化 + 日志目录切换(默认 `D:\Serial_Log`);高频串口/执行日志分批渲染防止 Tk 主线程被占满；目录不可写时弹窗；全包升级自动打开的终端在本批串口释放后自动关闭，手动终端不受影响
 - ONU 注册(查询 / 注册 / 离线清理后重注册 / `write` 保存提示)
 - 单元测试 **143 项全过**
 

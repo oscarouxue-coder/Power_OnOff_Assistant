@@ -4,6 +4,7 @@ import json
 import os
 import queue
 import re
+import time
 from pathlib import Path
 from tkinter import END, Frame, Label, StringVar, Text, Toplevel, filedialog, messagebox, ttk
 
@@ -17,6 +18,9 @@ _MIN_WIDTH = 1000
 _MIN_HEIGHT = 650
 _GEOMETRY_PATTERN = re.compile(r"^(?P<w>\d+)x(?P<h>\d+)(?P<x>[+-]\d+)(?P<y>[+-]\d+)$")
 _MIN_VISIBLE = 120  # 窗口在屏幕内至少要可见的像素,避免开屏外
+_RENDER_EVENTS_PER_TICK = 120
+_RENDER_TIME_BUDGET_SECONDS = 0.010
+_RENDER_IDLE_DELAY_MS = 80
 
 
 class SerialTerminalWindow:
@@ -173,21 +177,29 @@ class SerialTerminalWindow:
             item["status"].set(f"{item['port']} 已停止")
 
     def _poll(self) -> None:
-        try:
-            for _ in range(200):
+        chunks_by_vlan: dict[str, list[str]] = {}
+        processed = 0
+        deadline = time.monotonic() + _RENDER_TIME_BUDGET_SECONDS
+        while processed < _RENDER_EVENTS_PER_TICK and time.monotonic() < deadline:
+            try:
                 vlan, event = self.events.get_nowait()
-                item = self.tabs.get(vlan)
-                if item is None:
-                    continue
-                output = item["output"]
-                output.configure(state="normal")
-                output.insert(END, event.text)
-                output.see(END)
-                output.configure(state="disabled")
-        except queue.Empty:
-            pass
+            except queue.Empty:
+                break
+            processed += 1
+            if vlan in self.tabs:
+                chunks_by_vlan.setdefault(vlan, []).append(event.text)
+
+        # 同一 VLAN 的高频片段仅在本轮写入一次，避免每段 RX 都触发 Text 重绘和滚动。
+        for vlan, chunks in chunks_by_vlan.items():
+            output = self.tabs[vlan]["output"]
+            output.configure(state="normal")
+            output.insert(END, "".join(chunks))
+            output.see(END)
+            output.configure(state="disabled")
+
         if self.window is not None and self.window.winfo_exists():
-            self._after_id = self.window.after(80, self._poll)
+            delay = 0 if not self.events.empty() else _RENDER_IDLE_DELAY_MS
+            self._after_id = self.window.after(delay, self._poll)
 
     def close(self) -> None:
         if self._after_id and self.window is not None:

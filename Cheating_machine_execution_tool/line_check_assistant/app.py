@@ -79,6 +79,8 @@ SERIAL_FULL_PACKAGE_TRANSFERS = {TFTP_COMMAND_TRANSFER, TFTP_PUT_TRANSFER}
 UPGRADE_EXECUTION_SERIAL = DEFAULT_UPGRADE_EXECUTION_MODE
 UPGRADE_EXECUTION_PARALLEL = "并行（最多 2 台）"
 UPGRADE_EXECUTION_OPTIONS = (UPGRADE_EXECUTION_SERIAL, UPGRADE_EXECUTION_PARALLEL)
+MAIN_LOG_EVENTS_PER_TICK = 120
+MAIN_LOG_IDLE_DELAY_MS = 200
 FONT_FAMILY = "Microsoft YaHei UI"
 COLOR_BG = "#eef2f5"
 COLOR_SURFACE = "#ffffff"
@@ -2100,11 +2102,13 @@ class LineCheckAssistant(Tk):
         self.log_queue.put("__DONE__")
 
     def _drain_log_queue(self) -> None:
-        while True:
+        processed = 0
+        while processed < MAIN_LOG_EVENTS_PER_TICK:
             try:
                 item = self.log_queue.get_nowait()
             except queue.Empty:
                 break
+            processed += 1
             if item == "__DONE__":
                 self.running = False
             elif item == "__POWER_DONE__":
@@ -2113,7 +2117,8 @@ class LineCheckAssistant(Tk):
                 self.progress.configure(value=int(item.split(":", 1)[1]))
             else:
                 self._log(item)
-        self.after(200, self._drain_log_queue)
+        delay = 0 if not self.log_queue.empty() else MAIN_LOG_IDLE_DELAY_MS
+        self.after(delay, self._drain_log_queue)
 
     def _configure_log_tags(self) -> None:
         self.log_text.tag_configure("time", foreground=COLOR_MUTED)

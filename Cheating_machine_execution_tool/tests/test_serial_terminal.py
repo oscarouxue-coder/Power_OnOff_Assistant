@@ -2,6 +2,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -10,6 +11,32 @@ from src.ui.serial_terminal import SerialTerminalWindow
 
 
 class SerialTerminalPersistenceTests(unittest.TestCase):
+    def test_poll_batches_high_frequency_events_by_vlan_and_yields_to_ui(self):
+        terminal = SerialTerminalWindow(Mock(), Mock(), Path(r"D:\Serial_Log"))
+        window = Mock()
+        window.winfo_exists.return_value = True
+        terminal.window = window
+        outputs = {vlan: Mock() for vlan in ("vlan137", "vlan138", "vlan139")}
+        terminal.tabs = {vlan: {"output": output} for vlan, output in outputs.items()}
+        for index in range(150):
+            vlan = ("vlan137", "vlan138", "vlan139")[index % 3]
+            terminal.events.put((vlan, SimpleNamespace(text=f"{vlan}-{index}\n")))
+
+        with patch("src.ui.serial_terminal.time.monotonic", return_value=0):
+            terminal._poll()
+
+        self.assertEqual(terminal.events.qsize(), 30)
+        for output in outputs.values():
+            output.insert.assert_called_once()
+            output.see.assert_called_once_with("end")
+        self.assertEqual(window.after.call_args.args[0], 0)
+
+        with patch("src.ui.serial_terminal.time.monotonic", return_value=0):
+            terminal._poll()
+
+        self.assertEqual(terminal.events.qsize(), 0)
+        self.assertEqual(window.after.call_args.args[0], 80)
+
     def test_finish_upgrade_logs_closes_only_auto_opened_window(self):
         terminal = SerialTerminalWindow(Mock(), Mock(), Path(r"D:\Serial_Log"))
         terminal.close = Mock()
