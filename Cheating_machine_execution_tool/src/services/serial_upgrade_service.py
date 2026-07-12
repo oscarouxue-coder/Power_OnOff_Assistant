@@ -11,6 +11,7 @@ from typing import Callable, Iterable
 from line_check_assistant.network_ops import CommandResult, enable_adapter, set_static_ip
 from src.config import DEFAULT_LOG_DIR
 from src.core import SerialSessionManager, TftpServerHandle, upload_firmware, vlan_to_serial_port, wait_for_bindable_ip
+from src.core.power_supply import ProgrammablePowerSupply
 from src.models import FullPackageUpgradeRequest, SerialSettings
 from .power_on_service import power_on_selected_channels
 
@@ -54,18 +55,46 @@ class FullPackageUpgradeItemResult:
 
 
 class UpgradePowerCycleCoordinator:
-    """按程控电源 COM 口串行化短暂断电/上电帧，启动等待在锁外并行进行。"""
+    """按程控电源 COM 口串行化短暂断电/上电帧，启动等待在锁外并行进行。
+
+    同时持有每条 COM 口的 `ProgrammablePowerSupply` 长连接，使同一批次内多个通道的
+    上下电复用同一个串口句柄，避免每台样机都 open/close 一次 COM。
+    调用方需在批次结束后调用 `close()`，或用 `with` 语法自动收尾。
+    """
 
     def __init__(
         self,
         *,
         sleep_fn: Callable[[float], None] = time.sleep,
         monotonic_fn: Callable[[], float] = time.monotonic,
+        supply_factory: Callable[..., ProgrammablePowerSupply] = ProgrammablePowerSupply,
     ) -> None:
         self._sleep = sleep_fn
         self._monotonic = monotonic_fn
+        self._supply_factory = supply_factory
         self._locks: dict[str, threading.Lock] = {}
+        self._supplies: dict[str, ProgrammablePowerSupply] = {}
         self._locks_guard = threading.Lock()
+
+    def __enter__(self) -> "UpgradePowerCycleCoordinator":
+        return self
+
+    def __exit__(self, _exc_type, _exc_value, _traceback) -> None:
+        self.close()
+
+    def _get_or_open_supply(
+        self,
+        port: str,
+        on_output: Callable[[str], None] | None,
+    ) -> ProgrammablePowerSupply:
+        with self._locks_guard:
+            supply = self._supplies.get(port)
+            if supply is None:
+                # supply 自身的 _on_output 会负责 emit 帧日志；这里只在 open/close 时各打一行。
+                supply = self._supply_factory(port, on_output=on_output)
+                supply.open()
+                self._supplies[port] = supply
+            return supply
 
     def power_on_channel(
         self,
@@ -82,15 +111,12 @@ class UpgradePowerCycleCoordinator:
 
         with lock:
             command_started = self._monotonic()
-            result = power_on_selected_channels(
-                port,
-                [channel],
-                wait_seconds=0,
-                on_output=on_output,
-                on_channel_powered=on_channel_powered,
-                sleep_fn=self._sleep,
-                monotonic_fn=self._monotonic,
-            )
+            try:
+                supply = self._get_or_open_supply(port, on_output)
+                supply.power_on_channels([channel], on_channel_powered=on_channel_powered)
+                result = CommandResult(True, f"程控电源已直接上电：{port}，通道 {channel}。")
+            except Exception as exc:
+                result = CommandResult(False, f"程控电源直接上电失败：{exc}")
             command_elapsed = self._monotonic() - command_started
 
         if result.ok:
@@ -100,6 +126,18 @@ class UpgradePowerCycleCoordinator:
                     on_output(f"程控电源通道 {channel} 指令完成，继续等待样机启动：{remaining:.1f} 秒。")
                 self._sleep(remaining)
         return result
+
+    def close(self) -> None:
+        """关闭本批次持有的所有程控电源 COM；幂等。"""
+        with self._locks_guard:
+            supplies = list(self._supplies.values())
+            self._supplies.clear()
+        for supply in supplies:
+            try:
+                supply.close()
+            except Exception:
+                # 关闭失败不抛：批次结束语义以"已尝试关闭"为准。
+                pass
 
 
 class SerialUpgradeController:
@@ -631,11 +669,10 @@ def run_parallel_tftp_command_upgrades(
     if any(request.transfer_method != TRANSFER_TFTP_COMMAND for request in pending):
         raise ValueError("并行升级仅支持 Tftp指令。")
 
-    coordinator = UpgradePowerCycleCoordinator()
     active: dict[object, FullPackageUpgradeRequest] = {}
     completed: dict[int, FullPackageUpgradeItemResult] = {}
 
-    def run_one(request: FullPackageUpgradeRequest) -> CommandResult:
+    def run_one(request: FullPackageUpgradeRequest, coordinator: UpgradePowerCycleCoordinator) -> CommandResult:
         def emit(message: str) -> None:
             if on_output:
                 on_output(request.vlan, message)
@@ -649,13 +686,16 @@ def run_parallel_tftp_command_upgrades(
             strict_tftp_bind=True,
         )
 
-    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="parallel-tftp") as executor:
+    # coordinator 用 with 包裹，批次结束自动 close 所有持有的程控电源 COM。
+    with UpgradePowerCycleCoordinator() as coordinator, ThreadPoolExecutor(
+        max_workers=max_workers, thread_name_prefix="parallel-tftp"
+    ) as executor:
         while pending or active:
             while pending and len(active) < max_workers:
                 request = pending.pop(0)
                 if on_item_started:
                     on_item_started(request)
-                active[executor.submit(run_one, request)] = request
+                active[executor.submit(run_one, request, coordinator)] = request
 
             done, _pending_futures = wait(active, return_when=FIRST_COMPLETED)
             for future in done:
@@ -692,11 +732,10 @@ def run_parallel_tftp_put_upgrades(
 
     # Tftp Put 的 TFTPy 是客户端；协调器只保护共享程控电源 COM 口，
     # 各 VLAN 的串口、网卡准备和上传仍由各 worker 独立推进。
-    coordinator = UpgradePowerCycleCoordinator()
     active: dict[object, FullPackageUpgradeRequest] = {}
     completed: dict[int, FullPackageUpgradeItemResult] = {}
 
-    def run_one(request: FullPackageUpgradeRequest) -> CommandResult:
+    def run_one(request: FullPackageUpgradeRequest, coordinator: UpgradePowerCycleCoordinator) -> CommandResult:
         def emit(message: str) -> None:
             if on_output:
                 on_output(request.vlan, message)
@@ -710,13 +749,15 @@ def run_parallel_tftp_put_upgrades(
             strict_tftp_bind=False,
         )
 
-    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="parallel-tftp-put") as executor:
+    with UpgradePowerCycleCoordinator() as coordinator, ThreadPoolExecutor(
+        max_workers=max_workers, thread_name_prefix="parallel-tftp-put"
+    ) as executor:
         while pending or active:
             while pending and len(active) < max_workers:
                 request = pending.pop(0)
                 if on_item_started:
                     on_item_started(request)
-                active[executor.submit(run_one, request)] = request
+                active[executor.submit(run_one, request, coordinator)] = request
 
             done, _pending_futures = wait(active, return_when=FIRST_COMPLETED)
             for future in done:

@@ -34,6 +34,16 @@
 - 验证结果：`python -m py_compile line_check_assistant/app.py src/ui/serial_terminal.py` 通过；串口终端专项 4 项、主界面专项 58 项通过；完整 `python -m unittest discover -s tests -v` 共 150 项通过。
 - 后续待办：真实两台独立 VLAN 样机复测并行 `Tftp指令`，确认升级窗口和串口终端在高频启动日志下持续可响应。
 
+## 2026-07-12 - 全包升级并行上限扩到 8 台 + 程控电源 COM 批次内复用
+
+- 类型：功能 / 优化 / 测试 / 文档
+- 背景：`Tftp指令` / `Tftp Put` 并行升级上限硬编码为 2 台，无法满足后续多 VLAN 真实样机需求；真实样机日志显示同一批次内程控电源 COM102 在每台样机上下电前后反复 open/close，扩到 8 台后浪费会放大 4 倍。
+- 完成内容：`MAX_PARALLEL_UPGRADES = 8` 单一来源常量；`SampleUpgradeSettings` 新增 `parallel_count`（默认 2，存 ini，1–8 区间），Store 读写并加 `clamp_parallel_count` 防御非法值；UI 在执行方式 Combobox 右侧新增 `ttk.Spinbox`（1–8），串行时灰显；`_parallel_tftp_command_upgrade_worker` / `_parallel_tftp_put_upgrade_worker` 接收 `parallel_count` 并钳制后传入 `max_workers`，确认弹窗和状态文案跟随实际并行数。`UpgradePowerCycleCoordinator` 改为持有每条 COM 的长连接 `ProgrammablePowerSupply`，通过 `with UpgradePowerCycleCoordinator() as coordinator` 在两个并行 runner 收尾时统一 `close()`；serial 路径未动。`power_on_service.py` 未改接口，只新增一个供 coordinator 直接复用的入口（最终选择由 coordinator 直接调用 `supply.power_on_channels`）。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/sample_upgrade_settings_store.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/Auto_power_on_off_tool/config/sample_upgrade_settings.ini`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_sample_upgrade_settings_store.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行 `python -m py_compile` 关键模块；`python -m unittest discover -s tests -v` 全量；新加 `coordinator` supply 复用与 `close()` 幂等两项断言。
+- 验证结果：编译通过；`python -m unittest discover -s tests -v` 共 163 项通过；旧 coordinator 串行化测试改为对 `supply_factory` mock，新增 supply 只 open 一次 / close 幂等 2 项断言。
+- 后续待办：真实 2 台、4 台、8 台独立 VLAN / COM 样机分别跑一次 `Tftp指令` 和 `Tftp Put` 并行升级，确认日志中"已打开 / 已关闭程控电源串口"各仅出现一次且 TFTPy 上传无错包；如实验室功率闸容量紧张，再评估在 coordinator 内加错峰 `power_cycle_offset_seconds` 开关（默认 0）。
+
 ## 2026-07-12 - Tftp Put 多台串行全包升级真实样机验收通过
 
 - 类型：真实样机验收 / 状态更新

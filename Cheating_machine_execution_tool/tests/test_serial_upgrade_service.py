@@ -92,23 +92,46 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("15 秒内仍不可绑定", result.message)
 
-    @patch("src.services.serial_upgrade_service.power_on_selected_channels")
-    def test_parallel_power_cycle_coordinator_serializes_shared_power_port(self, power_on):
-        coordinator = UpgradePowerCycleCoordinator(sleep_fn=lambda _seconds: None)
+    def test_parallel_power_cycle_coordinator_serializes_shared_power_port(self):
+        """两个并发 power_on_channel 仍被串行化（同 COM 共享一个 lock）。"""
+        supply_open_count = 0
+        power_on_calls = 0
         active = []
         peak_active = []
         guard = threading.Lock()
+        guard_open = threading.Lock()
 
-        def fake_power(*_args, **_kwargs):
-            with guard:
-                active.append(True)
-                peak_active.append(len(active))
-            time.sleep(0.05)
-            with guard:
-                active.pop()
-            return CommandResult(True, "powered")
+        class FakeSupply:
+            def __init__(self, port, *, on_output=None):
+                self.port = port
+                self._on_output = on_output
+                self.opened = False
+                self.closed = False
 
-        power_on.side_effect = fake_power
+            def open(self):
+                nonlocal supply_open_count
+                with guard_open:
+                    supply_open_count += 1
+                self.opened = True
+
+            def close(self):
+                self.closed = True
+
+            def power_on_channels(self, channels, *, on_channel_powered=None):
+                nonlocal power_on_calls
+                with guard:
+                    power_on_calls += 1
+                    active.append(list(channels))
+                    peak_active.append(len(active))
+                time.sleep(0.05)
+                with guard:
+                    active.pop()
+                return list(channels)
+
+        coordinator = UpgradePowerCycleCoordinator(
+            sleep_fn=lambda _seconds: None,
+            supply_factory=FakeSupply,
+        )
         workers = [
             threading.Thread(
                 target=coordinator.power_on_channel,
@@ -123,8 +146,45 @@ class SerialUpgradeControllerTests(unittest.TestCase):
             worker.join(2)
 
         self.assertTrue(all(not worker.is_alive() for worker in workers))
+        # 锁串行化：同一 COM 任意时刻只允许一次 power_on_channels。
         self.assertEqual(max(peak_active), 1)
-        self.assertEqual(power_on.call_count, 2)
+        self.assertEqual(power_on_calls, 2)
+        # supply 在两次调用之间被复用 —— 同一 COM 只 open 一次。
+        self.assertEqual(supply_open_count, 1)
+        # close 还没发生，由调用方负责；这里 sanity-check supply 仍处于 opened 状态。
+        self.assertTrue(all(callable(s.close) for s in coordinator._supplies.values()))
+
+    def test_parallel_power_cycle_coordinator_closes_supplies_on_close(self):
+        """coordinator.close() 关闭所有持有过的 supply。"""
+        opened: list[str] = []
+        closed: list[str] = []
+
+        class FakeSupply:
+            def __init__(self, port, *, on_output=None):
+                self.port = port
+
+            def open(self):
+                opened.append(self.port)
+
+            def close(self):
+                closed.append(self.port)
+
+            def power_on_channels(self, channels, *, on_channel_powered=None):
+                return list(channels)
+
+        coordinator = UpgradePowerCycleCoordinator(
+            sleep_fn=lambda _seconds: None,
+            supply_factory=FakeSupply,
+        )
+        coordinator.power_on_channel("COM106", 1, wait_seconds=0)
+        coordinator.power_on_channel("COM107", 2, wait_seconds=0)
+
+        self.assertEqual(sorted(opened), ["COM106", "COM107"])
+        coordinator.close()
+        self.assertEqual(sorted(closed), ["COM106", "COM107"])
+        # 再次关闭幂等。
+        coordinator.close()
+        self.assertEqual(closed, ["COM106", "COM107"])
 
     @patch("src.services.serial_upgrade_service.run_single_full_package_upgrade")
     def test_parallel_tftp_command_limits_running_workers_and_continues_after_failure(self, run_upgrade):

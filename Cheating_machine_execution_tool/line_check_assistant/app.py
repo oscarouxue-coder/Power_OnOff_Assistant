@@ -4,7 +4,7 @@ import queue
 import threading
 from datetime import datetime
 from pathlib import Path
-from tkinter import BooleanVar, Button, Checkbutton, DoubleVar, END, Frame, Label, Listbox, Tk, StringVar, Text, Toplevel, filedialog, messagebox, ttk
+from tkinter import BooleanVar, Button, Checkbutton, DoubleVar, END, Frame, IntVar, Label, Listbox, Tk, StringVar, Text, Toplevel, filedialog, messagebox, ttk
 
 from .config_store import ChannelConfig, ChannelConfigStore, DEFAULT_POWER_SERIAL_PORT, DEFAULT_SUBNET_MASK
 from .network_ops import (
@@ -25,11 +25,14 @@ from .onu_registration_store import DEFAULT_OLT_IP, OnuRegistrationConfig, OnuRe
 from .page_upgrade import PageUpgradeRequest, run_page_upgrade_batch
 from .paths import resolve_config_dir, resolve_tool_root
 from .sample_upgrade_settings_store import (
+    DEFAULT_PARALLEL_COUNT,
     DEFAULT_UPGRADE_EXECUTION_MODE,
     DEFAULT_UPGRADE_MODE,
     DEFAULT_UPGRADE_TRANSFER,
+    MAX_PARALLEL_UPGRADES,
     SampleUpgradeSettings,
     SampleUpgradeSettingsStore,
+    clamp_parallel_count,
 )
 from .serial_ports import list_prolific_ports, port_from_display
 from src.core import SerialSessionManager
@@ -78,7 +81,7 @@ LEGACY_TFTP_COPY_TRANSFER = "Tftp拷贝命令"
 UPGRADE_TRANSFER_OPTIONS = (DEFAULT_UPGRADE_TRANSFER, TFTP_COMMAND_TRANSFER, "web打开网关")
 SERIAL_FULL_PACKAGE_TRANSFERS = {TFTP_COMMAND_TRANSFER, TFTP_PUT_TRANSFER}
 UPGRADE_EXECUTION_SERIAL = DEFAULT_UPGRADE_EXECUTION_MODE
-UPGRADE_EXECUTION_PARALLEL = "并行（最多 2 台）"
+UPGRADE_EXECUTION_PARALLEL = f"并行（最多 {MAX_PARALLEL_UPGRADES} 台）"
 UPGRADE_EXECUTION_OPTIONS = (UPGRADE_EXECUTION_SERIAL, UPGRADE_EXECUTION_PARALLEL)
 MAIN_LOG_EVENTS_PER_TICK = 120
 MAIN_LOG_IDLE_DELAY_MS = 200
@@ -157,6 +160,9 @@ class LineCheckAssistant(Tk):
         self.upgrade_mode_var = StringVar(value=upgrade_mode)
         self.upgrade_transfer_var = StringVar(value=transfer_method)
         self.upgrade_execution_var = StringVar(value=execution_mode)
+        self.upgrade_parallel_count_var = IntVar(
+            value=clamp_parallel_count(self.sample_upgrade_settings.parallel_count)
+        )
         restore_factory_enabled = bool(self.sample_upgrade_settings.restore_factory)
         self.upgrade_restore_factory_var = BooleanVar(value=restore_factory_enabled)
         self.upgrade_restore_factory_text_var = StringVar(value=LineCheckAssistant._restore_factory_text(restore_factory_enabled))
@@ -489,6 +495,7 @@ class LineCheckAssistant(Tk):
             upgrade_mode=self.upgrade_mode_var.get(),
             transfer_method=LineCheckAssistant._normalize_upgrade_transfer_method(self.upgrade_transfer_var.get()),
             execution_mode=LineCheckAssistant._normalize_upgrade_execution_mode(self.upgrade_execution_var.get()),
+            parallel_count=clamp_parallel_count(self.upgrade_parallel_count_var.get()),
             restore_factory=bool(self.upgrade_restore_factory_var.get()),
             username=self.upgrade_username_var.get(),
             password=self.upgrade_password_var.get(),
@@ -974,6 +981,21 @@ class LineCheckAssistant(Tk):
             width=18,
         )
         self.upgrade_execution_combo.grid(row=1, column=3, sticky="ew", padx=(0, 12), pady=8)
+        self.upgrade_execution_combo.bind("<<ComboboxSelected>>", lambda _event: self._refresh_upgrade_parallel_count_visibility())
+        self.upgrade_parallel_count_label = Label(
+            overview,
+            text=f"并行数 (1-{MAX_PARALLEL_UPGRADES})",
+            anchor="w",
+        )
+        self.upgrade_parallel_count_label.grid(row=1, column=4, sticky="w", padx=(0, 8), pady=8)
+        self.upgrade_parallel_count_spin = ttk.Spinbox(
+            overview,
+            from_=1,
+            to=MAX_PARALLEL_UPGRADES,
+            textvariable=self.upgrade_parallel_count_var,
+            width=5,
+        )
+        self.upgrade_parallel_count_spin.grid(row=1, column=5, sticky="w", padx=(0, 12), pady=8)
         self.upgrade_restore_factory_label = Label(
             overview,
             textvariable=self.upgrade_restore_factory_text_var,
@@ -1103,6 +1125,25 @@ class LineCheckAssistant(Tk):
             self.upgrade_execution_var.set(UPGRADE_EXECUTION_SERIAL)
             self.upgrade_execution_label.grid_remove()
             self.upgrade_execution_combo.grid_remove()
+        self._refresh_upgrade_parallel_count_visibility()
+
+    def _refresh_upgrade_parallel_count_visibility(self) -> None:
+        """执行方式 = 串行 或 全包升级未启用时，并行数 Spinbox 灰显。"""
+        if not hasattr(self, "upgrade_parallel_count_label") or not hasattr(self, "upgrade_parallel_count_spin"):
+            return
+        show = (
+            self.upgrade_mode_var.get() == "全包升级"
+            and LineCheckAssistant._normalize_upgrade_execution_mode(self.upgrade_execution_var.get())
+            == UPGRADE_EXECUTION_PARALLEL
+        )
+        if show:
+            self.upgrade_parallel_count_label.grid()
+            self.upgrade_parallel_count_spin.grid()
+            self.upgrade_parallel_count_spin.state(["!disabled"])
+        else:
+            self.upgrade_parallel_count_label.grid_remove()
+            self.upgrade_parallel_count_spin.grid_remove()
+            self.upgrade_parallel_count_spin.state(["disabled"])
 
     def _on_upgrade_start_clicked(self) -> None:
         self._capture_current_channel()
@@ -1272,11 +1313,14 @@ class LineCheckAssistant(Tk):
         target_text = "、".join(request.vlan for _channel, request in upgrade_items)
         transfer_action = "执行 Tftp Put" if transfer_method == TFTP_PUT_TRANSFER else "下发 Tftp指令"
         execution_mode = LineCheckAssistant._normalize_upgrade_execution_mode(self.upgrade_execution_var.get())
+        parallel_count = clamp_parallel_count(self.upgrade_parallel_count_var.get())
         parallel_serial_tftp = (
             transfer_method in SERIAL_FULL_PACKAGE_TRANSFERS
             and execution_mode == UPGRADE_EXECUTION_PARALLEL
         )
-        execution_text = "并行（最多 2 台，完成即补位）" if parallel_serial_tftp else "串行"
+        execution_text = (
+            f"并行（最多 {parallel_count} 台，完成即补位）" if parallel_serial_tftp else "串行"
+        )
         restore_factory_text = "开启，会在最终系统登录后执行恢复出厂" if bool(self.upgrade_restore_factory_var.get()) else "关闭，不会执行恢复出厂"
         if not messagebox.askyesno(
             "确认样机升级",
@@ -1291,13 +1335,13 @@ class LineCheckAssistant(Tk):
         if terminal is not None:
             terminal.begin_upgrade_logs([request.vlan for _channel, request in upgrade_items])
         if parallel_serial_tftp:
-            self._set_upgrade_status("", f"准备并行升级 {len(upgrade_items)} 台样机（最多 2 台）", 0)
+            self._set_upgrade_status("", f"准备并行升级 {len(upgrade_items)} 台样机（最多 {parallel_count} 台）", 0)
             parallel_worker = (
                 self._parallel_tftp_command_upgrade_worker
                 if transfer_method == TFTP_COMMAND_TRANSFER
                 else self._parallel_tftp_put_upgrade_worker
             )
-            thread = threading.Thread(target=parallel_worker, args=(upgrade_items,), daemon=True)
+            thread = threading.Thread(target=parallel_worker, args=(upgrade_items, parallel_count), daemon=True)
         else:
             self._set_upgrade_status("", f"准备串行升级 {len(upgrade_items)} 台样机", 0)
             thread = threading.Thread(target=self._serial_tftp_copy_upgrade_worker, args=(upgrade_items,), daemon=True)
@@ -1382,9 +1426,14 @@ class LineCheckAssistant(Tk):
         if terminal is not None:
             self.after(100, terminal.finish_upgrade_logs)
 
-    def _parallel_tftp_command_upgrade_worker(self, upgrade_items: list[tuple[ChannelConfig, FullPackageUpgradeRequest]]) -> None:
+    def _parallel_tftp_command_upgrade_worker(
+        self,
+        upgrade_items: list[tuple[ChannelConfig, FullPackageUpgradeRequest]],
+        parallel_count: int = DEFAULT_PARALLEL_COUNT,
+    ) -> None:
         requests = [request for _channel, request in upgrade_items]
         total = len(requests)
+        max_workers = max(1, min(clamp_parallel_count(parallel_count), total))
         started = succeeded = failed = 0
 
         def refresh_status() -> None:
@@ -1419,7 +1468,7 @@ class LineCheckAssistant(Tk):
             results = run_parallel_tftp_command_upgrades(
                 requests,
                 self.serial_session_manager,
-                max_workers=2,
+                max_workers=max_workers,
                 on_output=lambda vlan, line: self.log_queue.put(f"[{vlan}] {line}"),
                 on_session_ready=lambda vlan, session, log_path: self.after(
                     0, lambda: self.serial_terminal.attach_upgrade(vlan, session, log_path)
@@ -1435,9 +1484,14 @@ class LineCheckAssistant(Tk):
             if terminal is not None:
                 self.after(100, terminal.finish_upgrade_logs)
 
-    def _parallel_tftp_put_upgrade_worker(self, upgrade_items: list[tuple[ChannelConfig, FullPackageUpgradeRequest]]) -> None:
+    def _parallel_tftp_put_upgrade_worker(
+        self,
+        upgrade_items: list[tuple[ChannelConfig, FullPackageUpgradeRequest]],
+        parallel_count: int = DEFAULT_PARALLEL_COUNT,
+    ) -> None:
         requests = [request for _channel, request in upgrade_items]
         total = len(requests)
+        max_workers = max(1, min(clamp_parallel_count(parallel_count), total))
         started = succeeded = failed = 0
 
         def refresh_status() -> None:
@@ -1472,7 +1526,7 @@ class LineCheckAssistant(Tk):
             results = run_parallel_tftp_put_upgrades(
                 requests,
                 self.serial_session_manager,
-                max_workers=2,
+                max_workers=max_workers,
                 on_output=lambda vlan, line: self.log_queue.put(f"[{vlan}] {line}"),
                 on_session_ready=lambda vlan, session, log_path: self.after(
                     0, lambda: self.serial_terminal.attach_upgrade(vlan, session, log_path)

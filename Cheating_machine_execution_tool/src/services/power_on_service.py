@@ -81,7 +81,7 @@ def turn_off_selected_channels(
     serial_factory: SerialFactory | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> CommandResult:
-    """间隔关闭指定通道，不执行全断电。"""
+    """间隔关闭指定通道，不发送全断电指令。"""
     return _set_selected_channels_power(
         serial_port,
         channels,

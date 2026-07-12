@@ -444,7 +444,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         context = SimpleNamespace(
             upgrade_mode_var=Mock(get=Mock(return_value="全包升级")),
             upgrade_transfer_var=Mock(get=Mock(return_value="Tftp指令")),
-            upgrade_execution_var=Mock(get=Mock(return_value="并行（最多 2 台）")),
+            upgrade_execution_var=Mock(get=Mock(return_value="并行（最多 8 台）")),
+            upgrade_parallel_count_var=Mock(get=Mock(return_value=4)),
             upgrade_restore_factory_var=Mock(get=Mock(return_value=True)),
             upgrade_username_var=Mock(get=Mock(return_value="root")),
             upgrade_password_var=Mock(get=Mock(return_value="secret")),
@@ -458,7 +459,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             SampleUpgradeSettings(
                 upgrade_mode="全包升级",
                 transfer_method="Tftp指令",
-                execution_mode="并行（最多 2 台）",
+                execution_mode="并行（最多 8 台）",
+                parallel_count=4,
                 restore_factory=True,
                 username="root",
                 password="secret",
@@ -471,6 +473,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_mode_var=Mock(get=Mock(return_value="全包升级")),
             upgrade_transfer_var=Mock(get=Mock(return_value="Tftp拷贝命令")),
             upgrade_execution_var=Mock(get=Mock(return_value="无效选项")),
+            upgrade_parallel_count_var=Mock(get=Mock(return_value=2)),
             upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
             upgrade_username_var=Mock(get=Mock(return_value="root")),
             upgrade_password_var=Mock(get=Mock(return_value="secret")),
@@ -554,6 +557,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_execution_var=Mock(),
             upgrade_execution_label=Mock(),
             upgrade_execution_combo=Mock(),
+            _refresh_upgrade_parallel_count_visibility=Mock(),
         )
 
         LineCheckAssistant._refresh_upgrade_transfer_visibility(context)
@@ -794,6 +798,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
             upgrade_transfer_var=Mock(get=Mock(return_value="Tftp Put")),
             upgrade_execution_var=Mock(get=Mock(return_value="串行")),
+            upgrade_parallel_count_var=Mock(get=Mock(return_value=2)),
             upgrade_window=Mock(),
             _selected_tftp_copy_upgrade_channels=Mock(return_value=channels),
             _tftp_server_ip_for_channel=Mock(side_effect=["192.168.1.102", "192.168.1.101"]),
@@ -828,7 +833,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_password_var=Mock(get=Mock(return_value="secret")),
             upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
             upgrade_transfer_var=Mock(get=Mock(return_value="Tftp指令")),
-            upgrade_execution_var=Mock(get=Mock(return_value="并行（最多 2 台）")),
+            upgrade_execution_var=Mock(get=Mock(return_value="并行（最多 8 台）")),
+            upgrade_parallel_count_var=Mock(get=Mock(return_value=4)),
             upgrade_window=Mock(),
             _selected_tftp_copy_upgrade_channels=Mock(return_value=[channel]),
             _tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
@@ -842,10 +848,10 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         thread_class.assert_called_once_with(
             target=context._parallel_tftp_command_upgrade_worker,
-            args=(thread_class.call_args.kwargs["args"][0],),
+            args=(thread_class.call_args.kwargs["args"][0], 4),
             daemon=True,
         )
-        context._set_upgrade_status.assert_called_once_with("", "准备并行升级 1 台样机（最多 2 台）", 0)
+        context._set_upgrade_status.assert_called_once_with("", "准备并行升级 1 台样机（最多 4 台）", 0)
 
     @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
     @patch("line_check_assistant.app.Path.is_file", return_value=True)
@@ -858,7 +864,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_password_var=Mock(get=Mock(return_value="secret")),
             upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
             upgrade_transfer_var=Mock(get=Mock(return_value="Tftp Put")),
-            upgrade_execution_var=Mock(get=Mock(return_value="并行（最多 2 台）")),
+            upgrade_execution_var=Mock(get=Mock(return_value="并行（最多 8 台）")),
+            upgrade_parallel_count_var=Mock(get=Mock(return_value=4)),
             upgrade_window=Mock(),
             _selected_tftp_copy_upgrade_channels=Mock(return_value=[channel]),
             _tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
@@ -873,10 +880,10 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         thread_class.assert_called_once_with(
             target=context._parallel_tftp_put_upgrade_worker,
-            args=(thread_class.call_args.kwargs["args"][0],),
+            args=(thread_class.call_args.kwargs["args"][0], 4),
             daemon=True,
         )
-        context._set_upgrade_status.assert_called_once_with("", "准备并行升级 1 台样机（最多 2 台）", 0)
+        context._set_upgrade_status.assert_called_once_with("", "准备并行升级 1 台样机（最多 4 台）", 0)
 
     def test_tftp_copy_channels_follow_main_channel_order_and_deduplicate(self):
         context = SimpleNamespace(
