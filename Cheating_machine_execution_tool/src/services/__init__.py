@@ -6,6 +6,7 @@ from .serial_upgrade_service import (
     SerialUpgradeController,
     UpgradePowerCycleCoordinator,
     run_parallel_tftp_command_upgrades,
+    run_parallel_tftp_put_upgrades,
     run_single_full_package_upgrade,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "turn_off_selected_channels",
     "turn_on_selected_channels",
     "run_parallel_tftp_command_upgrades",
+    "run_parallel_tftp_put_upgrades",
     "run_single_full_package_upgrade",
 ]

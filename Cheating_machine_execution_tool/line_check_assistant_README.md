@@ -9,11 +9,11 @@
 - 读取和实时维护 `Auto_power_on_off_tool/config/network_card_ip.ini` 的通道配置。
 - 主界面顶部提供“样机升级”入口，支持“页面升级”和“全包升级”两类流程。
 - 样机升级窗口支持自定义项目/型号、输入超级用户凭据、选择升级固件、同步主界面目标 VLAN，并显示实时状态和进度。
-- 样机升级窗口会保存上一次关闭时的升级方式、固件传输方式、`Tftp指令` 的执行方式（串行/并行）、恢复出厂选项、超级用户名、密码和固件路径；恢复出厂显示会按真实保存值刷新，开始升级确认框会明确显示“恢复出厂：开启/关闭”；状态保存到本机 `Auto_power_on_off_tool/config/sample_upgrade_settings.ini`，该文件不提交 Git。
+- 样机升级窗口会保存上一次关闭时的升级方式、固件传输方式、`Tftp指令` / `Tftp Put` 的执行方式（串行/并行）、恢复出厂选项、超级用户名、密码和固件路径；恢复出厂显示会按真实保存值刷新，开始升级确认框会明确显示“恢复出厂：开启/关闭”；状态保存到本机 `Auto_power_on_off_tool/config/sample_upgrade_settings.ini`，该文件不提交 Git。
 - 选择“页面升级”后，点击“开始升级”会按主界面已勾选通道并行执行 UBUS 页面升级；每台样机会先启用通道对应网卡，再使用通道的 PC 静态 IP 作为请求绑定 IP、样机管理 IP 作为目标 IP，自动尝试 HTTP/HTTPS 登录 `/ubus/`，上传固件到 `/cgi-bin/cgi-upload`，调用 `Device.DeviceInfo.X_SDMC_Upgrade()`，查询升级状态并等待设备重启上线。
 - 选择“全包升级 + Tftp指令”后，可选择默认“串行”或“并行（最多 2 台）”。并行模式完成即补位，单台失败不会停止其它样机；程控电源 COM 帧仍按通道串行发送，后续 Boot、TFTP、重启等待和最终登录可并行。每台 TFTPy Server 及其后续数据传输 socket 都严格绑定当前 VLAN 的 PC IP；设置网卡 IP 后会最多等待 15 秒，直到 Windows 确认该 IP 可绑定，仍不可绑定才报网卡/重复 IP/驱动错误，不回退到 `0.0.0.0`。所选固件映射为设备固定请求名 `tclinux_allinone`，设备仍执行 `tftp <通道IP>:tclinux_allinone`。
-- 选择“全包升级 + Tftp Put”后，程序先对当前通道下电再上电；串口就绪后等待 1 秒并循环发送回车，检测到 `UserName:` 后按 boot 账号 `telecomadmin / nE7jA%5m` 登录。随后仍由 TFTPy Client 从当前通道 IP 上传到固定设备 `192.168.1.1:69`，并绑定该源 IP，避免多张 `.1` 网卡造成错误选路或启动变慢；远端文件名使用所选固件 basename。
-- `Tftp Put` 保持原有串行、首错即停；`Tftp指令` 的并行模式最多同时运行两台。全包升级全程不临时改写 `Auto_power_on_off_tool/config/network_card_ip.ini`；所有串口和 TFTPy Server 都由本程序在 `finally` 中关闭，不查找或关闭外部 CRT/Tftpd 进程。
+- 选择“全包升级 + Tftp Put”后，程序先对当前通道下电再上电；串口就绪后等待 1 秒并循环发送回车，检测到 `UserName:` 后按 boot 账号 `telecomadmin / nE7jA%5m` 登录。随后仍由 TFTPy Client 从当前通道 IP 上传到固定设备 `192.168.1.1:69`，并绑定该源 IP，避免多张 `.1` 网卡造成错误选路或启动变慢；远端文件名使用所选固件 basename。可选择“串行”或“并行（最多 2 台）”；并行模式完成即补位，单台失败不会停止其它样机，共享程控电源 COM 帧仍串行发送。
+- `Tftp指令` 和 `Tftp Put` 的并行模式最多同时运行两台；串行 `Tftp Put` 保持原有首错即停语义。全包升级全程不临时改写 `Auto_power_on_off_tool/config/network_card_ip.ini`；所有串口和 TFTPy Client/Server 都由本程序在 `finally` 中关闭，不查找或关闭外部 CRT/Tftpd 进程。
 - `Tftp指令` 仍以串口的 `done` 与 `write` 同时出现作为设备处理完成判据；`Tftp Put` 则以 TFTPy 上传成功作为传输完成判据。随后保留 90 秒 boot 观察、`Boot/Bood` 后延迟 1 秒发送一次 `reset`、120 秒等待或重新上电、最终系统五次登录重试，以及恢复出厂“命令→1 秒→回车→8 秒”时序；仅当实际发送恢复出厂命令后，主程序执行日志才显示 `TX firstboot -y;reboot`。
 - Boot 登录会在上电完成后先等待 1 秒再发送首个回车；仅当完整 `UserName:` / `User Name:` 在 1 秒稳定窗口内未夹带旧 `Password:` / `Passvord:` 时才提交用户名。用户名回车后重新从串口新数据中等待完整密码提示符，避免首轮上电过渡日志或旧缓存导致账号、密码错位。`Tftp Put` 的 UserName 后直连 boot 登录会在写用户名前记录密码游标、在写密码前记录 shell 游标，确保同批回显里的 `Password:` 或 `ECNT>` 不会漏检。
 - 主界面“串口日志记录”已改为内置多通道终端：按 VLAN/COM 分页实时显示、开始/停止、清屏、手动命令发送和日志保存。自动升级占用某通道时仍显示输出，但手动发送被锁定；高频串口输出会按 VLAN 分批合并渲染，界面可短暂滞后但原始日志仍完整写入磁盘；全包升级自动打开的终端会在本批串口释放并写入关闭状态后自动关闭，手动打开的终端不会被自动关闭；`reboot`、`reset`、`firstboot`、`tftp`、`upgrade` 类手动命令需要二次确认；默认日志目录或本机终端状态文件不可写时会弹出明确错误提示。

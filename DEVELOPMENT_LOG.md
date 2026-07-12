@@ -691,3 +691,19 @@
 - 修改文件：`Cheating_machine_execution_tool/src/core/tftp_transport.py`、`tests/test_tftp_transport.py`、`line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
 - 验证方法：模拟 RRQ，断言 TFTPy 新建的数据 socket 绑定监听 VLAN IP；运行完整单元测试；真实设备执行两台并行 `Tftp指令`。
 - 验证结果：TFTP 专项 9 项通过；完整 `python -m unittest discover -s tests -v` 共 134 项通过。真实两台并行传输待复测。
+## 2026-07-12 - 全包升级 Tftp Put 支持两台受控并行
+
+- 类型：功能 / 并行编排 / 程控电源 / 测试 / 文档
+- 背景：`Tftp Put` 已完成多台串行真实样机验收；需要在不触碰 `Tftp指令` 调度和传输逻辑的前提下，提供两台受控并行升级能力。
+- 完成内容：新增仅接受 `Tftp Put` 请求的并行服务入口，固定最多两台、完成即补位、单台失败不中止其它样机并按输入顺序汇总。每个 worker 仍使用 TFTPy Client 将固件推送至隔离 VLAN 内的 `192.168.1.1`，共享程控电源 COM 的开关帧由现有协调器串行化。升级窗口现对 `Tftp Put` 显示“串行 / 并行（最多 2 台）”，新增独立 UI worker、状态汇总、VLAN 日志和自动串口终端收尾；`Tftp指令` 的 worker、严格服务端绑定和传输流程未改动。
+- 修改文件：`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/src/services/__init__.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行编译检查、串行升级服务专项测试、主界面专项测试和完整单元测试；真实两台独立 VLAN / COM 样机执行并行 `Tftp Put`。
+- 验证结果：`python -m py_compile line_check_assistant/app.py src/services/serial_upgrade_service.py src/services/__init__.py` 通过；串行升级服务专项 24 项、主界面专项 60 项通过；完整 `python -m unittest discover -s tests -v` 共 154 项通过。
+- 后续待办：真实两台独立 VLAN / COM 样机验收并行 `Tftp Put`，确认两路上传可同时推进且程控电源开关帧不交叠。
+
+## 2026-07-12 - 精简项目交接状态文档
+
+- 类型：文档 / 交接
+- 完成内容：重写 `PROJECT_STATUS.md`，仅保留项目目标与实现进度、关键文件、已完成与待验收项、技术限制，以及运行/测试/继续开发命令；同步当前全量测试基线为 154 项。
+- 修改文件：`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证结果：已核对源码入口、升级服务、串口/TFTP 核心文件与当前测试基线；未改动业务代码。

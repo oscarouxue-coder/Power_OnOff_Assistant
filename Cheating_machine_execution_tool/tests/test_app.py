@@ -545,6 +545,23 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         context.upgrade_transfer_label.grid_remove.assert_not_called()
         context.upgrade_transfer_combo.grid_remove.assert_not_called()
 
+    def test_full_package_tftp_put_shows_execution_mode(self):
+        context = SimpleNamespace(
+            upgrade_mode_var=Mock(get=Mock(return_value="全包升级")),
+            upgrade_transfer_var=Mock(get=Mock(return_value="Tftp Put"), set=Mock()),
+            upgrade_transfer_label=Mock(),
+            upgrade_transfer_combo=Mock(),
+            upgrade_execution_var=Mock(),
+            upgrade_execution_label=Mock(),
+            upgrade_execution_combo=Mock(),
+        )
+
+        LineCheckAssistant._refresh_upgrade_transfer_visibility(context)
+
+        context.upgrade_execution_label.grid.assert_called_once_with()
+        context.upgrade_execution_combo.grid.assert_called_once_with()
+        context.upgrade_execution_var.set.assert_not_called()
+
     def test_page_upgrade_hides_transfer_method(self):
         context = SimpleNamespace(
             upgrade_mode_var=Mock(get=Mock(return_value="页面升级")),
@@ -825,6 +842,37 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         thread_class.assert_called_once_with(
             target=context._parallel_tftp_command_upgrade_worker,
+            args=(thread_class.call_args.kwargs["args"][0],),
+            daemon=True,
+        )
+        context._set_upgrade_status.assert_called_once_with("", "准备并行升级 1 台样机（最多 2 台）", 0)
+
+    @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
+    @patch("line_check_assistant.app.Path.is_file", return_value=True)
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_tftp_put_parallel_mode_uses_parallel_worker(self, thread_class, _is_file, _askyesno):
+        channel = ChannelConfig(section="channel_1", vlan_name="VLAN101", enabled=True)
+        context = SimpleNamespace(
+            upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\\firmware\\tclinux_allinone")),
+            upgrade_username_var=Mock(get=Mock(return_value="root")),
+            upgrade_password_var=Mock(get=Mock(return_value="secret")),
+            upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
+            upgrade_transfer_var=Mock(get=Mock(return_value="Tftp Put")),
+            upgrade_execution_var=Mock(get=Mock(return_value="并行（最多 2 台）")),
+            upgrade_window=Mock(),
+            _selected_tftp_copy_upgrade_channels=Mock(return_value=[channel]),
+            _tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
+            _selected_power_serial_port=Mock(return_value="COM106"),
+            _set_upgrade_status=Mock(),
+            _serial_tftp_copy_upgrade_worker=Mock(),
+            _parallel_tftp_command_upgrade_worker=Mock(),
+            _parallel_tftp_put_upgrade_worker=Mock(),
+        )
+
+        LineCheckAssistant._start_serial_tftp_copy_upgrade(context)
+
+        thread_class.assert_called_once_with(
+            target=context._parallel_tftp_put_upgrade_worker,
             args=(thread_class.call_args.kwargs["args"][0],),
             daemon=True,
         )

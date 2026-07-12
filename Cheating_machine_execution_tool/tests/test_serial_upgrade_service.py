@@ -19,6 +19,7 @@ from src.services.serial_upgrade_service import (
     UpgradePowerCycleCoordinator,
     prepare_tftp_network,
     run_parallel_tftp_command_upgrades,
+    run_parallel_tftp_put_upgrades,
     run_single_full_package_upgrade,
 )
 
@@ -181,6 +182,85 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         self.assertEqual(len(collected), 3)
         self.assertFalse(next(item.result.ok for item in collected if item.request.vlan == "vlan101"))
         self.assertTrue(next(item.result.ok for item in collected if item.request.vlan == "vlan103"))
+
+    @patch("src.services.serial_upgrade_service.run_single_full_package_upgrade")
+    def test_parallel_tftp_put_limits_running_workers_and_continues_after_failure(self, run_upgrade):
+        requests = [
+            FullPackageUpgradeRequest(
+                vlan=f"vlan10{index}",
+                server_interface=f"VLAN10{index}",
+                tftp_server_ip=f"192.168.1.10{index}",
+                firmware_path=Path(r"F:\\firmware\\tclinux_allinone"),
+                power_serial_port="COM106",
+                final_username="root",
+                final_password="secret",
+                transfer_method=TRANSFER_TFTP_PUT,
+                power_channel=index,
+            )
+            for index in (1, 2, 3)
+        ]
+        active = []
+        peak_active = []
+        active_lock = threading.Lock()
+        first_two_started = threading.Event()
+        release = threading.Event()
+
+        def fake_upgrade(request, *_args, **_kwargs):
+            with active_lock:
+                active.append(request.vlan)
+                peak_active.append(len(active))
+                if len(active) == 2:
+                    first_two_started.set()
+            release.wait(2)
+            with active_lock:
+                active.remove(request.vlan)
+            return CommandResult(request.vlan != "vlan101", f"{request.vlan} completed")
+
+        run_upgrade.side_effect = fake_upgrade
+        completed_events = []
+        collected = []
+
+        def run_scheduler():
+            collected.extend(
+                run_parallel_tftp_put_upgrades(
+                    requests,
+                    Mock(),
+                    on_item_complete=lambda item: completed_events.append(item),
+                )
+            )
+
+        runner = threading.Thread(target=run_scheduler)
+        runner.start()
+        self.assertTrue(first_two_started.wait(1))
+        self.assertEqual(max(peak_active), 2)
+        release.set()
+        runner.join(3)
+
+        self.assertFalse(runner.is_alive())
+        self.assertEqual(run_upgrade.call_count, 3)
+        coordinators = [call.kwargs["power_cycle_coordinator"] for call in run_upgrade.call_args_list]
+        self.assertTrue(all(coordinator is coordinators[0] for coordinator in coordinators))
+        self.assertTrue(all(call.kwargs["strict_tftp_bind"] is False for call in run_upgrade.call_args_list))
+        self.assertEqual(len(completed_events), 3)
+        self.assertEqual([item.request.vlan for item in collected], [request.vlan for request in requests])
+        self.assertFalse(next(item.result.ok for item in collected if item.request.vlan == "vlan101"))
+        self.assertTrue(next(item.result.ok for item in collected if item.request.vlan == "vlan103"))
+
+    def test_parallel_tftp_put_rejects_other_transfer_method(self):
+        request = FullPackageUpgradeRequest(
+            vlan="vlan101",
+            server_interface="VLAN101",
+            tftp_server_ip="192.168.1.101",
+            firmware_path=Path(r"F:\\firmware\\tclinux_allinone"),
+            power_serial_port="COM106",
+            final_username="root",
+            final_password="secret",
+            transfer_method=TRANSFER_TFTP_COMMAND,
+            power_channel=1,
+        )
+
+        with self.assertRaisesRegex(ValueError, "Tftp Put"):
+            run_parallel_tftp_put_upgrades([request], Mock())
 
     def test_tftp_command_requires_done_and_write_stage_result(self):
         session = FakeSession(all_result=True)

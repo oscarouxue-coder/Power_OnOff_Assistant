@@ -39,6 +39,7 @@ from src.services import (
     TRANSFER_TFTP_COMMAND,
     TRANSFER_TFTP_PUT,
     run_parallel_tftp_command_upgrades,
+    run_parallel_tftp_put_upgrades,
     run_single_full_package_upgrade,
     turn_off_selected_channels,
     turn_on_selected_channels,
@@ -1093,7 +1094,7 @@ class LineCheckAssistant(Tk):
             return
         show_execution_mode = (
             self.upgrade_mode_var.get() == "全包升级"
-            and current_transfer == TFTP_COMMAND_TRANSFER
+            and current_transfer in SERIAL_FULL_PACKAGE_TRANSFERS
         )
         if show_execution_mode:
             self.upgrade_execution_label.grid()
@@ -1271,11 +1272,11 @@ class LineCheckAssistant(Tk):
         target_text = "、".join(request.vlan for _channel, request in upgrade_items)
         transfer_action = "执行 Tftp Put" if transfer_method == TFTP_PUT_TRANSFER else "下发 Tftp指令"
         execution_mode = LineCheckAssistant._normalize_upgrade_execution_mode(self.upgrade_execution_var.get())
-        parallel_tftp_command = (
-            transfer_method == TFTP_COMMAND_TRANSFER
+        parallel_serial_tftp = (
+            transfer_method in SERIAL_FULL_PACKAGE_TRANSFERS
             and execution_mode == UPGRADE_EXECUTION_PARALLEL
         )
-        execution_text = "并行（最多 2 台，完成即补位）" if parallel_tftp_command else "串行"
+        execution_text = "并行（最多 2 台，完成即补位）" if parallel_serial_tftp else "串行"
         restore_factory_text = "开启，会在最终系统登录后执行恢复出厂" if bool(self.upgrade_restore_factory_var.get()) else "关闭，不会执行恢复出厂"
         if not messagebox.askyesno(
             "确认样机升级",
@@ -1289,9 +1290,14 @@ class LineCheckAssistant(Tk):
         terminal = getattr(self, "serial_terminal", None)
         if terminal is not None:
             terminal.begin_upgrade_logs([request.vlan for _channel, request in upgrade_items])
-        if parallel_tftp_command:
+        if parallel_serial_tftp:
             self._set_upgrade_status("", f"准备并行升级 {len(upgrade_items)} 台样机（最多 2 台）", 0)
-            thread = threading.Thread(target=self._parallel_tftp_command_upgrade_worker, args=(upgrade_items,), daemon=True)
+            parallel_worker = (
+                self._parallel_tftp_command_upgrade_worker
+                if transfer_method == TFTP_COMMAND_TRANSFER
+                else self._parallel_tftp_put_upgrade_worker
+            )
+            thread = threading.Thread(target=parallel_worker, args=(upgrade_items,), daemon=True)
         else:
             self._set_upgrade_status("", f"准备串行升级 {len(upgrade_items)} 台样机", 0)
             thread = threading.Thread(target=self._serial_tftp_copy_upgrade_worker, args=(upgrade_items,), daemon=True)
@@ -1429,7 +1435,78 @@ class LineCheckAssistant(Tk):
             if terminal is not None:
                 self.after(100, terminal.finish_upgrade_logs)
 
+    def _parallel_tftp_put_upgrade_worker(self, upgrade_items: list[tuple[ChannelConfig, FullPackageUpgradeRequest]]) -> None:
+        requests = [request for _channel, request in upgrade_items]
+        total = len(requests)
+        started = succeeded = failed = 0
+
+        def refresh_status() -> None:
+            running = started - succeeded - failed
+            queued = total - started
+            progress = ((succeeded + failed) / total) * 100 if total else 100
+            self.after(
+                0,
+                lambda: self._set_upgrade_status(
+                    "",
+                    f"并行升级：运行中 {running} 台，已成功 {succeeded} 台，已失败 {failed} 台，排队 {queued} 台",
+                    progress,
+                ),
+            )
+
+        def on_item_started(request: FullPackageUpgradeRequest) -> None:
+            nonlocal started
+            started += 1
+            self.log_queue.put(f"开始并行升级：{request.vlan}")
+            refresh_status()
+
+        def on_item_complete(item) -> None:
+            nonlocal succeeded, failed
+            if item.result.ok:
+                succeeded += 1
+            else:
+                failed += 1
+            self.log_queue.put(item.result.message)
+            refresh_status()
+
+        try:
+            results = run_parallel_tftp_put_upgrades(
+                requests,
+                self.serial_session_manager,
+                max_workers=2,
+                on_output=lambda vlan, line: self.log_queue.put(f"[{vlan}] {line}"),
+                on_session_ready=lambda vlan, session, log_path: self.after(
+                    0, lambda: self.serial_terminal.attach_upgrade(vlan, session, log_path)
+                ),
+                on_item_started=on_item_started,
+                on_item_complete=on_item_complete,
+            )
+            self.after(0, lambda: self._complete_parallel_tftp_put_upgrade(total, results))
+        except Exception as exc:
+            self.after(0, lambda: self._complete_parallel_tftp_put_upgrade(total, [], str(exc)))
+        finally:
+            terminal = getattr(self, "serial_terminal", None)
+            if terminal is not None:
+                self.after(100, terminal.finish_upgrade_logs)
+
     def _complete_parallel_tftp_command_upgrade(self, total: int, results, orchestration_error: str | None = None) -> None:
+        if orchestration_error:
+            self._set_upgrade_status("", "并行升级启动失败", 0)
+            self._log(orchestration_error)
+            messagebox.showerror("并行升级失败", orchestration_error, parent=self.upgrade_window)
+            return
+        succeeded = [item for item in results if item.result.ok]
+        failed = [item for item in results if not item.result.ok]
+        self._set_upgrade_status("", f"并行升级完成：成功 {len(succeeded)}/{total} 台，失败 {len(failed)} 台", 100)
+        detail = "\n".join(
+            f"{'成功' if item.result.ok else '失败'} {item.request.vlan}：{item.result.message}"
+            for item in results
+        )
+        if failed:
+            messagebox.showwarning("样机升级完成", detail, parent=self.upgrade_window)
+        else:
+            messagebox.showinfo("样机升级完成", detail, parent=self.upgrade_window)
+
+    def _complete_parallel_tftp_put_upgrade(self, total: int, results, orchestration_error: str | None = None) -> None:
         if orchestration_error:
             self._set_upgrade_status("", "并行升级启动失败", 0)
             self._log(orchestration_error)

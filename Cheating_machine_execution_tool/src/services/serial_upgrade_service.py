@@ -628,3 +628,64 @@ def run_parallel_tftp_command_upgrades(
                     on_item_complete(item)
 
     return [completed[id(request)] for request in all_requests]
+
+
+def run_parallel_tftp_put_upgrades(
+    requests: Iterable[FullPackageUpgradeRequest],
+    session_manager: SerialSessionManager,
+    *,
+    max_workers: int = 2,
+    on_output: Callable[[str, str], None] | None = None,
+    on_session_ready: Callable[[str, object, Path], None] | None = None,
+    on_item_started: Callable[[FullPackageUpgradeRequest], None] | None = None,
+    on_item_complete: Callable[[FullPackageUpgradeItemResult], None] | None = None,
+) -> list[FullPackageUpgradeItemResult]:
+    """以固定并行度执行本机 TFTPy Client 推送固件流程，单台失败不取消其它样机。"""
+    all_requests = list(requests)
+    pending = list(all_requests)
+    if max_workers < 1:
+        raise ValueError("并行升级数量必须至少为 1。")
+    if any(request.transfer_method != TRANSFER_TFTP_PUT for request in pending):
+        raise ValueError("并行升级仅支持 Tftp Put。")
+
+    # Tftp Put 的 TFTPy 是客户端；协调器只保护共享程控电源 COM 口，
+    # 各 VLAN 的串口、网卡准备和上传仍由各 worker 独立推进。
+    coordinator = UpgradePowerCycleCoordinator()
+    active: dict[object, FullPackageUpgradeRequest] = {}
+    completed: dict[int, FullPackageUpgradeItemResult] = {}
+
+    def run_one(request: FullPackageUpgradeRequest) -> CommandResult:
+        def emit(message: str) -> None:
+            if on_output:
+                on_output(request.vlan, message)
+
+        return run_single_full_package_upgrade(
+            request,
+            session_manager,
+            on_output=emit,
+            on_session_ready=on_session_ready,
+            power_cycle_coordinator=coordinator,
+            strict_tftp_bind=False,
+        )
+
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="parallel-tftp-put") as executor:
+        while pending or active:
+            while pending and len(active) < max_workers:
+                request = pending.pop(0)
+                if on_item_started:
+                    on_item_started(request)
+                active[executor.submit(run_one, request)] = request
+
+            done, _pending_futures = wait(active, return_when=FIRST_COMPLETED)
+            for future in done:
+                request = active.pop(future)
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    result = CommandResult(False, f"{request.vlan} 并行升级异常：{exc}")
+                item = FullPackageUpgradeItemResult(request=request, result=result)
+                completed[id(request)] = item
+                if on_item_complete:
+                    on_item_complete(item)
+
+    return [completed[id(request)] for request in all_requests]
