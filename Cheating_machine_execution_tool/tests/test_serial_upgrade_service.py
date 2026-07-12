@@ -25,10 +25,11 @@ from src.services.serial_upgrade_service import (
 
 
 class FakeSession:
-    def __init__(self, any_results=(), all_result=True):
+    def __init__(self, any_results=(), all_result=True, peek_text=""):
         self.any_results = list(any_results)
         self.all_result = all_result
         self.writes = []
+        self.peek_text = peek_text
 
     def cursor(self):
         return 0
@@ -44,6 +45,9 @@ class FakeSession:
 
     def wait_for_all(self, _markers, _timeout, _cursor):
         return self.all_result
+
+    def peek_since(self, _cursor):
+        return self.peek_text
 
 
 class FakeSessionManager:
@@ -711,6 +715,130 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("串口交互异常", result.message)
         # 不会让 daemon 线程因为未捕获的 RuntimeError 死亡。
+
+    def test_login_boot_salvages_after_garbled_username_echo(self):
+        """Tftp指令：用户名回显含 UTF-8 替换标记时,盲发密码一次,命中 shell 提示符即成功。
+
+        模拟现场 UART 输出损坏:UserName/Password 都是乱码,但 UART 输入正常,
+        样机实际已接受账号,密码后能进入 shell。
+        """
+        # pop 顺序:
+        #   1) USERNAME_PROMPTS 等待 → "username:"
+        #   2) Password 稳定窗口检查 → None (没有 Password,继续)
+        #   3) Password 30s 等待 → None (超时,乱码导致没有 Password:)
+        #   4) salvage 的 SHELL 等待 → ">" (盲发密码后命中)
+        session = FakeSession(
+            any_results=[
+                "username:", None, None, ">",
+            ],
+            peek_text="}\r\nC�H�\r\n",
+        )
+        sleeps = []
+        controller = SerialUpgradeController(session, sleep_fn=sleeps.append)
+
+        result = controller._login_boot(max_attempts=1)
+
+        self.assertTrue(result.ok)
+        self.assertIn("用户名回显乱码", result.message)
+        # 验证写出顺序:探测 \r、username、\r(用户名)、password、\r(密码)
+        values = [item[0] for item in session.writes]
+        self.assertEqual(values, [b"\r", BOOT_USERNAME.encode("utf-8"), b"\r", BOOT_PASSWORD.encode("utf-8"), b"\r"])
+        # 盲发密码时仍走 sensitive 标记
+        password_writes = [item for item in session.writes if item[0] == BOOT_PASSWORD.encode("utf-8")]
+        self.assertEqual(password_writes, [(BOOT_PASSWORD.encode("utf-8"), True)])
+
+    def test_login_boot_garbled_salvage_without_shell_falls_through_to_retry(self):
+        """Tftp指令：乱码回显 + 盲发密码后无 shell → 走 continue 常规重试。"""
+        # iter 1 顺序:UserName / Password 稳定 / Password 30s 超时 / salvage shell 超时 → 失败 continue
+        # iter 2 顺序:UserName / Password 稳定 / Password 命中 / shell 命中 → 成功
+        session = FakeSession(
+            any_results=[
+                "username:", None, None, None,  # iter 1
+                "username:", None, "password:", "#",  # iter 2
+            ],
+            peek_text="}\r\nC�H�\r\n",
+        )
+        sleeps = []
+        controller = SerialUpgradeController(session, sleep_fn=sleeps.append)
+
+        result = controller._login_boot(max_attempts=3)
+
+        self.assertTrue(result.ok)
+        # iter1: \r 探测 + username/\r + 盲发 password/\r;iter2: \r 探测 + username/\r + password/\r
+        values = [item[0] for item in session.writes]
+        self.assertEqual(
+            values,
+            [
+                b"\r",  # iter1 探测
+                BOOT_USERNAME.encode("utf-8"), b"\r",
+                BOOT_PASSWORD.encode("utf-8"), b"\r",
+                b"\r",  # iter2 探测
+                BOOT_USERNAME.encode("utf-8"), b"\r",
+                BOOT_PASSWORD.encode("utf-8"), b"\r",
+            ],
+        )
+
+    def test_login_boot_clean_timeout_does_not_salvage(self):
+        """Tftp指令：超时但响应无乱码 → 不盲发,避免误伤正常延迟场景。"""
+        # iter 1:Password 超时;peek_since 返回干净文本(无 U+FFFD);不走 salvage → continue
+        # iter 2:同 iter 1 → 循环结束 → 失败
+        session = FakeSession(
+            any_results=[
+                "username:", None,  # iter 1
+                "username:", None,  # iter 2
+                "username:", None,  # iter 3
+            ],
+            peek_text="clean text without replacement markers",
+        )
+        controller = SerialUpgradeController(session, sleep_fn=lambda _s: None)
+
+        result = controller._login_boot(max_attempts=3)
+
+        self.assertFalse(result.ok)
+        # 全程未写密码(只写 \r 探测 + username + \r)
+        values = [item[0] for item in session.writes]
+        for value in values:
+            self.assertNotEqual(value, BOOT_PASSWORD.encode("utf-8"))
+
+    def test_tftp_put_salvages_after_garbled_username_echo(self):
+        """Tftp Put：用户名回显含 UTF-8 替换标记时,盲发密码一次,命中 shell 提示符即成功。"""
+        # Tftp Put 把 username + \r 一次写出,然后等 Password 提示符
+        # Password 超时、peek 出乱码、盲发密码等 shell 命中 "ecnt>"
+        session = FakeSession(
+            any_results=[
+                None, "ecnt>",  # 等 Password 超时 + 盲发等 shell 命中
+            ],
+            peek_text="}\r\nC!���ݽɑ�\r\n",
+        )
+        controller = SerialUpgradeController(session, sleep_fn=lambda _s: None)
+
+        result = controller.login_tftp_put_boot_after_username()
+
+        self.assertTrue(result.ok)
+        self.assertIn("用户名回显乱码", result.message)
+        values = [item[0] for item in session.writes]
+        self.assertEqual(values, [
+            b"telecomadmin\r",
+            BOOT_PASSWORD.encode("utf-8"), b"\r",
+        ])
+        password_writes = [item for item in session.writes if item[0] == BOOT_PASSWORD.encode("utf-8")]
+        self.assertEqual(password_writes, [(BOOT_PASSWORD.encode("utf-8"), True)])
+
+    def test_tftp_put_clean_timeout_still_fails_without_salvage(self):
+        """Tftp Put：超时但响应无乱码 → 立即失败,无盲发。"""
+        session = FakeSession(
+            any_results=[None],  # Password 等不到
+            peek_text="just slow response, no garbled bytes",
+        )
+        controller = SerialUpgradeController(session, sleep_fn=lambda _s: None)
+
+        result = controller.login_tftp_put_boot_after_username()
+
+        self.assertFalse(result.ok)
+        self.assertIn("boot 登录未检测到 Password 提示符", result.message)
+        # 只写了 username + \r,没写密码
+        values = [item[0] for item in session.writes]
+        self.assertEqual(values, [b"telecomadmin\r"])
 
     @patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=True)
     @patch("src.services.serial_upgrade_service.TftpServerHandle")

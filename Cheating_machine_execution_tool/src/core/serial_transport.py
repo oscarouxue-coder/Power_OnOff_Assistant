@@ -82,6 +82,15 @@ class PySerialSession:
         with self._condition:
             return len(self._history)
 
+    def peek_since(self, cursor: int) -> str:
+        """从指定游标读取到当前的全部历史数据的解码字符串。
+
+        用于诊断（如检测 UTF-8 解码失败标记），不消费也不修改历史。
+        """
+        with self._condition:
+            data = bytes(self._history[cursor:])
+        return self._display(data)
+
     def subscribe(self, subscriber: Subscriber) -> None:
         with self._condition:
             self._subscribers.add(subscriber)

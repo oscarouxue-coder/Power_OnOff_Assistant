@@ -701,6 +701,36 @@
 - 验证结果：`python -m py_compile line_check_assistant/app.py src/services/serial_upgrade_service.py src/services/__init__.py` 通过；串行升级服务专项 24 项、主界面专项 60 项通过；完整 `python -m unittest discover -s tests -v` 共 154 项通过。
 - 后续待办：真实两台独立 VLAN / COM 样机验收并行 `Tftp Put`，确认两路上传可同时推进且程控电源开关帧不交叠。
 
+## 2026-07-12 - 全包升级 Tftp指令 / Tftp Put 两台并行真实样机验收通过
+
+- 类型：真实样机验收 / 状态更新
+- 背景：`Tftp指令` 两台并行和 `Tftp Put` 两台并行此前都是“代码完成，待真实两台验收”，需要把状态收口到已验收。
+- 完成内容：用户已用两台不同 VLAN/COM 的真实样机验收 `Tftp指令` 并行和 `Tftp Put` 并行，结果通过。同步将 `PROJECT_STATUS.md` 中两项标记为“已真实两台验收”，移除“待两台真实验收”相关待办，删除“`Tftp Put` 并行仍是代码和单测验证”的限制项。
+- 修改文件：`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：真实两台不同 VLAN/COM 样机分别执行 `Tftp指令` 并行和 `Tftp Put` 并行升级。
+- 验证结果：通过。
+- 后续待办：继续按现有约束观察新型号或异常现场日志，再扩展超时、掉线、登录失败与型号差异处理；不要预先改变已验收时序。
+
+## 2026-07-12 - 串口乱码盲发密码补救登录真实样机验收通过
+
+- 类型：真实样机验收 / 状态更新
+- 背景：先前在 `_login_boot` 与 `login_tftp_put_boot_after_username` 增加的 salvage 分支（回显含 UTF-8 替换符 `�` → 盲发密码 → 等 shell 提示符）已通过单元测试（160 项），需要现场复现 UART 损坏场景验证命中率。
+- 完成内容：用户已在真实样机上验证该 salvage 方案，结果通过。同步在 `PROJECT_STATUS.md` 的"已完成"中追加该能力的真实样机验收条目。
+- 修改文件：`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：真实样机复现 UART 输出损坏场景,触发用户名回显和 `Password:` 提示符均为乱码,确认 salvage 命中并进入 shell。
+- 验证结果：通过。
+- 后续待办：继续按现有约束观察新型号或异常现场日志,再扩展其他场景;不要预先改变已验收时序。
+
+## 2026-07-12 - 串口乱码时盲发密码补救登录
+
+- 类型：BUG 修复 / 异常现场补强 / 测试 / 文档
+- 背景：现场日志显示一台样机的 UART 输出损坏：`UserName:` 被切成 `U` + `serName:`、`RX C�H�`、`RX C!���ݽɑ�` 等乱码；`Password:` 提示符也是乱码。`_login_boot` 与 `login_tftp_put_boot_after_username` 都在等待完整 `Password:` 提示符，超时后只能重试或放弃，但 UART 输入正常时样机实际已接受账号。
+- 完成内容：新增 `PySerialSession.peek_since(cursor)` 读取从游标开始的解码文本（不消费历史）；新增模块级常量 `GARBLED_REPLACEMENT_MARKER` 与辅助函数 `_looks_like_garbled_response()` 检测 UTF-8 替换符 `�`；新增 `SerialUpgradeController._try_login_after_garbled_username()`，在 `_login_boot`（Tftp指令）和 `login_tftp_put_boot_after_username`（Tftp Put）的 `Password:` 超时分支中：当回显含 `�` 时盲发一次密码，等待 shell 提示符（`#` / `>` / `ecnt>` / `u-boot>`）作为登录成功；salvage 失败不影响原重试或失败路径。完整 `UserName:` / `Password:` 提示符到达时仍走原路径，不改变已验收时序。
+- 修改文件：`Cheating_machine_execution_tool/src/core/serial_transport.py`、`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/tests/test_serial_transport.py`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile src/core/serial_transport.py src/services/serial_upgrade_service.py`；运行 `tests/test_serial_upgrade_service.py`、`tests/test_serial_transport.py` 及完整单元测试。
+- 验证结果：编译通过；新增 6 项用例覆盖 `peek_since` 基础行为、Tftp指令 salvage 成功 / 失败重试 / 干净超时无 salvage、Tftp Put salvage 成功 / 干净超时无 salvage；完整 `python -m unittest discover -s tests -v` 共 160 项通过。后续现场用已知会让响应乱码的串口线复测,确认命中并进入 shell,真实样机验收通过。
+- 后续待办：继续按现有约束观察新型号或异常现场日志,再扩展其他场景;不要预先改变已验收时序。
+
 ## 2026-07-12 - 精简项目交接状态文档
 
 - 类型：文档 / 交接

@@ -81,3 +81,24 @@ class SerialTransportTests(unittest.TestCase):
             manager.release("upgrade", "COM1")
             self.assertTrue(manager.manual_writable("COM1"))
             manager.shutdown_all()
+
+    def test_peek_since_returns_decoded_text_from_cursor(self):
+        """peek_since 返回从指定游标到当前的全部解码文本,不消费历史。
+
+        用于诊断乱码(UTF-8 替换符),不应影响 wait_for_any 的游标。
+        """
+        session = PySerialSession(SerialSettings("COM1"), serial_factory=lambda **_k: FakeSerial(**_k))
+        # 不调用 open() 避免 reader 线程污染 history;直接注入数据
+        session._history.extend(b"UserName:\x80\x81\xc0")
+        snapshot = session.peek_since(0)
+        # 无效字节会被 decode(errors="replace") 替换为 U+FFFD
+        self.assertIn("UserName:", snapshot)
+        self.assertIn("�", snapshot)
+        # peek_since 不影响游标
+        cursor_before = session.cursor()
+        session.peek_since(0)
+        self.assertEqual(session.cursor(), cursor_before)
+        # 起点游标为 9,只看到乱码部分
+        tail = session.peek_since(9)
+        self.assertNotIn("UserName:", tail)
+        self.assertIn("�", tail)

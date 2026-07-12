@@ -36,6 +36,16 @@ BOOT_LOGIN_RESULT_PROMPTS = ("#", ">", "login incorrect", "incorrect")
 TFTP_PUT_BOOT_RESULT_PROMPTS = ("=>", "ecnt>", "u-boot>", "#", ">", "username:", "user name:")
 BOOT_USERNAME_STABILITY_SECONDS = 1.0
 
+# _display() 使用 decode(errors="replace"),无效 UTF-8 字节会渲染为该字符。
+# 检测到该字符即视为响应包含乱码字节。
+GARBLED_REPLACEMENT_MARKER = "�"
+GARBLED_LOGIN_RESULT_PROMPTS = ("#", ">", "ecnt>", "u-boot>")
+
+
+def _looks_like_garbled_response(text: str) -> bool:
+    """粗略判断：响应中包含 UTF-8 解码失败标记即视为乱码。"""
+    return bool(text) and GARBLED_REPLACEMENT_MARKER in text
+
 
 @dataclass(frozen=True)
 class FullPackageUpgradeItemResult:
@@ -161,6 +171,14 @@ class SerialUpgradeController:
                 password_cursor = self.session.cursor()
                 password_prompt = self.session.wait_for_any(BOOT_PASSWORD_PROMPTS, 30, password_cursor)
                 if password_prompt not in BOOT_PASSWORD_PROMPTS:
+                    # 现场：UART 输出损坏导致 Password: 提示符也是乱码；UART 输入正常。
+                    # 若用户名回显含有 UTF-8 替换标记,盲发密码一次,如果样机已接受账号
+                    # 就能进入 shell;否则继续常规重试。
+                    recent_text = self.session.peek_since(password_cursor)
+                    if recent_text and _looks_like_garbled_response(recent_text):
+                        salvage = self._try_login_after_garbled_username(password_cursor)
+                        if salvage.ok:
+                            return salvage
                     continue
 
                 # 仅在完整 Password: / Passvord: 提示符稳定到达后发送密码。
@@ -176,6 +194,24 @@ class SerialUpgradeController:
             except Exception as exc:
                 return CommandResult(False, f"boot 登录异常:{exc}")
         return CommandResult(False, "boot 登录失败。")
+
+    def _try_login_after_garbled_username(self, password_cursor: int) -> CommandResult:
+        """用户名回显异常时盲发一次密码,验证样机是否已接受账号。
+
+        适用场景:UART 输出损坏导致 Password: 提示符也是乱码,但 UART 输入正常。
+        如果样机实际已接受账号,密码后应进入 shell 提示符。
+        """
+        self.session.write(BOOT_PASSWORD.encode("utf-8"), sensitive=True)
+        self.sleep(1.0)
+        self.session.write(b"\r", sensitive=True)
+        result_cursor = self.session.cursor()
+        result = self.session.wait_for_any(GARBLED_LOGIN_RESULT_PROMPTS, 12, result_cursor)
+        if result in GARBLED_LOGIN_RESULT_PROMPTS:
+            return CommandResult(
+                True,
+                f"用户名回显乱码，盲发密码后检测到 shell 提示符 {result!r}。",
+            )
+        return CommandResult(False, "用户名回显乱码，盲发密码未检测到 shell 提示符。")
 
     def send_tftp_command_and_wait(self, command: str) -> CommandResult:
         cursor = self.session.cursor()
@@ -218,6 +254,12 @@ class SerialUpgradeController:
                 self.sleep(0.3)
                 password_prompt = self.session.wait_for_any(BOOT_PASSWORD_PROMPTS, 10, password_cursor)
                 if password_prompt not in BOOT_PASSWORD_PROMPTS:
+                    # 现场：UART 输出损坏导致 Password: 提示符也是乱码;盲发密码一次验证登录。
+                    recent_text = self.session.peek_since(password_cursor)
+                    if recent_text and _looks_like_garbled_response(recent_text):
+                        salvage = self._try_login_after_garbled_username(password_cursor)
+                        if salvage.ok:
+                            return salvage
                     return CommandResult(False, "boot 登录未检测到 Password 提示符。")
 
                 # ECNT> 等 shell 提示同样可能在密码回显的同一批数据中到达，
