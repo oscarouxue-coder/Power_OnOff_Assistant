@@ -24,6 +24,86 @@
 - 后续待办：
 ```
 
+## 2026-07-12 - Tftp Put 多台串行全包升级真实样机验收通过
+
+- 类型：真实样机验收 / 状态更新
+- 背景：Tftp Put 已完成前置下电上电、`UserName` 后 boot 登录、TFTPy 推送和串口终端自动收尾改造，需要确认多台按串行顺序执行时的完整链路。
+- 完成内容：用户已完成全包升级 `Tftp Put` 多台串行真实样机验收，结果通过。
+- 修改文件：`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：真实样机多台串行升级。
+- 验证结果：通过。
+- 后续待办：`Tftp指令` 两台并行仍待真实两台独立 VLAN 样机验收。
+
+## 2026-07-12 - 全包升级结束后关闭自动打开的串口终端
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：全包升级完成后，升级会话已写入 `STATE 串口已关闭` 并释放 COM 口，但本次自动打开的“串口日志记录”窗口仍残留。
+- 完成内容：串口终端记录自动升级批次；串行全包升级和并行 `Tftp指令` 均在批次完成并释放会话后延迟 100ms 请求终端收尾。仅升级自动打开的终端会关闭，手动打开的终端保持打开。
+- 修改文件：`Cheating_machine_execution_tool/src/ui/serial_terminal.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_serial_terminal.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行串口终端、主界面升级流程相关测试、完整单元测试和源码编译检查。
+- 验证结果：`python -m py_compile line_check_assistant/app.py src/ui/serial_terminal.py` 通过；串口终端专项 3 项、主界面专项 57 项通过；完整 `python -m unittest discover -s tests -v` 共 148 项通过。
+- 后续待办：真实样机验证 `STATE 串口已关闭` 后本次自动打开的串口终端窗口关闭，手动打开的终端不受影响。
+
+## 2026-07-12 - 恢复出厂命令同步到主程序执行日志
+
+- 类型：优化 / 测试 / 文档
+- 背景：串口日志可见 `TX firstboot -y;reboot`，但主程序执行日志未体现已实际下发恢复出厂命令，操作员无法在主界面确认危险操作是否执行。
+- 完成内容：恢复出厂命令写入串口成功后，向主程序执行日志输出 `TX firstboot -y;reboot`；未启用恢复出厂时不输出该日志。两种全包升级传输方式均复用此日志回调，传输时序不变。
+- 修改文件：`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行串行升级专项测试、完整单元测试和源码编译检查。
+- 验证结果：`python -m py_compile src/services/serial_upgrade_service.py` 通过；串行升级专项 22 项通过；完整 `python -m unittest discover -s tests -v` 共 147 项通过。
+- 后续待办：真实样机勾选恢复出厂时确认主程序执行日志出现该 TX 行；未勾选时确认不出现。
+
+## 2026-07-12 - Tftp Put boot 登录不再漏掉同批 ECNT 提示
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：真实串口日志显示 boot 密码提交后已出现 `ECNT>`，但 Tftp Put 专用登录逻辑在写密码并等待 1 秒后才记录 shell 等待游标，导致 `ECNT>` 落在游标之前而误报“boot 登录后未检测到 shell 提示符”。
+- 完成内容：把 Tftp Put 专用 boot 登录的 shell 等待游标提前到 boot 密码写入前；`ecnt>` 已是现有 shell 提示识别项，修复后可匹配同批 `ECNT>` 并继续 TFTPy 传输。未改动 `Tftp指令` 路径。
+- 修改文件：`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行串行升级专项测试、完整单元测试和源码编译检查。
+- 验证结果：`python -m py_compile src/services/serial_upgrade_service.py` 通过；串行升级专项 21 项通过；完整 `python -m unittest discover -s tests -v` 共 146 项通过。
+- 后续待办：使用真实 Tftp Put 样机确认 `ECNT>` 后立即进入 TFTPy 传输阶段。
+
+## 2026-07-12 - Tftp Put boot 登录不再漏掉同批 Password 提示
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：真实串口日志已显示 `UserName: telecomadmin` 后紧接 `Password:`，但 Tftp Put 专用登录逻辑在写用户名并等待 0.3 秒后才记录等待游标，导致同批到达的 `Password:` 落在游标之前而被漏检。
+- 完成内容：把 Tftp Put 专用 boot 登录的密码等待游标提前到用户名写入前，确保用户名回显期间或同批数据中的完整 `Password:` 仍可匹配；未改动 `Tftp指令` 路径。
+- 修改文件：`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行串行升级专项测试、完整单元测试和源码编译检查。
+- 验证结果：`python -m py_compile src/services/serial_upgrade_service.py` 通过；串行升级专项 20 项通过；完整 `python -m unittest discover -s tests -v` 共 145 项通过。
+- 后续待办：使用真实 Tftp Put 样机确认 `UserName` 后同批 `Password:` 可被识别并继续发送 boot 密码。
+
+## 2026-07-12 - Tftp Put 检测 UserName 后按 boot 凭据登录并保留 TFTPy 上传
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：`Tftp Put` 前置下电 + 上电完成后，现场要求以串口 `UserName:` 作为 boot 登录起点，沿用同事 `serial_upgrade.py` 的 boot 凭据交互，而不再先登录最终系统并发送 `reboot`。
+- 完成内容：新增仅由 `Tftp Put` 调用的「循环回车等待 `UserName:` → `telecomadmin / nE7jA%5m` 登录 boot」状态机；登录成功后继续复用主程序 `prepare_tftp_network()` 和 TFTPy Client 上传，不调用 Windows `tftp.exe`。保留传输后的 boot 重启检测、最终系统登录及恢复出厂；`Tftp指令` 未调整。
+- 修改文件：`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行串行升级专项测试、完整单元测试和源码编译检查。
+- 验证结果：`python -m py_compile src/services/serial_upgrade_service.py` 通过；串行升级专项 19 项通过；完整 `python -m unittest discover -s tests -v` 共 144 项通过。
+- 后续待办：使用真实 `Tftp Put` 样机确认日志顺序为“串口已开启”→等待 1 秒→检测到 `UserName`→boot 登录→TFTPy 上传。
+
+## 2026-07-11 - Tftp Put 开始前先对样机执行下电 + 上电
+
+- 类型：功能 / 程控电源 / 重构 / 测试 / 文档
+- 背景：现场反馈 `Tftp Put` 升级时样机经常不是干净的上电状态，需要主程序在开始原有 reboot → boot → TFTP 流程前，先对程控电源对应通道做一次下电 + 上电，确保样机从已知上电状态启动；该需求与现有 `Tftp指令` 链路的「断电再上电」语义一致。
+- 完成内容：把 `serial_upgrade_service.py` 中 `_run_tftp_command_with_power_supply` 内联的 `power_on_current_channel` 抽出为模块级 helper `_power_cycle_current_channel()`，复用 `power_on_selected_channels`（串行）或 `UpgradePowerCycleCoordinator`（并行）；`Tftp Put` 分支在打开串口后立即调用该 helper 对 `request.power_serial_port / request.power_channel` 执行下电 + 上电（`wait_seconds=0`，由后续 `login_final_system` 的 900 秒首轮等待兜底样机启动），失败立即返回；`Tftp指令` 链路行为保持不变，仅复用同一 helper。
+- 修改文件：`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile` 编译；运行 `test_serial_upgrade_service.py` 及完整单元测试。
+- 验证结果：编译通过；`test_serial_upgrade_service.py` 新增 1 项（`test_full_package_upgrade_tftp_put_propagates_power_cycle_failure`），重命名 / 调整 2 项（原 `skips_programmable_power_supply` / `does_not_invoke_power_supply_module` 已不能描述新行为）；完整 `python -m unittest discover -s tests` 共 143 项全部通过。
+- 后续待办：真实样机验证 `Tftp Put` 在开始 reboot 之前程控电源下电 + 上电日志与上电时序，并确认主流程未受影响。
+
+## 2026-07-11 - 页面升级前先把网卡设为样机同网段
+
+- 类型：优化 / 重构 / 测试 / 文档
+- 背景：现场 `vlan137/138/139` 页面升级前 PC 网卡已启用但 IP 仍为旧配置，与样机管理 IP（如 `192.168.29.1`）不在同一网段，导致 HTTP/HTTPS 登录 UBUS 前路由不通。
+- 完成内容：在 `network_ops.py` 抽出 `prepare_network_for_sample()`，封装「启用网卡 → 设置静态 IP → 缓冲 2 秒」的统一流程，原 `run_line_check` 复用同一 helper；`PageUpgradeRequest` 新增 `subnet_mask` 字段（默认 `255.255.255.0`），`run_single_page_upgrade` 在启用网卡之后改用 `prepare_network_for_sample()`，把 PC 静态 IP 切到样机管理 IP 所在网段；`app.py` 把 `ChannelConfig.subnet_mask` 透传给 `PageUpgradeRequest`。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/network_ops.py`、`Cheating_machine_execution_tool/line_check_assistant/page_upgrade.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_network_ops.py`、`Cheating_machine_execution_tool/tests/test_page_upgrade.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile` 编译主程序、网络与页面升级模块；运行 `test_network_ops.py`、`test_page_upgrade.py`、`test_app.py` 及完整单元测试。
+- 验证结果：编译通过；`test_network_ops.py` 新增 6 项（启用网卡 + 静态 IP、启用失败、设 IP 失败、缺 alias、缺 bind_ip、display name 兼容）；`test_page_upgrade.py` 新增/调整 4 项；`test_app.py` 新增 1 项；完整 `python -m unittest discover -s tests` 共 142 项全部通过。
+- 后续待办：使用真实 `vlan137/138/139` 复测页面升级，确认 PC 网卡 IP 已切到样机管理 IP 所在网段，且 HTTP/HTTPS 登录一次成功。
+
 ## 2026-07-11 - Boot 登录按新提示符逐步提交凭据
 
 - 类型：BUG 修复 / 测试 / 文档

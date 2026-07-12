@@ -10,7 +10,7 @@ import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Callable, Iterable, List, Optional
 
 from .subprocess_window import hidden_window_kwargs
 
@@ -742,6 +742,47 @@ def launch_old_tool(tool_path: Path) -> CommandResult:
         return CommandResult(False, f"启动旧软件失败：{exc}")
 
 
+def prepare_network_for_sample(
+    adapter_alias: str,
+    network_card_ip: str,
+    subnet_mask: str,
+    on_output: Optional[Callable[[str], None]] = None,
+    sleep_fn: Callable[[float], None] = time.sleep,
+    settle_seconds: float = 2.0,
+) -> CommandResult:
+    """为单台样机准备网络：先启用网卡，再把 PC 静态 IP 设置到与样机同网段。"""
+
+    def emit(message: str) -> None:
+        if on_output:
+            on_output(message)
+
+    adapter_alias = adapter_alias_from_display(adapter_alias)
+    if not adapter_alias:
+        return CommandResult(False, "未选择 VLAN 网卡")
+    if not network_card_ip:
+        return CommandResult(False, "未配置用于访问样机的 PC 静态 IP")
+
+    emit(f"检查并启用网卡：{adapter_alias}")
+    enable_result = enable_adapter(adapter_alias)
+    emit(enable_result.message)
+    if not enable_result.ok:
+        return enable_result
+    sleep_fn(settle_seconds)
+
+    emit(f"设置 {adapter_alias} 静态 IP：{network_card_ip}（{subnet_mask or '255.255.255.0'}）")
+    set_result = set_static_ip(adapter_alias, network_card_ip, subnet_mask)
+    emit(set_result.message)
+    if not set_result.ok:
+        return set_result
+    sleep_fn(settle_seconds)
+
+    return CommandResult(
+        True,
+        f"已准备 {adapter_alias} 静态 IP：{network_card_ip}",
+        enable_result.output + "\n" + set_result.output,
+    )
+
+
 def run_line_check(
     adapter_alias: str,
     network_card_ip: str,
@@ -749,20 +790,18 @@ def run_line_check(
     device_manage_ip: str,
     settle_seconds: float = 2.0,
 ) -> CommandResult:
-    enable_result = enable_adapter(adapter_alias)
-    if not enable_result.ok:
-        return enable_result
-    time.sleep(settle_seconds)
-
-    set_output = enable_result.output
-    if network_card_ip:
-        set_result = set_static_ip(adapter_alias, network_card_ip, subnet_mask)
-        if not set_result.ok:
-            return set_result
-        set_output += "\n" + set_result.output
-        time.sleep(settle_seconds)
     if not network_card_ip:
         return CommandResult(False, "未配置用于 ping 的 PC 静态 IP")
+    network_result = prepare_network_for_sample(
+        adapter_alias,
+        network_card_ip,
+        subnet_mask,
+        sleep_fn=time.sleep,
+        settle_seconds=settle_seconds,
+    )
+    if not network_result.ok:
+        return network_result
+    set_output = network_result.output
     ping_result = ping_host(device_manage_ip, network_card_ip)
     if ping_result.ok:
         return CommandResult(True, ping_result.message, set_output + "\n" + ping_result.output)

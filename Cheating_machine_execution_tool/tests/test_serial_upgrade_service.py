@@ -220,27 +220,40 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         self.assertTrue(controller.monitor_post_tftp(seconds=1))
         self.assertEqual(session.writes, [(b"reset\r", False)])
 
+    def test_restore_factory_logs_command_only_when_it_is_sent(self):
+        session = FakeSession()
+        controller = SerialUpgradeController(session, sleep_fn=lambda _seconds: None)
+        execution_log = []
+
+        controller.restore_factory_if_enabled(False, on_command_sent=execution_log.append)
+        self.assertEqual(execution_log, [])
+        self.assertEqual(session.writes, [])
+
+        controller.restore_factory_if_enabled(True, on_command_sent=execution_log.append)
+
+        self.assertEqual(execution_log, ["TX firstboot -y;reboot"])
+        self.assertEqual(session.writes, [(b"firstboot -y;reboot", False), (b"\r", False)])
+
     @patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=False)
     @patch("src.services.serial_upgrade_service.upload_firmware")
     @patch("src.services.serial_upgrade_service.prepare_tftp_network", return_value=CommandResult(True, "network ready"))
-    def test_full_package_upgrade_skips_programmable_power_supply(
+    @patch("src.services.serial_upgrade_service.power_on_selected_channels", return_value=CommandResult(True, "powered on"))
+    def test_full_package_upgrade_tftp_put_runs_full_flow_after_power_cycle(
         self,
+        _power_on_selected_channels,
         _prepare_network,
         _upload_firmware,
         _monitor_post_tftp,
     ):
-        """升级流程不再操作程控电源:串口开启后直接登录超级用户,
-        reboot 中断 → boot 登录 → TFTP → 最终系统登录 → 恢复出厂。"""
+        """Tftp Put 升级流程在前置下电 + 上电后，看到 UserName 即登录 boot 并使用 TFTPy。"""
         # wait_for_any 调用顺序:
-        #   1. login_final_system(第 1 次):login / password / #
-        #   2. interrupt_boot_with_enter:username:
-        #   3. _login_boot:username: / 稳定窗口 / password: / #
-        #   4. login_final_system(第 2 次):login / password / #
+        #   1. wait_for_tftp_put_boot_username:username:
+        #   2. login_tftp_put_boot_after_username:password / #
+        #   3. login_final_system:login / password / #
         session = FakeSession(
             any_results=[
-                "login", "password", "#",
                 "username:",
-                "username:", None, "password:", "#",
+                "password:", "#",
                 "login", "password", "#",
             ]
         )
@@ -260,18 +273,151 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         result = run_single_full_package_upgrade(request, manager, sleep_fn=lambda _seconds: None)
 
         self.assertTrue(result.ok)
-        # 写入序列里必须包含 reboot,且不应再有任何程控电源协议帧。
+        # UserName 后直接进行 boot 登录，不再先登录最终系统或发送 reboot。
         decoded = [item[0].decode("utf-8", "ignore").rstrip("\r") for item in session.writes]
-        self.assertIn("reboot", decoded)
+        self.assertIn(BOOT_USERNAME, decoded)
+        self.assertNotIn("reboot", decoded)
         self.assertEqual(len(manager.released), 1)
 
-    def test_full_package_upgrade_does_not_invoke_power_supply_module(self):
-        """回归保护:升级流程不得再调用 power_on_service 里的任何函数。"""
+    @patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=False)
+    @patch("src.services.serial_upgrade_service.upload_firmware")
+    @patch("src.services.serial_upgrade_service.prepare_tftp_network", return_value=CommandResult(True, "network ready"))
+    @patch("src.services.serial_upgrade_service.power_on_selected_channels", return_value=CommandResult(True, "powered on"))
+    def test_tftp_put_waits_for_username_before_starting_boot_login(
+        self,
+        _power_on_selected_channels,
+        _prepare_network,
+        _upload_firmware,
+        _monitor_post_tftp,
+    ):
+        """Tftp Put 前必须等待 1 秒、发送回车并确认 UserName，再提交 boot 凭据。"""
+        events = []
+        sleeps = []
+
+        class RecordingSession(FakeSession):
+            def wait_for_any(self, markers, timeout, cursor):
+                result = super().wait_for_any(markers, timeout, cursor)
+                events.append(("wait", tuple(markers), result))
+                return result
+
+        session = RecordingSession(
+            any_results=[
+                "username:",
+                "password:", "#",
+                "login", "password", "#",
+            ]
+        )
+        manager = FakeSessionManager(session)
+        request = FullPackageUpgradeRequest(
+            vlan="vlan124",
+            server_interface="VLAN124",
+            tftp_server_ip="192.168.1.124",
+            firmware_path=Path(r"F:\firmware\tclinux_allinone"),
+            power_serial_port="COM106",
+            final_username="sdmc",
+            final_password="secret",
+            transfer_method=TRANSFER_TFTP_PUT,
+            power_channel=2,
+        )
+
+        result = run_single_full_package_upgrade(
+            request,
+            manager,
+            sleep_fn=sleeps.append,
+            on_output=lambda message: events.append(("message", message)),
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(sleeps[0], 1.0)
+        self.assertEqual(session.writes[:2], [(b"\r", False), (b"telecomadmin\r", False)])
+        prompt_index = next(
+            index
+            for index, event in enumerate(events)
+            if event == ("wait", ("username:", "user name:"), "username:")
+        )
+        status_index = next(
+            index
+            for index, event in enumerate(events)
+            if event == ("message", "检测到 UserName 提示符，开始使用 boot 用户名和密码登录。")
+        )
+        self.assertLess(prompt_index, status_index)
+
+    def test_tftp_put_boot_login_keeps_password_cursor_before_username_write(self):
+        """回归：Password: 在用户名写入后立刻到达时，不能因新游标而漏检。"""
+
+        class ImmediatePasswordSession(FakeSession):
+            def __init__(self):
+                super().__init__()
+                self.cursor_value = 0
+                self.password_wait_cursors = []
+
+            def cursor(self):
+                return self.cursor_value
+
+            def write(self, data, sensitive=False):
+                super().write(data, sensitive)
+                if data == b"telecomadmin\r":
+                    # 模拟用户名刚写出时，串口读取线程已把 Password: 写入历史。
+                    self.cursor_value = 1
+
+            def wait_for_any(self, markers, timeout, cursor):
+                if tuple(markers) == ("passvord:", "password:"):
+                    self.password_wait_cursors.append(cursor)
+                    return "password:" if cursor == 0 else None
+                return "#"
+
+        session = ImmediatePasswordSession()
+        controller = SerialUpgradeController(session, sleep_fn=lambda _seconds: None)
+
+        result = controller.login_tftp_put_boot_after_username()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(session.password_wait_cursors, [0])
+        self.assertEqual(session.writes[:2], [(b"telecomadmin\r", False), (b"nE7jA%5m\r", True)])
+
+    def test_tftp_put_boot_login_keeps_shell_cursor_before_password_write(self):
+        """回归：ECNT> 在密码写入后立刻到达时，不能因新游标而漏检。"""
+
+        class ImmediateShellSession(FakeSession):
+            def __init__(self):
+                super().__init__()
+                self.cursor_value = 0
+                self.shell_wait_cursors = []
+
+            def cursor(self):
+                return self.cursor_value
+
+            def write(self, data, sensitive=False):
+                super().write(data, sensitive)
+                if data == b"telecomadmin\r":
+                    self.cursor_value = 1
+                elif data == b"nE7jA%5m\r":
+                    # 模拟密码刚写出时，串口读取线程已把 ECNT> 写入历史。
+                    self.cursor_value = 2
+
+            def wait_for_any(self, markers, timeout, cursor):
+                if tuple(markers) == ("passvord:", "password:"):
+                    return "password:"
+                if "ecnt>" in markers:
+                    self.shell_wait_cursors.append(cursor)
+                    return "ecnt>" if cursor == 1 else None
+                return None
+
+        session = ImmediateShellSession()
+        controller = SerialUpgradeController(session, sleep_fn=lambda _seconds: None)
+
+        result = controller.login_tftp_put_boot_after_username()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(session.shell_wait_cursors, [1])
+
+    def test_full_package_upgrade_tftp_put_power_cycles_before_existing_flow(self):
+        """回归保护:Tftp Put 在现有 reboot → boot → TFTP 流程之前,
+        必须由程控电源对当前通道执行一次下电 + 上电。"""
         session = FakeSession(
             any_results=[
-                "login", "password", "#",
                 "username:",
-                "username:", None, "password:", "#",
+                "password:", "#",
                 "login", "password", "#",
             ]
         )
@@ -291,15 +437,58 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         with patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=False), \
              patch("src.services.serial_upgrade_service.upload_firmware"), \
              patch("src.services.serial_upgrade_service.prepare_tftp_network", return_value=CommandResult(True, "network ready")), \
-             patch("src.services.power_on_service.power_on_selected_channels") as direct_power, \
+             patch("src.services.serial_upgrade_service.power_on_selected_channels") as direct_power, \
              patch("src.services.power_on_service.turn_on_selected_channels") as turn_on, \
              patch("src.services.power_on_service.turn_off_selected_channels") as turn_off:
             result = run_single_full_package_upgrade(request, manager, sleep_fn=lambda _seconds: None)
 
         self.assertTrue(result.ok)
-        direct_power.assert_not_called()
+        # Tftp Put 必须先调用一次 power_on_selected_channels 完成下电 + 上电;
+        # 参数必须精确指向本次请求对应的程控电源串口和通道。
+        direct_power.assert_called_once()
+        first_call = direct_power.call_args
+        self.assertEqual(first_call.args[0], request.power_serial_port)
+        self.assertEqual(list(first_call.args[1]), [request.power_channel])
+        self.assertEqual(first_call.kwargs.get("wait_seconds", 0), 0)
+        self.assertTrue(callable(first_call.kwargs["on_output"]))
+        # 分通道间隔开关仍不在 Tftp Put 流程内出现,继续保持纯 cycle 语义。
         turn_on.assert_not_called()
         turn_off.assert_not_called()
+        self.assertEqual(len(manager.released), 1)
+
+    def test_full_package_upgrade_tftp_put_propagates_power_cycle_failure(self):
+        """回归保护:Tftp Put 前置下电 + 上电失败时,直接返回失败结果,不进入 reboot 流程。"""
+        session = FakeSession(
+            any_results=[
+                "login", "password", "#",
+            ]
+        )
+        manager = FakeSessionManager(session)
+        request = FullPackageUpgradeRequest(
+            vlan="vlan102",
+            server_interface="VLAN102",
+            tftp_server_ip="192.168.1.102",
+            firmware_path=Path(r"F:\firmware\tclinux_allinone"),
+            power_serial_port="COM106",
+            final_username="root",
+            final_password="secret",
+            transfer_method=TRANSFER_TFTP_PUT,
+            power_channel=2,
+        )
+
+        with patch(
+            "src.services.serial_upgrade_service.power_on_selected_channels",
+            return_value=CommandResult(False, "程控电源直接上电失败：串口被占用"),
+        ):
+            result = run_single_full_package_upgrade(request, manager, sleep_fn=lambda _seconds: None)
+
+        self.assertFalse(result.ok)
+        self.assertIn("程控电源直接上电失败", result.message)
+        # 下电 + 上电失败时不应触发任何 reboot / 串口登录交互
+        decoded = [item[0].decode("utf-8", "ignore").rstrip("\r") for item in session.writes]
+        self.assertNotIn("reboot", decoded)
+        self.assertNotIn("login", decoded)
+        self.assertEqual(len(manager.released), 1)
 
     def test_boot_login_uses_one_second_gap_between_username_and_enter(self):
         """回归：boot 登录每条指令间应留出 1 秒缓冲，避免贴在一起导致密码错位。

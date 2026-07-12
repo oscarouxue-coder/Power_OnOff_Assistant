@@ -33,6 +33,7 @@ FACTORY_RESET_COMMAND = "firstboot -y;reboot"
 BOOT_USERNAME_PROMPTS = ("username:", "user name:")
 BOOT_PASSWORD_PROMPTS = ("passvord:", "password:")
 BOOT_LOGIN_RESULT_PROMPTS = ("#", ">", "login incorrect", "incorrect")
+TFTP_PUT_BOOT_RESULT_PROMPTS = ("=>", "ecnt>", "u-boot>", "#", ">", "username:", "user name:")
 BOOT_USERNAME_STABILITY_SECONDS = 1.0
 
 
@@ -194,6 +195,50 @@ class SerialUpgradeController:
                 return True
         return False
 
+    def wait_for_tftp_put_boot_username(self, timeout_seconds: float = BOOT_LOGIN_TIMEOUT_SECONDS) -> CommandResult:
+        """仅供 Tftp Put 使用：循环回车，等待同事流程使用的 UserName 提示符。"""
+        cursor = self.session.cursor()
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline and not self._cancel.is_set():
+            self.session.write(b"\r")
+            username_prompt = self.session.wait_for_any(BOOT_USERNAME_PROMPTS, 1.0, cursor)
+            if username_prompt in BOOT_USERNAME_PROMPTS:
+                return CommandResult(True, "检测到 UserName 提示符。")
+        return CommandResult(False, "等待 UserName 提示符超时，未进入 boot 登录阶段。")
+
+    def login_tftp_put_boot_after_username(self) -> CommandResult:
+        """仅供 Tftp Put 使用：复用同事 serial_upgrade.py 的 UserName 后 boot 登录时序。"""
+        for attempt in range(1, 4):
+            try:
+                # 同事脚本在 UserName: 后直接发送账号加回车，随后等待 Password:。
+                # 游标必须在写用户名之前取得：部分样机在用户名回显的同一批数据中
+                # 已输出 Password:；若等到写入后再取游标，会把该提示当成旧数据跳过。
+                password_cursor = self.session.cursor()
+                self.session.write(f"{BOOT_USERNAME}\r".encode("utf-8"))
+                self.sleep(0.3)
+                password_prompt = self.session.wait_for_any(BOOT_PASSWORD_PROMPTS, 10, password_cursor)
+                if password_prompt not in BOOT_PASSWORD_PROMPTS:
+                    return CommandResult(False, "boot 登录未检测到 Password 提示符。")
+
+                # ECNT> 等 shell 提示同样可能在密码回显的同一批数据中到达，
+                # 因此也必须在写密码前记录游标，不能等 1 秒后再开始等待。
+                result_cursor = self.session.cursor()
+                self.session.write(f"{BOOT_PASSWORD}\r".encode("utf-8"), sensitive=True)
+                self.sleep(1.0)
+                result = self.session.wait_for_any(TFTP_PUT_BOOT_RESULT_PROMPTS, 12, result_cursor)
+                if result in ("=>", "ecnt>", "u-boot>", "#", ">"):
+                    return CommandResult(True, "boot 登录完成。")
+                if result in BOOT_USERNAME_PROMPTS and attempt < 3:
+                    # 同事脚本检测到 UserName 再次出现时会重试账号密码。
+                    self.sleep(1.0)
+                    continue
+                return CommandResult(False, "boot 登录后未检测到 shell 提示符。")
+            except RuntimeError as exc:
+                return CommandResult(False, f"串口交互异常，boot 登录失败:{exc}")
+            except Exception as exc:
+                return CommandResult(False, f"boot 登录异常:{exc}")
+        return CommandResult(False, "boot 登录失败。")
+
     def login_final_system(self, username: str, password: str) -> CommandResult:
         cursor = self.session.cursor()
         for attempt in range(1, 6):
@@ -231,10 +276,16 @@ class SerialUpgradeController:
                 return CommandResult(True, f"检测到串口提示符 {found!r},停止发送回车。")
         return CommandResult(False, "reboot 后未检测到 boot/login 提示符,样机可能未按预期重启。")
 
-    def restore_factory_if_enabled(self, enabled: bool) -> None:
+    def restore_factory_if_enabled(
+        self,
+        enabled: bool,
+        on_command_sent: Callable[[str], None] | None = None,
+    ) -> None:
         if not enabled:
             return
         self.session.write(FACTORY_RESET_COMMAND.encode("utf-8"))
+        if on_command_sent:
+            on_command_sent(f"TX {FACTORY_RESET_COMMAND}")
         self.sleep(1)
         self.session.write(b"\r")
         self.sleep(8)
@@ -270,6 +321,38 @@ def prepare_tftp_network(
             "请检查网卡 IP 状态、重复 IP 或驱动。",
         )
     return CommandResult(True, f"TFTP 网卡已准备好：{server_interface} / {server_ip}")
+
+
+def _power_cycle_current_channel(
+    request: FullPackageUpgradeRequest,
+    emit: Callable[[str], None],
+    *,
+    sleep_fn: Callable[[float], None] = time.sleep,
+    power_cycle_coordinator: UpgradePowerCycleCoordinator | None = None,
+    wait_seconds: float = 0,
+    on_channel_powered: Callable[[int], None] | None = None,
+) -> CommandResult:
+    """对当前请求对应的程控电源通道执行一次下电 + 上电。
+
+    并行模式下走 UpgradePowerCycleCoordinator 串行化电源 COM 口;
+    串行模式下走 power_on_selected_channels(内部已封装关闭 + 开启 + 1.5s/3s 缓冲)。
+    """
+    if power_cycle_coordinator is not None:
+        return power_cycle_coordinator.power_on_channel(
+            request.power_serial_port,
+            request.power_channel,
+            wait_seconds=wait_seconds,
+            on_output=emit,
+            on_channel_powered=on_channel_powered,
+        )
+    return power_on_selected_channels(
+        request.power_serial_port,
+        [request.power_channel],
+        wait_seconds=wait_seconds,
+        on_output=emit,
+        on_channel_powered=on_channel_powered,
+        sleep_fn=sleep_fn,
+    )
 
 
 def _run_tftp_command_with_power_supply(
@@ -311,19 +394,12 @@ def _run_tftp_command_with_power_supply(
             emit("程控电源已写入上电帧，等待电源动作完成后开始串口回车进入 boot。")
 
     def power_on_current_channel(on_powered: Callable[[int], None] | None = None) -> CommandResult:
-        if power_cycle_coordinator is not None:
-            return power_cycle_coordinator.power_on_channel(
-                request.power_serial_port,
-                request.power_channel,
-                wait_seconds=POWER_ON_WAIT_SECONDS,
-                on_output=emit,
-                on_channel_powered=on_powered,
-            )
-        return power_on_selected_channels(
-            request.power_serial_port,
-            [request.power_channel],
+        return _power_cycle_current_channel(
+            request=request,
+            emit=emit,
+            sleep_fn=sleep_fn,
+            power_cycle_coordinator=power_cycle_coordinator,
             wait_seconds=POWER_ON_WAIT_SECONDS,
-            on_output=emit,
             on_channel_powered=on_powered,
         )
 
@@ -378,7 +454,7 @@ def _run_tftp_command_with_power_supply(
     final = controller.login_final_system(request.final_username, request.final_password)
     if not final.ok:
         return final
-    controller.restore_factory_if_enabled(request.restore_factory)
+    controller.restore_factory_if_enabled(request.restore_factory, on_command_sent=emit)
     return CommandResult(True, f"{request.vlan} 全包升级流程完成。")
 
 
@@ -428,35 +504,35 @@ def run_single_full_package_upgrade(
                 strict_tftp_bind=strict_tftp_bind,
             )
 
-        # Tftp Put(本机推到 192.168.1.1):保持"手动上电 + reboot + 回车"流程,
-        # 不操作程控电源,假设样机已由用户手动上电。
-        emit(f"串口 {port} 已开启,准备用超级用户登录当前运行的样机系统。")
-
-        emit(f"正在使用超级用户 {request.final_username} 登录样机...")
-        final_login = controller.login_final_system(request.final_username, request.final_password)
-        if not final_login.ok:
-            return final_login
-        emit(f"超级用户登录完成:{final_login.message}")
-
-        # 第 2 步:触发样机重启,准备进入 boot 菜单。
-        controller.session.send_line("reboot")
-        sleep_fn(3)
-        emit("已发送 reboot,准备每秒发送回车中断样机自动启动进入 boot。")
-
-        # 第 3 步:每秒发送回车,直到检测到 boot/login 提示符。
-        interrupt = controller.interrupt_boot_with_enter(
-            enter_interval=1.0,
-            timeout_seconds=BOOT_LOGIN_TIMEOUT_SECONDS,
+        # Tftp Put(本机推到 192.168.1.1):先对当前通道下电 + 上电；
+        # 串口看到 UserName 后，按同事 serial_upgrade.py 的 boot 登录时序进入 shell，
+        # 上传仍使用主程序的 TFTPy Client。
+        emit(
+            f"Tftp Put 前置下电 + 上电：程控电源串口 {request.power_serial_port}，"
+            f"通道 {request.power_channel}。"
         )
-        if not interrupt.ok:
-            return interrupt
-        emit(f"{interrupt.message},准备登录 boot。")
+        power_cycle = _power_cycle_current_channel(
+            request=request,
+            emit=emit,
+            sleep_fn=sleep_fn,
+            power_cycle_coordinator=power_cycle_coordinator,
+            wait_seconds=0,
+        )
+        if not power_cycle.ok:
+            return power_cycle
+        emit(f"程控电源下电 + 上电完成:{power_cycle.message}")
+        emit(f"串口 {port} 已开启，准备等待 UserName 提示符进入 boot。")
 
-        # 第 4 步:用 boot 用户名/密码完成 boot 登录,后续流程保持不变。
-        boot_login = controller._login_boot()
+        # 电源动作结束后先留出 1 秒稳定窗口，再开始循环回车等待 UserName。
+        sleep_fn(1.0)
+        username_prompt = controller.wait_for_tftp_put_boot_username()
+        if not username_prompt.ok:
+            return username_prompt
+        emit("检测到 UserName 提示符，开始使用 boot 用户名和密码登录。")
+        boot_login = controller.login_tftp_put_boot_after_username()
         if not boot_login.ok:
             return boot_login
-        emit("boot 登录完成，准备传输环境。")
+        emit("boot 登录完成，准备使用 TFTPy 传输环境。")
 
         network = prepare_tftp_network(request.server_interface, request.tftp_server_ip, emit, sleep_fn)
         if not network.ok:
@@ -482,7 +558,7 @@ def run_single_full_package_upgrade(
         final = controller.login_final_system(request.final_username, request.final_password)
         if not final.ok:
             return final
-        controller.restore_factory_if_enabled(request.restore_factory)
+        controller.restore_factory_if_enabled(request.restore_factory, on_command_sent=emit)
         return CommandResult(True, f"{request.vlan} 全包升级流程完成。")
     except Exception as exc:
         return CommandResult(False, f"{request.vlan} 串行升级异常：{exc}")

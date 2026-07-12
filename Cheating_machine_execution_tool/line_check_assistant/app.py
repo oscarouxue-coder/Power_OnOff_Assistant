@@ -1153,6 +1153,7 @@ class LineCheckAssistant(Tk):
                     username=self.upgrade_username_var.get().strip(),
                     password=self.upgrade_password_var.get().strip(),
                     firmware_path=firmware_path,
+                    subnet_mask=channel.subnet_mask or DEFAULT_SUBNET_MASK,
                 )
             )
 
@@ -1283,6 +1284,9 @@ class LineCheckAssistant(Tk):
         ):
             return
 
+        terminal = getattr(self, "serial_terminal", None)
+        if terminal is not None:
+            terminal.begin_upgrade_logs([request.vlan for _channel, request in upgrade_items])
         if parallel_tftp_command:
             self._set_upgrade_status("", f"准备并行升级 {len(upgrade_items)} 台样机（最多 2 台）", 0)
             thread = threading.Thread(target=self._parallel_tftp_command_upgrade_worker, args=(upgrade_items,), daemon=True)
@@ -1366,6 +1370,9 @@ class LineCheckAssistant(Tk):
                 ),
             )
         self.after(0, lambda: self._complete_serial_tftp_copy_upgrade(total, completed, failed_request, failed_result))
+        terminal = getattr(self, "serial_terminal", None)
+        if terminal is not None:
+            self.after(100, terminal.finish_upgrade_logs)
 
     def _parallel_tftp_command_upgrade_worker(self, upgrade_items: list[tuple[ChannelConfig, FullPackageUpgradeRequest]]) -> None:
         requests = [request for _channel, request in upgrade_items]
@@ -1415,6 +1422,10 @@ class LineCheckAssistant(Tk):
             self.after(0, lambda: self._complete_parallel_tftp_command_upgrade(total, results))
         except Exception as exc:
             self.after(0, lambda: self._complete_parallel_tftp_command_upgrade(total, [], str(exc)))
+        finally:
+            terminal = getattr(self, "serial_terminal", None)
+            if terminal is not None:
+                self.after(100, terminal.finish_upgrade_logs)
 
     def _complete_parallel_tftp_command_upgrade(self, total: int, results, orchestration_error: str | None = None) -> None:
         if orchestration_error:

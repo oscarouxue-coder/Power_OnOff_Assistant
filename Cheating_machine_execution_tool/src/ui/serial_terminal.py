@@ -37,6 +37,18 @@ class SerialTerminalWindow:
         self.tabs = {}
         self.events: queue.Queue = queue.Queue(maxsize=2000)
         self._after_id = None
+        self._upgrade_batch_active = False
+        self._auto_opened_for_upgrade = False
+
+    def begin_upgrade_logs(self, vlans: list[str]) -> None:
+        """标记本批自动升级；仅本批自动打开的窗口会在完成后自动关闭。"""
+        self._upgrade_batch_active = bool(vlans)
+
+    def finish_upgrade_logs(self) -> None:
+        """本批升级串口已释放后关闭其自动打开的终端窗口。"""
+        self._upgrade_batch_active = False
+        if self._auto_opened_for_upgrade:
+            self.close()
 
     def show(self, vlans: list[str]) -> None:
         if self.window is not None and self.window.winfo_exists():
@@ -111,8 +123,11 @@ class SerialTerminalWindow:
             messagebox.showerror("打开串口失败", str(exc), parent=self.window)
 
     def attach_upgrade(self, vlan: str, session, log_path: Path) -> None:
+        opened_by_upgrade = self.window is None or not self.window.winfo_exists()
         if self.window is None or not self.window.winfo_exists():
             self.show([vlan])
+        if opened_by_upgrade and self._upgrade_batch_active:
+            self._auto_opened_for_upgrade = True
         self._ensure_tab(vlan)
         item = self.tabs[vlan.lower()]
         if item["subscriber"] is None:
@@ -185,6 +200,8 @@ class SerialTerminalWindow:
         self.notebook = None
         self.tabs = {}
         self.log_dir_var = None
+        self._auto_opened_for_upgrade = False
+        self._upgrade_batch_active = False
 
     def _load_state(self) -> dict:
         """读取持久化文件,失败/缺失时返回空字典"""

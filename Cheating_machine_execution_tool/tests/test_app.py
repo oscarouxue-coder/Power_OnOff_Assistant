@@ -650,7 +650,41 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual([request.device_ip for request in requests], ["192.168.29.1", "192.168.30.1"])
         self.assertTrue(all(request.username == "sdmc" for request in requests))
         self.assertTrue(all(request.password == "1234" for request in requests))
+        # 所有 PageUpgradeRequest 都带上默认 /24 子网掩码,准备网络时据此设置 PC 静态 IP
+        self.assertTrue(all(request.subnet_mask == "255.255.255.0" for request in requests))
         thread_class.return_value.start.assert_called_once_with()
+
+    @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
+    @patch("line_check_assistant.app.Path.is_file", return_value=True)
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_page_upgrade_requests_propagate_custom_subnet_mask(self, thread_class, _is_file, _askyesno):
+        channels = [
+            ChannelConfig(
+                section="channel_1",
+                vlan_name="VLAN139",
+                adapter_alias="VLAN139",
+                network_card_ip="192.168.29.139",
+                device_manage_ip="192.168.29.1",
+                subnet_mask="255.255.255.128",
+                enabled=True,
+            ),
+        ]
+        context = SimpleNamespace(
+            upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\sdmc.bin")),
+            upgrade_username_var=Mock(get=Mock(return_value="sdmc")),
+            upgrade_password_var=Mock(get=Mock(return_value="1234")),
+            upgrade_window=Mock(),
+            device_ip_var=Mock(get=Mock(return_value="")),
+            _selected_page_upgrade_channels=Mock(return_value=channels),
+            _tftp_server_ip_for_channel=Mock(return_value=""),
+            _set_upgrade_status=Mock(),
+            _page_upgrade_worker=Mock(),
+        )
+
+        LineCheckAssistant._start_page_upgrade(context)
+
+        requests = thread_class.call_args.kwargs["args"][0]
+        self.assertEqual(requests[0].subnet_mask, "255.255.255.128")
 
     def test_page_upgrade_channels_follow_main_channel_order_and_deduplicate(self):
         context = SimpleNamespace(
@@ -808,6 +842,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         LineCheckAssistant._serial_tftp_copy_upgrade_worker(context, upgrade_items)
 
         run_upgrade.assert_called_once()
+        context.serial_terminal.finish_upgrade_logs.assert_called_once_with()
         context._complete_serial_tftp_copy_upgrade.assert_called_once_with(2, 0, requests[0], run_upgrade.return_value)
 
     @patch("line_check_assistant.app.run_single_full_package_upgrade")
@@ -827,6 +862,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         LineCheckAssistant._serial_tftp_copy_upgrade_worker(context, [(channel, request)])
 
         self.assertFalse(hasattr(context, "store"))
+        context.serial_terminal.finish_upgrade_logs.assert_called_once_with()
 
     def test_upgrade_required_fields_warn_when_missing(self):
         context = SimpleNamespace(

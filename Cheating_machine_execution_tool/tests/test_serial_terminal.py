@@ -10,6 +10,18 @@ from src.ui.serial_terminal import SerialTerminalWindow
 
 
 class SerialTerminalPersistenceTests(unittest.TestCase):
+    def test_finish_upgrade_logs_closes_only_auto_opened_window(self):
+        terminal = SerialTerminalWindow(Mock(), Mock(), Path(r"D:\Serial_Log"))
+        terminal.close = Mock()
+
+        terminal.finish_upgrade_logs()
+        terminal.close.assert_not_called()
+
+        terminal._auto_opened_for_upgrade = True
+        terminal.finish_upgrade_logs()
+
+        terminal.close.assert_called_once()
+
     def test_save_state_shows_error_when_state_file_is_not_writable(self):
         master = Mock()
         state_file = Mock()

@@ -59,10 +59,10 @@ class FakeTriggerFallbackClient(FakeUbusClient):
 
 
 class PageUpgradeTests(unittest.TestCase):
-    @patch("line_check_assistant.page_upgrade.enable_adapter")
-    def test_single_page_upgrade_falls_back_to_https_and_waits_for_reboot_login(self, enable_adapter):
+    @patch("line_check_assistant.page_upgrade.prepare_network_for_sample")
+    def test_single_page_upgrade_prepares_network_on_same_subnet_before_login(self, prepare_network):
         firmware = Path(__file__)
-        enable_adapter.return_value = Mock(ok=True, message="enabled")
+        prepare_network.return_value = Mock(ok=True, message="network ready")
         fake_client = FakeUbusClient(
             "172.18.18.3",
             login_results=[False, True, True],
@@ -79,6 +79,7 @@ class PageUpgradeTests(unittest.TestCase):
                 password="1234",
                 firmware_path=firmware,
                 adapter_alias="VLAN101",
+                subnet_mask="255.255.255.0",
             ),
             on_output=output,
             sleep_fn=Mock(),
@@ -86,6 +87,13 @@ class PageUpgradeTests(unittest.TestCase):
         )
 
         self.assertTrue(result.ok)
+        prepare_network.assert_called_once()
+        call_args = prepare_network.call_args.args
+        self.assertEqual(call_args[0], "VLAN101")
+        self.assertEqual(call_args[1], "172.18.18.3")
+        self.assertEqual(call_args[2], "255.255.255.0")
+        # sleep_fn 必须透传给 prepare_network,避免升级流程中使用 Mock sleep 时网卡准备也跳过等待
+        self.assertIsNotNone(prepare_network.call_args.kwargs.get("sleep_fn"))
         self.assertEqual(
             fake_client.urls,
             [
@@ -97,14 +105,14 @@ class PageUpgradeTests(unittest.TestCase):
         self.assertEqual(fake_client.upload_calls[0][2], "https://192.168.29.1/cgi-bin/cgi-upload")
         self.assertTrue(fake_client.triggered)
         self.assertEqual(fake_client.logout_count, 2)
-        enable_adapter.assert_called_once_with("VLAN101")
-        output.assert_any_call("vlan101 检查并启用网卡：VLAN101")
-        output.assert_any_call("enabled")
-        output.assert_any_call("vlan101 UBUS 登录成功")
+        # 准备网络后的登录/上传/触发/等待流程按顺序推进,且 vlan101 标签贯穿整个升级过程
+        call_args_list = [str(call) for call in output.call_args_list]
+        self.assertTrue(any("HTTP" in arg for arg in call_args_list), call_args_list)
+        self.assertTrue(any("HTTPS" in arg for arg in call_args_list), call_args_list)
 
-    @patch("line_check_assistant.page_upgrade.enable_adapter")
-    def test_single_page_upgrade_returns_failure_status_message(self, enable_adapter):
-        enable_adapter.return_value = Mock(ok=True, message="enabled")
+    @patch("line_check_assistant.page_upgrade.prepare_network_for_sample")
+    def test_single_page_upgrade_returns_failure_status_message(self, prepare_network):
+        prepare_network.return_value = Mock(ok=True, message="network ready")
         fake_client = FakeUbusClient(
             "172.18.18.3",
             login_results=[True],
@@ -128,9 +136,9 @@ class PageUpgradeTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("固件验证错误", result.message)
 
-    @patch("line_check_assistant.page_upgrade.enable_adapter")
-    def test_single_page_upgrade_accepts_trigger_fallback(self, enable_adapter):
-        enable_adapter.return_value = Mock(ok=True, message="enabled")
+    @patch("line_check_assistant.page_upgrade.prepare_network_for_sample")
+    def test_single_page_upgrade_accepts_trigger_fallback(self, prepare_network):
+        prepare_network.return_value = Mock(ok=True, message="network ready")
         fake_client = FakeTriggerFallbackClient("172.18.18.3")
         output = Mock()
 
@@ -153,9 +161,9 @@ class PageUpgradeTests(unittest.TestCase):
         output.assert_any_call("bbfdm.operate 触发升级被拒绝，尝试下一种兼容方式。")
         output.assert_any_call("vlan139 升级命令已触发：bbfdm.operate(proto=web)")
 
-    @patch("line_check_assistant.page_upgrade.enable_adapter")
-    def test_single_page_upgrade_stops_when_adapter_enable_fails(self, enable_adapter):
-        enable_adapter.return_value = Mock(ok=False, message="启用网卡失败：拒绝访问")
+    @patch("line_check_assistant.page_upgrade.prepare_network_for_sample")
+    def test_single_page_upgrade_stops_when_network_prepare_fails(self, prepare_network):
+        prepare_network.return_value = Mock(ok=False, message="设置网卡静态 IP 失败：拒绝访问")
         client_factory = Mock()
 
         result = run_single_page_upgrade(
@@ -173,8 +181,34 @@ class PageUpgradeTests(unittest.TestCase):
         )
 
         self.assertFalse(result.ok)
-        self.assertIn("启用网卡失败", result.message)
+        self.assertIn("设置网卡静态 IP 失败", result.message)
         client_factory.assert_not_called()
+
+    @patch("line_check_assistant.page_upgrade.prepare_network_for_sample")
+    def test_single_page_upgrade_skips_network_prepare_when_no_adapter_alias(self, prepare_network):
+        prepare_network.return_value = Mock(ok=True, message="network ready")
+        fake_client = FakeUbusClient(
+            "172.18.18.3",
+            login_results=[True],
+            status_results=[9],
+        )
+
+        result = run_single_page_upgrade(
+            PageUpgradeRequest(
+                vlan="vlan101",
+                bind_ip="172.18.18.3",
+                device_ip="192.168.29.1",
+                username="sdmc",
+                password="1234",
+                firmware_path=Path(__file__),
+                adapter_alias="",
+            ),
+            sleep_fn=Mock(),
+            client_factory=Mock(return_value=fake_client),
+        )
+
+        self.assertTrue(result.ok)
+        prepare_network.assert_not_called()
 
     def test_ubus_rpc_error_detects_access_denied(self):
         error = UbusRpcError("bbfdm.operate", {"error": {"code": -32002, "message": "Access denied"}})

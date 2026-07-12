@@ -12,7 +12,7 @@ import requests
 import urllib3
 from requests.adapters import HTTPAdapter
 
-from .network_ops import CommandResult, enable_adapter
+from .network_ops import CommandResult, prepare_network_for_sample
 
 
 VENDOR_PREFIX = "X_SDMC_"
@@ -46,6 +46,7 @@ class PageUpgradeRequest:
     password: str
     firmware_path: Path
     adapter_alias: str = ""
+    subnet_mask: str = "255.255.255.0"
 
 
 @dataclass(frozen=True)
@@ -256,11 +257,15 @@ def run_single_page_upgrade(
         return CommandResult(False, f"{label} 页面升级失败：固件文件不存在：{request.firmware_path}")
 
     if request.adapter_alias:
-        emit(f"{label} 检查并启用网卡：{request.adapter_alias}")
-        enable_result = enable_adapter(request.adapter_alias)
-        emit(enable_result.message)
-        if not enable_result.ok:
-            return CommandResult(False, f"{label} 页面升级失败：{enable_result.message}")
+        network_result = prepare_network_for_sample(
+            request.adapter_alias,
+            request.bind_ip,
+            request.subnet_mask,
+            on_output=emit,
+            sleep_fn=sleep_fn,
+        )
+        if not network_result.ok:
+            return CommandResult(False, f"{label} 页面升级失败：{network_result.message}")
 
     client = client_factory(request.bind_ip)
     try:

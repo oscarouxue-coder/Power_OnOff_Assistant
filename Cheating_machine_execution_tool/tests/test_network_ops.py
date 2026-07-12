@@ -13,6 +13,7 @@ from line_check_assistant.network_ops import (
     login_olt_and_enter_global_mode,
     parse_registered_onu_states,
     ping_host,
+    prepare_network_for_sample,
     query_unregistered_onus,
     register_unregistered_onus,
     run_line_check,
@@ -403,6 +404,83 @@ class EnableAdapterTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(calls, ["enable", "set_ip", "ping"])
+
+
+class PrepareNetworkForSampleTests(unittest.TestCase):
+    @patch("line_check_assistant.network_ops.set_static_ip")
+    @patch("line_check_assistant.network_ops.enable_adapter")
+    def test_enables_adapter_then_sets_static_ip(self, enable, set_ip):
+        enable.return_value = CommandResult(True, "enabled")
+        set_ip.return_value = CommandResult(True, "static ip set")
+        sleeps: list[float] = []
+        output: list[str] = []
+
+        result = prepare_network_for_sample(
+            "VLAN107",
+            "192.168.29.107",
+            "255.255.255.0",
+            on_output=output.append,
+            sleep_fn=sleeps.append,
+            settle_seconds=0.5,
+        )
+
+        self.assertTrue(result.ok)
+        enable.assert_called_once_with("VLAN107")
+        set_ip.assert_called_once_with("VLAN107", "192.168.29.107", "255.255.255.0")
+        self.assertEqual(sleeps, [0.5, 0.5])
+        self.assertTrue(any("VLAN107" in line for line in output), output)
+        self.assertTrue(any("192.168.29.107" in line for line in output), output)
+        self.assertTrue(any("255.255.255.0" in line for line in output), output)
+
+    @patch("line_check_assistant.network_ops.set_static_ip")
+    @patch("line_check_assistant.network_ops.enable_adapter")
+    def test_returns_failure_when_enable_adapter_fails(self, enable, set_ip):
+        enable.return_value = CommandResult(False, "启用网卡失败：拒绝访问")
+
+        result = prepare_network_for_sample("VLAN107", "192.168.29.107", "255.255.255.0", sleep_fn=lambda _x: None)
+
+        self.assertFalse(result.ok)
+        self.assertIn("启用网卡失败", result.message)
+        set_ip.assert_not_called()
+
+    @patch("line_check_assistant.network_ops.set_static_ip")
+    @patch("line_check_assistant.network_ops.enable_adapter")
+    def test_returns_failure_when_set_static_ip_fails(self, enable, set_ip):
+        enable.return_value = CommandResult(True, "enabled")
+        set_ip.return_value = CommandResult(False, "设置网卡静态 IP 失败：拒绝访问")
+
+        result = prepare_network_for_sample("VLAN107", "192.168.29.107", "255.255.255.0", sleep_fn=lambda _x: None)
+
+        self.assertFalse(result.ok)
+        self.assertIn("设置网卡静态 IP 失败", result.message)
+
+    def test_returns_failure_when_adapter_alias_missing(self):
+        result = prepare_network_for_sample("", "192.168.29.107", "255.255.255.0", sleep_fn=lambda _x: None)
+
+        self.assertFalse(result.ok)
+        self.assertIn("未选择 VLAN 网卡", result.message)
+
+    def test_returns_failure_when_bind_ip_missing(self):
+        result = prepare_network_for_sample("VLAN107", "", "255.255.255.0", sleep_fn=lambda _x: None)
+
+        self.assertFalse(result.ok)
+        self.assertIn("未配置用于访问样机的 PC 静态 IP", result.message)
+
+    def test_strips_status_suffix_from_adapter_alias(self):
+        with patch("line_check_assistant.network_ops.enable_adapter") as enable, \
+                patch("line_check_assistant.network_ops.set_static_ip") as set_ip:
+            enable.return_value = CommandResult(True, "enabled")
+            set_ip.return_value = CommandResult(True, "ok")
+
+            prepare_network_for_sample(
+                "VLAN107 [Up]",
+                "192.168.29.107",
+                "255.255.255.0",
+                sleep_fn=lambda _x: None,
+            )
+
+            enable.assert_called_once_with("VLAN107")
+            set_ip.assert_called_once_with("VLAN107", "192.168.29.107", "255.255.255.0")
 
 
 if __name__ == "__main__":
