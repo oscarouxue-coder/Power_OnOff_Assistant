@@ -25,11 +25,16 @@ from src.services.serial_upgrade_service import (
 
 
 class FakeSession:
-    def __init__(self, any_results=(), all_result=True, peek_text=""):
+    def __init__(self, any_results=(), all_result=True, peek_text="", all_results=None):
         self.any_results = list(any_results)
         self.all_result = all_result
+        # 若 all_results 是列表,每次 wait_for_all 按序弹出一个布尔;
+        # 列表耗尽后返回 False,用于模拟首次未完成 + 重试时完成的场景。
+        self.all_results = list(all_results) if all_results is not None else None
         self.writes = []
         self.peek_text = peek_text
+        self.peek_calls = 0
+        self.all_calls = 0
 
     def cursor(self):
         return 0
@@ -44,10 +49,33 @@ class FakeSession:
         return self.any_results.pop(0) if self.any_results else None
 
     def wait_for_all(self, _markers, _timeout, _cursor):
+        self.all_calls += 1
+        if self.all_results is not None:
+            if not self.all_results:
+                return False
+            return self.all_results.pop(0)
         return self.all_result
 
     def peek_since(self, _cursor):
+        self.peek_calls += 1
         return self.peek_text
+
+
+class FastMonotonic:
+    """测试用 monotonic:第一次返回 0,后续每次返回远超 deadline 的值。
+
+    让 _wait_for_tftp_completion_or_arp_failure 的 polling 循环直接跳过、
+    立即进入 final check,避免测试在真实 time.monotonic 下阻塞 300 秒。
+    """
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __call__(self) -> float:
+        self.calls += 1
+        if self.calls == 1:
+            return 0.0
+        return 1_000_000.0
 
 
 class FakeSessionManager:
@@ -1020,3 +1048,145 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         turn_on.assert_not_called()
         turn_off.assert_not_called()
         self.assertEqual(len(manager.released), 1)
+
+    def test_tftp_command_does_not_retry_on_first_attempt_success(self):
+        """首次尝试即检测到 done + write 时只发一条命令,不打印重试日志。"""
+        session = FakeSession(all_result=True, peek_text="Bytes transferred = 1000\ndone\nwrite")
+        sleeps: list[float] = []
+        output: list[str] = []
+        controller = SerialUpgradeController(session, sleep_fn=sleeps.append)
+
+        result = controller.send_tftp_command_and_wait(
+            "tftp 192.168.1.101:tclinux_allinone",
+            on_output=output.append,
+        )
+
+        self.assertTrue(result.ok)
+        # 只有一条 tftp 命令,无重试。
+        self.assertEqual(len(session.writes), 1)
+        self.assertEqual(session.writes[0][0], b"tftp 192.168.1.101:tclinux_allinone\r")
+        # 首次成功不打印任何重试 / ARP 相关日志。
+        self.assertFalse(any("自动重试 TFTP" in line for line in output))
+        self.assertFalse(any("ARP Retry count exceeded" in line for line in output))
+        self.assertEqual(sleeps, [])
+
+    def test_tftp_command_retries_on_arp_failure_then_succeeds(self):
+        """首次命中 ARP 失败 + U-Boot>,第二次成功:共发 2 次命令,第 1 次后 sleep 1 秒。"""
+        # 序列:1st attempt helper 见到 ARP 失败 → 2nd attempt helper 见到 done + write
+        session = FakeSession(
+            all_results=[False, True],
+            peek_text="Using eth@1fb59000 device\nTFTP from server 192.168.1.101\n"
+            "ARP Retry count exceeded; starting again\nU-Boot> ",
+        )
+        sleeps: list[float] = []
+        output: list[str] = []
+        controller = SerialUpgradeController(session, sleep_fn=sleeps.append)
+
+        result = controller.send_tftp_command_and_wait(
+            "tftp 192.168.1.101:tclinux_allinone",
+            on_output=output.append,
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(len(session.writes), 2)
+        self.assertEqual(session.writes[0][0], b"tftp 192.168.1.101:tclinux_allinone\r")
+        self.assertEqual(session.writes[1][0], b"tftp 192.168.1.101:tclinux_allinone\r")
+        # 1 次 retry sleep(1 秒)
+        self.assertEqual(sleeps, [1.0])
+        # 重试相关日志完整:
+        #   - 第 1 次 ARP 失败时还剩 2 次自动重试
+        #   - 第 2 次发送属于自动重试 (第 2/3 次)
+        #   - 第 2 次检测到完成标记
+        self.assertTrue(any("ARP Retry count exceeded" in line and "剩余 2 次自动重试" in line for line in output))
+        self.assertTrue(any("自动重试 TFTP 命令" in line and "第 2/3 次" in line for line in output))
+        self.assertTrue(any("第 2 次尝试时检测到完成标记" in line for line in output))
+
+    def test_tftp_command_retries_three_times_then_fails(self):
+        """3 次尝试都遇 ARP 失败 → 失败。共发 3 条命令,2 次 sleep。"""
+        session = FakeSession(
+            all_results=[False, False, False],
+            peek_text="ARP Retry count exceeded; starting again\nU-Boot> ",
+        )
+        sleeps: list[float] = []
+        output: list[str] = []
+        controller = SerialUpgradeController(session, sleep_fn=sleeps.append)
+
+        result = controller.send_tftp_command_and_wait(
+            "tftp 192.168.1.101:tclinux_allinone",
+            on_output=output.append,
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("已重试 3 次仍未成功", result.message)
+        self.assertEqual(len(session.writes), 3)
+        # 2 次 retry sleep,3 条命令之间间隔 1 秒。
+        self.assertEqual(sleeps, [1.0, 1.0])
+        # 每次尝试都有 ARP 失败日志,最后一次打印已达最大次数。
+        arp_logs = [line for line in output if "ARP Retry count exceeded" in line]
+        self.assertEqual(len(arp_logs), 3)
+        self.assertTrue(any("已达最大重试次数 3" in line for line in output))
+        self.assertFalse(any("检测到完成标记" in line for line in output))
+
+    def test_tftp_command_does_not_retry_without_arp_marker(self):
+        """peek_since 不含 ARP 失败模式 → 不重试,直接返回超时失败。"""
+        # 强制 polling loop 不进入,只走 final check;peek_text 既无 arp marker 也无 u-boot>。
+        session = FakeSession(
+            all_result=False,
+            peek_text="Loading: ##################################################",
+        )
+        sleeps: list[float] = []
+        output: list[str] = []
+        controller = SerialUpgradeController(
+            session, sleep_fn=sleeps.append, monotonic_fn=FastMonotonic()
+        )
+
+        result = controller.send_tftp_command_and_wait(
+            "tftp 192.168.1.101:tclinux_allinone",
+            on_output=output.append,
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("等待样机串口 TFTP 完成标记超时", result.message)
+        # 只有 1 次尝试,1 条命令,无 sleep。
+        self.assertEqual(len(session.writes), 1)
+        self.assertEqual(sleeps, [])
+        # 不打印任何重试 / ARP 日志。
+        self.assertFalse(any("自动重试 TFTP" in line for line in output))
+        self.assertFalse(any("ARP Retry count exceeded" in line for line in output))
+
+    def test_tftp_command_does_not_retry_when_arp_marker_missing_u_boot_prompt(self):
+        """仅有 ARP 失败标记但样机未返回 U-Boot>(卡在 Loading)→ 不重试。"""
+        session = FakeSession(
+            all_result=False,
+            peek_text="Loading: *\nARP Retry count exceeded; starting again\nLoading: *",
+        )
+        output: list[str] = []
+        controller = SerialUpgradeController(
+            session, sleep_fn=lambda _: None, monotonic_fn=FastMonotonic()
+        )
+
+        result = controller.send_tftp_command_and_wait(
+            "tftp 192.168.1.101:tclinux_allinone",
+            on_output=output.append,
+        )
+
+        self.assertFalse(result.ok)
+        self.assertEqual(len(session.writes), 1)
+        self.assertFalse(any("自动重试 TFTP" in line for line in output))
+        self.assertFalse(any("ARP Retry count exceeded" in line for line in output))
+
+    def test_tftp_command_skips_retry_log_when_on_output_not_provided(self):
+        """不传 on_output 时,即使命中 ARP 失败也不会抛异常,只是不打印日志。"""
+        session = FakeSession(
+            all_results=[False, True],
+            peek_text="ARP Retry count exceeded; starting again\nU-Boot> ",
+        )
+        controller = SerialUpgradeController(session, sleep_fn=lambda _: None)
+
+        # 不传 on_output 也应正常工作,不抛异常。
+        result = controller.send_tftp_command_and_wait(
+            "tftp 192.168.1.101:tclinux_allinone",
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(len(session.writes), 2)

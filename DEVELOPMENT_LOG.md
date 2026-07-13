@@ -24,6 +24,16 @@
 - 后续待办：
 ```
 
+## 2026-07-12 - Tftp指令 ARP 失败自动重试 3 次
+
+- 类型：功能 / 优化 / 测试 / 文档
+- 背景：现场样机偶发 `ARP Retry count exceeded; starting again` 后回到 `U-Boot>` 提示符；旧 `send_tftp_command_and_wait` 依赖 `wait_for_all(("done", "write"), TFTP_COMMAND_TIMEOUT_SECONDS=1800)`，本次失败会阻塞整整 30 分钟才向主程序报告超时，且无任何补救。
+- 完成内容：模块顶部新增 `TFTP_COMMAND_MAX_RETRIES=3` / `TFTP_ARP_FAILURE_MARKER="arp retry count exceeded"` / `TFTP_RETRY_PROMPT_MARKER="u-boot>"` / `TFTP_COMMAND_POLL_SECONDS=1.0` / `TFTP_COMMAND_RETRY_DELAY_SECONDS=1.0`，并将单次超时从 1800 秒下调到 300 秒。`SerialUpgradeController` 新增 `_wait_for_tftp_completion_or_arp_failure` 按秒轮询：等待 `done + write` 完成标记，或识别 `ARP Retry count exceeded` + `u-boot>` 模式；不再阻塞到完整超时，避免已知快速失败场景浪费 5 分钟。`send_tftp_command_and_wait` 改为接收可选 `on_output` 回调，命中 ARP 失败模式时记录"自动重试 TFTP 命令：第 X/3 次发送..."和"检测到 ARP Retry count exceeded，剩余 N 次自动重试"并 sleep 1 秒后再次发送；最多 3 次尝试全部失败时返回 `TFTP 命令已重试 3 次仍未成功...`。`_run_tftp_command_with_power_supply` 调用处传入 `on_output=emit`，重试/成功提示直接进主程序执行日志。仅作用于 `Tftp指令`（样机主动拉固件）链路；`Tftp Put` 不走串口 tftp 命令，无 ARP 字样，不适用。`SerialUpgradeController.__init__` 新增 `monotonic_fn` 注入便于测试。
+- 修改文件：`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行 `python -m py_compile` 关键模块；`python -m unittest discover -s tests -v` 全量；新增 6 项：首次成功不重试、ARP 失败后第 2 次成功、3 次全部 ARP 失败、无 ARP 标记不重试、ARP 标记但无 U-Boot> 不重试、`on_output=None` 也能跑通。
+- 验证结果：`python -m py_compile src/services/serial_upgrade_service.py` 通过；`python -m unittest discover -s tests -v` 共 169 项通过（原 163 项 + 新增 6 项）。
+- 后续待办：真实样机故意断 TFTPy Server 网络让 ARP 失败，确认主程序执行日志出现 "检测到 ARP Retry count exceeded, 剩余 X 次自动重试" 和 "自动重试 TFTP 命令：第 X/3 次发送..."；正常场景确认仍只发一条 tftp 即检测到 done + write 完成。
+
 ## 2026-07-12 - 并行 Tftp 指令高频日志不再阻塞 Tk 界面
 
 - 类型：BUG 修复 / 测试 / 文档

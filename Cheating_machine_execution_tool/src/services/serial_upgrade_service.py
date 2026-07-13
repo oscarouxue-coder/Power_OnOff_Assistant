@@ -23,7 +23,14 @@ POWER_ON_WAIT_SECONDS = 10
 POWER_RECYCLE_AFTER_UPGRADE_SECONDS = 90
 POWER_ON_SETTLE_SECONDS = 120
 BOOT_LOGIN_TIMEOUT_SECONDS = 600
-TFTP_COMMAND_TIMEOUT_SECONDS = 1800
+# Tftp指令 单次尝试超时:5 分钟内应能看到 done+write 或 ARP 失败 + U-Boot>；
+# 超过 5 分钟视为异常等待，由下次重试或上层决定。
+TFTP_COMMAND_TIMEOUT_SECONDS = 300
+TFTP_COMMAND_MAX_RETRIES = 3
+TFTP_COMMAND_POLL_SECONDS = 1.0
+TFTP_COMMAND_RETRY_DELAY_SECONDS = 1.0
+TFTP_ARP_FAILURE_MARKER = "arp retry count exceeded"
+TFTP_RETRY_PROMPT_MARKER = "u-boot>"
 TFTP_PUT_TIMEOUT_SECONDS = 600
 FINAL_LOGIN_TIMEOUT_SECONDS = 1200
 TFTP_SUBNET_MASK = "255.255.255.0"
@@ -141,9 +148,15 @@ class UpgradePowerCycleCoordinator:
 
 
 class SerialUpgradeController:
-    def __init__(self, session, sleep_fn: Callable[[float], None] = time.sleep) -> None:
+    def __init__(
+        self,
+        session,
+        sleep_fn: Callable[[float], None] = time.sleep,
+        monotonic_fn: Callable[[], float] = time.monotonic,
+    ) -> None:
         self.session = session
         self.sleep = sleep_fn
+        self._monotonic_fn = monotonic_fn
         self._cancel = threading.Event()
 
     def cancel(self) -> None:
@@ -251,12 +264,109 @@ class SerialUpgradeController:
             )
         return CommandResult(False, "用户名回显乱码，盲发密码未检测到 shell 提示符。")
 
-    def send_tftp_command_and_wait(self, command: str) -> CommandResult:
-        cursor = self.session.cursor()
-        self.session.send_line(command)
-        if self.session.wait_for_all(("done", "write"), TFTP_COMMAND_TIMEOUT_SECONDS, cursor):
-            return CommandResult(True, "检测到 TFTP 传输完成标记 done + write。")
-        return CommandResult(False, "等待样机串口 TFTP 完成标记超时。")
+    def send_tftp_command_and_wait(
+        self,
+        command: str,
+        on_output: Callable[[str], None] | None = None,
+    ) -> CommandResult:
+        """发送 tftp 指令并等待完成标记；命中 ARP 失败 + U-Boot> 时自动重试。
+
+        单次尝试窗口 TFTP_COMMAND_TIMEOUT_SECONDS；总尝试次数 TFTP_COMMAND_MAX_RETRIES。
+        on_output 用于在主程序执行日志里打印重试/成功提示，行为与
+        restore_factory_if_enabled 的 on_command_sent 一致；不传则不打印。
+        """
+        last_failure: str | None = None
+        for attempt in range(1, TFTP_COMMAND_MAX_RETRIES + 1):
+            cursor = self.session.cursor()
+            if on_output and attempt > 1:
+                on_output(
+                    f"自动重试 TFTP 命令：第 {attempt}/{TFTP_COMMAND_MAX_RETRIES} 次发送 {command}"
+                )
+            self.session.send_line(command)
+
+            completed, arp_failed = self._wait_for_tftp_completion_or_arp_failure(
+                cursor, TFTP_COMMAND_TIMEOUT_SECONDS
+            )
+            if completed:
+                if on_output and attempt > 1:
+                    on_output(
+                        f"TFTP 命令在第 {attempt} 次尝试时检测到完成标记 done + write。"
+                    )
+                return CommandResult(True, "检测到 TFTP 传输完成标记 done + write。")
+
+            if arp_failed:
+                last_failure = (
+                    f"第 {attempt} 次传输因 ARP Retry count exceeded 失败且样机返回 U-Boot> 提示符"
+                )
+                if on_output:
+                    if attempt < TFTP_COMMAND_MAX_RETRIES:
+                        on_output(
+                            f"检测到 {last_failure}，剩余 {TFTP_COMMAND_MAX_RETRIES - attempt} 次自动重试。"
+                        )
+                    else:
+                        on_output(
+                            f"检测到 {last_failure}，已达最大重试次数 {TFTP_COMMAND_MAX_RETRIES}。"
+                        )
+                if attempt >= TFTP_COMMAND_MAX_RETRIES:
+                    break
+                self.sleep(TFTP_COMMAND_RETRY_DELAY_SECONDS)
+                continue
+
+            return CommandResult(False, "等待样机串口 TFTP 完成标记超时。")
+
+        return CommandResult(
+            False,
+            f"TFTP 命令已重试 {TFTP_COMMAND_MAX_RETRIES} 次仍未成功：{last_failure or '原因未明'}。",
+        )
+
+    def _wait_for_tftp_completion_or_arp_failure(
+        self,
+        cursor: int,
+        timeout_seconds: float,
+    ) -> tuple[bool, bool]:
+        """按秒轮询：等待 done+write 完成标记，或识别 ARP 失败 + U-Boot> 模式。
+
+        主动轮询而非直接阻塞到 timeout_seconds：避免已知快速失败场景
+        （ARP 失败 + 样机返回提示符通常在数十秒内完成）消耗整段超时。
+
+        返回 (completed, arp_failed)：
+        - completed=True 表示在窗口内检测到 done + write。
+        - arp_failed=True 表示在窗口内检测到 ARP retry count exceeded + u-boot>。
+        - 两者皆 False 表示总等待超时仍未命中任何标记。
+        """
+        deadline = self._monotonic_fn() + timeout_seconds
+        poll_markers = (
+            "done",
+            "write",
+            TFTP_ARP_FAILURE_MARKER,
+            TFTP_RETRY_PROMPT_MARKER,
+        )
+        while self._monotonic_fn() < deadline:
+            # 先用 0 秒超时立即检查当前历史是否已命中完成标记。
+            if self.session.wait_for_all(("done", "write"), 0, cursor):
+                return True, False
+            # 检查是否已出现 ARP retry + U-Boot> 模式。
+            recent_text = self.session.peek_since(cursor).lower()
+            if (
+                TFTP_ARP_FAILURE_MARKER in recent_text
+                and TFTP_RETRY_PROMPT_MARKER in recent_text
+            ):
+                return False, True
+            # 让步：等最多 1 秒数据后再检查。
+            remaining = deadline - self._monotonic_fn()
+            if remaining <= 0:
+                break
+            self.session.wait_for_any(poll_markers, min(TFTP_COMMAND_POLL_SECONDS, remaining), cursor)
+        # 超时后再校验一次，避免边界遗漏。
+        if self.session.wait_for_all(("done", "write"), 0, cursor):
+            return True, False
+        recent_text = self.session.peek_since(cursor).lower()
+        if (
+            TFTP_ARP_FAILURE_MARKER in recent_text
+            and TFTP_RETRY_PROMPT_MARKER in recent_text
+        ):
+            return False, True
+        return False, False
 
     def monitor_post_tftp(self, seconds: float = POWER_RECYCLE_AFTER_UPGRADE_SECONDS) -> bool:
         cursor = self.session.cursor()
@@ -513,7 +623,8 @@ def _run_tftp_command_with_power_supply(
         listened_ip = server.bind_ip_actually_used or "0.0.0.0"
         emit(f"TFTPy 服务已监听：{listened_ip}:{server.port}，文件映射为 tclinux_allinone。")
         tftp_result = controller.send_tftp_command_and_wait(
-            f"tftp {request.tftp_server_ip}:tclinux_allinone"
+            f"tftp {request.tftp_server_ip}:tclinux_allinone",
+            on_output=emit,
         )
         if not tftp_result.ok:
             return tftp_result
