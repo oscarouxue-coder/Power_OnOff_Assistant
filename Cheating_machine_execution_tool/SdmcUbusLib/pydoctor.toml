@@ -1,0 +1,6 @@
+[tool.pydoctor]
+project-name = "SdmcUbusLib API"
+project-url = "https://example.com"
+html-output = "docs/api"
+add-package = ["."]
+

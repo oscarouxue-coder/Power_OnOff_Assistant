@@ -1,0 +1,1172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  
+
+  <head>
+    
+    <title>SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib</title>
+    <meta name="generator" content="pydoctor 25.4.0"> 
+        
+    </meta>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1 maximum-scale=1" />
+    <link rel="stylesheet" type="text/css" href="bootstrap.min.css" />
+    <link rel="stylesheet" type="text/css" href="apidocs.css" />
+    <link rel="stylesheet" type="text/css" href="extra.css" />
+    
+</head>
+
+  <body>
+
+    
+
+    <nav class="navbar navbar-default mainnavbar">
+      
+  
+  <div class="container-fluid">
+
+
+    <div class="navbar-header">
+      
+      <div class="navlinks">
+        <span class="navbar-brand">
+          <a href="https://example.com" class="projecthome">SdmcUbusLib API</a> <a href="index.html">API Documentation</a>
+        </span>
+
+        <a href="moduleIndex.html">
+          Modules
+        </a>
+
+        <a href="classIndex.html">
+          Classes
+        </a>
+
+        <a href="nameIndex.html">
+          Names
+        </a>
+
+        <div id="search-box-container">
+          <div class="input-group">
+            <input id="search-box" type="search" name="search-query" placeholder="Search..." aria-label="Search" minlength="2" class="form-control" autocomplete="off" />
+            
+            <span class="input-group-btn">
+              <a style="display: none;" class="btn btn-default" id="search-clear-button" title="Clear" onclick="clearSearch()"><img src="fonts/x-circle.svg" alt="Clear" /></a>
+              <a class="btn btn-default" id="apidocs-help-button" title="Help" href="apidocs-help.html"><img src="fonts/info.svg" alt="Help" /></a>
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      <div id="search-results-container" style="display: none;">
+        
+        <div id="search-buttons">
+          <span class="label label-default" id="search-docstrings-button">
+          <label class="checkbox-inline">
+            <input type="checkbox" id="toggle-search-in-docstrings-checkbox" value="false" onclick="toggleSearchInDocstrings()">
+              search in docstrings
+            </input>
+          </label>
+          </span>
+          
+        </div>
+        
+        <noscript>
+            <h1>Cannot search: JavaScript is not supported/enabled in your browser.</h1>
+        </noscript>
+
+        <div id="search-status"> </div>
+
+        <div class="warning" id="search-warn-box" style="display: none;">
+          <p class="rst-last"><span id="search-warn"></span></p>
+        </div>
+
+        <table id="search-results">
+          <!-- Filled dynamically by JS -->
+        </table>
+        
+        <div style="margin-top: 10px;">
+          <p>For more information on the search, visit the <a href="apidocs-help.html#rst-search">help page</a>.</p>
+        </div>
+      </div>
+
+    </div>
+
+
+  </div>
+</nav>
+    
+    <div class="container-fluid">
+
+      <!-- Side navigation -->
+      <div class="sidebarcontainer" style="display: none;">
+        
+        <div class="sidebar"><nav class="sidebar">
+  
+
+  <div>
+
+      <div class="thingTitle">
+        <span>Class</span>
+        <code class="thisobject"><a href="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.html" class="internal-link" title="This class"><wbr></wbr>Sdmc<wbr></wbr>Wlan<wbr></wbr>Lib</a></code> 
+      </div>
+      
+      <div>
+        
+
+        
+         
+
+        
+        
+
+        <div class="childrenKindTitle">Methods</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.__init__">__init__</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_keyword_arguments" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.get_keyword_arguments">get<wbr></wbr>_keyword<wbr></wbr>_arguments</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_keyword_documentation" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.get_keyword_documentation">get<wbr></wbr>_keyword<wbr></wbr>_documentation</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_keyword_names" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.get_keyword_names">get<wbr></wbr>_keyword<wbr></wbr>_names</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#run_keyword" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.run_keyword">run<wbr></wbr>_keyword</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#Ubus_GuestWlan_Get_info" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_GuestWlan_Get_info"><wbr></wbr>Ubus_<wbr></wbr>Guest<wbr></wbr>Wlan_<wbr></wbr>Get_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#Ubus_GuestWlan_Set_2g" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_GuestWlan_Set_2g"><wbr></wbr>Ubus_<wbr></wbr>Guest<wbr></wbr>Wlan_<wbr></wbr>Set_2g</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#Ubus_GuestWlan_Set_5g" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_GuestWlan_Set_5g"><wbr></wbr>Ubus_<wbr></wbr>Guest<wbr></wbr>Wlan_<wbr></wbr>Set_5g</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#Ubus_Wlan_Get_All_2G_info" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Get_All_2G_info"><wbr></wbr>Ubus_<wbr></wbr>Wlan_<wbr></wbr>Get_<wbr></wbr>All_2<wbr></wbr>G_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#Ubus_Wlan_Get_All_5G_info" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Get_All_5G_info"><wbr></wbr>Ubus_<wbr></wbr>Wlan_<wbr></wbr>Get_<wbr></wbr>All_5<wbr></wbr>G_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#Ubus_Wlan_Get_All_Bandsteering_info" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Get_All_Bandsteering_info"><wbr></wbr>Ubus_<wbr></wbr>Wlan_<wbr></wbr>Get_<wbr></wbr>All_<wbr></wbr>Bandsteering_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#Ubus_Wlan_Set_2G" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Set_2G"><wbr></wbr>Ubus_<wbr></wbr>Wlan_<wbr></wbr>Set_2<wbr></wbr>G</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#Ubus_Wlan_Set_5G" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Set_5G"><wbr></wbr>Ubus_<wbr></wbr>Wlan_<wbr></wbr>Set_5<wbr></wbr>G</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#Ubus_Wlan_Set_BandSteering" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Set_BandSteering"><wbr></wbr>Ubus_<wbr></wbr>Wlan_<wbr></wbr>Set_<wbr></wbr>Band<wbr></wbr>Steering</a></code>
+            </div>
+        
+
+    </li><li class="private">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#_get_self_keywords" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib._get_self_keywords">_get<wbr></wbr>_self<wbr></wbr>_keywords</a></code>
+            </div>
+        
+
+    </li><li class="private">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#_Ubus_Network_GuestWlan_Init" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib._Ubus_Network_GuestWlan_Init">_<wbr></wbr>Ubus_<wbr></wbr>Network_<wbr></wbr>Guest<wbr></wbr>Wlan_<wbr></wbr>Init</a></code>
+            </div>
+        
+
+    </li><li class="private">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#_Ubus_wlan_init" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib._Ubus_wlan_init">_<wbr></wbr>Ubus_wlan_init</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+
+        <div class="childrenKindTitle">Attributes</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#guestwlan" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.guestwlan">guestwlan</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#keywords" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.keywords">keywords</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#wlan_manager" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.wlan_manager">wlan<wbr></wbr>_manager</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+        
+      </div>
+  </div><div>
+
+      <div class="thingTitle">
+        <span>Package</span>
+        <code><a href="SdmcUbusLib.libs.Wlan_moudle_api.html" class="internal-link" title="The parent of this class"><wbr></wbr>Wlan_moudle_api</a></code> 
+      </div>
+      
+      <div>
+        
+
+        <div class="childrenKindTitle">Modules</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="SdmcUbusLib.libs.Wlan_moudle_api.guestnetwork.html" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.guestnetwork">guestnetwork</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="SdmcUbusLib.libs.Wlan_moudle_api.wlan.html" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.wlan">wlan</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        <div class="childrenKindTitle">Classes</div>
+        <ul>
+    
+    <li class=" thisobject">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.html" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib"><wbr></wbr>Sdmc<wbr></wbr>Wlan<wbr></wbr>Lib</a></code>
+            </div>
+        
+
+    </li>
+</ul>
+
+        <div class="childrenKindTitle">Functions</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="SdmcUbusLib.libs.Wlan_moudle_api.html#debug_test" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.debug_test">debug<wbr></wbr>_test</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+
+        
+         
+
+        
+         
+        
+      </div>
+  </div>
+
+</nav>
+        </div>
+        <div id="collapseSideBar">
+          <a class="btn btn-link" onclick="toggleSideBarCollapse()" title="Toggle Sidebar Collapse">
+          </a>
+        </div> 
+        <script src="sidebartoggle.js" type="text/javascript"></script>
+       
+      </div>
+
+      <div id="main" class="">
+        
+
+        
+
+        <div class="page-header">
+          <h1 class="class"><code><code><a href="index.html" class="internal-link">SdmcUbusLib</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.html" class="internal-link" title="SdmcUbusLib.libs">libs</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.Wlan_moudle_api.html" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api">Wlan_moudle_api</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.html" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib">SdmcWlanLib</a></code></code></h1>
+          <div id="showPrivate">
+            <button class="btn btn-link" onclick="togglePrivate()">Toggle Private API</button>
+          </div>
+        </div>
+
+        <div class="categoryHeader">
+          class documentation
+        </div>
+
+        <div class="extrasDocstring">
+          <p class="class-signature"><code><span class="py-keyword">class</span> <span class="py-defname">SdmcWlanLib</span>(object):</code></p><p>Constructor: <code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.__init__">SdmcWlanLib()</a></code></p>
+          <p><a href="classIndex.html#SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib">View In Hierarchy</a></p>
+        </div>
+
+        <div class="moduleDocstring">
+          <div><p>测试库 demo for class</p></div>
+        </div>
+
+        <div id="splitTables">
+          <table class="children sortable" id="id93">
+  
+  
+  <tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.__init__">__init__</a></code></td>
+    <td><span class="rst-undocumented">No summary</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_keyword_arguments" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.get_keyword_arguments">get<wbr></wbr>_keyword<wbr></wbr>_arguments</a></code></td>
+    <td>返回关键字的参数列表</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_keyword_documentation" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.get_keyword_documentation">get<wbr></wbr>_keyword<wbr></wbr>_documentation</a></code></td>
+    <td><span class="rst-undocumented">No summary</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_keyword_names" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.get_keyword_names">get<wbr></wbr>_keyword<wbr></wbr>_names</a></code></td>
+    <td><span class="rst-undocumented">No summary</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#run_keyword" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.run_keyword">run<wbr></wbr>_keyword</a></code></td>
+    <td><span class="rst-undocumented">No summary</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#Ubus_GuestWlan_Get_info" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_GuestWlan_Get_info"><wbr></wbr>Ubus_<wbr></wbr>Guest<wbr></wbr>Wlan_<wbr></wbr>Get_info</a></code></td>
+    <td>【功能描述】 获取访客网络信息</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#Ubus_GuestWlan_Set_2g" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_GuestWlan_Set_2g"><wbr></wbr>Ubus_<wbr></wbr>Guest<wbr></wbr>Wlan_<wbr></wbr>Set_2g</a></code></td>
+    <td>【功能描述】 通过 ubus 设置 2G 访客网络 WiFi</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#Ubus_GuestWlan_Set_5g" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_GuestWlan_Set_5g"><wbr></wbr>Ubus_<wbr></wbr>Guest<wbr></wbr>Wlan_<wbr></wbr>Set_5g</a></code></td>
+    <td>【功能描述】 通过 ubus 设置 5G 访客网络 WiFi</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#Ubus_Wlan_Get_All_2G_info" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Get_All_2G_info"><wbr></wbr>Ubus_<wbr></wbr>Wlan_<wbr></wbr>Get_<wbr></wbr>All_2<wbr></wbr>G_info</a></code></td>
+    <td>功能描述：获取2G WiFi所有信息；</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#Ubus_Wlan_Get_All_5G_info" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Get_All_5G_info"><wbr></wbr>Ubus_<wbr></wbr>Wlan_<wbr></wbr>Get_<wbr></wbr>All_5<wbr></wbr>G_info</a></code></td>
+    <td>功能描述：获取5G WiFi所有信息；</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#Ubus_Wlan_Get_All_Bandsteering_info" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Get_All_Bandsteering_info"><wbr></wbr>Ubus_<wbr></wbr>Wlan_<wbr></wbr>Get_<wbr></wbr>All_<wbr></wbr>Bandsteering_info</a></code></td>
+    <td>功能描述：</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#Ubus_Wlan_Set_2G" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Set_2G"><wbr></wbr>Ubus_<wbr></wbr>Wlan_<wbr></wbr>Set_2<wbr></wbr>G</a></code></td>
+    <td>功能描述：设置2.4G WiFi 参数</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#Ubus_Wlan_Set_5G" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Set_5G"><wbr></wbr>Ubus_<wbr></wbr>Wlan_<wbr></wbr>Set_5<wbr></wbr>G</a></code></td>
+    <td>功能描述：设置5G WiFi 参数</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#Ubus_Wlan_Set_BandSteering" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Set_BandSteering"><wbr></wbr>Ubus_<wbr></wbr>Wlan_<wbr></wbr>Set_<wbr></wbr>Band<wbr></wbr>Steering</a></code></td>
+    <td>功能描述：</td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#guestwlan" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.guestwlan">guestwlan</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#keywords" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.keywords">keywords</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#wlan_manager" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.wlan_manager">wlan<wbr></wbr>_manager</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method private">
+    
+    <td>Method</td>
+    <td><code><a href="#_get_self_keywords" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib._get_self_keywords">_get<wbr></wbr>_self<wbr></wbr>_keywords</a></code></td>
+    <td><span class="rst-undocumented">No summary</span></td>
+  </tr><tr class="method private">
+    
+    <td>Method</td>
+    <td><code><a href="#_Ubus_Network_GuestWlan_Init" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib._Ubus_Network_GuestWlan_Init">_<wbr></wbr>Ubus_<wbr></wbr>Network_<wbr></wbr>Guest<wbr></wbr>Wlan_<wbr></wbr>Init</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method private">
+    
+    <td>Method</td>
+    <td><code><a href="#_Ubus_wlan_init" class="internal-link" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib._Ubus_wlan_init">_<wbr></wbr>Ubus_wlan_init</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr>
+</table>
+          
+
+            
+        </div>
+
+        <div id="childList">
+          <div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.__init__">
+    
+  </a>
+  <a name="__init__">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">__init__</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#__init__" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.__init__">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.get_keyword_arguments">
+    
+  </a>
+  <a name="get_keyword_arguments">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_keyword_arguments</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">name</span>):</span>
+    
+    <a class="headerLink" href="#get_keyword_arguments" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.get_keyword_arguments">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>返回关键字的参数列表</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.get_keyword_documentation">
+    
+  </a>
+  <a name="get_keyword_documentation">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_keyword_documentation</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">name</span>):</span>
+    
+    <a class="headerLink" href="#get_keyword_documentation" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.get_keyword_documentation">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.get_keyword_names">
+    
+  </a>
+  <a name="get_keyword_names">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_keyword_names</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_keyword_names" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.get_keyword_names">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.run_keyword">
+    
+  </a>
+  <a name="run_keyword">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">run_keyword</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">name, </span><span class="rst-sig-param">args, </span><span class="rst-sig-param">kwargs=None</span>):</span>
+    
+    <a class="headerLink" href="#run_keyword" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.run_keyword">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_GuestWlan_Get_info">
+    
+  </a>
+  <a name="Ubus_GuestWlan_Get_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">Ubus_GuestWlan_Get_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#Ubus_GuestWlan_Get_info" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_GuestWlan_Get_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>【功能描述】 获取访客网络信息</p>
+<p>【返回值】 访客网络信息 {'guest_2g_ssid_Enable': True, 'guest_2g_ssid_SSID': 'Sdmc_guest_2g', 'guest_2g_ap_BroadcastSSID': True, 'guest_2g_ap_AuthorizationMode': 'WPA2-Personal', 'guest_2g_ap_WPAPreSharedKey': 'Sdmc@123', 'guest_2g_ap_Speedlimit': 0, 'guest_5g_ssid_Enable': True, 'guest_5g_ssid_SSID': 'Sdmc_guest_5g', 'guest_5g_ap_BroadcastSSID': False, 'guest_5g_ap_AuthorizationMode': 'WPA2-Personal', 'guest_5g_ap_WPAPreSharedKey': 'Sdmc@123', 'guest_5g_ap_Speedlimit': 0}</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_GuestWlan_Set_2g">
+    
+  </a>
+  <a name="Ubus_GuestWlan_Set_2g">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">Ubus_GuestWlan_Set_2g</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">ssid, </span><span class="rst-sig-param">password, </span><span class="rst-sig-param">**kwargs</span>):</span>
+    
+    <a class="headerLink" href="#Ubus_GuestWlan_Set_2g" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_GuestWlan_Set_2g">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+通过 ubus 设置 2G 访客网络 WiFi
+
+【入参】
+ ssid: 2G SSID
+ key: 2G 密码
+ ratelimit: 2G 限速
+ mode: 2G 认证模式 None/WPA2-Personal/WPA3-Personal-Transition
+ enable: 1表示开启，0表示关闭
+ broadcast: 1表示开启，0表示关闭
+ wait_time: 默认90，wifi重启等待时间
+
+【返回值】
+ERR_SUCCESS  : 执行成功
+ERR_FAIL : 执行失败 或 抛出异常
+
+【示例】
+Example:
+|  set_guest_wifi_2g  |  ssid=sdmc_2g  |  key=Sdmc@123  |</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_GuestWlan_Set_5g">
+    
+  </a>
+  <a name="Ubus_GuestWlan_Set_5g">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">Ubus_GuestWlan_Set_5g</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">ssid, </span><span class="rst-sig-param">password, </span><span class="rst-sig-param">**kwargs</span>):</span>
+    
+    <a class="headerLink" href="#Ubus_GuestWlan_Set_5g" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_GuestWlan_Set_5g">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+通过 ubus 设置 5G 访客网络 WiFi
+
+【入参】
+ ssid: 5G SSID
+ key: 5G 密码
+ ratelimit: 5G 限速
+ mode: 5G 认证模式 None/WPA2-Personal/WPA3-Personal-Transition
+ enable: 1表示开启，0表示关闭
+ broadcast: 1表示开启，0表示关闭
+ wait_time: 默认90，wifi重启等待时间
+
+【返回值】
+ERR_SUCCESS  : 执行成功
+ERR_FAIL : 执行失败 或 抛出异常
+
+【示例】
+Example:
+|  set_guest_wifi_5g  |  ssid=sdmc_5g  |  key=Sdmc@123  |</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Get_All_2G_info">
+    
+  </a>
+  <a name="Ubus_Wlan_Get_All_2G_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">Ubus_Wlan_Get_All_2G_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#Ubus_Wlan_Get_All_2G_info" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Get_All_2G_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：获取2G WiFi所有信息；</p>
+<p>返回值： 字典：{'Enable SSID': True, 'SSID': 'SDMC_4D2028', 'MaxAllowedAssociations': 32, 'BroadcastSSID': True, 'WMMEnable': True, 'AuthorizationMode': 'WPA2-Personal', 'WPAPreSharedKey': 'Sdmc@123', 'AuthorizationModesSupported': 'None,WPA2-Personal,WPA3-Personal-Transition', 'ChannelEnabled': 'auto', 'Channel': 2, 'ChannelBandwidth': '20/40MHz', 'OperatingMode': 'b,g,n,ax', 'TransmitPower': 100, 'ChannelSupport': 'auto,1,2,3,4,5,6,7,8,9,10,11', 'ModeSupport': ['b', 'b,g', 'b,g,n', 'b,g,n,ax'], 'BandwidthSupport': '20/40MHz,20MHz,40MHz'}</p>
+<p>Example: |  ${ret}  | Ubus_Network_Wlan_Get_All_2G_info |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Get_All_5G_info">
+    
+  </a>
+  <a name="Ubus_Wlan_Get_All_5G_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">Ubus_Wlan_Get_All_5G_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#Ubus_Wlan_Get_All_5G_info" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Get_All_5G_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：获取5G WiFi所有信息；</p>
+<p>返回值： 字典：{'Enable SSID': True, 'SSID': 'SDMC_4D2028_5G', 'MaxAllowedAssociations': 32, 'BroadcastSSID': True, 'WMMEnable': True, 'AuthorizationMode': 'WPA2-Personal', 'WPAPreSharedKey': 'Sdmc@123', 'AuthorizationModesSupported': 'None,WPA2-Personal,WPA3-Personal-Transition', 'ChannelEnabled': 'auto', 'Channel': 116, 'ChannelBandwidth': '160MHz', 'OperatingMode': 'a,n,ac,ax', 'TransmitPower': 100, 'ChannelSupport': 'auto,36,40,44,48,52,56,60,64,100,104,108,112,116,120,124,128,132,136,140,149,153,157,161,165', 'ModeSupport': ['a', 'a,n', 'a,n,ac', 'a,n,ac,ax'], 'BandwidthSupport': '160MHz,20MHz,40MHz,80MHz'}</p>
+<p>Example: |  ${ret}  | Ubus_Network_Wlan_Get_All_5G_info |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Get_All_Bandsteering_info">
+    
+  </a>
+  <a name="Ubus_Wlan_Get_All_Bandsteering_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">Ubus_Wlan_Get_All_Bandsteering_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#Ubus_Wlan_Get_All_Bandsteering_info" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Get_All_Bandsteering_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：</p>
+<p>获取Bandsteering 信息</p>
+<p>返回值：</p>
+<p>Bandsteering_info:Bandsteering的所有信息</p>
+<p>{'DualBandEnable': True, 'Merged_Config': {'Enable SSID': True, 'SSID': 'Test_5G_01', 'MaxAllowedAssociations': 32, 'BroadcastSSID': True, 'WMMEnable': True, 'AuthorizationMode': 'WPA2-Personal', 'WPAPreSharedKey': 'Sdmc@1234_5G'}}</p>
+<p>Example: | ${ret} |  Ubus_Network_Wlan_Set_BandSteering  |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Set_2G">
+    
+  </a>
+  <a name="Ubus_Wlan_Set_2G">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">Ubus_Wlan_Set_2G</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">ssid, </span><span class="rst-sig-param">password, </span><span class="rst-sig-param">**kwargs</span>):</span>
+    
+    <a class="headerLink" href="#Ubus_Wlan_Set_2G" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Set_2G">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：设置2.4G WiFi 参数</p>
+<p>参数：</p>
+<p>bandsteering:双频合一开关；默认0：关；可填：0：关；1：开；</p>
+<p>ssid: WIFI名称，默认：“Test_2G_01”;</p>
+<p>password: WIFI密码， 默认：“Sdmc@1234_2G”；</p>
+<p>channel: WIFI信道， 默认： auto；可填：auto，1，2，3......，11；</p>
+<p>bandwidth：带宽， 默认： 20/40MHz；可填：20MHz；40MHz；20/40MHz；</p>
+<p>wifi_mode: WiFi模式，默认：b,g,n,ax； 可填：b; b,g; b,g,n; b,g,n,ax; b,g,n,ax,be</p>
+<p>security_mode: 安全认证模式，默认：WPA2-Personal; 可填： None； WPA2-Personal; WPA3-Personal-Transition;</p>
+<p>ssid_enable: WIFI ssid 使能开关；默认：True 对应开； 可填：True 对应 开； False 对应 关；</p>
+<p>max_connect_count: WiFi最大连接数量；默认：32；可填： 0-32；</p>
+<p>broadcast_ssid: 广播WiFi使能开关； 默认： 1 开启； 可填：0 对应 关；1 对应 开；</p>
+<p>WMN_Enable：WMN使能开关； 默认： 1 开启； 可填：0 对应 关； 1 对应 开；</p>
+<p>TransmitPower：WiFi发射功率； 默认： 100； 可填；20，40，60，80，100；</p>
+<p>wait_time: 设置wifi等待时间；默认：90</p>
+<p>Example: |  Ubus_Network_Wlan_Set_2G  | ssid=jjwwbb6688_2G | password=J@wb1234 | channel=1 | bandwidth=2 | wifi_mode=3 |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Set_5G">
+    
+  </a>
+  <a name="Ubus_Wlan_Set_5G">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">Ubus_Wlan_Set_5G</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">ssid, </span><span class="rst-sig-param">password, </span><span class="rst-sig-param">**kwargs</span>):</span>
+    
+    <a class="headerLink" href="#Ubus_Wlan_Set_5G" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Set_5G">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：设置5G WiFi 参数</p>
+<p>参数：</p>
+<p>bandsteering:双频合一开关；默认0：关；可填：0：关；1：开；</p>
+<p>ssid: WIFI名称，默认：“Test_5G_01”;</p>
+<p>password: WIFI密码， 默认：“Sdmc@1234_5G”；</p>
+<p>channel: WIFI信道， 默认： auto；可填：auto...36..64..149...；</p>
+<p>bandwidth：带宽， 默认：160MHZ；可填：20MHz；40MHz；80MHz；160MHz</p>
+<p>wifi_mode: WiFi模式，默认：a,n,ac,ax； 可填： a; a,n;  a,n,ac; a,n,ac,ax;</p>
+<p>security_mode: 安全认证模式，默认：WPA2-Personal; 可填：None；WPA2-Personal; WPA3-Personal-Transition;</p>
+<p>ssid_enable: WIFI ssid 使能开关；默认：True 对应开； 可填：True 对应 开； False 对应 关；</p>
+<p>max_connect_count: WiFi最大连接数量；默认：32；可填： 0-32；</p>
+<p>broadcast_ssid: 广播WiFi使能开关； 默认： 1 开启； 可填：0 对应 关；1 对应 开；</p>
+<p>WMN_Enable：WMN使能开关； 默认： 1 开启； 可填：0 对应 关； 1 对应 开；</p>
+<p>TransmitPower：WiFi发射功率； 默认： 100； 可填；20，40，60，80，100；</p>
+<p>wait_time: 设置wifi等待时间；默认：90</p>
+<p>Example: |  Ubus_Network_Wlan_Set_5G  | ssid=jjwwbb6688_5G | password=J@wb1234 | channel=1 | bandwidth=2 | wifi_mode=3 |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Set_BandSteering">
+    
+  </a>
+  <a name="Ubus_Wlan_Set_BandSteering">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">Ubus_Wlan_Set_BandSteering</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">bandsteering, </span><span class="rst-sig-param">ssid, </span><span class="rst-sig-param">password, </span><span class="rst-sig-param">**kwargs</span>):</span>
+    
+    <a class="headerLink" href="#Ubus_Wlan_Set_BandSteering" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.Ubus_Wlan_Set_BandSteering">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：</p>
+<p>设置双频合一参数</p>
+<p>入参：</p>
+<p>bandsteering:双频合一开关；默认0：关；可填：0：关；1：开；</p>
+<p>ssid: WIFI名称，默认：“Test_2G_01”;</p>
+<p>password: WIFI密码， 默认：“Sdmc@1234_2G”；</p>
+<p>security_mode: 安全认证模式，默认：WPA2-Personal; 可填： None；WPA2-Personal; WPA2-Personal-Transition;</p>
+<p>ssid_enable: WIFI ssid 使能开关；默认：True 对应开； 可填：True 对应 开； False 对应 关；</p>
+<p>max_connect_count: WiFi最大连接数量；默认：32；可填： 0-32；</p>
+<p>broadcast_ssid: 广播WiFi使能开关； 默认： 1 开启； 可填：0 对应 关；1 对应 开；</p>
+<p>WMN_Enable：WMN使能开关； 默认： 1 开启； 可填：0 对应 关； 1 对应 开；</p>
+<p>wait_time: 设置wifi等待时间；默认：90</p>
+<p>Example: |  Ubus_Network_Wlan_Set_BandSteering  | ssid=jjwwbb6688_5G | password=J@wb1234 |</p>
+</div>
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.guestwlan">
+    
+  </a>
+  <a name="guestwlan">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">guestwlan</span> =
+    
+    <a class="headerLink" href="#guestwlan" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.guestwlan">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.keywords">
+    
+  </a>
+  <a name="keywords">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">keywords</span>: <code>list</code> =
+    
+    <a class="headerLink" href="#keywords" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.keywords">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.wlan_manager">
+    
+  </a>
+  <a name="wlan_manager">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">wlan_manager</span> =
+    
+    <a class="headerLink" href="#wlan_manager" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib.wlan_manager">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="basemethod private">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib._get_self_keywords">
+    
+  </a>
+  <a name="_get_self_keywords">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">_get_self_keywords</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#_get_self_keywords" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib._get_self_keywords">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div></div>
+  </div>
+</div><div class="basemethod private">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib._Ubus_Network_GuestWlan_Init">
+    
+  </a>
+  <a name="_Ubus_Network_GuestWlan_Init">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">_Ubus_Network_GuestWlan_Init</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#_Ubus_Network_GuestWlan_Init" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib._Ubus_Network_GuestWlan_Init">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod private">
+  
+  
+  <a name="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib._Ubus_wlan_init">
+    
+  </a>
+  <a name="_Ubus_wlan_init">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">_Ubus_wlan_init</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#_Ubus_wlan_init" title="SdmcUbusLib.libs.Wlan_moudle_api.SdmcWlanLib._Ubus_wlan_init">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div>
+        </div>
+      
+      </div>
+    </div>
+
+    <footer class="navbar navbar-default">
+
+  
+  <div class="container-fluid">
+    <a href="index.html">API Documentation</a> for <a href="https://example.com" class="projecthome">SdmcUbusLib API</a>,
+  generated by <a href="https://github.com/twisted/pydoctor/">pydoctor</a>
+    25.4.0 at 2025-11-05 17:50:00.
+  </div>
+
+  <!-- Search related scripts needs to be loaded at the end of HTML 
+    parsing not to introduce overhead and display HTML data asap -->
+  <script src="ajax.js" type="text/javascript"></script>
+  <script src="searchlib.js" type="text/javascript"></script>
+  <script src="search.js" type="text/javascript"></script>
+
+</footer>
+  
+    <script src="pydoctor.js" type="text/javascript"></script>
+
+  </body>
+</html>

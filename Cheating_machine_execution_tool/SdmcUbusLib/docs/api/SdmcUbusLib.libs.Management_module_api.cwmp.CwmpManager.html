@@ -1,0 +1,728 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  
+
+  <head>
+    
+    <title>SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager</title>
+    <meta name="generator" content="pydoctor 25.4.0"> 
+        
+    </meta>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1 maximum-scale=1" />
+    <link rel="stylesheet" type="text/css" href="bootstrap.min.css" />
+    <link rel="stylesheet" type="text/css" href="apidocs.css" />
+    <link rel="stylesheet" type="text/css" href="extra.css" />
+    
+</head>
+
+  <body>
+
+    
+
+    <nav class="navbar navbar-default mainnavbar">
+      
+  
+  <div class="container-fluid">
+
+
+    <div class="navbar-header">
+      
+      <div class="navlinks">
+        <span class="navbar-brand">
+          <a href="https://example.com" class="projecthome">SdmcUbusLib API</a> <a href="index.html">API Documentation</a>
+        </span>
+
+        <a href="moduleIndex.html">
+          Modules
+        </a>
+
+        <a href="classIndex.html">
+          Classes
+        </a>
+
+        <a href="nameIndex.html">
+          Names
+        </a>
+
+        <div id="search-box-container">
+          <div class="input-group">
+            <input id="search-box" type="search" name="search-query" placeholder="Search..." aria-label="Search" minlength="2" class="form-control" autocomplete="off" />
+            
+            <span class="input-group-btn">
+              <a style="display: none;" class="btn btn-default" id="search-clear-button" title="Clear" onclick="clearSearch()"><img src="fonts/x-circle.svg" alt="Clear" /></a>
+              <a class="btn btn-default" id="apidocs-help-button" title="Help" href="apidocs-help.html"><img src="fonts/info.svg" alt="Help" /></a>
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      <div id="search-results-container" style="display: none;">
+        
+        <div id="search-buttons">
+          <span class="label label-default" id="search-docstrings-button">
+          <label class="checkbox-inline">
+            <input type="checkbox" id="toggle-search-in-docstrings-checkbox" value="false" onclick="toggleSearchInDocstrings()">
+              search in docstrings
+            </input>
+          </label>
+          </span>
+          
+        </div>
+        
+        <noscript>
+            <h1>Cannot search: JavaScript is not supported/enabled in your browser.</h1>
+        </noscript>
+
+        <div id="search-status"> </div>
+
+        <div class="warning" id="search-warn-box" style="display: none;">
+          <p class="rst-last"><span id="search-warn"></span></p>
+        </div>
+
+        <table id="search-results">
+          <!-- Filled dynamically by JS -->
+        </table>
+        
+        <div style="margin-top: 10px;">
+          <p>For more information on the search, visit the <a href="apidocs-help.html#rst-search">help page</a>.</p>
+        </div>
+      </div>
+
+    </div>
+
+
+  </div>
+</nav>
+    
+    <div class="container-fluid">
+
+      <!-- Side navigation -->
+      <div class="sidebarcontainer" style="display: none;">
+        
+        <div class="sidebar"><nav class="sidebar">
+  
+
+  <div>
+
+      <div class="thingTitle">
+        <span>Class</span>
+        <code class="thisobject"><a href="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.html" class="internal-link" title="This class"><wbr></wbr>Cwmp<wbr></wbr>Manager</a></code> 
+      </div>
+      
+      <div>
+        
+
+        
+         
+
+        
+        
+
+        <div class="childrenKindTitle">Methods</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.__init__">__init__</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#debug_test" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.debug_test">debug<wbr></wbr>_test</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_tr069_inform_status" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.get_tr069_inform_status">get<wbr></wbr>_tr069<wbr></wbr>_inform<wbr></wbr>_status</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_tr069_setting_info" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.get_tr069_setting_info">get<wbr></wbr>_tr069<wbr></wbr>_setting<wbr></wbr>_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#inform_tr069" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.inform_tr069">inform<wbr></wbr>_tr069</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#set_tr069_setting" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.set_tr069_setting">set<wbr></wbr>_tr069<wbr></wbr>_setting</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+
+        <div class="childrenKindTitle">Attributes</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#ip" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.ip">ip</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#password" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.password">password</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#result_mapping" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.result_mapping">result<wbr></wbr>_mapping</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#ubus" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.ubus">ubus</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#username" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.username">username</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+        
+      </div>
+  </div><div>
+
+      <div class="thingTitle">
+        <span>Module</span>
+        <code><a href="SdmcUbusLib.libs.Management_module_api.cwmp.html" class="internal-link" title="The parent of this class">cwmp</a></code> 
+      </div>
+      
+      <div>
+        
+
+        
+         
+
+        <div class="childrenKindTitle">Classes</div>
+        <ul>
+    
+    <li class=" thisobject">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.html" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager"><wbr></wbr>Cwmp<wbr></wbr>Manager</a></code>
+            </div>
+        
+
+    </li>
+</ul>
+
+        
+         
+
+        
+         
+
+        
+         
+
+        
+         
+        
+      </div>
+  </div>
+
+</nav>
+        </div>
+        <div id="collapseSideBar">
+          <a class="btn btn-link" onclick="toggleSideBarCollapse()" title="Toggle Sidebar Collapse">
+          </a>
+        </div> 
+        <script src="sidebartoggle.js" type="text/javascript"></script>
+       
+      </div>
+
+      <div id="main" class="">
+        
+
+        
+
+        <div class="page-header">
+          <h1 class="class"><code><code><a href="index.html" class="internal-link">SdmcUbusLib</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.html" class="internal-link" title="SdmcUbusLib.libs">libs</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.Management_module_api.html" class="internal-link" title="SdmcUbusLib.libs.Management_module_api">Management_module_api</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.Management_module_api.cwmp.html" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp">cwmp</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.html" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager">CwmpManager</a></code></code></h1>
+          <div id="showPrivate">
+            <button class="btn btn-link" onclick="togglePrivate()">Toggle Private API</button>
+          </div>
+        </div>
+
+        <div class="categoryHeader">
+          class documentation
+        </div>
+
+        <div class="extrasDocstring">
+          <p class="class-signature"><code><span class="py-keyword">class</span> <span class="py-defname">CwmpManager</span>:</code></p><p>Constructor: <code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.__init__">CwmpManager(ip, username, password)</a></code></p>
+          <p><a href="classIndex.html#SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager">View In Hierarchy</a></p>
+        </div>
+
+        <div class="moduleDocstring">
+          <div><p class="undocumented">Undocumented</p></div>
+        </div>
+
+        <div id="splitTables">
+          <table class="children sortable" id="id30">
+  
+  
+  <tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.__init__">__init__</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#debug_test" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.debug_test">debug<wbr></wbr>_test</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_tr069_inform_status" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.get_tr069_inform_status">get<wbr></wbr>_tr069<wbr></wbr>_inform<wbr></wbr>_status</a></code></td>
+    <td>【功能描述】 查询TR069 inform状态，并返回查询结果</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_tr069_setting_info" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.get_tr069_setting_info">get<wbr></wbr>_tr069<wbr></wbr>_setting<wbr></wbr>_info</a></code></td>
+    <td>【功能描述】 获取TR069参数并返回结果</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#inform_tr069" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.inform_tr069">inform<wbr></wbr>_tr069</a></code></td>
+    <td>【功能描述】 触发TR069 Inform并轮询结果状态</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#set_tr069_setting" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.set_tr069_setting">set<wbr></wbr>_tr069<wbr></wbr>_setting</a></code></td>
+    <td>【功能描述】 设置TR069管理服务器配置</td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#ip" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.ip">ip</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#password" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.password">password</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#result_mapping" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.result_mapping">result<wbr></wbr>_mapping</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#ubus" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.ubus">ubus</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#username" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.username">username</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr>
+</table>
+          
+
+            
+        </div>
+
+        <div id="childList">
+          <div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.__init__">
+    
+  </a>
+  <a name="__init__">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">__init__</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">ip, </span><span class="rst-sig-param">username, </span><span class="rst-sig-param">password</span>):</span>
+    
+    <a class="headerLink" href="#__init__" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.__init__">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.debug_test">
+    
+  </a>
+  <a name="debug_test">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">debug_test</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#debug_test" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.debug_test">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.get_tr069_inform_status">
+    
+  </a>
+  <a name="get_tr069_inform_status">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_tr069_inform_status</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">timeout=60</span>):</span>
+    
+    <a class="headerLink" href="#get_tr069_inform_status" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.get_tr069_inform_status">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>【功能描述】 查询TR069 inform状态，并返回查询结果</p>
+<p>【入参】 timeout=60 : 等待 finish_inform 时间</p>
+<p>【返回值】 inform_status(元组) : inform 成功返回 ("success", "成功")/inform 失败返回 ('error', '失败类型')</p>
+<p>【示例】 Example: |  Some Keyword  |  timeout=60  |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.get_tr069_setting_info">
+    
+  </a>
+  <a name="get_tr069_setting_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_tr069_setting_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_tr069_setting_info" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.get_tr069_setting_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>【功能描述】 获取TR069参数并返回结果</p>
+<p>【入参】</p>
+<p>【返回值】 tr069_setting_info : {'PeriodicInformEnable':true,'inform_interval'=86400,....}</p>
+<p>【示例】 Example:</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.inform_tr069">
+    
+  </a>
+  <a name="inform_tr069">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">inform_tr069</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">timeout=60, </span><span class="rst-sig-param">interval=1</span>):</span>
+    
+    <a class="headerLink" href="#inform_tr069" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.inform_tr069">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>【功能描述】 触发TR069 Inform并轮询结果状态</p>
+<p>【入参】 timeout=60: 超时时间(秒)，默认60秒 interval=1: 轮询间隔(秒)，默认1秒</p>
+<p>【返回值】 tuple: (最终状态, 结果代码) 状态值: "success"、"timeout"、"error" 结果代码: 对应各种错误码或成功码(10_success)</p>
+<p>【示例】 Example: |  Some Keyword  |  timeout=60  |  interval=1  |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.set_tr069_setting">
+    
+  </a>
+  <a name="set_tr069_setting">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">set_tr069_setting</span><span class="function-signature long-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">Url=<span class="rst-variable-quote">'</span><span class="rst-variable-string">http://172.18.18.101:7547/ACS-server/ACS</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">Username=<span class="rst-variable-quote">'</span><span class="rst-variable-string">hgw</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">Password=<span class="rst-variable-quote">'</span><span class="rst-variable-string">hgw</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">Period_Inform_Enable=1, </span><span class="rst-sig-param">Periodic_Inform_Interval=86400, </span><span class="rst-sig-param">HTTP_Connection_Request_Enable=1, </span><span class="rst-sig-param">Connection_Request_Username=<span class="rst-variable-quote">'</span><span class="rst-variable-string">itms</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">Connection_Request_Password=<span class="rst-variable-quote">'</span><span class="rst-variable-string">itms</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">Certificate_Enable=0</span>):</span>
+    
+    <a class="headerLink" href="#set_tr069_setting" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.set_tr069_setting">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+设置TR069管理服务器配置
+
+【入参】
+Period_Inform_Enable=1 : 是否启用周期上报
+Periodic_Inform_Interval=86400 : 上报间隔(秒)
+URL='http://172.18.18.101:7547/ACS-server/ACS' : ACS服务器URL（允许空字符串）
+Username='hgw' : ACS用户名（允许空字符串）
+Password='hgw' : ACS密码（允许空字符串）
+HTTP_Connection_Request_Enable=1 : 是否启用HTTP连接请求
+Connection_Request_Username='itms' : 连接请求用户名（允许空字符串）
+Connection_Request_Password='itms' : 连接请求密码（允许空字符串）
+Certificate_Enable=0 : 是否启用证书
+
+【返回值】
+ubus调用结果：成功
+0：失败
+
+【示例】
+Example:
+|  Some Keyword  |  Url='http://172.18.18.101:7547/ACS-server/ACS'  |  Username='hgw'  |
+                    Password='hgw'  |  Period_Inform_Enable=1  |  Periodic_Inform_Interval=86400  |
+                    HTTP_Connection_Request_Enable=1  |  Connection_Request_Username='itms'  |
+                    Connection_Request_Password='itms'  |  Certificate_Enable=0  |
+
+【注意事项】
+- 如果设备未启动，该关键字会失败</p></div>
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.ip">
+    
+  </a>
+  <a name="ip">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">ip</span> =
+    
+    <a class="headerLink" href="#ip" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.ip">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.password">
+    
+  </a>
+  <a name="password">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">password</span> =
+    
+    <a class="headerLink" href="#password" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.password">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.result_mapping">
+    
+  </a>
+  <a name="result_mapping">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">result_mapping</span>: <code>dict</code> =
+    
+    <a class="headerLink" href="#result_mapping" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.result_mapping">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.ubus">
+    
+  </a>
+  <a name="ubus">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">ubus</span> =
+    
+    <a class="headerLink" href="#ubus" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.ubus">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.username">
+    
+  </a>
+  <a name="username">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">username</span> =
+    
+    <a class="headerLink" href="#username" title="SdmcUbusLib.libs.Management_module_api.cwmp.CwmpManager.username">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div>
+        </div>
+      
+      </div>
+    </div>
+
+    <footer class="navbar navbar-default">
+
+  
+  <div class="container-fluid">
+    <a href="index.html">API Documentation</a> for <a href="https://example.com" class="projecthome">SdmcUbusLib API</a>,
+  generated by <a href="https://github.com/twisted/pydoctor/">pydoctor</a>
+    25.4.0 at 2025-11-05 17:50:00.
+  </div>
+
+  <!-- Search related scripts needs to be loaded at the end of HTML 
+    parsing not to introduce overhead and display HTML data asap -->
+  <script src="ajax.js" type="text/javascript"></script>
+  <script src="searchlib.js" type="text/javascript"></script>
+  <script src="search.js" type="text/javascript"></script>
+
+</footer>
+  
+    <script src="pydoctor.js" type="text/javascript"></script>
+
+  </body>
+</html>

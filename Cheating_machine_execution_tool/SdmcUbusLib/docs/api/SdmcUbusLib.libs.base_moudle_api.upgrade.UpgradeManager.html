@@ -1,0 +1,1314 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  
+
+  <head>
+    
+    <title>SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager</title>
+    <meta name="generator" content="pydoctor 25.4.0"> 
+        
+    </meta>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1 maximum-scale=1" />
+    <link rel="stylesheet" type="text/css" href="bootstrap.min.css" />
+    <link rel="stylesheet" type="text/css" href="apidocs.css" />
+    <link rel="stylesheet" type="text/css" href="extra.css" />
+    
+</head>
+
+  <body>
+
+    
+
+    <nav class="navbar navbar-default mainnavbar">
+      
+  
+  <div class="container-fluid">
+
+
+    <div class="navbar-header">
+      
+      <div class="navlinks">
+        <span class="navbar-brand">
+          <a href="https://example.com" class="projecthome">SdmcUbusLib API</a> <a href="index.html">API Documentation</a>
+        </span>
+
+        <a href="moduleIndex.html">
+          Modules
+        </a>
+
+        <a href="classIndex.html">
+          Classes
+        </a>
+
+        <a href="nameIndex.html">
+          Names
+        </a>
+
+        <div id="search-box-container">
+          <div class="input-group">
+            <input id="search-box" type="search" name="search-query" placeholder="Search..." aria-label="Search" minlength="2" class="form-control" autocomplete="off" />
+            
+            <span class="input-group-btn">
+              <a style="display: none;" class="btn btn-default" id="search-clear-button" title="Clear" onclick="clearSearch()"><img src="fonts/x-circle.svg" alt="Clear" /></a>
+              <a class="btn btn-default" id="apidocs-help-button" title="Help" href="apidocs-help.html"><img src="fonts/info.svg" alt="Help" /></a>
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      <div id="search-results-container" style="display: none;">
+        
+        <div id="search-buttons">
+          <span class="label label-default" id="search-docstrings-button">
+          <label class="checkbox-inline">
+            <input type="checkbox" id="toggle-search-in-docstrings-checkbox" value="false" onclick="toggleSearchInDocstrings()">
+              search in docstrings
+            </input>
+          </label>
+          </span>
+          
+        </div>
+        
+        <noscript>
+            <h1>Cannot search: JavaScript is not supported/enabled in your browser.</h1>
+        </noscript>
+
+        <div id="search-status"> </div>
+
+        <div class="warning" id="search-warn-box" style="display: none;">
+          <p class="rst-last"><span id="search-warn"></span></p>
+        </div>
+
+        <table id="search-results">
+          <!-- Filled dynamically by JS -->
+        </table>
+        
+        <div style="margin-top: 10px;">
+          <p>For more information on the search, visit the <a href="apidocs-help.html#rst-search">help page</a>.</p>
+        </div>
+      </div>
+
+    </div>
+
+
+  </div>
+</nav>
+    
+    <div class="container-fluid">
+
+      <!-- Side navigation -->
+      <div class="sidebarcontainer" style="display: none;">
+        
+        <div class="sidebar"><nav class="sidebar">
+  
+
+  <div>
+
+      <div class="thingTitle">
+        <span>Class</span>
+        <code class="thisobject"><a href="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.html" class="internal-link" title="This class"><wbr></wbr>Upgrade<wbr></wbr>Manager</a></code> 
+      </div>
+      
+      <div>
+        
+
+        
+         
+
+        
+        
+
+        <div class="childrenKindTitle">Methods</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.__init__">__init__</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#call_upgrade" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.call_upgrade">call<wbr></wbr>_upgrade</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#debug_test" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.debug_test">debug<wbr></wbr>_test</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_device_hwversion" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_device_hwversion">get<wbr></wbr>_device<wbr></wbr>_hwversion</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_device_swversion" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_device_swversion">get<wbr></wbr>_device<wbr></wbr>_swversion</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_firmware_hwversion" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_firmware_hwversion">get<wbr></wbr>_firmware<wbr></wbr>_hwversion</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_firmware_swversion" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_firmware_swversion">get<wbr></wbr>_firmware<wbr></wbr>_swversion</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_upgrade_status" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_upgrade_status">get<wbr></wbr>_upgrade<wbr></wbr>_status</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#login" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.login">login</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#query_hw_version" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.query_hw_version">query<wbr></wbr>_hw<wbr></wbr>_version</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#query_sw_version" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.query_sw_version">query<wbr></wbr>_sw<wbr></wbr>_version</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#query_upgrade_status" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.query_upgrade_status">query<wbr></wbr>_upgrade<wbr></wbr>_status</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#read_firmware_header" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.read_firmware_header">read<wbr></wbr>_firmware<wbr></wbr>_header</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#trigger_upgrade" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.trigger_upgrade">trigger<wbr></wbr>_upgrade</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#ubus_upgrade" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.ubus_upgrade">ubus<wbr></wbr>_upgrade</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#unit_test" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.unit_test">unit<wbr></wbr>_test</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#upload_and_upgrade" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.upload_and_upgrade">upload<wbr></wbr>_and<wbr></wbr>_upgrade</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#upload_file" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.upload_file">upload<wbr></wbr>_file</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#upload_file_to_device" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.upload_file_to_device">upload<wbr></wbr>_file<wbr></wbr>_to<wbr></wbr>_device</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#wait_device_reboot" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.wait_device_reboot">wait<wbr></wbr>_device<wbr></wbr>_reboot</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+
+        <div class="childrenKindTitle">Attributes</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#ip" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.ip">ip</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#password" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.password">password</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#ubus" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.ubus">ubus</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#username" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.username">username</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+        
+      </div>
+  </div><div>
+
+      <div class="thingTitle">
+        <span>Module</span>
+        <code><a href="SdmcUbusLib.libs.base_moudle_api.upgrade.html" class="internal-link" title="The parent of this class">upgrade</a></code> 
+      </div>
+      
+      <div>
+        
+
+        
+         
+
+        <div class="childrenKindTitle">Classes</div>
+        <ul>
+    
+    <li class=" thisobject">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.html" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager"><wbr></wbr>Upgrade<wbr></wbr>Manager</a></code>
+            </div>
+        
+
+    </li>
+</ul>
+
+        
+         
+
+        
+         
+
+        <div class="childrenKindTitle">Variables</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="SdmcUbusLib.libs.base_moudle_api.upgrade.html#UPGRADE_STATUS_MSG" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UPGRADE_STATUS_MSG">UPGRADE<wbr></wbr>_STATUS<wbr></wbr>_MSG</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+        
+      </div>
+  </div>
+
+</nav>
+        </div>
+        <div id="collapseSideBar">
+          <a class="btn btn-link" onclick="toggleSideBarCollapse()" title="Toggle Sidebar Collapse">
+          </a>
+        </div> 
+        <script src="sidebartoggle.js" type="text/javascript"></script>
+       
+      </div>
+
+      <div id="main" class="">
+        
+
+        
+
+        <div class="page-header">
+          <h1 class="class"><code><code><a href="index.html" class="internal-link">SdmcUbusLib</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.html" class="internal-link" title="SdmcUbusLib.libs">libs</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.base_moudle_api.html" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api">base_moudle_api</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.base_moudle_api.upgrade.html" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade">upgrade</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.html" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager">UpgradeManager</a></code></code></h1>
+          <div id="showPrivate">
+            <button class="btn btn-link" onclick="togglePrivate()">Toggle Private API</button>
+          </div>
+        </div>
+
+        <div class="categoryHeader">
+          class documentation
+        </div>
+
+        <div class="extrasDocstring">
+          <p class="class-signature"><code><span class="py-keyword">class</span> <span class="py-defname">UpgradeManager</span>:</code></p><p>Constructor: <code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.__init__">UpgradeManager(ip, username, password)</a></code></p>
+          <p><a href="classIndex.html#SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager">View In Hierarchy</a></p>
+        </div>
+
+        <div class="moduleDocstring">
+          <div><p class="undocumented">Undocumented</p></div>
+        </div>
+
+        <div id="splitTables">
+          <table class="children sortable" id="id20">
+  
+  
+  <tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.__init__">__init__</a></code></td>
+    <td>功能描述：初始化升级管理器。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#call_upgrade" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.call_upgrade">call<wbr></wbr>_upgrade</a></code></td>
+    <td>功能描述：调用升级接口</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#debug_test" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.debug_test">debug<wbr></wbr>_test</a></code></td>
+    <td>功能描述：调试测试接口</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_device_hwversion" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_device_hwversion">get<wbr></wbr>_device<wbr></wbr>_hwversion</a></code></td>
+    <td>功能描述：获取设备当前的硬件版本。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_device_swversion" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_device_swversion">get<wbr></wbr>_device<wbr></wbr>_swversion</a></code></td>
+    <td>功能描述：获取设备当前的软件版本号。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_firmware_hwversion" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_firmware_hwversion">get<wbr></wbr>_firmware<wbr></wbr>_hwversion</a></code></td>
+    <td>功能描述：读取固件文件中的硬件版本号。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_firmware_swversion" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_firmware_swversion">get<wbr></wbr>_firmware<wbr></wbr>_swversion</a></code></td>
+    <td>功能描述：读取固件文件中的软件版本号。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_upgrade_status" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_upgrade_status">get<wbr></wbr>_upgrade<wbr></wbr>_status</a></code></td>
+    <td>    功能描述：查询设备当前的升级状态。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#login" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.login">login</a></code></td>
+    <td>功能描述：执行ubus登录</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#query_hw_version" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.query_hw_version">query<wbr></wbr>_hw<wbr></wbr>_version</a></code></td>
+    <td>功能描述：查询设备硬件版本</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#query_sw_version" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.query_sw_version">query<wbr></wbr>_sw<wbr></wbr>_version</a></code></td>
+    <td>功能描述：查询设备软件版本</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#query_upgrade_status" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.query_upgrade_status">query<wbr></wbr>_upgrade<wbr></wbr>_status</a></code></td>
+    <td>功能描述：查询升级状态</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#read_firmware_header" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.read_firmware_header">read<wbr></wbr>_firmware<wbr></wbr>_header</a></code></td>
+    <td>功能描述：读取固件文件头部信息</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#trigger_upgrade" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.trigger_upgrade">trigger<wbr></wbr>_upgrade</a></code></td>
+    <td>功能描述：触发设备执行升级操作。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#ubus_upgrade" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.ubus_upgrade">ubus<wbr></wbr>_upgrade</a></code></td>
+    <td>功能描述：</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#unit_test" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.unit_test">unit<wbr></wbr>_test</a></code></td>
+    <td>功能描述：执行一次完整的固件升级单元测试流程。步骤包括：</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#upload_and_upgrade" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.upload_and_upgrade">upload<wbr></wbr>_and<wbr></wbr>_upgrade</a></code></td>
+    <td>功能描述：上传固件并执行设备升级，完整自动流程。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#upload_file" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.upload_file">upload<wbr></wbr>_file</a></code></td>
+    <td>功能描述：上传文件到设备（纯上传功能，不包含登录）</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#upload_file_to_device" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.upload_file_to_device">upload<wbr></wbr>_file<wbr></wbr>_to<wbr></wbr>_device</a></code></td>
+    <td>功能描述：上传固件文件到设备（包含错误处理和日志记录）。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#wait_device_reboot" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.wait_device_reboot">wait<wbr></wbr>_device<wbr></wbr>_reboot</a></code></td>
+    <td>功能描述：等待设备重启完成并重新上线。</td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#ip" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.ip">ip</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#password" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.password">password</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#ubus" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.ubus">ubus</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#username" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.username">username</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr>
+</table>
+          
+
+            
+        </div>
+
+        <div id="childList">
+          <div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.__init__">
+    
+  </a>
+  <a name="__init__">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">__init__</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">ip, </span><span class="rst-sig-param">username, </span><span class="rst-sig-param">password</span>):</span>
+    
+    <a class="headerLink" href="#__init__" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.__init__">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：初始化升级管理器。</p>
+<p>参数： | ip        | 设备 IP 地址（如 "192.168.1.1"）             | | username  | 登录用户名                     z              | | password  | 登录密码                                     |</p>
+<p>Example: | ${mgr}=  |  Create Instance  |  UpgradeManager  |  192.168.1.1  |  admin  |  admin123  |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.call_upgrade">
+    
+  </a>
+  <a name="call_upgrade">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">call_upgrade</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#call_upgrade" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.call_upgrade">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：调用升级接口</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.debug_test">
+    
+  </a>
+  <a name="debug_test">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">debug_test</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">device_url, </span><span class="rst-sig-param">local_file_path, </span><span class="rst-sig-param">device_save_path</span>):</span>
+    
+    <a class="headerLink" href="#debug_test" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.debug_test">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：调试测试接口</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_device_hwversion">
+    
+  </a>
+  <a name="get_device_hwversion">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_device_hwversion</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_device_hwversion" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_device_hwversion">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：获取设备当前的硬件版本。</p>
+<p>参数： 无</p>
+<p>返回： | 返回值类型 | 说明                | | str        | 硬件版本号字符串    |</p>
+<p>Example: | ${hw_version}=  |  get_device_hwversion  |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_device_swversion">
+    
+  </a>
+  <a name="get_device_swversion">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_device_swversion</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_device_swversion" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_device_swversion">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：获取设备当前的软件版本号。</p>
+<p>参数： 无</p>
+<p>返回： | 返回值类型 | 说明                 | | str        | 软件版本号字符串     |</p>
+<p>Example: | ${sw_version}=  |  get_device_swversion  |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_firmware_hwversion">
+    
+  </a>
+  <a name="get_firmware_hwversion">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_firmware_hwversion</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">firmware_path</span>):</span>
+    
+    <a class="headerLink" href="#get_firmware_hwversion" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_firmware_hwversion">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：读取固件文件中的硬件版本号。</p>
+<p>参数： | 参数名        | 类型   | 说明           | |---------------|--------|----------------| | firmware_path | str    | 固件文件路径   |</p>
+<p>返回： | 返回值类型 | 说明                      | | str        | 固件中的硬件版本号字符串 |</p>
+<p>Example: | ${hw_version}=  |  get_firmware_hwversion  |  /tmp/fw.bin  |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_firmware_swversion">
+    
+  </a>
+  <a name="get_firmware_swversion">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_firmware_swversion</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">firmware_path</span>):</span>
+    
+    <a class="headerLink" href="#get_firmware_swversion" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_firmware_swversion">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：读取固件文件中的软件版本号。</p>
+<p>参数： | 参数名        | 类型   | 说明           | |---------------|--------|----------------| | firmware_path | str    | 固件文件路径   |</p>
+<p>返回： | 返回值类型 | 说明                      | | str        | 固件中的软件版本号字符串 |</p>
+<p>Example: | ${sw_version}=  |  get_firmware_swversion  |  /tmp/fw.bin  |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_upgrade_status">
+    
+  </a>
+  <a name="get_upgrade_status">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_upgrade_status</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">timeout=15, </span><span class="rst-sig-param">interval=1.0</span>):</span>
+    
+    <a class="headerLink" href="#get_upgrade_status" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.get_upgrade_status">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">    功能描述：查询设备当前的升级状态。
+
+参数：
+    | 参数名    | 类型  | 说明                                   |
+    | timeout   | int   | 最大等待时间，单位秒，默认15s          |
+    | interval  | float | 查询间隔时间，单位秒，默认1s           |
+
+返回：
+    | 返回值类型 | 说明                                   |
+    | int        | 升级状态码（失败返回 -1 或 None）      |
+
+Example:
+    | ${status}=  |  get_upgrade_status  |</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.login">
+    
+  </a>
+  <a name="login">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">login</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#login" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.login">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：执行ubus登录</p>
+<p>返回： | int | 登录结果，ERR_SUCCESS表示成功 |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.query_hw_version">
+    
+  </a>
+  <a name="query_hw_version">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">query_hw_version</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#query_hw_version" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.query_hw_version">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：查询设备硬件版本</p>
+<p>返回： | str | 硬件版本字符串 |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.query_sw_version">
+    
+  </a>
+  <a name="query_sw_version">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">query_sw_version</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#query_sw_version" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.query_sw_version">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：查询设备软件版本</p>
+<p>返回： | str | 软件版本字符串 |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.query_upgrade_status">
+    
+  </a>
+  <a name="query_upgrade_status">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">query_upgrade_status</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#query_upgrade_status" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.query_upgrade_status">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：查询升级状态</p>
+<p>返回： | dict | 包含upgrade和status的状态字典 |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.read_firmware_header">
+    
+  </a>
+  <a name="read_firmware_header">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">read_firmware_header</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">firmware_path, </span><span class="rst-sig-param">FIP_OFFSET=512</span>):</span>
+    
+    <a class="headerLink" href="#read_firmware_header" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.read_firmware_header">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：读取固件文件头部信息</p>
+<p>参数： | firmware_path | 固件文件路径 | | FIP_OFFSET    | 固件头部偏移，默认 512 |</p>
+<p>返回： | tuple | 解包后的固件头部信息 |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.trigger_upgrade">
+    
+  </a>
+  <a name="trigger_upgrade">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">trigger_upgrade</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#trigger_upgrade" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.trigger_upgrade">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：触发设备执行升级操作。</p>
+<p>参数： 无</p>
+<p>返回： 无</p>
+<p>Example: |  trigger_upgrade  |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.ubus_upgrade">
+    
+  </a>
+  <a name="ubus_upgrade">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">ubus_upgrade</span><span class="function-signature long-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">local_path, </span><span class="rst-sig-param">remote_path=<span class="rst-variable-quote">'</span><span class="rst-variable-string">/tmp/x_sdmc_firmware.pkgtb</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">device_url=<span class="rst-variable-quote">'</span><span class="rst-variable-string">http://192.168.29.1/cgi-bin/cgi-upload</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">timeout=15, </span><span class="rst-sig-param">interval=1.0</span>):</span>
+    
+    <a class="headerLink" href="#ubus_upgrade" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.ubus_upgrade">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">功能描述：
+
+参数：
+    local_path          本地 bin 升级路径
+    remote_path         ONU设备 升级路径
+    timeout            最大等待时间，单位秒，默认15s
+    interval           查询间隔时间，单位秒，默认1s
+
+返回值：
+    0 表示 升级成功
+    非0值 表示升级失败
+
+    UPGRADE_STATUS_MSG = {
+        1: "输入参数错误",
+        2: "下载固件错误",
+        3: "文件不存在",
+        4: "固件验证错误",
+        5: "软件版本过低",
+        6: "硬件版本过低",
+        7: "CRC校验错误",
+        8: "固件写入错误",
+        9: "升级成功",
+        11: "没有固件"
+    }
+
+Example:
+| ${ret} | ${status}   |  Ubus_Upgrade |  e:/tclinux_trxheader_upg.bin | /tmp/x_sdmc_firmware.pkgtb  | http://192.168.29.1/cgi-bin/cgi-upload |</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.unit_test">
+    
+  </a>
+  <a name="unit_test">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">unit_test</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">device_url, </span><span class="rst-sig-param">local_file_path, </span><span class="rst-sig-param">device_save_path</span>):</span>
+    
+    <a class="headerLink" href="#unit_test" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.unit_test">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：执行一次完整的固件升级单元测试流程。步骤包括：</p>
+<ul>
+<li><p class="rst-first">获取本地固件的目标软件版本和硬件版本；</p>
+</li>
+<li><p class="rst-first">登录设备；</p>
+</li>
+<li><p class="rst-first">上传固件并触发升级；</p>
+</li>
+<li><p class="rst-first">等待设备重启上线；</p>
+</li>
+<li><p class="rst-first">对比设备升级后的版本是否与期望一致。</p>
+<p>参数： | device_url       | 上传接口 URL（如 http://192.168.1.1/cgi-bin/upload.cgi）     | | local_file_path  | 本地固件文件路径（如 /tmp/fw.bin）                            | | device_save_path | 上传到设备后的保存路径（如 /tmp/fw.bin）                      |</p>
+<p>返回： | 返回值类型 | 说明                                                             | | None       | 无返回值，如失败会抛出异常                                        |</p>
+<p>异常： | RuntimeError   | 登录失败或升级失败等错误                                     | | TimeoutError   | 等待设备上线超时                                             | | AssertionError | 版本校验失败，实际版本与期望不一致                          |</p>
+<p>Example: | Unit Test  |  http://192.168.1.1/cgi-bin/upload.cgi  |  /tmp/fw.bin  |  /tmp/fw.bin  |</p>
+</li>
+</ul>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.upload_and_upgrade">
+    
+  </a>
+  <a name="upload_and_upgrade">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">upload_and_upgrade</span><span class="function-signature long-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">device_url, </span><span class="rst-sig-param">local_file_path, </span><span class="rst-sig-param">device_save_path, </span><span class="rst-sig-param">timeout=15, </span><span class="rst-sig-param">interval=1.0</span>):</span>
+    
+    <a class="headerLink" href="#upload_and_upgrade" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.upload_and_upgrade">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：上传固件并执行设备升级，完整自动流程。</p>
+<p>参数： | 参数名           | 类型   | 说明                     | |------------------|--------|--------------------------| | device_url       | str    | 设备接收文件的 URL       | | local_file_path  | str    | 本地固件文件路径         | | device_save_path | str    | 设备保存路径             | | timeout   | int   | 最大等待时间，单位秒，默认15s          | | interval  | float | 查询间隔时间，单位秒，默认1s           |</p>
+<p>返回： | 返回值类型 | 说明                            | | int        | 升级状态码，失败返回 None       |</p>
+<p>Example: | ${status}=  |  upload_and_upgrade  |  http://192.168.1.1/upload  |  firmware.bin  |  /tmp/fw.bin  |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.upload_file">
+    
+  </a>
+  <a name="upload_file">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">upload_file</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">device_url, </span><span class="rst-sig-param">local_file_path, </span><span class="rst-sig-param">device_save_path</span>):</span>
+    
+    <a class="headerLink" href="#upload_file" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.upload_file">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：上传文件到设备（纯上传功能，不包含登录）</p>
+<p>参数： | device_url       | 上传接口URL                     | | local_file_path  | 本地文件路径                    | | device_save_path | 设备端保存路径                  |</p>
+<p>返回： | tuple | (status_code, response_text) |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.upload_file_to_device">
+    
+  </a>
+  <a name="upload_file_to_device">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">upload_file_to_device</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">device_url, </span><span class="rst-sig-param">local_file_path, </span><span class="rst-sig-param">device_save_path, </span><span class="rst-sig-param">sessionid</span>):</span>
+    
+    <a class="headerLink" href="#upload_file_to_device" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.upload_file_to_device">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：上传固件文件到设备（包含错误处理和日志记录）。</p>
+<p>参数： | 参数名           | 类型   | 说明                     | |------------------|--------|--------------------------| | device_url       | str    | 设备接收文件的 URL       | | local_file_path  | str    | 本地固件文件路径         | | device_save_path | str    | 设备保存路径             | | sessionid        | str    | 当前 ubus 登录 sessionId |</p>
+<p>返回： | 返回值类型 | 说明                     | | tuple      | (状态码: int, 消息: str) |</p>
+<p>Example: | ${code}  | ${msg}=  |  upload_file_to_device  |  http://192.168.1.1/upload  |  firmware.bin  |  /tmp/fw.bin  |  ${sessionid}  |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.wait_device_reboot">
+    
+  </a>
+  <a name="wait_device_reboot">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">wait_device_reboot</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">timeout=240, </span><span class="rst-sig-param">interval=20</span>):</span>
+    
+    <a class="headerLink" href="#wait_device_reboot" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.wait_device_reboot">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：等待设备重启完成并重新上线。</p>
+<p>参数： | 参数名   | 类型 | 说明                   | |----------|------|------------------------| | timeout  | int  | 最大等待时间（单位：秒）| | interval | int  | 检查间隔时间（单位：秒）|</p>
+<p>返回： | 返回值类型 | 说明                       | | bool       | True 表示设备已上线，False 表示超时 |</p>
+<p>Example: | ${ret}=  |  wait_device_reboot  |  timeout=300  |  interval=60  |</p>
+</div>
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.ip">
+    
+  </a>
+  <a name="ip">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">ip</span> =
+    
+    <a class="headerLink" href="#ip" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.ip">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.password">
+    
+  </a>
+  <a name="password">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">password</span> =
+    
+    <a class="headerLink" href="#password" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.password">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.ubus">
+    
+  </a>
+  <a name="ubus">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">ubus</span> =
+    
+    <a class="headerLink" href="#ubus" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.ubus">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.username">
+    
+  </a>
+  <a name="username">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">username</span> =
+    
+    <a class="headerLink" href="#username" title="SdmcUbusLib.libs.base_moudle_api.upgrade.UpgradeManager.username">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div>
+        </div>
+      
+      </div>
+    </div>
+
+    <footer class="navbar navbar-default">
+
+  
+  <div class="container-fluid">
+    <a href="index.html">API Documentation</a> for <a href="https://example.com" class="projecthome">SdmcUbusLib API</a>,
+  generated by <a href="https://github.com/twisted/pydoctor/">pydoctor</a>
+    25.4.0 at 2025-11-05 17:50:00.
+  </div>
+
+  <!-- Search related scripts needs to be loaded at the end of HTML 
+    parsing not to introduce overhead and display HTML data asap -->
+  <script src="ajax.js" type="text/javascript"></script>
+  <script src="searchlib.js" type="text/javascript"></script>
+  <script src="search.js" type="text/javascript"></script>
+
+</footer>
+  
+    <script src="pydoctor.js" type="text/javascript"></script>
+
+  </body>
+</html>

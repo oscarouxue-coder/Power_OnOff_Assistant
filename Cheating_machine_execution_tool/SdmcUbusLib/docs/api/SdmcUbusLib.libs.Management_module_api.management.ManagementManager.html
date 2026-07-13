@@ -1,0 +1,679 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  
+
+  <head>
+    
+    <title>SdmcUbusLib.libs.Management_module_api.management.ManagementManager</title>
+    <meta name="generator" content="pydoctor 25.4.0"> 
+        
+    </meta>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1 maximum-scale=1" />
+    <link rel="stylesheet" type="text/css" href="bootstrap.min.css" />
+    <link rel="stylesheet" type="text/css" href="apidocs.css" />
+    <link rel="stylesheet" type="text/css" href="extra.css" />
+    
+</head>
+
+  <body>
+
+    
+
+    <nav class="navbar navbar-default mainnavbar">
+      
+  
+  <div class="container-fluid">
+
+
+    <div class="navbar-header">
+      
+      <div class="navlinks">
+        <span class="navbar-brand">
+          <a href="https://example.com" class="projecthome">SdmcUbusLib API</a> <a href="index.html">API Documentation</a>
+        </span>
+
+        <a href="moduleIndex.html">
+          Modules
+        </a>
+
+        <a href="classIndex.html">
+          Classes
+        </a>
+
+        <a href="nameIndex.html">
+          Names
+        </a>
+
+        <div id="search-box-container">
+          <div class="input-group">
+            <input id="search-box" type="search" name="search-query" placeholder="Search..." aria-label="Search" minlength="2" class="form-control" autocomplete="off" />
+            
+            <span class="input-group-btn">
+              <a style="display: none;" class="btn btn-default" id="search-clear-button" title="Clear" onclick="clearSearch()"><img src="fonts/x-circle.svg" alt="Clear" /></a>
+              <a class="btn btn-default" id="apidocs-help-button" title="Help" href="apidocs-help.html"><img src="fonts/info.svg" alt="Help" /></a>
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      <div id="search-results-container" style="display: none;">
+        
+        <div id="search-buttons">
+          <span class="label label-default" id="search-docstrings-button">
+          <label class="checkbox-inline">
+            <input type="checkbox" id="toggle-search-in-docstrings-checkbox" value="false" onclick="toggleSearchInDocstrings()">
+              search in docstrings
+            </input>
+          </label>
+          </span>
+          
+        </div>
+        
+        <noscript>
+            <h1>Cannot search: JavaScript is not supported/enabled in your browser.</h1>
+        </noscript>
+
+        <div id="search-status"> </div>
+
+        <div class="warning" id="search-warn-box" style="display: none;">
+          <p class="rst-last"><span id="search-warn"></span></p>
+        </div>
+
+        <table id="search-results">
+          <!-- Filled dynamically by JS -->
+        </table>
+        
+        <div style="margin-top: 10px;">
+          <p>For more information on the search, visit the <a href="apidocs-help.html#rst-search">help page</a>.</p>
+        </div>
+      </div>
+
+    </div>
+
+
+  </div>
+</nav>
+    
+    <div class="container-fluid">
+
+      <!-- Side navigation -->
+      <div class="sidebarcontainer" style="display: none;">
+        
+        <div class="sidebar"><nav class="sidebar">
+  
+
+  <div>
+
+      <div class="thingTitle">
+        <span>Class</span>
+        <code class="thisobject"><a href="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.html" class="internal-link" title="This class"><wbr></wbr>Management<wbr></wbr>Manager</a></code> 
+      </div>
+      
+      <div>
+        
+
+        
+         
+
+        
+        
+
+        <div class="childrenKindTitle">Methods</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.__init__">__init__</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#debug_test" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.debug_test">debug<wbr></wbr>_test</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#reboot_device" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.reboot_device">reboot<wbr></wbr>_device</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#reset_device" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.reset_device">reset<wbr></wbr>_device</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#ubus_reboot_device" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ubus_reboot_device">ubus<wbr></wbr>_reboot<wbr></wbr>_device</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#ubus_reset_device" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ubus_reset_device">ubus<wbr></wbr>_reset<wbr></wbr>_device</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+
+        <div class="childrenKindTitle">Attributes</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#ip" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ip">ip</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#password" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.password">password</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#ubus" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ubus">ubus</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#username" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.username">username</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+        
+      </div>
+  </div><div>
+
+      <div class="thingTitle">
+        <span>Module</span>
+        <code><a href="SdmcUbusLib.libs.Management_module_api.management.html" class="internal-link" title="The parent of this class">management</a></code> 
+      </div>
+      
+      <div>
+        
+
+        
+         
+
+        <div class="childrenKindTitle">Classes</div>
+        <ul>
+    
+    <li class=" thisobject">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.html" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager"><wbr></wbr>Management<wbr></wbr>Manager</a></code>
+            </div>
+        
+
+    </li>
+</ul>
+
+        
+         
+
+        
+         
+
+        
+         
+
+        
+         
+        
+      </div>
+  </div>
+
+</nav>
+        </div>
+        <div id="collapseSideBar">
+          <a class="btn btn-link" onclick="toggleSideBarCollapse()" title="Toggle Sidebar Collapse">
+          </a>
+        </div> 
+        <script src="sidebartoggle.js" type="text/javascript"></script>
+       
+      </div>
+
+      <div id="main" class="">
+        
+
+        
+
+        <div class="page-header">
+          <h1 class="class"><code><code><a href="index.html" class="internal-link">SdmcUbusLib</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.html" class="internal-link" title="SdmcUbusLib.libs">libs</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.Management_module_api.html" class="internal-link" title="SdmcUbusLib.libs.Management_module_api">Management_module_api</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.Management_module_api.management.html" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management">management</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.html" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager">ManagementManager</a></code></code></h1>
+          <div id="showPrivate">
+            <button class="btn btn-link" onclick="togglePrivate()">Toggle Private API</button>
+          </div>
+        </div>
+
+        <div class="categoryHeader">
+          class documentation
+        </div>
+
+        <div class="extrasDocstring">
+          <p class="class-signature"><code><span class="py-keyword">class</span> <span class="py-defname">ManagementManager</span>:</code></p><p>Constructor: <code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.__init__">ManagementManager(ip, username, password)</a></code></p>
+          <p><a href="classIndex.html#SdmcUbusLib.libs.Management_module_api.management.ManagementManager">View In Hierarchy</a></p>
+        </div>
+
+        <div class="moduleDocstring">
+          <div><p class="undocumented">Undocumented</p></div>
+        </div>
+
+        <div id="splitTables">
+          <table class="children sortable" id="id34">
+  
+  
+  <tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.__init__">__init__</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#debug_test" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.debug_test">debug<wbr></wbr>_test</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#reboot_device" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.reboot_device">reboot<wbr></wbr>_device</a></code></td>
+    <td>【功能描述】     通过 ubus 调用设备重启</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#reset_device" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.reset_device">reset<wbr></wbr>_device</a></code></td>
+    <td>【功能描述】     通过 ubus 调用设备恢复出厂</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#ubus_reboot_device" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ubus_reboot_device">ubus<wbr></wbr>_reboot<wbr></wbr>_device</a></code></td>
+    <td>【功能描述】     设备重启</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#ubus_reset_device" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ubus_reset_device">ubus<wbr></wbr>_reset<wbr></wbr>_device</a></code></td>
+    <td>【功能描述】     设备恢复出厂</td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#ip" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ip">ip</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#password" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.password">password</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#ubus" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ubus">ubus</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#username" class="internal-link" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.username">username</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr>
+</table>
+          
+
+            
+        </div>
+
+        <div id="childList">
+          <div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.__init__">
+    
+  </a>
+  <a name="__init__">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">__init__</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">ip, </span><span class="rst-sig-param">username, </span><span class="rst-sig-param">password</span>):</span>
+    
+    <a class="headerLink" href="#__init__" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.__init__">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.debug_test">
+    
+  </a>
+  <a name="debug_test">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">debug_test</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#debug_test" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.debug_test">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.reboot_device">
+    
+  </a>
+  <a name="reboot_device">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">reboot_device</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#reboot_device" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.reboot_device">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+    通过 ubus 调用设备重启
+
+【返回值】
+    调用重启节点返回的ubus数据</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.reset_device">
+    
+  </a>
+  <a name="reset_device">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">reset_device</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#reset_device" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.reset_device">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+    通过 ubus 调用设备恢复出厂
+
+【返回值】
+    调用恢复出厂节点返回的ubus数据</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ubus_reboot_device">
+    
+  </a>
+  <a name="ubus_reboot_device">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">ubus_reboot_device</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">wait_time=180</span>):</span>
+    
+    <a class="headerLink" href="#ubus_reboot_device" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ubus_reboot_device">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+    设备重启
+
+【入参】
+    wait_time:默认180s，重启等待时间
+
+【返回值】
+    调用重启节点返回的ubus数据
+
+【Example】
+    | ${result} | ubus_reboot_device</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ubus_reset_device">
+    
+  </a>
+  <a name="ubus_reset_device">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">ubus_reset_device</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">wait_time=180</span>):</span>
+    
+    <a class="headerLink" href="#ubus_reset_device" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ubus_reset_device">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+    设备恢复出厂
+
+【入参】
+    wait_time:默认180s，重启等待时间
+
+【返回值】
+    调用恢复出厂节点返回的ubus数据
+
+【Example】
+    | ${result} | ubus_reset_device</p></div>
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ip">
+    
+  </a>
+  <a name="ip">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">ip</span> =
+    
+    <a class="headerLink" href="#ip" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ip">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.password">
+    
+  </a>
+  <a name="password">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">password</span> =
+    
+    <a class="headerLink" href="#password" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.password">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ubus">
+    
+  </a>
+  <a name="ubus">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">ubus</span> =
+    
+    <a class="headerLink" href="#ubus" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.ubus">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.username">
+    
+  </a>
+  <a name="username">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">username</span> =
+    
+    <a class="headerLink" href="#username" title="SdmcUbusLib.libs.Management_module_api.management.ManagementManager.username">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div>
+        </div>
+      
+      </div>
+    </div>
+
+    <footer class="navbar navbar-default">
+
+  
+  <div class="container-fluid">
+    <a href="index.html">API Documentation</a> for <a href="https://example.com" class="projecthome">SdmcUbusLib API</a>,
+  generated by <a href="https://github.com/twisted/pydoctor/">pydoctor</a>
+    25.4.0 at 2025-11-05 17:50:00.
+  </div>
+
+  <!-- Search related scripts needs to be loaded at the end of HTML 
+    parsing not to introduce overhead and display HTML data asap -->
+  <script src="ajax.js" type="text/javascript"></script>
+  <script src="searchlib.js" type="text/javascript"></script>
+  <script src="search.js" type="text/javascript"></script>
+
+</footer>
+  
+    <script src="pydoctor.js" type="text/javascript"></script>
+
+  </body>
+</html>

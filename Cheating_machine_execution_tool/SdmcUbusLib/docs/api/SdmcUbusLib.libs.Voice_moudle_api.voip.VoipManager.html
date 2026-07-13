@@ -1,0 +1,1457 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  
+
+  <head>
+    
+    <title>SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager</title>
+    <meta name="generator" content="pydoctor 25.4.0"> 
+        
+    </meta>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1 maximum-scale=1" />
+    <link rel="stylesheet" type="text/css" href="bootstrap.min.css" />
+    <link rel="stylesheet" type="text/css" href="apidocs.css" />
+    <link rel="stylesheet" type="text/css" href="extra.css" />
+    
+</head>
+
+  <body>
+
+    
+
+    <nav class="navbar navbar-default mainnavbar">
+      
+  
+  <div class="container-fluid">
+
+
+    <div class="navbar-header">
+      
+      <div class="navlinks">
+        <span class="navbar-brand">
+          <a href="https://example.com" class="projecthome">SdmcUbusLib API</a> <a href="index.html">API Documentation</a>
+        </span>
+
+        <a href="moduleIndex.html">
+          Modules
+        </a>
+
+        <a href="classIndex.html">
+          Classes
+        </a>
+
+        <a href="nameIndex.html">
+          Names
+        </a>
+
+        <div id="search-box-container">
+          <div class="input-group">
+            <input id="search-box" type="search" name="search-query" placeholder="Search..." aria-label="Search" minlength="2" class="form-control" autocomplete="off" />
+            
+            <span class="input-group-btn">
+              <a style="display: none;" class="btn btn-default" id="search-clear-button" title="Clear" onclick="clearSearch()"><img src="fonts/x-circle.svg" alt="Clear" /></a>
+              <a class="btn btn-default" id="apidocs-help-button" title="Help" href="apidocs-help.html"><img src="fonts/info.svg" alt="Help" /></a>
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      <div id="search-results-container" style="display: none;">
+        
+        <div id="search-buttons">
+          <span class="label label-default" id="search-docstrings-button">
+          <label class="checkbox-inline">
+            <input type="checkbox" id="toggle-search-in-docstrings-checkbox" value="false" onclick="toggleSearchInDocstrings()">
+              search in docstrings
+            </input>
+          </label>
+          </span>
+          
+        </div>
+        
+        <noscript>
+            <h1>Cannot search: JavaScript is not supported/enabled in your browser.</h1>
+        </noscript>
+
+        <div id="search-status"> </div>
+
+        <div class="warning" id="search-warn-box" style="display: none;">
+          <p class="rst-last"><span id="search-warn"></span></p>
+        </div>
+
+        <table id="search-results">
+          <!-- Filled dynamically by JS -->
+        </table>
+        
+        <div style="margin-top: 10px;">
+          <p>For more information on the search, visit the <a href="apidocs-help.html#rst-search">help page</a>.</p>
+        </div>
+      </div>
+
+    </div>
+
+
+  </div>
+</nav>
+    
+    <div class="container-fluid">
+
+      <!-- Side navigation -->
+      <div class="sidebarcontainer" style="display: none;">
+        
+        <div class="sidebar"><nav class="sidebar">
+  
+
+  <div>
+
+      <div class="thingTitle">
+        <span>Class</span>
+        <code class="thisobject"><a href="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.html" class="internal-link" title="This class"><wbr></wbr>Voip<wbr></wbr>Manager</a></code> 
+      </div>
+      
+      <div>
+        
+
+        
+         
+
+        
+        
+
+        <div class="childrenKindTitle">Methods</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.__init__">__init__</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#debug_test" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.debug_test">debug<wbr></wbr>_test</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_all_voip_info" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_all_voip_info">get<wbr></wbr>_all<wbr></wbr>_voip<wbr></wbr>_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_callcontol_json" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_callcontol_json">get<wbr></wbr>_callcontol<wbr></wbr>_json</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_fax_setting_info" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_fax_setting_info">get<wbr></wbr>_fax<wbr></wbr>_setting<wbr></wbr>_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_interwork_json" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_interwork_json">get<wbr></wbr>_interwork<wbr></wbr>_json</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_media_setting_info" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_media_setting_info">get<wbr></wbr>_media<wbr></wbr>_setting<wbr></wbr>_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_sip_account_setting_info" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_sip_account_setting_info">get<wbr></wbr>_sip<wbr></wbr>_account<wbr></wbr>_setting<wbr></wbr>_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_sip_json" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_sip_json">get<wbr></wbr>_sip<wbr></wbr>_json</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_terminal_json" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_terminal_json">get<wbr></wbr>_terminal<wbr></wbr>_json</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_voice_service_info" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voice_service_info">get<wbr></wbr>_voice<wbr></wbr>_service<wbr></wbr>_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_voip_base_setting_info" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voip_base_setting_info">get<wbr></wbr>_voip<wbr></wbr>_base<wbr></wbr>_setting<wbr></wbr>_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_voip_register_server_info" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voip_register_server_info">get<wbr></wbr>_voip<wbr></wbr>_register<wbr></wbr>_server<wbr></wbr>_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_voipprofile_json" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voipprofile_json">get<wbr></wbr>_voipprofile<wbr></wbr>_json</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#set_voip_account" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_account">set<wbr></wbr>_voip<wbr></wbr>_account</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#set_voip_base" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_base">set<wbr></wbr>_voip<wbr></wbr>_base</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#set_voip_codec" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_codec">set<wbr></wbr>_voip<wbr></wbr>_codec</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#set_voip_digmap" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_digmap">set<wbr></wbr>_voip<wbr></wbr>_digmap</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#set_voip_register_server" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_register_server">set<wbr></wbr>_voip<wbr></wbr>_register<wbr></wbr>_server</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#unit_test" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.unit_test">unit<wbr></wbr>_test</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+
+        <div class="childrenKindTitle">Attributes</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#ip" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.ip">ip</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#password" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.password">password</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#ubus" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.ubus">ubus</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#username" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.username">username</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+        
+      </div>
+  </div><div>
+
+      <div class="thingTitle">
+        <span>Module</span>
+        <code><a href="SdmcUbusLib.libs.Voice_moudle_api.voip.html" class="internal-link" title="The parent of this class">voip</a></code> 
+      </div>
+      
+      <div>
+        
+
+        
+         
+
+        <div class="childrenKindTitle">Classes</div>
+        <ul>
+    
+    <li class=" thisobject">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.html" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager"><wbr></wbr>Voip<wbr></wbr>Manager</a></code>
+            </div>
+        
+
+    </li>
+</ul>
+
+        
+         
+
+        
+         
+
+        
+         
+
+        
+         
+        
+      </div>
+  </div>
+
+</nav>
+        </div>
+        <div id="collapseSideBar">
+          <a class="btn btn-link" onclick="toggleSideBarCollapse()" title="Toggle Sidebar Collapse">
+          </a>
+        </div> 
+        <script src="sidebartoggle.js" type="text/javascript"></script>
+       
+      </div>
+
+      <div id="main" class="">
+        
+
+        
+
+        <div class="page-header">
+          <h1 class="class"><code><code><a href="index.html" class="internal-link">SdmcUbusLib</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.html" class="internal-link" title="SdmcUbusLib.libs">libs</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.Voice_moudle_api.html" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api">Voice_moudle_api</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.Voice_moudle_api.voip.html" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip">voip</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.html" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager">VoipManager</a></code></code></h1>
+          <div id="showPrivate">
+            <button class="btn btn-link" onclick="togglePrivate()">Toggle Private API</button>
+          </div>
+        </div>
+
+        <div class="categoryHeader">
+          class documentation
+        </div>
+
+        <div class="extrasDocstring">
+          <p class="class-signature"><code><span class="py-keyword">class</span> <span class="py-defname">VoipManager</span>:</code></p><p>Constructor: <code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.__init__">VoipManager(ip, username, password)</a></code></p>
+          <p><a href="classIndex.html#SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager">View In Hierarchy</a></p>
+        </div>
+
+        <div class="moduleDocstring">
+          <div><p class="undocumented">Undocumented</p></div>
+        </div>
+
+        <div id="splitTables">
+          <table class="children sortable" id="id85">
+  
+  
+  <tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.__init__">__init__</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#debug_test" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.debug_test">debug<wbr></wbr>_test</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_all_voip_info" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_all_voip_info">get<wbr></wbr>_all<wbr></wbr>_voip<wbr></wbr>_info</a></code></td>
+    <td>【功能描述】 一次性获取所有 VoIP 相关信息（基础配置、服务器、账号、传真、媒体、语音服务）， 并将所有字段统一展开到同一级字典中返回。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_callcontol_json" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_callcontol_json">get<wbr></wbr>_callcontol<wbr></wbr>_json</a></code></td>
+    <td>【功能描述】 获取 VoiceService 下 CallControl → CallingFeatures → Set 节点的配置信息。 该节点通常用于存储呼叫特性设置，例如呼叫转移、呼叫等待等。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_fax_setting_info" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_fax_setting_info">get<wbr></wbr>_fax<wbr></wbr>_setting<wbr></wbr>_info</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_interwork_json" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_interwork_json">get<wbr></wbr>_interwork<wbr></wbr>_json</a></code></td>
+    <td>【功能描述】 获取 VoiceService 下 Interwork → Map 节点的配置信息。 Interwork.Map 节点通常用于存放 DigitMap（号码映射规则），用于定义拨号计划。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_media_setting_info" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_media_setting_info">get<wbr></wbr>_media<wbr></wbr>_setting<wbr></wbr>_info</a></code></td>
+    <td>【功能描述】 获取 VoIP 媒体相关配置，包括 VAD、Codec 列表、音频增益以及呼叫特性设置。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_sip_account_setting_info" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_sip_account_setting_info">get<wbr></wbr>_sip<wbr></wbr>_account<wbr></wbr>_setting<wbr></wbr>_info</a></code></td>
+    <td>【功能描述】 获取 SIP 账号的配置信息，包括账号使能状态、显示名称、用户名、密码及线路状态。 可用于测试或管理 SIP 账号信息。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_sip_json" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_sip_json">get<wbr></wbr>_sip<wbr></wbr>_json</a></code></td>
+    <td>【功能描述】 获取 SIP 节点的原始配置信息（TR-181 模型路径：Device.Services.VoiceService.1.SIP）。 主要包含 SIP 网络配置、注册服务器、代理服务器等参数。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_terminal_json" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_terminal_json">get<wbr></wbr>_terminal<wbr></wbr>_json</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_voice_service_info" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voice_service_info">get<wbr></wbr>_voice<wbr></wbr>_service<wbr></wbr>_info</a></code></td>
+    <td>【功能描述】 获取 VoiceService 中的 DigitMap 配置信息。 DigitMap 用于定义拨号规则和号码映射逻辑，是语音业务中的重要参数。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_voip_base_setting_info" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voip_base_setting_info">get<wbr></wbr>_voip<wbr></wbr>_base<wbr></wbr>_setting<wbr></wbr>_info</a></code></td>
+    <td>【功能描述】 获取 VoIP 基础配置信息，包括绑定接口、SIP 模式、DTMF 设置、注册有效期及注册重试间隔。 用于提取 VoIP/SIP 相关的核心参数，供后续业务逻辑或测试验证使用。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_voip_register_server_info" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voip_register_server_info">get<wbr></wbr>_voip<wbr></wbr>_register<wbr></wbr>_server<wbr></wbr>_info</a></code></td>
+    <td>【功能描述】 获取 VoIP 注册服务器相关配置信息，包括 Registrar、Proxy、OutboundProxy 等服务器信息， 并返回服务器的索引、地址、端口、注册时间等参数。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_voipprofile_json" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voipprofile_json">get<wbr></wbr>_voipprofile<wbr></wbr>_json</a></code></td>
+    <td>【功能描述】 获取 VoIPProfile 节点的原始配置信息（TR-181 模型路径：Device.Services.VoiceService.1.VoIPProfile.1）。 主要包含 DTMF 设置、编解码器、VoIP 特性配置等参数。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#set_voip_account" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_account">set<wbr></wbr>_voip<wbr></wbr>_account</a></code></td>
+    <td>【功能描述】     设置 VoIP 账户配置</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#set_voip_base" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_base">set<wbr></wbr>_voip<wbr></wbr>_base</a></code></td>
+    <td>【功能描述】     设置 VoIP 基础配置</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#set_voip_codec" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_codec">set<wbr></wbr>_voip<wbr></wbr>_codec</a></code></td>
+    <td>【功能描述】     设置 VoIP 编解码器配置 【入参】     param line_index: int - 线路索引，对应 Device.Services.VoiceService.1.SIP中1     param codec1: str - 编解码器1，可填写为G.711 U-law,G.711 A-law,G.729,G.722,G.723,G.726 - 16,G.726 - 24,G...</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#set_voip_digmap" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_digmap">set<wbr></wbr>_voip<wbr></wbr>_digmap</a></code></td>
+    <td>【功能描述】     设置 VoIP DigitMap 配uration 【入参】     param digit_map: str - DigitMap 值值，例如 "x." 【返回值】     UBUS 调调用结果 【示例】 Example: |  Set VoIP DigitMap  | x.  |</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#set_voip_register_server" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_register_server">set<wbr></wbr>_voip<wbr></wbr>_register<wbr></wbr>_server</a></code></td>
+    <td>【功能描述】     设置 VoIP 注册服务器配置</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#unit_test" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.unit_test">unit<wbr></wbr>_test</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#ip" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.ip">ip</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#password" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.password">password</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#ubus" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.ubus">ubus</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#username" class="internal-link" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.username">username</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr>
+</table>
+          
+
+            
+        </div>
+
+        <div id="childList">
+          <div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.__init__">
+    
+  </a>
+  <a name="__init__">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">__init__</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">ip, </span><span class="rst-sig-param">username, </span><span class="rst-sig-param">password</span>):</span>
+    
+    <a class="headerLink" href="#__init__" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.__init__">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.debug_test">
+    
+  </a>
+  <a name="debug_test">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">debug_test</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#debug_test" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.debug_test">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_all_voip_info">
+    
+  </a>
+  <a name="get_all_voip_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_all_voip_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_all_voip_info" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_all_voip_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>【功能描述】 一次性获取所有 VoIP 相关信息（基础配置、服务器、账号、传真、媒体、语音服务）， 并将所有字段统一展开到同一级字典中返回。</p>
+<p>【返回值】 dict : {'BindingInterface': '', 'SIPMode': 'SIP', 'DTMFSetting': 'RFC2833', 'ExpireTime': 3600, 'RegisterRetryInterval': 120, 'Server1_ServerIndex': 1, 'Server1_RegistrarServer': '', 'Server1_RegistrarServerPort': 5060, 'Server1_ProxyServer': '', 'Server1_ProxyServerPort': 5060, 'Server1_OutboundProxy': '', 'Server1_OutboundProxyPort': 5060, 'Server1_ExpireTime': 3600, 'Server1_RegisterRetryInterval': 120, 'Server2_ServerIndex': 2, 'Server2_RegistrarServer': '', 'Server2_RegistrarServerPort': 5060, 'Server2_ProxyServer': '', 'Server2_ProxyServerPort': 5060, 'Server2_OutboundProxy': '', 'Server2_OutboundProxyPort': 5060, 'Server2_ExpireTime': 3600, 'Server2_RegisterRetryInterval': 120, 'Account1_LineIndex': 1, 'Account1_SipAccountEnable': False, 'Account1_DisplayName': '', 'Account1_Account': '', 'Account1_Password': '', 'Account1_LineStatus': 'Error', 'Fax_T38Enable': False, 'Media1_LineIndex': 1, 'Media1_VADEnable': True, 'Media1_CodecList1_CodecIndex': 1, 'Media1_CodecList1_Enable': True, 'Media1_CodecList1_Codec': 'G.711 U-law', 'Media1_CodecList1_Priority': '1', 'Media1_CodecList2_CodecIndex': 2, 'Media1_CodecList2_Enable': True, 'Media1_CodecList2_Codec': 'G.711 A-law', 'Media1_CodecList2_Priority': '2', 'Media1_CodecList3_CodecIndex': 3, 'Media1_CodecList3_Enable': True, 'Media1_CodecList3_Codec': 'G.729', 'Media1_CodecList3_Priority': '3', 'Media1_CodecList4_CodecIndex': 4, 'Media1_CodecList4_Enable': True, 'Media1_CodecList4_Codec': 'G.722', 'Media1_CodecList4_Priority': '4', 'Media1_CodecList5_CodecIndex': 5, 'Media1_CodecList5_Enable': True, 'Media1_CodecList5_Codec': 'G.723', 'Media1_CodecList5_Priority': '0', 'Media1_CodecList6_CodecIndex': 6, 'Media1_CodecList6_Enable': True, 'Media1_CodecList6_Codec': 'G.726 - 16', 'Media1_CodecList6_Priority': '0', 'Media1_CodecList7_CodecIndex': 7, 'Media1_CodecList7_Enable': True, 'Media1_CodecList7_Codec': 'G.726 - 24', 'Media1_CodecList7_Priority': '0', 'Media1_CodecList8_CodecIndex': 8, 'Media1_CodecList8_Enable': True, 'Media1_CodecList8_Codec': 'G.726 - 32', 'Media1_CodecList8_Priority': '0', 'Media1_CodecList9_CodecIndex': 9, 'Media1_CodecList9_Enable': True, 'Media1_CodecList9_Codec': 'G.726 - 40', 'Media1_CodecList9_Priority': '0', 'Media1_SendGain': 0, 'Media1_ReceiveGain': 0, 'Media1_CallFeatureSetting1_LineIndex': 1, 'Media1_CallFeatureSetting1_CallTransferEnable': False, 'Media1_CallFeatureSetting1_CallWaitingEnable': False, 'Media1_CallFeatureSetting1_CallForwardUnconditionalEnable': False, 'Media1_CallFeatureSetting1_CallForwardOnBusyEnable': False, 'Media1_CallFeatureSetting1_CallForwardOnNoAnswerEnable': False, 'Media1_CallFeatureSetting1_CallForwardUnconditionalNumber': '', 'Media1_CallFeatureSetting1_CallForwardOnBusyNumber': '', 'Media1_CallFeatureSetting1_CallForwardOnNoAnswerNumber': '', 'Media1_CallFeatureSetting1_CallForwardOnNoAnswerRingTimeout': 60, 'Media1_CallFeatureSetting1_WarmlineEnable': False, 'Media1_CallFeatureSetting1_WarmLineNumber': '', 'Media1_CallFeatureSetting1_WarmLineTimeout': 5, 'VoiceService_DigitMap': 'x.'}</p>
+<p>【异常】 调用过程出现异常时，抛出异常。</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_callcontol_json">
+    
+  </a>
+  <a name="get_callcontol_json">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_callcontol_json</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_callcontol_json" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_callcontol_json">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>【功能描述】 获取 VoiceService 下 CallControl → CallingFeatures → Set 节点的配置信息。 该节点通常用于存储呼叫特性设置，例如呼叫转移、呼叫等待等。</p>
+<p>【入参】 无</p>
+<p>【返回值】 | 返回值类型 | 说明                                               | | ---------- | -------------------------------------------------- | | dict       | 返回包含 CallingFeatures.Set 配置信息的字典结构。 |</p>
+<p>【异常】 Exception : 当调用 ubus 接口失败，或返回结果结构异常时抛出。</p>
+<p>【示例】 Example (Robot Framework): |  Get Callcontol Json  | |  ${callcontrol}=      |  Get Callcontol Json  | |  Log To Console       |  ${callcontrol}       |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_fax_setting_info">
+    
+  </a>
+  <a name="get_fax_setting_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_fax_setting_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_fax_setting_info" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_fax_setting_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_interwork_json">
+    
+  </a>
+  <a name="get_interwork_json">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_interwork_json</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_interwork_json" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_interwork_json">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>【功能描述】 获取 VoiceService 下 Interwork → Map 节点的配置信息。 Interwork.Map 节点通常用于存放 DigitMap（号码映射规则），用于定义拨号计划。</p>
+<p>【入参】 无</p>
+<p>【返回值】 | 返回值类型 | 说明                                    | | ---------- | --------------------------------------- | | dict       | 返回包含 Interwork.Map 配置信息的字典。 |</p>
+<p>【异常】 Exception : 当调用 ubus 接口失败，或返回结果结构异常时抛出。</p>
+<p>【示例】 Example (Robot Framework): |  Get Interwork Json  | |  ${interwork}=       |  Get Interwork Json  | |  Log To Console      |  ${interwork}        |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_media_setting_info">
+    
+  </a>
+  <a name="get_media_setting_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_media_setting_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_media_setting_info" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_media_setting_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>【功能描述】 获取 VoIP 媒体相关配置，包括 VAD、Codec 列表、音频增益以及呼叫特性设置。</p>
+<p>【返回值】 list : 每个元素为一个 dict，包含以下字段：</p>
+<ul class="rst-simple">
+<li>LineIndex (int)       : 线路索引</li>
+<li>VADEnable (bool)      : 是否启用 VAD</li>
+<li>CodecList (list)      : 编解码器配置列表</li>
+<li>SendGain (int/float)  : 发送增益</li>
+<li>ReceiveGain (int/float): 接收增益</li>
+<li>CallFeatureSetting (list[dict]): 呼叫特性设置</li>
+</ul>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_sip_account_setting_info">
+    
+  </a>
+  <a name="get_sip_account_setting_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_sip_account_setting_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_sip_account_setting_info" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_sip_account_setting_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+获取 SIP 账号的配置信息，包括账号使能状态、显示名称、用户名、密码及线路状态。
+可用于测试或管理 SIP 账号信息。
+
+【入参】
+无
+
+【返回值】
+list : 包含多个 SIP 账号信息的列表，每个元素为一个 dict，字段包括：
+    - LineIndex (str/int)       : 线路索引
+    - SipAccountEnable (bool)   : SIP 账号是否启用
+    - DisplayName (str)         : SIP 注册显示名称（RegisterURI）
+    - Account (str)             : SIP 用户名（AuthUserName）
+    - Password (str)            : SIP 密码（AuthPassword）
+    - LineStatus (str)          : 线路状态，例如：Registered、Initializing 等
+
+【示例】
+Example:
+|  Get Sip Account Setting Info  |
+返回结果:
+[
+    {
+        "LineIndex": 1,
+        "SipAccountEnable": True,
+        "DisplayName": "1001@sip.example.com",
+        "Account": "1001",
+        "Password": "pass123",
+        "LineStatus": "Registered"
+    },
+    {
+        "LineIndex": 2,
+        "SipAccountEnable": False,
+        "DisplayName": "1002@sip.example.com",
+        "Account": "1002",
+        "Password": "pass456",
+        "LineStatus": "Unregistered"
+    }
+]</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_sip_json">
+    
+  </a>
+  <a name="get_sip_json">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_sip_json</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_sip_json" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_sip_json">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+获取 SIP 节点的原始配置信息（TR-181 模型路径：Device.Services.VoiceService.1.SIP）。
+主要包含 SIP 网络配置、注册服务器、代理服务器等参数。
+
+【入参】
+无
+
+【返回值】
+dict : 返回 SIP 节点的完整 JSON 数据。
+    常见字段：
+    {
+        "Network": [...],                     # SIP 网络配置列表
+        "X_SDMC_BoundInterfaceList": "...",   # 绑定接口
+        "X_SDMC_SIPMode": "...",              # SIP 模式
+        ...
+    }
+
+异常：
+    - 调用 ubus 接口失败时抛出异常。
+
+【示例】
+Example:
+|  Get Sip Json  |
+返回结果：
+{
+    "Network": [
+        {
+            "X_SDMC_Instance": 1,
+            "RegistrarServer": "sip.example.com",
+            "RegistrarServerPort": 5060,
+            ...
+        }
+    ]
+}</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_terminal_json">
+    
+  </a>
+  <a name="get_terminal_json">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_terminal_json</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_terminal_json" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_terminal_json">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voice_service_info">
+    
+  </a>
+  <a name="get_voice_service_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_voice_service_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_voice_service_info" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voice_service_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>【功能描述】 获取 VoiceService 中的 DigitMap 配置信息。 DigitMap 用于定义拨号规则和号码映射逻辑，是语音业务中的重要参数。</p>
+<p>【入参】 无</p>
+<p>【返回值】 | 返回值类型 | 说明                           | | ---------- | ------------------------------ | | str / None | 返回 DigitMap 字符串；若异常则返回 None 或抛出异常 |</p>
+<p>【异常】 Exception : 当调用 get_interwork_json() 失败，或数据结构异常时抛出。</p>
+<p>【示例】 Example (Robot Framework): |  Get Voice Service Info  | |  ${digit_map}=           |  Get Voice Service Info  | |  Log To Console          |  DigitMap: ${digit_map}  |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voip_base_setting_info">
+    
+  </a>
+  <a name="get_voip_base_setting_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_voip_base_setting_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_voip_base_setting_info" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voip_base_setting_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+获取 VoIP 基础配置信息，包括绑定接口、SIP 模式、DTMF 设置、注册有效期及注册重试间隔。
+用于提取 VoIP/SIP 相关的核心参数，供后续业务逻辑或测试验证使用。
+
+【入参】
+无
+
+【返回值】
+dict : 返回包含基础配置的字典，字段说明如下
+    {
+        "BindingInterface"       : 绑定的网络接口（str 或 None）
+        "SIPMode"                : SIP 工作模式，例如 UDP/TCP/TLS（str 或 None）
+        "DTMFSetting"            : DTMF 信令传输方式，例如 RFC2833/InBand/SIPINFO（str 或 None）
+        "ExpireTime"             : 注册有效期，单位秒（int 或 None）
+        "RegisterRetryInterval"  : 注册失败后的重试间隔，单位秒（int 或 None）
+    }
+
+异常：
+    - 调用过程出现异常时，抛出原始异常信息。
+
+【示例】
+Example:
+|  Get Voip Base Setting Info  |
+返回结果：
+{
+    "BindingInterface": "eth0",
+    "SIPMode": "UDP",
+    "DTMFSetting": "RFC2833",
+    "ExpireTime": 3600,
+    "RegisterRetryInterval": 120
+}</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voip_register_server_info">
+    
+  </a>
+  <a name="get_voip_register_server_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_voip_register_server_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_voip_register_server_info" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voip_register_server_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+获取 VoIP 注册服务器相关配置信息，包括 Registrar、Proxy、OutboundProxy 等服务器信息，
+并返回服务器的索引、地址、端口、注册时间等参数。
+
+【入参】
+无
+
+【返回值】
+list : 包含多个服务器信息的列表，每个元素为一个 dict，字段包括：
+    - ServerIndex (str/int)              : 服务器索引（由厂商自定义字段标识实例）
+    - RegistrarServer (str)              : 注册服务器地址
+    - RegistrarServerPort (int/str)      : 注册服务器端口
+    - ProxyServer (str)                   : 代理服务器地址
+    - ProxyServerPort (int/str)          : 代理服务器端口
+    - OutboundProxy (str)                 : 出口代理服务器地址
+    - OutboundProxyPort (int/str)        : 出口代理服务器端口
+    - ExpireTime (int/str)               : 注册过期时间（秒）
+    - RegisterRetryInterval (int/str)    : 注册失败后的重试间隔（秒）
+
+【示例】
+Example:
+|  Get Voip Register Server Info  |
+返回结果:
+[
+    {
+        "ServerIndex": 1,
+        "RegistrarServer": "sip.example.com",
+        "RegistrarServerPort": 5060,
+        "ProxyServer": "proxy.example.com",
+        "ProxyServerPort": 5060,
+        "OutboundProxy": "outbound.example.com",
+        "OutboundProxyPort": 5060,
+        "ExpireTime": 3600,
+        "RegisterRetryInterval": 30
+    }
+]</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voipprofile_json">
+    
+  </a>
+  <a name="get_voipprofile_json">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_voipprofile_json</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_voipprofile_json" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.get_voipprofile_json">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+获取 VoIPProfile 节点的原始配置信息（TR-181 模型路径：Device.Services.VoiceService.1.VoIPProfile.1）。
+主要包含 DTMF 设置、编解码器、VoIP 特性配置等参数。
+
+【入参】
+无
+
+【返回值】
+dict : 返回 VoIPProfile 节点的完整 JSON 数据。
+    常见字段：
+    {
+        "DTMFMethod": "RFC2833",   # DTMF 配置
+        "Codec": [...],           # 编解码器配置
+        ...
+    }
+
+异常：
+    - 调用 ubus 接口失败时抛出异常。
+
+【示例】
+Example:
+|  Get VoipProfile Json  |
+返回结果：
+{
+    "VoIPProfile": [
+        {
+            "DTMFMethod": "RFC2833",
+            "Codec": [...]
+        }
+    ]
+}</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_account">
+    
+  </a>
+  <a name="set_voip_account">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">set_voip_account</span><span class="function-signature long-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">line_index=<span class="rst-variable-quote">'</span><span class="rst-variable-string">1</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">enable=<span class="rst-variable-quote">'</span><span class="rst-variable-string">0</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">display_name=<span class="rst-variable-quote">'</span><span class="rst-variable-string"></span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">auth_user_name=<span class="rst-variable-quote">'</span><span class="rst-variable-string"></span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">auth_password=<span class="rst-variable-quote">'</span><span class="rst-variable-string"></span><span class="rst-variable-quote">'</span></span>):</span>
+    
+    <a class="headerLink" href="#set_voip_account" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_account">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+    设置 VoIP 账户配置
+
+【入参】
+    param line_index: str - 线路索引，对应 Device.Services.VoiceService.1.SIP.Client.1.中1
+    param enable: str - 启状态，例如 "1" 启，"0" 禁
+    param display_name: str - 显示名称，例如 "VoIP Line 1"
+    param auth_user_name: str - 认件用户名，例如 "111"
+    param auth_password: str - 认件密码，例如 "111"
+
+【返回值】
+    UBUS 调用结果
+
+【示例】
+Example:
+|  Set VoIP Account  | 1 | 0 | VoIP Line 1 | 111 | 111  |</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_base">
+    
+  </a>
+  <a name="set_voip_base">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">set_voip_base</span><span class="function-signature long-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">dtmf_method=<span class="rst-variable-quote">'</span><span class="rst-variable-string">RFC2833</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">proxy_server_port=<span class="rst-variable-quote">'</span><span class="rst-variable-string">5060</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">register_expires=<span class="rst-variable-quote">'</span><span class="rst-variable-string">3600</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">sip_mode=<span class="rst-variable-quote">'</span><span class="rst-variable-string">SIP</span><span class="rst-variable-quote">'</span></span>):</span>
+    
+    <a class="headerLink" href="#set_voip_base" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_base">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+    设置 VoIP 基础配置
+
+【入参】
+    param dtmf_method: str - DTMF方法，默认"RFC2833"
+    param proxy_server_port: str - 代理服务器端口，默认"5060"
+    param register_expires: str - 注册过期时间，默认"3600"
+    param sip_mode: str - SIP模式，默认"SIP"
+
+【返回值】
+    UBUS 调调用结果
+
+【示例】
+Example:
+|  Set VoIP Base  | RFC2833 | 5060 | 3600 | SIP  |</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_codec">
+    
+  </a>
+  <a name="set_voip_codec">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">set_voip_codec</span><span class="function-signature long-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">line_index=<span class="rst-variable-quote">'</span><span class="rst-variable-string">1</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">codec1=<span class="rst-variable-quote">'</span><span class="rst-variable-string">G.711 U-law</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">codec2=<span class="rst-variable-quote">'</span><span class="rst-variable-string">G.711 A-law</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">codec3=<span class="rst-variable-quote">'</span><span class="rst-variable-string">G.729</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">codec4=<span class="rst-variable-quote">'</span><span class="rst-variable-string">G.722</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">codec5=<span class="rst-variable-quote">'</span><span class="rst-variable-string">G.723</span><span class="rst-variable-quote">'</span></span>):</span>
+    
+    <a class="headerLink" href="#set_voip_codec" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_codec">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+    设置 VoIP 编解码器配置
+【入参】
+    param line_index: int - 线路索引，对应 Device.Services.VoiceService.1.SIP中1
+    param codec1: str - 编解码器1，可填写为G.711 U-law,G.711 A-law,G.729,G.722,G.723,G.726 - 16,G.726 - 24,G.726 - 32,G.726 - 40
+    param codec2: str - 编解码器2，可填写为G.711 U-law,G.711 A-law,G.729,G.722,G.723,G.726 - 16,G.726 - 24,G.726 - 32,G.726 - 40
+    param codec3: str - 编解码器3，可填写为G.711 U-law,G.711 A-law,G.729,G.722,G.723,G.726 - 16,G.726 - 24,G.726 - 32,G.726 - 40
+    param codec4: str - 编解码器4，可填写为G.711 U-law,G.711 A-law,G.729,G.722,G.723,G.726 - 16,G.726 - 24,G.726 - 32,G.726 - 40
+    param codec5: str - 编解码器5，可填写为G.711 U-law,G.711 A-law,G.729,G.722,G.723,G.726 - 16,G.726 - 24,G.726 - 32,G.726 - 40
+【返回值】
+    UBUS 调调用结果
+【示例】
+Example:
+|  Set VoIP Codec  | 1 | G.711 U-law | G.711 A-law | G.729 | G.722 | G.723  |</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_digmap">
+    
+  </a>
+  <a name="set_voip_digmap">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">set_voip_digmap</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">digit_map</span>):</span>
+    
+    <a class="headerLink" href="#set_voip_digmap" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_digmap">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+    设置 VoIP DigitMap 配uration
+【入参】
+    param digit_map: str - DigitMap 值值，例如 "x."
+【返回值】
+    UBUS 调调用结果
+【示例】
+Example:
+|  Set VoIP DigitMap  | x.  |</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_register_server">
+    
+  </a>
+  <a name="set_voip_register_server">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">set_voip_register_server</span><span class="function-signature long-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">server_index=<span class="rst-variable-quote">'</span><span class="rst-variable-string">1</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">proxy_server=<span class="rst-variable-quote">'</span><span class="rst-variable-string">172.33.5.251</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">proxy_server_port=<span class="rst-variable-quote">'</span><span class="rst-variable-string">5060</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">outbound_proxy=<span class="rst-variable-quote">'</span><span class="rst-variable-string">172.33.5.251</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">outbound_proxy_port=<span class="rst-variable-quote">'</span><span class="rst-variable-string">5060</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">registrar_server=<span class="rst-variable-quote">'</span><span class="rst-variable-string">172.33.5.251</span><span class="rst-variable-quote">'</span>, </span><span class="rst-sig-param">registrar_server_port=<span class="rst-variable-quote">'</span><span class="rst-variable-string">5060</span><span class="rst-variable-quote">'</span></span>):</span>
+    
+    <a class="headerLink" href="#set_voip_register_server" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.set_voip_register_server">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+    设置 VoIP 注册服务器配置
+
+【入参】
+    param server_index: str - 网络索引，对应 Device.Services.VoiceService.1.SIP.Network.1.中1
+    param proxy_server: str - 代理服务器地址，默认"172.33.5.251"
+    param proxy_server_port: str - 代理服务器端口，默认"5060"
+    param outbound_proxy: str - 出bound代理地址，默认"172.33.5.251"
+    param outbound_proxy_port: str - 出bound代理端口，默认"5060"
+    param registrar_server: str - 注册服务器地址，默认"172.33.5.251"
+    param registrar_server_port: str - 注册服务器端口，默认"5060"
+
+【返回值】
+    UBUS 调调用结果
+
+【示例】
+Example:
+|  Set VoIP Register Server  | 1 | 172.33.5.251 | 5060 | 172.33.5.251 | 5060 | 172.33.5.251 | 5060  |</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.unit_test">
+    
+  </a>
+  <a name="unit_test">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">unit_test</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#unit_test" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.unit_test">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.ip">
+    
+  </a>
+  <a name="ip">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">ip</span> =
+    
+    <a class="headerLink" href="#ip" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.ip">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.password">
+    
+  </a>
+  <a name="password">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">password</span> =
+    
+    <a class="headerLink" href="#password" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.password">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.ubus">
+    
+  </a>
+  <a name="ubus">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">ubus</span> =
+    
+    <a class="headerLink" href="#ubus" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.ubus">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.username">
+    
+  </a>
+  <a name="username">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">username</span> =
+    
+    <a class="headerLink" href="#username" title="SdmcUbusLib.libs.Voice_moudle_api.voip.VoipManager.username">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div>
+        </div>
+      
+      </div>
+    </div>
+
+    <footer class="navbar navbar-default">
+
+  
+  <div class="container-fluid">
+    <a href="index.html">API Documentation</a> for <a href="https://example.com" class="projecthome">SdmcUbusLib API</a>,
+  generated by <a href="https://github.com/twisted/pydoctor/">pydoctor</a>
+    25.4.0 at 2025-11-05 17:50:00.
+  </div>
+
+  <!-- Search related scripts needs to be loaded at the end of HTML 
+    parsing not to introduce overhead and display HTML data asap -->
+  <script src="ajax.js" type="text/javascript"></script>
+  <script src="searchlib.js" type="text/javascript"></script>
+  <script src="search.js" type="text/javascript"></script>
+
+</footer>
+  
+    <script src="pydoctor.js" type="text/javascript"></script>
+
+  </body>
+</html>

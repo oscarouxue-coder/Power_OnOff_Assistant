@@ -1,0 +1,818 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  
+
+  <head>
+    
+    <title>SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib</title>
+    <meta name="generator" content="pydoctor 25.4.0"> 
+        
+    </meta>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1 maximum-scale=1" />
+    <link rel="stylesheet" type="text/css" href="bootstrap.min.css" />
+    <link rel="stylesheet" type="text/css" href="apidocs.css" />
+    <link rel="stylesheet" type="text/css" href="extra.css" />
+    
+</head>
+
+  <body>
+
+    
+
+    <nav class="navbar navbar-default mainnavbar">
+      
+  
+  <div class="container-fluid">
+
+
+    <div class="navbar-header">
+      
+      <div class="navlinks">
+        <span class="navbar-brand">
+          <a href="https://example.com" class="projecthome">SdmcUbusLib API</a> <a href="index.html">API Documentation</a>
+        </span>
+
+        <a href="moduleIndex.html">
+          Modules
+        </a>
+
+        <a href="classIndex.html">
+          Classes
+        </a>
+
+        <a href="nameIndex.html">
+          Names
+        </a>
+
+        <div id="search-box-container">
+          <div class="input-group">
+            <input id="search-box" type="search" name="search-query" placeholder="Search..." aria-label="Search" minlength="2" class="form-control" autocomplete="off" />
+            
+            <span class="input-group-btn">
+              <a style="display: none;" class="btn btn-default" id="search-clear-button" title="Clear" onclick="clearSearch()"><img src="fonts/x-circle.svg" alt="Clear" /></a>
+              <a class="btn btn-default" id="apidocs-help-button" title="Help" href="apidocs-help.html"><img src="fonts/info.svg" alt="Help" /></a>
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      <div id="search-results-container" style="display: none;">
+        
+        <div id="search-buttons">
+          <span class="label label-default" id="search-docstrings-button">
+          <label class="checkbox-inline">
+            <input type="checkbox" id="toggle-search-in-docstrings-checkbox" value="false" onclick="toggleSearchInDocstrings()">
+              search in docstrings
+            </input>
+          </label>
+          </span>
+          
+        </div>
+        
+        <noscript>
+            <h1>Cannot search: JavaScript is not supported/enabled in your browser.</h1>
+        </noscript>
+
+        <div id="search-status"> </div>
+
+        <div class="warning" id="search-warn-box" style="display: none;">
+          <p class="rst-last"><span id="search-warn"></span></p>
+        </div>
+
+        <table id="search-results">
+          <!-- Filled dynamically by JS -->
+        </table>
+        
+        <div style="margin-top: 10px;">
+          <p>For more information on the search, visit the <a href="apidocs-help.html#rst-search">help page</a>.</p>
+        </div>
+      </div>
+
+    </div>
+
+
+  </div>
+</nav>
+    
+    <div class="container-fluid">
+
+      <!-- Side navigation -->
+      <div class="sidebarcontainer" style="display: none;">
+        
+        <div class="sidebar"><nav class="sidebar">
+  
+
+  <div>
+
+      <div class="thingTitle">
+        <span>Class</span>
+        <code class="thisobject"><a href="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.html" class="internal-link" title="This class"><wbr></wbr>Sdmc<wbr></wbr>Performance<wbr></wbr>Lib</a></code> 
+      </div>
+      
+      <div>
+        
+
+        
+         
+
+        
+        
+
+        <div class="childrenKindTitle">Methods</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.__init__">__init__</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_keyword_arguments" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.get_keyword_arguments">get<wbr></wbr>_keyword<wbr></wbr>_arguments</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_keyword_documentation" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.get_keyword_documentation">get<wbr></wbr>_keyword<wbr></wbr>_documentation</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_keyword_names" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.get_keyword_names">get<wbr></wbr>_keyword<wbr></wbr>_names</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#run_keyword" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.run_keyword">run<wbr></wbr>_keyword</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#Ubus_Status_get_device_info" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_get_device_info"><wbr></wbr>Ubus_<wbr></wbr>Status_get_device_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#Ubus_Status_get_wan_index" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_get_wan_index"><wbr></wbr>Ubus_<wbr></wbr>Status_get_wan_index</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#Ubus_Status_get_wan_info" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_get_wan_info"><wbr></wbr>Ubus_<wbr></wbr>Status_get_wan_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#Ubus_Status_manage_wan" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_manage_wan"><wbr></wbr>Ubus_<wbr></wbr>Status_manage_wan</a></code>
+            </div>
+        
+
+    </li><li class="private">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#_get_self_keywords" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib._get_self_keywords">_get<wbr></wbr>_self<wbr></wbr>_keywords</a></code>
+            </div>
+        
+
+    </li><li class="private">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#_Ubus_Status_init" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib._Ubus_Status_init">_<wbr></wbr>Ubus_<wbr></wbr>Status_init</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+
+        <div class="childrenKindTitle">Attributes</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#keywords" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.keywords">keywords</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#status" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.status">status</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+        
+      </div>
+  </div><div>
+
+      <div class="thingTitle">
+        <span>Package</span>
+        <code><a href="SdmcUbusLib.libs.Performance_module_api.html" class="internal-link" title="The parent of this class"><wbr></wbr>Performance_module_api</a></code> 
+      </div>
+      
+      <div>
+        
+
+        
+         
+
+        <div class="childrenKindTitle">Classes</div>
+        <ul>
+    
+    <li class=" thisobject">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.html" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib"><wbr></wbr>Sdmc<wbr></wbr>Performance<wbr></wbr>Lib</a></code>
+            </div>
+        
+
+    </li>
+</ul>
+
+        
+         
+
+        
+         
+
+        
+         
+
+        
+         
+        
+      </div>
+  </div>
+
+</nav>
+        </div>
+        <div id="collapseSideBar">
+          <a class="btn btn-link" onclick="toggleSideBarCollapse()" title="Toggle Sidebar Collapse">
+          </a>
+        </div> 
+        <script src="sidebartoggle.js" type="text/javascript"></script>
+       
+      </div>
+
+      <div id="main" class="">
+        
+
+        
+
+        <div class="page-header">
+          <h1 class="class"><code><code><a href="index.html" class="internal-link">SdmcUbusLib</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.html" class="internal-link" title="SdmcUbusLib.libs">libs</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.Performance_module_api.html" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api">Performance_module_api</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.html" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib">SdmcPerformanceLib</a></code></code></h1>
+          <div id="showPrivate">
+            <button class="btn btn-link" onclick="togglePrivate()">Toggle Private API</button>
+          </div>
+        </div>
+
+        <div class="categoryHeader">
+          class documentation
+        </div>
+
+        <div class="extrasDocstring">
+          <p class="class-signature"><code><span class="py-keyword">class</span> <span class="py-defname">SdmcPerformanceLib</span>(object):</code></p><p>Constructor: <code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.__init__">SdmcPerformanceLib()</a></code></p>
+          <p><a href="classIndex.html#SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib">View In Hierarchy</a></p>
+        </div>
+
+        <div class="moduleDocstring">
+          <div><p>测试库 demo for class</p></div>
+        </div>
+
+        <div id="splitTables">
+          <table class="children sortable" id="id62">
+  
+  
+  <tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.__init__">__init__</a></code></td>
+    <td><span class="rst-undocumented">No summary</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_keyword_arguments" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.get_keyword_arguments">get<wbr></wbr>_keyword<wbr></wbr>_arguments</a></code></td>
+    <td>返回关键字的参数列表</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_keyword_documentation" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.get_keyword_documentation">get<wbr></wbr>_keyword<wbr></wbr>_documentation</a></code></td>
+    <td><span class="rst-undocumented">No summary</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_keyword_names" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.get_keyword_names">get<wbr></wbr>_keyword<wbr></wbr>_names</a></code></td>
+    <td><span class="rst-undocumented">No summary</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#run_keyword" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.run_keyword">run<wbr></wbr>_keyword</a></code></td>
+    <td><span class="rst-undocumented">No summary</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#Ubus_Status_get_device_info" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_get_device_info"><wbr></wbr>Ubus_<wbr></wbr>Status_get_device_info</a></code></td>
+    <td>功能描述：</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#Ubus_Status_get_wan_index" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_get_wan_index"><wbr></wbr>Ubus_<wbr></wbr>Status_get_wan_index</a></code></td>
+    <td>功能描述：</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#Ubus_Status_get_wan_info" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_get_wan_info"><wbr></wbr>Ubus_<wbr></wbr>Status_get_wan_info</a></code></td>
+    <td>功能描述：</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#Ubus_Status_manage_wan" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_manage_wan"><wbr></wbr>Ubus_<wbr></wbr>Status_manage_wan</a></code></td>
+    <td>功能描述：</td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#keywords" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.keywords">keywords</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#status" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.status">status</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method private">
+    
+    <td>Method</td>
+    <td><code><a href="#_get_self_keywords" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib._get_self_keywords">_get<wbr></wbr>_self<wbr></wbr>_keywords</a></code></td>
+    <td><span class="rst-undocumented">No summary</span></td>
+  </tr><tr class="method private">
+    
+    <td>Method</td>
+    <td><code><a href="#_Ubus_Status_init" class="internal-link" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib._Ubus_Status_init">_<wbr></wbr>Ubus_<wbr></wbr>Status_init</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr>
+</table>
+          
+
+            
+        </div>
+
+        <div id="childList">
+          <div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.__init__">
+    
+  </a>
+  <a name="__init__">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">__init__</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#__init__" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.__init__">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.get_keyword_arguments">
+    
+  </a>
+  <a name="get_keyword_arguments">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_keyword_arguments</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">name</span>):</span>
+    
+    <a class="headerLink" href="#get_keyword_arguments" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.get_keyword_arguments">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>返回关键字的参数列表</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.get_keyword_documentation">
+    
+  </a>
+  <a name="get_keyword_documentation">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_keyword_documentation</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">name</span>):</span>
+    
+    <a class="headerLink" href="#get_keyword_documentation" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.get_keyword_documentation">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.get_keyword_names">
+    
+  </a>
+  <a name="get_keyword_names">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_keyword_names</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_keyword_names" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.get_keyword_names">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.run_keyword">
+    
+  </a>
+  <a name="run_keyword">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">run_keyword</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">name, </span><span class="rst-sig-param">args, </span><span class="rst-sig-param">kwargs=None</span>):</span>
+    
+    <a class="headerLink" href="#run_keyword" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.run_keyword">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_get_device_info">
+    
+  </a>
+  <a name="Ubus_Status_get_device_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">Ubus_Status_get_device_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#Ubus_Status_get_device_info" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_get_device_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：</p>
+<p>获取Status中的device info</p>
+<p>返回值：</p>
+<p>返回一个字典，为所有device info中的各个信息</p>
+<p>{'Model': 'NPE3039GB', 'MAC Address': '2C:EC:F7:BB:4C:56', 'Hardware Version': 'V1.0', 'Software Version': 'S13.4B.01.001', 'Uptime': '1 Day 02 Hour 14 Minute 28 Seconds', 'System Time': '2025/07/30 05:52:06', 'Firmware Time': 'Thu Jul 10 04:15:44 UTC 2025', 'Device SN': '24C0010191000078', 'CPU Usage': '9 %', 'Memory Usage': '59 %', 'Temperature': '61 ℃'}</p>
+<p>Example: | ${ret} |  Ubus_Status_get_device_info  |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_get_wan_index">
+    
+  </a>
+  <a name="Ubus_Status_get_wan_index">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">Ubus_Status_get_wan_index</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">wan_name</span>):</span>
+    
+    <a class="headerLink" href="#Ubus_Status_get_wan_index" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_get_wan_index">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：</p>
+<p>获取wan index</p>
+<p>入参：</p>
+<p>wan_name:WAN的名称，可以通过 Ubus_Status_get_wan_info 获取</p>
+<p>返回值：</p>
+<p>wan_index: wan 序号</p>
+<p>Example: | ${ret} |  Ubus_Status_get_wan_index  |</p>
+</div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_get_wan_info">
+    
+  </a>
+  <a name="Ubus_Status_get_wan_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">Ubus_Status_get_wan_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#Ubus_Status_get_wan_info" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_get_wan_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">功能描述：
+
+获取status中的wan的详细信息
+
+返回值：
+
+以字典的形式返回所有wan的信息
+{
+    "2": {
+        "Name": "3_INTERNET_R_VID_200",
+        "MAC": "2C:EC:F7:BB:4C:57",
+        "IPv4": "172.18.18.54",
+        "IPv4Gateway": "172.18.18.1",
+        "Status": "Up",
+        "Uptime": "0 Day 00 Hour 11 Minute 57 Seconds",
+        "PrimaryDNSv4": "202.96.134.133",
+        "SecondaryDNSv4": "152.152.152.222"
+    },
+    "3": {
+        "Name": "4_TR069_R_VID_50",
+        "MAC": "2C:EC:F7:BB:4C:58",
+        "IPv4": "10.50.100.113",
+        "IPv4Gateway": "10.50.100.1",
+        "Status": "Up",
+        "Uptime": "0 Day 00 Hour 07 Minute 46 Seconds",
+        "PrimaryDNSv4": "152.152.152.222",
+        "SecondaryDNSv4": ""
+    }
+}
+
+Example:
+| ${ret} |  Ubus_Status_get_wan_info  |</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_manage_wan">
+    
+  </a>
+  <a name="Ubus_Status_manage_wan">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">Ubus_Status_manage_wan</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">method, </span><span class="rst-sig-param">wan_index</span>):</span>
+    
+    <a class="headerLink" href="#Ubus_Status_manage_wan" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.Ubus_Status_manage_wan">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>功能描述：</p>
+<p>设置wan的release和renew</p>
+<p>入参：</p>
+<p>method：操作类型，"Release" 或 "Renew"</p>
+<p>wan_index: WAN 接口索引号</p>
+<p>Example: |  Ubus_Status_get_wan_info  | Release | 2 |</p>
+</div>
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.keywords">
+    
+  </a>
+  <a name="keywords">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">keywords</span>: <code>list</code> =
+    
+    <a class="headerLink" href="#keywords" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.keywords">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.status">
+    
+  </a>
+  <a name="status">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">status</span> =
+    
+    <a class="headerLink" href="#status" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib.status">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="basemethod private">
+  
+  
+  <a name="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib._get_self_keywords">
+    
+  </a>
+  <a name="_get_self_keywords">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">_get_self_keywords</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#_get_self_keywords" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib._get_self_keywords">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div></div>
+  </div>
+</div><div class="basemethod private">
+  
+  
+  <a name="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib._Ubus_Status_init">
+    
+  </a>
+  <a name="_Ubus_Status_init">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">_Ubus_Status_init</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#_Ubus_Status_init" title="SdmcUbusLib.libs.Performance_module_api.SdmcPerformanceLib._Ubus_Status_init">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div>
+        </div>
+      
+      </div>
+    </div>
+
+    <footer class="navbar navbar-default">
+
+  
+  <div class="container-fluid">
+    <a href="index.html">API Documentation</a> for <a href="https://example.com" class="projecthome">SdmcUbusLib API</a>,
+  generated by <a href="https://github.com/twisted/pydoctor/">pydoctor</a>
+    25.4.0 at 2025-11-05 17:50:00.
+  </div>
+
+  <!-- Search related scripts needs to be loaded at the end of HTML 
+    parsing not to introduce overhead and display HTML data asap -->
+  <script src="ajax.js" type="text/javascript"></script>
+  <script src="searchlib.js" type="text/javascript"></script>
+  <script src="search.js" type="text/javascript"></script>
+
+</footer>
+  
+    <script src="pydoctor.js" type="text/javascript"></script>
+
+  </body>
+</html>

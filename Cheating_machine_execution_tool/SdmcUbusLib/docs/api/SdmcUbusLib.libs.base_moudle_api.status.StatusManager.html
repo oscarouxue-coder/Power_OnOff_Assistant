@@ -1,0 +1,1136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+          "DTD/xhtml1-strict.dtd">
+<html>
+  
+
+  <head>
+    
+    <title>SdmcUbusLib.libs.base_moudle_api.status.StatusManager</title>
+    <meta name="generator" content="pydoctor 25.4.0"> 
+        
+    </meta>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1 maximum-scale=1" />
+    <link rel="stylesheet" type="text/css" href="bootstrap.min.css" />
+    <link rel="stylesheet" type="text/css" href="apidocs.css" />
+    <link rel="stylesheet" type="text/css" href="extra.css" />
+    
+</head>
+
+  <body>
+
+    
+
+    <nav class="navbar navbar-default mainnavbar">
+      
+  
+  <div class="container-fluid">
+
+
+    <div class="navbar-header">
+      
+      <div class="navlinks">
+        <span class="navbar-brand">
+          <a href="https://example.com" class="projecthome">SdmcUbusLib API</a> <a href="index.html">API Documentation</a>
+        </span>
+
+        <a href="moduleIndex.html">
+          Modules
+        </a>
+
+        <a href="classIndex.html">
+          Classes
+        </a>
+
+        <a href="nameIndex.html">
+          Names
+        </a>
+
+        <div id="search-box-container">
+          <div class="input-group">
+            <input id="search-box" type="search" name="search-query" placeholder="Search..." aria-label="Search" minlength="2" class="form-control" autocomplete="off" />
+            
+            <span class="input-group-btn">
+              <a style="display: none;" class="btn btn-default" id="search-clear-button" title="Clear" onclick="clearSearch()"><img src="fonts/x-circle.svg" alt="Clear" /></a>
+              <a class="btn btn-default" id="apidocs-help-button" title="Help" href="apidocs-help.html"><img src="fonts/info.svg" alt="Help" /></a>
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      <div id="search-results-container" style="display: none;">
+        
+        <div id="search-buttons">
+          <span class="label label-default" id="search-docstrings-button">
+          <label class="checkbox-inline">
+            <input type="checkbox" id="toggle-search-in-docstrings-checkbox" value="false" onclick="toggleSearchInDocstrings()">
+              search in docstrings
+            </input>
+          </label>
+          </span>
+          
+        </div>
+        
+        <noscript>
+            <h1>Cannot search: JavaScript is not supported/enabled in your browser.</h1>
+        </noscript>
+
+        <div id="search-status"> </div>
+
+        <div class="warning" id="search-warn-box" style="display: none;">
+          <p class="rst-last"><span id="search-warn"></span></p>
+        </div>
+
+        <table id="search-results">
+          <!-- Filled dynamically by JS -->
+        </table>
+        
+        <div style="margin-top: 10px;">
+          <p>For more information on the search, visit the <a href="apidocs-help.html#rst-search">help page</a>.</p>
+        </div>
+      </div>
+
+    </div>
+
+
+  </div>
+</nav>
+    
+    <div class="container-fluid">
+
+      <!-- Side navigation -->
+      <div class="sidebarcontainer" style="display: none;">
+        
+        <div class="sidebar"><nav class="sidebar">
+  
+
+  <div>
+
+      <div class="thingTitle">
+        <span>Class</span>
+        <code class="thisobject"><a href="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.html" class="internal-link" title="This class"><wbr></wbr>Status<wbr></wbr>Manager</a></code> 
+      </div>
+      
+      <div>
+        
+
+        
+         
+
+        
+        
+
+        <div class="childrenKindTitle">Methods</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.__init__">__init__</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#debug_test" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.debug_test">debug<wbr></wbr>_test</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#format_uptime" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.format_uptime">format<wbr></wbr>_uptime</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_acsline_status" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_acsline_status">get<wbr></wbr>_acsline<wbr></wbr>_status</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_chip_name" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_chip_name">get<wbr></wbr>_chip<wbr></wbr>_name</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_connected_hosts_info" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_connected_hosts_info">get<wbr></wbr>_connected<wbr></wbr>_hosts<wbr></wbr>_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_device_info" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_device_info">get<wbr></wbr>_device<wbr></wbr>_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_device_info_and_time_ubus" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_device_info_and_time_ubus">get<wbr></wbr>_device<wbr></wbr>_info<wbr></wbr>_and<wbr></wbr>_time<wbr></wbr>_ubus</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_interface_instance_by_name" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_interface_instance_by_name">get<wbr></wbr>_interface<wbr></wbr>_instance<wbr></wbr>_by<wbr></wbr>_name</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_internetline_status" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_internetline_status">get<wbr></wbr>_internetline<wbr></wbr>_status</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_lan_port_status" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_lan_port_status">get<wbr></wbr>_lan<wbr></wbr>_port<wbr></wbr>_status</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_mac_from_ethernet_link" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_mac_from_ethernet_link">get<wbr></wbr>_mac<wbr></wbr>_from<wbr></wbr>_ethernet<wbr></wbr>_link</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_poninfo" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_poninfo">get<wbr></wbr>_poninfo</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_voipline_status" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_voipline_status">get<wbr></wbr>_voipline<wbr></wbr>_status</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#get_wan_info" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_wan_info">get<wbr></wbr>_wan<wbr></wbr>_info</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#manage_wan" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.manage_wan">manage<wbr></wbr>_wan</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#unit_test" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.unit_test">unit<wbr></wbr>_test</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+
+        <div class="childrenKindTitle">Attributes</div>
+        <ul>
+    
+    <li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#ip" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.ip">ip</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#password" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.password">password</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#ubus" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.ubus">ubus</a></code>
+            </div>
+        
+
+    </li><li class="">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="#username" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.username">username</a></code>
+            </div>
+        
+
+    </li>
+</ul> 
+
+        
+         
+        
+      </div>
+  </div><div>
+
+      <div class="thingTitle">
+        <span>Module</span>
+        <code><a href="SdmcUbusLib.libs.base_moudle_api.status.html" class="internal-link" title="The parent of this class">status</a></code> 
+      </div>
+      
+      <div>
+        
+
+        
+         
+
+        <div class="childrenKindTitle">Classes</div>
+        <ul>
+    
+    <li class=" thisobject">
+        
+        
+        
+
+        
+            <div class="itemName"><code><a href="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.html" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager"><wbr></wbr>Status<wbr></wbr>Manager</a></code>
+            </div>
+        
+
+    </li>
+</ul>
+
+        
+         
+
+        
+         
+
+        
+         
+
+        
+         
+        
+      </div>
+  </div>
+
+</nav>
+        </div>
+        <div id="collapseSideBar">
+          <a class="btn btn-link" onclick="toggleSideBarCollapse()" title="Toggle Sidebar Collapse">
+          </a>
+        </div> 
+        <script src="sidebartoggle.js" type="text/javascript"></script>
+       
+      </div>
+
+      <div id="main" class="">
+        
+
+        
+
+        <div class="page-header">
+          <h1 class="class"><code><code><a href="index.html" class="internal-link">SdmcUbusLib</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.html" class="internal-link" title="SdmcUbusLib.libs">libs</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.base_moudle_api.html" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api">base_moudle_api</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.base_moudle_api.status.html" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status">status</a></code><wbr></wbr>.<code><a href="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.html" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager">StatusManager</a></code></code></h1>
+          <div id="showPrivate">
+            <button class="btn btn-link" onclick="togglePrivate()">Toggle Private API</button>
+          </div>
+        </div>
+
+        <div class="categoryHeader">
+          class documentation
+        </div>
+
+        <div class="extrasDocstring">
+          <p class="class-signature"><code><span class="py-keyword">class</span> <span class="py-defname">StatusManager</span>:</code></p><p>Constructor: <code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.__init__">StatusManager(ip, username, password)</a></code></p>
+          <p><a href="classIndex.html#SdmcUbusLib.libs.base_moudle_api.status.StatusManager">View In Hierarchy</a></p>
+        </div>
+
+        <div class="moduleDocstring">
+          <div><p class="undocumented">Undocumented</p></div>
+        </div>
+
+        <div id="splitTables">
+          <table class="children sortable" id="id16">
+  
+  
+  <tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#__init__" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.__init__">__init__</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#debug_test" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.debug_test">debug<wbr></wbr>_test</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#format_uptime" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.format_uptime">format<wbr></wbr>_uptime</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_acsline_status" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_acsline_status">get<wbr></wbr>_acsline<wbr></wbr>_status</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_chip_name" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_chip_name">get<wbr></wbr>_chip<wbr></wbr>_name</a></code></td>
+    <td>【功能描述】     获取产品方案名称</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_connected_hosts_info" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_connected_hosts_info">get<wbr></wbr>_connected<wbr></wbr>_hosts<wbr></wbr>_info</a></code></td>
+    <td>【功能描述】     获取 client 下 Router 模式连接的 host信息</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_device_info" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_device_info">get<wbr></wbr>_device<wbr></wbr>_info</a></code></td>
+    <td>获取 Device Information</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_device_info_and_time_ubus" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_device_info_and_time_ubus">get<wbr></wbr>_device<wbr></wbr>_info<wbr></wbr>_and<wbr></wbr>_time<wbr></wbr>_ubus</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_interface_instance_by_name" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_interface_instance_by_name">get<wbr></wbr>_interface<wbr></wbr>_instance<wbr></wbr>_by<wbr></wbr>_name</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_internetline_status" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_internetline_status">get<wbr></wbr>_internetline<wbr></wbr>_status</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_lan_port_status" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_lan_port_status">get<wbr></wbr>_lan<wbr></wbr>_port<wbr></wbr>_status</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_mac_from_ethernet_link" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_mac_from_ethernet_link">get<wbr></wbr>_mac<wbr></wbr>_from<wbr></wbr>_ethernet<wbr></wbr>_link</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_poninfo" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_poninfo">get<wbr></wbr>_poninfo</a></code></td>
+    <td>【功能描述】 获取光模块（PON模块）的运行信息，包括注册状态、工作温度、光功率、电压、电流等。</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_voipline_status" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_voipline_status">get<wbr></wbr>_voipline<wbr></wbr>_status</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#get_wan_info" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_wan_info">get<wbr></wbr>_wan<wbr></wbr>_info</a></code></td>
+    <td>【功能描述】     获取status界面wan相关信息</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#manage_wan" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.manage_wan">manage<wbr></wbr>_wan</a></code></td>
+    <td>统一管理 WAN 接口：支持 Release 和 Renew 操作</td>
+  </tr><tr class="method">
+    
+    <td>Method</td>
+    <td><code><a href="#unit_test" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.unit_test">unit<wbr></wbr>_test</a></code></td>
+    <td>单元测试前要确保已经仅创建一条路由wan用于验证Release/Renew WAN IP的功能</td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#ip" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.ip">ip</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#password" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.password">password</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#ubus" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.ubus">ubus</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr><tr class="instancevariable">
+    
+    <td>Instance Variable</td>
+    <td><code><a href="#username" class="internal-link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.username">username</a></code></td>
+    <td><span class="rst-undocumented">Undocumented</span></td>
+  </tr>
+</table>
+          
+
+            
+        </div>
+
+        <div id="childList">
+          <div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.__init__">
+    
+  </a>
+  <a name="__init__">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">__init__</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">ip, </span><span class="rst-sig-param">username, </span><span class="rst-sig-param">password</span>):</span>
+    
+    <a class="headerLink" href="#__init__" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.__init__">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.debug_test">
+    
+  </a>
+  <a name="debug_test">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">debug_test</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#debug_test" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.debug_test">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.format_uptime">
+    
+  </a>
+  <a name="format_uptime">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">format_uptime</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">seconds</span>):</span>
+    
+    <a class="headerLink" href="#format_uptime" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.format_uptime">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_acsline_status">
+    
+  </a>
+  <a name="get_acsline_status">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_acsline_status</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_acsline_status" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_acsline_status">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_chip_name">
+    
+  </a>
+  <a name="get_chip_name">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_chip_name</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_chip_name" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_chip_name">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+    获取产品方案名称
+
+【返回值】
+    airoha或者bcmxxx(xxx为芯片名称)
+
+【示例】
+Example:
+|  chip_name  |  get_chip_name  |</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_connected_hosts_info">
+    
+  </a>
+  <a name="get_connected_hosts_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_connected_hosts_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_connected_hosts_info" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_connected_hosts_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+    获取 client 下 Router 模式连接的 host信息
+
+【返回值】
+    [{'hostname': 'H1148', 'ip': '192.168.29.221', 'mac': 'f8:e4:3b:6f:0a:21', 'type': 'Ethernet', 'linkport': 'eth2.0'}, {'hostname': 'H1148', 'ip': '192.168.29.8', 'mac': 'bc:cd:99:f7:c3:62', 'type': 'Wi-Fi', 'linkport': '!!!SDMC_221100_5G'}]
+
+
+【示例】
+    Example:
+    |  result  |  get_connected_hosts_info  |</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_device_info">
+    
+  </a>
+  <a name="get_device_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_device_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_device_info" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_device_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>获取 Device Information</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_device_info_and_time_ubus">
+    
+  </a>
+  <a name="get_device_info_and_time_ubus">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_device_info_and_time_ubus</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_device_info_and_time_ubus" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_device_info_and_time_ubus">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_interface_instance_by_name">
+    
+  </a>
+  <a name="get_interface_instance_by_name">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_interface_instance_by_name</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">target_name</span>):</span>
+    
+    <a class="headerLink" href="#get_interface_instance_by_name" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_interface_instance_by_name">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_internetline_status">
+    
+  </a>
+  <a name="get_internetline_status">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_internetline_status</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_internetline_status" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_internetline_status">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_lan_port_status">
+    
+  </a>
+  <a name="get_lan_port_status">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_lan_port_status</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_lan_port_status" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_lan_port_status">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_mac_from_ethernet_link">
+    
+  </a>
+  <a name="get_mac_from_ethernet_link">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_mac_from_ethernet_link</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">target_name</span>):</span>
+    
+    <a class="headerLink" href="#get_mac_from_ethernet_link" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_mac_from_ethernet_link">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_poninfo">
+    
+  </a>
+  <a name="get_poninfo">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_poninfo</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_poninfo" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_poninfo">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+获取光模块（PON模块）的运行信息，包括注册状态、工作温度、光功率、电压、电流等。
+
+【入参】
+无
+
+【返回值】
+pon_info : dict
+    返回光模块的状态信息，示例如下：
+    {
+        "ONT Registration Status": "Online",
+        "Working Temperature": "45.2℃",
+        "TX Optical Power": "-1.23 dBm",
+        "RX Optical Power": "-18.56 dBm",
+        "Working Voltage": "3300 mV",
+        "Working Current": "12.5 mA"
+    }
+
+    若未获取到 Optical.Interface 信息，则返回空字典 {}
+
+【示例】
+Example:
+|  Get Pon Info  |  |  |
+|  返回结果: {'ONT Registration Status': 'Online', 'Working Temperature': '42.8℃', 'TX Optical Power': '-2.10 dBm', 'RX Optical Power': '-17.88 dBm', 'Working Voltage': '3300 mV', 'Working Current': '12.3 mA'}  |</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_voipline_status">
+    
+  </a>
+  <a name="get_voipline_status">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_voipline_status</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_voipline_status" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_voipline_status">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_wan_info">
+    
+  </a>
+  <a name="get_wan_info">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">get_wan_info</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#get_wan_info" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.get_wan_info">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">【功能描述】
+    获取status界面wan相关信息
+
+【返回值】
+    {2: {'Name': '3_INTERNET_R_VID_35', 'MAC': 'B2:B3:69:60:1C:A1', 'IPv4': '', 'IPv4Gateway': '', 'Status': 'Down', 'Uptime': '0 Day 00 Hour 00 Minute 00 Seconds', 'PrimaryDNSv4': '', 'SecondaryDNSv4': '', 'IPv6': '', 'IPv6Gateway': '', 'PrimaryDNSv6': '', 'SecondaryDNSv6': ''}, 3: {'Name': '4_TR069_R_VID_2501', 'MAC': 'B2:B3:69:60:1C:A2', 'IPv4': '', 'IPv4Gateway': '', 'Status': 'Down', 'Uptime': '0 Day 00 Hour 00 Minute 00 Seconds', 'PrimaryDNSv4': '', 'SecondaryDNSv4': '', 'IPv6': '', 'IPv6Gateway': '', 'PrimaryDNSv6': '', 'SecondaryDNSv6': ''}}
+
+
+【示例】
+Example:
+|  result  |  get_wan_info  |</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.manage_wan">
+    
+  </a>
+  <a name="manage_wan">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">manage_wan</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span>, </span><span class="rst-sig-param">method, </span><span class="rst-sig-param">index</span>):</span>
+    
+    <a class="headerLink" href="#manage_wan" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.manage_wan">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p class="pre">统一管理 WAN 接口：支持 Release 和 Renew 操作
+
+参数：
+    method (str): 操作类型，"Release" 或 "Renew"
+    index (int): WAN 接口索引号
+
+返回：
+    ubus 调用结果</p></div>
+  </div>
+</div><div class="basemethod">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.unit_test">
+    
+  </a>
+  <a name="unit_test">
+    
+  </a>
+  <div class="functionHeader">
+    
+    
+    <span class="py-keyword">def</span>&#160;<span class="py-defname">unit_test</span><span class="function-signature">(<span class="rst-sig-param"><span class="rst-undocumented">self</span></span>):</span>
+    
+    <a class="headerLink" href="#unit_test" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.unit_test">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="docstring functionBody">
+    
+    <div><p>单元测试前要确保已经仅创建一条路由wan用于验证Release/Renew WAN IP的功能</p></div>
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.ip">
+    
+  </a>
+  <a name="ip">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">ip</span> =
+    
+    <a class="headerLink" href="#ip" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.ip">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.password">
+    
+  </a>
+  <a name="password">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">password</span> =
+    
+    <a class="headerLink" href="#password" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.password">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.ubus">
+    
+  </a>
+  <a name="ubus">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">ubus</span> =
+    
+    <a class="headerLink" href="#ubus" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.ubus">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div><div class="baseinstancevariable">
+  
+  
+  <a name="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.username">
+    
+  </a>
+  <a name="username">
+    
+  </a>
+  <div class="functionHeader">
+    
+    <span class="py-defname">username</span> =
+    
+    <a class="headerLink" href="#username" title="SdmcUbusLib.libs.base_moudle_api.status.StatusManager.username">
+      
+      
+      ¶
+    </a>
+  </div>
+  <div class="functionBody">
+    
+    <div><p class="undocumented">Undocumented</p></div>
+    
+  </div>
+</div>
+        </div>
+      
+      </div>
+    </div>
+
+    <footer class="navbar navbar-default">
+
+  
+  <div class="container-fluid">
+    <a href="index.html">API Documentation</a> for <a href="https://example.com" class="projecthome">SdmcUbusLib API</a>,
+  generated by <a href="https://github.com/twisted/pydoctor/">pydoctor</a>
+    25.4.0 at 2025-11-05 17:50:00.
+  </div>
+
+  <!-- Search related scripts needs to be loaded at the end of HTML 
+    parsing not to introduce overhead and display HTML data asap -->
+  <script src="ajax.js" type="text/javascript"></script>
+  <script src="searchlib.js" type="text/javascript"></script>
+  <script src="search.js" type="text/javascript"></script>
+
+</footer>
+  
+    <script src="pydoctor.js" type="text/javascript"></script>
+
+  </body>
+</html>
