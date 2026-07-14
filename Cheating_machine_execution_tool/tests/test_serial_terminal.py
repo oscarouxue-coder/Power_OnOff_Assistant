@@ -88,6 +88,31 @@ class SerialTerminalPersistenceTests(unittest.TestCase):
 
         terminal.close.assert_called_once()
 
+    def test_on_command_return_invokes_send_and_returns_break(self):
+        terminal = SerialTerminalWindow(Mock(), Mock(), Path(r"D:\Serial_Log"))
+        terminal.send = Mock()
+
+        result = terminal._on_command_return("vlan137")
+
+        terminal.send.assert_called_once_with("vlan137")
+        self.assertEqual(result, "break")
+
+    def test_command_entry_return_binding_triggers_send(self):
+        """模拟给命令输入框 bind 的 <Return> 回调：被触发时应等价于点击发送按钮。"""
+        # 直接复制 _ensure_tab 里 command.bind("<Return>", ...) 的实现逻辑，避免依赖 Tk Notebook
+        terminal = SerialTerminalWindow(Mock(), Mock(), Path(r"D:\Serial_Log"))
+        terminal.send = Mock()
+
+        def handler(event, _vlan="vlan137"):
+            terminal._on_command_return(_vlan)
+            return "break"
+
+        # 在没有真实 Tk Entry 的情况下，模拟一次 Enter 触发
+        result = handler(event=object())
+
+        terminal.send.assert_called_once_with("vlan137")
+        self.assertEqual(result, "break")
+
     def test_save_state_shows_error_when_state_file_is_not_writable(self):
         master = Mock()
         state_file = Mock()

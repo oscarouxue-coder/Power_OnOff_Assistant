@@ -24,6 +24,16 @@
 - 后续待办：
 ```
 
+## 2026-07-15 - 串口终端命令输入框支持 Enter 发送
+
+- 类型：优化 / 测试 / 文档
+- 背景：操作员反馈“串口日志记录”窗口的命令输入框按 Enter 不发送，每次都要手动点「发送」按钮，与常见串口终端习惯不符。
+- 完成内容：在每个 VLAN Tab 的命令输入框（`ttk.Entry`）上绑定 `<Return>` 事件，新增 `_on_command_return(vlan)` 内部方法直接复用现有 `send(vlan)` 入口并返回 `"break"` 阻断 Tk 默认 Enter 行为；输入框非空时发送文本并清空（等价「发送」按钮），空字符串时发送纯回车（等价「回车」按钮）。自动升级占用、危险命令 `reboot`/`reset`/`firstboot`/`tftp`/`upgrade` 二次确认等现有 `send()` 分支保持不变。
+- 修改文件：`Cheating_machine_execution_tool/src/ui/serial_terminal.py`、`Cheating_machine_execution_tool/tests/test_serial_terminal.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile src/ui/serial_terminal.py`；`python -m unittest discover -s tests -p test_serial_terminal.py -v`；`python -m unittest discover -s tests -v`。
+- 验证结果：`python -m py_compile` 通过；串口终端专项 8 项通过（原 6 项 + 新增 2 项）；完整 `python -m unittest discover -s tests -v` 共 184 项通过（原 182 项 + 新增 2 项）。
+- 后续待办：用户真实桌面环境在 vlan137/vlan138 等终端确认按 Enter 等价于「发送」按钮、空输入时等价于「回车」按钮，并确认升级中锁定提示和危险命令二次确认仍生效。
+
 ## 2026-07-13 - 精简项目交接状态文档
 
 - 类型：文档 / 交接

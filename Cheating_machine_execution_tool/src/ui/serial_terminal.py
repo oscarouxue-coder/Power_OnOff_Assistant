@@ -110,6 +110,15 @@ class SerialTerminalWindow:
         bottom.pack(fill="x", padx=8, pady=(0, 8))
         command = ttk.Entry(bottom)
         command.pack(side="left", fill="x", expand=True)
+        # 命令输入框按 Enter 等价于点击「发送」按钮；
+        # send() 内部会自动处理空字符串、危险命令二次确认和升级中锁定的拦截。
+        def _on_command_return_inner(event, _vlan=normalized):
+            # event 在标准 Tk 回调中是 Event 对象，仅作为合法签名占位；
+            # 通过 _ = event 让静态检查器接受该形参并不再持续提示。
+            _ = event
+            self._on_command_return(_vlan)
+            return "break"
+        command.bind("<Return>", _on_command_return_inner)
         ttk.Button(bottom, text="发送", command=lambda v=normalized: self.send(v)).pack(side="left", padx=(6, 0))
         ttk.Button(bottom, text="回车", command=lambda v=normalized: self.send(v, force_enter=True)).pack(side="left", padx=(6, 0))
         ttk.Button(bottom, text="清屏", command=lambda o=output: self.clear(o)).pack(side="left", padx=(6, 0))
@@ -147,6 +156,15 @@ class SerialTerminalWindow:
             session.subscribe(subscriber)
             item.update(session=session, subscriber=subscriber)
         item["status"].set(f"{item['port']} 正在自动升级，手动发送已锁定，日志：{log_path}")
+
+    def _on_command_return(self, vlan: str) -> str:
+        """命令行输入框按 Enter 时的入口，等价于「发送」按钮。
+
+        返回 "break" 用来阻止 Tk 默认 Enter 行为（例如激活焦点按钮），
+        确保自动升级锁定提示、危险命令二次确认等 send() 逻辑都被执行。
+        """
+        self.send(vlan)
+        return "break"
 
     def send(self, vlan: str, force_enter: bool = False) -> None:
         item = self.tabs[vlan]
