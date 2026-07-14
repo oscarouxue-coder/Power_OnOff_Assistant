@@ -29,13 +29,52 @@ class SerialTerminalPersistenceTests(unittest.TestCase):
         for output in outputs.values():
             output.insert.assert_called_once()
             output.see.assert_called_once_with("end")
-        self.assertEqual(window.after.call_args.args[0], 0)
+        self.assertEqual(window.after.call_args.args[0], 33)
 
         with patch("src.ui.serial_terminal.time.monotonic", return_value=0):
             terminal._poll()
 
         self.assertEqual(terminal.events.qsize(), 0)
         self.assertEqual(window.after.call_args.args[0], 80)
+
+    def test_poll_renders_only_active_tab_and_buffers_other_tabs(self):
+        terminal = SerialTerminalWindow(Mock(), Mock(), Path(r"D:\Serial_Log"))
+        window = Mock()
+        window.winfo_exists.return_value = True
+        terminal.window = window
+        active_frame = Mock()
+        inactive_frame = Mock()
+        notebook = Mock()
+        notebook.select.return_value = str(active_frame)
+        terminal.notebook = notebook
+        active_output = Mock()
+        inactive_output = Mock()
+        terminal.tabs = {
+            "vlan137": {"frame": active_frame, "output": active_output},
+            "vlan138": {"frame": inactive_frame, "output": inactive_output},
+        }
+        terminal.events.put(("vlan137", SimpleNamespace(text="active\n")))
+        terminal.events.put(("vlan138", SimpleNamespace(text="inactive\n")))
+
+        terminal._poll()
+
+        active_output.insert.assert_called_once()
+        inactive_output.insert.assert_not_called()
+        self.assertIn("vlan138", terminal._pending_chunks)
+        self.assertEqual(window.after.call_args.args[0], 80)
+
+        notebook.select.return_value = str(inactive_frame)
+        terminal._poll()
+
+        inactive_output.insert.assert_called_once()
+
+    def test_trim_display_removes_old_lines_beyond_limit(self):
+        output = Mock()
+        output.index.return_value = "5003.0"
+
+        SerialTerminalWindow._trim_display(output)
+
+        output.delete.assert_called_once_with("1.0", "4.0")
 
     def test_finish_upgrade_logs_closes_only_auto_opened_window(self):
         terminal = SerialTerminalWindow(Mock(), Mock(), Path(r"D:\Serial_Log"))

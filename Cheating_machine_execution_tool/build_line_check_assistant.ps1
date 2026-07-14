@@ -19,6 +19,8 @@ try {
         --specpath $specDir `
         --additional-hooks-dir $hookDir `
         --collect-submodules tftpy `
+        --collect-submodules openpyxl `
+        --collect-submodules xlrd `
         .\run_line_check_assistant.py
 
     if (Test-Path -LiteralPath $thirdPartyNotice) {

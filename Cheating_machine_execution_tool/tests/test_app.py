@@ -682,6 +682,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\sdmc.bin")),
             upgrade_username_var=Mock(get=Mock(return_value="sdmc")),
             upgrade_password_var=Mock(get=Mock(return_value="1234")),
+            upgrade_restore_factory_var=Mock(get=Mock(return_value=True)),
             upgrade_window=Mock(),
             device_ip_var=Mock(get=Mock(return_value="192.168.1.1")),
             _selected_page_upgrade_channels=Mock(return_value=channels),
@@ -699,8 +700,10 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual([request.device_ip for request in requests], ["192.168.29.1", "192.168.30.1"])
         self.assertTrue(all(request.username == "sdmc" for request in requests))
         self.assertTrue(all(request.password == "1234" for request in requests))
+        self.assertTrue(all(request.restore_factory for request in requests))
         # 所有 PageUpgradeRequest 都带上默认 /24 子网掩码,准备网络时据此设置 PC 静态 IP
         self.assertTrue(all(request.subnet_mask == "255.255.255.0" for request in requests))
+        self.assertIn("恢复出厂：开启，升级成功、设备重启并重新登录成功后将通过 UBUS 执行恢复出厂", _askyesno.call_args.args[1])
         thread_class.return_value.start.assert_called_once_with()
 
     @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
@@ -722,6 +725,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\sdmc.bin")),
             upgrade_username_var=Mock(get=Mock(return_value="sdmc")),
             upgrade_password_var=Mock(get=Mock(return_value="1234")),
+            upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
             upgrade_window=Mock(),
             device_ip_var=Mock(get=Mock(return_value="")),
             _selected_page_upgrade_channels=Mock(return_value=channels),

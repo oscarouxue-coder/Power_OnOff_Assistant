@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from line_check_assistant.page_upgrade import (
     DEVICE_SAVE_PATH,
     PageUpgradeRequest,
+    UbusUpgradeClient,
     UbusRpcError,
     run_single_page_upgrade,
 )
@@ -21,6 +22,7 @@ class FakeUbusClient:
         self.urls = []
         self.upload_calls = []
         self.triggered = False
+        self.factory_reset_calls = 0
         self.logout_count = 0
         self.ubus_url = ""
 
@@ -38,6 +40,10 @@ class FakeUbusClient:
     def trigger_upgrade(self, on_output=None):
         self.triggered = True
         return "bbfdm.operate"
+
+    def trigger_factory_reset(self):
+        self.factory_reset_calls += 1
+        return [0]
 
     def query_upgrade_status(self):
         return self.status_results.pop(0) if self.status_results else 9
@@ -104,11 +110,63 @@ class PageUpgradeTests(unittest.TestCase):
         self.assertEqual(fake_client.upload_calls[0][1], DEVICE_SAVE_PATH)
         self.assertEqual(fake_client.upload_calls[0][2], "https://192.168.29.1/cgi-bin/cgi-upload")
         self.assertTrue(fake_client.triggered)
-        self.assertEqual(fake_client.logout_count, 2)
+        self.assertEqual(fake_client.logout_count, 1)
         # 准备网络后的登录/上传/触发/等待流程按顺序推进,且 vlan101 标签贯穿整个升级过程
         call_args_list = [str(call) for call in output.call_args_list]
         self.assertTrue(any("HTTP" in arg for arg in call_args_list), call_args_list)
         self.assertTrue(any("HTTPS" in arg for arg in call_args_list), call_args_list)
+        self.assertTrue(any("恢复出厂：关闭，跳过" in arg for arg in call_args_list), call_args_list)
+
+    @patch("line_check_assistant.page_upgrade.prepare_network_for_sample")
+    def test_single_page_upgrade_resets_factory_only_after_upgrade_and_relogin(self, prepare_network):
+        prepare_network.return_value = Mock(ok=True, message="network ready")
+        fake_client = FakeUbusClient("172.18.18.3", login_results=[True, True], status_results=[9])
+        output = Mock()
+
+        result = run_single_page_upgrade(
+            PageUpgradeRequest(
+                vlan="vlan101",
+                bind_ip="172.18.18.3",
+                device_ip="192.168.29.1",
+                username="sdmc",
+                password="1234",
+                firmware_path=Path(__file__),
+                adapter_alias="VLAN101",
+                restore_factory=True,
+            ),
+            on_output=output,
+            sleep_fn=Mock(),
+            client_factory=Mock(return_value=fake_client),
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(fake_client.factory_reset_calls, 1)
+        output.assert_any_call("vlan101 已完成升级并重新登录成功，恢复出厂：开启，开始下发 UBUS 命令")
+        output.assert_any_call("vlan101 TX UBUS Device.FactoryReset()")
+        output.assert_any_call("vlan101 UBUS 恢复出厂命令已下发")
+
+    @patch("line_check_assistant.page_upgrade.prepare_network_for_sample")
+    def test_single_page_upgrade_does_not_reset_factory_when_option_disabled(self, prepare_network):
+        prepare_network.return_value = Mock(ok=True, message="network ready")
+        fake_client = FakeUbusClient("172.18.18.3", login_results=[True, True], status_results=[9])
+
+        result = run_single_page_upgrade(
+            PageUpgradeRequest(
+                vlan="vlan101",
+                bind_ip="172.18.18.3",
+                device_ip="192.168.29.1",
+                username="sdmc",
+                password="1234",
+                firmware_path=Path(__file__),
+                adapter_alias="VLAN101",
+                restore_factory=False,
+            ),
+            sleep_fn=Mock(),
+            client_factory=Mock(return_value=fake_client),
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(fake_client.factory_reset_calls, 0)
 
     @patch("line_check_assistant.page_upgrade.prepare_network_for_sample")
     def test_single_page_upgrade_returns_failure_status_message(self, prepare_network):
@@ -215,6 +273,21 @@ class PageUpgradeTests(unittest.TestCase):
 
         self.assertTrue(error.is_access_denied)
         self.assertIn("bbfdm.operate", str(error))
+
+    def test_ubus_client_factory_reset_uses_company_web_command(self):
+        client = UbusUpgradeClient("172.18.18.3")
+        client.call = Mock(return_value=[0])
+
+        client.trigger_factory_reset()
+
+        client.call.assert_called_once_with(
+            "bbfdm",
+            "operate",
+            {
+                "command": "Device.FactoryReset()",
+                "optional": {"proto": "web"},
+            },
+        )
 
 
 if __name__ == "__main__":

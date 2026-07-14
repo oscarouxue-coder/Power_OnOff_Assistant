@@ -1,4 +1,10 @@
 from .power_on_service import power_on_selected_channels, turn_off_selected_channels, turn_on_selected_channels
+from .sample_parameter_service import (
+    PARAMETER_MAX_PARALLEL,
+    preflight_parameter_targets,
+    run_parallel_sample_parameter_writes,
+    run_single_sample_parameter_write,
+)
 from .serial_upgrade_service import (
     FullPackageUpgradeItemResult,
     TRANSFER_TFTP_COMMAND,
@@ -22,4 +28,8 @@ __all__ = [
     "run_parallel_tftp_command_upgrades",
     "run_parallel_tftp_put_upgrades",
     "run_single_full_package_upgrade",
+    "PARAMETER_MAX_PARALLEL",
+    "preflight_parameter_targets",
+    "run_parallel_sample_parameter_writes",
+    "run_single_sample_parameter_write",
 ]

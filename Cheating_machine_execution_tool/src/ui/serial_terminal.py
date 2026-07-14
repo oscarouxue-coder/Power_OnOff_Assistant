@@ -5,6 +5,7 @@ import os
 import queue
 import re
 import time
+from collections import deque
 from pathlib import Path
 from tkinter import END, Frame, Label, StringVar, Text, Toplevel, filedialog, messagebox, ttk
 
@@ -20,7 +21,10 @@ _GEOMETRY_PATTERN = re.compile(r"^(?P<w>\d+)x(?P<h>\d+)(?P<x>[+-]\d+)(?P<y>[+-]\
 _MIN_VISIBLE = 120  # 窗口在屏幕内至少要可见的像素,避免开屏外
 _RENDER_EVENTS_PER_TICK = 120
 _RENDER_TIME_BUDGET_SECONDS = 0.010
+_RENDER_ACTIVE_DELAY_MS = 33
 _RENDER_IDLE_DELAY_MS = 80
+_PENDING_CHARS_PER_VLAN = 64 * 1024
+_DISPLAY_MAX_LINES = 5000
 
 
 class SerialTerminalWindow:
@@ -40,6 +44,9 @@ class SerialTerminalWindow:
         self.notebook = None
         self.tabs = {}
         self.events: queue.Queue = queue.Queue(maxsize=2000)
+        self._pending_chunks: dict[str, deque[str]] = {}
+        self._pending_char_counts: dict[str, int] = {}
+        self._pending_dropped_chars: dict[str, int] = {}
         self._after_id = None
         self._upgrade_batch_active = False
         self._auto_opened_for_upgrade = False
@@ -83,6 +90,7 @@ class SerialTerminalWindow:
         ttk.Button(path_bar, text="打开文件夹", command=self._open_log_dir).pack(side="left")
         self.notebook = ttk.Notebook(self.window)
         self.notebook.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
         for vlan in vlans:
             self._ensure_tab(vlan)
         self.window.protocol("WM_DELETE_WINDOW", self.close)
@@ -177,7 +185,7 @@ class SerialTerminalWindow:
             item["status"].set(f"{item['port']} 已停止")
 
     def _poll(self) -> None:
-        chunks_by_vlan: dict[str, list[str]] = {}
+        self._after_id = None
         processed = 0
         deadline = time.monotonic() + _RENDER_TIME_BUDGET_SECONDS
         while processed < _RENDER_EVENTS_PER_TICK and time.monotonic() < deadline:
@@ -187,19 +195,87 @@ class SerialTerminalWindow:
                 break
             processed += 1
             if vlan in self.tabs:
-                chunks_by_vlan.setdefault(vlan, []).append(event.text)
+                self._append_pending_chunk(vlan, event.text)
 
-        # 同一 VLAN 的高频片段仅在本轮写入一次，避免每段 RX 都触发 Text 重绘和滚动。
-        for vlan, chunks in chunks_by_vlan.items():
+        # 仅刷新当前可见 Tab；其它 Tab 的输出先合并缓冲，切换过去后再显示。
+        # 这避免多路高频日志同时触发 Text 重绘和滚动，占满 Tk 主线程。
+        active_vlan = self._active_vlan()
+        render_vlans = tuple(self._pending_chunks) if active_vlan is None else (active_vlan,)
+        for vlan in render_vlans:
+            chunks = self._pending_chunks.get(vlan)
+            if not chunks or vlan not in self.tabs:
+                continue
             output = self.tabs[vlan]["output"]
+            text = "".join(chunks)
+            dropped_chars = self._pending_dropped_chars.pop(vlan, 0)
+            if dropped_chars:
+                text = f"[界面显示已合并 {dropped_chars} 个字符，原始日志已完整写入文件]\n{text}"
+            self._pending_chunks.pop(vlan, None)
+            self._pending_char_counts.pop(vlan, None)
             output.configure(state="normal")
-            output.insert(END, "".join(chunks))
+            output.insert(END, text)
+            self._trim_display(output)
             output.see(END)
             output.configure(state="disabled")
 
         if self.window is not None and self.window.winfo_exists():
-            delay = 0 if not self.events.empty() else _RENDER_IDLE_DELAY_MS
+            active_has_pending = active_vlan is not None and bool(self._pending_chunks.get(active_vlan))
+            delay = _RENDER_ACTIVE_DELAY_MS if not self.events.empty() or active_has_pending else _RENDER_IDLE_DELAY_MS
             self._after_id = self.window.after(delay, self._poll)
+
+    def _on_tab_changed(self, _event=None) -> None:
+        """切换到积压日志的 Tab 时立即安排一次渲染，不等待空闲轮询。"""
+        if self.window is None or not self.window.winfo_exists():
+            return
+        if self._after_id is not None:
+            try:
+                self.window.after_cancel(self._after_id)
+            except Exception:
+                pass
+        self._after_id = self.window.after(0, self._poll)
+
+    def _active_vlan(self) -> str | None:
+        if self.notebook is None:
+            return None
+        try:
+            selected = self.notebook.select()
+        except Exception:
+            return None
+        for vlan, item in self.tabs.items():
+            if str(item.get("frame")) == selected:
+                return vlan
+        return None
+
+    def _append_pending_chunk(self, vlan: str, text: str) -> None:
+        """为屏幕渲染保留有限的最新输出；完整原始日志由串口线程写入文件。"""
+        if not text:
+            return
+        chunks = self._pending_chunks.setdefault(vlan, deque())
+        current = self._pending_char_counts.get(vlan, 0)
+        overflow = current + len(text) - _PENDING_CHARS_PER_VLAN
+        while overflow > 0 and chunks:
+            removed = chunks.popleft()
+            current -= len(removed)
+            overflow -= len(removed)
+            self._pending_dropped_chars[vlan] = self._pending_dropped_chars.get(vlan, 0) + len(removed)
+        if overflow > 0:
+            text = text[overflow:]
+            self._pending_dropped_chars[vlan] = self._pending_dropped_chars.get(vlan, 0) + overflow
+        if text:
+            chunks.append(text)
+            current += len(text)
+        self._pending_char_counts[vlan] = current
+
+    @staticmethod
+    def _trim_display(output: Text) -> None:
+        """限制 Text 的可见行数，避免长时间监控后重绘成本持续增长。"""
+        try:
+            last_line = int(output.index("end-1c").split(".", 1)[0])
+        except Exception:
+            return
+        lines_to_remove = max(0, last_line - _DISPLAY_MAX_LINES)
+        if lines_to_remove:
+            output.delete("1.0", f"{lines_to_remove + 1}.0")
 
     def close(self) -> None:
         if self._after_id and self.window is not None:
@@ -211,6 +287,9 @@ class SerialTerminalWindow:
         self.window = None
         self.notebook = None
         self.tabs = {}
+        self._pending_chunks.clear()
+        self._pending_char_counts.clear()
+        self._pending_dropped_chars.clear()
         self.log_dir_var = None
         self._auto_opened_for_upgrade = False
         self._upgrade_batch_active = False

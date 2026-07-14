@@ -47,6 +47,7 @@ class PageUpgradeRequest:
     firmware_path: Path
     adapter_alias: str = ""
     subnet_mask: str = "255.255.255.0"
+    restore_factory: bool = False
 
 
 @dataclass(frozen=True)
@@ -221,6 +222,17 @@ class UbusUpgradeClient:
             raise last_access_denied
         raise RuntimeError("触发升级失败：没有可用的 UBUS 调用方式")
 
+    def trigger_factory_reset(self):
+        """按公司 SdmcUbusLib 的页面 UBUS 接口下发恢复出厂。"""
+        return self.call(
+            UBUS_SERVICE_BBFDM,
+            "operate",
+            {
+                "command": "Device.FactoryReset()",
+                "optional": {"proto": "web"},
+            },
+        )
+
     def query_upgrade_status(self) -> int | None:
         response = self.call(
             UBUS_SERVICE_BBFDM,
@@ -307,6 +319,13 @@ def run_single_page_upgrade(
         )
         if not reboot_result.ok:
             return reboot_result
+        if request.restore_factory:
+            emit(f"{label} 已完成升级并重新登录成功，恢复出厂：开启，开始下发 UBUS 命令")
+            client.trigger_factory_reset()
+            emit(f"{label} TX UBUS Device.FactoryReset()")
+            emit(f"{label} UBUS 恢复出厂命令已下发")
+        else:
+            emit(f"{label} 已完成升级并重新登录成功，恢复出厂：关闭，跳过")
         return CommandResult(True, f"{label} 页面升级完成。")
     except requests.RequestException as exc:
         return CommandResult(False, f"{label} 页面升级请求异常：{exc}")
@@ -406,6 +425,5 @@ def _wait_for_reboot_login(
         emit(f"{label} 尝试重新登录设备，第 {int(waited // interval_seconds)} 次")
         if client.login(username, password, attempts=1):
             emit(f"{label} 设备已重新上线")
-            client.logout()
             return CommandResult(True, f"{label} 重启后登录成功")
     return CommandResult(False, f"{label} 页面升级失败：等待设备重启上线超时")

@@ -35,14 +35,23 @@ from .sample_upgrade_settings_store import (
     clamp_parallel_count,
 )
 from .serial_ports import list_prolific_ports, port_from_display
-from src.core import SerialSessionManager
+from src.core import (
+    SerialSessionManager,
+    generate_parameter_records,
+    load_parameter_records,
+    save_parameter_records_xlsx,
+    vlan_to_serial_port,
+)
 from src.config import DEFAULT_LOG_DIR
-from src.models import FullPackageUpgradeRequest
+from src.models import FullPackageUpgradeRequest, ParameterGenerationTemplate, SampleParameterWriteRequest
 from src.services import (
+    PARAMETER_MAX_PARALLEL,
     TRANSFER_TFTP_COMMAND,
     TRANSFER_TFTP_PUT,
+    preflight_parameter_targets,
     run_parallel_tftp_command_upgrades,
     run_parallel_tftp_put_upgrades,
+    run_parallel_sample_parameter_writes,
     run_single_full_package_upgrade,
     turn_off_selected_channels,
     turn_on_selected_channels,
@@ -133,6 +142,11 @@ class LineCheckAssistant(Tk):
         self.running = False
         self.power_on_running = False
         self.upgrade_window = None
+        self.parameter_writer_window = None
+        self.parameter_write_running = False
+        self.parameter_records = []
+        self.parameter_preflight = None
+        self.parameter_cancel_event = None
         self.serial_session_manager = SerialSessionManager()
         self.serial_terminal = SerialTerminalWindow(self, self.serial_session_manager, self._serial_log_directory())
         self.test_item_config_window = None
@@ -441,7 +455,312 @@ class LineCheckAssistant(Tk):
             widget.bind("<FocusOut>", self._on_vlan_changed)
 
     def _open_sample_parameter_writer(self) -> None:
-        messagebox.showinfo("写样机参数", "写样机参数功能入口已预留，具体实现待完善。", parent=self)
+        if self.parameter_writer_window is not None and self.parameter_writer_window.winfo_exists():
+            self.parameter_writer_window.deiconify()
+            self.parameter_writer_window.lift()
+            self.parameter_writer_window.focus_force()
+            self._refresh_parameter_preflight()
+            return
+
+        dialog = Toplevel(self)
+        self.parameter_writer_window = dialog
+        dialog.title("写样机参数")
+        dialog.geometry("980x690")
+        dialog.minsize(860, 590)
+        dialog.transient(self)
+
+        self.parameter_table_var = StringVar()
+        self.parameter_initial_username_var = StringVar(value=self.upgrade_username_var.get().strip())
+        self.parameter_initial_password_var = StringVar(value=self.upgrade_password_var.get())
+        self.parameter_parallel_count_var = IntVar(value=DEFAULT_PARALLEL_COUNT)
+        self.parameter_status_var = StringVar(value="请选择或生成参数表。")
+
+        container = ttk.Frame(dialog, padding=14)
+        container.pack(fill="both", expand=True)
+        source_row = ttk.Frame(container)
+        source_row.pack(fill="x", pady=(0, 8))
+        ttk.Label(source_row, text="参数表：").pack(side="left")
+        ttk.Entry(source_row, textvariable=self.parameter_table_var, width=70, state="readonly").pack(side="left", fill="x", expand=True, padx=(6, 6))
+        ttk.Button(source_row, text="选择参数表...", command=self._browse_parameter_table, style="Secondary.TButton").pack(side="left")
+        ttk.Button(source_row, text="生成批量参数表...", command=self._open_parameter_generator, style="Tool.TButton").pack(side="left", padx=(8, 0))
+
+        credential_row = ttk.Frame(container)
+        credential_row.pack(fill="x", pady=(0, 8))
+        ttk.Label(credential_row, text="首次登录账号：").pack(side="left")
+        ttk.Entry(credential_row, textvariable=self.parameter_initial_username_var, width=20).pack(side="left", padx=(6, 14))
+        ttk.Label(credential_row, text="密码：").pack(side="left")
+        ttk.Entry(credential_row, textvariable=self.parameter_initial_password_var, width=24).pack(side="left", padx=(6, 14))
+        ttk.Label(credential_row, text="并行数：").pack(side="left")
+        parallel_spinbox = ttk.Spinbox(credential_row, from_=1, to=PARAMETER_MAX_PARALLEL, textvariable=self.parameter_parallel_count_var, width=5)
+        parallel_spinbox.pack(side="left", padx=(6, 0))
+        ttk.Label(credential_row, text=f"（1–{PARAMETER_MAX_PARALLEL} 台，默认 {DEFAULT_PARALLEL_COUNT}）", style="CardHint.TLabel").pack(side="left", padx=(6, 0))
+
+        ttk.Label(container, text="本次目标与预检结果", style="CardTitle.TLabel").pack(anchor="w", pady=(4, 4))
+        self.parameter_preview_text = Text(container, height=17, wrap="word", state="disabled", background=COLOR_LOG_BG)
+        self.parameter_preview_text.pack(fill="both", expand=True)
+        ttk.Label(container, textvariable=self.parameter_status_var, style="CardHint.TLabel").pack(anchor="w", pady=(7, 6))
+
+        actions = ttk.Frame(container)
+        actions.pack(fill="x")
+        ttk.Button(actions, text="重新预检", command=self._refresh_parameter_preflight, style="Secondary.TButton").pack(side="left")
+        self.parameter_write_button = ttk.Button(actions, text="写入参数", command=self._start_sample_parameter_write, style="Primary.TButton")
+        self.parameter_write_button.pack(side="right")
+        self.parameter_cancel_button = ttk.Button(actions, text="停止批次", command=self._cancel_sample_parameter_write, state="disabled", style="Secondary.TButton")
+        self.parameter_cancel_button.pack(side="right", padx=(0, 8))
+
+        def close_dialog() -> None:
+            if self.parameter_write_running:
+                messagebox.showwarning("写参进行中", "请先停止写参批次并等待串口清理完成。", parent=dialog)
+                return
+            dialog.destroy()
+
+        dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+        self._refresh_parameter_preflight()
+
+    def _parameter_channel_ports(self) -> list[tuple[str, str]]:
+        self._capture_current_channel()
+        items: list[tuple[str, str]] = []
+        for channel in self.channels:
+            if not channel.enabled:
+                continue
+            vlan = adapter_alias_from_display(channel.vlan_name or channel.adapter_alias).strip()
+            if not vlan:
+                items.append(("", ""))
+                continue
+            try:
+                items.append((vlan, vlan_to_serial_port(vlan)))
+            except ValueError:
+                items.append((vlan, ""))
+        return items
+
+    def _browse_parameter_table(self) -> None:
+        path = filedialog.askopenfilename(
+            title="选择批量样机参数表",
+            filetypes=[
+                ("参数表", "*.xlsx *.xlsm *.xls *.csv"),
+                ("Excel", "*.xlsx *.xlsm *.xls"),
+                ("CSV", "*.csv"),
+            ],
+            parent=self.parameter_writer_window,
+        )
+        if path:
+            self._load_parameter_table(Path(path))
+
+    def _load_parameter_table(self, path: Path) -> None:
+        try:
+            self.parameter_records = load_parameter_records(path)
+        except Exception as exc:
+            messagebox.showerror("读取参数表失败", str(exc), parent=self.parameter_writer_window)
+            return
+        self.parameter_table_var.set(str(path))
+        self._log(f"写样机参数：已加载参数表 {path}，共 {len(self.parameter_records)} 条记录。")
+        self._refresh_parameter_preflight()
+
+    def _refresh_parameter_preflight(self) -> None:
+        if self.parameter_writer_window is None or not self.parameter_writer_window.winfo_exists():
+            return
+        channel_ports = self._parameter_channel_ports()
+        if not self.parameter_records:
+            targets = [f"- {vlan or '未配置 VLAN'} / {port or '未映射串口'}" for vlan, port in channel_ports]
+            self._render_parameter_preview(["尚未加载参数表。", "当前已勾选通道：", *(targets or ["- 无"])] )
+            self.parameter_status_var.set("请先选择参数表，或使用“生成批量参数表”。")
+            self.parameter_preflight = None
+            return
+        self.parameter_preflight = preflight_parameter_targets(self.parameter_records, channel_ports)
+        lines = ["目标 VLAN / COM / MAC："]
+        for target in self.parameter_preflight.targets:
+            lines.append(f"- {target.vlan} / {target.serial_port} / {target.record.values.get('MAC', '')}")
+        if self.parameter_preflight.errors:
+            lines.extend(("", "预检错误：", *(f"- {item}" for item in self.parameter_preflight.errors)))
+        if self.parameter_preflight.warnings:
+            lines.extend(("", "预检提示：", *(f"- {item}" for item in self.parameter_preflight.warnings)))
+        self._render_parameter_preview(lines)
+        self.parameter_status_var.set(
+            f"预检通过：{len(self.parameter_preflight.targets)} 台可写入。"
+            if self.parameter_preflight.ok
+            else f"预检未通过：{len(self.parameter_preflight.errors)} 项错误。"
+        )
+
+    def _render_parameter_preview(self, lines: list[str]) -> None:
+        self.parameter_preview_text.configure(state="normal")
+        self.parameter_preview_text.delete("1.0", END)
+        self.parameter_preview_text.insert(END, "\n".join(lines))
+        self.parameter_preview_text.configure(state="disabled")
+
+    def _start_sample_parameter_write(self) -> None:
+        if self.parameter_write_running:
+            return
+        self._refresh_parameter_preflight()
+        preflight = self.parameter_preflight
+        if preflight is None or not preflight.ok:
+            messagebox.showwarning("参数表未通过预检", "请先处理预检错误后再写入参数。", parent=self.parameter_writer_window)
+            return
+        username = self.parameter_initial_username_var.get().strip()
+        password = self.parameter_initial_password_var.get()
+        if not username or not password:
+            messagebox.showwarning("登录信息不完整", "请填写首次登录账号和密码。", parent=self.parameter_writer_window)
+            return
+        try:
+            parallel_count = max(1, min(int(self.parameter_parallel_count_var.get()), PARAMETER_MAX_PARALLEL))
+        except (TypeError, ValueError):
+            parallel_count = DEFAULT_PARALLEL_COUNT
+        target_text = "\n".join(f"- {target.vlan} / {target.serial_port} / MAC:{target.record.values.get('MAC', '')}" for target in preflight.targets)
+        if not messagebox.askyesno(
+            "确认批量写样机参数",
+            f"将并行写入 {len(preflight.targets)} 台样机（最多 {parallel_count} 台）：\n{target_text}\n\n"
+            "每台会依次下发 ppctl clear、进入工厂模式、firstboot -yr 重启、写入并读回校验全部参数，"
+            "最后退出工厂模式并再次 firstboot -yr 重启。\n\n是否继续？",
+            parent=self.parameter_writer_window,
+        ):
+            return
+        requests = [
+            SampleParameterWriteRequest(
+                vlan=target.vlan,
+                serial_port=target.serial_port,
+                initial_username=username,
+                initial_password=password,
+                values=target.record.values,
+            )
+            for target in preflight.targets
+        ]
+        self.parameter_write_running = True
+        self.parameter_cancel_event = threading.Event()
+        self.parameter_write_button.configure(state="disabled")
+        self.parameter_cancel_button.configure(state="normal")
+        self.parameter_status_var.set(f"正在并行写入 {len(requests)} 台样机（最多 {parallel_count} 台）。")
+        self.serial_terminal.begin_upgrade_logs([request.vlan for request in requests])
+        thread = threading.Thread(
+            target=self._sample_parameter_write_worker,
+            args=(requests, parallel_count, self.parameter_cancel_event),
+            daemon=True,
+        )
+        thread.start()
+
+    def _sample_parameter_write_worker(self, requests: list[SampleParameterWriteRequest], parallel_count: int, cancel_event: threading.Event) -> None:
+        self.log_queue.put(f"开始批量写样机参数：{len(requests)} 台，并行上限 {parallel_count}。")
+        results = run_parallel_sample_parameter_writes(
+            requests,
+            self.serial_session_manager,
+            parallel_count=parallel_count,
+            on_output=lambda line: self.log_queue.put(line),
+            on_session_ready=lambda vlan, session, log_path: self.after(
+                0, lambda vlan=vlan, session=session, log_path=log_path: self.serial_terminal.attach_upgrade(vlan, session, log_path)
+            ),
+            cancel_event=cancel_event,
+        )
+        self.after(0, lambda: self._complete_sample_parameter_write(results))
+
+    def _cancel_sample_parameter_write(self) -> None:
+        if self.parameter_cancel_event is not None:
+            self.parameter_cancel_event.set()
+            self.parameter_cancel_button.configure(state="disabled")
+            self.parameter_status_var.set("已请求停止：正在完成已进入工厂模式样机的清理。")
+            self._log("写样机参数：用户请求停止批次，后续命令将停止并尝试清理工厂模式。")
+
+    def _complete_sample_parameter_write(self, results) -> None:
+        self.parameter_write_running = False
+        self.parameter_cancel_event = None
+        if self.parameter_writer_window is not None and self.parameter_writer_window.winfo_exists():
+            self.parameter_write_button.configure(state="normal")
+            self.parameter_cancel_button.configure(state="disabled")
+        self.serial_terminal.finish_upgrade_logs()
+        success_count = sum(1 for item in results if item.ok)
+        summary = "\n".join(f"- {item.request.vlan}: {item.message}" for item in results)
+        self._log(f"批量写样机参数结束：{success_count}/{len(results)} 台成功。")
+        if self.parameter_writer_window is not None and self.parameter_writer_window.winfo_exists():
+            self.parameter_status_var.set(f"批量写参完成：{success_count}/{len(results)} 台成功。")
+        if success_count == len(results):
+            messagebox.showinfo("批量写参完成", f"全部 {success_count} 台样机写参并读回校验成功。", parent=self.parameter_writer_window)
+        else:
+            messagebox.showerror("批量写参存在失败", f"成功 {success_count}/{len(results)} 台。\n\n{summary}", parent=self.parameter_writer_window)
+
+    def _open_parameter_generator(self) -> None:
+        channel_ports = self._parameter_channel_ports()
+        vlans = [vlan for vlan, _port in channel_ports if vlan]
+        if not vlans:
+            messagebox.showwarning("没有目标样机", "请先在主界面勾选通道并配置 VLAN。", parent=self.parameter_writer_window)
+            return
+        dialog = Toplevel(self.parameter_writer_window)
+        dialog.title("生成批量样机参数表")
+        dialog.geometry("680x750")
+        dialog.minsize(680, 750)
+        dialog.transient(self.parameter_writer_window)
+        dialog.grab_set()
+        container = ttk.Frame(dialog, padding=14)
+        container.pack(fill="both", expand=True)
+        ttk.Label(container, text=f"将为 {len(vlans)} 个已勾选 VLAN 生成一行参数。", style="CardHint.TLabel").pack(anchor="w", pady=(0, 10))
+
+        fields = {
+            "SN 前缀": StringVar(value="TESTSN"),
+            "XPON SN 前缀": StringVar(value="XPON"),
+            "2.4G SSID 前缀": StringVar(value="Test24G"),
+            "5G SSID 前缀": StringVar(value="Test5G"),
+            "随机后缀长度": StringVar(value="8"),
+            "2.4G WiFi Password": StringVar(),
+            "5G WiFi Password": StringVar(),
+            "2.4G Country Code": StringVar(value="CN"),
+            "5G Country Code": StringVar(value="CN"),
+            "Product Class": StringVar(),
+            "Superuser Name": StringVar(),
+            "Superuser Password": StringVar(),
+            "User Name": StringVar(),
+            "User Password": StringVar(),
+            "IP": StringVar(value="192.168.1.1"),
+        }
+        grid = ttk.Frame(container)
+        grid.pack(fill="both", expand=True)
+        for row, (label, variable) in enumerate(fields.items()):
+            ttk.Label(grid, text=f"{label}：").grid(row=row, column=0, sticky="e", padx=(0, 8), pady=3)
+            ttk.Entry(grid, textvariable=variable, width=48).grid(row=row, column=1, sticky="ew", pady=3)
+        grid.columnconfigure(1, weight=1)
+
+        def generate_and_save() -> None:
+            try:
+                suffix_length = int(fields["随机后缀长度"].get().strip())
+                fixed_values = {
+                    column: fields[column].get()
+                    for column in (
+                        "2.4G WiFi Password", "5G WiFi Password", "2.4G Country Code", "5G Country Code",
+                        "Product Class", "Superuser Name", "Superuser Password", "User Name", "User Password", "IP",
+                    )
+                }
+                records = generate_parameter_records(
+                    vlans,
+                    ParameterGenerationTemplate(
+                        sn_prefix=fields["SN 前缀"].get(),
+                        xpon_prefix=fields["XPON SN 前缀"].get(),
+                        ssid_24_prefix=fields["2.4G SSID 前缀"].get(),
+                        ssid_5_prefix=fields["5G SSID 前缀"].get(),
+                        suffix_length=suffix_length,
+                        fixed_values=fixed_values,
+                    ),
+                )
+            except Exception as exc:
+                messagebox.showwarning("生成参数表失败", str(exc), parent=dialog)
+                return
+            path = filedialog.asksaveasfilename(
+                title="保存批量样机参数表",
+                parent=dialog,
+                defaultextension=".xlsx",
+                filetypes=[("Excel 参数表", "*.xlsx")],
+                initialfile="batch_sample_parameters.xlsx",
+            )
+            if not path:
+                return
+            try:
+                save_parameter_records_xlsx(Path(path), records)
+            except Exception as exc:
+                messagebox.showerror("保存参数表失败", str(exc), parent=dialog)
+                return
+            dialog.grab_release()
+            dialog.destroy()
+            self._load_parameter_table(Path(path))
+            messagebox.showinfo("参数表已生成", f"已生成 {len(records)} 条记录并完成预检。\n生成不会自动写入设备。", parent=self.parameter_writer_window)
+
+        buttons = ttk.Frame(container)
+        buttons.pack(fill="x", pady=(10, 0))
+        ttk.Button(buttons, text="生成并保存...", command=generate_and_save, style="Primary.TButton").pack(side="right")
+        ttk.Button(buttons, text="取消", command=lambda: (dialog.grab_release(), dialog.destroy()), style="Secondary.TButton").pack(side="right", padx=(0, 8))
 
     def _bind_onu_registration_autosave(self) -> None:
         for variable in (self.onu_olt_ip_var, self.onu_username_var, self.onu_password_var):
@@ -1011,7 +1330,7 @@ class LineCheckAssistant(Tk):
         )
         Label(overview, text="密码", anchor="w").grid(row=2, column=2, sticky="w", padx=(0, 8), pady=8)
         password_container = Frame(overview, background=COLOR_SURFACE)
-        password_container.grid(row=2, column=3, sticky="ew", padx=(0, 12), pady=8)
+        password_container.grid(row=2, column=3, columnspan=2, sticky="ew", padx=(0, 12), pady=8)
         self.upgrade_password_entry = ttk.Entry(password_container, textvariable=self.upgrade_password_var, show="*")
         self.upgrade_password_entry.pack(side="left", fill="x", expand=True)
         self.upgrade_password_toggle = Button(
@@ -1024,10 +1343,10 @@ class LineCheckAssistant(Tk):
 
         Label(overview, text="升级固件", anchor="w").grid(row=3, column=0, sticky="w", padx=(12, 8), pady=8)
         ttk.Entry(overview, textvariable=self.upgrade_firmware_var, state="readonly").grid(
-            row=3, column=1, columnspan=2, sticky="ew", padx=(0, 8), pady=8
+            row=3, column=1, columnspan=3, sticky="ew", padx=(0, 8), pady=8
         )
         Button(overview, text="选择固件...", command=self._select_upgrade_firmware).grid(
-            row=3, column=3, sticky="e", padx=(0, 12), pady=8
+            row=3, column=4, sticky="e", padx=(0, 12), pady=8
         )
 
         Label(overview, text="目标样机", anchor="w").grid(row=4, column=0, sticky="nw", padx=(12, 8), pady=8)
@@ -1038,7 +1357,7 @@ class LineCheckAssistant(Tk):
             anchor="w",
             justify="left",
             wraplength=590,
-        ).grid(row=4, column=1, columnspan=3, sticky="ew", padx=(0, 12), pady=8)
+        ).grid(row=4, column=1, columnspan=4, sticky="ew", padx=(0, 12), pady=8)
 
         Label(overview, text="执行状态", anchor="w").grid(row=5, column=0, sticky="nw", padx=(12, 8), pady=8)
         Label(
@@ -1046,14 +1365,14 @@ class LineCheckAssistant(Tk):
             textvariable=self.upgrade_status_var,
             foreground=COLOR_TEXT,
             anchor="w",
-        ).grid(row=5, column=1, columnspan=3, sticky="ew", padx=(0, 12), pady=8)
+        ).grid(row=5, column=1, columnspan=4, sticky="ew", padx=(0, 12), pady=8)
         self.upgrade_progress = ttk.Progressbar(
             overview,
             variable=self.upgrade_progress_var,
             maximum=100,
             mode="determinate",
         )
-        self.upgrade_progress.grid(row=6, column=1, columnspan=3, sticky="ew", padx=(0, 12), pady=(0, 10))
+        self.upgrade_progress.grid(row=6, column=1, columnspan=4, sticky="ew", padx=(0, 12), pady=(0, 10))
         overview.columnconfigure(1, weight=1)
         overview.columnconfigure(3, weight=1)
         self._refresh_upgrade_transfer_visibility()
@@ -1198,14 +1517,20 @@ class LineCheckAssistant(Tk):
                     password=self.upgrade_password_var.get().strip(),
                     firmware_path=firmware_path,
                     subnet_mask=channel.subnet_mask or DEFAULT_SUBNET_MASK,
+                    restore_factory=bool(self.upgrade_restore_factory_var.get()),
                 )
             )
 
         target_text = "、".join(request.vlan or request.device_ip for request in requests)
+        restore_factory_text = (
+            "开启，升级成功、设备重启并重新登录成功后将通过 UBUS 执行恢复出厂"
+            if bool(self.upgrade_restore_factory_var.get())
+            else "关闭，不会执行恢复出厂"
+        )
         if not messagebox.askyesno(
             "确认页面升级",
             f"将通过 UBUS 页面升级并行升级 {len(requests)} 台样机：{target_text}\n\n"
-            "该操作会上传固件、触发升级并等待设备重启上线。是否继续？",
+            f"该操作会上传固件、触发升级并等待设备重启上线。\n恢复出厂：{restore_factory_text}\n\n是否继续？",
             parent=self.upgrade_window,
         ):
             return

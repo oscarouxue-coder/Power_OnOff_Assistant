@@ -24,6 +24,95 @@
 - 后续待办：
 ```
 
+## 2026-07-13 - 精简项目交接状态文档
+
+- 类型：文档 / 交接
+- 完成内容：按当前源码、测试与真实样机验收状态重写 `PROJECT_STATUS.md`，只保留项目进度、关键文件、已完成/待完成/限制、技术决策及运行测试入口。
+- 修改文件：`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：核对当前源码入口、批量写参模块、运行命令与测试基线。
+- 验证结果：状态文档当前测试基线为 182 项通过；未改动业务代码。
+- 后续待办：按文档中的真实样机验收项继续验证。
+
+## 2026-07-13 - 随机参数表生成窗口全部输入框改为明文显示
+
+- 类型：界面优化
+- 背景：操作员需要在生成批量参数表前核对 WiFi、超级用户和普通用户密码，原窗口中的密码类输入框以星号隐藏内容。
+- 完成内容：生成批量样机参数表窗口的全部输入框统一明文显示；生成后的写参执行、串口终端和主执行日志仍继续脱敏敏感参数值。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行 Python 编译检查；打开“生成批量样机参数表”，填写密码类字段后确认显示实际字符。
+- 验证结果：待桌面界面确认。
+- 后续待办：无。
+
+## 2026-07-13 - 写样机参数首次登录密码改为明文显示
+
+- 类型：界面优化
+- 背景：操作员在“写样机参数”窗口需要核对首次登录密码，原输入框以星号隐藏内容，不便确认实际填写值。
+- 完成内容：首次登录密码输入框改为明文显示；写参下发、串口终端和主执行日志中的敏感值脱敏逻辑不变。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行 Python 编译检查；打开“写样机参数”，确认首次登录密码框显示实际字符。
+- 验证结果：待桌面界面确认。
+- 后续待办：无。
+
+## 2026-07-13 - 接入批量写样机参数与随机参数表生成
+
+- 类型：功能 / 安全优化 / 测试 / 文档
+- 背景：主界面“写样机参数”仅为预留入口；同事的独立原型虽已具备单台写参流程，但未接入主程序的串口独占、并行调度、内置终端、主执行日志和参数表 VLAN 匹配。
+- 完成内容：新增批量写参窗口，按参数表 `VLAN` 匹配已勾选通道并通过固定 `vlan{N} -> COM{N-100}` 映射并行执行（1–8 台、默认 2）；预检会阻止缺失/重复 VLAN、重复 COM、MAC 格式错误、必填值为空和引号/换行。写入前二次确认清晰展示 `ppctl clear`、工厂模式及两次 `firstboot -yr` 重启；每项 `ppctl set/get` 最多重试 3 次，单台失败不取消其它通道，取消时停止后续命令并尝试退出工厂模式。新增随机 `.xlsx` 参数表生成：按已勾选 VLAN 生成唯一的本地管理单播 MAC、SN、XPON SN、2.4G/5G SSID，其他参数由模板统一填写；导出后自动加载预检但不自动写设备。新表使用区分 2.4G/5G 密码和国家码的唯一表头，导入兼容旧表重复 `WiFi Password` / `Country code` 列。
+- 修改文件：`line_check_assistant/app.py`、`src/models/sample_parameter_models.py`、`src/core/sample_parameter_table.py`、`src/services/sample_parameter_service.py`、相应 `__init__.py`、`requirements.txt`、`build_line_check_assistant.ps1`、`THIRD_PARTY_NOTICES.md`、新增专项测试、`line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行新增参数表/写参服务专项测试、源码编译检查与完整单元测试。
+- 验证结果：专项 8 项通过；`python -m unittest discover -s tests -v` 完整回归 `Ran 182 tests ... OK`。
+- 后续待办：先以 2 台独立 VLAN / COM 真实样机验证写参时序、读回校验、取消清理及密码脱敏，再扩展至 4 / 8 台并行。
+
+## 2026-07-13 - 并行升级、ARP 重试与高频串口真实样机验收通过
+
+- 类型：真实样机验收 / 项目状态
+- 背景：`Tftp指令` 的 ARP 自动重试、两条升级链路的 2 / 4 / 8 台并行，以及高频串口日志下界面响应和程控电源 COM 批次长连接复用，均已完成代码与单元测试，尚需现场收口。
+- 完成内容：用户确认上述三项真实样机验收均通过；`Tftp指令` 的 ARP 自动重试 3 次从“单元测试通过，待真实样机验收”更新为“已真实样机验收”，并移除相关现场待办。
+- 修改文件：`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：真实样机验证 `Tftp指令` 的 ARP Retry count exceeded 自动重试；分别以 2 / 4 / 8 台独立 VLAN / COM 样机运行 `Tftp指令`、`Tftp Put` 并行升级；在高频串口日志下复测界面响应和程控电源 COM 长连接复用。
+- 验证结果：均通过。
+- 后续待办：保持现有已验收时序；仅在实验室功率闸容量紧张或出现新型号、异常现场日志时再评估扩展。
+
+## 2026-07-13 - 样机升级配置行统一右边界
+
+- 类型：界面优化 / 测试
+- 背景：固件路径框扩展后，密码输入区及“目标样机”“执行状态”仍停在按钮左侧，右侧存在无意义空白，行间边界不一致。
+- 完成内容：密码输入容器扩展到最右列，目标样机、执行状态和升级进度条同样跨到该列；固件选择按钮位置和业务逻辑不变。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行 Python 编译检查；打开样机升级窗口，确认密码、目标样机、执行状态及进度条的右边缘与“选择固件...”按钮右边缘对齐。
+- 验证结果：`python -m py_compile line_check_assistant\\app.py` 通过；`python -m unittest discover -s tests -p test_app.py -v` 共 60 项通过；界面真实显示待用户在 Windows 桌面环境确认。
+- 后续待办：无。
+
+## 2026-07-13 - 高频串口日志不再占满 Tk 主界面线程
+
+- 类型：BUG 修复 / 性能优化 / 测试
+- 背景：同时监控多个持续高频输出的 COM 口时，串口读取虽在后台线程，但终端在 Tk 主线程持续以 `after(0)` 渲染所有 VLAN 的 `Text` 控件并自动滚动；日志积压时窗口绘制与输入事件被挤占，Windows 可能显示“未响应”。
+- 完成内容：终端渲染改为最小 33ms 节流；每轮只渲染当前可见 Tab，非活动 Tab 保留有限的最新缓冲，切换 Tab 时立即渲染；每个 Tab 的屏幕文本保留最近 5000 行，避免长期运行导致重绘成本和内存持续增加。屏幕缓冲最多 64KiB，超过时在终端提示已合并字符；原始串口日志仍由后台串口线程完整写入文件，不改串口协议、升级流程或端口映射。
+- 修改文件：`Cheating_machine_execution_tool/src/ui/serial_terminal.py`、`Cheating_machine_execution_tool/tests/test_serial_terminal.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行串口终端专项测试和完整单元测试；真实环境同时打开多路高频串口日志，确认主窗口、终端切换和按钮持续可操作。
+- 验证结果：`python -m py_compile src\\ui\\serial_terminal.py` 通过；串口终端专项 6 项通过；`python -m unittest discover -s tests -v` 完整回归 `Ran 174 tests ... OK`。
+- 后续待办：真实 3 路以上高频 WiFi 日志压测；如“打开全部”阶段仍卡顿，再把 COM 打开过程移到后台线程。
+
+## 2026-07-13 - 样机升级固件路径框扩展至右侧可用宽度
+
+- 类型：界面优化 / 测试
+- 背景：样机升级窗口的“升级固件”路径框只占用输入区前两列，密码输入列到“选择固件...”按钮之间留有空白，长路径无法充分显示。
+- 完成内容：路径框改为跨越前三个内容列，“选择固件...”按钮移到下一列并保持右对齐；窗口尺寸、固件选择和升级业务流程不变。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行 Python 编译检查；打开样机升级窗口，选择长路径固件，确认路径框延伸至按钮左侧且按钮仍可点击。
+- 验证结果：`python -m py_compile line_check_assistant\\app.py` 通过；`python -m unittest discover -s tests -p test_app.py -v` 共 60 项通过；界面真实显示待用户在 Windows 桌面环境确认。
+- 后续待办：无。
+
+## 2026-07-13 - 页面升级成功后执行 UBUS 恢复出厂
+
+- 类型：功能 / 测试 / 文档
+- 背景：样机升级窗口的“恢复出厂”原本只会保存为通用设置；页面升级链路未把该选项传入请求，也未调用公司 `SdmcUbusLib` 中的页面 UBUS 恢复出厂接口。
+- 完成内容：`PageUpgradeRequest` 增加 `restore_factory`；页面升级确认框明确显示关闭，或“升级成功、设备重启并重新登录成功后将通过 UBUS 执行恢复出厂”。在 `X_SDMC_Upgrade()` 返回成功、设备重启并由当前独立 UBUS session 重新登录成功后，调用公司已定义的 `bbfdm.operate` + `Device.FactoryReset()` + `optional.proto=web`。恢复出厂关闭时明确记录跳过；开启时依次记录开始下发、`TX UBUS Device.FactoryReset()` 和命令已下发；调用异常会使该样机页面升级失败。为确保命令使用已验证的重新登录会话，重登检查不再提前 logout，而统一由流程 finally 收尾。新增项目规则：每个新增功能点必须向主程序执行日志输出关键阶段、实际命令下发、成功、跳过或失败提示。
+- 修改文件：`AGENTS.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/page_upgrade.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_page_upgrade.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行 `python -m py_compile line_check_assistant\\app.py line_check_assistant\\page_upgrade.py`；页面升级专项、主界面专项和完整单元测试。
+- 验证结果：`python -m py_compile line_check_assistant\\app.py line_check_assistant\\page_upgrade.py` 通过；页面升级专项 9 项通过，主界面专项 60 项通过；`python -m unittest discover -s tests -v` 完整回归 `Ran 172 tests ... OK`。
+- 后续待办：真实样机勾选页面升级“恢复出厂”，确认执行日志依次出现升级状态成功、重新登录成功、`TX UBUS Device.FactoryReset()` 和“UBUS 恢复出厂命令已下发”，并确认设备实际恢复出厂；关闭该选项时确认只出现“恢复出厂：关闭，跳过”。
+
 ## 2026-07-12 - Tftp指令 ARP 失败自动重试 3 次
 
 - 类型：功能 / 优化 / 测试 / 文档
