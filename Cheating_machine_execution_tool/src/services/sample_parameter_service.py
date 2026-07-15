@@ -5,10 +5,11 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Optional
 
 from src.config import DEFAULT_LOG_DIR
 from src.core import SerialSessionManager
+from src.core.parameter_session import ParameterSession
 from src.models import (
     STANDARD_PARAMETER_DEFINITIONS,
     ParameterTablePreflight,
@@ -30,6 +31,10 @@ _DANGEROUS_VALUE_CHARS = frozenset({'\r', '\n', '"'})
 
 Output = Callable[[str], None]
 SessionReady = Callable[[str, object, Path], None]
+# 切到 telnet 路径时，run_*_sample_parameter_write 接受一个工厂方法返回已登录的 ParameterSession；
+# 保留 None 以兼容既有的串口路径与旧单元测试。
+# 用 Optional[...] 因为 Python 3.9 不支持在 typing 别名上用 PEP 604 "|"。
+TelnetSessionFactory = Optional[Callable[["SampleParameterWriteRequest"], ParameterSession]]
 
 
 def preflight_parameter_targets(
@@ -129,23 +134,61 @@ def run_single_sample_parameter_write(
     on_session_ready: SessionReady | None = None,
     cancel_event: threading.Event | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
+    telnet_session_factory: TelnetSessionFactory = None,
 ) -> SampleParameterItemResult:
+    """按样机写一次批量参数。
+
+    传输层选择：
+    - `telnet_session_factory=None`：走既有串口路径（保持 8 项单元测试不变）。
+    - `telnet_session_factory!=None`：切片 5 由工厂提供一个已登录的 ParameterSession,
+      service 层对其执行相同写入流程；session 生命周期由工厂自身管理(外层 finally 不再 release)。
+
+    切片 1 阶段 telnet_session_factory 形参已就绪但默认走串口路径，
+    即"新增抽象，零行为变更"。
+    """
     emit = on_output or (lambda _message: None)
     cancel = cancel_event or threading.Event()
     owner = f"sample-parameter:{request.vlan.casefold()}"
-    session = None
+    if telnet_session_factory is not None:
+        session = telnet_session_factory(request)
+        emit(f"{request.vlan} 写参：使用 Telnet 会话（绑定源 IP {getattr(request, 'bind_ip', '')}）。")
+        if on_session_ready:
+            on_session_ready(request.vlan, session, DEFAULT_LOG_DIR / f"sample_parameter_{request.vlan}.log")
+        return run_parameter_write_pipeline(request, session, cancel, sleep_fn, emit)
+    if cancel.is_set():
+        return SampleParameterItemResult(request, False, f"{request.vlan} 写参已取消。", cancelled=True)
+    log_path = DEFAULT_LOG_DIR / f"sample_parameter_{request.vlan}_{request.serial_port}.log"
+    session = session_manager.acquire_control(owner, SerialSettings(port=request.serial_port), log_path)
+    if on_session_ready:
+        on_session_ready(request.vlan, session, log_path)
+    emit(f"{request.vlan} 写参：串口 {request.serial_port} 已打开。")
+    try:
+        return run_parameter_write_pipeline(request, session, cancel, sleep_fn, emit)
+    finally:
+        # 串口路径专属: 始终释放 session。
+        session_manager.release(owner, request.serial_port)
+
+
+def run_parameter_write_pipeline(
+    request: SampleParameterWriteRequest,
+    session: ParameterSession,
+    cancel: threading.Event,
+    sleep_fn: Callable[[float], None],
+    emit: Output,
+) -> SampleParameterItemResult:
+    """对已打开的 ParameterSession 执行一次写样机参数的完整流水线。
+
+    流水线:
+        首次登录 → ppctl clear → FACTORY_MODE=1 → firstboot -yr
+        → 等 100 秒 → 工厂模式二次登录 → 15 项 ppctl set/get
+        → FACTORY_MODE=0 + firstboot -yr（在 finally 中执行）
+
+    不关心 session 是 PySerial 还是 Telnet；会话生命周期由调用方管理。
+    """
     entered_factory = False
-    written = 0
-    failed_labels: list[str] = []
-    cleanup_failed = False
     try:
         if cancel.is_set():
             return SampleParameterItemResult(request, False, f"{request.vlan} 写参已取消。", cancelled=True)
-        log_path = DEFAULT_LOG_DIR / f"sample_parameter_{request.vlan}_{request.serial_port}.log"
-        session = session_manager.acquire_control(owner, SerialSettings(port=request.serial_port), log_path)
-        if on_session_ready:
-            on_session_ready(request.vlan, session, log_path)
-        emit(f"{request.vlan} 写参：串口 {request.serial_port} 已打开。")
         if not _login(session, request.initial_username, request.initial_password, cancel, sleep_fn):
             return SampleParameterItemResult(request, False, f"{request.vlan} 写参失败：首次登录失败。")
         if cancel.is_set():
@@ -159,9 +202,15 @@ def run_single_sample_parameter_write(
             return SampleParameterItemResult(request, False, f"{request.vlan} 写参已取消，准备执行工厂模式清理。", cancelled=True)
         if not _login(session, FACTORY_USERNAME, FACTORY_PASSWORD, cancel, sleep_fn):
             return SampleParameterItemResult(request, False, f"{request.vlan} 写参失败：工厂模式二次登录失败。")
+        written = 0
+        failed_labels: list[str] = []
         for definition in STANDARD_PARAMETER_DEFINITIONS:
             if cancel.is_set():
-                return SampleParameterItemResult(request, False, f"{request.vlan} 写参已取消，准备执行工厂模式清理。", written, tuple(failed_labels), True)
+                return SampleParameterItemResult(
+                    request, False,
+                    f"{request.vlan} 写参已取消，准备执行工厂模式清理。",
+                    written, tuple(failed_labels), True,
+                )
             value = str(request.values.get(definition.column, ""))
             if _write_and_verify(session, request.vlan, definition.label, definition.command, value, definition.sensitive, cancel, emit, sleep_fn):
                 written += 1
@@ -177,20 +226,16 @@ def run_single_sample_parameter_write(
             )
         return SampleParameterItemResult(request, True, f"{request.vlan} 写参完成，{written} 项均已读回校验。", written)
     except Exception as exc:
-        return SampleParameterItemResult(request, False, f"{request.vlan} 写参异常：{exc}", written, tuple(failed_labels), cancel.is_set())
+        return SampleParameterItemResult(request, False, f"{request.vlan} 写参异常：{exc}", 0, (), cancel.is_set())
     finally:
-        if session is not None and entered_factory:
+        if entered_factory:
             try:
                 _send_stage(session, "ppctl set FACTORY_MODE=0", False, emit, request.vlan)
                 _send_stage(session, "firstboot -yr", False, emit, request.vlan)
                 emit(f"{request.vlan} 写参：已下发退出工厂模式与重启命令。")
             except Exception as exc:
-                cleanup_failed = True
                 emit(f"{request.vlan} 写参：退出工厂模式清理失败：{exc}")
-        if cleanup_failed:
-            emit(f"{request.vlan} 写参：请人工确认设备已退出工厂模式。")
-        if session is not None:
-            session_manager.release(owner, request.serial_port)
+                emit(f"{request.vlan} 写参：请人工确认设备已退出工厂模式。")
 
 
 def _record_errors(vlan: str, record: SampleParameterRecord) -> list[str]:

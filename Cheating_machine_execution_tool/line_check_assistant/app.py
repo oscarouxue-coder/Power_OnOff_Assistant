@@ -52,6 +52,7 @@ from src.services import (
     run_parallel_tftp_command_upgrades,
     run_parallel_tftp_put_upgrades,
     run_parallel_sample_parameter_writes,
+    run_single_sample_parameter_write,
     run_single_full_package_upgrade,
     turn_off_selected_channels,
     turn_on_selected_channels,
@@ -533,6 +534,29 @@ class LineCheckAssistant(Tk):
                 items.append((vlan, ""))
         return items
 
+    def _channel_for_vlan(self, vlan_name: str) -> ChannelConfig | None:
+        target = adapter_alias_from_display(vlan_name).strip().casefold()
+        if not target:
+            return None
+        for channel in self.channels:
+            if not channel.enabled:
+                continue
+            alias = adapter_alias_from_display(channel.vlan_name or channel.adapter_alias).strip().casefold()
+            if alias == target:
+                return channel
+        return None
+
+    def _bind_ip_for_vlan(self, vlan_name: str) -> str:
+        channel = self._channel_for_vlan(vlan_name)
+        return channel.network_card_ip.strip() if channel is not None and channel.network_card_ip else ""
+
+    def _device_host_for_vlan(self, vlan_name: str) -> str:
+        channel = self._channel_for_vlan(vlan_name)
+        if channel is not None and channel.device_manage_ip:
+            return channel.device_manage_ip.strip()
+        shared = self.device_ip_var.get().strip() if hasattr(self, "device_ip_var") else ""
+        return shared
+
     def _browse_parameter_table(self) -> None:
         path = filedialog.askopenfilename(
             title="选择批量样机参数表",
@@ -620,6 +644,9 @@ class LineCheckAssistant(Tk):
                 initial_username=username,
                 initial_password=password,
                 values=target.record.values,
+                bind_ip=self._bind_ip_for_vlan(target.vlan),
+                device_host=self._device_host_for_vlan(target.vlan),
+                ubus_port=80,
             )
             for target in preflight.targets
         ]
@@ -637,18 +664,108 @@ class LineCheckAssistant(Tk):
         thread.start()
 
     def _sample_parameter_write_worker(self, requests: list[SampleParameterWriteRequest], parallel_count: int, cancel_event: threading.Event) -> None:
+        # 端到端 telnet 写参:UBUS 启用 telnet → TelnetSession(未登录)→ run_parameter_write_pipeline 内部 _login。
+        # 串口路径保持现状做 transport 配置回退入口。
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        from src.config import DEFAULT_LOG_DIR
+        from src.core.telnet_transport import TelnetSession
+        from src.core.ubus_enable_telnet import enable_telnet_via_ubus
+        from src.core.ubus_http_client import UbusHttpClient
+        from src.models import SampleParameterItemResult
+        from src.services.sample_parameter_service import run_single_sample_parameter_write
+
         self.log_queue.put(f"开始批量写样机参数：{len(requests)} 台，并行上限 {parallel_count}。")
-        results = run_parallel_sample_parameter_writes(
-            requests,
-            self.serial_session_manager,
-            parallel_count=parallel_count,
-            on_output=lambda line: self.log_queue.put(line),
-            on_session_ready=lambda vlan, session, log_path: self.after(
-                0, lambda vlan=vlan, session=session, log_path=log_path: self.serial_terminal.attach_upgrade(vlan, session, log_path)
-            ),
-            cancel_event=cancel_event,
-        )
-        self.after(0, lambda: self._complete_sample_parameter_write(results))
+
+        def emit_to_main(line: str) -> None:
+            self.log_queue.put(line)
+
+        telnet_indices = [index for index, req in enumerate(requests) if req.bind_ip and req.device_host]
+        serial_indices = [index for index, req in enumerate(requests) if index not in telnet_indices]
+
+        def make_telnet_factory(request):
+            def factory(r):
+                if not r.bind_ip or not r.device_host:
+                    raise RuntimeError(f"{r.vlan} 切 telnet 路径但 bind_ip / device_host 为空")
+                log_path = DEFAULT_LOG_DIR / f"sample_parameter_{r.vlan}_{r.bind_ip}.log"
+                session = TelnetSession(
+                    r.bind_ip,
+                    r.device_host,
+                    log_path=log_path,
+                    known_secrets=(r.initial_password,),
+                )
+                emit_to_main(f"{r.vlan} 写参前置：UBUS 启用 telnet 中 ({r.device_host})。")
+                try:
+                    ubus_client = UbusHttpClient(r.bind_ip, r.device_host, ubus_port=r.ubus_port)
+                    try:
+                        enable_result = enable_telnet_via_ubus(
+                            ubus_client,
+                            r.initial_username,
+                            r.initial_password,
+                            on_log=lambda ev: emit_to_main(f"{r.vlan} UBUS: {ev.message}"),
+                            sleep_fn=lambda _seconds: None,
+                            sleep_after_seconds=0.0,
+                        )
+                    finally:
+                        ubus_client.close()
+                except Exception as exc:
+                    emit_to_main(f"{r.vlan} 写参前置：UBUS 启用 telnet 失败：{exc}")
+                    try:
+                        session.close()
+                    except OSError:
+                        pass
+                    raise
+                emit_to_main(f"{r.vlan} UBUS 启用 telnet {enable_result.action}: {enable_result.message}")
+                return session
+            return factory
+
+        results: list[SampleParameterItemResult | None] = [None] * len(requests)
+
+        if serial_indices:
+            serial_requests = [requests[i] for i in serial_indices]
+            serial_results = run_parallel_sample_parameter_writes(
+                serial_requests,
+                self.serial_session_manager,
+                parallel_count=parallel_count,
+                on_output=emit_to_main,
+                on_session_ready=lambda vlan, session, log_path: self.after(
+                    0, lambda vlan=vlan, session=session, log_path=log_path: self.serial_terminal.attach_upgrade(vlan, session, log_path)
+                ),
+                cancel_event=cancel_event,
+            )
+            for offset, serial_index in enumerate(serial_indices):
+                results[serial_index] = serial_results[offset]
+
+        if telnet_indices:
+            telnet_requests = [requests[i] for i in telnet_indices]
+            with ThreadPoolExecutor(max_workers=min(parallel_count, len(telnet_requests)), thread_name_prefix="sample-parameter-telnet") as executor:
+                telnet_futures = {
+                    executor.submit(
+                        run_single_sample_parameter_write,
+                        req,
+                        self.serial_session_manager,
+                        emit_to_main,
+                        None,
+                        cancel_event,
+                        None,
+                        make_telnet_factory(req),
+                    ): telnet_indices[offset]
+                    for offset, req in enumerate(telnet_requests)
+                }
+                for future in as_completed(telnet_futures):
+                    telnet_results_index = telnet_futures[future]
+                    try:
+                        results[telnet_results_index] = future.result()
+                    except Exception as exc:
+                        req = requests[telnet_results_index]
+                        results[telnet_results_index] = SampleParameterItemResult(
+                            req, False, f"{req.vlan} telnet 写参启动失败：{exc}",
+                            cancelled=cancel_event.is_set(),
+                        )
+
+        final = [r if isinstance(r, SampleParameterItemResult) else SampleParameterItemResult(requests[idx], False, "未运行") for idx, r in enumerate(results)]
+        self.after(0, lambda: self._complete_sample_parameter_write(final))
+
 
     def _cancel_sample_parameter_write(self) -> None:
         if self.parameter_cancel_event is not None:

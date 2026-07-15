@@ -56,6 +56,10 @@ class SampleParameterWriteRequest:
     initial_username: str
     initial_password: str
     values: Mapping[str, str]
+    # telnet + UBUS 启用前置字段。串口路径下填空,ubus_port 默认 80。
+    bind_ip: str = ""
+    device_host: str = ""
+    ubus_port: int = 80
 
 
 @dataclass(frozen=True)

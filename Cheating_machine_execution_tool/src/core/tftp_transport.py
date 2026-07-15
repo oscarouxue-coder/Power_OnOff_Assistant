@@ -46,27 +46,11 @@ _BIND_UNAVAILABLE_ERRNOS = {
 _BIND_UNAVAILABLE_ERRNOS.discard(None)
 
 
-def _ip_is_bindable_locally(ip: str) -> bool:
-    """检查指定 IPv4 是否能作为本机地址绑定(用于 TFTP 服务 start 前预检)。
-
-    通过在指定 IP 上开一个 UDP socket 试 bind;若 bind 成功,说明该地址确实属于本机某张网卡,
-    可以放心让 tftpy 监听;若失败,通常是该 IP 未配置在任何活动接口上,需要回退到 INADDR_ANY。
-    """
-    if not ip:
-        return True
-    sock: socket.socket | None = None
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind((ip, 0))
-        return True
-    except OSError:
-        return False
-    finally:
-        if sock is not None:
-            try:
-                sock.close()
-            except OSError:
-                pass
+# 源 IP 可绑校验抽到 bind_socket 模块,telnet_transport / ubus_http_client 共享。
+# 这里保留旧名作为薄 shim,避免本模块以外的下游测试(例如 test_tftp_transport.py)导入路径被破坏。
+# 注意:wait_for_bindable_ip 必须在本模块内"重新指过来",这样测试用 mock.patch
+# `src.core.tftp_transport._ip_is_bindable_locally` 才会真正命中这一份闭包引用。
+from .bind_socket import ip_is_bindable_locally as _ip_is_bindable_locally  # noqa: E402
 
 
 def wait_for_bindable_ip(

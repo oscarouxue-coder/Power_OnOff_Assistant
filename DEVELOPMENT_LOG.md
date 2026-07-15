@@ -34,6 +34,33 @@
 - 验证结果：`python -m py_compile` 通过；串口终端专项 8 项通过（原 6 项 + 新增 2 项）；完整 `python -m unittest discover -s tests -v` 共 184 项通过（原 182 项 + 新增 2 项）。
 - 后续待办：用户真实桌面环境在 vlan137/vlan138 等终端确认按 Enter 等价于「发送」按钮、空输入时等价于「回车」按钮，并确认升级中锁定提示和危险命令二次确认仍生效。
 
+## 2026-07-15 - 写样机参数传输层由串口切换为 Telnet（按 VLAN 网卡 IP 锁源）
+
+- 类型：功能 / 安全优化 / 重构 / 测试 / 文档
+- 背景：光猫/路由器测试环境普遍配备多张同网段 VLAN 网卡，串口写参会因 PC 自动选网卡导致命中错误样机。
+- 完成内容：
+  - 新增 `src/core/parameter_session.py` 的 `Protocol ParameterSession`，把 `run_single_sample_parameter_write` 抽出 `run_parameter_write_pipeline` helper，service 层不再 import `PySerialSession`；既有 4 项串口路径单测保持全绿。
+  - 抽出 `src/core/bind_socket.py`：`ip_is_bindable_locally` / `wait_for_bindable_ip`；TFTP strict server 改转发到该模块以保持兼容（保留 `tftp_transport._ip_is_bindable_locally / wait_for_bindable_ip` 旧名以免破坏测试 patch）。
+  - 新增 `src/core/telnet_transport.py`：`TelnetSession` 在 `socket.create_connection(..., source_address=(bind_ip, 0))` 上提供与 `PySerialSession` 同形接口（cursor / write / send_line / wait_for_any / wait_for_all / peek_since）；源 IP 不可绑时强报错、不回退 `0.0.0.0`。
+  - 新增 `src/core/ubus_http_client.py`：自写 JSON-RPC 2.0 客户端，不依赖 `SdmcUbusLib`（其静态字段多线程会互相覆盖 session）；通过 `http.client.HTTPConnection(..., source_address=(bind_ip, 0))` 按 VLAN 网卡锁定出口；当前支持 `login / bbfdm.get / bbfdm.set / bbfdm.add / bbfdm.unauthenticated_operate`。
+  - 新增 `src/core/ubus_enable_telnet.py`：复刻 `SdmcUbusLibEnableTelnet.Enable_telnet` 的访问控制规则协议，按 `get/set/add/SourceInterface=lan 回退` 三段处理；返回 `EnableTelnetResult(action, ok, message)`。
+  - `SampleParameterWriteRequest` 增加 `bind_ip / device_host / ubus_port` 字段（默认空 / 80，向后兼容）。
+  - `line_check_assistant/app.py` 的 `_start_sample_parameter_write` 把 `ChannelConfig.network_card_ip / device_manage_ip` 透传到 request；`_sample_parameter_write_worker` 中按 VLAN 一台样机走 UBUS 启用 telnet → `TelnetSession` → service 流程；其余串口路径保留作 transport 回退。
+- 修改文件：`Cheating_machine_execution_tool/src/core/parameter_session.py`（新）、`src/core/bind_socket.py`（新）、`src/core/telnet_transport.py`（新）、`src/core/ubus_http_client.py`（新）、`src/core/ubus_enable_telnet.py`（新）、`tests/test_telnet_transport.py`（新）、`tests/test_ubus_http_client.py`（新）、`src/core/tftp_transport.py`（转发到 bind_socket）、`src/services/sample_parameter_service.py`（加 `ParameterSession` 依赖）、`src/models/sample_parameter_models.py`（新增字段）、`line_check_assistant/app.py`（组装 telnet 工厂、`_channel_for_vlan` 等 helper）、`line_check_assistant_README.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile` 各新模块与 `app.py`；`python -m unittest discover -s tests -v`。
+- 验证结果：`py_compile` 通过；完整 `python -m unittest discover -s tests -v` 共 199 项通过（原 184 + telnet 6 + ubus 9）。
+- 后续待办：用户先以 2 台独立 VLAN / COM 样机验收 UBUS 启用 telnet → Telnet 写参 → 工厂模式 → 15 项 set/get 读回校验；其次扩展至 4 / 8 台并行；真实样机成功后追加一条“真实样机验收通过”记录。
+
+## 2026-07-15 - 串口日志记录-新增回车发送功能验收通过
+
+- 类型：真实样机验收 / 状态更新
+- 背景：2026-07-15 接入的命令输入框 Enter 发送最初仅有单元测试通过；用户已在线下样机完成端到端验证。
+- 完成内容：用户确认“串口日志记录-新增回车发送功能”真实样机验收通过；该能力从 `ACCEPTANCE_BASELINE.md` 第 4 节的“已实现但未确认验收/待确认”收敛为“已确认验收”，同步把 `PROJECT_STATUS.md` 对应行（内置多 VLAN 串口终端）追加“含回车发送”说明。
+- 修改文件：`DEVELOPMENT_LOG.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`。
+- 验证方法：以真实样机在“串口日志记录”窗口的命令输入框中：①输入文本后按 Enter，确认等价于「发送」按钮且输入框被清空；②输入框为空时按 Enter，确认等价于「回车」按钮；③自动升级占用对应 Tab 时按 Enter，确认弹出 “串口被占用” warning；④输入包含 `reboot` / `firstboot` 等关键字时按 Enter，确认继续弹出“确认危险命令”二次确认。
+- 验证结果：通过。
+- 后续待办：无。
+
 ## 2026-07-13 - 精简项目交接状态文档
 
 - 类型：文档 / 交接

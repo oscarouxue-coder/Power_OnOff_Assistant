@@ -45,11 +45,12 @@
 
 ## 4. 串口日志 / 多 VLAN 终端
 
+- **已确认验收**：
+  - 命令输入框支持 Enter 发送（2026-07-15）：非空等价「发送」、空字符串等价「回车」；自动升级占用与危险命令二次确认仍生效 — 用户已线下样机验证通过
 - **已实现但未确认验收**：
   - 多 Tab、`vlan{N} -> COM{N-100}` 固定映射、按 VLAN 合并后只渲染当前 Tab，48 KiB 屏幕缓冲、33ms 节流
   - 危险命令（`reboot`/`reset`/`firstboot`/`tftp`/`upgrade`）二次确认
   - 默认日志目录不可写 / 终端状态文件不可写时显式提示
-  - 命令输入框支持 Enter 发送（2026-07-15 改动）；锁定 Tab 在 Enter 时弹"串口被占用"
 - **待确认**：3 路以上高频 WiFi 日志压测；现场观察高频滚动下按钮是否持续可点
 - **兼容性约束**：原始终端文件由后台串口线程完整写入磁盘；屏幕缓冲超过 64 KiB 仅合并展示
 - **回归检查点**：`tests/test_serial_terminal.py` 8 项；现场监控下手动验证 Enter 触发发送
@@ -117,13 +118,18 @@
 
 - **已实现但未确认验收**：
   - 参数表 `VLAN` 列与已勾选通道匹配
-  - `vlan{N} -> COM{N-100}` 固定映射、并行 1-8 台（默认 2）
-  - 预检：重复/缺失 VLAN、重复 COM、MAC 格式、必填空、引号/换行
-  - 标准流程：`ppctl clear → FACTORY_MODE=1 → firstboot -yr → 等待 100s → 二次登录 → set/get → FACTORY_MODE=0 → firstboot -yr`
+  - 传输层已切到 Telnet（仅限写样机参数），按 `ChannelConfig.network_card_ip` 强绑定 PC 源 IP；多张同网段网卡不会命中错误样机
+  - 前置阶段通过本机自写的 UBUS HTTP 客户端（不复用 `SdmcUbusLib`）按 `SdmcUbusLibEnableTelnet.Enable_telnet` 同协议打开 `Device.Firewall.<X_SDMC_>Security.AccessCtrl` 的 LAN-telnet 规则（含 Device.IP.Interface.1 → lan 回退）
+  - 业务时序：`ppctl clear → FACTORY_MODE=1 → firstboot -yr → 等待 100s → 二次登录 → set/get → FACTORY_MODE=0 → firstboot -yr`；并行 1-8 台（默认 2）
   - 取消时停止后续命令并尝试退出工厂模式
-- **待确认**：2 / 4 / 8 台独立 VLAN/COM 真实样机验收（VLAN/MAC 对应、`set/get` 读回校验、取消清理、退出工厂模式后的重启、日志脱敏）
-- **兼容性约束**：参数值不允许双引号/回车/换行；密码类字段在终端与日志脱敏
-- **回归检查点**：`tests/test_sample_parameter_service.py`、`tests/test_sample_parameter_table.py`、`tests/test_sample_parameter_app.py`
+- **待确认**：
+  - 2 / 4 / 8 台独立 VLAN 真实样机验收（VLAN/MAC 对应、`set/get` 读回校验、取消清理、退出工厂模式后的重启、日志脱敏、UBUS 启用 telnet 与 telnet 登录衔接时序）
+  - 现场首次确认 UBUS 启用 telnet 总开关、规则 enable 三段日志
+- **兼容性约束**：
+  - 参数值不允许双引号/回车/换行；密码类字段在终端与日志脱敏
+  - 源 IP 不可绑时强提示人工检查 `network_card_ip.ini`，不回退 `0.0.0.0`
+  - 串口路径保留作 transport 配置回退入口；所有其他功能（页面升级 / 全包升级 / 串口终端）继续走原有路径，不受本节改动影响
+- **回归检查点**：`tests/test_sample_parameter_service.py`（4 项既有断言）、`tests/test_telnet_transport.py`（6 项）、`tests/test_ubus_http_client.py`（9 项）、`tests/test_sample_parameter_table.py`、`tests/test_sample_parameter_app.py`
 
 ## 11. 随机参数表生成
 
@@ -177,11 +183,11 @@
 
 ```powershell
 cd F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool
-python -m py_compile line_check_assistant\app.py src\ui\serial_terminal.py src\services\serial_upgrade_service.py src\services\sample_parameter_service.py src\core\tftp_transport.py
+python -m py_compile line_check_assistant\app.py src\ui\serial_terminal.py src\services\serial_upgrade_service.py src\services\sample_parameter_service.py src\core\tftp_transport.py src\core\telnet_transport.py src\core\ubus_http_client.py src\core\ubus_enable_telnet.py src\core\bind_socket.py src\core\parameter_session.py
 python -m unittest discover -s tests -v
 ```
 
-- 预期：`Ran 184 tests ... OK`
+- 预期：`Ran 199 tests ... OK`（基线 184 + telnet 6 + ubus_http_client 9）
 - 协议不变性自检（应全部命中）：
   - `bbfdm.operate`（页面升级 UBUS）
   - `0.0.0.0` 不应出现在并行 TFTP 监听 / 数据 socket 路径
@@ -189,4 +195,6 @@ python -m unittest discover -s tests -v
   - `192.168.1.1`（Tftp Put 远端固定）
   - `vlan{N} -> COM{N-100}` 映射公式（`vlan_to_serial_port`）
   - `MAX_PARALLEL_UPGRADES = 8`、`clamp_parallel_count`
-- 入口自检：可分别打开"页面升级""全包升级（Tftp指令/Tftp Put）""写样机参数""生成批量样机参数表""ONU注册""串口日志记录"窗口
+  - `source_address=(bind_ip, 0)` 应出现在 `TelnetSession`、`UbusHttpClient` 构造路径
+  - `Device.Firewall.<X_SDMC_>Security.AccessCtrl` 协议应出现在 `ubus_enable_telnet`
+- 入口自检：可分别打开"页面升级""全包升级（Tftp指令/Tftp Put）""写样机参数（默认走 telnet 路径）""生成批量样机参数表""ONU注册""串口日志记录"窗口
