@@ -135,6 +135,7 @@ def run_single_sample_parameter_write(
     cancel_event: threading.Event | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
     telnet_session_factory: TelnetSessionFactory = None,
+    factory_session_swap: Optional[Callable[[ParameterSession], Optional[ParameterSession]]] = None,
 ) -> SampleParameterItemResult:
     """按样机写一次批量参数。
 
@@ -145,6 +146,12 @@ def run_single_sample_parameter_write(
 
     切片 1 阶段 telnet_session_factory 形参已就绪但默认走串口路径，
     即"新增抽象，零行为变更"。
+
+    工厂模式二次登录前,可选传入 ``factory_session_swap`` 回调。
+    100 秒等待后,pipeline 会以旧 session 调此回调：
+    - 回调负责关闭旧 session、把 VLAN 网卡切到工厂模式对应的网段、并返回新 ParameterSession;
+    - 返回 None 表示放弃本台(切网段或重建 telnet 失败),pipeline 直接退出本台;
+    - 不传(默认 None)表示不切换,与历史行为兼容。
     """
     emit = on_output or (lambda _message: None)
     cancel = cancel_event or threading.Event()
@@ -154,7 +161,7 @@ def run_single_sample_parameter_write(
         emit(f"{request.vlan} 写参：使用 Telnet 会话（绑定源 IP {getattr(request, 'bind_ip', '')}）。")
         if on_session_ready:
             on_session_ready(request.vlan, session, DEFAULT_LOG_DIR / f"sample_parameter_{request.vlan}.log")
-        return run_parameter_write_pipeline(request, session, cancel, sleep_fn, emit)
+        return run_parameter_write_pipeline(request, session, cancel, sleep_fn, emit, factory_session_swap)
     if cancel.is_set():
         return SampleParameterItemResult(request, False, f"{request.vlan} 写参已取消。", cancelled=True)
     log_path = DEFAULT_LOG_DIR / f"sample_parameter_{request.vlan}_{request.serial_port}.log"
@@ -163,7 +170,7 @@ def run_single_sample_parameter_write(
         on_session_ready(request.vlan, session, log_path)
     emit(f"{request.vlan} 写参：串口 {request.serial_port} 已打开。")
     try:
-        return run_parameter_write_pipeline(request, session, cancel, sleep_fn, emit)
+        return run_parameter_write_pipeline(request, session, cancel, sleep_fn, emit, factory_session_swap)
     finally:
         # 串口路径专属: 始终释放 session。
         session_manager.release(owner, request.serial_port)
@@ -175,12 +182,14 @@ def run_parameter_write_pipeline(
     cancel: threading.Event,
     sleep_fn: Callable[[float], None],
     emit: Output,
+    factory_session_swap: Optional[Callable[[ParameterSession], Optional[ParameterSession]]] = None,
 ) -> SampleParameterItemResult:
     """对已打开的 ParameterSession 执行一次写样机参数的完整流水线。
 
     流水线:
-        首次登录 → ppctl clear → FACTORY_MODE=1 → firstboot -yr
-        → 等 100 秒 → 工厂模式二次登录 → 15 项 ppctl set/get
+        首次登录 → FACTORY_MODE=1 → firstboot -yr
+        → 等 100 秒 → （可选 factory_session_swap：切网段 + 新 session）
+        → 工厂模式二次登录 → ppctl clear → 15 项 ppctl set/get
         → FACTORY_MODE=0 + firstboot -yr（在 finally 中执行）
 
     不关心 session 是 PySerial 还是 Telnet；会话生命周期由调用方管理。
@@ -193,15 +202,36 @@ def run_parameter_write_pipeline(
             return SampleParameterItemResult(request, False, f"{request.vlan} 写参失败：首次登录失败。")
         if cancel.is_set():
             return SampleParameterItemResult(request, False, f"{request.vlan} 写参已取消。", cancelled=True)
-        _send_stage(session, "ppctl clear", False, emit, request.vlan)
         _send_stage(session, "ppctl set FACTORY_MODE=1", False, emit, request.vlan)
         entered_factory = True
         _send_stage(session, "firstboot -yr", False, emit, request.vlan)
         emit(f"{request.vlan} 写参：已触发进入工厂模式重启，等待 {FACTORY_REBOOT_WAIT_SECONDS} 秒。")
         if not _wait_cancellable(FACTORY_REBOOT_WAIT_SECONDS, cancel, sleep_fn):
             return SampleParameterItemResult(request, False, f"{request.vlan} 写参已取消，准备执行工厂模式清理。", cancelled=True)
+        # 100 秒后,部分样机的管理 IP 切到另一网段(如 192.168.29.1);若调用方提供了
+        # factory_session_swap,本流水线拿到旧 session,等调用方关闭旧会话、切网段、
+        # 重建新 ParameterSession 后再用新会话继续。返回 None 视为放弃本台。
+        if factory_session_swap is not None:
+            try:
+                new_session = factory_session_swap(session)
+            except Exception as exc:
+                emit(f"{request.vlan} 写参：工厂模式网络切换异常：{exc}")
+                return SampleParameterItemResult(
+                    request, False,
+                    f"{request.vlan} 写参失败：工厂模式网络切换异常。",
+                )
+            if new_session is None:
+                return SampleParameterItemResult(
+                    request, False,
+                    f"{request.vlan} 写参失败：工厂模式网络切换失败,请人工核对 {request.vlan} 的工厂模式配置后重试。",
+                )
+            session = new_session
+            emit(f"{request.vlan} 写参：工厂模式网络切换完成,继续工厂模式二次登录。")
         if not _login(session, FACTORY_USERNAME, FACTORY_PASSWORD, cancel, sleep_fn):
             return SampleParameterItemResult(request, False, f"{request.vlan} 写参失败：工厂模式二次登录失败。")
+        # 二次登录成功后才下发 ppctl clear:清理工厂模式重启后可能残留的临时参数,
+        # 然后再写 15 项 ppctl set/get。
+        _send_stage(session, "ppctl clear", False, emit, request.vlan)
         written = 0
         failed_labels: list[str] = []
         for definition in STANDARD_PARAMETER_DEFINITIONS:
@@ -285,7 +315,7 @@ def _write_and_verify(session, vlan: str, label: str, command_prefix: str, value
         if cancel.is_set():
             return False
         command = f'{command_prefix}"{value}"'
-        emit(f"{vlan} TX {command_prefix}{'[敏感内容已隐藏]' if sensitive else repr(value)}（{label}，第 {attempt}/{PARAMETER_WRITE_RETRIES} 次）")
+        emit(f"{vlan} TX {command_prefix}{repr(value)}（{label}，第 {attempt}/{PARAMETER_WRITE_RETRIES} 次）")
         session.send_line(command, sensitive=sensitive)
         if not _wait_cancellable(1, cancel, sleep_fn):
             return False

@@ -119,7 +119,9 @@ class TelnetSessionTests(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
 
-    def test_peek_since_redacts_known_secrets(self):
+    def test_peek_since_displays_plaintext_known_secrets(self):
+        # 操作员要求:所有下发/回显一律明文,不再按 known_secrets 脱敏。
+        # ``known_secrets`` 形参保留以兼容既有调用方,但 _display 不再替换。
         port = free_port()
 
         class _EchoHandler(socketserver.BaseRequestHandler):
@@ -142,9 +144,9 @@ class TelnetSessionTests(unittest.TestCase):
                 try:
                     time.sleep(0.2)
                     snapshot = session.peek_since(0)
-                    # 明文 secret 不能出现,但 placeholder "[敏感内容已隐藏]" 必须出现
-                    self.assertIn("[敏感内容已隐藏]", snapshot)
-                    self.assertNotIn("super-secret-from-sample", snapshot)
+                    # 明文 secret 必须出现,"[敏感内容已隐藏]" placeholder 不应再出现
+                    self.assertIn("super-secret-from-sample", snapshot)
+                    self.assertNotIn("[敏感内容已隐藏]", snapshot)
                 finally:
                     session.close()
             finally:

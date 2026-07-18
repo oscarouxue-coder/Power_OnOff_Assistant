@@ -2,6 +2,216 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-07-17 - 写样机参数 UBUS 启用 telnet 失败允许重试 3 次
+
+- 类型：功能 / 测试
+- 背景：用户线下真实样机跑批量写样机参数时遇到 `写参前置：UBUS 启用 telnet 失败：UBUS HTTP 请求失败 192.168.1.1:80：timed out`,偶发但会直接放弃本台。失败原因通常是样机防火墙 reload 中 / telnetd 启动慢 / HTTP 握手慢,首次 UBUS 同步调用就判定失败过于严格;与 `serial_upgrade_service.TFTP_COMMAND_MAX_RETRIES=3` 和 `sample_parameter_service.PARAMETER_WRITE_RETRIES=3` 的同款约定一致,允许重试 3 次,每次间隔 2 秒给样机缓冲。
+- 完成内容:
+  1. **`line_check_assistant/app.py`** —— `_sample_parameter_write_worker` 顶部新增两个 worker 局部常量 `UBUS_ENABLE_TELNET_MAX_RETRIES=3` 与 `UBUS_ENABLE_TELNET_RETRY_DELAY_SECONDS=2.0`。`make_telnet_factory.factory` 内 UBUS 启用块由原来的单次 `try/except` 改为 `for _attempt in range(1, 3 + 2)` 重试循环,每次重试前 `time.sleep(2.0)` 并 emit 主程序执行日志 `VLANxxx UBUS 启用 telnet 第 N/3 次重试,等待 2 秒...`;失败时 emit `VLANxxx 写参前置：UBUS 启用 telnet 失败：{exc}`;最后一次失败抛 `RuntimeError` 给 worker 的 `except Exception` 捕获并标记 `telnet 写参启动失败`。`UbusHttpClient` 每次重试都新建(`finally` 保证关闭),避免上一个失败连接残留状态。
+  2. **测试** —— `tests/test_sample_parameter_app.py` 新增 `SampleParameterAppUbusRetryTests` 3 项:① `test_ubus_retry_succeeds_on_third_attempt` 模拟 2 次失败后第 3 次成功,断言 `enable_telnet_via_ubus.call_count==3` / `time.sleep.call_count==2` / 主日志含 `第 1/3 次重试` 与 `第 2/3 次重试`;② `test_ubus_retry_gives_up_after_max_retries` 模拟 4 次全部抛 `RuntimeError("UBUS HTTP 请求失败...timed out")`,断言 4 次调用 + 3 次 sleep + 3 条重试日志 + 4 条失败日志 + 不建 `TelnetSession`;③ `test_ubus_first_try_success_no_retry_log` 首次成功,断言 1 次调用 + 0 次 sleep + 0 条重试日志。`time.sleep` 用 `@patch("time.sleep")` mock 掉,避免真睡 2*3=6 秒拖慢测试。
+- 修改文件:`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_app.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法:`python -m py_compile line_check_assistant/app.py tests/test_sample_parameter_app.py`;`python -m unittest discover -s tests -v`。
+- 验证结果:`py_compile` 通过;完整 `python -m unittest discover -s tests -v` 共 **249 项** 全过(原 246 + 新增 3)。
+- 后续待办:用户真实样机验收 —— 主执行日志首次失败时依次出现 `VLANxxx 写参前置：UBUS 启用 telnet 中 → UBUS: 三段 → VLANxxx 写参前置：UBUS 启用 telnet 失败：UBUS HTTP 请求失败 ... timed out → VLANxxx UBUS 启用 telnet 第 1/3 次重试,等待 2 秒... → 再次启用 → 成功:`;若 4 次仍失败,主程序会弹 `telnet 写参启动失败：UBUS 启用 telnet 失败：...` 并标记该台失败,其它通道继续;按 UBUS 错误消息判断是防火墙 reload 慢、telnetd 没起还是 HTTP 服务异常,若是后者(比如 BBFDM 未就绪)需重启样机或排查 `UbusHttpClient` 内部连接握手逻辑。
+
+## 2026-07-17 - 写样机参数 / 串口终端所有 [敏感内容已隐藏] 改为明文显示
+
+- 类型：功能 / 测试
+- 背景：用户线下真实样机验收时反馈,主程序执行日志、串口终端 RX/TX、文件日志中密码类字段(WiFi 密码、superuser 密码、user 密码、首次登录密码等)仍以 `[敏感内容已隐藏]` 占位符显示,与现场"操作员需在主界面核对实际下发的值"诉求不一致;沿用 2026-07-13 的"输入框明文显示"方针,要求下发与回显同样明文。
+- 完成内容:
+  1. **`src/core/telnet_transport.py`** —— `_display()` 不再按 `self._known_secrets` 替换为占位符,改为直接 `decode("utf-8", errors="replace")`;`_emit()` 不再分支 `sensitive`,统一走 `_display(data)`。`sensitive` 形参保留以兼容既有调用方,但实际不起作用。`known_secrets` 形参与 `self._known_secrets` 属性保留同样兼容,后续可按需删除。
+  2. **`src/core/serial_transport.py`** —— `_display()` 与 `write()` 内联 emit 文本生成,均不再走占位符;`sensitive` 形参保留为 no-op。
+  3. **`src/services/sample_parameter_service.py`** —— `_write_and_verify` 的 TX 日志从 `'{[敏感内容已隐藏]}' if sensitive else repr(value)` 改为统一 `repr(value)`,密码类 5 项字段(2.4G/5G WiFi Password、Superuser Password、User Password)主执行日志直接出原文。
+  4. **测试** —— `tests/test_telnet_transport.py` 的 `test_peek_since_redacts_known_secrets` 重命名为 `test_peek_since_displays_plaintext_known_secrets`,断言反转(明文 secret 出现 / `[敏感内容已隐藏]` 不出现);`tests/test_sample_parameter_service.py` 的 `test_write_reads_back_all_values_and_hides_sensitive_values` 重命名为 `test_write_reads_back_all_values_and_displays_plaintext`,断言主执行日志含 `secret-super` / `secret-user` 且不含 `[敏感内容已隐藏]`。
+- 修改文件:`Cheating_machine_execution_tool/src/core/telnet_transport.py`、`Cheating_machine_execution_tool/src/core/serial_transport.py`、`Cheating_machine_execution_tool/src/services/sample_parameter_service.py`、`Cheating_machine_execution_tool/tests/test_telnet_transport.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_service.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法:`python -m py_compile src/core/telnet_transport.py src/core/serial_transport.py src/services/sample_parameter_service.py tests/test_telnet_transport.py tests/test_sample_parameter_service.py`;`python -m unittest discover -s tests -v`。
+- 验证结果:`py_compile` 通过;完整 `python -m unittest discover -s tests -v` 共 **246 项** 全过。
+- 后续待办:用户重新跑批量写样机参数 telnet 路径,主执行日志期望直接看到 `TX ppctl set WIFI_KEY_24G1='xxx'`、`TX ppctl set SUPER_PASSWORD='xxx'` 等明文,串口终端 RX 同样明文;若现场反馈需对某类字段(例如 super 密码)在文件日志中重新脱敏,再单独加字段级控制(目前是统一明文)。
+
+## 2026-07-17 - 写样机参数 telnet 路径 1 台真实样机验收通过
+
+- 类型：真实样机验收 / 状态更新
+- 背景：用户线下用 1 台样机（VLAN114，源 IP `192.168.1.114` / 设备 `192.168.1.1`）跑批量写样机参数 telnet 路径端到端，验证本轮三连改动——① 写参前置启用网卡 + 设置静态 IP + 等可绑；② `factory_bind_ip` / `factory_device_host` 未配置时按"第 3 段 → 29,主机位不变"自动派生（ini 中这两个字段故意留空以触发派生）；③ `ppctl clear` 紧跟工厂模式二次登录。
+- 完成内容：用户确认 1 台真实样机验收通过；写样机参数（含 telnet 路径、UBUS 启用 telnet、工厂模式自动网段切换、`ppctl clear` 时序）从 `ACCEPTANCE_BASELINE.md` §2.7 与 `PROJECT_STATUS.md` 的「已实现未验收」升级为「已确认验收（1 台单台）」。`ACCEPTANCE_BASELINE.md` §0 最小可信回归基线从 199 项更新到 **246 项**（2026-07-17 实跑）。
+- 修改文件：`DEVELOPMENT_LOG.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`。
+- 验证方法：真实样机 VLAN114 端到端验证网络准备 + UBUS 启用 telnet + 首次登录 + 工厂模式 + 15 项 ppctl set/get 读回校验 + 退出工厂模式完整流水线；主执行日志依次出现「`VLAN114 写参前置：准备网络 vlan114（192.168.1.114 / 255.255.255.0）` → `检查并启用网卡` → `已启用网卡` → `设置 vlan114 静态 IP` → `已设置` → `UBUS 启用 telnet 中` → UBUS 三段日志 → `UBUS 启用 telnet <action>` → `STATE Telnet 已连接` → `首次登录成功` → `TX ppctl clear` → `TX ppctl set FACTORY_MODE=1` → `TX firstboot -yr` → 等待 100 秒 → `VLAN114 工厂模式网段切换：准备把 vlan114 设为 192.168.29.114（自动派生自 network_card_ip）` → `工厂模式重建 TelnetSession 成功（192.168.29.114 → 192.168.29.1）` → 工厂模式二次登录 → 15 项 `TX ppctl set/get` 读回校验 → `写参完成，15 项均已读回校验` → `TX ppctl set FACTORY_MODE=0` → `TX firstboot -yr` → `已下发退出工厂模式与重启命令`」。
+- 验证结果：通过。
+- 后续待办：2 / 4 / 8 台独立 VLAN 真实样机并行验收（`ACCEPTANCE_BASELINE.md` §2.7 待确认项）；通过后再把 §2.7 状态升级到「已确认验收（全场景）」。
+
+## 2026-07-15 - 写样机参数 factory_bind_ip / factory_device_host 未配置时自动派生
+
+- 类型：功能 / 测试
+- 背景：用户点击「写入参数」报弹窗 `通道 VLAN114 走 telnet 路径,但缺少 factory_bind_ip / factory_device_host 配置`。检查 `Auto_power_on_off_tool/config/network_card_ip.ini`,`[channel_2]` 的 `factory_bind_ip` 与 `factory_device_host` 都是空字符串,只有 `network_card_ip=192.168.1.114` 与 `device_manage_ip=192.168.1.1`。按本轮之前确认的"29 网段、主机位不变"约定,可由用户模式 IP 自动派生工厂模式 IP,无需用户在主界面表格里手动补两个字段。
+- 完成内容：
+  1. **`line_check_assistant/network_ops.py`** —— 新增模块常量 `FACTORY_MODE_OCTET_INDEX = 2` / `FACTORY_MODE_OCTET_VALUE = "29"` 与两个纯函数 `factory_bind_ip_for(network_card_ip)` / `factory_device_host_for(device_manage_ip)`,底层共用 `_swap_third_octet_to_factory_subnet(ip)`,走 `ipaddress.IPv4Address` 校验;无效或为空时返回空串,与既有 `static_ip_for_vlan` 派生失败语义一致。注释说明约定:样机进入工厂模式(ppctl set FACTORY_MODE=1 + firstboot -yr 重启)后管理 IP 切到第 3 段替换为 29 的网段,主机位不变。
+  2. **`line_check_assistant/app.py`** —— 顶部新增 `factory_bind_ip_for` / `factory_device_host_for` 导入。`_factory_bind_ip_for_vlan` / `_factory_device_host_for_vlan` 在用户模式字段已填、工厂模式字段为空时改为按"第 3 段 → 29,主机位不变"自动派生;手动填的工厂模式字段优先级最高,不覆盖。`_start_sample_parameter_write` 的预校验错误文案改为"自动派生工厂模式配置失败:factory_bind_ip (需补齐 network_card_ip 或手动填写)"等,引导用户补用户模式字段或显式手动填工厂模式字段。
+  3. **测试** —— `tests/test_network_ops.py` 新增 `FactoryModeIpDerivationTests` 8 项(典型场景、空串/None、无效 IP、非 192.168.1 子网、前导零拒绝);`tests/test_sample_parameter_app.py` 新增 `FactoryModeIpHelperTests` 6 项(派生行为、手动覆盖优先级、双字段缺失兜底、用户模式 IP 非法时 device_host 仍能派生)。复用现有 `_channel_for_vlan` 替换为 lambda 返回真实 `ChannelConfig`,避免 Mock() 自动 mock 属性吞掉断言。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/network_ops.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_network_ops.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_app.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile line_check_assistant/app.py line_check_assistant/network_ops.py tests/test_network_ops.py tests/test_sample_parameter_app.py`;`python -m unittest discover -s tests -v`。
+- 验证结果：`py_compile` 通过;完整 `python -m unittest discover -s tests -v` 共 **246 项** 全过(原 232 + 新增 14)。
+- 后续待办：用户重新打开主界面,点击「写入参数」应不再弹工厂模式配置缺失报错;确认后主执行日志依次出现 `写参前置：准备网络 vlan114（192.168.1.114 / 255.255.255.0）→ 已启用 → 已设置 → UBUS 启用 telnet → ... → 工厂模式网段切换：准备把 vlan114 设为 192.168.29.114 → ...`。若主界面表格里想保留手工指定的工厂模式 IP(例如 192.168.29.114 之外的值),直接在 `network_card_ip.ini` 给 `factory_bind_ip` / `factory_device_host` 写非空即可,优先级高于派生。
+
+## 2026-07-15 - 写样机参数开始前启用对应通道网卡 + 设置静态 IP
+
+- 类型：功能 / 测试
+- 背景：批量写样机参数默认走 Telnet 路径,`make_telnet_factory` 当前直接进入 UBUS 启用 telnet + TelnetSession 创建,没有显式启用对应 VLAN 网卡并把 `channel.network_card_ip` 写入该网卡。多张同网段网卡环境下若 adapter 未启用或 IP 未生效,UBUS / Telnet 用 `source_address=(bind_ip, 0)` 锁源时会立即抛 `WSAEADDRNOTAVAIL`(10049)。用户澄清:写参开始时样机处于用户模式,直接按 `network_card_ip` 设置即可(主界面已按 `vlan{N} → 192.168.1.{N}` 约定自动派生到该字段);100 秒工厂模式重启后切到 29 网段、主机位不变,继续走既有 `make_factory_session_swap`,不重复实现。
+- 完成内容:
+  1. **`line_check_assistant/app.py`** —— `_sample_parameter_write_worker.make_telnet_factory` 在「`r.bind_ip / r.device_host` 校验后、UBUS 启用 telnet 之前」插入 3 步:① 通过既有 `self._adapter_alias_for_vlan(r.vlan)` / `self._subnet_mask_for_vlan(r.vlan)` 取字段;② 调用 `prepare_network_for_sample(adapter_alias, r.bind_ip, subnet_mask, on_output=emit_to_main, sleep_fn=time.sleep)` 启用网卡 + 设置静态 IP(其内部 emit 会把 `检查并启用网卡 / 已启用 / 设置静态 IP / 已设置` 四条主程序执行日志自然输出);③ `wait_for_bindable_ip(r.bind_ip, timeout_seconds=15.0)` 等 Windows 把新 IP 注册为可绑地址。任一失败抛 `RuntimeError`,被 worker `except Exception` 捕获并标记该台 `telnet 写参启动失败:{exc}`,其它通道继续。`adapter_alias` 或 `bind_ip` 为空时跳过该步骤(向后兼容,避免对未配置通道硬错误)。
+  2. **测试** —— `tests/test_sample_parameter_app.py` 新增 `SampleParameterAppNetworkPreflightTests` 4 项:① `test_factory_prepares_network_before_ubus` 断言 4 个外部依赖各被调用 1 次、`prepare_network_for_sample` 形参为 `(adapter_alias, bind_ip, subnet_mask, on_output=..., sleep_fn=...)`、`wait_for_bindable_ip` 形参为 `(bind_ip, timeout_seconds=15.0)`,且调用顺序为 prepare → wait → UBUS → TelnetSession;② `test_factory_raises_when_prepare_network_fails` 断言 `ok=False` 时抛 RuntimeError,UBUS/Telnet 不调用,主执行日志出现 `网络准备失败`;③ `test_factory_raises_when_bindable_ip_times_out` 断言 `wait_for_bindable_ip=False` 时抛 RuntimeError,主执行日志出现 `仍未成为可绑地址`;④ `test_factory_skips_network_step_when_adapter_alias_empty` 断言 `adapter_alias=""` 时跳过两步,继续 UBUS/Telnet。
+- 修改文件:`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_app.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法:`python -m py_compile line_check_assistant/app.py tests/test_sample_parameter_app.py`;`python -m unittest discover -s tests -v`。
+- 验证结果:`py_compile` 通过;完整 `python -m unittest discover -s tests -v` 共 **232 项** 全过(原 228 + 新增 4)。
+- 后续待办:用户真实样机验收 —— 主执行日志期待出现
+  ```
+  VLANxxx 写参前置:准备网络 vlan101(192.168.1.101 / 255.255.255.0)。
+  检查并启用网卡:vlan101
+  已启用网卡 vlan101
+  设置 vlan101 静态 IP:192.168.1.101(255.255.255.0)
+  已设置 vlan101 为 192.168.1.101
+  VLANxxx 写参前置:UBUS 启用 telnet 中 (192.168.1.1)。
+  VLANxxx UBUS: ...
+  VLANxxx UBUS 启用 telnet <action>: <message>
+  STATE Telnet 已连接
+  VLANxxx 写参:使用 Telnet 会话(绑定源 IP 192.168.1.101)
+  ```
+  确认 `network_card_ip` 与样机管理 IP 在同一 /24 子网;若 `prepare_network_for_sample` 失败日志明确显示对应 VLAN 与原因,按提示核对 `adapter_alias` / 管理员权限 / `network_card_ip.ini`;`wait_for_bindable_ip` 超时则核对 Windows 注册网卡 IP 的延迟(实测通常 < 3 秒,15 秒足够覆盖大部分现场)。
+
+## 2026-07-15 - 写样机参数窗口「首次登录账号/密码」持久化到 sample_upgrade_settings.ini
+
+- 类型：功能 / 测试
+- 背景：用户反馈写样机参数窗口的"首次登录账号"和"密码"每次打开界面时,虽然默认值会取上次的内容,但实际只是从 Tk 内存变量 (`self.upgrade_username_var / self.upgrade_password_var`) 拷贝而来,并没有真的存盘。在升级窗口里改过的值能影响,样机参数窗口里键入的新内容关闭再打开会丢。用户指出项目里已有 `Cheating_machine_execution_tool/line_check_assistant/sample_upgrade_settings_store.py` 把升级相关设置(`upgrade_mode`、`username`、`password`、`firmware_path` 等)持久化到 `Auto_power_on_off_tool/config/sample_upgrade_settings.ini`,建议把写样机参数窗口的首次登录账号/密码也落到这个文件。
+- 完成内容:
+  1. **`line_check_assistant/sample_upgrade_settings_store.py`** — `SampleUpgradeSettings` 加两个独立字段 `parameter_initial_username`、`parameter_initial_password`(独立 key,与升级超级凭据 `username/password` 不混淆);`SampleUpgradeSettingsStore.load/save` 同步读写,空 ini 兼容回退到空字符串。
+  2. **`line_check_assistant/app.py`** — `__init__` 阶段(`_load_settings` 之后)新增实例级 StringVar `parameter_initial_username_var / parameter_initial_password_var`,值取自 `self.sample_upgrade_settings.parameter_initial_username/password`,与 `upgrade_username_var / upgrade_password_var` 同级,通过 `_bind_sample_upgrade_autosave` 的 `trace_add("write", ...)` 走 400ms 防抖自动写盘。`_current_sample_upgrade_settings()` 把这两个字段也带上写盘。原 `_open_parameter_writer_window` 不再新创建同名 StringVar,直接复用实例级,关闭再开窗能恢复到上次内容。
+  3. **测试** — `tests/test_sample_upgrade_settings_store.py` 加 2 项:① `test_save_and_load_preserves_parameter_initial_credentials` —— 证明两个字段独立存读且与升级凭据分离;② `test_load_missing_parameter_initial_keys_defaults_to_empty` —— 旧 ini(还没写过这两个 key)回退到空字符串无报错。`tests/test_app.py` 的两处 `_current_sample_upgrade_settings` 用例补齐 `parameter_initial_username_var / _password_var` 的 mock。
+- 修改文件:`Cheating_machine_execution_tool/line_check_assistant/sample_upgrade_settings_store.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_sample_upgrade_settings_store.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法:`python -m py_compile line_check_assistant/app.py line_check_assistant/sample_upgrade_settings_store.py`;`python -m unittest discover -s tests -v`。
+- 验证结果:`py_compile` 通过;完整 `python -m unittest discover -s tests -v` 共 228 项全过(原 226 + 新增 2)。
+- 后续待办:用户重新打开主界面,在"写样机参数"窗口的"首次登录账号"和"密码"输入新值,关闭主程序再重开,确认两个字段仍能恢复到本次输入(查看 `Auto_power_on_off_tool/config/sample_upgrade_settings.ini` 的 `parameter_initial_username = ...`、`parameter_initial_password = ...` 两行)。注意:`%` 走 `RawConfigParser` 仍不会触发 interpolation(配置类用 `RawConfigParser`),所以含百分号的密码不会被误解为变量引用。
+
+## 2026-07-15 - 写样机参数 ppctl clear 移到工厂模式二次登录之后 + 工厂模式网段切换
+
+- 类型：BUG 修复 / 功能 / 测试
+- 背景：用户接着前几轮修复继续真机验证：
+  - UBUS 启用 telnet 成功；
+  - `ppctl clear → ppctl set FACTORY_MODE=1 → firstboot -yr` 成功；
+  - 100 秒等待后,主程序仍在用旧 TelnetSession(指向 `192.168.1.1:23`)尝试工厂模式二次登录,样机已在 `192.168.29.1:23`,旧 socket 被关闭,`cleanup` 阶段报 `Telnet 连接已关闭:192.168.1.1:23`,样机因此卡在工厂模式。
+  - 用户纠正一个时序错误:`ppctl clear` 应当出现在工厂模式二次登录之后、15 项 `ppctl set/get` 之前,而不是首次登录之后进入工厂模式之前（当前代码是先清再进入工厂,但工厂模式重启会把 ppctl 表复原,等于白清）。
+- 完成内容：
+  1. **`line_check_assistant/config_store.py`** — `ChannelConfig` 新增 `factory_device_host: str = ""`、`factory_bind_ip: str = ""` 两个字段;`ChannelConfigStore.load/save` 同步读写,缺失字段保持空字符串。
+  2. **`src/models/sample_parameter_models.py`** — `SampleParameterWriteRequest` 新增 `factory_bind_ip / factory_device_host` 两个字段,默认空,串口路径不消费。
+  3. **`src/services/sample_parameter_service.py`** — `run_parameter_write_pipeline` 与 `run_single_sample_parameter_write` 新增可选 `factory_session_swap: Callable[[ParameterSession], Optional[ParameterSession]] = None` 形参;流水线在 100s 等待后、第二次 `_login` 之前调用该回调:返回新 session 切换并继续二次登录,返回 None 视为放弃本台,抛异常也立刻放弃本台。`ppctl clear` 命令从"FACTORY_MODE=1 之前"挪到"二次登录成功之后",与用户期望一致(`_send_stage(session, "ppctl clear", ...)` 现在紧跟 `_login(FACTORY_USERNAME/FACTORY_PASSWORD)` 成功);`finally` 清理仍用当前 session(已切换过就走新 session)。
+  4. **`line_check_assistant/app.py`** — 新增 5 个 helper:`_factory_bind_ip_for_vlan / _factory_device_host_for_vlan / _adapter_alias_for_vlan / _subnet_mask_for_vlan`;`_start_sample_parameter_write` 在确认弹窗前增加工厂模式必填校验(telnet 路径的通道必须配齐 `factory_bind_ip / factory_device_host`,缺一拒绝本次写入并给出说明);`SampleParameterWriteRequest` 在工厂里塞入新字段;`_sample_parameter_write_worker` 新增 `make_factory_session_swap(request)` 闭包:旧 session.close() → `prepare_network_for_sample(adapter_alias, factory_bind_ip, subnet_mask)` → `wait_for_bindable_ip(factory_bind_ip, 15s)` → `TelnetSession(factory_bind_ip, factory_device_host)`;任意一步失败返回 None 并 `emit_to_main` 明确写日志(切网段失败 / 重建 TelnetSession 失败 / 缺少字段);`executor.submit` 第 8 个位置参数 `make_factory_session_swap(req)` 接入。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/config_store.py`、`Cheating_machine_execution_tool/src/models/sample_parameter_models.py`、`Cheating_machine_execution_tool/src/services/sample_parameter_service.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_service.py`、`Cheating_machine_execution_tool/tests/test_channel_config.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile line_check_assistant/app.py src/services/sample_parameter_service.py src/models/sample_parameter_models.py line_check_assistant/config_store.py`;`python -m unittest discover -s tests -v`。
+- 验证结果：`py_compile` 通过;`tests/test_sample_parameter_service.py` 新增 4 项:① `test_ppctl_clear_runs_after_factory_relogin_not_before` —— 断言 `ppctl clear` 只在工厂模式二次登录之后、15 项 `ppctl set` 之前出现一次,且位于 `ppctl set FACTORY_MODE=0` 之前;② `test_factory_session_swap_returns_none_abandons_before_second_login` —— 断言 swap 返回 None 时立即放弃本台,旧 session 上没有 `ppctl clear`;③ `test_factory_session_swap_exception_reports_failure` —— 断言 swap 抛异常时 pipeline 以"工厂模式网络切换异常"消息失败;④ `test_factory_session_swap_new_session_is_used_for_second_login` —— 断言 swap 返回新 session 时,`ppctl clear` 与 15 项 set 走新 session,finally 清理 (`FACTORY_MODE=0` + `firstboot -yr`) 也走新 session,旧 session 被 close;`tests/test_channel_config.py` 新增 3 项:① `test_load_includes_factory_bind_ip_and_device_host`;② `test_load_defaults_factory_fields_to_empty_when_missing`;③ `test_save_round_trip_preserves_factory_fields`。完整 `python -m unittest discover -s tests -v` 共 226 项全过(原 219 + 新增 7)。
+- 后续待办：用户真实样机验证 —— 主执行日志期待出现
+  ```
+  VLAN114 写参前置：UBUS 启用 telnet 中 (192.168.1.114)
+  VLAN114 UBUS: 已发起 UBUS 启用 telnet 流程
+  …
+  VLAN114 TX ppctl set FACTORY_MODE=1
+  VLAN114 TX firstboot -yr
+  VLAN114 写参：已触发进入工厂模式重启,等待 100 秒。
+  …（约 100 秒后）…
+  VLAN114 工厂模式网段切换:准备把 vlan114 设为 192.168.29.114 ……
+  …
+  VLAN114 UBUS 启用 telnet added_iface/already_present: …
+  VLAN114 工厂模式重建 TelnetSession 成功(192.168.29.114 → 192.168.29.1)。
+  VLAN114 写参：工厂模式网络切换完成,继续工厂模式二次登录。
+  VLAN114 TX ppctl clear
+  VLAN114 TX ppctl set SERIAL_NUMBER=…
+  …15 项 set/get…
+  VLAN114 写参完成,15 项均已读回校验。
+  VLAN114 TX ppctl set FACTORY_MODE=0
+  VLAN114 TX firstboot -yr
+  VLAN114 写参：已下发退出工厂模式与重启命令。
+  ```
+  提示：测试结果仍「待真实样机验收」,修完后还需 2/4/8 台并行验收才能在 `ACCEPTANCE_BASELINE.md` §2.7 与 `PROJECT_STATUS.md` 把"已实现未验收"升级到"已确认验收"。`ChannelConfig` 新增 `factory_bind_ip / factory_device_host` 后,主程序表格里这些列现在是空白(空字符串视为未配置);现场需要按 VLAN 补齐。若 `prepare_network_for_sample` 失败(log 出现"工厂模式网段切换失败"),按提示核对对应 VLAN 的 adapter_alias 是否存在、是否能启用并设静态 IP;若 NIC 切换后 15s 仍未可绑,核对 Windows 注册网卡 IP 的延迟或现场状态。
+
+## 2026-07-15 - 写样机参数 telnet 路径 sleep_fn=None 导致 100 秒等待立即抛 'NoneType' object is not callable
+
+- 类型：BUG 修复 / 测试
+- 背景：用户接着上轮修复继续真机验证 VLAN114 写参,UBUS 启用 telnet 成功后，主执行日志依次出现
+  ```
+  00:34:29 VLAN114 TX ppctl clear
+  00:34:29 VLAN114 TX ppctl set FACTORY_MODE=1
+  00:34:29 VLAN114 TX firstboot -yr
+  00:34:29 VLAN114 写参：已触发进入工厂模式重启,等待 100 秒。
+  00:34:29 VLAN114 TX ppctl set FACTORY_MODE=0
+  00:34:29 VLAN114 TX firstboot -yr
+  00:34:29 VLAN114 写参：已下发退出工厂模式与重启命令。
+  ```
+  最后却弹窗 `VLAN114 写参异常：'NoneType' object is not callable`。症状是「等待 100 秒。」刚打印就立刻同秒覆写三条最终清理命令。根因:`line_check_assistant/app.py` 的 `_sample_parameter_write_worker` 提交 telnet 路径执行时把 `sleep_fn=None` 作为第 6 个位置参数传给 `run_single_sample_parameter_write`,而 `_wait_cancellable(FACTORY_REBOOT_WAIT_SECONDS, cancel, sleep_fn)` 内部循环第一轮直接调用 `sleep_fn(1.0)`,`None(1.0)` 立即抛 `TypeError`,被外层 `except Exception` 接住返回失败结果;`finally` 看到 `entered_factory=True` 立刻连续下发 `ppctl set FACTORY_MODE=0` + `firstboot -yr` + 「已下发退出工厂模式与重启命令。」 这就是同秒出现三条的原因。
+- 完成内容：`_sample_parameter_write_worker` 内部按样式加 `import time`;telnet 路径 executor.submit 调用第 6 个位置参数从 `None` 改成 `time.sleep`,与串口路径(走默认 `time.sleep`)对齐。其余流程、cancel 语义、15 项 set/get 重试、`FACTORY_USERNAME / FACTORY_PASSWORD` 与 100 秒工厂模式等待都不变。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_regression_sleep_fn.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile line_check_assistant/app.py src/services/sample_parameter_service.py src/core/ubus_enable_telnet.py`;`python -m unittest discover -s tests -v`。
+- 验证结果：`py_compile` 通过;新增 `tests/test_regression_sleep_fn.py` 3 项固化契约:① `test_sleep_fn_none_raises_none_type_not_callable` —— 用 `assertRaisesRegex(TypeError, "NoneType")` 锁死"`sleep_fn=None` 必须立即抛错"的契约,防止以后 caller 误传 `None` 让工厂模式清理走 finally 同一毫秒；② `test_sleep_fn_callable_runs_through_and_returns_true` —— 真 sleep_fn 在 cancel 未触发时跑完返回 True;③ `test_sleep_fn_callable_returns_false_on_cancel` —— cancel 已 set 时返回 False 且不调用 sleep_fn;完整 `python -m unittest discover -s tests -v` 共 219 项全过(原 199 + 新增 20)。
+- 后续待办：用户真实样机再跑 VLAN114 写参,主执行日志期待出现
+  ```
+  VLAN114 写参前置：UBUS 启用 telnet 中 (192.168.1.114)
+  VLAN114 UBUS: 已发起 UBUS 启用 telnet 流程
+  …
+  VLAN114 TX ppctl set FACTORY_MODE=1
+  VLAN114 TX firstboot -yr
+  VLAN114 写参：已触发进入工厂模式重启,等待 100 秒。
+  …等待约 100 秒后…
+  VLAN114 写参：触发首次登录（root / ******）/ 工厂模式二次登录（root / ******）
+  VLAN114 TX ppctl set <15 项参数>=…
+  VLAN114 TX ppctl get <15 项参数>
+  …
+  VLAN114 写参完成,15 项均已读回校验。
+  VLAN114 TX ppctl set FACTORY_MODE=0
+  VLAN114 TX firstboot -yr
+  VLAN114 写参：已下发退出工厂模式与重启命令。
+  ```
+  若 100 秒等待结束后出现 "工厂模式二次登录失败",需按现场样机的工厂模式用户名/密码核对 `src/services/sample_parameter_service.py:25` 的 `FACTORY_USERNAME = "root"` 与 `FACTORY_PASSWORD = "t*hEQ#BHu7z%3n"`;若等待期间 `cancel.is_set()` 提前返回,主程序会在「已触发进入工厂模式重启,等待 100 秒。」后立即进入 finally 清理(符合预期逻辑,但可能被肉眼误判为清理太快)。
+
+## 2026-07-15 - 写样机参数 UBUS 启用 telnet 总开关 set 必须用对象路径而非参数路径
+
+- 类型：BUG 修复 / 测试
+- 背景：用户接着上一轮修复继续验证 VLAN115 写参,主执行日志抛出
+  ```
+  VLAN115 UBUS: 获取访问规则总开关失败:UBUS 设置访问控制总开关失败,响应 [0, {'results': [{'path': 'Device.Firewall.X_SDMC_Security.AccessCtrl.EnableEnable', 'fault': 9005, 'fault_msg': 'Invalid parameter name'}]}]
+  ```
+  关键线索是 BBFDM 响应里 path 字段被拼成了 `...AccessCtrl.EnableEnable` —— 多出一个 `Enable`。原版 `SdmcUbusLibEnableTelnet._set_SecurityAccessCtrl_enable` 用的是对象路径 `f"Device.Firewall.{VENDOR_PREFIX}Security.AccessCtrl."` (末尾带点),并传 `obj_path={"Enable":"1"}`,BBFDM 会把 `obj_path` 的键当作对象下的参数;我代码误用参数路径 `ACCESS_CTRL_ENABLE_PATH` (`...AccessCtrl.Enable`) + 同一个 `obj_path={"Enable":"1"}`,BBFDM 视为在已经到参数的路径上继续追加,把两段 `Enable` 直接串联,产生 fault 9005 `Invalid parameter name`。
+- 完成内容:`src/core/ubus_enable_telnet.py` 新增模块常量 `ACCESS_CTRL_ENABLE_OBJECT_PATH = "...AccessCtrl."`,仅用在 SET 总开关那一处 (`bbfdm_set` 的 path)。GET 总开关仍保留 `ACCESS_CTRL_ENABLE_PATH = "...AccessCtrl.Enable"`,因为 GET 接收"参数路径"形式合法;同时 `_bbfdm_all_results_one` 检查 `data != "1"`,遇到 fault 9005 这种 `data='Invalid parameter name'` 的响应会判定失败并抛 `UbusError`,刚好与上一轮校验修复串起来。其余路径(规则 set、add iface、add lan 回退)沿用上轮的修改不动,继续走 `data == "1"` 校验。
+- 修改文件:`Cheating_machine_execution_tool/src/core/ubus_enable_telnet.py`、`Cheating_machine_execution_tool/tests/test_ubus_enable_telnet.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法:`python -m py_compile src/core/ubus_enable_telnet.py line_check_assistant/app.py src/core/ubus_http_client.py`;`python -m unittest discover -s tests -v`。
+- 验证结果:`py_compile` 通过;`tests/test_ubus_enable_telnet.py` 新增 2 项 —— ① `test_set_total_enable_uses_object_path_not_parameter_path`:直接抓取 `bbfdm_set` 路径调用,断言总开关 SET 路径严格等于 `ACCESS_CTRL_ENABLE_OBJECT_PATH` 且 obj_path 等于 `{"Enable":"1"}`,确保本回归不会再次出现;② `test_set_total_enable_fault_9005_with_parameter_path_raises`:模拟 BBFDM 返回 `{'path': '...EnableEnable', 'fault': 9005, 'fault_msg': 'Invalid parameter name'}`,断言 `enable_telnet_via_ubus` 抛 `UbusError` 含"总开关失败";`tests/test_ubus_enable_telnet.py` 共 17 项全过;完整 `python -m unittest discover -s tests -v` 共 216 项全过(原 199 + 17)。
+- 后续待办:用户真实样机验证 —— 主执行日志期待出现
+  ```
+  VLAN115 写参前置:UBUS 启用 telnet 中 (192.168.1.115)
+  VLAN115 UBUS: 已发起 UBUS 启用 telnet 流程
+  VLAN115 UBUS: AccessCtrl 总开关开启                (若原先 Enable != "1")
+  VLAN115 UBUS: <already_present / added_iface / added_lan_fallback / reused>
+  VLAN115 UBUS 启用 telnet <action>: <message>
+  STATE Telnet 已连接
+  VLAN115 写参:使用 Telnet 会话(绑定源 IP 192.168.1.115)
+  …
+  ```
+  若仍 timed out,主程序会抛出"总开关失败 / 开启 LAN-telnet 规则失败 / 添加 telnet 规则 (Device.IP.Interface.1 / lan) 失败" 的明确 UbusError;按消息判断是设备未就绪、BBFDM 拒绝还是 telnetd 没起;若是 telnetd 守护进程没起则需要新增 UCI / `system.exec` 等路线,与本次 BGF 修复独立。
+
+## 2026-07-15 - 写样机参数 UBUS 启用 telnet 校验 BBFDM 响应 data + 防火墙 reload 缓冲
+
+- 类型：BUG 修复 / 测试
+- 背景：用户在 VLAN115 上跑批量写样机参数，前一次修复（TCP 连接挪到 UBUS 之后）后仍报 `Telnet 连接失败 192.168.1.1:23 ... timed out`。复查 `Cheating_machine_execution_tool/SdmcUbusLib/libs/Security_module_api/enable_telnet.py`：该库对外只暴露 `SdmcUbusLibEnableTelnet.Enable_telnet()` 和 `SdmcSecurityLib.Ubus_telnet_enable()`，两者本质都是 BBFDM `bbf.shell` 下 `Device.Firewall.X_SDMC_Security.AccessCtrl.{Enable,Rule}` 路径上的 GET/SET/ADD 操作，并不直接启停 `telnetd` 守护进程。对照原版后发现三处实际差异：① SdmcUbusLib `_set_SecurityAccessCtrl_enable` / `_add_SecurityAccessCtrlRule` 在 JSON-RPC `error_code=0` 之外还会校验 `results[*].data == "1"`，本地实现在这两处缺失该校验；② SdmcUbusLib `Enable_telnet` 内含 `time.sleep(2)` 缓冲；本地实现因为 `_sample_parameter_write_worker` 传 `sleep_after_seconds=0.0`，防火墙变更后几乎没有等待。这两条都让 BBFDM 即使"看似成功"也未必真把 telnet 端口放开。
+- 完成内容：在 `src/core/ubus_enable_telnet.py` 新增模块级 helper `_bbfdm_all_results_one(response) -> bool`，对齐 SdmcUbusLib 同款 `data == "1"` 校验；`enable_telnet_via_ubus` 内部：总开关 `bbfdm_set`、已存在规则 `bbfdm_set Enable=1`、`bbfdm_add Device.IP.Interface.1`、`bbfdm_add lan` 回退四处全部要求 `results[*].data == "1"`，否则 `raise UbusError`（与 `except UbusError: lan 回退` 这一既有 fallback 兼容）；新增常量 `ENABLE_TELNET_FINAL_SLEEP_SECONDS = 1.0`，在三个成功分支末尾固定 `sleep_fn(1.0)`，与 `sleep_after_seconds` 叠加，确保即便调用方传 0.0 也给防火墙 reload 留 1 秒。本地并未新增启动 `telnetd` 守护进程的入口，与 SdmcUbusLib 保持完全一致；若该设备未启动 telnetd，单靠 UBUS 防火墙规则不会让 23 端口 listening，需后续单独处理。
+- 修改文件：`Cheating_machine_execution_tool/src/core/ubus_enable_telnet.py`、`Cheating_machine_execution_tool/tests/test_ubus_enable_telnet.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile src/core/ubus_enable_telnet.py line_check_assistant/app.py src/core/ubus_http_client.py`；`python -m unittest discover -s tests -v`。
+- 验证结果：`py_compile` 通过；新增 `tests/test_ubus_enable_telnet.py` 包含 6 项 `_bbfdm_all_results_one` 行为断言（data='1' / data='0' / 缺 results / 负载非 dict / 顶层非 list）+ 9 项 `enable_telnet_via_ubus` 端到端断言（already_present 不调 set/add、reused、added_iface、set_total data=0 抛错、set 已有规则 data=0 抛错、add_iface data=0 走 lan 回退、add 抛 UbusError 时 lan 回退、set_total + add_iface 日志顺序、sleep_after_seconds=0 仍触发 ENABLE_TELNET_FINAL_SLEEP_SECONDS）；完整 `python -m unittest discover -s tests -v` 共 214 项全过（原 199 + 新增 15）。
+- 后续待办：用户真实样机再次验证：①日志依次出现「写参前置：UBUS 启用 telnet 中 → UBUS 总开关/规则 enable 三段消息 → UBUS 启用 telnet <action>: <message> → STATE Telnet 已连接 → 首次登录成功 → ...」；②若仍 timed out，主程序将抛出明确 UbusError `总开关失败` / `开启 LAN-telnet 规则失败` / `添加 telnet 规则 (Device.IP.Interface.1 / lan) 失败`，按消息可判断是 BBFDM 拒绝、设备未就绪还是该设备本就没起 telnetd；若是后者再单独立项处理。
+
+## 2026-07-15 - 写样机参数 TCP 连接挪到 UBUS 启用 telnet 之后
+
+- 类型：BUG 修复
+- 背景：用户实际跑批量写样机参数（VLAN115，源 IP `192.168.1.115`）失败，弹窗 `VLAN115 telnet 写参启动失败：Telnet 连接失败 192.168.1.1:23 源 IP 192.168.1.115: timed out`。`make_telnet_factory` 当前顺序为先 `TelnetSession(...)` 同步建 TCP 连接、后 `enable_telnet_via_ubus(...)` 打开样机防火墙访问控制规则；但 OpenWRT 样机默认禁用 LAN-telnet，访问规则不开就没有进程监听 23 端口，SYN 不会得到响应，15 秒后 `socket.timeout`。这与函数顶部注释「端到端 telnet 写参:UBUS 启用 telnet → TelnetSession(未登录)」相反。
+- 完成内容：把 `make_telnet_factory` 内部语句顺序调整为「先 `enable_telnet_via_ubus`（含总开关 get/set、规则遍历、add 规则、add lan 回退四段，仍走 `sleep_after_seconds=0.0`）→ 后 `TelnetSession(...)` 同步连」。UBUS 失败时不再需要回头关闭未创建的 Telnet 连接，清理分支简化。其余传输流程、`known_secrets`、`log_path`、`UbusHttpClient.close()` 等不变；源 IP `source_address=(bind_ip, 0)` 锁源、`enable_telnet_via_ubus` 三段日志、`ACCEPTANCE_BASELINE.md` §2.7 注释等均保持原状。修复后关键阶段日志自然输出：`写参前置：UBUS 启用 telnet 中 → UBUS 三段消息 → UBUS 启用 telnet <action>: <message> → STATE Telnet 已连接 → 首次登录 → ppctl clear → …`。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile Cheating_machine_execution_tool\line_check_assistant\app.py`；`python -m unittest discover -s Cheating_machine_execution_tool\tests -v`。
+- 验证结果：`python -m py_compile` 通过；完整 `python -m unittest discover -s Cheating_machine_execution_tool\tests -v` 共 199 项通过（与 `ACCEPTANCE_BASELINE.md` §0 基线一致，未新增/调整任何测试）。
+- 后续待办：用户真实样机验收：先以 VLAN115 单台验证日志依次出现「写参前置：UBUS 启用 telnet 中 → UBUS 总开关/规则 enable 三段消息 → UBUS 启用 telnet added_iface/already_present: … → STATE Telnet 已连接 → 首次登录成功 → ppctl clear → 工厂模式 → 15 项 set/get 读回 → 退出工厂模式」；通过后扩展到 2/4/8 台独立 VLAN 并行，状态标签由「已实现未验收」升级为「已确认验收」再同步 `ACCEPTANCE_BASELINE.md` §2.7 与 `PROJECT_STATUS.md` 表格。
+
 ## 记录规则
 
 - 每次完成代码、配置、文档或流程变更后，都在本文件顶部追加一条记录。

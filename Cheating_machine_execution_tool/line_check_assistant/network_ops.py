@@ -547,6 +547,42 @@ def static_ip_for_vlan(vlan_name: str, device_manage_ip: str) -> str:
     return ".".join((*octets[:3], str(host_number)))
 
 
+# 工厂模式子网约定:样机进入工厂模式(ppctl set FACTORY_MODE=1 + firstboot -yr 重启)后,
+# 管理 IP 切到"原 IP 第 3 段替换为 29"的网段(如 192.168.1.114 → 192.168.29.114),
+# PC 端 VLAN 网卡也必须切到该网段,主机位保持不变。
+FACTORY_MODE_OCTET_INDEX = 2
+FACTORY_MODE_OCTET_VALUE = "29"
+
+
+def factory_bind_ip_for(network_card_ip: str) -> str:
+    """按用户模式 PC 静态 IP 派生工厂模式 PC bind_ip(第 3 段 → 29,主机位不变)。
+
+    输入无效或为空时返回空串,语义与 ``_factory_bind_ip_for_vlan`` 的"无配置"一致。
+    """
+    return _swap_third_octet_to_factory_subnet(network_card_ip)
+
+
+def factory_device_host_for(device_manage_ip: str) -> str:
+    """按用户模式样机管理 IP 派生工厂模式样机管理 IP(第 3 段 → 29,主机位不变)。
+
+    输入无效或为空时返回空串,语义与 ``_factory_device_host_for_vlan`` 的"无配置"一致。
+    """
+    return _swap_third_octet_to_factory_subnet(device_manage_ip)
+
+
+def _swap_third_octet_to_factory_subnet(ip: str) -> str:
+    value = (ip or "").strip()
+    if not value:
+        return ""
+    try:
+        address = ipaddress.IPv4Address(value)
+    except ipaddress.AddressValueError:
+        return ""
+    octets = str(address).split(".")
+    octets[FACTORY_MODE_OCTET_INDEX] = FACTORY_MODE_OCTET_VALUE
+    return ".".join(octets)
+
+
 def list_adapters() -> List[AdapterInfo]:
     adapters = _list_adapters_with_powershell()
     if adapters:

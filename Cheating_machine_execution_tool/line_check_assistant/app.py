@@ -20,6 +20,8 @@ from .network_ops import (
     run_line_check,
     save_olt_configuration,
     static_ip_for_vlan,
+    factory_bind_ip_for,
+    factory_device_host_for,
 )
 from .onu_registration_store import DEFAULT_OLT_IP, OnuRegistrationConfig, OnuRegistrationStore
 from .page_upgrade import PageUpgradeRequest, run_page_upgrade_batch
@@ -188,6 +190,10 @@ class LineCheckAssistant(Tk):
         self.upgrade_targets_var = StringVar(value="未勾选目标样机")
         self.upgrade_status_var = StringVar(value="尚未开始升级")
         self.upgrade_progress_var = DoubleVar(value=0)
+        # 写样机参数窗口的「首次登录账号 / 密码」也走同一份 sample_upgrade_settings.ini,
+        # 与升级超级凭据分两个独立 key;作为主程序实例变量持久存在,值变更通过 trace_add 自动写盘。
+        self.parameter_initial_username_var = StringVar(value=self.sample_upgrade_settings.parameter_initial_username)
+        self.parameter_initial_password_var = StringVar(value=self.sample_upgrade_settings.parameter_initial_password)
         self._bind_sample_upgrade_autosave()
         LOG_DIR.mkdir(exist_ok=True)
         self.log_path = LOG_DIR / f"line_check_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
@@ -471,8 +477,8 @@ class LineCheckAssistant(Tk):
         dialog.transient(self)
 
         self.parameter_table_var = StringVar()
-        self.parameter_initial_username_var = StringVar(value=self.upgrade_username_var.get().strip())
-        self.parameter_initial_password_var = StringVar(value=self.upgrade_password_var.get())
+        # 写样机参数窗口的「首次登录账号 / 密码」直接复用主程序实例级 StringVar,
+        # 由 ``__init__`` 阶段从 sample_upgrade_settings.ini 加载,值变更经 trace_add 自动写盘。
         self.parameter_parallel_count_var = IntVar(value=DEFAULT_PARALLEL_COUNT)
         self.parameter_status_var = StringVar(value="请选择或生成参数表。")
 
@@ -557,6 +563,32 @@ class LineCheckAssistant(Tk):
         shared = self.device_ip_var.get().strip() if hasattr(self, "device_ip_var") else ""
         return shared
 
+    def _factory_bind_ip_for_vlan(self, vlan_name: str) -> str:
+        channel = self._channel_for_vlan(vlan_name)
+        if channel is not None and channel.factory_bind_ip and channel.factory_bind_ip.strip():
+            return channel.factory_bind_ip.strip()
+        # 未配置时按用户模式 network_card_ip 自动派生:第 3 段 → 29,主机位不变
+        if channel is not None and channel.network_card_ip:
+            return factory_bind_ip_for(channel.network_card_ip)
+        return ""
+
+    def _factory_device_host_for_vlan(self, vlan_name: str) -> str:
+        channel = self._channel_for_vlan(vlan_name)
+        if channel is not None and channel.factory_device_host and channel.factory_device_host.strip():
+            return channel.factory_device_host.strip()
+        # 未配置时按用户模式 device_manage_ip 自动派生:第 3 段 → 29,主机位不变
+        if channel is not None and channel.device_manage_ip:
+            return factory_device_host_for(channel.device_manage_ip)
+        return ""
+
+    def _adapter_alias_for_vlan(self, vlan_name: str) -> str:
+        channel = self._channel_for_vlan(vlan_name)
+        return channel.adapter_alias.strip() if channel is not None and channel.adapter_alias else ""
+
+    def _subnet_mask_for_vlan(self, vlan_name: str) -> str:
+        channel = self._channel_for_vlan(vlan_name)
+        return (channel.subnet_mask or "").strip() if channel is not None else ""
+
     def _browse_parameter_table(self) -> None:
         path = filedialog.askopenfilename(
             title="选择批量样机参数表",
@@ -629,6 +661,31 @@ class LineCheckAssistant(Tk):
         except (TypeError, ValueError):
             parallel_count = DEFAULT_PARALLEL_COUNT
         target_text = "\n".join(f"- {target.vlan} / {target.serial_port} / MAC:{target.record.values.get('MAC', '')}" for target in preflight.targets)
+        # 验证走 telnet 路径的目标必须有 factory_bind_ip / factory_device_host:
+        # 工厂模式 reboot 后,样机管理 IP 切到另一网段(如 192.168.29.1),PC 端 VLAN 网卡也
+        # 必须切到该网段才能继续工厂模式二次登录。
+        # 两个字段若未手动填写,会按"第 3 段 → 29,主机位不变"从用户模式
+        # network_card_ip / device_manage_ip 自动派生;派生失败(用户模式字段也未填)
+        # 才拒绝本次写入。
+        for target in preflight.targets:
+            if not self._bind_ip_for_vlan(target.vlan) or not self._device_host_for_vlan(target.vlan):
+                continue
+            missing = []
+            factory_bind = self._factory_bind_ip_for_vlan(target.vlan)
+            factory_device = self._factory_device_host_for_vlan(target.vlan)
+            if not factory_bind:
+                missing.append("factory_bind_ip (需补齐 network_card_ip 或手动填写)")
+            if not factory_device:
+                missing.append("factory_device_host (需补齐 device_manage_ip 或手动填写)")
+            if missing:
+                messagebox.showerror(
+                    "缺少工厂模式配置",
+                    f"通道 {target.vlan} 走 telnet 路径,但自动派生工厂模式配置失败:{', '.join(missing)}。\n"
+                    "工厂模式重启后样机管理 IP 会切换到 29 网段(如 192.168.29.1),PC 端 VLAN 网卡也需切换。\n"
+                    "请在主界面表格中补齐 network_card_ip / device_manage_ip 或手动填写 factory_bind_ip / factory_device_host 后重试。",
+                    parent=self.parameter_writer_window,
+                )
+                return
         if not messagebox.askyesno(
             "确认批量写样机参数",
             f"将并行写入 {len(preflight.targets)} 台样机（最多 {parallel_count} 台）：\n{target_text}\n\n"
@@ -647,6 +704,8 @@ class LineCheckAssistant(Tk):
                 bind_ip=self._bind_ip_for_vlan(target.vlan),
                 device_host=self._device_host_for_vlan(target.vlan),
                 ubus_port=80,
+                factory_bind_ip=self._factory_bind_ip_for_vlan(target.vlan),
+                factory_device_host=self._factory_device_host_for_vlan(target.vlan),
             )
             for target in preflight.targets
         ]
@@ -665,20 +724,30 @@ class LineCheckAssistant(Tk):
 
     def _sample_parameter_write_worker(self, requests: list[SampleParameterWriteRequest], parallel_count: int, cancel_event: threading.Event) -> None:
         # 端到端 telnet 写参:UBUS 启用 telnet → TelnetSession(未登录)→ run_parameter_write_pipeline 内部 _login。
-        # 串口路径保持现状做 transport 配置回退入口。
+        # 工厂模式 100 秒等待后可切换 PC 网卡到工厂模式对应网段后重建 TelnetSession
+        # （session_swap），其它情况由串口路径走 transport 回退入口。
+        import time
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         from src.config import DEFAULT_LOG_DIR
+        from src.core.bind_socket import wait_for_bindable_ip as _wait_for_bindable_ip
         from src.core.telnet_transport import TelnetSession
         from src.core.ubus_enable_telnet import enable_telnet_via_ubus
         from src.core.ubus_http_client import UbusHttpClient
         from src.models import SampleParameterItemResult
         from src.services.sample_parameter_service import run_single_sample_parameter_write
+        from line_check_assistant.network_ops import prepare_network_for_sample
 
         self.log_queue.put(f"开始批量写样机参数：{len(requests)} 台，并行上限 {parallel_count}。")
 
         def emit_to_main(line: str) -> None:
             self.log_queue.put(line)
+
+        # UBUS 启用 telnet 失败(典型:HTTP timed out / TCP refused)允许重试 3 次。
+        # 与 sample_parameter_service.PARAMETER_WRITE_RETRIES=3 / 串行升级
+        # TFTP_COMMAND_MAX_RETRIES=3 的同款约定。
+        UBUS_ENABLE_TELNET_MAX_RETRIES = 3
+        UBUS_ENABLE_TELNET_RETRY_DELAY_SECONDS = 2.0
 
         telnet_indices = [index for index, req in enumerate(requests) if req.bind_ip and req.device_host]
         serial_indices = [index for index, req in enumerate(requests) if index not in telnet_indices]
@@ -687,37 +756,134 @@ class LineCheckAssistant(Tk):
             def factory(r):
                 if not r.bind_ip or not r.device_host:
                     raise RuntimeError(f"{r.vlan} 切 telnet 路径但 bind_ip / device_host 为空")
+
+                # 写参前置:启用对应通道网卡 + 按 channel.network_card_ip 设置静态 IP + 等可绑。
+                # 100 秒工厂模式网段切换由 make_factory_session_swap 处理,本步骤只覆盖用户模式初始网段。
+                adapter_alias = self._adapter_alias_for_vlan(r.vlan)
+                subnet_mask = self._subnet_mask_for_vlan(r.vlan)
+                if adapter_alias and r.bind_ip:
+                    emit_to_main(
+                        f"{r.vlan} 写参前置:准备网络 {adapter_alias}({r.bind_ip} / {subnet_mask or '255.255.255.0'})。"
+                    )
+                    network_result = prepare_network_for_sample(
+                        adapter_alias,
+                        r.bind_ip,
+                        subnet_mask,
+                        on_output=emit_to_main,
+                        sleep_fn=time.sleep,
+                    )
+                    if not network_result.ok:
+                        emit_to_main(f"{r.vlan} 写参前置:网络准备失败:{network_result.message}")
+                        raise RuntimeError(f"{r.vlan} 网络准备失败:{network_result.message}")
+                    if not _wait_for_bindable_ip(r.bind_ip, timeout_seconds=15.0):
+                        emit_to_main(
+                            f"{r.vlan} 写参前置:{r.bind_ip} 仍未成为可绑地址,放弃本台。"
+                        )
+                        raise RuntimeError(f"{r.vlan} 网络准备后 {r.bind_ip} 仍不可绑")
+
                 log_path = DEFAULT_LOG_DIR / f"sample_parameter_{r.vlan}_{r.bind_ip}.log"
-                session = TelnetSession(
+                # 端到端 telnet 写参:UBUS 启用 telnet → TelnetSession(未登录)→ run_parameter_write_pipeline 内部 _login。
+                # 必须先由 UBUS 打开样机的 telnet 监听（默认防火墙禁用），再同步建立 TCP 连接，否则 192.168.1.1:23 会 timed out。
+                # 启用失败(典型:UBUS HTTP 请求失败 ... timed out)允许重试 3 次,
+                # 每次重试前 sleep 2 秒,给样机防火墙 reload / telnetd 启动留缓冲。
+                emit_to_main(f"{r.vlan} 写参前置：UBUS 启用 telnet 中 ({r.device_host})。")
+                enable_result = None
+                for _attempt in range(1, UBUS_ENABLE_TELNET_MAX_RETRIES + 2):
+                    if _attempt > 1:
+                        emit_to_main(
+                            f"{r.vlan} UBUS 启用 telnet 第 {_attempt - 1}/{UBUS_ENABLE_TELNET_MAX_RETRIES} 次重试,"
+                            f"等待 {UBUS_ENABLE_TELNET_RETRY_DELAY_SECONDS} 秒..."
+                        )
+                        time.sleep(UBUS_ENABLE_TELNET_RETRY_DELAY_SECONDS)
+                    ubus_client = UbusHttpClient(r.bind_ip, r.device_host, ubus_port=r.ubus_port)
+                    try:
+                        try:
+                            enable_result = enable_telnet_via_ubus(
+                                ubus_client,
+                                r.initial_username,
+                                r.initial_password,
+                                on_log=lambda ev: emit_to_main(f"{r.vlan} UBUS: {ev.message}"),
+                                sleep_fn=lambda _seconds: None,
+                                sleep_after_seconds=0.0,
+                            )
+                        finally:
+                            ubus_client.close()
+                        break  # 成功,跳出重试循环
+                    except Exception as exc:
+                        emit_to_main(f"{r.vlan} 写参前置：UBUS 启用 telnet 失败：{exc}")
+                        if _attempt > UBUS_ENABLE_TELNET_MAX_RETRIES:
+                            raise  # 已用完全部 3 次重试
+                emit_to_main(f"{r.vlan} UBUS 启用 telnet {enable_result.action}: {enable_result.message}")
+                return TelnetSession(
                     r.bind_ip,
                     r.device_host,
                     log_path=log_path,
                     known_secrets=(r.initial_password,),
                 )
-                emit_to_main(f"{r.vlan} 写参前置：UBUS 启用 telnet 中 ({r.device_host})。")
-                try:
-                    ubus_client = UbusHttpClient(r.bind_ip, r.device_host, ubus_port=r.ubus_port)
-                    try:
-                        enable_result = enable_telnet_via_ubus(
-                            ubus_client,
-                            r.initial_username,
-                            r.initial_password,
-                            on_log=lambda ev: emit_to_main(f"{r.vlan} UBUS: {ev.message}"),
-                            sleep_fn=lambda _seconds: None,
-                            sleep_after_seconds=0.0,
-                        )
-                    finally:
-                        ubus_client.close()
-                except Exception as exc:
-                    emit_to_main(f"{r.vlan} 写参前置：UBUS 启用 telnet 失败：{exc}")
-                    try:
-                        session.close()
-                    except OSError:
-                        pass
-                    raise
-                emit_to_main(f"{r.vlan} UBUS 启用 telnet {enable_result.action}: {enable_result.message}")
-                return session
             return factory
+
+        def make_factory_session_swap(request):
+            """工厂模式 100 秒等待后的会话切换回调。
+
+            流程:
+              1. 关闭旧 TelnetSession(样机管理 IP 已切到工厂模式网段,旧 socket 已无意义);
+              2. 调用 ``prepare_network_for_sample`` 把 PC VLAN 网卡切到
+                 ``request.factory_bind_ip / factory_device_host`` 同一网段;
+              3. 调用 ``wait_for_bindable_ip`` 等 Windows 把新 IP 注册为可绑定地址;
+              4. 创建新 TelnetSession 指向工厂模式管理 IP 后返回。
+            失败时 (缺字段 / 切网段失败 / 新建会话失败) 返回 None,pipeline 视作放弃本台。
+            """
+            if not request.factory_bind_ip or not request.factory_device_host:
+                emit_to_main(f"{request.vlan} 工厂模式网段切换：缺少 factory_bind_ip / factory_device_host,放弃本台。")
+                return None
+
+            def swap(old_session):
+                # 关闭旧会话;失败也继续(本来就可能已断)。
+                try:
+                    old_session.close()
+                except Exception as exc:
+                    emit_to_main(f"{request.vlan} 工厂模式网段切换：关闭旧 TelnetSession 异常(忽略):{exc}")
+
+                adapter_alias = self._adapter_alias_for_vlan(request.vlan)
+                subnet_mask = self._subnet_mask_for_vlan(request.vlan)
+                if not adapter_alias:
+                    emit_to_main(f"{request.vlan} 工厂模式网段切换：未找到 VLAN {request.vlan} 的 adapter_alias,放弃本台。")
+                    return None
+                emit_to_main(
+                    f"{request.vlan} 工厂模式网段切换：准备把 {adapter_alias} 设为 {request.factory_bind_ip}（{subnet_mask or '255.255.255.0'}）,"
+                    f"样机目标 {request.factory_device_host}。"
+                )
+                result = prepare_network_for_sample(
+                    adapter_alias,
+                    request.factory_bind_ip,
+                    subnet_mask,
+                    on_output=emit_to_main,
+                    sleep_fn=time.sleep,
+                )
+                if not result.ok:
+                    emit_to_main(f"{request.vlan} 工厂模式网段切换失败：{result.message}")
+                    return None
+                if not _wait_for_bindable_ip(request.factory_bind_ip, timeout_seconds=15.0):
+                    emit_to_main(
+                        f"{request.vlan} 工厂模式网段切换：{request.factory_bind_ip} 仍未成为可绑地址,放弃本台。"
+                    )
+                    return None
+                new_log_path = DEFAULT_LOG_DIR / f"sample_parameter_{request.vlan}_{request.factory_bind_ip}.log"
+                try:
+                    new_session = TelnetSession(
+                        request.factory_bind_ip,
+                        request.factory_device_host,
+                        log_path=new_log_path,
+                        known_secrets=(request.initial_password,),
+                    )
+                except Exception as exc:
+                    emit_to_main(f"{request.vlan} 工厂模式重建 TelnetSession 失败：{exc}")
+                    return None
+                emit_to_main(
+                    f"{request.vlan} 工厂模式重建 TelnetSession 成功（{request.factory_bind_ip} → {request.factory_device_host}）。"
+                )
+                return new_session
+            return swap
 
         results: list[SampleParameterItemResult | None] = [None] * len(requests)
 
@@ -747,8 +913,9 @@ class LineCheckAssistant(Tk):
                         emit_to_main,
                         None,
                         cancel_event,
-                        None,
+                        time.sleep,
                         make_telnet_factory(req),
+                        make_factory_session_swap(req),
                     ): telnet_indices[offset]
                     for offset, req in enumerate(telnet_requests)
                 }
@@ -911,6 +1078,8 @@ class LineCheckAssistant(Tk):
             self.upgrade_username_var,
             self.upgrade_password_var,
             self.upgrade_firmware_var,
+            self.parameter_initial_username_var,
+            self.parameter_initial_password_var,
         ):
             variable.trace_add("write", lambda *_args: self._schedule_sample_upgrade_save())
 
@@ -936,6 +1105,8 @@ class LineCheckAssistant(Tk):
             username=self.upgrade_username_var.get(),
             password=self.upgrade_password_var.get(),
             firmware_path=self.upgrade_firmware_var.get(),
+            parameter_initial_username=self.parameter_initial_username_var.get(),
+            parameter_initial_password=self.parameter_initial_password_var.get(),
         )
 
     def _schedule_sample_upgrade_save(self) -> None:

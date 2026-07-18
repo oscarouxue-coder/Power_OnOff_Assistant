@@ -6,26 +6,33 @@
 调用顺序：
 1) `client.login(user, pass)` 拿到 ubus_rpc_session
 2) bbfdm `get` Device.Firewall.<X_SDMC_>Security.AccessCtrl.Enable 总开关
-3) 如 Enable != "1"：bbfdm `set` {"Enable": "1"}
+3) 如 Enable != "1"：bbfdm `set` {"Enable": "1"}（并校验 results[*].data == "1"）
 4) bbfdm `get` Device.Firewall.<X_SDMC_>Security.AccessCtrl.Rule.{}. — 列出规则
-5) 若存在 Application 含 "telnet" 且 SourceInterface in (lan / both / Device.IP.Interface.1)：
-   - Enable != "True"：`set` 该 X_SDMC_Instance 的 {"Enable": "1"} → 返回 "already_present" 或 "reused"
+5) 若存在 Application 含 "telnet" 且 SourceInterface in (lan / both / Device.IP.Interface.1):
+   - Enable != "True"：`set` 该 X_SDMC_Instance 的 {"Enable": "1"}（并校验 results[*].data == "1"）→ 返回 "reused"
    - 否则返回 "already_present"
-6) 否则 `add` {SourceInterface: "Device.IP.Interface.1", IPVersion: 4, SourceIP: "0.0.0.0", Application: "telnet"}
-7) 失败回退: `add` {SourceInterface: "lan", IPVersion: 4, SourceIP: "0.0.0.0", Application: "telnet"}
+6) 否则 `add` {SourceInterface: "Device.IP.Interface.1", IPVersion: 4, SourceIP: "0.0.0.0", Application: "telnet"}（并校验 results[*].data == "1"）
+7) 失败回退: `add` {SourceInterface: "lan", IPVersion: 4, SourceIP: "0.0.0.0", Application: "telnet"}（并校验 results[*].data == "1"）
+8) 成功路径的最后额外 sleep 1.0 秒,模拟 SdmcUbusLib 现有流程节奏,给防火墙 reload 留时间。
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
 
 from .ubus_http_client import UbusError, UbusHttpClient
 
 
 VENDOR_PREFIX = "X_SDMC_"
+# GET 参数路径:Device.Firewall.<X_SDMC_>Security.AccessCtrl.Enable
 ACCESS_CTRL_ENABLE_PATH = f"Device.Firewall.{VENDOR_PREFIX}Security.AccessCtrl.Enable"
+# SET/ADD 时使用的对象路径(末尾带点):与 SdmcUbusLibEnableTelnet._set_SecurityAccessCtrl_enable
+# 一致。若使用 ACCESS_CTRL_ENABLE_PATH 加 obj_path={"Enable":"1"},bbfdm 会把路径拼成
+# "...AccessCtrl.EnableEnable" 并以 fault 9005 "Invalid parameter name" 拒绝。
+ACCESS_CTRL_ENABLE_OBJECT_PATH = f"Device.Firewall.{VENDOR_PREFIX}Security.AccessCtrl."
 ACCESS_CTRL_RULE_BASE_PATH = f"Device.Firewall.{VENDOR_PREFIX}Security.AccessCtrl.Rule."
 LAN_SOURCE_INTERFACES = ("lan", "both", "Device.IP.Interface.1")
+ENABLE_TELNET_FINAL_SLEEP_SECONDS = 1.0
 
 
 @dataclass(frozen=True)
@@ -38,6 +45,26 @@ class EnableTelnetResult:
 EnableTelnetCallback = Callable[[EnableTelnetResult], None]
 
 
+def _bbfdm_all_results_one(response: Any) -> bool:
+    """校验 bbfdm SET/ADD 响应中 ``results[*].data`` 全部等于 ``"1"``。
+
+    复刻自 ``SdmcUbusLibEnableTelnet._set_SecurityAccessCtrl_enable`` 与
+    ``_add_SecurityAccessCtrlRule`` 的断言:BBFDM 即使 JSON-RPC ``error_code=0``,
+    也可能在 ``results[*].data='0'`` 中给出拒绝;不校验会误判为成功。
+    """
+    if not isinstance(response, list) or len(response) < 2:
+        return False
+    payload = response[1]
+    if not isinstance(payload, dict):
+        return False
+    results = payload.get("results")
+    if not isinstance(results, list) or not results:
+        return False
+    return all(
+        isinstance(item, dict) and item.get("data") == "1" for item in results
+    )
+
+
 def enable_telnet_via_ubus(
     client: UbusHttpClient,
     username: str,
@@ -47,7 +74,7 @@ def enable_telnet_via_ubus(
     sleep_fn: Callable[[float], None] = __import__("time").sleep,
     sleep_after_seconds: float = 1.5,
 ) -> EnableTelnetResult:
-    """对一台样机执行\"启用 telnet\"的 UBUS 流程。失败抛 UbusError 由调用方决定是否单台跳过。"""
+    """对一台样机执行"启用 telnet"的 UBUS 流程。失败抛 UbusError 由调用方决定是否单台跳过。"""
     if on_log is not None:
         on_log(EnableTelnetResult(True, "started", "已发起 UBUS 启用 telnet 流程"))
 
@@ -63,12 +90,14 @@ def enable_telnet_via_ubus(
             if isinstance(inner, dict):
                 enable_state = inner.get("Enable")
         if enable_state != "1":
-            client.bbfdm_set(session_id, ACCESS_CTRL_ENABLE_PATH, {"Enable": "1"})
+            set_response = client.bbfdm_set(session_id, ACCESS_CTRL_ENABLE_OBJECT_PATH, {"Enable": "1"})
+            if not _bbfdm_all_results_one(set_response):
+                raise UbusError(f"UBUS 设置访问控制总开关失败,响应 {set_response}")
             if on_log is not None:
                 on_log(EnableTelnetResult(True, "set_total_enable", "AccessCtrl 总开关开启"))
     except UbusError as exc:
         if on_log is not None:
-            on_log(EnableTelnetResult(False, "get_total_enable_failed", f"获取访问规则总开关失败：{exc}"))
+            on_log(EnableTelnetResult(False, "get_total_enable_failed", f"获取访问规则总开关失败:{exc}"))
         raise
 
     # 3) 检查已有 telnet 规则
@@ -76,7 +105,7 @@ def enable_telnet_via_ubus(
         result_rule = client.bbfdm_get(session_id, ACCESS_CTRL_RULE_BASE_PATH)
     except UbusError as exc:
         if on_log is not None:
-            on_log(EnableTelnetResult(False, "get_rule_failed", f"获取访问控制规则失败：{exc}"))
+            on_log(EnableTelnetResult(False, "get_rule_failed", f"获取访问控制规则失败:{exc}"))
         raise
 
     rules_payload: list = []
@@ -96,23 +125,29 @@ def enable_telnet_via_ubus(
             continue
         enable_flag = rule.get("Enable", "True")
         x_sdmc_instance = rule.get("X_SDMC_Instance", "")
+        result: EnableTelnetResult
         if enable_flag != "True":
-            client.bbfdm_set(
+            set_response = client.bbfdm_set(
                 session_id,
                 f"{ACCESS_CTRL_RULE_BASE_PATH}{x_sdmc_instance}.",
                 {"Enable": "1"},
             )
+            if not _bbfdm_all_results_one(set_response):
+                raise UbusError(f"UBUS 开启 LAN-telnet 规则失败,响应 {set_response}")
             if on_log is not None:
                 on_log(EnableTelnetResult(True, "reused", f"已开启 LAN-telnet 规则 Enable (instance={x_sdmc_instance})"))
+            result = EnableTelnetResult(True, "reused", "LAN-telnet 规则已开启")
         else:
             if on_log is not None:
                 on_log(EnableTelnetResult(True, "already_present", "LAN-telnet 规则已启用"))
+            result = EnableTelnetResult(True, "already_present", "LAN-telnet 规则已就绪")
         sleep_fn(sleep_after_seconds)
-        return EnableTelnetResult(True, "already_present", "LAN-telnet 规则已就绪")
+        sleep_fn(ENABLE_TELNET_FINAL_SLEEP_SECONDS)
+        return result
 
     # 4) 没有规则: add Device.IP.Interface.1（默认）
     try:
-        client.bbfdm_add(
+        add_response = client.bbfdm_add(
             session_id,
             ACCESS_CTRL_RULE_BASE_PATH,
             {
@@ -122,13 +157,16 @@ def enable_telnet_via_ubus(
                 "Application": "telnet",
             },
         )
+        if not _bbfdm_all_results_one(add_response):
+            raise UbusError(f"UBUS 添加 telnet 规则 (Device.IP.Interface.1) 失败,响应 {add_response}")
         sleep_fn(sleep_after_seconds)
+        sleep_fn(ENABLE_TELNET_FINAL_SLEEP_SECONDS)
         if on_log is not None:
             on_log(EnableTelnetResult(True, "added_iface", "已添加 Device.IP.Interface.1 telnet 规则"))
         return EnableTelnetResult(True, "added_iface", "已添加 telnet 规则")
     except UbusError:
         # 回退到 lan
-        client.bbfdm_add(
+        add_response = client.bbfdm_add(
             session_id,
             ACCESS_CTRL_RULE_BASE_PATH,
             {
@@ -138,7 +176,10 @@ def enable_telnet_via_ubus(
                 "Application": "telnet",
             },
         )
+        if not _bbfdm_all_results_one(add_response):
+            raise UbusError(f"UBUS 添加 telnet 规则 (lan 回退) 失败,响应 {add_response}")
         sleep_fn(sleep_after_seconds)
+        sleep_fn(ENABLE_TELNET_FINAL_SLEEP_SECONDS)
         if on_log is not None:
             on_log(EnableTelnetResult(True, "added_lan_fallback", "Device.IP.Interface.1 失败,回退添加 lan telnet 规则"))
         return EnableTelnetResult(True, "added_lan_fallback", "已通过 lan 回退添加 telnet 规则")

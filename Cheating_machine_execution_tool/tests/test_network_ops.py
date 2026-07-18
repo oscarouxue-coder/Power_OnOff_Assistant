@@ -10,6 +10,8 @@ from line_check_assistant.network_ops import (
     build_onu_registration_commands,
     check_telnet_connection,
     enable_adapter,
+    factory_bind_ip_for,
+    factory_device_host_for,
     login_olt_and_enter_global_mode,
     parse_registered_onu_states,
     ping_host,
@@ -65,6 +67,47 @@ class StaticIpForVlanTests(unittest.TestCase):
     def test_rejects_invalid_device_ip(self):
         with self.assertRaisesRegex(ValueError, "样机管理 IP"):
             static_ip_for_vlan("VLAN108", "192.168.1")
+
+
+class FactoryModeIpDerivationTests(unittest.TestCase):
+    """工厂模式 IP 派生:第 3 段 → 29,主机位保持不变。"""
+
+    def test_factory_bind_ip_swaps_third_octet_to_29(self):
+        # VLAN114 常见场景:network_card_ip=192.168.1.114 → factory_bind_ip=192.168.29.114
+        self.assertEqual(factory_bind_ip_for("192.168.1.114"), "192.168.29.114")
+
+    def test_factory_device_host_swaps_third_octet_to_29(self):
+        # device_manage_ip=192.168.1.1 → factory_device_host=192.168.29.1
+        self.assertEqual(factory_device_host_for("192.168.1.1"), "192.168.29.1")
+
+    def test_factory_bind_ip_preserves_unusual_subnets(self):
+        # 非 192.168.1.x 子网也应派生:10.20.30.50 → 10.20.29.50
+        self.assertEqual(factory_bind_ip_for("10.20.30.50"), "10.20.29.50")
+        self.assertEqual(factory_device_host_for("172.16.5.10"), "172.16.29.10")
+
+    def test_factory_bind_ip_returns_empty_for_empty_input(self):
+        self.assertEqual(factory_bind_ip_for(""), "")
+        self.assertEqual(factory_bind_ip_for("   "), "")
+        self.assertEqual(factory_bind_ip_for(None), "")
+
+    def test_factory_device_host_returns_empty_for_empty_input(self):
+        self.assertEqual(factory_device_host_for(""), "")
+        self.assertEqual(factory_device_host_for("   "), "")
+        self.assertEqual(factory_device_host_for(None), "")
+
+    def test_factory_bind_ip_returns_empty_for_invalid_ip(self):
+        self.assertEqual(factory_bind_ip_for("192.168.1"), "")
+        self.assertEqual(factory_bind_ip_for("192.168.1.114.5"), "")
+        self.assertEqual(factory_bind_ip_for("not-an-ip"), "")
+        self.assertEqual(factory_bind_ip_for("256.0.0.1"), "")
+
+    def test_factory_device_host_returns_empty_for_invalid_ip(self):
+        self.assertEqual(factory_device_host_for("192.168.1"), "")
+        self.assertEqual(factory_device_host_for("not-an-ip"), "")
+
+    def test_factory_bind_ip_rejects_leading_zeros(self):
+        # Python ipaddress.IPv4Address 出于安全考虑拒绝前导零,与 inet_aton 行为一致
+        self.assertEqual(factory_bind_ip_for("192.168.001.114"), "")
 
 
 class PingHostTests(unittest.TestCase):

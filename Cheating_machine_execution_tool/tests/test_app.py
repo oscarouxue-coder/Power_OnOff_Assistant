@@ -450,6 +450,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_username_var=Mock(get=Mock(return_value="root")),
             upgrade_password_var=Mock(get=Mock(return_value="secret")),
             upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\tclinux_allinone")),
+            parameter_initial_username_var=Mock(get=Mock(return_value="param-root")),
+            parameter_initial_password_var=Mock(get=Mock(return_value="param-secret")),
         )
 
         settings = LineCheckAssistant._current_sample_upgrade_settings(context)
@@ -465,6 +467,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
                 username="root",
                 password="secret",
                 firmware_path=r"F:\firmware\tclinux_allinone",
+                parameter_initial_username="param-root",
+                parameter_initial_password="param-secret",
             ),
         )
 
@@ -478,6 +482,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_username_var=Mock(get=Mock(return_value="root")),
             upgrade_password_var=Mock(get=Mock(return_value="secret")),
             upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\tclinux_allinone")),
+            parameter_initial_username_var=Mock(get=Mock(return_value="")),
+            parameter_initial_password_var=Mock(get=Mock(return_value="")),
         )
 
         settings = LineCheckAssistant._current_sample_upgrade_settings(context)

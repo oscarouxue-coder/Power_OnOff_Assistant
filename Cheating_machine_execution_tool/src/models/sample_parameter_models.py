@@ -60,6 +60,10 @@ class SampleParameterWriteRequest:
     bind_ip: str = ""
     device_host: str = ""
     ubus_port: int = 80
+    # 工厂模式第二次登录所需的网络切换字段(样机进入工厂模式重启后管理 IP 切到另一网段);
+    # telnet 路径下必备。串口路径可填空,service 层不消费。
+    factory_bind_ip: str = ""
+    factory_device_host: str = ""
 
 
 @dataclass(frozen=True)

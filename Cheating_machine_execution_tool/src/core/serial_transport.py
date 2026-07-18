@@ -115,7 +115,7 @@ class PySerialSession:
                     flush()
         except Exception as exc:
             raise RuntimeError(f"向串口 {self.settings.port} 发送失败：{exc}") from exc
-        self._emit("TX", data, "[敏感内容已隐藏]" if sensitive else self._display(data), sensitive=sensitive)
+        self._emit("TX", data, self._display(data), sensitive=sensitive)
 
     def send_line(self, text: str, sensitive: bool = False) -> None:
         self.write(text.encode("utf-8") + b"\r", sensitive=sensitive)
@@ -195,12 +195,8 @@ class PySerialSession:
             self._emit("RX", data, self._display(data))
 
     def _display(self, data: bytes) -> str:
-        text = data.decode("utf-8", errors="replace")
-        for secret in self._known_secrets:
-            decoded = secret.decode("utf-8", errors="ignore")
-            if decoded:
-                text = text.replace(decoded, "[敏感内容已隐藏]")
-        return text
+        # 操作员要求明文显示所有下发/回显内容,不再按 known_secrets 脱敏。
+        return data.decode("utf-8", errors="replace")
 
     def _emit(self, direction: str, data: bytes, text: str, sensitive: bool = False) -> None:
         event = SerialEvent(self.settings.port, direction, data, text, sensitive)

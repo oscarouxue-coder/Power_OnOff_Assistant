@@ -19,6 +19,11 @@ class ChannelConfig:
     network_card_ip: str = ""
     device_manage_ip: str = ""
     subnet_mask: str = DEFAULT_SUBNET_MASK
+    # 样机进入工厂模式（ppctl set FACTORY_MODE=1 + firstboot -yr 重启之后），
+    # 管理 IP 会切到另一网段（例如 192.168.29.1），PC 端 VLAN 网卡也需要切到该网段。
+    # telnet 写参必须配置这两个字段；缺失则在启动批量写参时被预校验拒绝。
+    factory_device_host: str = ""
+    factory_bind_ip: str = ""
     enabled: bool = True
 
     @property
@@ -47,6 +52,8 @@ class ChannelConfigStore:
                     network_card_ip=parser.get(section, "network_card_ip", fallback=""),
                     device_manage_ip=parser.get(section, "device_manage_ip", fallback=""),
                     subnet_mask=parser.get(section, "subnet_mask", fallback=DEFAULT_SUBNET_MASK),
+                    factory_device_host=parser.get(section, "factory_device_host", fallback=""),
+                    factory_bind_ip=parser.get(section, "factory_bind_ip", fallback=""),
                     enabled=parser.getboolean(section, "enabled", fallback=True),
                 )
             )
@@ -73,6 +80,8 @@ class ChannelConfigStore:
                 "network_card_ip": channel.network_card_ip,
                 "device_manage_ip": channel.device_manage_ip,
                 "subnet_mask": channel.subnet_mask or DEFAULT_SUBNET_MASK,
+                "factory_device_host": channel.factory_device_host,
+                "factory_bind_ip": channel.factory_bind_ip,
                 "enabled": "1" if channel.enabled else "0",
             }
 

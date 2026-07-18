@@ -40,6 +40,9 @@ class SampleUpgradeSettings:
     username: str = ""
     password: str = ""
     firmware_path: str = ""
+    # 写样机参数窗口的「首次登录账号 / 密码」,独立于升级超级凭据,但落到同一 ini 文件,方便现场单点维护。
+    parameter_initial_username: str = ""
+    parameter_initial_password: str = ""
 
 
 class SampleUpgradeSettingsStore:
@@ -62,6 +65,8 @@ class SampleUpgradeSettingsStore:
             username=parser.get(SAMPLE_UPGRADE_SECTION, "username", fallback=""),
             password=parser.get(SAMPLE_UPGRADE_SECTION, "password", fallback=""),
             firmware_path=parser.get(SAMPLE_UPGRADE_SECTION, "firmware_path", fallback=""),
+            parameter_initial_username=parser.get(SAMPLE_UPGRADE_SECTION, "parameter_initial_username", fallback=""),
+            parameter_initial_password=parser.get(SAMPLE_UPGRADE_SECTION, "parameter_initial_password", fallback=""),
         )
 
     def save(self, settings: SampleUpgradeSettings) -> None:
@@ -76,6 +81,8 @@ class SampleUpgradeSettingsStore:
             "username": settings.username or "",
             "password": settings.password or "",
             "firmware_path": settings.firmware_path or "",
+            "parameter_initial_username": settings.parameter_initial_username or "",
+            "parameter_initial_password": settings.parameter_initial_password or "",
         }
 
         self.config_path.parent.mkdir(parents=True, exist_ok=True)

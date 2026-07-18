@@ -216,15 +216,12 @@ class TelnetSession:
             self._log_handle = None
 
     def _display(self, data: bytes) -> str:
-        text = data.decode("utf-8", errors="replace")
-        for secret in self._known_secrets:
-            decoded = secret.decode("utf-8", errors="ignore")
-            if decoded:
-                text = text.replace(decoded, "[敏感内容已隐藏]")
-        return text
+        # 操作员要求明文显示所有下发/回显内容,不再按 known_secrets 脱敏。
+        return data.decode("utf-8", errors="replace")
 
     def _emit(self, direction: bytes, data: bytes, sensitive: bool = False) -> None:
-        text = "[敏感内容已隐藏]" if sensitive else self._display(data)
+        # ``sensitive`` 形参保留以兼容既有调用方;按操作员要求一律明文。
+        text = self._display(data)
         if self._log_handle is not None:
             try:
                 timestamp = time.strftime("[%Y-%m-%d %H:%M:%S] ")

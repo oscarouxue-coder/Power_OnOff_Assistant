@@ -31,6 +31,8 @@ class SampleUpgradeSettingsStoreTests(unittest.TestCase):
             self.assertEqual(settings.username, "")
             self.assertEqual(settings.password, "")
             self.assertEqual(settings.firmware_path, "")
+            self.assertEqual(settings.parameter_initial_username, "")
+            self.assertEqual(settings.parameter_initial_password, "")
 
     def test_save_and_load_preserves_last_closed_inputs(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -43,12 +45,54 @@ class SampleUpgradeSettingsStoreTests(unittest.TestCase):
                 username="root",
                 password="secret",
                 firmware_path=r"F:\firmware\tclinux_allinone",
+                parameter_initial_username="telecomadmin",
+                parameter_initial_password="nE7jA%5m",
             )
 
             store.save(saved)
             loaded = store.load()
 
             self.assertEqual(loaded, saved)
+
+    def test_save_and_load_preserves_parameter_initial_credentials(self):
+        # 写样机参数窗口的「首次登录账号 / 密码」独立 key,与升级超级凭据不混淆。
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = SampleUpgradeSettingsStore(Path(temp_dir) / "sample_upgrade_settings.ini")
+            saved = SampleUpgradeSettings(
+                username="root",
+                password="upgrade-secret",
+                parameter_initial_username="telecomadmin",
+                parameter_initial_password="nE7jA%5m",
+            )
+
+            store.save(saved)
+            loaded = store.load()
+
+            self.assertEqual(loaded.parameter_initial_username, "telecomadmin")
+            self.assertEqual(loaded.parameter_initial_password, "nE7jA%5m")
+            # 与升级超级凭据分开存放。
+            self.assertEqual(loaded.username, "root")
+            self.assertEqual(loaded.password, "upgrade-secret")
+
+    def test_load_missing_parameter_initial_keys_defaults_to_empty(self):
+        # 兼容旧 ini(尚未存盘过 parameter_initial_*):缺字段回退空字符串。
+        from configparser import RawConfigParser
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "sample_upgrade_settings.ini"
+            parser = RawConfigParser()
+            parser.optionxform = str
+            parser["sample_upgrade"] = {
+                "username": "root",
+                "password": "secret",
+            }
+            config_path.write_text("", encoding="utf-8") if False else None
+            with config_path.open("w", encoding="utf-8") as file:
+                parser.write(file)
+
+            loaded = SampleUpgradeSettingsStore(config_path).load()
+            self.assertEqual(loaded.parameter_initial_username, "")
+            self.assertEqual(loaded.parameter_initial_password, "")
 
     def test_save_and_load_preserves_percent_characters(self):
         with tempfile.TemporaryDirectory() as temp_dir:
