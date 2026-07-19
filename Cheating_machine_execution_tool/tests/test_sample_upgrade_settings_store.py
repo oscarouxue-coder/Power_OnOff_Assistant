@@ -6,6 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from line_check_assistant.sample_upgrade_settings_store import (
+    DEFAULT_PARAMETER_PARALLEL_COUNT,
     DEFAULT_PARALLEL_COUNT,
     DEFAULT_UPGRADE_EXECUTION_MODE,
     DEFAULT_UPGRADE_MODE,
@@ -130,6 +131,59 @@ class SampleUpgradeSettingsStoreTests(unittest.TestCase):
                 (None, DEFAULT_PARALLEL_COUNT),
             ):
                 self.assertEqual(clamp_parallel_count(raw), expected, f"raw={raw!r}")
+
+    def test_save_and_load_preserves_parameter_clear_and_exit_aging(self):
+        # 2026-07-19:写样机参数流水线新增 clear_parameters / exit_aging 两个 bool,
+        # 独立存读,与升级 restore_factory / parameter_initial_* 不混淆。
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = SampleUpgradeSettingsStore(Path(temp_dir) / "sample_upgrade_settings.ini")
+            saved = SampleUpgradeSettings(
+                parameter_initial_username="telecomadmin",
+                parameter_initial_password="nE7jA%5m",
+                parameter_clear_parameters=True,
+                parameter_exit_aging=True,
+            )
+
+            store.save(saved)
+            loaded = store.load()
+
+            self.assertTrue(loaded.parameter_clear_parameters)
+            self.assertTrue(loaded.parameter_exit_aging)
+            # 升级凭据未被覆盖
+            self.assertEqual(loaded.parameter_initial_username, "telecomadmin")
+            self.assertEqual(loaded.parameter_initial_password, "nE7jA%5m")
+
+    def test_load_missing_parameter_clear_and_exit_aging_keys_defaults_to_false(self):
+        # 兼容旧 ini(尚未存盘过 parameter_clear_*/exit_aging*):缺字段回退到 False,
+        # 与既有 parameter_initial_* 的 fallback 策略一致。
+        from configparser import RawConfigParser
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "sample_upgrade_settings.ini"
+            parser = RawConfigParser()
+            parser.optionxform = str
+            parser["sample_upgrade"] = {
+                "username": "root",
+                "password": "secret",
+                "parameter_initial_username": "telecomadmin",
+                "parameter_initial_password": "nE7jA%5m",
+            }
+            with config_path.open("w", encoding="utf-8") as file:
+                parser.write(file)
+
+            loaded = SampleUpgradeSettingsStore(config_path).load()
+            self.assertFalse(loaded.parameter_clear_parameters)
+            self.assertFalse(loaded.parameter_exit_aging)
+            # parameter_initial_* 字段仍能正常读出
+            self.assertEqual(loaded.parameter_initial_username, "telecomadmin")
+            self.assertEqual(loaded.parameter_initial_password, "nE7jA%5m")
+
+    def test_default_parameter_parallel_count_is_one(self):
+        # 2026-07-19 用户要求:写样机参数默认并行数从 2 改为 1。
+        # 锁定常量本身,避免后续被改回;同时确认升级窗口的 DEFAULT_PARALLEL_COUNT
+        # 仍保持 2,两个默认值不互相污染。
+        self.assertEqual(DEFAULT_PARAMETER_PARALLEL_COUNT, 1)
+        self.assertEqual(DEFAULT_PARALLEL_COUNT, 2)
 
 
 if __name__ == "__main__":

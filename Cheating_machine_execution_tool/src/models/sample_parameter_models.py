@@ -64,6 +64,13 @@ class SampleParameterWriteRequest:
     # telnet 路径下必备。串口路径可填空,service 层不消费。
     factory_bind_ip: str = ""
     factory_device_host: str = ""
+    # 写参流水线可选行为(2026-07-19):
+    #   clear_parameters=True → 工厂模式二次登录成功后下发 ppctl clear(默认 False,避免误清空)
+    #   exit_aging=True      → 二次登录成功后、下一个命令之前下发 ppctl set AGING_STATE=1
+    #                          (默认 False,正常老化测试默认关闭)
+    # 两个命令默认关闭,由主界面 Checkbutton 控制。
+    clear_parameters: bool = False
+    exit_aging: bool = False
 
 
 @dataclass(frozen=True)

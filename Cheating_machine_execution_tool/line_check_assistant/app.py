@@ -27,6 +27,7 @@ from .onu_registration_store import DEFAULT_OLT_IP, OnuRegistrationConfig, OnuRe
 from .page_upgrade import PageUpgradeRequest, run_page_upgrade_batch
 from .paths import resolve_config_dir, resolve_tool_root
 from .sample_upgrade_settings_store import (
+    DEFAULT_PARAMETER_PARALLEL_COUNT,
     DEFAULT_PARALLEL_COUNT,
     DEFAULT_UPGRADE_EXECUTION_MODE,
     DEFAULT_UPGRADE_MODE,
@@ -195,6 +196,10 @@ class LineCheckAssistant(Tk):
         # 与升级超级凭据分两个独立 key;作为主程序实例变量持久存在,值变更通过 trace_add 自动写盘。
         self.parameter_initial_username_var = StringVar(value=self.sample_upgrade_settings.parameter_initial_username)
         self.parameter_initial_password_var = StringVar(value=self.sample_upgrade_settings.parameter_initial_password)
+        # 写样机参数流水线两个可选行为(2026-07-19):清空参数 / 退出老化,
+        # 默认关闭,操作员勾选后下次写参时下发对应命令。
+        self.parameter_clear_parameters_var = BooleanVar(value=self.sample_upgrade_settings.parameter_clear_parameters)
+        self.parameter_exit_aging_var = BooleanVar(value=self.sample_upgrade_settings.parameter_exit_aging)
         self._bind_sample_upgrade_autosave()
         LOG_DIR.mkdir(exist_ok=True)
         self.log_path = LOG_DIR / f"line_check_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
@@ -480,7 +485,9 @@ class LineCheckAssistant(Tk):
         self.parameter_table_var = StringVar()
         # 写样机参数窗口的「首次登录账号 / 密码」直接复用主程序实例级 StringVar,
         # 由 ``__init__`` 阶段从 sample_upgrade_settings.ini 加载,值变更经 trace_add 自动写盘。
-        self.parameter_parallel_count_var = IntVar(value=DEFAULT_PARALLEL_COUNT)
+        # 写样机参数默认并行 1(2026-07-19 用户要求):多台并发容易撞 UBUS HTTP / telnet login / NIC,
+        # 默认串行更稳;Spinbox 仍允许 1–8 现场上调。升级窗口的 parallel_count 仍走 DEFAULT_PARALLEL_COUNT=2。
+        self.parameter_parallel_count_var = IntVar(value=DEFAULT_PARAMETER_PARALLEL_COUNT)
         self.parameter_status_var = StringVar(value="请选择或生成参数表。")
 
         container = ttk.Frame(dialog, padding=14)
@@ -501,7 +508,14 @@ class LineCheckAssistant(Tk):
         ttk.Label(credential_row, text="并行数：").pack(side="left")
         parallel_spinbox = ttk.Spinbox(credential_row, from_=1, to=PARAMETER_MAX_PARALLEL, textvariable=self.parameter_parallel_count_var, width=5)
         parallel_spinbox.pack(side="left", padx=(6, 0))
-        ttk.Label(credential_row, text=f"（1–{PARAMETER_MAX_PARALLEL} 台，默认 {DEFAULT_PARALLEL_COUNT}）", style="CardHint.TLabel").pack(side="left", padx=(6, 0))
+        ttk.Label(credential_row, text=f"（1–{PARAMETER_MAX_PARALLEL} 台，默认 {DEFAULT_PARAMETER_PARALLEL_COUNT}）", style="CardHint.TLabel").pack(side="left", padx=(6, 0))
+
+        # 写样机参数流水线两个可选行为(2026-07-19):勾选后才下发,默认关闭。
+        option_row = ttk.Frame(container)
+        option_row.pack(fill="x", pady=(0, 8))
+        ttk.Checkbutton(option_row, text="清空参数", variable=self.parameter_clear_parameters_var).pack(side="left")
+        ttk.Checkbutton(option_row, text="退出老化", variable=self.parameter_exit_aging_var).pack(side="left", padx=(16, 0))
+        ttk.Label(option_row, text="（勾选后,工厂模式二次登录成功时下发对应命令；不勾选则下发跳过日志）", style="CardHint.TLabel").pack(side="left", padx=(12, 0))
 
         ttk.Label(container, text="本次目标与预检结果", style="CardTitle.TLabel").pack(anchor="w", pady=(4, 4))
         self.parameter_preview_text = Text(container, height=17, wrap="word", state="disabled", background=COLOR_LOG_BG)
@@ -660,7 +674,7 @@ class LineCheckAssistant(Tk):
         try:
             parallel_count = max(1, min(int(self.parameter_parallel_count_var.get()), PARAMETER_MAX_PARALLEL))
         except (TypeError, ValueError):
-            parallel_count = DEFAULT_PARALLEL_COUNT
+            parallel_count = DEFAULT_PARAMETER_PARALLEL_COUNT
         target_text = "\n".join(f"- {target.vlan} / {target.serial_port} / MAC:{target.record.values.get('MAC', '')}" for target in preflight.targets)
         # 配置冲突预检(2026-07-18):bind_ip 与 device_host 相同 → PC 把自己作为目标连接,
         # TCP 必然 timed out(典型表现 VLAN110/111 报「Telnet 连接失败 192.168.1.110:23 源 IP 192.168.1.110:timed out」)。
@@ -708,11 +722,36 @@ class LineCheckAssistant(Tk):
                     parent=self.parameter_writer_window,
                 )
                 return
+        # 写样机参数可选行为(2026-07-19):确认框描述按 9 步自然顺序生成,
+        # 严格匹配 sample_parameter_service.run_parameter_write_pipeline 实际下发顺序,
+        # 避免描述与现场实际下发的命令列表不符。勾选的可选项打勾并显示命令,
+        # 未勾选的可选项明确标注"[跳过]"便于操作员一眼分辨。
+        clear_enabled = bool(self.parameter_clear_parameters_var.get())
+        aging_enabled = bool(self.parameter_exit_aging_var.get())
+        action_lines = [
+            "1. 进入工厂模式（ppctl set FACTORY_MODE=1）",
+            "2. firstboot -yr",
+            "3. 等待 100 秒",
+            "4. 工厂模式二次登录（root / 工厂密码）",
+        ]
+        if aging_enabled:
+            action_lines.append("5. 下发退出老化命令（ppctl set AGING_STATE=1）")
+        else:
+            action_lines.append("5. [跳过] 退出老化命令")
+        if clear_enabled:
+            action_lines.append("6. 下发 ppctl clear")
+        else:
+            action_lines.append("6. [跳过] ppctl clear")
+        action_lines.extend([
+            "7. 写入并读回校验全部 15 项参数",
+            "8. 退出工厂模式（ppctl set FACTORY_MODE=0）",
+            "9. firstboot -yr",
+        ])
+        action_summary = "\n".join(action_lines)
         if not messagebox.askyesno(
             "确认批量写样机参数",
             f"将并行写入 {len(preflight.targets)} 台样机（最多 {parallel_count} 台）：\n{target_text}\n\n"
-            "每台会依次下发 ppctl clear、进入工厂模式、firstboot -yr 重启、写入并读回校验全部参数，"
-            "最后退出工厂模式并再次 firstboot -yr 重启。\n\n是否继续？",
+            f"每台会依次：\n{action_summary}\n\n是否继续？",
             parent=self.parameter_writer_window,
         ):
             return
@@ -728,6 +767,8 @@ class LineCheckAssistant(Tk):
                 ubus_port=80,
                 factory_bind_ip=self._factory_bind_ip_for_vlan(target.vlan),
                 factory_device_host=self._factory_device_host_for_vlan(target.vlan),
+                clear_parameters=clear_enabled,
+                exit_aging=aging_enabled,
             )
             for target in preflight.targets
         ]
@@ -1006,7 +1047,7 @@ class LineCheckAssistant(Tk):
             "XPON SN 前缀": StringVar(value="XPON"),
             "2.4G SSID 前缀": StringVar(value="Test24G"),
             "5G SSID 前缀": StringVar(value="Test5G"),
-            "随机后缀长度": StringVar(value="8"),
+            "SN/GPON SN 随机后缀长度": StringVar(value="8"),
             "2.4G WiFi Password": StringVar(),
             "5G WiFi Password": StringVar(),
             "2.4G Country Code": StringVar(value="CN"),
@@ -1027,7 +1068,7 @@ class LineCheckAssistant(Tk):
 
         def generate_and_save() -> None:
             try:
-                suffix_length = int(fields["随机后缀长度"].get().strip())
+                suffix_length = int(fields["SN/GPON SN 随机后缀长度"].get().strip())
                 fixed_values = {
                     column: fields[column].get()
                     for column in (
@@ -1107,6 +1148,8 @@ class LineCheckAssistant(Tk):
             self.upgrade_firmware_var,
             self.parameter_initial_username_var,
             self.parameter_initial_password_var,
+            self.parameter_clear_parameters_var,
+            self.parameter_exit_aging_var,
         ):
             variable.trace_add("write", lambda *_args: self._schedule_sample_upgrade_save())
 
@@ -1134,6 +1177,8 @@ class LineCheckAssistant(Tk):
             firmware_path=self.upgrade_firmware_var.get(),
             parameter_initial_username=self.parameter_initial_username_var.get(),
             parameter_initial_password=self.parameter_initial_password_var.get(),
+            parameter_clear_parameters=bool(self.parameter_clear_parameters_var.get()),
+            parameter_exit_aging=bool(self.parameter_exit_aging_var.get()),
         )
 
     def _schedule_sample_upgrade_save(self) -> None:

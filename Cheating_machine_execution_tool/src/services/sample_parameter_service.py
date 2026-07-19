@@ -212,12 +212,20 @@ def run_parameter_write_pipeline(
 ) -> SampleParameterItemResult:
     """对已打开的 ParameterSession 执行一次写样机参数的完整流水线。
 
-    流水线:
-        首次登录 → FACTORY_MODE=1 → firstboot -yr
-        → 等 100 秒 → （可选 factory_session_swap：切网段 + 新 session）
-        → 工厂模式二次登录 → ppctl clear → 15 项 ppctl set/get
-        → FACTORY_MODE=0 + firstboot -yr（在 finally 中执行）
+    流水线(2026-07-19 优化):
+        首次登录
+        → 1. 进入工厂模式（ppctl set FACTORY_MODE=1）
+        → 2. firstboot -yr
+        → 3. 等待 100 秒
+        → 4. 工厂模式二次登录（root / 工厂密码）
+        → 5. 下发退出老化命令（ppctl set AGING_STATE=1,仅当 request.exit_aging=True）
+        → 6. 下发 ppctl clear（仅当 request.clear_parameters=True）
+        → 7. 写入并读回校验全部 15 项参数
+        → 8. 退出工厂模式（ppctl set FACTORY_MODE=0,在 finally 中执行）
+        → 9. firstboot -yr（在 finally 中执行）
 
+    注:步骤 3 等待 100 秒后,若调用方传入 ``factory_session_swap``,会在 4 之前
+    切网段并返回新 session(对应 telnet 路径 192.168.1.x → 192.168.29.x 切换)。
     不关心 session 是 PySerial 还是 Telnet；会话生命周期由调用方管理。
     """
     entered_factory = False
@@ -255,9 +263,19 @@ def run_parameter_write_pipeline(
             emit(f"{request.vlan} 写参：工厂模式网络切换完成,继续工厂模式二次登录。")
         if not _login(session, FACTORY_USERNAME, FACTORY_PASSWORD, cancel, sleep_fn):
             return SampleParameterItemResult(request, False, f"{request.vlan} 写参失败：工厂模式二次登录失败。")
-        # 二次登录成功后才下发 ppctl clear:清理工厂模式重启后可能残留的临时参数,
-        # 然后再写 15 项 ppctl set/get。
-        _send_stage(session, "ppctl clear", False, emit, request.vlan)
+        # 二次登录成功后,按用户选项决定是否下发两个准备命令。
+        # 顺序:退出老化 → 清空参数 → 15 项 ppctl set/get。
+        # 两者都关闭时主执行日志分别输出「关闭，跳过」,与项目规则 12 一致。
+        # ``getattr`` 兜底以兼容未声明这两字段的旧 SampleParameterWriteRequest 实例。
+        if getattr(request, "exit_aging", False):
+            _send_stage(session, "ppctl set AGING_STATE=1", False, emit, request.vlan)
+            emit(f"{request.vlan} 写参：已下发退出老化命令。")
+        else:
+            emit(f"{request.vlan} 写参：退出老化：关闭，跳过。")
+        if getattr(request, "clear_parameters", False):
+            _send_stage(session, "ppctl clear", False, emit, request.vlan)
+        else:
+            emit(f"{request.vlan} 写参：清空参数：关闭，跳过。")
         written = 0
         failed_labels: list[str] = []
         for definition in STANDARD_PARAMETER_DEFINITIONS:

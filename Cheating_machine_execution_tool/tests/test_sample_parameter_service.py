@@ -135,9 +135,14 @@ class SampleParameterServiceTests(unittest.TestCase):
     def test_ppctl_clear_runs_after_factory_relogin_not_before(self):
         # 用户纠正:ppctl clear 应该在工厂模式二次登录之后、15 项 set/get 之前,
         # 而不是首次登录之后、进入工厂模式之前。
+        # 2026-07-19 起 clear_parameters 默认 False → 本测试需显式传 True 才能
+        # 验证 ppctl clear 的下发时机(已不是默认行为)。
         session = FakeSession()
         manager = FakeManager(session)
-        request = SampleParameterWriteRequest("vlan101", "COM1", "root", "initial-secret", values())
+        request = SampleParameterWriteRequest(
+            "vlan101", "COM1", "root", "initial-secret", values(),
+            clear_parameters=True,
+        )
         result = run_single_sample_parameter_write(request, manager, sleep_fn=lambda _seconds: None)
         self.assertTrue(result.ok, result.message)
         writes = [text for text, _ in session.writes if isinstance(text, str)]
@@ -156,6 +161,7 @@ class SampleParameterServiceTests(unittest.TestCase):
 
     def test_factory_session_swap_returns_none_abandons_before_second_login(self):
         # session_swap 返回 None → pipeline 在二次登录前放弃本台。
+        # 显式传 clear_parameters=True 以保留"放弃时不发 ppctl clear"的原始测试意图。
         old_session = FakeSession()
         swap_calls: list = []
 
@@ -168,6 +174,7 @@ class SampleParameterServiceTests(unittest.TestCase):
             "vlan101", "COM1", "root", "initial-secret", values(),
             factory_bind_ip="192.168.29.101",
             factory_device_host="192.168.29.1",
+            clear_parameters=True,
         )
         messages: list = []
         result = run_parameter_write_pipeline(
@@ -221,6 +228,7 @@ class SampleParameterServiceTests(unittest.TestCase):
             "vlan101", "COM1", "root", "initial-secret", values(),
             factory_bind_ip="192.168.29.101",
             factory_device_host="192.168.29.1",
+            clear_parameters=True,
         )
 
         def telnet_factory(_r):
@@ -416,3 +424,121 @@ class SampleParameterServiceCleanupFailureTests(unittest.TestCase):
             any("请人工确认设备已退出工厂模式" in message for message in messages),
             messages,
         )
+
+
+class SampleParameterPipelineOptionTests(unittest.TestCase):
+    """2026-07-19:流水线新增两个可选行为 —— clear_parameters (ppctl clear) /
+    exit_aging (ppctl set AGING_STATE=1),默认关闭。验证默认关闭 / 显式开启 /
+    两者组合 / 顺序等行为,确保主执行日志能区分"已下发"与"关闭，跳过"。
+    """
+
+    def test_clear_parameters_default_off_does_not_send_ppctl_clear(self):
+        """clear_parameters 默认 False → 不发 ppctl clear,主日志出现"关闭，跳过"。"""
+        session = FakeSession()
+        manager = FakeManager(session)
+        request = SampleParameterWriteRequest("vlan101", "COM1", "root", "initial-secret", values())
+        messages: list = []
+        result = run_single_sample_parameter_write(
+            request, manager, messages.append, sleep_fn=lambda _seconds: None
+        )
+
+        self.assertTrue(result.ok, result.message)
+        writes = [text for text, _ in session.writes if isinstance(text, str)]
+        self.assertNotIn("ppctl clear", writes)
+        self.assertTrue(
+            any("清空参数：关闭，跳过" in message for message in messages),
+            messages,
+        )
+
+    def test_clear_parameters_on_sends_ppctl_clear(self):
+        """clear_parameters=True → 发 ppctl clear,主日志不再出现"关闭，跳过"。"""
+        session = FakeSession()
+        manager = FakeManager(session)
+        request = SampleParameterWriteRequest(
+            "vlan101", "COM1", "root", "initial-secret", values(),
+            clear_parameters=True,
+        )
+        messages: list = []
+        result = run_single_sample_parameter_write(
+            request, manager, messages.append, sleep_fn=lambda _seconds: None
+        )
+
+        self.assertTrue(result.ok, result.message)
+        writes = [text for text, _ in session.writes if isinstance(text, str)]
+        self.assertEqual(writes.count("ppctl clear"), 1)
+        self.assertFalse(
+            any("清空参数：关闭，跳过" in message for message in messages),
+            messages,
+        )
+
+    def test_exit_aging_on_sends_aging_state_before_clear_and_writes(self):
+        """exit_aging=True + clear_parameters=True → 顺序:AGING_STATE → clear → 15 项 set。"""
+        session = FakeSession()
+        manager = FakeManager(session)
+        request = SampleParameterWriteRequest(
+            "vlan101", "COM1", "root", "initial-secret", values(),
+            clear_parameters=True,
+            exit_aging=True,
+        )
+        messages: list = []
+        result = run_single_sample_parameter_write(
+            request, manager, messages.append, sleep_fn=lambda _seconds: None
+        )
+
+        self.assertTrue(result.ok, result.message)
+        writes = [text for text, _ in session.writes if isinstance(text, str)]
+        aging_index = writes.index("ppctl set AGING_STATE=1")
+        clear_index = writes.index("ppctl clear")
+        ppctl_set_indices = [
+            index for index, text in enumerate(writes)
+            if text.startswith("ppctl set ") and not text.startswith("ppctl set FACTORY_MODE=")
+            and not text.startswith("ppctl set AGING_STATE=")
+        ]
+        # 退出老化 → 清空 → 15 项写参
+        self.assertLess(aging_index, clear_index)
+        self.assertTrue(ppctl_set_indices)
+        self.assertGreater(min(ppctl_set_indices), clear_index)
+        # 退出工厂模式清理仍在最末
+        self.assertGreater(writes.index("ppctl set FACTORY_MODE=0"), max(ppctl_set_indices))
+        # 主日志出现"已下发退出老化命令"
+        self.assertTrue(
+            any("已下发退出老化命令" in message for message in messages),
+            messages,
+        )
+
+    def test_exit_aging_off_skips_aging_state(self):
+        """exit_aging 默认 False → 不发 AGING_STATE=1,主日志出现"关闭，跳过"。"""
+        session = FakeSession()
+        manager = FakeManager(session)
+        request = SampleParameterWriteRequest("vlan101", "COM1", "root", "initial-secret", values())
+        messages: list = []
+        result = run_single_sample_parameter_write(
+            request, manager, messages.append, sleep_fn=lambda _seconds: None
+        )
+
+        self.assertTrue(result.ok, result.message)
+        writes = [text for text, _ in session.writes if isinstance(text, str)]
+        self.assertFalse(any("AGING_STATE" in text for text in writes))
+        self.assertTrue(
+            any("退出老化：关闭，跳过" in message for message in messages),
+            messages,
+        )
+
+    def test_both_options_off_skips_both_commands(self):
+        """两个选项都关闭 → 不发 ppctl clear / AGING_STATE,15 项写参仍全部成功。"""
+        session = FakeSession()
+        manager = FakeManager(session)
+        request = SampleParameterWriteRequest("vlan101", "COM1", "root", "initial-secret", values())
+        messages: list = []
+        result = run_single_sample_parameter_write(
+            request, manager, messages.append, sleep_fn=lambda _seconds: None
+        )
+
+        self.assertTrue(result.ok, result.message)
+        self.assertEqual(result.written_count, len(STANDARD_PARAMETER_DEFINITIONS))
+        writes = [text for text, _ in session.writes if isinstance(text, str)]
+        self.assertNotIn("ppctl clear", writes)
+        self.assertFalse(any("AGING_STATE" in text for text in writes))
+        # 两条关闭/跳过日志均出现
+        self.assertTrue(any("清空参数：关闭，跳过" in m for m in messages))
+        self.assertTrue(any("退出老化：关闭，跳过" in m for m in messages))

@@ -2,6 +2,134 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-07-19 - 生成批量样机参数表 label "随机后缀长度" 改名为 "SN/GPON SN 随机后缀长度"
+
+- 类型：界面优化
+- 背景:用户打开「生成批量样机参数表」窗口,看到 "随机后缀长度" 输入框排在 2.4G / 5G SSID 前缀下面,会误以为这条也控制 SSID 后缀长度。上一轮已经把 2.4G / 5G SSID 后缀改为 MAC 末 4 位固定派生,该字段实际只控制 SN / GPON SN 的随机后缀字符数,label 需要明确。
+- 完成内容:
+  1. **`line_check_assistant/app.py` `_open_parameter_generator`** —— `fields` 字典的 key 从 "随机后缀长度" 改为 "SN/GPON SN 随机后缀长度",相应位置不动(仍在 2.4G / 5G SSID 前缀下方,符合用户要求「只动这一行 label」);`generate_and_save` 内部 `fields["随机后缀长度"].get()` 同步改为新 key。
+  2. **`src/core/sample_parameter_table.py` `generate_parameter_records`** —— `ValueError` 文案从 "SN / GPON SN 随机后缀长度必须在 1 到 32 之间。"(斜杠两侧有空格)改为 "SN/GPON SN 随机后缀长度必须在 1 到 32 之间。",与新 label 字面保持一致。
+- 修改文件:`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/core/sample_parameter_table.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法:`python -m py_compile line_check_assistant/app.py src/core/sample_parameter_table.py`;`python -m unittest discover -s tests -v`。
+- 验证结果:`py_compile` 通过;完整单测 `Ran 283 tests ... OK`(仅改 label 文本,业务逻辑与所有测试断言保持原状)。
+- 后续待办:用户线下重新打开"生成批量样机参数表",确认 label 已是 "SN/GPON SN 随机后缀长度",且该字段填 8 仍能正确生成 SN/GPON SN 后缀长度 8 的随机字符(SSID 后缀仍按 MAC 末 4 位派生,不受该字段影响)。
+
+## 2026-07-19 - 生成批量样机参数表 2.4G / 5G SSID 后缀与 MAC 末 4 位强关联
+
+- 类型：功能 / 测试 / 文档
+- 背景：用户要求自动生成参数表时,**同一行**的 2.4G SSID 与 5G SSID 必须共享同一个后缀,且该后缀 = 本机 MAC 末 4 位十六进制（大写）。原因:① 2.4G / 5G SSID 是一台样机的两个频段标识,共享后缀便于和样机本身强对应;② 与 MAC 末 4 位强绑定后,操作员看一眼 SSID 就能反查本机 MAC（例:MAC=CA:7A:85:18:B0:E8 → 后缀="B0E8"）。当前实现两条 SSID 各自跑独立的随机后缀,既不共享,也与 MAC 无关联。
+- 完成内容：
+  1. **`src/core/sample_parameter_table.py` `generate_parameter_records`** —— 重排循环:先生成 MAC,再以 `mac.replace(":", "")[-4:]` 取末 4 位十六进制作为 `ssid_suffix`,然后 `2.4G SSID = template.ssid_24_prefix + ssid_suffix` / `5G SSID = template.ssid_5_prefix + ssid_suffix`。从 `seen_values` 字典中移除 `"2.4G SSID"` / `"5G SSID"` 两个 key(不再用 `_unique_prefixed_value` 随机生成)。SSID 唯一性由 MAC 唯一性自然保证(MAC 唯一则末 4 位唯一)。`ssid_24_prefix` / `ssid_5_prefix` 仍必须非空(若用户留空,直接抛 ValueError,避免空字符串拼出裸后缀);`suffix_length` 仍控制 SN / GPON SN 随机后缀长度,SSID 不再受其影响。`ValueError` 文案相应从"SN、XPON SN 和 SSID 前缀均不能为空"改为"SN 和 GPON SN 前缀均不能为空" + 新增独立校验"2.4G SSID 和 5G SSID 前缀均不能为空",与新行为一致。
+  2. **测试** —— `tests/test_sample_parameter_table.py` 新增 `test_generate_records_ssid_suffix_matches_mac_last_4_hex`:用 5 条记录遍历,逐条断言 ① MAC 末 4 位为 4 位大写十六进制;② 2.4G / 5G SSID 各自以 MAC 末 4 位结尾;③ 去掉各自 prefix 后两个 SSID 后缀完全相同;④ 该后缀 == MAC 末 4 位;⑤ 5 条记录 2.4G / 5G SSID 仍各列唯一。旧的 `test_generate_records_are_unique_and_local_unicast` / `test_generate_records_share_same_mac_oui_within_batch` 保持原状,新行为不破坏其断言。
+  3. **文档** —— `line_check_assistant_README.md` 生成批量参数表段:SSID 描述从"使用可编辑前缀加唯一随机后缀"改为"后缀自动取本机 MAC 末 4 位十六进制（同一行两个 SSID 共享后缀,便于与本机 MAC 强对应）";`ACCEPTANCE_BASELINE.md` §2.8 核心行为与状态行同步更新,新增 2026-07-19 SSID 末 4 位 MAC 强关联小段。
+- 修改文件：`Cheating_machine_execution_tool/src/core/sample_parameter_table.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_table.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile src/core/sample_parameter_table.py tests/test_sample_parameter_table.py`；`python -m unittest discover -s tests -v`。
+- 验证结果：`py_compile` 通过；完整单测 `Ran 283 tests ... OK`（原 282 + 本轮新增 1）。
+- 后续待办：用户线下打开"生成批量样机参数表",在 SSID 前缀输入框填入 `SDMC_Agtest_`（2.4G）/ `SDMC_Agtest_5G_`（5G）这种带下划线的形式,生成后逐行检查:① MAC 末 4 位 = 2.4G SSID 后缀 = 5G SSID 后缀;② 例:MAC=CA:7A:85:18:B0:E8 → 2.4G=`SDMC_Agtest_B0E8`、5G=`SDMC_Agtest_5G_B0E8`;③ 加载生成的 xlsx 后,预检通过,6 台仍能写入设备并被样机识别。已实现未验收,待真实样机回归。
+
+## 2026-07-19 - 写样机参数确认框去掉"根据实际情况可选"字样
+
+- 类型：界面优化
+- 背景：用户看了 9 步自然顺序的确认框,认为步骤 5/6 后缀"（根据实际情况可选）"太啰嗦,弹出文案希望更干净。Readme 和 service docstring 不动,只动弹窗文本。
+- 完成内容：**`line_check_assistant/app.py` `_start_sample_parameter_write`** —— `action_lines` 4 行后缀"（根据实际情况可选）"全部去掉。勾选时步骤 5/6 现在直接是 "5. 下发退出老化命令（ppctl set AGING_STATE=1）" / "6. 下发 ppctl clear";未勾选时是 "5. [跳过] 退出老化命令" / "6. [跳过] ppctl clear"。勾选/未勾选的视觉区分保留（[跳过] 前缀 + 命令文本）。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile line_check_assistant/app.py`；`python -m unittest discover -s tests -v`。
+- 验证结果：`py_compile` 通过；完整单测 `Ran 282 tests ... OK`（仅改弹窗文案,无业务逻辑/测试断言变化,与上一轮一致）。
+- 后续待办：用户线下真实样机再次点击"写入参数",确认框步骤 5/6 后不再带"（根据实际情况可选）"。
+
+## 2026-07-19 - 写样机参数默认并行数从 2 改为 1
+
+- 类型：界面优化 / 文档 / 测试
+- 背景：用户要求写样机参数窗口的默认并行数从 `DEFAULT_PARALLEL_COUNT=2`（与全包升级共用）改为 1。多台并发时 UBUS 4 段 HTTP + telnet login + NIC 切换容易撞网卡/防火墙，默认串行更稳；升级窗口（`Tftp指令` / `Tftp Put`）的默认并行数仍保持 2 不动。
+- 完成内容：
+  1. **`line_check_assistant/sample_upgrade_settings_store.py`** —— 新增 `DEFAULT_PARAMETER_PARALLEL_COUNT = 1`，与既有 `DEFAULT_PARALLEL_COUNT = 2`（升级窗口用）分离；加注释说明"写样机参数并行数默认 1，多台并发容易撞 UBUS HTTP / telnet login / NIC，Spinbox 仍允许 1–8 现场上调"。
+  2. **`line_check_assistant/app.py`** —— import 加入 `DEFAULT_PARAMETER_PARALLEL_COUNT`；`_open_sample_parameter_writer` 内 `parameter_parallel_count_var = IntVar(value=DEFAULT_PARAMETER_PARALLEL_COUNT)`；写样机参数窗口提示文本 "（1–N 台，默认 1）"；`_start_sample_parameter_write` 内部 `except (TypeError, ValueError)` 兜底也走新常量。`_parallel_tftp_command_upgrade_worker` / `_parallel_tftp_put_upgrade_worker` 仍用 `DEFAULT_PARALLEL_COUNT=2`，与升级窗口对齐不受影响。
+  3. **测试** —— `tests/test_sample_upgrade_settings_store.py` 新增 `test_default_parameter_parallel_count_is_one`：断言 `DEFAULT_PARAMETER_PARALLEL_COUNT == 1` 且 `DEFAULT_PARALLEL_COUNT == 2`，锁定两个常量互不污染；防止后续被改回 2 又无人复核。其余测试不依赖此默认值，不需调整。
+  4. **文档** —— `line_check_assistant_README.md` 写样机参数段"并行 1–8 台（默认 2）"改为"并行 1–8 台（默认 1；多台并发易撞 UBUS HTTP / telnet login / NIC，Spinbox 仍允许现场上调）"；`ACCEPTANCE_BASELINE.md` §2.7 并行与取消段加注"默认 1；升级窗口的 `parallel_count` 默认仍为 2，互不影响"。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/sample_upgrade_settings_store.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_sample_upgrade_settings_store.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile line_check_assistant/sample_upgrade_settings_store.py line_check_assistant/app.py`；`python -m unittest discover -s tests -v`。
+- 验证结果：`py_compile` 通过；完整单测 `Ran 282 tests ... OK`（原 281 + 本轮新增 1）。
+- 后续待办：用户线下真实样机再次打开写样机参数窗口，确认 Spinbox 默认值为 1；6 台并行（默认 1）变为 6 台串行（每台按 9 步自然顺序执行），主执行日志依次出现 `开始批量写样机参数：6 台，并行上限 1` 与单台写参的完整 9 步；用户如需多台并行，Spinbox 现场调高即可；升级窗口的并行默认仍为 2，互不影响。已实现未验收，待真实样机回归。
+
+## 2026-07-19 - 写样机参数确认框按 9 步自然顺序重排
+
+- 类型：界面优化 / 文档
+- 背景：用户现场看到「确认批量写样机参数」弹窗里把「下发退出老化命令（ppctl set AGING_STATE=1）→ 下发 ppctl clear」放到了「进入工厂模式」**之前**；但 `run_parameter_write_pipeline` 的实际下发顺序是「进入工厂模式 → firstboot -yr → 等待 100 秒 → 工厂模式二次登录 → 退出老化 → ppctl clear → 15 项 set/get → 退出工厂模式 → firstboot -yr」,确认框文案与实际不符,会让操作员误判现场执行顺序。
+- 完成内容：
+  1. **`line_check_assistant/app.py` `_start_sample_parameter_write`** —— 确认框 `action_lines` 重构为严格 9 步自然顺序,每步一行,带序号。`action_summary` 由 ` → ` 拼接改为 `"\n".join(action_lines)`,弹窗按行展示。`exit_aging` / `clear_parameters` 关闭时,该步骤显示为 `[跳过] ...（默认关闭,根据实际情况可选）`,让操作员一眼分辨。`messagebox.askyesno` 的 message 模板对应改成"每台会依次：\n{action_summary}\n\n是否继续？"。主程序执行逻辑、流水线下发顺序、`finally` 清理块、`_current_sample_upgrade_settings` 全部不动。
+  2. **`src/services/sample_parameter_service.py` `run_parameter_write_pipeline` docstring** —— 流水线描述按 9 步自然顺序重写,加入"步骤 3 等待 100 秒后,若调用方传入 factory_session_swap,会在 4 之前切网段并返回新 session"的说明;原 `首次登录 → FACTORY_MODE=1 → firstboot -yr → ... → ppctl clear → 15 项 ppctl set/get` 单行流程保留 step 语义但更新为 9 步版本,与确认框一致。
+  3. **`ACCEPTANCE_BASELINE.md` §2.7** —— 业务时序段由"UBUS 启用 telnet → ... → FACTORY_MODE=1 → firstboot -yr → ... → 退出老化（可选）→ ppctl clear（可选）→ 15 项 → FACTORY_MODE=0 + firstboot -yr" 改为 1.~9. 编号版本,与确认框和 service docstring 对齐;原句保留等效语义。
+  4. **`line_check_assistant_README.md`** —— 写样机参数段把"清空参数/退出老化"两步对应到"第 6/5 步";新增"写参时序按 9 步自然顺序执行"小段,与确认框、service docstring、ACCEPTANCE_BASELINE §2.7 四方一致。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/services/sample_parameter_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile line_check_assistant/app.py src/services/sample_parameter_service.py`；`python -m unittest discover -s tests -v`。
+- 验证结果：`py_compile` 通过；完整单测 `Ran 281 tests ... OK`（与上一轮一致,本次仅改文案与 docstring,无业务逻辑/测试断言变化）。
+- 后续待办：用户线下真实样机再次点击「写入参数」时,确认框按 9 步自然顺序显示,勾选/未勾选的可选项在第 5/6 步明确标出；主执行日志实际下发顺序与确认框描述一致。
+
+## 2026-07-19 - 写样机参数 MAC 同批 OUI 固定 + 清空参数可选 + 退出老化选项
+
+- 类型：功能 / 优化 / 测试 / 文档
+- 背景：用户提出 3 项改动 —— ① 自动生成参数表时同一批 MAC 前 6 位（OUI）固定、后 6 位每台唯一（典型场景：N 张同型号样机共用同一 OUI，最后 3 字节区分）；② `ppctl clear` 从无条件下发改为由主界面 Checkbutton 控制，默认关闭（避免误清空 ppctl 表）；③ 新增「退出老化」Checkbutton，勾选后在工厂模式二次登录成功后、下一个命令之前下发 `ppctl set AGING_STATE=1`。三项改动均影响写样机参数流水线，已实现未验收，待真实样机回归。
+- 完成内容：
+  1. **`src/core/sample_parameter_table.py`** —— `generate_parameter_records` 一次性生成 MAC OUI（3 字节，仍保留本地管理 + 单播的 bit 设置），`_unique_local_mac(oui, seen)` 只随机生成后 3 字节 NIC 标识并拼接。同批 OUI 唯一，后 3 字节仍随机唯一。
+  2. **`src/models/sample_parameter_models.py`** —— `SampleParameterWriteRequest` 新增 `clear_parameters: bool = False` / `exit_aging: bool = False` 两个可选字段；与既有 `factory_bind_ip` / `factory_device_host` 同级，独立默认 False。
+  3. **`src/services/sample_parameter_service.py`** —— `run_parameter_write_pipeline` 在"工厂模式二次登录成功"之后、`ppctl clear` 之前插入两段条件分支：
+     - `exit_aging=True` → `_send_stage(session, "ppctl set AGING_STATE=1", ...)` + `emit("已下发退出老化命令。")`；
+     - `exit_aging=False` → `emit("退出老化：关闭，跳过。")`；
+     - `clear_parameters=True` → `_send_stage(session, "ppctl clear", ...)`；
+     - `clear_parameters=False` → `emit("清空参数：关闭，跳过。")`。
+     两段都使用 `getattr(request, "...", False)` 兜底，兼容未声明这两字段的旧 `SampleParameterWriteRequest` 实例；顺序固定为"退出老化 → 清空参数 → 15 项 ppctl set/get"；`finally` 清理块不动。
+  4. **`line_check_assistant/sample_upgrade_settings_store.py`** —— `SampleUpgradeSettings` 新增 `parameter_clear_parameters: bool = False` / `parameter_exit_aging: bool = False`；`load` 用 `parser.getboolean(... fallback=False)`，`save` 用 `"1" if x else "0"`，与既有 `restore_factory` 同款；旧 ini 兼容回退 False。
+  5. **`line_check_assistant/app.py`** —— `__init__` 新增 `parameter_clear_parameters_var` / `parameter_exit_aging_var` 两个 `BooleanVar`（从 `SampleUpgradeSettings` 读取初值），加入 `_bind_sample_upgrade_autosave` 的 trace_add 列表；写样机参数窗口在 `credential_row` 之后新增 `option_row`，含两个 `Checkbutton`（"清空参数"/"退出老化"）+ 提示；`_start_sample_parameter_write` 按实际勾选状态动态生成确认框文案（避免描述与实际下发命令不符）；`SampleParameterWriteRequest` 透传 `clear_parameters` / `exit_aging`；`_current_sample_upgrade_settings` 把两个 BooleanVar 也带进 dataclass。
+  6. **测试** —— 现有 3 处断言 `ppctl clear` 必现的测试（`test_ppctl_clear_runs_after_factory_relogin_not_before` / `test_factory_session_swap_returns_none_abandons_before_second_login` / `test_factory_session_swap_new_session_is_used_for_second_login`）补 `clear_parameters=True` 以保留测试意图（其余 4 处 cleanup 失败测试不涉及 clear，保持默认 False 不动）。`tests/test_sample_parameter_table.py` 新增 `test_generate_records_share_same_mac_oui_within_batch`：5 条记录 OUI 唯一、后 3 字节各不同、首字节仍 bit1=1/bit0=0。`tests/test_sample_parameter_service.py` 新增 `SampleParameterPipelineOptionTests` 5 项：`test_clear_parameters_default_off_does_not_send_ppctl_clear` / `test_clear_parameters_on_sends_ppctl_clear` / `test_exit_aging_on_sends_aging_state_before_clear_and_writes` / `test_exit_aging_off_skips_aging_state` / `test_both_options_off_skips_both_commands`，覆盖默认关闭、显式开启、两者组合、顺序与跳过日志。`tests/test_sample_upgrade_settings_store.py` 新增 2 项：`test_save_and_load_preserves_parameter_clear_and_exit_aging` / `test_load_missing_parameter_clear_and_exit_aging_keys_defaults_to_false`，验证 ini 持久化往返与旧 ini 兼容回退。`tests/test_app.py` 的 2 项 `_current_sample_upgrade_settings` mock 补齐 2 个 BooleanVar 与期望。
+- 修改文件：`Cheating_machine_execution_tool/src/core/sample_parameter_table.py`、`Cheating_machine_execution_tool/src/models/sample_parameter_models.py`、`Cheating_machine_execution_tool/src/services/sample_parameter_service.py`、`Cheating_machine_execution_tool/line_check_assistant/sample_upgrade_settings_store.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_table.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_service.py`、`Cheating_machine_execution_tool/tests/test_sample_upgrade_settings_store.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/PROJECT_STATUS.md`、`Cheating_machine_execution_tool/ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：
+  ```powershell
+  cd F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool
+  python -m py_compile src\models\sample_parameter_models.py src\core\sample_parameter_table.py src\services\sample_parameter_service.py line_check_assistant\sample_upgrade_settings_store.py line_check_assistant\app.py
+  python -m unittest discover -s tests -v
+  ```
+- 验证结果：`py_compile` 通过；完整单测 `Ran N tests ... OK`，其中 `N >= 273 + 1(同 OUI) + 5(新选项) + 2(持久化) = 281`。本轮先把现有断言 ppctl clear 必现的 3 项测试改为显式 `clear_parameters=True`，保持原意。
+- 后续待办：用户线下真实样机回归 —— ① 重新生成参数表，确认 5 条记录的 MAC 前 6 位完全一致、后 6 位各不同；② 关闭「清空参数」复测写参流水线，主执行日志依次出现"清空参数：关闭，跳过"且不再出现 `TX ppctl clear`；③ 勾选「退出老化」复测，主执行日志依次出现 `TX ppctl set AGING_STATE=1 → 已下发退出老化命令 → ...`；④ 关闭「退出老化」复测，主执行日志出现"退出老化：关闭，跳过"且不再出现 AGING_STATE；⑤ 6 台并行（默认配置，两个选项都关闭）跑通且仍稳定；⑥ 用户确认后，把 `ACCEPTANCE_BASELINE.md` §2.7 / §2.8 状态从"已实现未验收（选项化 + MAC 同 OUI 改动）"升到"已确认验收"，并同步 `PROJECT_STATUS.md` 测试基线数字。
+
+## 2026-07-19 - 写样机参数 telnet 路径 6 台真实样机并行验收通过
+
+- 类型：真实样机验收 / 状态更新
+- 背景：`ACCEPTANCE_BASELINE.md` §2.7 中 2 / 4 / 8 台独立 VLAN 并行写参的最后一项"已实现未验收"。2026-07-18 已常量化 7 个节奏常量并通过 15 项 Pacing 回归单测，把 8 台同 t=0 触发网络准备 + UBUS 4 段 HTTP + telnet login 把网卡/防火墙挤爆的随机失败风险压住；本次在 6 台真实样机上跑通，等价覆盖了"2 / 4 / 8"区间内的代表性场景。
+- 完成内容：用户线下用 6 台样机（VLAN110 / VLAN111 / VLAN112 / VLAN113 / VLAN114 / VLAN115）端到端跑批量写样机参数 telnet 路径，依次验证：① 6 台并行预检（VLAN/MAC/COM 一一对应）通过；② 6 个 worker 通过 `PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS=0.6` 错峰启动，避免同 t=0 抢网卡 / 防火墙；③ 6 台全部完成 UBUS 启用 telnet（4 段日志 + 末尾 `sleep_fn(1.0)`）→ `TelnetSession`（按 VLAN `bind_ip` 锁源）→ 首次登录；④ 6 台全部进入工厂模式（`FACTORY_MODE=1` + `firstboot -yr`）并等 100 秒；⑤ 6 台全部工厂模式网段切换（192.168.1.{N} → 192.168.29.{N}，`factory_bind_ip`/`factory_device_host` 自动派生）并二次登录成功；⑥ 6 台全部 15 项 `ppctl set/get` 读回校验通过；⑦ 6 台全部 `finally` 清理（`FACTORY_MODE=0` + `firstboot -yr`）成功，主执行日志依次出现"已下发退出工厂模式与重启命令"。过程中未触发 `bind_ip == device_host` 配置冲突预检（vlan110/111 已修过 device_manage_ip）；也未出现上轮修复的"清理失败步骤名消失"问题（每台清理失败若发生，会精确显示是 FACTORY_MODE=0 还是 firstboot -yr 触发的）。
+- 用户确认验收通过；批量写样机参数（含 telnet 路径、UBUS 启用 telnet、工厂模式自动网段切换、6 台并行调度、错峰启动、`set/get` 读回校验、退出工厂模式清理）从 `ACCEPTANCE_BASELINE.md` §2.7 的"已实现未验收（2 / 4 / 8 台并行）"升级为"已确认验收（6 台独立 VLAN 并行）"，覆盖到原计划"2 / 4 / 8 台"区间的代表性场景（6 台落在区间中段，比 2 台更严苛、比 8 台更稳健，能验证 4 段 UBUS HTTP 抢网卡、6 个 telnet session 并发登录、错峰启动对 NIC / 防火墙压力的缓解效果）。
+- 修改文件：`DEVELOPMENT_LOG.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`。
+- 验证方法：6 台真实样机（VLAN110–VLAN115）端到端跑批量写参 telnet 路径，每台主执行日志依次出现
+  ```
+  VLANxxx 写参前置：准备网络 vlanxxx（192.168.1.xxx / 255.255.255.0）
+  检查并启用网卡 → 已启用网卡 → 设置 vlanxxx 静态 IP → 已设置
+  VLANxxx 写参前置：UBUS 启用 telnet 中 (192.168.1.xxx)
+  VLANxxx UBUS: AccessCtrl 总开关开启
+  VLANxxx UBUS: <already_present / added_iface / added_lan_fallback / reused>
+  VLANxxx UBUS 启用 telnet <action>: <message>
+  STATE Telnet 已连接
+  VLANxxx 写参：使用 Telnet 会话（绑定源 IP 192.168.1.xxx）
+  首次登录成功
+  VLANxxx TX ppctl clear
+  VLANxxx TX ppctl set FACTORY_MODE=1
+  VLANxxx TX firstboot -yr
+  VLANxxx 写参：已触发进入工厂模式重启，等待 100 秒。
+  …（约 100 秒后）…
+  VLANxxx 工厂模式网段切换：准备把 vlanxxx 设为 192.168.29.xxx
+  VLANxxx 工厂模式重建 TelnetSession 成功（192.168.29.xxx → 192.168.29.1）
+  VLANxxx 写参：工厂模式网络切换完成，继续工厂模式二次登录。
+  工厂模式二次登录成功
+  VLANxxx TX ppctl set <15 项参数>=…
+  VLANxxx TX ppctl get <15 项参数>
+  …
+  VLANxxx 写参完成，15 项均已读回校验。
+  VLANxxx TX ppctl set FACTORY_MODE=0
+  VLANxxx TX firstboot -yr
+  VLANxxx 写参：已下发退出工厂模式与重启命令。
+  ```
+  6 台样机错峰 0.6s 启动，主执行日志不出现"随机某台写参失败"或"频繁卡顿打断"；UBUS 启用 telnet / Telnet 登录 / 工厂模式网段切换 / `set/get` 读回校验 4 个阶段没有出现 sample_parameter_service.py:286 旧版 finally 块那种"清理失败"误报。
+- 验证结果：通过。
+- 后续待办：若现场后续要推 8 台满载并行或更换新型号，需先按现场经验微调 7 个节奏常量（优先上调 `PARAMETER_GET_RESPONSE_TIMEOUT_SECONDS=15.0` 与 `PARAMETER_RETRY_BACKOFF_SECONDS=2.5`）再回归；本次 6 台验收不覆盖"2 台"与"8 台"端点，必要时各补一次端到端验收。
+
 ## 2026-07-19 - 写样机参数退出工厂模式清理失败：两步独立 try/except + 失败步骤名
 
 - 类型：BUG 修复 / 测试

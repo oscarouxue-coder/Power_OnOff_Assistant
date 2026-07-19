@@ -15,6 +15,9 @@ SAMPLE_UPGRADE_SECTION = "sample_upgrade"
 MAX_PARALLEL_UPGRADES = 8
 # 默认仍保持 2 台，匹配当前真实样机已验收的行为，避免一升级就跳到 8 台。
 DEFAULT_PARALLEL_COUNT = 2
+# 写样机参数并行数默认 1(2026-07-19 用户要求):多台并发容易撞 UBUS HTTP / telnet login / NIC,
+# 默认串行更稳;Spinbox 仍允许 1–8 现场上调,升级窗口不受影响。
+DEFAULT_PARAMETER_PARALLEL_COUNT = 1
 
 
 def clamp_parallel_count(value: int | str | None) -> int:
@@ -43,6 +46,10 @@ class SampleUpgradeSettings:
     # 写样机参数窗口的「首次登录账号 / 密码」,独立于升级超级凭据,但落到同一 ini 文件,方便现场单点维护。
     parameter_initial_username: str = ""
     parameter_initial_password: str = ""
+    # 写样机参数流水线两个可选行为(2026-07-19),与 parameter_initial_* 同级存到 ini。
+    # 默认关闭:clear_parameters / exit_aging 都需要操作员在写样机参数窗口勾选才生效。
+    parameter_clear_parameters: bool = False
+    parameter_exit_aging: bool = False
 
 
 class SampleUpgradeSettingsStore:
@@ -67,6 +74,8 @@ class SampleUpgradeSettingsStore:
             firmware_path=parser.get(SAMPLE_UPGRADE_SECTION, "firmware_path", fallback=""),
             parameter_initial_username=parser.get(SAMPLE_UPGRADE_SECTION, "parameter_initial_username", fallback=""),
             parameter_initial_password=parser.get(SAMPLE_UPGRADE_SECTION, "parameter_initial_password", fallback=""),
+            parameter_clear_parameters=parser.getboolean(SAMPLE_UPGRADE_SECTION, "parameter_clear_parameters", fallback=False),
+            parameter_exit_aging=parser.getboolean(SAMPLE_UPGRADE_SECTION, "parameter_exit_aging", fallback=False),
         )
 
     def save(self, settings: SampleUpgradeSettings) -> None:
@@ -83,6 +92,8 @@ class SampleUpgradeSettingsStore:
             "firmware_path": settings.firmware_path or "",
             "parameter_initial_username": settings.parameter_initial_username or "",
             "parameter_initial_password": settings.parameter_initial_password or "",
+            "parameter_clear_parameters": "1" if settings.parameter_clear_parameters else "0",
+            "parameter_exit_aging": "1" if settings.parameter_exit_aging else "0",
         }
 
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
