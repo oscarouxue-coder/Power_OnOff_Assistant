@@ -48,6 +48,7 @@ from src.config import DEFAULT_LOG_DIR
 from src.models import FullPackageUpgradeRequest, ParameterGenerationTemplate, SampleParameterWriteRequest
 from src.services import (
     PARAMETER_MAX_PARALLEL,
+    PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS,
     TRANSFER_TFTP_COMMAND,
     TRANSFER_TFTP_PUT,
     preflight_parameter_targets,
@@ -661,6 +662,27 @@ class LineCheckAssistant(Tk):
         except (TypeError, ValueError):
             parallel_count = DEFAULT_PARALLEL_COUNT
         target_text = "\n".join(f"- {target.vlan} / {target.serial_port} / MAC:{target.record.values.get('MAC', '')}" for target in preflight.targets)
+        # 配置冲突预检(2026-07-18):bind_ip 与 device_host 相同 → PC 把自己作为目标连接,
+        # TCP 必然 timed out(典型表现 VLAN110/111 报「Telnet 连接失败 192.168.1.110:23 源 IP 192.168.1.110:timed out」)。
+        # `vlan{N} -> 192.168.1.{N}` 约定只适用于 PC 静态 IP(network_card_ip),
+        # 样机管理 IP 是设备自身 IP,跟 VLAN 编号无关,典型值 192.168.1.1。
+        for target in preflight.targets:
+            bind_ip = self._bind_ip_for_vlan(target.vlan)
+            device_host = self._device_host_for_vlan(target.vlan)
+            if not bind_ip or not device_host:
+                continue
+            if bind_ip == device_host:
+                messagebox.showerror(
+                    "样机 IP 配置冲突",
+                    f"通道 {target.vlan} 的 PC 静态 IP({bind_ip})与样机管理 IP({device_host})相同,"
+                    "PC 无法把自己作为目标连接,写参必然超时失败。\n\n"
+                    "样机管理 IP 应为设备自身的管理 IP（典型 192.168.1.1）,不是按 VLAN 编号派生的 PC 静态 IP。\n"
+                    "请在主界面表格中修改该通道的「样机管理 IP」字段,"
+                    "或在 Auto_power_on_off_tool/config/network_card_ip.ini 中"
+                    f"将该通道的 device_manage_ip 改为样机实际管理 IP（典型 192.168.1.1）后重试。",
+                    parent=self.parameter_writer_window,
+                )
+                return
         # 验证走 telnet 路径的目标必须有 factory_bind_ip / factory_device_host:
         # 工厂模式 reboot 后,样机管理 IP 切到另一网段(如 192.168.29.1),PC 端 VLAN 网卡也
         # 必须切到该网段才能继续工厂模式二次登录。
@@ -905,8 +927,14 @@ class LineCheckAssistant(Tk):
         if telnet_indices:
             telnet_requests = [requests[i] for i in telnet_indices]
             with ThreadPoolExecutor(max_workers=min(parallel_count, len(telnet_requests)), thread_name_prefix="sample-parameter-telnet") as executor:
-                telnet_futures = {
-                    executor.submit(
+                # 错峰启动(2026-07-18 P2 缓解): 第 1 个 worker 立即 submit,后续每个 worker
+                # 在 submit 前 sleep PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS,避免 8 台同 t=0
+                # 触发网络准备 + UBUS 4 段 HTTP + telnet login 把网卡/防火墙挤爆。
+                telnet_futures: dict = {}
+                for offset, req in enumerate(telnet_requests):
+                    if offset > 0:
+                        time.sleep(PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS)
+                    future = executor.submit(
                         run_single_sample_parameter_write,
                         req,
                         self.serial_session_manager,
@@ -916,9 +944,8 @@ class LineCheckAssistant(Tk):
                         time.sleep,
                         make_telnet_factory(req),
                         make_factory_session_swap(req),
-                    ): telnet_indices[offset]
-                    for offset, req in enumerate(telnet_requests)
-                }
+                    )
+                    telnet_futures[future] = telnet_indices[offset]
                 for future in as_completed(telnet_futures):
                     telnet_results_index = telnet_futures[future]
                     try:

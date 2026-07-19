@@ -1,6 +1,6 @@
 # Acceptance Baseline
 
-更新：2026-07-17
+更新：2026-07-19
 
 > 与 `PROJECT_STATUS.md` 的关系：本文按"实现 → 单测 → 真实样机验收"三态罗列验收证据与不变量，作为独立验收基线。`PROJECT_STATUS.md` 保留面向项目的进度叙述；两者冲突时以本文为准。
 >
@@ -17,7 +17,7 @@ python -m py_compile line_check_assistant\app.py src\ui\serial_terminal.py src\s
 python -m unittest discover -s tests -v
 ```
 
-预期 `Ran 249 tests ... OK`（2026-07-17 实跑；原 199 + 本轮新增 50：网络准备前置 4 + factory 派生 14 + factory session swap 7 + 其它历史补充 22 + UBUS retry 3）。
+预期 `Ran 273 tests ... OK`（2026-07-19 实跑；原 270 + 本轮新增 3：清理失败步骤名标识 3）。
 
 ## 1. 全局不可破坏规则
 
@@ -30,7 +30,7 @@ python -m unittest discover -s tests -v
 
 ### 1.2 测试与目录基线
 
-- 全量：`python -m unittest discover -s tests -v` → **249 项全过**（2026-07-17 实跑，对应 `tests/` 下 19 个 unittest 文件）
+- 全量：`python -m unittest discover -s tests -v` → **273 项全过**（2026-07-19 实跑，对应 `tests/` 下 19 个 unittest 文件）
 - 不动 `build/`、`dist/`、`logs/`、`.venv/`
 
 ### 1.3 协议不变性自检（grep 必须命中）
@@ -138,11 +138,12 @@ python -m unittest discover -s tests -v
 
 ### 2.7 批量写样机参数（默认走 telnet 路径）
 
-- **状态**：已确认验收（1 台单台 telnet 路径，2026-07-17）/ 已实现未验收（2 / 4 / 8 台并行）
+- **状态**：已确认验收（1 台单台 telnet 路径，2026-07-17）/ 已实现未验收（2 / 4 / 8 台并行；2026-07-18 已为节奏常量化 + 错峰启动，缓解多台并行随机失败）
 - **业务时序**：UBUS 启用 telnet → `TelnetSession`（未登录） → 首次登录 → `ppctl clear` → `ppctl set FACTORY_MODE=1` → `firstboot -yr` → 等 100 秒 → 工厂模式二次登录 → 15 项 `ppctl set/get` 读回校验 → `FACTORY_MODE=0` + `firstboot -yr`（`finally` 中执行）
 
   写参前置新增「启用对应通道网卡 + 按 `channel.network_card_ip` 设置静态 IP + `wait_for_bindable_ip` 等 15 秒」三步（任何一步失败抛 `RuntimeError` → worker 标记 `telnet 写参启动失败`，单台放弃不影响其它通道），位于 `make_telnet_factory` 内 UBUS 启用 telnet 之前；100 秒工厂模式网段切换继续由 `make_factory_session_swap` 处理，PC 端从 `192.168.1.x` 切到 `192.168.29.x`、主机位保持不变。`factory_bind_ip` / `factory_device_host` 未配置时按 `factory_bind_ip_for(network_card_ip)` / `factory_device_host_for(device_manage_ip)` 自动派生（第 3 段 → 29，主机位不变）；手动填值优先级最高。
 - **并行与取消**：并行 1-8 台（默认 2）；取消时停止后续命令并尝试退出工厂模式
+- **节奏常量（2026-07-18 P2 缓解）**：默认 `src/services/sample_parameter_service.py` 顶部 7 个常量，按现场经验统一调整；`_login` prompt/password_prompt 用 `PARAMETER_LOGIN_PROMPT_TIMEOUT_SECONDS=10.0`、password_result 用 `PARAMETER_LOGIN_PASSWORD_TIMEOUT_SECONDS=20.0`；`_write_and_verify` set 后 sleep `PARAMETER_SETTLE_AFTER_SET_SECONDS=1.5`、get 等 marker 用 `PARAMETER_GET_RESPONSE_TIMEOUT_SECONDS=10.0`、mismatch/marker=None 后退避 `PARAMETER_RETRY_BACKOFF_SECONDS=1.5`、成功/失败末尾 BETWEEN_PARAMS=`0.5`；并行 worker 错峰 `PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS=0.6`。若 8 台并行仍偶发失败，优先上调 `PARAMETER_GET_RESPONSE_TIMEOUT_SECONDS=15.0` 与 `PARAMETER_RETRY_BACKOFF_SECONDS=2.5`。
 - **前置 UBUS 协议**：经自写 `UbusHttpClient` 按 `SdmcUbusLibEnableTelnet.Enable_telnet` 协议开 LAN-telnet 规则 — ① 总开关 `Device.Firewall.<X_SDMC_>Security.AccessCtrl.Enable` 若非 `"1"` 则 `set Enable=1`（用对象路径 `...AccessCtrl.`，非参数路径，避免 fault 9005 `EnableEnable`）；② 查 `AccessCtrl.Rule.{}.` 既有 telnet 规则（`SourceInterface ∈ {lan, both, Device.IP.Interface.1}`）— 已启用返回 `already_present`，否则 `set Enable=1` 返回 `reused`；③ 若无合适规则则 `add {SourceInterface: Device.IP.Interface.1, IPVersion:4, SourceIP:0.0.0.0, Application:telnet}` 返回 `added_iface`；失败回退 `add SourceInterface=lan` 返回 `added_lan_fallback`。每步校验 `results[*].data == "1"`，末尾固定 `sleep_fn(ENABLE_TELNET_FINAL_SLEEP_SECONDS=1.0)` 给防火墙 reload 留缓冲。
 - **核心验收行为（2026-07-17 单台 VLAN114 真实样机验收通过）**：
   - 主执行日志依次输出「写参前置：准备网络 vlan114（192.168.1.114 / 255.255.255.0） → 检查并启用网卡 → 已启用网卡 → 设置静态 IP → 已设置 → UBUS 启用 telnet 中 → UBUS 三段消息（AccessCtrl 总开关开启 / 规则 enable / 最终 action） → UBUS 启用 telnet added_iface/already_present: ... → STATE Telnet 已连接 → 首次登录成功 → TX ppctl clear → TX ppctl set FACTORY_MODE=1 → TX firstboot -yr → 等待 100 秒 → 工厂模式网段切换：准备把 vlan114 设为 192.168.29.114（自动派生自 network_card_ip）→ 工厂模式重建 TelnetSession 成功（192.168.29.114 → 192.168.29.1） → 工厂模式二次登录 → 15 项 TX ppctl set/get 读回校验 → 写参完成，15 项均已读回校验 → TX ppctl set FACTORY_MODE=0 → TX firstboot -yr → 已下发退出工厂模式与重启命令」
@@ -152,6 +153,8 @@ python -m unittest discover -s tests -v
   - 密码类字段在终端与日志脱敏
   - 源 IP 不可绑时强提示人工检查 `network_card_ip.ini`，不回退 `0.0.0.0`
   - 派生失败（`network_card_ip` / `device_manage_ip` 缺失或格式无效）时 `_start_sample_parameter_write` 弹错误并要求补齐
+  - **配置冲突（2026-07-18）**：`bind_ip == device_host`（PC 静态 IP 与样机管理 IP 相同）→ PC 把自己作为目标连接，必然 timed out。`_start_sample_parameter_write` 预检命中即弹「样机 IP 配置冲突」并阻止 worker 启动；同时 `TelnetSession._open_socket` / `UbusHttpClient._post` 在 `bind_ip == device_host` 时，错误消息附加 hint 提示操作员去 `network_card_ip.ini` 修 `device_manage_ip`（典型值 192.168.1.1）。
+  - **退出工厂模式清理失败（2026-07-19）**：`finally` 清理块把 `ppctl set FACTORY_MODE=0` 与 `firstboot -yr` 拆为两个独立 `try/except`，第 1 步失败也会尝试第 2 步（best-effort）。两步的 TX 主程序执行日志都必然出现（`_send_stage` 内部 `emit` 在 `send_line` 之前），失败消息明确包含 step 名（`FACTORY_MODE=0 下发失败：…` / `firstboot -yr 下发失败：…`），多条失败用「；」拼接，便于操作员分辨是哪一步触发的"Telnet 连接已关闭"。
 - **禁止破坏**：
   - `TelnetSession`、`UbusHttpClient` 必须按 VLAN `bind_ip` 锁源（`source_address=(bind_ip, 0)`）
   - 串口路径保留作 transport 配置回退入口；其他功能（页面升级 / 全包升级 / 串口终端）不受影响

@@ -247,3 +247,172 @@ class SampleParameterServiceTests(unittest.TestCase):
         self.assertIn("ppctl set FACTORY_MODE=0", new_writes)
         self.assertIn("firstboot -yr", new_writes)
         self.assertTrue(old_session.closed)
+
+
+class _FlakyFakeSession(FakeSession):
+    """FakeSession 子类,支持对特定 command 抛异常以模拟连接关闭。
+
+    抛出后,_send_stage 内的 ``session.send_line`` 会立即抛 ``RuntimeError``,
+    模拟 ``TelnetSession.write`` 在 ``self._closed=True`` 或 ``sendall`` OSError 时的行为。
+
+    ``fail_on_call_index`` 用于只在第 N 次匹配该子串时抛异常,避免影响
+    流水线中更早的同名命令(例如 ``firstboot -yr`` 既有"进入工厂模式"也有
+    "退出工厂模式清理"两次,只想让第 2 次失败)。
+    """
+
+    def __init__(self, failing_command_substrings=(), fail_on_call_index=None):
+        super().__init__()
+        self.failing_command_substrings = tuple(failing_command_substrings)
+        # 形如 {"firstboot -yr": 2} 表示"firstboot -yr"第 2 次出现时抛;
+        # 不在 dict 里的子串永不抛;形如 {"firstboot -yr": 1} 表示第 1 次就抛。
+        self.fail_on_call_index = dict(fail_on_call_index or {})
+        self._match_counts: dict[str, int] = {}
+        self.failed_commands: list[str] = []
+
+    def send_line(self, text, sensitive=False):
+        for needle in self.failing_command_substrings:
+            if needle in text:
+                self._match_counts[needle] = self._match_counts.get(needle, 0) + 1
+                target = self.fail_on_call_index.get(needle)
+                # 没指定 target → 立刻抛(向后兼容);指定 target → 只在该次抛。
+                if target is None or self._match_counts[needle] == target:
+                    self.failed_commands.append(text)
+                    raise RuntimeError(f"Telnet 连接已关闭:192.168.29.1:23")
+                # 还没到目标次数,落到 FakeSession.send_line 正常写。
+                break
+        super().send_line(text, sensitive=sensitive)
+
+
+class SampleParameterServiceCleanupFailureTests(unittest.TestCase):
+    """退出工厂模式清理失败日志(2026-07-19):两步独立 try/except 后,每一步的
+    TX 主程序执行日志必然出现,失败消息明确标识是哪一步触发的连接关闭。"""
+
+    def test_cleanup_emits_both_tx_lines_even_when_firstboot_fails(self):
+        # 第 1 步 FACTORY_MODE=0 成功,第 2 步 firstboot -yr 抛 "Telnet 连接已关闭"。
+        # 期望主执行日志: TX FACTORY_MODE=0 → TX firstboot -yr → 失败(明确 step 名)
+        # → 请人工确认。关键: TX firstboot -yr 必须出现;失败消息不吞掉第 1 步成功上下文。
+        # ``firstboot -yr`` 在流水线里出现两次(进入工厂模式 + 退出清理),
+        # 用 ``fail_on_call_index=2`` 让第 2 次(清理)失败,避免把入口流程也搞坏。
+        session = _FlakyFakeSession(
+            failing_command_substrings=("firstboot -yr",),
+            fail_on_call_index={"firstboot -yr": 2},
+        )
+        manager = FakeManager(session)
+        request = SampleParameterWriteRequest("vlan112", "COM112", "root", "initial-secret", values())
+        messages: list = []
+        result = run_single_sample_parameter_write(
+            request, manager, messages.append, sleep_fn=lambda _seconds: None
+        )
+        # 主流程 15 项全部成功(异常只在 finally 清理抛)。
+        self.assertTrue(result.ok, result.message)
+        writes = [text for text, _ in session.writes if isinstance(text, str)]
+        self.assertIn("ppctl set FACTORY_MODE=0", writes)
+        self.assertIn("firstboot -yr", writes)
+        self.assertEqual(session.failed_commands, ["firstboot -yr"])
+        # 主执行日志按顺序出现两条 TX:cleanup 的 FACTORY_MODE=0 在 cleanup 的 firstboot -yr 之前。
+        # 精确字符串匹配避免与入口阶段的 FACTORY_MODE=1 / firstboot -yr 混淆。
+        tx_factory_index = messages.index("vlan112 TX ppctl set FACTORY_MODE=0")
+        tx_firstboot_indices = [
+            index for index, message in enumerate(messages)
+            if message == "vlan112 TX firstboot -yr"
+        ]
+        self.assertEqual(len(tx_firstboot_indices), 2, messages)
+        cleanup_firstboot_index = tx_firstboot_indices[1]
+        self.assertGreater(cleanup_firstboot_index, tx_factory_index)
+        # 失败日志明确标识为 firstboot -yr 下发失败。
+        self.assertTrue(
+            any("firstboot -yr 下发失败" in message for message in messages),
+            messages,
+        )
+        self.assertTrue(
+            any("请人工确认设备已退出工厂模式" in message for message in messages),
+            messages,
+        )
+        # 成功收尾日志被抑制(因为有失败步骤)。
+        self.assertFalse(
+            any("已下发退出工厂模式与重启命令" in message for message in messages),
+            messages,
+        )
+
+    def test_cleanup_reports_factory_mode_failure_when_step_one_fails(self):
+        # 第 1 步 FACTORY_MODE=0 立刻抛异常,模拟连接在清理时已被关闭。
+        # 期望:第 1 步的 TX 出现 + 第 1 步失败消息;第 2 步 firstboot -yr 仍要尝试
+        # 并在主执行日志出现 TX 行(best-effort);firstboot 也失败时,两条失败都用
+        # ";" 分隔出现在汇总消息里。
+        # ``FACTORY_MODE=0`` 出现一次(只在 cleanup 阶段),``firstboot -yr`` 出现两次
+        # (进入工厂 + 退出清理),所以 fail_on_call_index 配成 1 / 2。
+        session = _FlakyFakeSession(
+            failing_command_substrings=(
+                "ppctl set FACTORY_MODE=0",
+                "firstboot -yr",
+            ),
+            fail_on_call_index={
+                "ppctl set FACTORY_MODE=0": 1,
+                "firstboot -yr": 2,
+            },
+        )
+        manager = FakeManager(session)
+        request = SampleParameterWriteRequest("vlan112", "COM112", "root", "initial-secret", values())
+        messages: list = []
+        result = run_single_sample_parameter_write(
+            request, manager, messages.append, sleep_fn=lambda _seconds: None
+        )
+        self.assertTrue(result.ok, result.message)
+        # 两条命令都被尝试(FACTORY_MODE 先,firstboot 后)。
+        self.assertEqual(
+            session.failed_commands,
+            ["ppctl set FACTORY_MODE=0", "firstboot -yr"],
+        )
+        # 主执行日志里两步的 TX 行都出现,顺序 FACTORY_MODE 在前。
+        # 精确字符串匹配避免与入口阶段的 FACTORY_MODE=1 / firstboot -yr 混淆。
+        tx_factory_index = messages.index("vlan112 TX ppctl set FACTORY_MODE=0")
+        tx_firstboot_indices = [
+            index for index, message in enumerate(messages)
+            if message == "vlan112 TX firstboot -yr"
+        ]
+        self.assertEqual(len(tx_firstboot_indices), 2, messages)
+        self.assertLess(tx_factory_index, tx_firstboot_indices[1])
+        # 失败汇总消息把两条都列出来,用 ";" 分隔,且明确指明是哪一步失败。
+        failure_lines = [
+            message for message in messages
+            if message.startswith("vlan112 写参：退出工厂模式清理失败：")
+        ]
+        self.assertEqual(len(failure_lines), 1, failure_lines)
+        combined = failure_lines[0]
+        self.assertIn("FACTORY_MODE=0 下发失败", combined)
+        self.assertIn("firstboot -yr 下发失败", combined)
+        self.assertIn("；", combined)
+        # 仍输出"请人工确认"提示。
+        self.assertTrue(
+            any("请人工确认设备已退出工厂模式" in message for message in messages),
+            messages,
+        )
+
+    def test_cleanup_success_log_unchanged_when_both_steps_succeed(self):
+        # 成功路径回归:两步都下发成功时,主执行日志必须出现"已下发退出工厂模式与重启命令。"
+        # 与"已下发退出工厂模式与重启命令"互斥的失败消息不应出现。
+        session = FakeSession()
+        manager = FakeManager(session)
+        request = SampleParameterWriteRequest("vlan112", "COM112", "root", "initial-secret", values())
+        messages: list = []
+        result = run_single_sample_parameter_write(
+            request, manager, messages.append, sleep_fn=lambda _seconds: None
+        )
+        self.assertTrue(result.ok, result.message)
+        writes = [text for text, _ in session.writes if isinstance(text, str)]
+        self.assertIn("ppctl set FACTORY_MODE=0", writes)
+        self.assertIn("firstboot -yr", writes)
+        # 成功收尾日志出现。
+        self.assertTrue(
+            any("已下发退出工厂模式与重启命令" in message for message in messages),
+            messages,
+        )
+        # 失败相关日志不出现。
+        self.assertFalse(
+            any("退出工厂模式清理失败" in message for message in messages),
+            messages,
+        )
+        self.assertFalse(
+            any("请人工确认设备已退出工厂模式" in message for message in messages),
+            messages,
+        )

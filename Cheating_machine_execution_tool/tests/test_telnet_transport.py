@@ -167,6 +167,29 @@ class TelnetSessionTests(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
 
+    def test_open_socket_error_hint_when_bind_ip_equals_device_host(self):
+        """2026-07-18:bind_ip 与 device_host 相同时,Telnet 连接失败错误消息应附加 hint,
+        便于操作员快速定位 network_card_ip.ini 中 device_manage_ip 误填。
+        """
+        # mock socket.create_connection 让它抛 timed out
+        with patch("src.core.telnet_transport.ip_is_bindable_locally", return_value=True), \
+             patch("src.core.telnet_transport.socket.create_connection", side_effect=OSError(110, "timed out")):
+            with self.assertRaisesRegex(RuntimeError, "提示") as ctx:
+                TelnetSession("192.168.1.110", "192.168.1.110", device_port=23)
+        msg = str(ctx.exception)
+        self.assertIn("Telnet 连接失败 192.168.1.110:23 源 IP 192.168.1.110", msg)
+        self.assertIn("bind_ip 与 device_host 相同", msg)
+        self.assertIn("device_manage_ip", msg)
+        self.assertIn("192.168.1.1", msg)  # 提示中应提到典型样机管理 IP
+
+    def test_open_socket_error_no_hint_when_bind_ip_differs_from_device_host(self):
+        """bind_ip 与 device_host 不同时,错误消息不应附加 hint,保持原行为。"""
+        with patch("src.core.telnet_transport.ip_is_bindable_locally", return_value=True), \
+             patch("src.core.telnet_transport.socket.create_connection", side_effect=OSError(110, "timed out")):
+            with self.assertRaises(RuntimeError) as ctx:
+                TelnetSession("192.168.1.110", "192.168.1.1", device_port=23)
+        self.assertNotIn("提示", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

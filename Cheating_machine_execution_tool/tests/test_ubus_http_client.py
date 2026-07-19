@@ -137,6 +137,36 @@ class UbusHttpClientTests(unittest.TestCase):
             client.close()
             self.assertIsNone(client._connection)
 
+    def test_post_error_hint_when_bind_ip_equals_device_host(self):
+        """2026-07-18:bind_ip 与 device_host 相同时,UBUS HTTP 错误消息应附加 hint
+        （与 TelnetSession._open_socket 同款）,便于操作员快速定位
+        network_card_ip.ini 中 device_manage_ip 误填。
+        """
+        with self._patch_ip():
+            client = UbusHttpClient("192.168.1.110", "192.168.1.110")
+        with patch.object(client, "_ensure_connection") as ensure:
+            connection = MagicMock()
+            ensure.return_value = connection
+            connection.request.side_effect = OSError(110, "timed out")
+            with self.assertRaisesRegex(UbusError, "提示") as ctx:
+                client._post(["session-id", "bbf.shell", "get", {"path": "Device.Firewall.X_SDMC_Security.AccessCtrl.Enable"}])
+        msg = str(ctx.exception)
+        self.assertIn("bind_ip 与 device_host 相同", msg)
+        self.assertIn("192.168.1.110", msg)
+        self.assertIn("device_manage_ip", msg)
+
+    def test_post_error_no_hint_when_bind_ip_differs_from_device_host(self):
+        """bind_ip 与 device_host 不同时,UBUS HTTP 错误消息不应附加 hint,保持原行为。"""
+        with self._patch_ip():
+            client = UbusHttpClient("192.168.1.110", "192.168.1.1")
+        with patch.object(client, "_ensure_connection") as ensure:
+            connection = MagicMock()
+            ensure.return_value = connection
+            connection.request.side_effect = OSError(110, "timed out")
+            with self.assertRaises(UbusError) as ctx:
+                client._post(["session-id", "bbf.shell", "get", {"path": "x"}])
+        self.assertNotIn("提示", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

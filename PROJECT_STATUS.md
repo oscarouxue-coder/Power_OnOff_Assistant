@@ -1,6 +1,6 @@
 # 项目交接状态
 
-更新：2026-07-13
+更新：2026-07-19
 
 ## 项目目标与当前实现进度
 
@@ -13,11 +13,12 @@
 | 页面升级（UBUS 批量 + 可选恢复出厂） | 升级已完成；恢复出厂待真实样机验收 |
 | 全包升级 `Tftp指令`、`Tftp Put`（串行/并行 1–8 台） | 已真实样机验收 |
 | `Tftp指令` ARP Retry count exceeded 自动重试 3 次 | 已真实样机验收 |
-| 批量写样机参数（VLAN 表匹配、并行、set/get 校验） | 已 1 台真实样机验收（2026-07-17，Telnet 路径）；2/4/8 台并行待真实样机验收 |
+| 批量写样机参数（VLAN 表匹配、并行、set/get 校验） | 已 1 台真实样机验收（2026-07-17，Telnet 路径）；2/4/8 台并行待真实样机验收（2026-07-18 已常量化 7 个节奏常量 + 错峰启动 0.6s 缓解多台并行随机失败） |
 | 写样机参数 UBUS 启用 telnet（按 VLAN 网卡 IP 锁源） | 已 1 台真实样机验收（2026-07-17，UBUS 三段日志确认）；2/4/8 台并行待真实样机验收 |
+| 写样机参数 7 个节奏常量（set 后 settle / get 超时 / 重试退避 / 项间间隔 / 登录超时 / 错峰启动） | 单元测试通过（2026-07-18，15 项 Pacing 回归） |
 | 随机批量参数表生成（`.xlsx`） | 单元测试通过 |
 | ZTE OLT ONU 查询、注册、离线 ONU 清理重试 | 已完成 |
-| 单元测试 | 249 项通过（2026-07-17，含 telnet 14 + ubus 17 + factory 派生 8 + UBUS retry 3） |
+| 单元测试 | 273 项通过（2026-07-19，含 270 + 退出工厂模式清理失败步骤名标识 3 项） |
 
 ## 关键文件及其作用
 
@@ -46,7 +47,7 @@
 **待完成**：
 
 - 真实样机验收页面升级“恢复出厂”。
-- 真实 2/4/8 台独立 VLAN/COM 并行验收批量写参（2026-07-17 已 1 台验收通过）：确认 VLAN/MAC 对应、读回校验、取消后的工厂模式清理与重启、日志脱敏。
+- 真实 2/4/8 台独立 VLAN/COM 并行验收批量写参（2026-07-17 已 1 台验收通过；2026-07-18 已将 7 个节奏常量（set 后 settle / get 超时 / 重试退避 / 项间间隔 / 登录超时 / 错峰启动 0.6s）常量化并通过 15 项节奏回归单测，多台并行随机失败风险已缓解）。
 
 **当前问题/限制**：
 
@@ -74,7 +75,7 @@ python -m py_compile line_check_assistant\app.py src\services\serial_upgrade_ser
 python -m unittest discover -s tests -v
 ```
 
-- 当前全量测试预期：`Ran 249 tests ... OK`（2026-07-17 实跑，原 199 + 本轮新增 50：网络准备前置 4 + factory 派生 14 + factory session swap 7 + 其它 22 + UBUS retry 3）。
+- 当前全量测试预期：`Ran 273 tests ... OK`（2026-07-19 实跑，原 270 + 本轮新增 3：退出工厂模式清理失败步骤名标识）。
 - VS Code 使用 `.vscode/launch.json` 的 `LineCheckAssistant`，工作目录为 `Cheating_machine_execution_tool`。
 - 打包：`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1`；构建后不要在当前 PC 运行 `dist\LineCheckAssistant.exe`，仅确认构建成功并报告路径。
 - 每次代码、测试或文档改动后追加 `DEVELOPMENT_LOG.md`；影响本文件结论时同步更新本文件。

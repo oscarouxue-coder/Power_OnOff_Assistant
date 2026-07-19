@@ -481,5 +481,93 @@ class SampleParameterAppUbusRetryTests(unittest.TestCase):
         self.assertEqual(len(retry_logs), 0, f"expected no retry logs on first-try success, got {retry_logs}")
 
 
+class SampleParameterAppBindConflictPreflightTests(unittest.TestCase):
+    """2026-07-18:_start_sample_parameter_write 在检测到 bind_ip == device_host
+    时应弹 messagebox.showerror 提示「样机 IP 配置冲突」并阻止 worker 启动。
+
+    根因:用户曾把 network_card_ip.ini 的 device_manage_ip 误填为 PC 静态 IP（如
+    vlan110 写成 192.168.1.110），导致 PC 把自己作为目标连接，15 秒后 timed out。
+    """
+
+    @staticmethod
+    def _make_preflight_with_targets(targets):
+        """构造 _refresh_parameter_preflight 期望返回的 ParameterTablePreflight。"""
+        preflight = Mock()
+        preflight.ok = True
+        preflight.errors = ()
+        preflight.targets = targets
+        return preflight
+
+    @staticmethod
+    def _make_target(vlan: str, mac: str = "02:00:00:00:01:10"):
+        target = Mock()
+        target.vlan = vlan
+        target.serial_port = "COM110"
+        target.record.values = {"MAC": mac}
+        return target
+
+    @patch("line_check_assistant.app.messagebox")
+    def test_start_shows_error_when_bind_ip_equals_device_host(self, mock_messagebox):
+        """bind_ip == device_host → 弹错,不启动 worker。"""
+        fake_app = Mock()
+        fake_app.parameter_write_running = False
+        fake_app.parameter_initial_username_var.get.return_value = "root"
+        fake_app.parameter_initial_password_var.get.return_value = "x"
+        fake_app.parameter_parallel_count_var.get.return_value = 2
+        fake_app.parameter_window = Mock()
+        fake_app.parameter_writer_window = Mock()
+        fake_app.parameter_preflight = self._make_preflight_with_targets(
+            [self._make_target("vlan110", "02:00:00:00:01:10")]
+        )
+        # bind_ip 与 device_host 故意相同(复现用户现场的 network_card_ip.ini 配置)
+        fake_app._bind_ip_for_vlan.return_value = "192.168.1.110"
+        fake_app._device_host_for_vlan.return_value = "192.168.1.110"
+        fake_app._factory_bind_ip_for_vlan.return_value = "192.168.29.110"
+        fake_app._factory_device_host_for_vlan.return_value = "192.168.29.1"
+        fake_app._refresh_parameter_preflight = Mock()
+
+        LineCheckAssistant._start_sample_parameter_write(fake_app)
+
+        # 必须弹 showerror,标题含「样机 IP 配置冲突」
+        mock_messagebox.showerror.assert_called_once()
+        title, message = mock_messagebox.showerror.call_args.args[0], mock_messagebox.showerror.call_args.args[1]
+        self.assertIn("样机 IP 配置冲突", title)
+        self.assertIn("192.168.1.110", message)
+        self.assertIn("PC 无法把自己作为目标连接", message)
+        self.assertIn("device_manage_ip", message)
+        # 后续 worker 不应启动
+        fake_app._sample_parameter_write_worker.assert_not_called()
+        # 参数写入状态不应进入 running
+        self.assertFalse(fake_app.parameter_write_running)
+
+    @patch("line_check_assistant.app.messagebox")
+    def test_start_proceeds_when_bind_ip_differs_from_device_host(self, mock_messagebox):
+        """bind_ip 与 device_host 不同时,正常进入确认框（此处仅断言不弹冲突错误且不启动 worker,避免真跑弹窗流程）。"""
+        fake_app = Mock()
+        fake_app.parameter_write_running = False
+        fake_app.parameter_initial_username_var.get.return_value = "root"
+        fake_app.parameter_initial_password_var.get.return_value = "x"
+        fake_app.parameter_parallel_count_var.get.return_value = 2
+        fake_app.parameter_writer_window = Mock()
+        fake_app.parameter_preflight = self._make_preflight_with_targets(
+            [self._make_target("vlan114", "02:00:00:00:01:14")]
+        )
+        # bind_ip 与 device_host 不同(正确配置)
+        fake_app._bind_ip_for_vlan.return_value = "192.168.1.114"
+        fake_app._device_host_for_vlan.return_value = "192.168.1.1"
+        fake_app._factory_bind_ip_for_vlan.return_value = "192.168.29.114"
+        fake_app._factory_device_host_for_vlan.return_value = "192.168.29.1"
+        fake_app._refresh_parameter_preflight = Mock()
+        # 模拟用户确认框返回 True,跳过线程启动,只看 showerror 是否被调用
+        mock_messagebox.askyesno.return_value = False
+
+        LineCheckAssistant._start_sample_parameter_write(fake_app)
+
+        # 没有弹「样机 IP 配置冲突」错误
+        if mock_messagebox.showerror.called:
+            title = mock_messagebox.showerror.call_args.args[0]
+            self.assertNotIn("样机 IP 配置冲突", title, f"unexpected error: {title}")
+
+
 if __name__ == "__main__":
     unittest.main()

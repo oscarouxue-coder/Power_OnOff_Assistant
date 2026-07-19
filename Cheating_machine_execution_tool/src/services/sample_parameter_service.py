@@ -26,6 +26,19 @@ FACTORY_PASSWORD = "t*hEQ#BHu7z%3n"
 FACTORY_REBOOT_WAIT_SECONDS = 100
 PARAMETER_MAX_PARALLEL = 8
 PARAMETER_WRITE_RETRIES = 3
+# 写参节奏控制（按真实样机经验调整）。
+# 历史硬编码值:_write_and_verify set→get 间隔 1.0s / get 等 marker 4.0s;
+# _login prompt 8s / password_prompt 8s / password_result 15s。
+# 多台并行（≥4 台）时样机偶发 `ppctl set` 落盘慢、`ppctl get` 读回旧值或超时,
+# 造成 readback 校验失败 → 3 次重试仍失败 → 单台标记失败。
+# 把上述时间常量化并适度放宽,允许后续统一按现场经验调整而无需修改业务代码。
+PARAMETER_SETTLE_AFTER_SET_SECONDS = 1.5        # 原硬编码 1.0;set 后等样机落盘再发 get
+PARAMETER_GET_RESPONSE_TIMEOUT_SECONDS = 10.0   # 原硬编码 4.0;get 后等 marker 的最长秒数
+PARAMETER_RETRY_BACKOFF_SECONDS = 1.5           # 原无;set/get 校验失败后下次重试前的退避
+PARAMETER_BETWEEN_PARAMS_SECONDS = 0.5          # 原无;同一台样机 15 项参数之间留缓冲
+PARAMETER_LOGIN_PROMPT_TIMEOUT_SECONDS = 10.0   # 原硬编码 8.0;_login 等 prompt / username 的上限
+PARAMETER_LOGIN_PASSWORD_TIMEOUT_SECONDS = 20.0 # 原硬编码 15.0;_login 等密码回执的上限
+PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS = 0.6# 原无;并行 worker 错峰启动延迟(按 index 累加)
 _MAC_PATTERN = re.compile(r"^[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}$")
 _DANGEROUS_VALUE_CHARS = frozenset({'\r', '\n', '"'})
 
@@ -97,16 +110,30 @@ def run_parallel_sample_parameter_writes(
     on_session_ready: SessionReady | None = None,
     cancel_event: threading.Event | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
+    startup_stagger_seconds: float = PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS,
 ) -> list[SampleParameterItemResult]:
+    """并行调度 ``run_single_sample_parameter_write``。
+
+    错峰启动（2026-07-18 P2 缓解）：``startup_stagger_seconds`` 控制每个 worker
+    在 ``executor.submit`` 之前按 ``index * stagger`` 顺序 sleep。第一个 worker
+    立即启动,后续每个 worker 等前一个 sleep 后再 submit,避免 8 台同 t=0 触发
+    网络准备 + UBUS 4 段 HTTP + telnet login 把网卡/防火墙挤爆。
+
+    ``startup_stagger_seconds <= 0`` 时关闭错峰（保持旧行为）。
+    """
     items = list(requests)
     if not items:
         return []
     workers = max(1, min(int(parallel_count), PARAMETER_MAX_PARALLEL, len(items)))
     cancel = cancel_event or threading.Event()
     indexed_results: dict[int, SampleParameterItemResult] = {}
+    stagger = float(startup_stagger_seconds)
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="sample-parameter") as executor:
-        futures = {
-            executor.submit(
+        futures: dict = {}
+        for index, request in enumerate(items):
+            if index > 0 and stagger > 0:
+                sleep_fn(stagger)
+            future = executor.submit(
                 run_single_sample_parameter_write,
                 request,
                 session_manager,
@@ -114,9 +141,8 @@ def run_parallel_sample_parameter_writes(
                 on_session_ready,
                 cancel,
                 sleep_fn,
-            ): index
-            for index, request in enumerate(items)
-        }
+            )
+            futures[future] = index
         for future in as_completed(futures):
             index = futures[future]
             request = items[index]
@@ -259,13 +285,27 @@ def run_parameter_write_pipeline(
         return SampleParameterItemResult(request, False, f"{request.vlan} 写参异常：{exc}", 0, (), cancel.is_set())
     finally:
         if entered_factory:
+            # 退出工厂模式需要两步：1) FACTORY_MODE=0 关掉标志 2) firstboot -yr 触发实际重启。
+            # 两步独立 try/except（2026-07-19）：第 1 步失败也要尝试第 2 步
+            # (设备已断电/重置场景下 best-effort),并把失败步骤名嵌入错误消息,
+            # 避免日志只能看到 "Telnet 连接已关闭" 而无法分辨是 FACTORY_MODE
+            # 还是 firstboot 触发的连接关闭。两步的 TX 主程序执行日志都必然出现
+            # (因为 _send_stage 内部先 emit 再 send_line),操作员能看清
+            # "哪一步在哪一秒执行 / 哪一步失败 / 哪一步成功"。
+            cleanup_failures: list[str] = []
             try:
                 _send_stage(session, "ppctl set FACTORY_MODE=0", False, emit, request.vlan)
-                _send_stage(session, "firstboot -yr", False, emit, request.vlan)
-                emit(f"{request.vlan} 写参：已下发退出工厂模式与重启命令。")
             except Exception as exc:
-                emit(f"{request.vlan} 写参：退出工厂模式清理失败：{exc}")
+                cleanup_failures.append(f"FACTORY_MODE=0 下发失败：{exc}")
+            try:
+                _send_stage(session, "firstboot -yr", False, emit, request.vlan)
+            except Exception as exc:
+                cleanup_failures.append(f"firstboot -yr 下发失败：{exc}")
+            if cleanup_failures:
+                emit(f"{request.vlan} 写参：退出工厂模式清理失败：{'；'.join(cleanup_failures)}")
                 emit(f"{request.vlan} 写参：请人工确认设备已退出工厂模式。")
+            else:
+                emit(f"{request.vlan} 写参：已下发退出工厂模式与重启命令。")
 
 
 def _record_errors(vlan: str, record: SampleParameterRecord) -> list[str]:
@@ -290,17 +330,17 @@ def _login(session, username: str, password: str, cancel: threading.Event, sleep
             return False
         cursor = session.cursor()
         session.write(b"\r")
-        prompt = session.wait_for_any(("#", ">", "login:", "username:"), 8, cursor)
+        prompt = session.wait_for_any(("#", ">", "login:", "username:"), PARAMETER_LOGIN_PROMPT_TIMEOUT_SECONDS, cursor)
         if prompt in ("#", ">"):
             return True
         username_cursor = session.cursor()
         session.send_line(username, sensitive=True)
-        password_prompt = session.wait_for_any(("password:", "passvord:"), 8, username_cursor)
+        password_prompt = session.wait_for_any(("password:", "passvord:"), PARAMETER_LOGIN_PROMPT_TIMEOUT_SECONDS, username_cursor)
         if password_prompt not in ("password:", "passvord:"):
             continue
         result_cursor = session.cursor()
         session.send_line(password, sensitive=True)
-        result = session.wait_for_any(("#", ">", "incorrect", "failed"), 15, result_cursor)
+        result = session.wait_for_any(("#", ">", "incorrect", "failed"), PARAMETER_LOGIN_PASSWORD_TIMEOUT_SECONDS, result_cursor)
         if result in ("#", ">"):
             return True
         _wait_cancellable(1, cancel, sleep_fn)
@@ -317,21 +357,31 @@ def _write_and_verify(session, vlan: str, label: str, command_prefix: str, value
         command = f'{command_prefix}"{value}"'
         emit(f"{vlan} TX {command_prefix}{repr(value)}（{label}，第 {attempt}/{PARAMETER_WRITE_RETRIES} 次）")
         session.send_line(command, sensitive=sensitive)
-        if not _wait_cancellable(1, cancel, sleep_fn):
+        # set 后等样机落盘再发 get（原硬编码 1.0s,多台并行下偶发 get 在 set 还没完成时执行
+        # 导致读回旧值 → mismatch → 3 次重试仍失败）。
+        if not _wait_cancellable(PARAMETER_SETTLE_AFTER_SET_SECONDS, cancel, sleep_fn):
             return False
         cursor = session.cursor()
         emit(f"{vlan} TX {read_command}（读取 {label}）")
         session.send_line(read_command)
-        marker = session.wait_for_any((f"{variable}=", f"{variable} =", f"{variable}:"), 4, cursor)
+        marker = session.wait_for_any((f"{variable}=", f"{variable} =", f"{variable}:"), PARAMETER_GET_RESPONSE_TIMEOUT_SECONDS, cursor)
         if marker is None:
             emit(f"{vlan} {label} 第 {attempt}/{PARAMETER_WRITE_RETRIES} 次读回无响应。")
+            # marker 没等到(样机响应慢 / 掉包),先退避再重试,避免立刻连续下发给样机叠加负载。
+            _wait_cancellable(PARAMETER_RETRY_BACKOFF_SECONDS, cancel, sleep_fn)
             continue
         actual = _extract_readback(session.peek_since(cursor), variable)
         actual_for_compare = _normalize_mac(actual) if label == "MAC" else actual
         if actual_for_compare == expected:
             emit(f"{vlan} {label} 写入并读回校验成功（第 {attempt} 次）。")
+            # 同一台样机相邻 15 项参数之间留缓冲,避免命令队列压满。
+            _wait_cancellable(PARAMETER_BETWEEN_PARAMS_SECONDS, cancel, sleep_fn)
             return True
         emit(f"{vlan} {label} 第 {attempt}/{PARAMETER_WRITE_RETRIES} 次读回不一致。")
+        # 读回不一致后,下次重试前退避,让样机有缓冲时间。
+        _wait_cancellable(PARAMETER_RETRY_BACKOFF_SECONDS, cancel, sleep_fn)
+    # 3 次都失败,函数返回前再睡一格 BETWEEN_PARAMS,与成功路径节奏一致(给样机收尾)。
+    _wait_cancellable(PARAMETER_BETWEEN_PARAMS_SECONDS, cancel, sleep_fn)
     return False
 
 

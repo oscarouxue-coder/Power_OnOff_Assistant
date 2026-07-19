@@ -2,6 +2,96 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-07-19 - 写样机参数退出工厂模式清理失败：两步独立 try/except + 失败步骤名
+
+- 类型：BUG 修复 / 测试
+- 背景：用户线下 6 台真实样机跑批量写参，主执行日志在 VLAN112 上抓到一段有歧义的输出：
+  ```
+  13:27:52  VLAN112 TX ppctl set XPON_SN='XPOND8AIKI54'（XPON SN，第 2/3 次）
+  13:27:53  VLAN112 TX ppctl get XPON_SN（读取 XPON SN）
+  13:27:53  VLAN112 TX ppctl set FACTORY_MODE=0
+  13:27:53  VLAN112 写参：退出工厂模式清理失败：Telnet 连接已关闭：192.168.29.1:23
+  13:27:53  VLAN112 写参：请人工确认设备已退出工厂模式。
+  ```
+  清理阶段本应依次下发 `FACTORY_MODE=0` 和 `firstboot -yr`，但 `TX firstboot -yr` 这一行消失了，紧接着直接是"退出工厂模式清理失败"，操作员无法判断：① `firstboot -yr` 到底有没有尝试过；② 是 `FACTORY_MODE=0` 还是 `firstboot -yr` 触发"连接已关闭"；③ 设备是否处于 `FACTORY_MODE=0` 但未重启的"半退出"状态。
+- 根因：`src/services/sample_parameter_service.py` 的 `finally` 块把 `FACTORY_MODE=0` 和 `firstboot -yr` 两次 `_send_stage` 包在同一个 `try/except` 里，第 2 步抛 `RuntimeError` 会被外层 except 直接捕获并只输出一行笼统的"清理失败"，既没有 step 名区分、也没有把第 1 步的成功上下文保留下来。
+- 完成内容：
+  1. **`src/services/sample_parameter_service.py`** — 把 `finally` 块改成两步独立 `try/except`：
+     ```python
+     cleanup_failures: list[str] = []
+     try:
+         _send_stage(session, "ppctl set FACTORY_MODE=0", False, emit, request.vlan)
+     except Exception as exc:
+         cleanup_failures.append(f"FACTORY_MODE=0 下发失败：{exc}")
+     try:
+         _send_stage(session, "firstboot -yr", False, emit, request.vlan)
+     except Exception as exc:
+         cleanup_failures.append(f"firstboot -yr 下发失败：{exc}")
+     if cleanup_failures:
+         emit(f"{request.vlan} 写参：退出工厂模式清理失败：{'；'.join(cleanup_failures)}")
+         emit(f"{request.vlan} 写参：请人工确认设备已退出工厂模式。")
+     else:
+         emit(f"{request.vlan} 写参：已下发退出工厂模式与重启命令。")
+     ```
+     关键不变量：① 第 1 步失败不会阻止第 2 步尝试（best-effort）；② 两步的 TX 主程序执行日志都必然出现（`_send_stage` 内部 `emit` 在 `send_line` 之前）；③ 失败消息明确包含 step 名（`FACTORY_MODE=0 下发失败：…` / `firstboot -yr 下发失败：…`），并用「；」拼接多条失败；④ 成功路径日志、流程、调用方契约全部不变。
+  2. **`tests/test_sample_parameter_service.py`** — 新增 `SampleParameterServiceCleanupFailureTests` 3 项：
+     - `test_cleanup_emits_both_tx_lines_even_when_firstboot_fails`：用 `_FlakyFakeSession` + `fail_on_call_index={"firstboot -yr": 2}` 让 `firstboot -yr` 第 2 次（清理阶段）失败；断言 cleanup 的 `FACTORY_MODE=0` TX 在 cleanup 的 `firstboot -yr` TX 之前出现；断言 `firstboot -yr 下发失败` 与 `请人工确认设备已退出工厂模式` 都出现在主执行日志；断言成功收尾日志被抑制。
+     - `test_cleanup_reports_factory_mode_failure_when_step_one_fails`：FACTORY_MODE=0 和 firstboot -yr 都失败；断言 cleanup 的 `FACTORY_MODE=0` TX 与 cleanup 的 `firstboot -yr` TX 都出现，顺序 FACTORY_MODE 在前；断言失败汇总消息同时含 `FACTORY_MODE=0 下发失败` 和 `firstboot -yr 下发失败` 且用「；」分隔。
+     - `test_cleanup_success_log_unchanged_when_both_steps_succeed`：成功路径回归；断言"已下发退出工厂模式与重启命令"出现，"退出工厂模式清理失败"不出现。
+     `_FlakyFakeSession` 新增 `fail_on_call_index` 形参（dict 形如 `{"firstboot -yr": 2}` 表示第 2 次匹配才抛），用于精确控制哪一次同名命令失败；不指定 target 时保持"立刻抛"向后兼容。
+- 修改文件：`Cheating_machine_execution_tool/src/services/sample_parameter_service.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_service.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile src/services/sample_parameter_service.py tests/test_sample_parameter_service.py`；`python -m unittest discover -s tests -v`。
+- 验证结果：`py_compile` 通过；完整单测 `Ran 273 tests ... OK`（原 270 + 本轮新增 3）。
+- 后续待办：用户线下真实样机再次跑批量写参时，主执行日志期望出现
+  ```
+  VLANxxx TX ppctl set FACTORY_MODE=0
+  VLANxxx TX firstboot -yr
+  VLANxxx 写参：退出工厂模式清理失败：firstboot -yr 下发失败：Telnet 连接已关闭：192.168.29.1:23
+  VLANxxx 写参：请人工确认设备已退出工厂模式。
+  ```
+  两步 TX 都看得见 + 失败步骤名明确；按消息直接判断是 `FACTORY_MODE=0` 触发的连接关闭还是 `firstboot -yr` 触发的，再决定是否人工补 `firstboot -yr` / 重启样机 / 升级会话凭据。
+
+## 2026-07-18 - 写样机参数配置冲突预检：bind_ip == device_host 弹错 + 错误消息 hint
+
+- 类型：BUG 修复 / 测试
+- 背景：用户线下用 6 台样机（VLAN110-115）跑批量写样机参数，主执行日志依次出现
+  ```
+  - VLAN111 写参启动失败：Telnet 连接失败 192.168.1.111:23 源 IP 192.168.1.111：timed out
+  - VLAN110 写参启动失败：Telnet 连接失败 192.168.1.110:23 源 IP 192.168.1.110：timed out
+  ```
+  错误模式特征：`device_host == bind_ip == 192.168.1.{N}`，PC 想连 192.168.1.111:23 但源 IP 也是 192.168.1.111，等于连自己 → SYN 不被响应 → 15 秒后 timed out。根因：`Auto_power_on_off_tool/config/network_card_ip.ini` 中 VLAN110/VLAN111 这两段的 `device_manage_ip` 被误填为 PC 静态 IP（192.168.1.110/111），而其他通道正确填为 192.168.1.1。`vlan{N} -> 192.168.1.{N}` 这个约定只适用于 `network_card_ip`（PC 端 NIC IP），不适用于 `device_manage_ip`（设备自身的管理 IP，跟 VLAN 编号无关，典型 192.168.1.1）。
+- 完成内容：
+  1. **`line_check_assistant/app.py`** — `_start_sample_parameter_write` 在已有的「factory_bind_ip / factory_device_host 派生失败」校验之前新增「bind_ip == device_host 冲突」预检：命中即 `messagebox.showerror("样机 IP 配置冲突", ...)`，提示文案明确指出 "PC 无法把自己作为目标连接" 与修复位置（主界面表格或 `network_card_ip.ini` 的 `device_manage_ip` 字段，典型值 192.168.1.1）。
+  2. **`src/core/telnet_transport.py`** — `TelnetSession._open_socket` 在 `socket.create_connection` 抛 `OSError` 时，若 `bind_ip == device_host`，错误消息追加 hint（"bind_ip 与 device_host 相同，PC 无法把自己作为目标连接；请检查 network_card_ip.ini 中该 VLAN 的 device_manage_ip 是否误填为 PC 静态 IP，样机管理 IP 应是设备自身 IP，典型 192.168.1.1"），即便上游预检漏掉，下游也能给操作员明确的修复指引。
+  3. **`src/core/ubus_http_client.py`** — `UbusHttpClient._post` 在连接失败时附加同款 hint，保持 UBUS HTTP 与 Telnet 两条链路错误消息一致。
+  4. **测试** — `tests/test_sample_parameter_app.py` 新增 `SampleParameterAppBindConflictPreflightTests` 2 项：① `test_start_shows_error_when_bind_ip_equals_device_host` 模拟用户误配，断言 `showerror` 弹"样机 IP 配置冲突"且 worker 不启动；② `test_start_proceeds_when_bind_ip_differs_from_device_host` 断言正常配置不弹冲突错误。`tests/test_telnet_transport.py` 新增 2 项：hint 与 no-hint 场景。`tests/test_ubus_http_client.py` 新增 2 项：hint 与 no-hint 场景（用 `OSError(110, "timed out")` 触发）。所有新增测试均使用 `Mock`/`patch` 不真连网络，跑得快（< 100 ms）。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/core/telnet_transport.py`、`Cheating_machine_execution_tool/src/core/ubus_http_client.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_app.py`、`Cheating_machine_execution_tool/tests/test_telnet_transport.py`、`Cheating_machine_execution_tool/tests/test_ubus_http_client.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile src\core\telnet_transport.py src\core\ubus_http_client.py line_check_assistant\app.py tests\test_*`；`python -m unittest discover -s tests -v`。
+- 验证结果：`py_compile` 通过；完整 `python -m unittest discover -s tests -v` 共 **270 项** 全过（原 264 + 本轮新增 6）。
+- 后续待办：用户修改 `network_card_ip.ini` 把 VLAN110/VLAN111 的 `device_manage_ip` 改为 192.168.1.1（或其他真实设备管理 IP）后重新跑批量写参，主执行日志应不再出现"bind_ip == device_host"错误；其余 4 台（VLAN112/113/114/115）继续保持现状即可。后续若需扩展：在 `network_card_ip.ini` 启动时增加一次性配置体检，对所有通道的 `bind_ip`/`device_manage_ip`/`factory_bind_ip`/`factory_device_host` 做静态校验并写入主程序启动日志，便于现场发现同类配置错误。
+
+## 2026-07-18 - 写样机参数多台并行稳定性 — 节奏常量 + 错峰启动
+
+- 类型：性能优化 / 测试
+- 背景：用户线下用 8 台真实样机跑批量写样机参数,反馈"随机某台或多台样机写参失败"。经代码定位与用户现场经验,根因为多台并行时单台节奏过紧(`ppctl set` 后只等 1.0s 就发 `get`、`get` 等 marker 只给 4.0s、15 项参数之间无间隔、3 次重试无退避、8 台 worker 同 t=0 启动把 UBUS HTTP / 网卡 / 防火墙挤爆)。
+- 完成内容：
+  1. **`src/services/sample_parameter_service.py`** —— 新增 7 个模块级节奏常量(默认值按现场经验统一调整):
+     - `PARAMETER_SETTLE_AFTER_SET_SECONDS = 1.5`(原硬编码 1.0;set 后等样机落盘再发 get)
+     - `PARAMETER_GET_RESPONSE_TIMEOUT_SECONDS = 10.0`(原硬编码 4.0;get 后等 marker 的最长秒数)
+     - `PARAMETER_RETRY_BACKOFF_SECONDS = 1.5`(原无;mismatch / marker=None 后下次重试前退避)
+     - `PARAMETER_BETWEEN_PARAMS_SECONDS = 0.5`(原无;同一台样机 15 项参数之间留缓冲)
+     - `PARAMETER_LOGIN_PROMPT_TIMEOUT_SECONDS = 10.0`(原硬编码 8.0;_login 等 prompt / username)
+     - `PARAMETER_LOGIN_PASSWORD_TIMEOUT_SECONDS = 20.0`(原硬编码 15.0;_login 等密码回执)
+     - `PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS = 0.6`(原无;并行 worker 错峰启动延迟)
+     `_login` 3 处 `wait_for_any` 超时改用 `PARAMETER_LOGIN_PROMPT/PASSWORD_TIMEOUT_SECONDS`;`_write_and_verify` 的 set 后 settle / get 后 wait timeout / mismatch retry backoff / 成功失败末尾的 between-params sleep 全部按常量调用。`run_parallel_sample_parameter_writes` 新增 `startup_stagger_seconds` 形参,默认 = 常量;executor.submit 由 dict comprehension 改为 for-loop,按 `index > 0` 在 submit 前 `sleep_fn(stagger)`。
+  2. **`src/services/__init__.py`** —— 新增 `PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS` 的 `__all__` 与显式 re-export,使 `from src.services import PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS` 可用。
+  3. **`line_check_assistant/app.py`** —— `_sample_parameter_write_worker` 内 telnet 路径 executor 由 dict comprehension 改为 for-loop,`offset > 0` 时 `time.sleep(PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS)` 再 submit,避免 8 台同 t=0 触发网络准备 + UBUS 4 段 HTTP + telnet login 把网卡/防火墙挤爆。serial 路径走 `run_parallel_sample_parameter_writes` 默认 `startup_stagger_seconds` 自动生效,无需显式传。
+  4. **测试** —— `tests/test_sample_parameter_pacing.py` 新增 15 项回归:① `LoginPacingTests` 3 项 — 用包装 fake 驱动 _login 走完整 3 次 wait_for_any,断言 timeout = 对应常量;另 2 项是常量值本身的下界保护;② `WriteAndVerifyPacingTests` 4 项 — 用 `_RecordingSession` + `_aggregate_chunks` 还原 `_wait_cancellable` 切块后的 sleep,断言成功 / mismatch-then-success / 全 timeout / 全 mismatch 4 种场景的 sleep 模式精确等于 `[SETTLE, ... , BACKOFF, ..., BETWEEN]`;③ `ParallelStaggerTests` 3 项 — 3 个 requests 走 `run_parallel_sample_parameter_writes(stagger=X)`,断言 sleep_fn 调用次数与时长;另含 zero-stagger 与默认常量场景;④ `PacingConstantRegressionTests` 5 项 — 保护 7 个常量不会被改回更紧的值。新增 `_aggregate_chunks(sleeps)` 把 `_wait_cancellable` 切出的 `(1.0, 0.5)` 合并回 1.5s,避免 SETTLE 与 BACKOFF 同值(都 1.5s)在聚合前无法区分。
+- 修改文件:`Cheating_machine_execution_tool/src/services/sample_parameter_service.py`、`Cheating_machine_execution_tool/src/services/__init__.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_pacing.py`(新)、`DEVELOPMENT_LOG.md`。
+- 验证方法:`python -m py_compile src\services\sample_parameter_service.py src\services\__init__.py line_check_assistant\app.py tests\test_sample_parameter_pacing.py`;`python -m unittest discover -s tests -v`。
+- 验证结果:`py_compile` 通过;完整 `python -m unittest discover -s tests -v` 共 **264 项** 全过(原 249 + 本轮新增 15)。
+- 后续待办:用户线下真实样机 2/4/8 台并行验收,主执行日志节奏不再被 `set/get` 频繁卡顿打断;若仍偶发失败,先把 `PARAMETER_RETRY_BACKOFF_SECONDS` 上调到 2.5、`PARAMETER_GET_RESPONSE_TIMEOUT_SECONDS` 上调到 15.0 现场试一次;确认后把 `ACCEPTANCE_BASELINE.md §2.7` 待确认项的"2 / 4 / 8 台并行验收"升级为"已确认验收(全场景)"。
+
 ## 2026-07-17 - 写样机参数 UBUS 启用 telnet 失败允许重试 3 次
 
 - 类型：功能 / 测试

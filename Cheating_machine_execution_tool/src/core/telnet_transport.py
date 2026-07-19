@@ -90,8 +90,17 @@ class TelnetSession:
                 timeout=self._connect_timeout,
             )
         except OSError as exc:
+            # 2026-07-18: bind_ip 与 device_host 相同 → PC 把自己作为目标连接,OS 不响应 SYN,
+            # 15 秒后 timed out。给操作员明确修复指引,避免反复猜测 network_card_ip.ini 配置。
+            hint = ""
+            if self.bind_ip == self.device_host:
+                hint = (
+                    "（提示：bind_ip 与 device_host 相同,PC 无法把自己作为目标连接；"
+                    "请检查 network_card_ip.ini 中该 VLAN 的 device_manage_ip 是否误填为 PC 静态 IP,"
+                    "样机管理 IP 应是设备自身 IP,典型 192.168.1.1。）"
+                )
             raise RuntimeError(
-                f"Telnet 连接失败 {self.device_host}:{self.device_port} 源 IP {self.bind_ip}：{exc}"
+                f"Telnet 连接失败 {self.device_host}:{self.device_port} 源 IP {self.bind_ip}：{exc}{hint}"
             ) from exc
 
     def _start_reader(self) -> None:
