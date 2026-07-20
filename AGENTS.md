@@ -40,11 +40,36 @@
 2. UI 只负责显示、输入和调用 service。
 3. 单个底层能力放到 core。
 4. 多步骤流程放到 services。
-5. 新增功能时，必须同步更新 `README.md`。
+5. **新增功能 / Bug 修复若影响已验收功能边界 / 真实样机验收 → 必须同步更新 `README.md`、`ACCEPTANCE_BASELINE.md`（§2.x 状态标签 / §3 待确认清单）、`PROJECT_STATUS.md`（能力矩阵对应行）。** 详细同步矩阵见 `.claude/skills/line-check-dev/SKILL.md §3`。
 6. 修改代码后，必须说明改了哪些文件。
 7. 修改代码后，必须给出验证方法。
 8. 不要改动 `build`、`dist`、`logs`、`.venv` 目录。
 9. 不要随意删除已有功能。
 10. 涉及设备登录、升级、重启等危险操作时，必须加确认提示和日志记录。
-11. 每次完成的功能、优化、修改、BUG 修复、文档、构建或测试调整，都必须追加记录到 `DEVELOPMENT_LOG.md`；如果影响项目概览或后续入口，同步更新 `PROJECT_STATUS.md`。
+11. 每次完成的功能、优化、修改、BUG 修复、文档、构建或测试调整，都必须追加记录到 `DEVELOPMENT_LOG.md`；如果影响项目概览或后续入口，同步更新 `PROJECT_STATUS.md`；**真实样机验收或破坏 / 补全验收状态时，同步更新 `ACCEPTANCE_BASELINE.md §2.x 状态标签与 §3 待确认清单**。
 12. 每个新增功能点都必须在主程序执行日志输出关键阶段、实际命令下发、成功、跳过或失败提示，便于操作员核对真实执行结果。
+13. **提交代码前必须运行 `python scripts/verify_baseline.py` 全部通过** —— 这是拦截破坏已验收功能（`ACCEPTANCE_BASELINE §0 / §1.3 / §1.4`）的最低门禁。脚本封装 4 类检查：① 全量 py_compile ② 全量 unittest（解析 `Ran N tests`）③ §1.3 必须命中不变量 grep ④ §1.3 / §1.4 必须不出现模式 grep。任一失败 exit 1，不可绕开。
+14. 详细工作流（改动分类 → 文档同步矩阵、真实样机验收流程、完成一次改动标准动作清单）见 `.claude/skills/line-check-dev/SKILL.md`。
+
+## 验收不变量（来自 `ACCEPTANCE_BASELINE.md §1.3 / §1.4`，不可破坏）
+
+> **本章节是 `scripts/verify_baseline.py` 中 `MUST_EXIST` / `MUST_NOT_EXIST` 的可读副本**。改这里必须同步改脚本里的清单；改脚本里的清单也必须同步改这里。
+
+### 必须命中（grep 必须找到）
+
+| 字符串 | 含义 | 搜索范围 |
+| --- | --- | --- |
+| `bbfdm.operate` | 页面升级 UBUS 调用形式 | `src/` |
+| `tclinux_allinone` | `Tftp指令` 文件名映射 | `src/` |
+| `192.168.1.1` | `Tftp Put` 远端固定 | `src/` |
+| `vlan_to_serial_port` | `vlan{N} -> COM{N-100}` 映射 | `src/`, `line_check_assistant/` |
+| `MAX_PARALLEL_UPGRADES = 8` | 并行上限 | `src/` |
+| `clamp_parallel_count` | 并行数钳制 | `src/`, `line_check_assistant/` |
+| `source_address=(bind_ip, 0)` | 锁源 IP（TelnetSession / UbusHttpClient 构造路径） | `src/`, `line_check_assistant/` |
+| `Device.Firewall.<X_SDMC_>Security.AccessCtrl` | UBUS 启用 telnet 协议 | `src/` |
+
+### 必须不出现（grep 必须找不到）
+
+| 字符串 | 含义 | 限制范围 |
+| --- | --- | --- |
+| `0.0.0.0` | 严禁在并行 TFTP 监听 / 数据 socket 路径回退 INADDR_ANY | `src/core/tftp_transport.py`, `src/core/telnet_transport.py` |

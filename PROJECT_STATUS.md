@@ -1,6 +1,6 @@
 # 项目交接状态
 
-更新：2026-07-20（测试项配置窗口改造为 ini 编辑器，283 → 296 项单测全过；不接主程序执行）
+更新：2026-07-20（verify_baseline.py 回归门禁落地 + AGENTS.md 加验收同步硬规则，299 → 310 项单测全过；故意破坏实验证明可拦截不变量修改）
 
 ## 项目目标与当前实现进度
 
@@ -20,8 +20,9 @@
 | 自动生成参数表 MAC 同批 OUI 固定 + 2.4G / 5G SSID 后缀取 MAC 末 4 位 + label 优化 | 已 6 台独立 VLAN 并行（2026-07-19）真实样机验收 |
 | 随机批量参数表生成（`.xlsx`） | 已 6 台独立 VLAN 并行（2026-07-19）真实样机验收 |
 | ZTE OLT ONU 查询、注册、离线 ONU 清理重试 | 已完成 |
-| 单元测试 | 299 项通过（2026-07-20，原 283 + 测试项配置 ini 编辑器 store 13 + per-segment 否定 3） |
+| 单元测试 | 310 项通过（2026-07-20，原 283 + 测试项配置 store 13 + per-segment 否定 3 + verify_baseline 11） |
 | 测试项配置 ini 编辑器（`test_project_config.ini` 加载/编辑/保存，Q1=A 不接执行） | 已完成（2026-07-20，283 → 296 项单测全过；待 Windows 桌面真实交互验证） |
+| `scripts/verify_baseline.py` 回归门禁（py_compile + unittest + §1.3/§1.4 grep 不变量） | 已落地（2026-07-20，AGENTS.md 规则 13 强制提交前全绿；故意破坏实验证明可拦截不变量修改） |
 
 ## 关键文件及其作用
 
@@ -36,6 +37,7 @@
 - `Cheating_machine_execution_tool/src/ui/serial_terminal.py`：多 VLAN 终端与高频日志节流渲染。
 - `Cheating_machine_execution_tool/line_check_assistant/page_upgrade.py`：UBUS 页面升级与升级后恢复出厂。
 - `Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`：测试项配置 ini（`test_project_config.ini`）的加载 / 编辑 / 保存服务（Q1=A：仅编辑器，不接主程序执行）。
+- `Cheating_machine_execution_tool/scripts/verify_baseline.py`：项目级回归门禁脚本（py_compile + unittest + `ACCEPTANCE_BASELINE §1.3/§1.4` grep），AGENTS.md 规则 13 强制提交前全绿。
 - `Cheating_machine_execution_tool/tests/`：单元测试；`line_check_assistant_README.md`：操作说明。
 
 ## 已完成、待完成和当前问题
@@ -80,7 +82,7 @@ python -m py_compile line_check_assistant\app.py src\services\serial_upgrade_ser
 python -m unittest discover -s tests -v
 ```
 
-- 当前全量测试预期：`Ran 299 tests ... OK`（2026-07-20 实跑；原 283 + 测试项配置 store 16 项 = load 默认 / round-trip / [order] 顶部全局值 / 多段拼接 / 命令级否定前缀（已替换为 per-segment） / 空段跳过 / 命令 key retry_times 拆分 / 缺 retry_times 默认 5 / retry_times_0 回退默认 / 特殊字符密码 / 未识别 key 容错 / WiFi enable 0-1 / product_solution 小写 + per-segment 否定 3 项 = 混合拼接 / 混合往返 / `_split_expected` 解析）。
+- 当前全量测试预期：`Ran 310 tests ... OK`（2026-07-20 实跑；原 299 + verify_baseline 11 项 = MUST_EXIST/MUST_NOT_EXIST 结构 / PY_COMPILE_FILES 路径校验 / check_must_exist 命中缺失目录不存在 / check_must_not_exist 命中缺失注释行缩进注释）。推荐提交前跑 `python scripts\verify_baseline.py` 作为更严的门禁（封装 py_compile + unittest + §1.3/§1.4 grep）。
 - VS Code 使用 `.vscode/launch.json` 的 `LineCheckAssistant`，工作目录为 `Cheating_machine_execution_tool`。
 - 打包：`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1`；构建后不要在当前 PC 运行 `dist\LineCheckAssistant.exe`，仅确认构建成功并报告路径。
 - 每次代码、测试或文档改动后追加 `DEVELOPMENT_LOG.md`；影响本文件结论时同步更新本文件。

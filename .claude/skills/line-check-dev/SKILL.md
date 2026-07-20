@@ -100,16 +100,17 @@ line_check_assistant/  Tk 主程序、配置 store、UI 窗口、网络/页面�
 
 ## 5. 验证命令（必须跑）
 
-按 `ACCEPTANCE_BASELINE.md` §0：
+按 `ACCEPTANCE_BASELINE.md` §0 + §1.3 + §1.4，统一封装在 `scripts/verify_baseline.py`：
 
 ```powershell
 cd F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool
-python -m py_compile line_check_assistant\app.py src\ui\serial_terminal.py src\services\serial_upgrade_service.py src\services\sample_parameter_service.py src\core\tftp_transport.py src\core\telnet_transport.py src\core\ubus_http_client.py src\core\ubus_enable_telnet.py src\core\bind_socket.py src\core\parameter_session.py line_check_assistant\network_ops.py
-python -m unittest discover -s tests -v
+python scripts\verify_baseline.py
 ```
 
-- 预期：`Ran 246 tests ... OK`（2026-07-17 实跑基线；后续按 DEVELOPMENT_LOG 顶部更新）
-- 仅当改动的 py 文件不在 py_compile 列表里，才追加新文件到 py_compile 命令
+- 预期：`ALL CHECKS PASSED`，exit 0
+- 任何一条 `FAIL` 都必须先修复再提交（`AGENTS.md` 规则 13）
+- 验证包含 4 类检查：① 全量 py_compile ② 全量 unittest（解析 `Ran N tests`）③ §1.3 必须命中不变量 grep ④ §1.3 / §1.4 必须不出现模式 grep
+- 单条检查的常量定义在 `scripts/verify_baseline.py` 的 `PY_COMPILE_FILES` / `MUST_EXIST` / `MUST_NOT_EXIST`；`AGENTS.md` 中同名章节是可读副本
 
 新增单测后必须确认 `Ran N tests ... OK` 中 N 正确递增（之前的基线 + 本轮新增 = 当前）。
 
@@ -190,7 +191,7 @@ plan 文档存放：`.claude/plans/<slug>.md`（参考已有 `telnet-ubus-pre-en
 2. **若改动 ≥ 3 文件或核心模块**：写 `.claude/plans/<slug>.md`，用 `EnterPlanMode` 让用户确认
 3. 写代码（遵守分层、保留 `sensitive` / `known_secrets` 形参兼容）
 4. 加单测（参照 `tests/test_*.py` 同类断言风格；优先 mock 外部 IO）
-5. 跑 `py_compile` + `unittest`，确认 `Ran N tests ... OK`
+5. 跑 `python scripts\verify_baseline.py`，确认 `ALL CHECKS PASSED`（封装了 py_compile + unittest + §1.3/§1.4 grep；任一 FAIL 必须先修复再提交）
 6. 在 `DEVELOPMENT_LOG.md` 顶部追加模板条目
 7. **按 §3 矩阵同步其它文档**（PROJECT_STATUS / ACCEPTANCE_BASELINE / README）
 8. 把改动文件、验证结果、后续待办告诉用户

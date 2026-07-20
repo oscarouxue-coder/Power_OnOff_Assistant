@@ -2,6 +2,25 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-07-20 - 建立 verify_baseline.py 回归门禁 + AGENTS.md 加验收同步硬规则
+
+- 类型：基础设施 / 文档 / 测试
+- 背景：项目早期 QA 报告（2026-07-20）指出**核心质量缺口**：① 无 CI/CD，测试靠手动跑；② 无自动化机制拦截破坏已验收功能的改动；③ `ACCEPTANCE_BASELINE.md §1.3` 的 8 条 grep 不变量没自动跑；④ `AGENTS.md` 规则 5/11 漏列 `ACCEPTANCE_BASELINE.md`，人类开发者读 AGENTS.md 不会知道还要同步 baseline。本轮建立最低门禁：单一脚本 `scripts/verify_baseline.py` 封装 `§0` + `§1.3` + `§1.4` 全部检查，AGENTS.md 升级为「提交前必须跑 verify_baseline 全绿」硬规则。
+- 完成内容：
+  1. **`Cheating_machine_execution_tool/scripts/verify_baseline.py`（新）** —— 4 类检查：① `py_compile` 对 `PY_COMPILE_FILES`（25 个 .py，覆盖 `line_check_assistant/` + `src/` 全量） ② `unittest discover -s tests` + 解析 `Ran N tests` 行（防止静默 0 项） ③ `MUST_EXIST`（8 条 §1.3 不变量 + 扩展搜索目录到 `line_check_assistant/`，覆盖 `bbfdm.operate` / `MAX_PARALLEL_UPGRADES = 8` 的实际位置） ④ `MUST_NOT_EXIST`（`0.0.0.0` 仅在代码行检测，**过滤掉 `#` 注释 + 三引号文档字符串**，避免反向语义注释误报，如 `telnet_transport.py:10` 「不回退 0.0.0.0」）。退出码 0 全过 / 1 任一失败。模块结构单一来源（3 个常量 + 4 个 check 函数 + main），便于单元测试。
+  2. **`tests/test_verify_baseline.py`（新，11 项）** —— ① `MUST_EXIST`/`MUST_NOT_EXIST` 结构合法性；② `PY_COMPILE_FILES` 全部位于 `line_check_assistant/` 或 `src/` 下；③ `check_must_exist` 命中/缺失/目录不存在 3 个分支；④ `check_must_not_exist` 命中/缺失/限制文件不存在/纯注释行/缩进注释行 5 个分支。`tempfile.TemporaryDirectory` 构造临时源码，毫秒级跑完。299 → 310。
+  3. **`AGENTS.md`（修改）** —— 规则 5 扩展为「新增功能 / Bug 修复 / 真实样机验收 → 必须同步更新 `README.md` + `ACCEPTANCE_BASELINE.md §2.x / §3` + `PROJECT_STATUS.md`」；规则 11 末尾补「真实样机验收或破坏/补全验收状态时同步更新 baseline §2.x 与 §3」；新增规则 13「提交代码前必须运行 `python scripts/verify_baseline.py` 全部通过 —— 拦截破坏已验收功能的最低门禁」；新增规则 14「详细工作流参考 SKILL.md」；新增章节「## 验收不变量」列出 MUST_EXIST / MUST_NOT_EXIST 的可读副本（与脚本单一来源保持一致，注释明确「改这里必须同步改脚本」）。
+  4. **`.claude/skills/line-check-dev/SKILL.md`（修改）** —— §5 验证命令改为引用 `verify_baseline.py`（封装 §0 + §1.3 + §1.4）；§11 第 5 步同步改为跑 `verify_baseline.py`。
+  5. **故意破坏实验** —— 把 `MAX_PARALLEL_UPGRADES = 8` 改成 `4`，跑 `verify_baseline.py` → 立即 FAIL：① `must_exist: MAX_PARALLEL_UPGRADES = 8` 不变量命中失败；② 4 项单测（`test_serial_upgrade_service.py` 断言常量为 8）失败。`exit 1`。改回后全绿。**门禁有效**。
+- 修改文件：`Cheating_machine_execution_tool/scripts/verify_baseline.py`（新）、`Cheating_machine_execution_tool/tests/test_verify_baseline.py`（新）、`AGENTS.md`、`.claude/skills/line-check-dev/SKILL.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile scripts\verify_baseline.py`；`python -m unittest discover -s tests -v`（应 `Ran 310 tests ... OK`，原 299 + 本轮新增 11）；`python scripts\verify_baseline.py`（应 `ALL CHECKS PASSED`，exit 0）；故意破坏 `MAX_PARALLEL_UPGRADES = 8` 验证拦截。
+- 验证结果：`py_compile` 通过；完整单测 `Ran 310 tests ... OK`（原 299 + verify_baseline 11 项）；`verify_baseline.py` 实跑 4 类检查全绿；故意破坏实验证明门禁可拦截不变量破坏。
+- 后续待办：
+  - 用户每次提交前运行 `python scripts\verify_baseline.py` 全绿（强制规则）；任何 FAIL 必须先修复。
+  - 下一步考虑 GitHub Actions 配置（需先建远端仓库），把 verify_baseline 接入 PR 检查。
+  - 下一步可考虑让 `verify_baseline.py` 解析 `ACCEPTANCE_BASELINE.md §1.3` 自动同步 `MUST_EXIST` 列表（消除文档与脚本漂移）。
+  - `THIRD_PARTY_NOTICES.md` 漏列 `requests` / `ACCEPTANCE_BASELINE.md §0` 数字 283→299 漂移仍未修（见 2026-07-20 QA 报告 P0-1 / P0-2）。
+
 ## 2026-07-20 - 测试项配置「期望」改为 per-segment 否定
 
 - 类型：功能 / 重构 / 测试 / 文档
