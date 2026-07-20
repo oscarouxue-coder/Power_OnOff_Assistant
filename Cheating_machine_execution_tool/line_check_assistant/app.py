@@ -168,6 +168,7 @@ class LineCheckAssistant(Tk):
         self.serial_session_manager = SerialSessionManager()
         self.serial_terminal = SerialTerminalWindow(self, self.serial_session_manager, self._serial_log_directory())
         self.test_item_config_window = None
+        self.pipeline_window = None
         self.onu_registration_window = None
         self.onu_telnet_test_running = False
         self.onu_query_running = False
@@ -213,6 +214,11 @@ class LineCheckAssistant(Tk):
         # 默认关闭,操作员勾选后下次写参时下发对应命令。
         self.parameter_clear_parameters_var = BooleanVar(value=self.sample_upgrade_settings.parameter_clear_parameters)
         self.parameter_exit_aging_var = BooleanVar(value=self.sample_upgrade_settings.parameter_exit_aging)
+        # 2026-07-20:全流程执行管道(主界面「检查并执行测试」)需要两个 Tk 变量:
+        # - ``power_operation_var``:「自动上/下电」子任务的上/下电选项("up" / "down")
+        # - ``parameter_table_path_var``:「写样机参数」子任务的参数表文件路径
+        self.power_operation_var = StringVar(value=self.sample_upgrade_settings.power_operation or "up")
+        self.parameter_table_path_var = StringVar(value=self.sample_upgrade_settings.parameter_table_path or "")
         self._bind_sample_upgrade_autosave()
         LOG_DIR.mkdir(exist_ok=True)
         self.log_path = LOG_DIR / f"line_check_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
@@ -1163,6 +1169,9 @@ class LineCheckAssistant(Tk):
             self.parameter_initial_password_var,
             self.parameter_clear_parameters_var,
             self.parameter_exit_aging_var,
+            # 2026-07-20:全流程执行管道用的两个新字段,加入 autosave 链。
+            self.power_operation_var,
+            self.parameter_table_path_var,
         ):
             variable.trace_add("write", lambda *_args: self._schedule_sample_upgrade_save())
 
@@ -1192,6 +1201,11 @@ class LineCheckAssistant(Tk):
             parameter_initial_password=self.parameter_initial_password_var.get(),
             parameter_clear_parameters=bool(self.parameter_clear_parameters_var.get()),
             parameter_exit_aging=bool(self.parameter_exit_aging_var.get()),
+            # 2026-07-20:全流程执行管道用的两个新字段,透传到 ``SampleUpgradeSettings``。
+            power_operation=(self.power_operation_var.get() or "up").strip().lower()
+            if (self.power_operation_var.get() or "up").strip().lower() in {"up", "down"}
+            else "up",
+            parameter_table_path=(self.parameter_table_path_var.get() or "").strip(),
         )
 
     def _schedule_sample_upgrade_save(self) -> None:
@@ -3494,15 +3508,26 @@ class LineCheckAssistant(Tk):
         self._log(f"已实时更新配置文件：{NETWORK_CONFIG_PATH}")
 
     def _start_all_checks(self) -> None:
+        """2026-07-20: 主界面「检查并执行测试」按钮升级为「全流程执行」弹窗入口。
+
+        旧实现:直接调 ``_run_checks``(仅做已勾选通道的 ping 通过性检查)。
+        新实现:弹「全流程执行」窗口,操作员勾选 6 个子任务(自动上/下电 / 样机升级 /
+        写样机参数 / ONU 注册 / 串口日志 / 测试项配置)后,按 1→6 顺序串行执行,
+        任一失败(串口日志除外)→ 整个管道停止。
+        ``_run_checks`` / ``_check_worker`` 仍保留供单通道 ping 检查场景使用。
+        """
+        # 旧逻辑保留作为兜底(直接跳弹窗失败时,仍可走 ping 检查)
         if self.running:
             return
-        self._capture_current_channel()
-        enabled_channels = self._selected_channels()
-        if not enabled_channels:
-            messagebox.showwarning("没有启用通道", "请至少启用一个通道。")
+        if self.pipeline_window is not None and self.pipeline_window.winfo_exists():
+            self.pipeline_window.deiconify()
+            self.pipeline_window.lift()
+            self.pipeline_window.focus_force()
             return
-        self._persist_config()
-        self._run_checks(enabled_channels)
+        # 2026-07-20 引入:PipelineWindow 在 ``line_check_assistant.pipeline_window``;
+        # 引用放在这里(而非 ``__init__``)以避免与 ``app.py`` 的 tkinter 启动顺序耦合。
+        from .pipeline_window import PipelineWindow
+        self.pipeline_window = PipelineWindow(self)
 
     def _selected_channels(self) -> list[ChannelConfig]:
         return [channel for channel in self.channels if channel.enabled]

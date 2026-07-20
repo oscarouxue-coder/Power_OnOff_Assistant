@@ -1,0 +1,375 @@
+"""pipeline_orchestrator 单元测试。
+
+覆盖:
+- 6 个 sub-task 状态评估(ready / missing / summary)
+- run() 按 1→6 顺序执行
+- NON_FATAL_SUBTASKS 失败不阻塞后续
+- 致命子任务失败 → 抛 PipelineError + 停止后续
+- request_stop() 阻止后续子任务
+- emit 主日志含「开始 / 结束 子任务」阶段标题
+"""
+from __future__ import annotations
+
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from typing import List
+from unittest.mock import MagicMock, patch
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from line_check_assistant.config_store import ChannelConfig
+from line_check_assistant.onu_registration_store import OnuRegistrationConfig
+from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
+from line_check_assistant.test_item_config_store import (
+    ExpectedSegment,
+    OrderConfig,
+    OrderItem,
+    TelnetSettings,
+    TestProjectConfig,
+)
+from src.services.pipeline_orchestrator import (
+    NON_FATAL_SUBTASKS,
+    SUBTASK_CODES,
+    SUBTASK_LABELS,
+    PipelineContext,
+    PipelineError,
+    PipelineOrchestrator,
+    SubTaskResult,
+    SubTaskStatus,
+    compute_all_subtask_statuses,
+)
+
+
+def _make_channel(section: str = "channel_2", enabled: bool = True) -> ChannelConfig:
+    return ChannelConfig(
+        section=section,
+        vlan_name="VLAN110",
+        adapter_alias="VLAN110",
+        network_card_ip="192.168.1.110",
+        device_manage_ip="192.168.1.1",
+        subnet_mask="255.255.255.0",
+        enabled=enabled,
+    )
+
+
+def _make_settings(**overrides) -> SampleUpgradeSettings:
+    defaults = dict(
+        upgrade_mode="全包升级",
+        transfer_method="Tftp Put",
+        execution_mode="串行",
+        parallel_count=2,
+        restore_factory=False,
+        username="root",
+        password="upgrade-secret",
+        firmware_path=r"F:\firmware\tclinux_allinone",
+        parameter_initial_username="telecomadmin",
+        parameter_initial_password="nE7jA%5m",
+        parameter_clear_parameters=False,
+        parameter_exit_aging=False,
+        power_operation="up",
+        parameter_table_path=r"F:\data\params.xlsx",
+    )
+    defaults.update(overrides)
+    return SampleUpgradeSettings(**defaults)
+
+
+def _make_onu(**overrides) -> OnuRegistrationConfig:
+    defaults = dict(
+        olt_ip="172.18.18.151",
+        username="admin",
+        password="olt-secret",
+    )
+    defaults.update(overrides)
+    return OnuRegistrationConfig(**defaults)
+
+
+def _make_test_project() -> TestProjectConfig:
+    return TestProjectConfig(
+        telnet=TelnetSettings(user="sdmc", password="1234"),
+        order=OrderConfig(
+            command_fail_retry_interval_time=60,
+            items=[OrderItem(command="ifconfig ra0", expected_segments=[ExpectedSegment(text="UP BROADCAST", negate=False)], retry_times=5)],
+        ),
+    )
+
+
+def _make_context(**overrides) -> PipelineContext:
+    """构造 PipelineContext,app 字段用 MagicMock 替代真实 LineCheckAssistant。"""
+    app = MagicMock()
+    app.power_serial_var.get.return_value = "COM102"
+    app.power_serial_port = "COM102"
+    channels = overrides.pop("channels", [_make_channel()])
+    return PipelineContext(
+        app=app,
+        channels=channels,
+        sample_upgrade_settings=overrides.pop("settings", _make_settings()),
+        onu_registration=overrides.pop("onu", _make_onu()),
+        test_project_config=overrides.pop("test_project", _make_test_project()),
+        serial_log_dir=overrides.pop("serial_log_dir", None),
+    )
+
+
+class ComputeSubTaskStatusTests(unittest.TestCase):
+    def test_power_cycle_status_with_complete_config(self) -> None:
+        ctx = _make_context()
+        status = compute_all_subtask_statuses(ctx)["power_cycle"]
+        self.assertTrue(status.ready)
+        self.assertEqual(status.missing, ())
+        self.assertIn("COM102", status.summary)
+        self.assertIn("up", status.summary)
+
+    def test_power_cycle_status_missing_com(self) -> None:
+        ctx = _make_context()
+        ctx.app.power_serial_var.get.return_value = ""
+        status = compute_all_subtask_statuses(ctx)["power_cycle"]
+        self.assertFalse(status.ready)
+        self.assertIn("程控电源 COM", status.missing)
+
+    def test_power_cycle_status_missing_operation(self) -> None:
+        ctx = _make_context(settings=_make_settings(power_operation="invalid"))
+        status = compute_all_subtask_statuses(ctx)["power_cycle"]
+        self.assertFalse(status.ready)
+        self.assertIn("上/下电选项", status.missing)
+
+    def test_sample_upgrade_status_complete(self) -> None:
+        ctx = _make_context()
+        status = compute_all_subtask_statuses(ctx)["sample_upgrade"]
+        self.assertTrue(status.ready)
+        self.assertEqual(status.missing, ())
+
+    def test_sample_upgrade_status_missing_firmware(self) -> None:
+        ctx = _make_context(settings=_make_settings(firmware_path=""))
+        status = compute_all_subtask_statuses(ctx)["sample_upgrade"]
+        self.assertFalse(status.ready)
+        self.assertIn("升级固件路径", status.missing)
+
+    def test_sample_upgrade_status_missing_credentials(self) -> None:
+        ctx = _make_context(settings=_make_settings(username="", password=""))
+        status = compute_all_subtask_statuses(ctx)["sample_upgrade"]
+        self.assertFalse(status.ready)
+        self.assertIn("超级用户名", status.missing)
+        self.assertIn("超级用户密码", status.missing)
+
+    def test_sample_upgrade_status_page_mode_ok(self) -> None:
+        ctx = _make_context(settings=_make_settings(upgrade_mode="页面升级"))
+        status = compute_all_subtask_statuses(ctx)["sample_upgrade"]
+        self.assertTrue(status.ready)
+
+    def test_sample_parameter_write_status_complete(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            table_path = Path(temp_dir) / "params.xlsx"
+            table_path.write_text("dummy", encoding="utf-8")
+            ctx = _make_context(settings=_make_settings(parameter_table_path=str(table_path)))
+            status = compute_all_subtask_statuses(ctx)["sample_parameter_write"]
+            self.assertTrue(status.ready)
+            self.assertIn("params.xlsx", status.summary)
+
+    def test_sample_parameter_write_status_missing_table(self) -> None:
+        ctx = _make_context(settings=_make_settings(parameter_table_path=""))
+        status = compute_all_subtask_statuses(ctx)["sample_parameter_write"]
+        self.assertFalse(status.ready)
+        self.assertIn("参数表路径", status.missing)
+
+    def test_sample_parameter_write_status_table_file_not_exist(self) -> None:
+        ctx = _make_context(settings=_make_settings(parameter_table_path=r"F:\non\existent.xlsx"))
+        status = compute_all_subtask_statuses(ctx)["sample_parameter_write"]
+        self.assertFalse(status.ready)
+        self.assertIn("参数表文件不存在", status.missing)
+
+    def test_onu_registration_status_complete(self) -> None:
+        ctx = _make_context()
+        status = compute_all_subtask_statuses(ctx)["onu_registration"]
+        self.assertTrue(status.ready)
+
+    def test_onu_registration_status_missing_olt_ip(self) -> None:
+        ctx = _make_context(onu=_make_onu(olt_ip=""))
+        status = compute_all_subtask_statuses(ctx)["onu_registration"]
+        self.assertFalse(status.ready)
+        self.assertIn("OLT IP", status.missing)
+
+    def test_serial_terminal_status_with_channels(self) -> None:
+        ctx = _make_context(channels=[_make_channel()])
+        status = compute_all_subtask_statuses(ctx)["serial_terminal"]
+        self.assertTrue(status.ready)
+        self.assertIn("1 通道", status.summary)
+
+    def test_serial_terminal_status_no_channels(self) -> None:
+        ctx = _make_context(channels=[])
+        status = compute_all_subtask_statuses(ctx)["serial_terminal"]
+        self.assertFalse(status.ready)
+        self.assertIn("已勾选通道", status.missing)
+
+    def test_test_item_execution_status_complete(self) -> None:
+        ctx = _make_context()
+        status = compute_all_subtask_statuses(ctx)["test_item_execution"]
+        self.assertTrue(status.ready)
+        self.assertIn("1 条", status.summary)
+
+    def test_test_item_execution_status_missing_credentials(self) -> None:
+        bad_project = TestProjectConfig(
+            telnet=TelnetSettings(user="", password=""),
+            order=OrderConfig(
+                command_fail_retry_interval_time=60,
+                items=[OrderItem(command="ifconfig ra0", expected_segments=[], retry_times=5)],
+            ),
+        )
+        ctx = _make_context(test_project=bad_project)
+        status = compute_all_subtask_statuses(ctx)["test_item_execution"]
+        self.assertFalse(status.ready)
+        self.assertIn("[telnet] user", status.missing)
+        self.assertIn("[telnet] password", status.missing)
+
+    def test_test_item_execution_status_no_items(self) -> None:
+        empty_project = TestProjectConfig(
+            telnet=TelnetSettings(user="sdmc", password="1234"),
+            order=OrderConfig(command_fail_retry_interval_time=60, items=[]),
+        )
+        ctx = _make_context(test_project=empty_project)
+        status = compute_all_subtask_statuses(ctx)["test_item_execution"]
+        self.assertFalse(status.ready)
+        self.assertIn("[order]", "".join(status.missing))
+
+
+class PipelineRunOrderTests(unittest.TestCase):
+    """验证 run() 按 1→6 顺序执行,以及 NON_FATAL_SUBTASKS 失败不阻塞。"""
+
+    @staticmethod
+    def _patch_all_subtasks():
+        """为每个子任务方法装上 mock,返回 ``(stack, method_mocks)``。
+
+        使用方式::
+            stack, method_mocks = PipelineRunOrderTests._patch_all_subtasks()
+            with stack:
+                orchestrator.run(...)
+        """
+        from contextlib import ExitStack
+        method_mocks = {code: MagicMock() for code in SUBTASK_CODES}
+        stack = ExitStack()
+        for code, mock_obj in method_mocks.items():
+            stack.enter_context(
+                patch.object(PipelineOrchestrator, f"_run_{code}", mock_obj)
+            )
+        return stack, method_mocks
+
+    def test_run_all_six_subtasks_in_order(self) -> None:
+        ctx = _make_context()
+        emit_msgs: List[str] = []
+        stack, method_mocks = self._patch_all_subtasks()
+        with stack:
+            orchestrator = PipelineOrchestrator(ctx, emit_msgs.append)
+            results = orchestrator.run(set(SUBTASK_CODES))
+
+        # 每个子任务方法都被调用 1 次
+        for code in SUBTASK_CODES:
+            method_mocks[code].assert_called_once()
+        # 6 个结果都成功
+        self.assertEqual(len(results), 6)
+        self.assertTrue(all(r.ok for r in results))
+        # 主日志含「开始 / 结束 子任务」 + 「管道开始 / 结束」
+        self.assertIn("全流程执行管道开始", "".join(emit_msgs))
+        self.assertIn("全流程执行管道结束", "".join(emit_msgs))
+        for code in SUBTASK_CODES:
+            self.assertIn(f"开始子任务 {SUBTASK_LABELS[code]}", "".join(emit_msgs))
+
+    def test_run_only_selected_subtasks(self) -> None:
+        ctx = _make_context()
+        emit_msgs: List[str] = []
+        stack, method_mocks = self._patch_all_subtasks()
+        with stack:
+            orchestrator = PipelineOrchestrator(ctx, emit_msgs.append)
+            results = orchestrator.run({"power_cycle", "test_item_execution"})
+
+        # 只调用了选中的 2 个
+        method_mocks["power_cycle"].assert_called_once()
+        method_mocks["test_item_execution"].assert_called_once()
+        self.assertFalse(method_mocks["sample_upgrade"].called)
+        self.assertFalse(method_mocks["onu_registration"].called)
+        self.assertEqual(len(results), 2)
+
+    def test_fatal_subtask_failure_raises_pipeline_error(self) -> None:
+        ctx = _make_context()
+        emit_msgs: List[str] = []
+        stack, method_mocks = self._patch_all_subtasks()
+        with stack:
+            method_mocks["sample_upgrade"].side_effect = RuntimeError("升级失败")
+            orchestrator = PipelineOrchestrator(ctx, emit_msgs.append)
+            with self.assertRaises(PipelineError) as ctx_exc:
+                orchestrator.run(set(SUBTASK_CODES))
+        self.assertIn("sample_upgrade", str(ctx_exc.exception))
+        # power_cycle 已执行
+        method_mocks["power_cycle"].assert_called_once()
+        # 升级失败后,后续子任务(写参 / ONU / 串口 / 测试项)不执行
+        method_mocks["sample_parameter_write"].assert_not_called()
+        method_mocks["onu_registration"].assert_not_called()
+        method_mocks["test_item_execution"].assert_not_called()
+        # 主日志含失败消息
+        self.assertIn("子任务 2. 样机升级 失败", "".join(emit_msgs))
+        self.assertIn("全流程执行管道因失败提前终止", "".join(emit_msgs))
+
+    def test_non_fatal_subtask_failure_continues(self) -> None:
+        """「串口日志」失败不阻塞后续。"""
+        ctx = _make_context()
+        emit_msgs: List[str] = []
+        stack, method_mocks = self._patch_all_subtasks()
+        with stack:
+            method_mocks["serial_terminal"].side_effect = RuntimeError("终端打不开")
+            orchestrator = PipelineOrchestrator(ctx, emit_msgs.append)
+            # 串口日志失败,6 项全选 → 不应抛 PipelineError
+            results = orchestrator.run(set(SUBTASK_CODES))
+
+        # 串口已执行(失败);后续子任务(测试项)继续
+        method_mocks["serial_terminal"].assert_called_once()
+        method_mocks["test_item_execution"].assert_called_once()
+        # 串口结果 ok=False
+        serial_result = next(r for r in results if r.code == "serial_terminal")
+        self.assertFalse(serial_result.ok)
+        # 测试项结果 ok=True
+        test_result = next(r for r in results if r.code == "test_item_execution")
+        self.assertTrue(test_result.ok)
+
+    def test_request_stop_skips_subsequent_subtasks(self) -> None:
+        ctx = _make_context()
+        emit_msgs: List[str] = []
+        orchestrator_ref: List[PipelineOrchestrator] = []
+        stack, method_mocks = self._patch_all_subtasks()
+        with stack:
+            def stop_after_power_cycle() -> None:
+                orchestrator_ref[0].request_stop()
+            method_mocks["power_cycle"].side_effect = stop_after_power_cycle
+            orchestrator_ref.append(PipelineOrchestrator(ctx, emit_msgs.append))
+            orchestrator_ref[0].run(set(SUBTASK_CODES))
+
+        # power_cycle 已执行;后续全部跳过
+        method_mocks["power_cycle"].assert_called_once()
+        for code in SUBTASK_CODES[1:]:
+            method_mocks[code].assert_not_called()
+        self.assertIn("已请求停止", "".join(emit_msgs))
+
+
+class SubTaskResultTests(unittest.TestCase):
+    def test_subtask_result_ok(self) -> None:
+        r = SubTaskResult(code="power_cycle", ok=True)
+        self.assertIsNone(r.error)
+        self.assertIsNone(r.detail)
+
+    def test_subtask_result_failure(self) -> None:
+        r = SubTaskResult(code="power_cycle", ok=False, error="failed")
+        self.assertFalse(r.ok)
+        self.assertEqual(r.error, "failed")
+
+
+class ConstantsTests(unittest.TestCase):
+    def test_subtask_codes_in_order(self) -> None:
+        self.assertEqual(
+            SUBTASK_CODES,
+            ("power_cycle", "sample_upgrade", "sample_parameter_write", "onu_registration", "serial_terminal", "test_item_execution"),
+        )
+
+    def test_non_fatal_subtasks_contains_only_serial(self) -> None:
+        self.assertEqual(NON_FATAL_SUBTASKS, frozenset({"serial_terminal"}))
+
+
+if __name__ == "__main__":
+    unittest.main()

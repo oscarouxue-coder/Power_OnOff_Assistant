@@ -1,6 +1,6 @@
 # Acceptance Baseline
 
-更新：2026-07-19
+更新：2026-07-20（新增 §2.12 「全流程执行」管道编排器；状态初始「已实现未验收」）
 
 > 与 `PROJECT_STATUS.md` 的关系：本文按"实现 → 单测 → 真实样机验收"三态罗列验收证据与不变量，作为独立验收基线。`PROJECT_STATUS.md` 保留面向项目的进度叙述；两者冲突时以本文为准。
 >
@@ -221,6 +221,49 @@ python -m unittest discover -s tests -v
   - INI 转义（含 `%`）不得再触发 `ConfigParser` 内插崩溃
   - 开发使用 `.venv_serial_upgrade`，不污染全局或 `.venv`
 - **对应测试**：`tests/test_sample_upgrade_settings_store.py`、`tests/test_onu_registration_store.py`
+
+### 2.12 「全流程执行」管道编排器（主界面「检查并执行测试」按钮升级）
+
+- **状态**：已实现未验收
+- **核心行为**：
+  - 主界面「检查并执行测试」按钮按下后弹出「全流程执行」窗口（替代旧实现的「直接跑 ping 检查」）
+  - 6 个子任务（1→6 固定顺序）：
+    1. **自动上/下电**（默认勾选）—— 调 `power_on_service.power_on_selected_channels` / `turn_off_selected_channels` 同步执行；必填项：程控电源 COM + 上/下电（`sample_upgrade_settings.ini` 新增 `power_operation`）+ ≥1 已勾选通道
+    2. **样机升级**（默认不勾）—— 调主程序既有 `_start_page_upgrade` / `_start_tftp_command_upgrade` / `_start_tftp_put_upgrade`（异步起线程 + 弹确认框）；必填项：升级方式 / 固件 / 超级用户凭据 / Tftp 指令或 Put
+    3. **写样机参数**（默认不勾）—— 调主程序既有 `_start_sample_parameter_write`（异步起线程 + 弹确认框）；必填项：参数表路径（`sample_upgrade_settings.ini` 新增 `parameter_table_path`）+ 写参首次登录账号 / 密码
+    4. **ONU 注册**（默认不勾）—— 调主程序既有 `_on_onu_query_clicked` + `_on_onu_register_clicked`（异步起线程 + 弹确认框）；必填项：OLT IP / 用户名 / 密码
+    5. **串口日志（管道期间持续记录）**（默认勾选）—— 调主程序既有 `_open_serial_log_module` 打开 `SerialTerminalWindow`；**非致命**（打开失败不阻塞后续）
+    6. **测试项配置（[order] 执行）**（默认勾选）—— 调新 `test_item_execution_service.run_test_item_execution` 同步执行（每台串行）；按 `[order]` 顺序逐条 telnet 下发 + per-segment fuzzy 匹配（`!A&&B`）+ 每条命令 `retry_times` 次重试（间隔 `command_fail_retry_interval_time` 秒）；per-channel 结果文件写到 `Cheating_machine_execution_tool/test_results/device_{section}_command_results_{YYYYMMDD_HHMMSS}.log`
+  - 每行右侧实时显示「必填项当前状态」（绿色就绪 / 红色「缺: 字段1, 字段2」），「去配置」按钮跳到主程序对应子窗口
+  - 「开始执行」走「必填项未就绪警告 + 全流程执行确认」二次确认后启动后台线程
+  - 任一「致命」子任务抛异常 → 整个管道停止，弹错误框；串口日志失败只记结果不阻塞
+  - 「停止」按钮：编排器在当前子任务结束后终止后续子任务
+- **核心验收行为（2026-07-20 单测全过，真实样机待验收）**：
+  - 全量 374 项单测（313 → +18 fuzzy + 14 test_item + 26 pipeline + 3 settings）全过；`scripts/verify_baseline.py` `ALL CHECKS PASSED`（29 个 .py 编译 + 374 项单测 + 8 条 MUST_EXIST + 1 条 MUST_NOT_EXIST 全绿）
+  - per-segment fuzzy 语义与老工具 `common/fuzzy_match.py` 一致：`!段A&&段B` 拆为 `[(True,"段A"), (False,"段B")]`；肯定段 `in` 子串匹配、否定段 `re.escape(segment)` 搜索；空段跳过；老工具 `tcapi get WanInfo_Entry` IPv6 特殊分支不移植
+  - 测试项执行 service 复用 `TelnetSession` 协议（按 VLAN `bind_ip` 锁源 `source_address=(bind_ip, 0)`，不绑直接抛错不回退 `0.0.0.0`）；登录阶段按 `telnet.input_user_flag` / `input_password_flag` / `login_success_flag` 三段等
+  - per-channel 结果文件路径生成 `Cheating_machine_execution_tool/test_results/device_{section}_command_results_{YYYYMMDD_HHMMSS}.log`（用户决策：与老工具 `Auto_power_on_off_tool/test_results/` 分离）
+  - 编排器 6 子任务调度顺序与失败传播：1→6 固定、致命失败抛 `PipelineError`、串口日志失败只记结果不阻塞、用户点「停止」时 `request_stop` 在当前子任务结束后终止后续
+- **边界与异常**：
+  - 必填项未就绪时弹「必填项未就绪」警告询问是否继续（不强阻，便于操作员知情决策）
+  - 关闭窗口时若管道运行中弹「全流程执行正在进行」二次确认
+  - 异步子任务（2/3/4）由主程序既有 worker 完成，编排器不阻塞等待；失败传播靠用户点击确认 + 主程序 worker 异常冒泡
+- **禁止破坏**：
+  - `TelnetSession` 协议（按 VLAN `bind_ip` 锁源）必须复用，不重写 telnet 客户端
+  - 子任务 1/5/6 调既有 service，不绕过主程序中间层
+  - 子任务 2/3/4 调主程序既有 `_start_*` 方法，弹确认框由操作员点「是」（与单功能窗口一致）
+  - `0.0.0.0` 不出现在 telnet / tftp 路径（与 §1.4 一致）
+  - AGENTS 硬规则：不修改老工具 `Auto_Power_On_Off_Tool.py` 源码；fuzzy 逻辑从老工具 `fuzzy_match.py` 移植而非直接 import
+- **待确认**：
+  - Windows 桌面真实交互：弹窗 / Checkbutton / 二次确认 / 必填项状态刷新
+  - 真实样机端到端跑通 6 子任务全流程：上下电 → 升级 → 写参 → ONU 注册 → 串口日志（持续）→ [order] 执行
+  - 异常场景：2/3/4 异步子任务失败传播（当前靠主程序 worker 异常冒泡 + 用户观察主执行日志；是否需要 polling + 状态轮询机制待定）
+- **对应测试**：
+  - `tests/test_fuzzy_match_runner.py`（18 项：单段 / 多段 / 否定 / 混合 / 空段 / re.escape / IPv6 边界 / 性能）
+  - `tests/test_test_item_execution_service.py`（14 项：单条匹配 / 失败重试 / 重试成功 / per-segment !A&&B / 无期望默认通过 / 多条顺序 / 网络准备失败 / 登录失败 / 结果文件创建 / session finally 关闭 / build_log_path / 常量）
+  - `tests/test_pipeline_orchestrator.py`（26 项：6 子任务状态评估 / run 顺序 / 致命失败抛 PipelineError / 串口失败不阻塞 / request_stop 阻止后续 / 6 个子任务 statuses 完整性 / 必填项 missing 标记）
+  - `tests/test_sample_upgrade_settings_store.py`（+3 项：power_operation / parameter_table_path 持久化 / power_operation 非法值回退 `up`）
+  - `tests/test_app.py`（+1 项：`_current_sample_upgrade_settings` 透传 2 个新字段）
 
 ---
 

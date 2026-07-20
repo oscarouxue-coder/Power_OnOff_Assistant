@@ -454,6 +454,9 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             parameter_initial_password_var=Mock(get=Mock(return_value="param-secret")),
             parameter_clear_parameters_var=Mock(get=Mock(return_value=True)),
             parameter_exit_aging_var=Mock(get=Mock(return_value=False)),
+            # 2026-07-20:全流程执行管道用的两个新字段
+            power_operation_var=Mock(get=Mock(return_value="down")),
+            parameter_table_path_var=Mock(get=Mock(return_value=r"F:\data\params.xlsx")),
         )
 
         settings = LineCheckAssistant._current_sample_upgrade_settings(context)
@@ -473,6 +476,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
                 parameter_initial_password="param-secret",
                 parameter_clear_parameters=True,
                 parameter_exit_aging=False,
+                power_operation="down",
+                parameter_table_path=r"F:\data\params.xlsx",
             ),
         )
 
@@ -490,12 +495,17 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             parameter_initial_password_var=Mock(get=Mock(return_value="")),
             parameter_clear_parameters_var=Mock(get=Mock(return_value=False)),
             parameter_exit_aging_var=Mock(get=Mock(return_value=False)),
+            # 2026-07-20:全流程执行管道默认字段
+            power_operation_var=Mock(get=Mock(return_value="up")),
+            parameter_table_path_var=Mock(get=Mock(return_value="")),
         )
 
         settings = LineCheckAssistant._current_sample_upgrade_settings(context)
 
         self.assertEqual(settings.transfer_method, "Tftp指令")
         self.assertEqual(settings.execution_mode, "串行")
+        self.assertEqual(settings.power_operation, "up")
+        self.assertEqual(settings.parameter_table_path, "")
 
     def test_save_sample_upgrade_settings_writes_current_inputs(self):
         settings = SampleUpgradeSettings(upgrade_mode="页面升级", transfer_method="Tftp Put")

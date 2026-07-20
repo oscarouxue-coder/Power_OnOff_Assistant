@@ -50,6 +50,11 @@ class SampleUpgradeSettings:
     # 默认关闭:clear_parameters / exit_aging 都需要操作员在写样机参数窗口勾选才生效。
     parameter_clear_parameters: bool = False
     parameter_exit_aging: bool = False
+    # 2026-07-20:全流程执行管道(主界面「检查并执行测试」)新增两个字段:
+    # - ``power_operation``:「自动上/下电」子任务的上/下电选项("up" / "down",默认 "up")
+    # - ``parameter_table_path``:「写样机参数」子任务的参数表文件路径(.xlsx/.xls/.csv)
+    power_operation: str = "up"
+    parameter_table_path: str = ""
 
 
 class SampleUpgradeSettingsStore:
@@ -76,6 +81,16 @@ class SampleUpgradeSettingsStore:
             parameter_initial_password=parser.get(SAMPLE_UPGRADE_SECTION, "parameter_initial_password", fallback=""),
             parameter_clear_parameters=parser.getboolean(SAMPLE_UPGRADE_SECTION, "parameter_clear_parameters", fallback=False),
             parameter_exit_aging=parser.getboolean(SAMPLE_UPGRADE_SECTION, "parameter_exit_aging", fallback=False),
+            power_operation=parser.get(
+                SAMPLE_UPGRADE_SECTION,
+                "power_operation",
+                fallback="up",
+            ),
+            parameter_table_path=parser.get(
+                SAMPLE_UPGRADE_SECTION,
+                "parameter_table_path",
+                fallback="",
+            ),
         )
 
     def save(self, settings: SampleUpgradeSettings) -> None:
@@ -94,6 +109,12 @@ class SampleUpgradeSettingsStore:
             "parameter_initial_password": settings.parameter_initial_password or "",
             "parameter_clear_parameters": "1" if settings.parameter_clear_parameters else "0",
             "parameter_exit_aging": "1" if settings.parameter_exit_aging else "0",
+            # 2026-07-20:全流程执行管道用的两个新字段。power_operation 仅接受 "up"/"down",
+            # 非法值统一回退 "up";parameter_table_path 自由文本(可能是 Windows 长路径)。
+            "power_operation": (settings.power_operation or "up").strip().lower()
+            if (settings.power_operation or "up").strip().lower() in {"up", "down"}
+            else "up",
+            "parameter_table_path": settings.parameter_table_path or "",
         }
 
         self.config_path.parent.mkdir(parents=True, exist_ok=True)

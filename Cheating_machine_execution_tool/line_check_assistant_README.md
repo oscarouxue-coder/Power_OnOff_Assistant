@@ -100,7 +100,29 @@ python .\run_line_check_assistant.py
 - **「期望」拼接规则**：每段独立勾选「否定」→ 该段前加 `!`；多段 → 用 `&&` 拼接；空段不写入拼接结果。例如第二段的 `00:00:00:00:00:00` 勾否定、`UP BROADCAST` 不勾，保存为 `!00:00:00:00:00:00&&UP BROADCAST`（前者应**不**出现，后者应**出现**）。
 - **「重试间隔」语义**：本字段名为 `command_fail_retry_interval_time`，写到 `[order]` 段**顶部独立行**，与老工具 `wait_time_N`（sleep 秒数，**语义不同**）不共用。**主程序不消费此字段**，仅作为 ini 内的全局参考值；若日后主程序按 ini 驱动执行，可从这里读出。
 - **主执行日志**：保存成功 / 失败都会写一条主程序执行日志；成功格式 `[测试项配置] 已保存 N 条测试项命令到 test_project_config.ini`。
-- **不接执行**：本窗口**不会**驱动任何 telnet / 上下电 / 测试项执行，仅做 ini 编辑器。
+- **不接执行**：本窗口**不会**驱动任何 telnet / 上下电 / 测试项执行，仅做 ini 编辑器。**「测试项配置」子任务在「全流程执行」窗口中独立执行**（见下），不走本窗口的 Start 按钮。
+
+## 全流程执行窗口（2026-07-20）
+
+主界面「检查并执行测试」按钮按下后，弹出本窗口（替代旧实现的「直接跑 ping 检查」）。操作员可勾选 6 个子任务，按 **1→6 固定顺序** 串行执行，任一失败（串口日志除外）将停止整个管道。
+
+- **6 个子任务**（每行 Checkbutton + 必填项状态 + 「去配置」按钮）：
+  1. **自动上/下电**（默认勾选）—— 调用 `power_on_service` 中的 `power_on_selected_channels` / `turn_off_selected_channels` 同步执行；必填项：程控电源 COM 口（主界面「程控电源串口」）+ 上/下电（`sample_upgrade_settings.ini` 新增的 `power_operation` 字段，默认 `up`）+ 至少 1 个已勾选通道。
+  2. **样机升级**（默认不勾）—— 调主程序既有的 `_start_page_upgrade()` / `_start_tftp_command_upgrade()` / `_start_tftp_put_upgrade()`（异步起线程，弹确认框由操作员点「是」）；必填项：升级方式 / 固件路径 / 超级用户凭据（页面升级）/ Tftp 指令或 Put（全包升级）。
+  3. **写样机参数**（默认不勾）—— 调主程序既有的 `_start_sample_parameter_write()`（异步起线程，弹确认框）；必填项：参数表文件路径（`sample_upgrade_settings.ini` 新增的 `parameter_table_path` 字段）+ 写参首次登录账号 / 密码（`parameter_initial_*`）。
+  4. **ONU 注册**（默认不勾）—— 调主程序既有的 `_on_onu_query_clicked()` + `_on_onu_register_clicked()`（异步起线程，弹确认框）；必填项：OLT IP / 用户名 / 密码（`onu_registration.ini`）。
+  5. **串口日志（管道期间持续记录）**（默认勾选）—— 调主程序既有的 `_open_serial_log_module()` 打开 `SerialTerminalWindow`；管道运行期间窗口保持开启，持续记录各通道输出。**「非致命」子任务**：打开失败不阻塞后续。
+  6. **测试项配置（[order] 执行）**（默认勾选）—— 调新 `test_item_execution_service.run_test_item_execution` 同步执行（每台串行）；按 `[order]` 段顺序逐条 telnet 下发 + per-segment fuzzy 匹配（`!A&&B`）+ 每条命令 `retry_times` 次重试（间隔 `command_fail_retry_interval_time` 秒）；per-channel 结果文件写到 `Cheating_machine_execution_tool/test_results/device_{section}_command_results_{YYYYMMDD_HHMMSS}.log`，主执行日志按 `[order]` 顺序输出每条命令的 TX / 读回 / 匹配结果。必填项：`test_project_config.ini` 中 `[telnet]` 段用户名 / 密码 + `[order]` 段至少 1 条命令。
+- **必填项状态展示**：每行右侧实时显示当前 store / main UI 状态（绿色就绪 / 红色「缺: 字段1, 字段2」），打开窗口时自动计算，勾选 / 切换 Checkbutton 时也会刷新。
+- **二次确认**：点击「开始执行」时若任一勾选子任务就绪 = False，弹「必填项未就绪」警告询问是否继续；继续后弹「确认全流程执行」显示勾选清单，操作员点「是」后启动后台线程。
+- **失败处理**：任一「致命」子任务抛异常 → 整个管道停止，弹「全流程执行失败」错误框；串口日志失败只记结果不阻塞。
+- **「停止」按钮**：管道运行期间可点击「停止」，编排器在当前子任务结束后终止后续子任务。
+- **子任务底层不重写**：本窗口不重写 6 个子任务的业务逻辑，全部走主程序既有的 `_open_*` / `_start_*` 方法 + 新 `test_item_execution_service`；编排器只负责调度 + 状态展示 + 失败传播。
+
+新增持久化字段（`Auto_power_on_off_tool/config/sample_upgrade_settings.ini`）：
+
+- `power_operation`（默认 `up`，非法值回退 `up`）—— 全流程执行「自动上/下电」子任务的上/下电选项。
+- `parameter_table_path`（默认空串）—— 全流程执行「写样机参数」子任务的参数表文件路径（`.xlsx`/`.xls`/`.csv`）。
 
 ## 打包建议
 

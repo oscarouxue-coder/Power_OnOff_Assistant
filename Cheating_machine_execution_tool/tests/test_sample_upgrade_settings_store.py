@@ -185,6 +185,69 @@ class SampleUpgradeSettingsStoreTests(unittest.TestCase):
         self.assertEqual(DEFAULT_PARAMETER_PARALLEL_COUNT, 1)
         self.assertEqual(DEFAULT_PARALLEL_COUNT, 2)
 
+    def test_save_and_load_preserves_power_operation_and_parameter_table_path(self):
+        # 2026-07-20:全流程执行管道需要持久化「上/下电选项」+「参数表路径」两个字段。
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = SampleUpgradeSettingsStore(Path(temp_dir) / "sample_upgrade_settings.ini")
+            saved = SampleUpgradeSettings(
+                power_operation="down",
+                parameter_table_path=r"F:\data\parameters_2026_07_20.xlsx",
+            )
+
+            store.save(saved)
+            loaded = store.load()
+
+            self.assertEqual(loaded.power_operation, "down")
+            self.assertEqual(loaded.parameter_table_path, r"F:\data\parameters_2026_07_20.xlsx")
+            # 默认值未被覆盖
+            self.assertEqual(loaded.upgrade_mode, DEFAULT_UPGRADE_MODE)
+            self.assertEqual(loaded.transfer_method, DEFAULT_UPGRADE_TRANSFER)
+
+    def test_load_missing_power_operation_and_parameter_table_path_defaults(self):
+        # 兼容旧 ini(尚未存盘过这两个字段):power_operation 回退 "up",
+        # parameter_table_path 回退空串,与其他 optional 字段的 fallback 策略一致。
+        from configparser import RawConfigParser
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "sample_upgrade_settings.ini"
+            parser = RawConfigParser()
+            parser.optionxform = str
+            parser["sample_upgrade"] = {
+                "username": "root",
+                "password": "secret",
+                "parameter_initial_username": "telecomadmin",
+                "parameter_initial_password": "nE7jA%5m",
+            }
+            with config_path.open("w", encoding="utf-8") as file:
+                parser.write(file)
+
+            loaded = SampleUpgradeSettingsStore(config_path).load()
+            self.assertEqual(loaded.power_operation, "up")
+            self.assertEqual(loaded.parameter_table_path, "")
+            # 既有字段仍能正常读出
+            self.assertEqual(loaded.parameter_initial_username, "telecomadmin")
+
+    def test_power_operation_normalized_to_up_or_down_on_save(self):
+        # 非法值(空串 / None / "DOWN" / "left") 落盘时统一回退 "up";
+        # 仅 "up" / "down"(大小写不敏感)透传。
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = SampleUpgradeSettingsStore(Path(temp_dir) / "sample_upgrade_settings.ini")
+            for raw, expected in (
+                ("up", "up"),
+                ("down", "down"),
+                ("DOWN", "down"),
+                (" Down ", "down"),
+                ("", "up"),
+                ("left", "up"),
+            ):
+                store.save(SampleUpgradeSettings(power_operation=raw))
+                loaded = store.load()
+                self.assertEqual(
+                    loaded.power_operation,
+                    expected,
+                    f"raw={raw!r} 应回退/透传到 {expected!r}",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

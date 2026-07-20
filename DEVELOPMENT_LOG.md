@@ -2,6 +2,50 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-07-20 - 「全流程执行」管道编排器（主界面「检查并执行测试」按钮升级）
+
+- 类型：功能 / 重构 / 测试 / 文档
+- 背景：用户对 `app.py:431` 的「检查并执行测试」按钮不满意——当前只调 `_start_all_checks` 做已勾选通道的 ping 通过性检查，不消费 `test_project_config.ini` 的 `[order]` 段。**用户目标**：把「自动上/下电 / 样机升级 / 写样机参数 / ONU 注册 / 串口日志 / 测试项配置」6 个已有功能作为可勾选的子任务，由用户勾选后按 1→6 固定顺序串行执行，任一失败（串口日志除外）→ 整个管道停止；用户连接好样机 + 填好所有配置后，一键跑通全流程。
+- 完成内容：
+  1. **`src/core/fuzzy_match_runner.py`（新）** —— 移植老工具 [Auto_power_on_off_tool/common/fuzzy_match.py](../../Cheating_machine_execution_tool/Auto_power_on_off_tool/common/fuzzy_match.py) 的 per-segment `!A&&B` 语义；纯函数无 IO，`match_expected(result, expected) -> bool` 入口；`iter_segments(expected)` 暴露拆分；老工具 `tcapi get WanInfo_Entry` IPv6 特殊分支不移植（用 `re.escape` 保证「字面匹配」）。AGENTS 硬规则：不改老工具源码，独立模块移植。
+  2. **`src/services/test_item_execution_service.py`（新）** —— 跑 `[order]` 段的 service：单台样机 → `prepare_network_for_sample` 切网卡 IP → `TelnetSession`（复用 `src/core/telnet_transport.py`）按 VLAN `bind_ip` 锁源 → `_login` 按 `telnet.input_user_flag` / `input_password_flag` / `login_success_flag` 三段登录 → 顺序执行 `[order]` 每条命令：send_line → `_read_until_stable`（连续 `READ_STABLE_SECONDS=1.0s` 无新数据 / 总 `READ_MAX_SECONDS=8.0s` 视完成）→ `match_expected` 判定 → 失败重试 `retry_times` 次（间隔 `command_fail_retry_interval_time` 秒）→ per-channel 结果文件 `Cheating_machine_execution_tool/test_results/device_{section}_command_results_{YYYYMMDD_HHMMSS}.log`。返回 `TestItemRunResult{channel_section, total, passed, failed, log_path}`；网络/登录失败抛 `RuntimeError`，由编排器统一 stop pipeline。
+  3. **`src/services/pipeline_orchestrator.py`（新）** —— 全流程执行管道：`PipelineContext` 包装 app + 通道 + 3 个 store + serial_log_dir；`compute_all_subtask_statuses(ctx)` 6 子任务必填项评估；`PipelineOrchestrator.run(selected: set[str])` 按 `SUBTASK_CODES` 1→6 固定顺序执行勾选子任务；每个子任务调 `app._start_*` 方法（既有逻辑，不重写）或直接调 service（1 电源 / 6 测试项）；致命失败抛 `PipelineError` + 停止后续；`NON_FATAL_SUBTASKS = {"serial_terminal"}` 失败只记结果；`request_stop()` 在当前子任务结束后终止后续。
+  4. **`line_check_assistant/pipeline_window.py`（新）** —— 「全流程执行」弹窗 UI（`Toplevel(780x560)` + 6 行 Checkbutton + 必填项状态 + 「去配置」按钮 + 「开始执行 / 停止 / 取消」）；每行右侧实时刷新「必填项当前状态」（绿色就绪 / 红色「缺: 字段1, 字段2」），「去配置」按钮调 `app._open_power_control` / `_open_upgrade_module` 等 6 个既有子窗口方法；「开始执行」走「必填项未就绪警告 + 全流程执行确认」二次确认后启动后台线程；主线程 UI 回调用 `window.after(0, ...)`；emit 投到主程序 `log_queue`。
+  5. **`line_check_assistant/sample_upgrade_settings_store.py`（改）** —— `SampleUpgradeSettings` 新增 `power_operation: str = "up"`（"up"/"down"，非法值 save 时回退 "up"）+ `parameter_table_path: str = ""`；load/save 同步；老 ini 兼容回退默认；与既有 `parameter_initial_*` / `parameter_clear_*` / `parameter_exit_aging` 同级存到 `[sample_upgrade]` 段。
+  6. **`line_check_assistant/app.py`（改）** —— `__init__` 新增 `self.pipeline_window = None`；新增 `self.power_operation_var = StringVar(value=settings.power_operation)` + `self.parameter_table_path_var = StringVar(value=settings.parameter_table_path)`，加入 `_bind_sample_upgrade_autosave` 的 trace_add 列表；`_current_sample_upgrade_settings` 透传这 2 个字段（`power_operation` 做 "up"/"down" 归一化，`parameter_table_path` 做 `.strip()`）；`_start_all_checks` 改为弹窗入口（`PipelineWindow(self)`），保留旧的 `_run_checks` / `_check_worker` 兜底用。
+  7. **`src/services/__init__.py`（改）** —— 新增 `pipeline_orchestrator` / `test_item_execution_service` 模块的 re-export（`PipelineContext` / `PipelineError` / `PipelineOrchestrator` / `SubTaskResult` / `SubTaskStatus` / `compute_all_subtask_statuses` / `TestItemRunRequest` / `TestItemRunResult` / `build_log_path` / `run_test_item_execution` / `*_SECONDS` 等常量），`__all__` 同步。
+  8. **`scripts/verify_baseline.py`（改）** —— `PY_COMPILE_FILES` 增 3 个路径：`src/core/fuzzy_match_runner.py` / `src/services/pipeline_orchestrator.py` / `src/services/test_item_execution_service.py` + `line_check_assistant/pipeline_window.py`。
+  9. **测试** —— 新增 4 个测试文件共 61 项：`tests/test_fuzzy_match_runner.py`（18：单段 / 多段 / 否定 / 混合 / 空段 / re.escape / IPv6 边界 / 性能）+ `tests/test_test_item_execution_service.py`（14：单条匹配 / 失败重试 / 重试成功 / per-segment !A&&B / 无期望默认通过 / 多条顺序 / 网络准备失败 / 登录失败 / 结果文件创建 / session finally 关闭 / build_log_path / 常量）+ `tests/test_pipeline_orchestrator.py`（26：6 子任务状态评估 / run 顺序 / 致命失败抛 PipelineError / 串口失败不阻塞 / request_stop 阻止后续 / 6 个子任务 statuses 完整性 / 必填项 missing 标记）+ `tests/test_sample_upgrade_settings_store.py`（+3：power_operation / parameter_table_path 持久化 / power_operation 非法值回退 `up`）；同时 `tests/test_app.py` 的 2 项 `_current_sample_upgrade_settings` mock 补齐 2 个 StringVar。
+- 修改文件：`Cheating_machine_execution_tool/src/core/fuzzy_match_runner.py`（新）、`Cheating_machine_execution_tool/src/services/test_item_execution_service.py`（新）、`Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`（新）、`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`（新）、`Cheating_machine_execution_tool/line_check_assistant/sample_upgrade_settings_store.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/services/__init__.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/tests/test_fuzzy_match_runner.py`（新）、`Cheating_machine_execution_tool/tests/test_test_item_execution_service.py`（新）、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`（新）、`Cheating_machine_execution_tool/tests/test_sample_upgrade_settings_store.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：
+  ```powershell
+  cd F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool
+  python -m py_compile src\core\fuzzy_match_runner.py src\services\test_item_execution_service.py src\services\pipeline_orchestrator.py line_check_assistant\pipeline_window.py line_check_assistant\sample_upgrade_settings_store.py line_check_assistant\app.py
+  python -m unittest discover -s tests -v
+  python scripts\verify_baseline.py
+  ```
+- 验证结果：`py_compile` 通过；完整单测 `Ran 374 tests ... OK`（原 313 + 新增 18 fuzzy + 14 test_item + 26 pipeline + 3 settings）；`verify_baseline.py` `ALL CHECKS PASSED`，exit 0（29 个 .py 编译 + 374 项单测 + 8 条 MUST_EXIST 全部命中 + 1 条 MUST_NOT_EXIST 全程不出现）。
+- 后续待办：
+  - 用户线下 Windows 桌面打开「全流程执行」窗口核对：① 6 行 Checkbutton / 必填项状态表 / 「去配置」按钮 ② 二次确认弹框「必填项未就绪警告 + 全流程执行确认」 ③ 主执行日志按「=== 开始子任务 N === → ... → === 结束子任务 N ===」输出 ④ 任一「致命」失败弹错误框 + 停止后续
+  - 用户在主程序配置好「全流程」所有必填项后，真实样机端到端跑通 6 子任务全流程：上下电 → 升级 → 写参 → ONU 注册 → 串口日志（持续）→ [order] 执行
+  - 异常场景验证：2/3/4 异步子任务（升级 / 写参 / ONU 注册）失败如何传播到编排器（当前靠主程序 worker 异常冒泡 + 用户观察主执行日志；是否需要 polling 状态轮询机制待 v2 评估）
+  - v2 候选：多通道并行、test_number 循环、WiFi 验证子任务、钉钉/邮件上报
+
+## 2026-07-20 - 「全流程执行」窗口尺寸 + 必填项状态计算修复（第二次：`_get_attr` 拿模块常量）
+
+- 类型：BUG 修复 / 测试
+- 背景：用户线下试运行「全流程执行」窗口(2026-07-20 提交后)报「6 行必填项状态全显示『无法计算状态』+ 错误 `'NoneType' object is not iterable`」。同一会话早先已修过一次(改 `resolve_config_dir()` 调用 → `app.TEST_ITEM_CONFIG_PATH`)，但**第一次修没修干净**——`TEST_ITEM_CONFIG_PATH` 是 `line_check_assistant/app.py:84` 的**模块级常量**,不是 `LineCheckAssistant` 实例属性,用 `_get_attr(app, "TEST_ITEM_CONFIG_PATH")` 仍拿到 `None`,后续 `configparser.read(None)` 抛 `TypeError: 'NoneType' object is not iterable`。
+- 根因：
+  1. `pipeline_window.py:38-39` 初始 / 最小尺寸过小(560 / 520),6 行 + 标题 + 按钮至少 640px。
+  2. `_build_context` 上次改错位置——应该从 `line_check_assistant.app` **模块**直接取常量,而不是从 app 实例取(`getattr(app_instance, "TEST_ITEM_CONFIG_PATH", None)` 永远拿到 `None`)。
+- 完成内容:
+  1. **`line_check_assistant/pipeline_window.py`（再次修）** — `_build_context` 把 `_get_attr(app, "TEST_ITEM_CONFIG_PATH")` 改为 `import line_check_assistant.app as _app_module; _app_module.TEST_ITEM_CONFIG_PATH`,从模块直接取常量;`_get_attr` 调用位置全部加注释说明 `TEST_ITEM_CONFIG_PATH` 在模块上、不在实例上。
+  2. **`tests/test_pipeline_window.py`(新)** — 2 项回归测试:① 静态源码断言 `_build_context` 不能再用 `_get_attr(app, "TEST_ITEM_CONFIG_PATH")`,且必须 `import line_check_assistant.app` + 访问 `TEST_ITEM_CONFIG_PATH`(防止以后误回滚);② 构造最小 `FakeApp`(无 tk、无实例属性),按 `_build_context` 的真实路径构造 `PipelineContext` 调 `compute_all_subtask_statuses`,断言 6 个子任务全部返回 `SubTaskStatus` 且不抛——直接复现并锁定 `'NoneType' object is not iterable` 这个 bug 不再回归。
+- 修改文件: `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`(新)、`DEVELOPMENT_LOG.md`。
+- 验证方法: `python -m py_compile line_check_assistant/pipeline_window.py`;`python -m unittest discover -s tests -p "test_pipeline_window.py" -v`(应 2 项 OK);`python scripts\verify_baseline.py`(应 `ALL CHECKS PASSED`)。
+- 验证结果: py_compile OK;`test_pipeline_window.py` 2 项 OK;`verify_baseline.py` `ALL CHECKS PASSED`(29 个 .py / **376** 项单测全绿,原 374 + 本轮新增 2)。
+- 后续待办: 用户重新打开「全流程执行」窗口核对 6 行必填项状态显示正常,不再出现「无法计算状态 / 'NoneType' object is not iterable」;窗口高度能容纳所有 6 行 + 底部「开始执行 / 停止 / 取消」按钮。
+
 ## 2026-07-20 - Telnet Tab 顶部增加「Telnet 默认已开启」Checkbutton
 
 - 类型：功能追加 / 测试 / 文档
