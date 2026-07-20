@@ -89,10 +89,11 @@ python .\run_line_check_assistant.py
 
 主界面工具栏「测试项配置」按钮打开的窗口是一个**编辑入口**，不接主程序执行流程（Q1=A 决策）：
 
-- **三 Tab 结构**：
-  - **Telnet** —— 编辑 `[telnet]` 段的 11 个字段（request_url / port / user / **password（明文）** / timeout / input_user_flag / input_password_flag / login_success_flag / 三个 0/1 flag）；password 输入框右侧小眼睛可在 `*` 密文 / 明文之间切换。
+- **四 Tab 结构**：
+  - **Telnet** —— 编辑 `[telnet]` 段的 12 个字段。顶部「Telnet 默认已开启」Checkbutton（`telnet_default_on`，默认 1 = 勾选）位于标题正下方，可由用户切换；下面是 request_url / port / user / **password（明文）** / timeout / input_user_flag / input_password_flag / login_success_flag / 三个 0/1 flag；password 输入框右侧小眼睛可在 `*` 密文 / 明文之间切换。
   - **测试项** —— 编辑 `[order]` 段：顶部全局 Spinbox「指令重试间隔（秒）」默认 60，写到 ini 的 `[order]` 段**第一行**（`command_fail_retry_interval_time = 60`）；中间滚动列表，每条命令一行（命令 + 重试次数 Spinbox 1-99 + 删除按钮），展开后是「期望」子表单（否定勾选 + 动态段列表 + 增加/删除段按钮）；底部「+ 新增测试项」。
   - **WiFi** —— `[connect_wifi]` 段：`enable` Checkbutton（0/1）+ `product_solution` Combobox（openwrt / bcm / mtk，保存时统一小写）。
+  - **项目信息** —— `[project_info]` 段：4 个字符串字段（项目名称 / 软件版本 / 内部软件版本 / ONU 软件编译时间），全部按自由文本存取；**仅做编辑器，不被主程序消费**，用于操作员在执行测试时肉眼对照样机输出的版本 / 编译时间。
 - **底部按钮**：「重新加载」（从磁盘重读 ini，丢弃未保存改动）/「保存」（二次确认后写回 ini）/「关闭」。
 - **Dirty 跟踪**：任意控件改动标记 dirty，「重新加载」和「关闭」在 dirty 时弹「放弃修改？」二次确认；「保存」成功后 dirty 清零。
 - **保存行为**：直接覆盖 `Auto_power_on_off_tool/config/test_project_config.ini`；标准 `configparser` 不支持保留注释，原 ini 中以 `;` 开头的注释会在保存后丢失；ini 文件不存在时打开窗口会提示「将以空白表单打开」，保存后自动创建。

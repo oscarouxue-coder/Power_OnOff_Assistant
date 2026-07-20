@@ -13,6 +13,7 @@ from line_check_assistant.test_item_config_store import (
     ORDER_GLOBAL_RETRY_INTERVAL_KEY,
     OrderConfig,
     OrderItem,
+    ProjectInfoSettings,
     TelnetSettings,
     TestItemConfigStore,
     TestProjectConfig,
@@ -38,12 +39,19 @@ class TestItemConfigStoreTests(unittest.TestCase):
             self.assertEqual(loaded.telnet.telnet_need_enter_password_flag, 0)
             self.assertEqual(loaded.telnet.telnet_no_user_password_flag, 0)
             self.assertEqual(loaded.telnet.only_power_off_on, 0)
+            # telnet_default_on 新字段默认 1(默认勾选);老 ini 缺该 key 时也回退 1。
+            self.assertEqual(loaded.telnet.telnet_default_on, 1)
             # [order] 段全局默认值 + 空列表
             self.assertEqual(loaded.order.command_fail_retry_interval_time, DEFAULT_COMMAND_FAIL_RETRY_INTERVAL)
             self.assertEqual(loaded.order.items, [])
             # [connect_wifi] 段默认值
             self.assertEqual(loaded.connect_wifi.enable, 0)
             self.assertEqual(loaded.connect_wifi.product_solution, "openwrt")
+            # [project_info] 段缺省时 4 字段全部回退空串(Q1=A,仅编辑器)
+            self.assertEqual(loaded.project_info.project_name, "")
+            self.assertEqual(loaded.project_info.software_version, "")
+            self.assertEqual(loaded.project_info.internal_software_version, "")
+            self.assertEqual(loaded.project_info.onu_compile_time, "")
 
     def test_save_and_load_round_trip(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -61,6 +69,7 @@ class TestItemConfigStoreTests(unittest.TestCase):
                     telnet_need_enter_password_flag=1,
                     telnet_no_user_password_flag=0,
                     only_power_off_on=0,
+                    telnet_default_on=0,  # 显式关掉,验证非默认 1 也能往返
                 ),
                 order=OrderConfig(
                     command_fail_retry_interval_time=90,
@@ -87,6 +96,12 @@ class TestItemConfigStoreTests(unittest.TestCase):
             loaded = store.load()
 
             self.assertEqual(loaded.telnet, saved.telnet)
+            # 新字段 telnet_default_on=0 落盘后必须能读回 0(非默认值 1 的对称 round-trip)。
+            self.assertEqual(loaded.telnet.telnet_default_on, 0)
+            # 落盘文本也必须包含 telnet_default_on
+            with (Path(temp_dir) / "test_project_config.ini").open("r", encoding="utf-8") as file:
+                content = file.read()
+            self.assertIn("telnet_default_on = 0", content)
             self.assertEqual(loaded.order.command_fail_retry_interval_time, saved.order.command_fail_retry_interval_time)
             self.assertEqual(len(loaded.order.items), len(saved.order.items))
             for loaded_item, saved_item in zip(loaded.order.items, saved.order.items):
@@ -383,6 +398,23 @@ class TestItemConfigStoreTests(unittest.TestCase):
             self.assertEqual(loaded.telnet.request_url, "http://10.0.0.1")
             # 缺省字段仍然回退默认值
             self.assertEqual(loaded.telnet.user, "root")
+            # 老 ini 没有 telnet_default_on 时也回退默认 1(默认勾选)
+            self.assertEqual(loaded.telnet.telnet_default_on, 1)
+
+    def test_telnet_default_on_saves_as_zero_or_one(self):
+        """telnet_default_on 字段统一 0/1,即便 UI 传入 Python bool 也强制转换。"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = TestItemConfigStore(Path(temp_dir) / "test_project_config.ini")
+            for raw_value, expected in ((1, "1"), (0, "0"), (True, "1"), (False, "0")):
+                config = TestProjectConfig(telnet=TelnetSettings(telnet_default_on=raw_value))
+                store.save(config)
+                with (Path(temp_dir) / "test_project_config.ini").open("r", encoding="utf-8") as file:
+                    content = file.read()
+                self.assertIn(
+                    f"telnet_default_on = {expected}",
+                    content,
+                    f"raw_value={raw_value}",
+                )
 
     def test_connect_wifi_enable_serializes_as_zero_or_one(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -404,6 +436,51 @@ class TestItemConfigStoreTests(unittest.TestCase):
             with (Path(temp_dir) / "test_project_config.ini").open("r", encoding="utf-8") as file:
                 content = file.read()
             self.assertIn("product_solution = openwrt", content)
+
+    def test_project_info_save_and_load_round_trip(self):
+        """4 字段含中文 / 空格 / 常见符号时往返保留。"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = TestItemConfigStore(Path(temp_dir) / "test_project_config.ini")
+            saved = TestProjectConfig(
+                project_info=ProjectInfoSettings(
+                    project_name="SDMC ONT 自动化",
+                    software_version="V1.0.2-beta",
+                    internal_software_version="S13.58.01.001",
+                    onu_compile_time="2026-07-19 18:30",
+                )
+            )
+
+            store.save(saved)
+            loaded = store.load()
+
+            self.assertEqual(loaded.project_info, saved.project_info)
+            # 落盘文本也必须包含四行字段
+            with (Path(temp_dir) / "test_project_config.ini").open("r", encoding="utf-8") as file:
+                content = file.read()
+            self.assertIn("[project_info]", content)
+            self.assertIn("project_name = SDMC ONT 自动化", content)
+            self.assertIn("software_version = V1.0.2-beta", content)
+            self.assertIn("internal_software_version = S13.58.01.001", content)
+            self.assertIn("onu_compile_time = 2026-07-19 18:30", content)
+
+    def test_project_info_load_tolerates_missing_section(self):
+        """老 ini 没有 [project_info] 段时,4 字段全部回退空串,不抛 NoSectionError。"""
+        from configparser import RawConfigParser
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "test_project_config.ini"
+            parser = RawConfigParser()
+            parser.optionxform = str
+            # 故意不写 [project_info]
+            parser["telnet"] = {"request_url": "http://10.0.0.1"}
+            with config_path.open("w", encoding="utf-8") as file:
+                parser.write(file)
+
+            loaded = TestItemConfigStore(config_path).load()
+            self.assertEqual(loaded.project_info.project_name, "")
+            self.assertEqual(loaded.project_info.software_version, "")
+            self.assertEqual(loaded.project_info.internal_software_version, "")
+            self.assertEqual(loaded.project_info.onu_compile_time, "")
 
 
 if __name__ == "__main__":

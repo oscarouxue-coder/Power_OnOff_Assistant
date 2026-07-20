@@ -2,6 +2,53 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-07-20 - Telnet Tab 顶部增加「Telnet 默认已开启」Checkbutton
+
+- 类型：功能追加 / 测试 / 文档
+- 背景：用户在线下「测试项配置 → Telnet」Tab 截图下方指出:在「Telnet 连接参数」标题与 `request_url` 之间留出空位,需要插入一个「Telnet 默认已开启」Checkbutton,默认勾选,由用户在 UI 中自行选择是否保留勾选状态(Q1=A 仍生效——仅编辑器,主程序不消费)。本轮沿用既有 `xxx_flag: int = 0` 风格:dataclass 字段名 `telnet_default_on: int = 1`,ini key `telnet_default_on`;`_dump_telnet` 强制 0/1 转换避免保存 `True`/`False`;`_load_telnet` 老 ini 缺该 key 时回退 1,与 dataclass 默认一致,保持向后兼容(不破坏已有 11 个 telnet 字段的回退行为)。
+- 完成内容:
+  1. **`line_check_assistant/test_item_config_store.py`** —— `TelnetSettings` 在 `only_power_off_on` 之后新增 `telnet_default_on: int = 1`(注释说明「默认 1 = 勾选,老 ini 缺 key 时回退 1」);`_load_telnet` 新增 `parser.get(section, "telnet_default_on", fallback="1")` + `_parse_int(..., 1)`,与其他 flag 同款 _parse_int 兜底;`_dump_telnet` 末尾新增 `"telnet_default_on": str(1 if bool(telnet.telnet_default_on) else 0)`,与 `connect_wifi.enable` 同款 0/1 强制转换。`enable` 字段 0/1 转换、`bool` 防 `True/False` 落盘等既有约定保持。
+  2. **`line_check_assistant/app.py`** —— `_build_test_item_telnet_tab` 新增 `telnet_default_on_var = IntVar(value=telnet.telnet_default_on)` 并加入 `mark_dirty` trace_add 列表;在标题(原 row 0)与 `request_url` 之间新增 `Checkbutton(... text="Telnet 默认已开启(telnet_default_on = 1,默认勾选)", variable=telnet_default_on_var, onvalue=1, offvalue=0, ...)`,grid 到 row 1 / columnspan=3;原 `request_url` 行的 row 1→2、`user` 2→3、`password` 3→4、`port` 4→5、`timeout` 5→6、`input_user_flag` 6→7、`input_password_flag` 7→8、`login_success_flag` 8→9、`telnet_need_enter_password_flag` 9→10、`telnet_no_user_password_flag` 10→11、`only_power_off_on` 11→12,所有 row 全部统一下移 1 行;`capture` / `load` 同步处理 `telnet_default_on`(`.get()` / `.set(int(...))`)。`save` 二次确认弹窗「Telnet 字段:11 项」自动由 `len(captured.telnet.__dict__)` 计算得出 12,不需要手改。
+  3. **`tests/test_test_item_config_store.py`** —— `test_load_defaults_when_config_is_missing` 末尾追加 `assertEqual(loaded.telnet.telnet_default_on, 1)`;`test_load_tolerates_unknown_keys` 末尾追加 `assertEqual(loaded.telnet.telnet_default_on, 1)` 验证老 ini 缺该 key 时回退 1;`test_save_and_load_round_trip` round-trip 数据加 `telnet_default_on=0`(显式非默认 1,验证非默认值也能往返),`self.assertEqual(loaded.telnet, saved.telnet)` 后追加 1 行 `assertEqual(loaded.telnet.telnet_default_on, 0)` 与落盘文本断言 `telnet_default_on = 0`;新增 `test_telnet_default_on_saves_as_zero_or_one`(参照 `test_connect_wifi_enable_serializes_as_zero_or_one` 模式,循环 4 种 raw_value(1/0/True/False) 验证落盘为 `1` / `0`)。312 → 313 项。
+  4. **`line_check_assistant_README.md`** —— 「测试项配置窗口」段 Telnet Tab 描述:从「11 个字段」改为「12 个字段」;新增顶部「Telnet 默认已开启」Checkbutton 说明(默认 1 = 勾选,可由用户切换);其余字段顺序不变。
+  5. **`PROJECT_STATUS.md`** —— 能力矩阵行:「测试项配置 ini 编辑器」描述增加「Telnet Tab 顶部『Telnet 默认已开启』Checkbutton 默认勾选」;单元测试行从 312 改 313。
+- 修改文件: `Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_test_item_config_store.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法: `python -m py_compile line_check_assistant/app.py line_check_assistant/test_item_config_store.py`;`python -m unittest discover -s tests -v`(应 `Ran 313 tests ... OK`,原 312 + 本轮新增 1);`python scripts\verify_baseline.py`(应 `ALL CHECKS PASSED`)。
+- 验证结果: `py_compile` 通过;完整单测 `Ran 313 tests ... OK`(原 312 + 新增 1 项 `test_telnet_default_on_saves_as_zero_or_one`);`verify_baseline.py` 全绿,exit 0。
+- 后续待办: 用户线下 Windows 桌面打开「测试项配置 → Telnet」Tab,核对:① 标题下方出现「Telnet 默认已开启(telnet_default_on = 1,默认勾选)」Checkbutton,默认已勾选;② 取消勾选后「重新加载」会按磁盘值恢复;③ 显式关掉后保存,二次确认弹窗「Telnet 字段:12 项」行可见,落盘 ini 中 `telnet_default_on = 0`;④ 显式勾选后保存,落盘 ini 中 `telnet_default_on = 1`;⑤ 关闭再开,首次打开的 ini 若没有该 key,Checkbutton 默认仍是勾选状态(老 ini 向后兼容)。
+
+## 2026-07-20 - 项目信息 Tab 增加「内部软件版本」字段
+
+- 类型：功能追加 / 测试 / 文档
+- 背景：上一轮在「测试项配置」窗口新增「项目信息」Tab 时,仅含 3 个字符串字段(项目名称 / 软件版本 / ONU 软件编译时间)。用户线下试用后反馈:现场场景下「软件版本」(对外版本号,例如 `V1.0.2-beta`)与「内部软件版本」(内部构建号,例如 `S13.58.01.001`)通常不同,操作员需要同时记录两个值用于和样机实际输出对照。本轮在「软件版本」下方插入新字段 `internal_software_version`,**仍 Q1=A**(仅编辑器,主程序不消费)。
+- 完成内容:
+  1. **`line_check_assistant/test_item_config_store.py`** —— `ProjectInfoSettings` 在 `software_version` 与 `onu_compile_time` 之间新增 `internal_software_version: str = ""`(默认空串);`_load_project_info` 新增 `parser.get(section, "internal_software_version", fallback="")`,老 ini 缺该 key 时回退空串;`_dump_project_info` 新增 `internal_software_version` key,落盘顺序固定在 `software_version` 之后。`enable` 0/1 转换 / `bool` 防 `True/False` 落盘等既有约定不动。
+  2. **`line_check_assistant/app.py`** —— `_build_test_item_project_info_tab` 新增 `internal_software_version_var` 第三个 `StringVar`,加入 `mark_dirty` trace_add 列表;`text_field(3, "内部软件版本", internal_software_version_var)` 插入到 `软件版本`(row 2)与 `ONU 软件编译时间` 之间,原 ONU 行下移到 row 4,底部说明 Label 下移到 row 5;`capture` / `load` 同步处理新字段(`.strip()` 写入,`or ""` 防御性回退)。`save` 二次确认弹窗项目信息行追加「内部软件版本=…」。
+  3. **`tests/test_test_item_config_store.py`** —— `test_load_defaults_when_config_is_missing` 末尾 3 行 assert 扩为 4 行(增加 `internal_software_version == ""`);`test_project_info_save_and_load_round_trip` round-trip 数据加 `internal_software_version="S13.58.01.001"`,落盘文本断言增加 `internal_software_version = S13.58.01.001`;`test_project_info_load_tolerates_missing_section` 末尾 3 行 assert 扩为 4 行。**不新增测试,只扩展既有 3 项**——`test_load_defaults_when_config_is_missing` / `test_project_info_save_and_load_round_trip` / `test_project_info_load_tolerates_missing_section` 3 项测试总数不变。
+  4. **`line_check_assistant_README.md`** —— 「测试项配置窗口」段项目信息 Tab 描述从「3 个字符串字段(项目名称 / 软件版本 / ONU 软件编译时间)」改为「4 个字符串字段(项目名称 / 软件版本 / **内部软件版本** / ONU 软件编译时间)」。
+- 修改文件: `Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_test_item_config_store.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法: `python -m py_compile line_check_assistant/app.py line_check_assistant/test_item_config_store.py`;`python -m unittest discover -s tests -v`(应仍 `Ran 312 tests ... OK`,原 312 + 本轮 0 新增);`python scripts\verify_baseline.py`(应 `ALL CHECKS PASSED`)。
+- 验证结果: `py_compile` 通过;完整单测 `Ran 312 tests ... OK`(不增测试计数,仅扩展既有 3 项的断言 / round-trip 数据);`verify_baseline.py` 全绿,exit 0。
+- 后续待办: 用户线下 Windows 桌面打开「测试项配置 → 项目信息」Tab,核对:① 第 3 行新增「内部软件版本」Label + 输入框;② 填入内部版本后点「保存」,二次确认弹窗项目信息行出现「内部软件版本=…」;③ 保存后点「重新加载」,内部软件版本值恢复;④ 关闭再开,磁盘 ini `[project_info]` 段含 `internal_software_version` 行,顺序在 `software_version` 之后、`onu_compile_time` 之前。
+
+## 2026-07-20 - 测试项配置窗口新增「项目信息」Tab（Q1=A 第 4 段）
+
+- 类型：功能 / 测试 / 文档
+- 背景：用户在线下「测试项配置」窗口下提出：在三 Tab 之外**新增一个「项目信息」Tab**,配置可供参考的项目基础信息（项目名称 / 软件版本 / ONU 软件编译时间），用于操作员在主程序执行过程中肉眼对照样机实际值（如 `bbfdm` / `ifconfig` 输出中的版本号与编译时间）。本轮遵循既有 Q1=A 决策——**仅做编辑器,不被主程序消费**,不接任何自动比对/上报/写设备流程。新增 ini 段 `[project_info]`,字段全部按字符串存取(编译时间不强制 ISO 格式),与现有三 Tab 的实现模式完全对齐。
+- 完成内容:
+  1. **`line_check_assistant/test_item_config_store.py`** —— 新增 `PROJECT_INFO_SECTION = "project_info"` 模块级常量与 `ProjectInfoSettings` dataclass(3 字段默认空串: `project_name` / `software_version` / `onu_compile_time`);`TestProjectConfig` 新增 `project_info: ProjectInfoSettings` 字段(排在最末,与既有三段顺序保持向后兼容);`load()` 调新私有方法 `_load_project_info`;`save()` 在末位 `parser[PROJECT_INFO_SECTION] = self._dump_project_info(...)`;新增 `_load_project_info` / `_dump_project_info` 私有方法,沿用 `_load_connect_wifi` / `_dump_connect_wifi` 的风格——老 ini 缺 `[project_info]` 段时 3 字段全部回退空串,**不抛 `NoSectionError`**;`__all__` 末尾追加 `"PROJECT_INFO_SECTION"` / `"ProjectInfoSettings"`。`enable` 0/1 强制转换、`bool` 防 `"True"`/`"False"` 落盘等既有约定不动,本段无 `enable` 字段无需做 0/1 转换。
+  2. **`tests/test_test_item_config_store.py`** —— import 加 `ProjectInfoSettings`;`test_load_defaults_when_config_is_missing` 末尾追加 3 行断言 `[project_info]` 段缺省时 3 字段默认空串;新增 `test_project_info_save_and_load_round_trip`(含中文 / 空格 / 常见符号的 round-trip + 落盘文本含 `[project_info]` 段 3 行);新增 `test_project_info_load_tolerates_missing_section`(手写不含 `[project_info]` 段的 ini,验证 `load` 不抛 `NoSectionError` 且 3 字段为空)。原 16 项 → 18 项。
+  3. **`line_check_assistant/app.py`** —— import 加 `ProjectInfoSettings`;`_open_test_item_config` 顶部描述从「telnet / 测试项命令 / WiFi 连接」扩为「telnet / 测试项命令 / WiFi 连接 / 项目信息」;新增第 4 次 `_build_test_item_project_info_tab(notebook, config.project_info, mark_dirty)` 调用;`reload` 内追加 `project_info_vars["load"](reloaded.project_info)`;`save` 内 `TestProjectConfig(...)` 多传 `project_info=project_info_vars["capture"]()`,二次确认弹窗追加「项目信息：项目=…,软件版本=…,编译时间=…」(空值显示「(空)」)一行。新增私有方法 `_build_test_item_project_info_tab`:2 列 grid + 标题 + 3 行 Label+`ttk.Entry`(与 `_build_test_item_wifi_tab` 同风格),`capture` 对 3 字段 `get().strip()`,`load` 直接 `var.set(...)`;`trace_add("write", lambda *_a: mark_dirty())` 模式与既有三 Tab 完全一致,dirty 跟踪自动覆盖。窗口几何 960x940 高度足够,`minsize` 不动。
+  4. **`line_check_assistant_README.md`** —— 「测试项配置窗口」段:「三 Tab 结构」改为「四 Tab 结构」;新增第 4 项「项目信息」描述(3 字段 + 仅编辑器 + 自由文本 + 肉眼对照样机值);保留前 3 Tab 描述不变。
+  5. **`PROJECT_STATUS.md`** —— 能力矩阵行:把「测试项配置 ini 编辑器(3 Tab / Q1=A 不接执行)」改为「4 Tab: Telnet / 测试项 / WiFi / 项目信息」,状态加注「310 → 313 项」;单元测试行从 310 改 313;「已完成」段(原 line 52)把「三 Tab」改为「四 Tab」并新增项目信息 Tab 描述。
+  6. **`ACCEPTANCE_BASELINE.md`** —— 本轮**不**新增独立 §2.x(原文件就没有为「测试项配置」单列条目,且本轮 Q1=A 不变,加 §2.x 会与既有叙述重复);等用户线下真实样机交互验证 4 Tab 行为后,再单独评估是否补 §2.x。
+- 修改文件: `Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_test_item_config_store.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法: `python -m py_compile line_check_assistant/app.py line_check_assistant/test_item_config_store.py`;`python -m unittest discover -s tests -v`(应 `Ran 312 tests ... OK`,原 310 + 本轮新增 2);`python scripts\verify_baseline.py`(应 `ALL CHECKS PASSED`,exit 0)。
+- 验证结果: 完整单测 `Ran 312 tests ... OK`(原 310 + 项目信息 2 项;`test_load_defaults_when_config_is_missing` 末尾追加 3 行 `[project_info]` 默认回退断言,不增加测试计数);`verify_baseline.py` 全绿,exit 0;`py_compile` 通过。
+- 后续待办:
+  - 用户线下 Windows 桌面打开「测试项配置」窗口,核对:① 第 4 个 Tab 显示「项目信息」;② 顶部描述包含「项目信息」;③ 首次打开 3 字段默认值都是空;④ 填值后点「保存」,二次确认弹窗项目信息一行显示填入的 3 个值;⑤ 保存后点「重新加载」,3 字段值恢复;⑥ 关闭再次打开,磁盘 ini 中存在 `[project_info]` 段且 3 字段写入正确(中文 / 空格 / 符号保留)。
+  - 若用户希望对项目信息 Tab 加额外的「产品系列 / 硬件版本 / 备注 / 测试员」等字段,可在 `ProjectInfoSettings` dataclass 与 UI `_build_test_item_project_info_tab` 内叠加(`_dump_project_info` / `_load_project_info` 自动覆盖新 key),不在本轮范围。
+
 ## 2026-07-20 - 建立 verify_baseline.py 回归门禁 + AGENTS.md 加验收同步硬规则
 
 - 类型：基础设施 / 文档 / 测试

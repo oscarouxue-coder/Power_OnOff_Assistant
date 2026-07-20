@@ -16,6 +16,9 @@ from typing import List, Optional
 TELNET_SECTION = "telnet"
 ORDER_SECTION = "order"
 CONNECT_WIFI_SECTION = "connect_wifi"
+# ``[project_info]`` 段(Q1=A:仅做编辑器,不被主程序消费);包含项目名称 / 软件版本 /
+# ONU 软件编译时间等参考信息,操作员肉眼对照样机实际值。
+PROJECT_INFO_SECTION = "project_info"
 
 # ``[order]`` 段顶部独立 key,语义对齐老工具 ``config.ini`` 中 ``command_fail_retry_interval_time``:
 # 表示两次失败重试之间的等待秒数。
@@ -46,6 +49,9 @@ class TelnetSettings:
     telnet_need_enter_password_flag: int = 0
     telnet_no_user_password_flag: int = 0
     only_power_off_on: int = 0
+    # ``telnet_default_on``:Telnet 段在测试项配置中是否默认启用(Q1=A,仅编辑器)。
+    # 默认 1 = 勾选;老 ini 没有该 key 时 ``_load_telnet`` 也回退 1,保持向后兼容。
+    telnet_default_on: int = 1
 
 
 @dataclass
@@ -86,12 +92,30 @@ class ConnectWifiSettings:
 
 
 @dataclass
+class ProjectInfoSettings:
+    """``[project_info]`` 段(Q1=A:仅做编辑器,不被主程序消费)。
+
+    字段含义:
+        project_name: 项目名称。
+        software_version: 软件版本(对外版本号)。
+        internal_software_version: 内部软件版本(内部构建号,可与对外版本号不同)。
+        onu_compile_time: ONU 软件编译时间(自由文本,不强制 ISO 格式)。
+    """
+
+    project_name: str = ""
+    software_version: str = ""
+    internal_software_version: str = ""
+    onu_compile_time: str = ""
+
+
+@dataclass
 class TestProjectConfig:
     """整个 ini 文件的内存模型。"""
 
     telnet: TelnetSettings = field(default_factory=TelnetSettings)
     order: OrderConfig = field(default_factory=OrderConfig)
     connect_wifi: ConnectWifiSettings = field(default_factory=ConnectWifiSettings)
+    project_info: ProjectInfoSettings = field(default_factory=ProjectInfoSettings)
 
 
 def _parse_int(value: object, default: int) -> int:
@@ -181,6 +205,7 @@ class TestItemConfigStore:
             telnet=self._load_telnet(parser),
             order=self._load_order(parser),
             connect_wifi=self._load_connect_wifi(parser),
+            project_info=self._load_project_info(parser),
         )
 
     def save(self, config: TestProjectConfig) -> None:
@@ -189,6 +214,7 @@ class TestItemConfigStore:
         parser[TELNET_SECTION] = self._dump_telnet(config.telnet)
         parser[ORDER_SECTION] = self._dump_order(config.order)
         parser[CONNECT_WIFI_SECTION] = self._dump_connect_wifi(config.connect_wifi)
+        parser[PROJECT_INFO_SECTION] = self._dump_project_info(config.project_info)
 
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         with self.config_path.open("w", encoding="utf-8") as file:
@@ -215,6 +241,10 @@ class TestItemConfigStore:
             ),
             only_power_off_on=_parse_int(
                 parser.get(section, "only_power_off_on", fallback="0"), 0
+            ),
+            # 老 ini 没有 telnet_default_on 时回退 1(默认勾选,行为与 dataclass 默认一致)。
+            telnet_default_on=_parse_int(
+                parser.get(section, "telnet_default_on", fallback="1"), 1
             ),
         )
 
@@ -259,6 +289,17 @@ class TestItemConfigStore:
             product_solution=parser.get(section, "product_solution", fallback="openwrt"),
         )
 
+    def _load_project_info(self, parser: configparser.RawConfigParser) -> ProjectInfoSettings:
+        # 老 ini 缺 [project_info] 段时容错:4 字段全部回退空串,不抛 NoSectionError;
+        # 老 ini 仅有 3 字段(无 internal_software_version)时该字段也回退空串。
+        section = PROJECT_INFO_SECTION
+        return ProjectInfoSettings(
+            project_name=parser.get(section, "project_name", fallback=""),
+            software_version=parser.get(section, "software_version", fallback=""),
+            internal_software_version=parser.get(section, "internal_software_version", fallback=""),
+            onu_compile_time=parser.get(section, "onu_compile_time", fallback=""),
+        )
+
     # -- 序列化 ----------------------------------------------------------
 
     def _dump_telnet(self, telnet: TelnetSettings) -> dict:
@@ -274,6 +315,8 @@ class TestItemConfigStore:
             "telnet_need_enter_password_flag": str(_parse_int(telnet.telnet_need_enter_password_flag, 0)),
             "telnet_no_user_password_flag": str(_parse_int(telnet.telnet_no_user_password_flag, 0)),
             "only_power_off_on": str(_parse_int(telnet.only_power_off_on, 0)),
+            # telnet_default_on 统一为 0/1,即便 UI 传入 Python bool 也强制转换,避免保存为 "True"/"False"。
+            "telnet_default_on": str(1 if bool(telnet.telnet_default_on) else 0),
         }
 
     def _dump_order(self, order: OrderConfig) -> dict:
@@ -294,6 +337,15 @@ class TestItemConfigStore:
             "product_solution": (wifi.product_solution or "openwrt").strip().lower(),
         }
 
+    def _dump_project_info(self, info: ProjectInfoSettings) -> dict:
+        # 全部按字符串存取;空串 / None 都落盘为空,便于老 ini 缺段时回填。
+        return {
+            "project_name": info.project_name or "",
+            "software_version": info.software_version or "",
+            "internal_software_version": info.internal_software_version or "",
+            "onu_compile_time": info.onu_compile_time or "",
+        }
+
 
 __all__ = [
     "CONNECT_WIFI_SECTION",
@@ -305,6 +357,8 @@ __all__ = [
     "ORDER_SECTION",
     "OrderConfig",
     "OrderItem",
+    "PROJECT_INFO_SECTION",
+    "ProjectInfoSettings",
     "TELNET_SECTION",
     "TelnetSettings",
     "TestItemConfigStore",

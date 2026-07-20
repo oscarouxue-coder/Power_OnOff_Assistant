@@ -44,6 +44,7 @@ from .test_item_config_store import (
     ExpectedSegment,
     OrderConfig,
     OrderItem,
+    ProjectInfoSettings,
     TelnetSettings,
     TestItemConfigStore,
     TestProjectConfig,
@@ -2364,7 +2365,7 @@ class LineCheckAssistant(Tk):
         Label(
             content,
             text=(
-                "编辑测试项 ini（telnet / 测试项命令 / WiFi 连接）。当前仅提供编辑入口，"
+                "编辑测试项 ini（telnet / 测试项命令 / WiFi 连接 / 项目信息）。当前仅提供编辑入口，"
                 "不会改变主程序的执行流程。"
             ),
             foreground=COLOR_MUTED,
@@ -2397,6 +2398,7 @@ class LineCheckAssistant(Tk):
         telnet_vars = self._build_test_item_telnet_tab(notebook, config.telnet, mark_dirty)
         order_control = self._build_test_item_order_tab(notebook, config.order, mark_dirty)
         wifi_vars = self._build_test_item_wifi_tab(notebook, config.connect_wifi, mark_dirty)
+        project_info_vars = self._build_test_item_project_info_tab(notebook, config.project_info, mark_dirty)
 
         button_bar = Frame(content, background=COLOR_BG)
         button_bar.pack(fill="x", side="bottom", anchor="e")
@@ -2420,6 +2422,7 @@ class LineCheckAssistant(Tk):
             telnet_vars["load"](reloaded.telnet)
             order_control["load"](reloaded.order)
             wifi_vars["load"](reloaded.connect_wifi)
+            project_info_vars["load"](reloaded.project_info)
             reset_dirty()
             self._log("[测试项配置] 已从磁盘重新加载（未保存改动已丢弃）")
 
@@ -2429,6 +2432,7 @@ class LineCheckAssistant(Tk):
                     telnet=telnet_vars["capture"](),
                     order=order_control["capture"](),
                     connect_wifi=wifi_vars["capture"](),
+                    project_info=project_info_vars["capture"](),
                 )
             except ValueError as exc:
                 messagebox.showerror("数据不合法", str(exc), parent=dialog)
@@ -2440,7 +2444,11 @@ class LineCheckAssistant(Tk):
                     f"- Telnet 字段：{len(captured.telnet.__dict__)} 项\n"
                     f"- 测试项命令：{len(captured.order.items)} 条\n"
                     f"- 指令重试间隔：{captured.order.command_fail_retry_interval_time} 秒\n"
-                    f"- WiFi 连接：{'启用' if captured.connect_wifi.enable else '关闭'}\n\n"
+                    f"- WiFi 连接：{'启用' if captured.connect_wifi.enable else '关闭'}\n"
+                    f"- 项目信息：项目={captured.project_info.project_name or '(空)'}，"
+                    f"软件版本={captured.project_info.software_version or '(空)'}，"
+                    f"内部软件版本={captured.project_info.internal_software_version or '(空)'}，"
+                    f"编译时间={captured.project_info.onu_compile_time or '(空)'}\n\n"
                     "原 ini 中的注释（以 ; 开头）会在保存后丢失。是否继续？"
                 ),
                 parent=dialog,
@@ -2502,6 +2510,8 @@ class LineCheckAssistant(Tk):
         need_pwd_flag_var = IntVar(value=telnet.telnet_need_enter_password_flag)
         no_user_pwd_flag_var = IntVar(value=telnet.telnet_no_user_password_flag)
         only_power_var = IntVar(value=telnet.only_power_off_on)
+        # Telnet 默认已开启(默认 1 = 勾选,可在 UI 中由用户切换;Q1=A 仅编辑器)。
+        telnet_default_on_var = IntVar(value=telnet.telnet_default_on)
 
         password_visible = [False]
 
@@ -2514,7 +2524,14 @@ class LineCheckAssistant(Tk):
             login_success_flag_var,
         ):
             var.trace_add("write", lambda *_a: mark_dirty())
-        for var in (port_var, timeout_var, need_pwd_flag_var, no_user_pwd_flag_var, only_power_var):
+        for var in (
+            port_var,
+            timeout_var,
+            need_pwd_flag_var,
+            no_user_pwd_flag_var,
+            only_power_var,
+            telnet_default_on_var,
+        ):
             var.trace_add("write", lambda *_a: mark_dirty())
 
         def int_field(parent: ttk.Frame, row: int, label: str, var: IntVar, from_: int = 0, to: int = 65535) -> None:
@@ -2533,21 +2550,34 @@ class LineCheckAssistant(Tk):
             background=COLOR_BG,
         ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
 
-        Label(frame, text="request_url", width=32, anchor="w", background=COLOR_BG).grid(
-            row=1, column=0, sticky="w", padx=(0, 12), pady=6
-        )
-        ttk.Entry(frame, textvariable=request_url_var, width=36).grid(row=1, column=1, sticky="ew", pady=6)
+        # 新增的 Checkbutton 放在标题下方(原 request_url 行的位置),其他字段全部下移 1 行。
+        Checkbutton(
+            frame,
+            text="Telnet 默认已开启（telnet_default_on = 1，默认勾选）",
+            variable=telnet_default_on_var,
+            onvalue=1,
+            offvalue=0,
+            background=COLOR_BG,
+            activebackground=COLOR_BG,
+            highlightthickness=0,
+            borderwidth=0,
+        ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(2, 8))
 
-        Label(frame, text="user", width=32, anchor="w", background=COLOR_BG).grid(
+        Label(frame, text="request_url", width=32, anchor="w", background=COLOR_BG).grid(
             row=2, column=0, sticky="w", padx=(0, 12), pady=6
         )
-        ttk.Entry(frame, textvariable=user_var, width=24).grid(row=2, column=1, sticky="ew", pady=6)
+        ttk.Entry(frame, textvariable=request_url_var, width=36).grid(row=2, column=1, sticky="ew", pady=6)
 
-        Label(frame, text="password（明文）", width=32, anchor="w", background=COLOR_BG).grid(
+        Label(frame, text="user", width=32, anchor="w", background=COLOR_BG).grid(
             row=3, column=0, sticky="w", padx=(0, 12), pady=6
         )
+        ttk.Entry(frame, textvariable=user_var, width=24).grid(row=3, column=1, sticky="ew", pady=6)
+
+        Label(frame, text="password（明文）", width=32, anchor="w", background=COLOR_BG).grid(
+            row=4, column=0, sticky="w", padx=(0, 12), pady=6
+        )
         pwd_container = Frame(frame, background=COLOR_BG)
-        pwd_container.grid(row=3, column=1, sticky="ew", pady=6)
+        pwd_container.grid(row=4, column=1, sticky="ew", pady=6)
         pwd_entry = ttk.Entry(pwd_container, textvariable=password_var, width=24)
         pwd_entry.pack(side="left", fill="x", expand=True)
 
@@ -2559,25 +2589,25 @@ class LineCheckAssistant(Tk):
         toggle_btn = Button(pwd_container, text="👁", width=3, command=toggle_password_visibility)
         toggle_btn.pack(side="left", padx=(8, 0))
 
-        int_field(frame, 4, "port", port_var, from_=1, to=65535)
-        int_field(frame, 5, "timeout", timeout_var, from_=1, to=600)
+        int_field(frame, 5, "port", port_var, from_=1, to=65535)
+        int_field(frame, 6, "timeout", timeout_var, from_=1, to=600)
 
         Label(frame, text="input_user_flag", width=32, anchor="w", background=COLOR_BG).grid(
-            row=6, column=0, sticky="w", padx=(0, 12), pady=6
-        )
-        ttk.Entry(frame, textvariable=input_user_flag_var, width=18).grid(row=6, column=1, sticky="w", pady=6)
-        Label(frame, text="input_password_flag", width=32, anchor="w", background=COLOR_BG).grid(
             row=7, column=0, sticky="w", padx=(0, 12), pady=6
         )
-        ttk.Entry(frame, textvariable=input_password_flag_var, width=18).grid(row=7, column=1, sticky="w", pady=6)
-        Label(frame, text="login_success_flag", width=32, anchor="w", background=COLOR_BG).grid(
+        ttk.Entry(frame, textvariable=input_user_flag_var, width=18).grid(row=7, column=1, sticky="w", pady=6)
+        Label(frame, text="input_password_flag", width=32, anchor="w", background=COLOR_BG).grid(
             row=8, column=0, sticky="w", padx=(0, 12), pady=6
         )
-        ttk.Entry(frame, textvariable=login_success_flag_var, width=18).grid(row=8, column=1, sticky="w", pady=6)
+        ttk.Entry(frame, textvariable=input_password_flag_var, width=18).grid(row=8, column=1, sticky="w", pady=6)
+        Label(frame, text="login_success_flag", width=32, anchor="w", background=COLOR_BG).grid(
+            row=9, column=0, sticky="w", padx=(0, 12), pady=6
+        )
+        ttk.Entry(frame, textvariable=login_success_flag_var, width=18).grid(row=9, column=1, sticky="w", pady=6)
 
-        int_field(frame, 9, "telnet_need_enter_password_flag", need_pwd_flag_var, from_=0, to=1)
-        int_field(frame, 10, "telnet_no_user_password_flag", no_user_pwd_flag_var, from_=0, to=1)
-        int_field(frame, 11, "only_power_off_on", only_power_var, from_=0, to=1)
+        int_field(frame, 10, "telnet_need_enter_password_flag", need_pwd_flag_var, from_=0, to=1)
+        int_field(frame, 11, "telnet_no_user_password_flag", no_user_pwd_flag_var, from_=0, to=1)
+        int_field(frame, 12, "only_power_off_on", only_power_var, from_=0, to=1)
 
         frame.columnconfigure(1, weight=1)
 
@@ -2594,6 +2624,7 @@ class LineCheckAssistant(Tk):
                 telnet_need_enter_password_flag=int(need_pwd_flag_var.get()),
                 telnet_no_user_password_flag=int(no_user_pwd_flag_var.get()),
                 only_power_off_on=int(only_power_var.get()),
+                telnet_default_on=int(telnet_default_on_var.get()),
             )
 
         def load(new_telnet: TelnetSettings) -> None:
@@ -2608,6 +2639,7 @@ class LineCheckAssistant(Tk):
             need_pwd_flag_var.set(new_telnet.telnet_need_enter_password_flag)
             no_user_pwd_flag_var.set(new_telnet.telnet_no_user_password_flag)
             only_power_var.set(new_telnet.only_power_off_on)
+            telnet_default_on_var.set(int(new_telnet.telnet_default_on))
 
         return {"capture": capture, "load": load}
 
@@ -2915,6 +2947,81 @@ class LineCheckAssistant(Tk):
         def load(new_wifi: ConnectWifiSettings) -> None:
             enable_var.set(int(new_wifi.enable))
             solution_var.set((new_wifi.product_solution or "openwrt").strip().lower())
+
+        return {"capture": capture, "load": load}
+
+    def _build_test_item_project_info_tab(
+        self,
+        notebook: ttk.Notebook,
+        info: ProjectInfoSettings,
+        mark_dirty,
+    ) -> dict:
+        """构建 [project_info] 段 Tab(Q1=A:仅做编辑器,不被主程序消费)。返回 ``{"capture": Callable, "load": Callable}``。"""
+        frame = ttk.Frame(notebook, style="App.TFrame", padding=(16, 14))
+        notebook.add(frame, text="项目信息")
+
+        project_name_var = StringVar(value=info.project_name or "")
+        software_version_var = StringVar(value=info.software_version or "")
+        internal_software_version_var = StringVar(value=info.internal_software_version or "")
+        onu_compile_time_var = StringVar(value=info.onu_compile_time or "")
+
+        for var in (
+            project_name_var,
+            software_version_var,
+            internal_software_version_var,
+            onu_compile_time_var,
+        ):
+            var.trace_add("write", lambda *_a: mark_dirty())
+
+        Label(
+            frame,
+            text="项目信息",
+            font=(FONT_FAMILY, 12, "bold"),
+            foreground=COLOR_TEXT,
+            background=COLOR_BG,
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
+
+        def text_field(row: int, label: str, var: StringVar, width: int = 40) -> None:
+            Label(frame, text=label, width=20, anchor="w", background=COLOR_BG).grid(
+                row=row, column=0, sticky="w", padx=(0, 12), pady=6
+            )
+            ttk.Entry(frame, textvariable=var, width=width).grid(
+                row=row, column=1, sticky="we", pady=6
+            )
+
+        text_field(1, "项目名称", project_name_var)
+        text_field(2, "软件版本", software_version_var)
+        text_field(3, "内部软件版本", internal_software_version_var)
+        text_field(4, "ONU 软件编译时间", onu_compile_time_var)
+
+        Label(
+            frame,
+            text=(
+                "本段仅做编辑器，不被主程序消费（Q1=A）。"
+                "编译时间为自由文本，不强制 ISO 格式；"
+                "操作员可在执行测试时肉眼对照样机输出的版本/编译时间。"
+            ),
+            foreground=COLOR_MUTED,
+            background=COLOR_BG,
+            wraplength=560,
+            justify="left",
+        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+        frame.columnconfigure(1, weight=1)
+
+        def capture() -> ProjectInfoSettings:
+            return ProjectInfoSettings(
+                project_name=project_name_var.get().strip(),
+                software_version=software_version_var.get().strip(),
+                internal_software_version=internal_software_version_var.get().strip(),
+                onu_compile_time=onu_compile_time_var.get().strip(),
+            )
+
+        def load(new_info: ProjectInfoSettings) -> None:
+            project_name_var.set(new_info.project_name or "")
+            software_version_var.set(new_info.software_version or "")
+            internal_software_version_var.set(new_info.internal_software_version or "")
+            onu_compile_time_var.set(new_info.onu_compile_time or "")
 
         return {"capture": capture, "load": load}
 
