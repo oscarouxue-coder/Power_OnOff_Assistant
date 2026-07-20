@@ -83,6 +83,23 @@ python .\run_line_check_assistant.py
 9. 打开“写样机参数”，先使用“生成批量参数表...”为已勾选 VLAN 生成 Excel 表，或选择已有 `.xlsx` / `.xlsm` / `.xls` / `.csv` 参数表；确认预检清单中的 VLAN、COM、MAC 一一对应。
    - 点击“写入参数”后，确认框会提示清空参数、工厂模式和两次重启；仅在确认后才实际下发命令。
    - 现场先以 2 台独立 VLAN / COM 样机验证，确认每台写入后读回校验成功、日志未暴露密码，并确认设备已完成退出工厂模式后的重启。
+10. 打开“测试项配置”，可加载并编辑 `Auto_power_on_off_tool/config/test_project_config.ini`，详见下方「测试项配置窗口」。
+
+## 测试项配置窗口
+
+主界面工具栏「测试项配置」按钮打开的窗口是一个**编辑入口**，不接主程序执行流程（Q1=A 决策）：
+
+- **三 Tab 结构**：
+  - **Telnet** —— 编辑 `[telnet]` 段的 11 个字段（request_url / port / user / **password（明文）** / timeout / input_user_flag / input_password_flag / login_success_flag / 三个 0/1 flag）；password 输入框右侧小眼睛可在 `*` 密文 / 明文之间切换。
+  - **测试项** —— 编辑 `[order]` 段：顶部全局 Spinbox「指令重试间隔（秒）」默认 60，写到 ini 的 `[order]` 段**第一行**（`command_fail_retry_interval_time = 60`）；中间滚动列表，每条命令一行（命令 + 重试次数 Spinbox 1-99 + 删除按钮），展开后是「期望」子表单（否定勾选 + 动态段列表 + 增加/删除段按钮）；底部「+ 新增测试项」。
+  - **WiFi** —— `[connect_wifi]` 段：`enable` Checkbutton（0/1）+ `product_solution` Combobox（openwrt / bcm / mtk，保存时统一小写）。
+- **底部按钮**：「重新加载」（从磁盘重读 ini，丢弃未保存改动）/「保存」（二次确认后写回 ini）/「关闭」。
+- **Dirty 跟踪**：任意控件改动标记 dirty，「重新加载」和「关闭」在 dirty 时弹「放弃修改？」二次确认；「保存」成功后 dirty 清零。
+- **保存行为**：直接覆盖 `Auto_power_on_off_tool/config/test_project_config.ini`；标准 `configparser` 不支持保留注释，原 ini 中以 `;` 开头的注释会在保存后丢失；ini 文件不存在时打开窗口会提示「将以空白表单打开」，保存后自动创建。
+- **「期望」拼接规则**：每段独立勾选「否定」→ 该段前加 `!`；多段 → 用 `&&` 拼接；空段不写入拼接结果。例如第二段的 `00:00:00:00:00:00` 勾否定、`UP BROADCAST` 不勾，保存为 `!00:00:00:00:00:00&&UP BROADCAST`（前者应**不**出现，后者应**出现**）。
+- **「重试间隔」语义**：本字段名为 `command_fail_retry_interval_time`，写到 `[order]` 段**顶部独立行**，与老工具 `wait_time_N`（sleep 秒数，**语义不同**）不共用。**主程序不消费此字段**，仅作为 ini 内的全局参考值；若日后主程序按 ini 驱动执行，可从这里读出。
+- **主执行日志**：保存成功 / 失败都会写一条主程序执行日志；成功格式 `[测试项配置] 已保存 N 条测试项命令到 test_project_config.ini`。
+- **不接执行**：本窗口**不会**驱动任何 telnet / 上下电 / 测试项执行，仅做 ini 编辑器。
 
 ## 打包建议
 

@@ -17,7 +17,7 @@ python -m py_compile line_check_assistant\app.py src\ui\serial_terminal.py src\s
 python -m unittest discover -s tests -v
 ```
 
-预期 `Ran 273 tests ... OK`（2026-07-19 实跑；原 270 + 本轮新增 3：清理失败步骤名标识 3）。
+预期 `Ran 283 tests ... OK`（2026-07-19 实跑；原 270 → 273（清理失败步骤名标识 3 项）→ 283（本轮新增 10 项：同 OUI 1 + 流水线选项 5 + 持久化 2 + 写样机参数默认并行 1 回归 1 + SSID 末 4 位 MAC 强关联 1））。
 
 ## 1. 全局不可破坏规则
 
@@ -30,7 +30,7 @@ python -m unittest discover -s tests -v
 
 ### 1.2 测试与目录基线
 
-- 全量：`python -m unittest discover -s tests -v` → **273 项全过**（2026-07-19 实跑，对应 `tests/` 下 19 个 unittest 文件）
+- 全量：`python -m unittest discover -s tests -v` → **283 项全过**（2026-07-19 实跑，对应 `tests/` 下 19 个 unittest 文件）
 - 不动 `build/`、`dist/`、`logs/`、`.venv/`
 
 ### 1.3 协议不变性自检（grep 必须命中）
@@ -138,17 +138,19 @@ python -m unittest discover -s tests -v
 
 ### 2.7 批量写样机参数（默认走 telnet 路径）
 
-- **状态**：已确认验收（1 台单台 telnet 路径，2026-07-17；6 台独立 VLAN 并行 telnet 路径，2026-07-19）/ 已实现未验收（2 / 8 台端点并行；2026-07-19 用 6 台覆盖了原计划 2 / 4 / 8 区间中段代表性场景）/ 已实现未验收（2026-07-19 流水线下发命令由可选 Checkbutton 控制：`ppctl clear` 与 `ppctl set AGING_STATE=1` 默认关闭，勾选才下发；该选项化行为待真实样机回归）
+- **状态**：已确认验收（1 台单台 telnet 路径，2026-07-17；6 台独立 VLAN 并行 telnet 路径，2026-07-19；流水线下发命令由可选 Checkbutton 控制：`ppctl clear` 与 `AGING_STATE=1` 默认关闭、勾选才下发、关闭时主日志输出"关闭，跳过"，2026-07-19 6 台真实样机验收通过；默认并行数 1 / 确认框 9 步自然顺序 / 清理失败步骤名标识 同步验收通过）/ 已实现未验收（2 / 8 台端点并行；2026-07-19 用 6 台覆盖了原计划 2 / 4 / 8 区间中段代表性场景）
 - **业务时序**：UBUS 启用 telnet → `TelnetSession`（未登录） → 首次登录 → 1. 进入工厂模式（`ppctl set FACTORY_MODE=1`）→ 2. `firstboot -yr` → 3. 等待 100 秒 → 4. 工厂模式二次登录 → 5.（可选 `ppctl set AGING_STATE=1`）→ 6.（可选 `ppctl clear`）→ 7. 15 项 `ppctl set/get` 读回校验 → 8. 退出工厂模式（`ppctl set FACTORY_MODE=0`）→ 9. `firstboot -yr`（`finally` 中执行第 8/9 步）
 
   写参前置新增「启用对应通道网卡 + 按 `channel.network_card_ip` 设置静态 IP + `wait_for_bindable_ip` 等 15 秒」三步（任何一步失败抛 `RuntimeError` → worker 标记 `telnet 写参启动失败`，单台放弃不影响其它通道），位于 `make_telnet_factory` 内 UBUS 启用 telnet 之前；100 秒工厂模式网段切换继续由 `make_factory_session_swap` 处理，PC 端从 `192.168.1.x` 切到 `192.168.29.x`、主机位保持不变。`factory_bind_ip` / `factory_device_host` 未配置时按 `factory_bind_ip_for(network_card_ip)` / `factory_device_host_for(device_manage_ip)` 自动派生（第 3 段 → 29，主机位不变）；手动填值优先级最高。
 - **并行与取消**：并行 1-8 台（默认 1；2026-07-19 用户要求默认串行更稳，多台并发易撞 UBUS HTTP / telnet login / NIC；Spinbox 仍允许 1–8 现场上调；升级窗口的 `parallel_count` 默认仍为 2，互不影响）；取消时停止后续命令并尝试退出工厂模式
 - **节奏常量（2026-07-18 P2 缓解）**：默认 `src/services/sample_parameter_service.py` 顶部 7 个常量，按现场经验统一调整；`_login` prompt/password_prompt 用 `PARAMETER_LOGIN_PROMPT_TIMEOUT_SECONDS=10.0`、password_result 用 `PARAMETER_LOGIN_PASSWORD_TIMEOUT_SECONDS=20.0`；`_write_and_verify` set 后 sleep `PARAMETER_SETTLE_AFTER_SET_SECONDS=1.5`、get 等 marker 用 `PARAMETER_GET_RESPONSE_TIMEOUT_SECONDS=10.0`、mismatch/marker=None 后退避 `PARAMETER_RETRY_BACKOFF_SECONDS=1.5`、成功/失败末尾 BETWEEN_PARAMS=`0.5`；并行 worker 错峰 `PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS=0.6`。若 8 台并行仍偶发失败，优先上调 `PARAMETER_GET_RESPONSE_TIMEOUT_SECONDS=15.0` 与 `PARAMETER_RETRY_BACKOFF_SECONDS=2.5`。
 - **前置 UBUS 协议**：经自写 `UbusHttpClient` 按 `SdmcUbusLibEnableTelnet.Enable_telnet` 协议开 LAN-telnet 规则 — ① 总开关 `Device.Firewall.<X_SDMC_>Security.AccessCtrl.Enable` 若非 `"1"` 则 `set Enable=1`（用对象路径 `...AccessCtrl.`，非参数路径，避免 fault 9005 `EnableEnable`）；② 查 `AccessCtrl.Rule.{}.` 既有 telnet 规则（`SourceInterface ∈ {lan, both, Device.IP.Interface.1}`）— 已启用返回 `already_present`，否则 `set Enable=1` 返回 `reused`；③ 若无合适规则则 `add {SourceInterface: Device.IP.Interface.1, IPVersion:4, SourceIP:0.0.0.0, Application:telnet}` 返回 `added_iface`；失败回退 `add SourceInterface=lan` 返回 `added_lan_fallback`。每步校验 `results[*].data == "1"`，末尾固定 `sleep_fn(ENABLE_TELNET_FINAL_SLEEP_SECONDS=1.0)` 给防火墙 reload 留缓冲。
-- **核心验收行为（2026-07-19 6 台独立 VLAN110–VLAN115 真实样机并行验收通过）**：
+- **核心验收行为（2026-07-19 6 台独立 VLAN110–VLAN115 真实样机并行验收通过，含可选项化 + 默认并行 1）**：
   - 6 个 worker 通过 `PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS=0.6` 错峰启动，避免同 t=0 把 NIC / 防火墙挤爆；UBUS 启用 telnet 4 段日志按样机独立给出，没有交错串行。
-  - 6 台全部完成 `TelnetSession`（按 VLAN `bind_ip` 锁源）→ 首次登录 → `ppctl clear` → `FACTORY_MODE=1` + `firstboot -yr` → 等 100 秒 → 工厂模式网段切换（192.168.1.{N} → 192.168.29.{N}，`factory_bind_ip`/`factory_device_host` 自动派生）→ 工厂模式二次登录 → 15 项 `ppctl set/get` 读回校验通过 → `FACTORY_MODE=0` + `firstboot -yr`（`finally` 清理成功，主执行日志出现"已下发退出工厂模式与重启命令"）。
-  - 6 台未触发 `bind_ip == device_host` 配置冲突预检（vlan110/111 已修过 device_manage_ip）；也未触发上轮修复的"清理失败步骤名消失"问题。
+  - 6 台全部完成 `TelnetSession`（按 VLAN `bind_ip` 锁源）→ 首次登录 → （按主界面 Checkbutton 状态）`AGING_STATE=1` / `ppctl clear` → `FACTORY_MODE=1` + `firstboot -yr` → 等 100 秒 → 工厂模式网段切换（192.168.1.{N} → 192.168.29.{N}，`factory_bind_ip`/`factory_device_host` 自动派生）→ 工厂模式二次登录 → 15 项 `ppctl set/get` 读回校验通过 → `FACTORY_MODE=0` + `firstboot -yr`（`finally` 清理成功，主执行日志出现"已下发退出工厂模式与重启命令"）。
+  - 「清空参数」勾选时 6 台 `TX ppctl clear` 全部出现在主执行日志；关闭时 6 台主日志均出现"清空参数：关闭，跳过"且设备 ppctl 表保持未清空。「退出老化」勾选时 6 台 `TX ppctl set AGING_STATE=1` 全部出现在主执行日志；关闭时 6 台主日志均出现"退出老化：关闭，跳过"。
+  - 默认并行 1 时 6 台变为串行（每台完整 9 步自然顺序），主执行日志依次出现 `开始批量写样机参数：6 台，并行上限 1` 与每台写参的完整 9 步；Spinbox 现场调到 2 / 4 仍能正常并行。
+  - 6 台未触发 `bind_ip == device_host` 配置冲突预检（vlan110/111 已修过 device_manage_ip）；也未触发"清理失败步骤名消失"问题（每台清理失败若发生，会精确显示是 FACTORY_MODE=0 还是 firstboot -yr 触发的）。
   - 覆盖了原计划 2 / 4 / 8 台区间的中段代表性场景（4 段 UBUS HTTP 抢网卡、6 个 telnet session 并发登录、错峰启动对 NIC / 防火墙压力的缓解效果都得到验证）；2 台 / 8 台端点如现场需要再补验收。
 - **核心验收行为（2026-07-17 单台 VLAN114 真实样机验收通过）**：
   - 主执行日志依次输出「写参前置：准备网络 vlan114（192.168.1.114 / 255.255.255.0） → 检查并启用网卡 → 已启用网卡 → 设置静态 IP → 已设置 → UBUS 启用 telnet 中 → UBUS 三段消息（AccessCtrl 总开关开启 / 规则 enable / 最终 action） → UBUS 启用 telnet added_iface/already_present: ... → STATE Telnet 已连接 → 首次登录成功 → TX ppctl clear → TX ppctl set FACTORY_MODE=1 → TX firstboot -yr → 等待 100 秒 → 工厂模式网段切换：准备把 vlan114 设为 192.168.29.114（自动派生自 network_card_ip）→ 工厂模式重建 TelnetSession 成功（192.168.29.114 → 192.168.29.1） → 工厂模式二次登录 → 15 项 TX ppctl set/get 读回校验 → 写参完成，15 项均已读回校验 → TX ppctl set FACTORY_MODE=0 → TX firstboot -yr → 已下发退出工厂模式与重启命令」
@@ -171,11 +173,12 @@ python -m unittest discover -s tests -v
 
 ### 2.8 随机参数表生成（`.xlsx`）
 
-- **状态**：已实现未验收
+- **状态**：已确认验收（2026-07-19 6 台独立 VLAN110–VLAN115 真实样机验收通过：同批 MAC 前 6 位 OUI 固定 + 2.4G / 5G SSID 后缀取本机 MAC 末 4 位十六进制 + 「SN/GPON SN 随机后缀长度」label 与 SSID 解耦）
 - **核心行为**：按已勾选 VLAN 生成 `.xlsx` 表，导出后自动加载并预检（**不自动下设备**）；MAC 同批前 6 位（OUI）固定、后 6 位（NIC 标识）每台唯一；SN、GPON SN 每行唯一（随机后缀）；2.4G / 5G SSID 后缀取本机 MAC 末 4 位十六进制（同一行两个 SSID 共享后缀）；密码类字段明文显示（操作员核对需要）
 - **兼容性约束**：导入兼容旧表共用 `WiFi Password` / `Country code` 列
-- **2026-07-19 同 OUI 改动**：自动生成时一次性随机生成 3 字节 OUI（保留本地管理 bit1=1 + 单播 bit0=0 的位设置），每条记录只随机生成后 3 字节 NIC 标识并拼接；同批 N 条记录的 MAC 前 6 位完全一致。已实现未验收，需真实样机回归确认 MAC 在样机端识别正常。
-- **2026-07-19 SSID 末 4 位 MAC 强关联**：2.4G / 5G SSID 后缀不再随机生成，改为 `mac.replace(":", "")[-4:]` 取本机 MAC 末 4 位十六进制（大写），便于操作员把同一行 SSID 与本机 MAC 一眼对应。例：`MAC=CA:7A:85:18:B0:E8` → 2.4G SSID = `ssid_24_prefix` + `B0E8`；5G SSID = `ssid_5_prefix` + `B0E8`（共享同一后缀）。已实现未验收，需真实样机回归确认 SSID 字段写入样机后能被本机识别。
+- **2026-07-19 同 OUI 改动（已确认验收）**：自动生成时一次性随机生成 3 字节 OUI（保留本地管理 bit1=1 + 单播 bit0=0 的位设置），每条记录只随机生成后 3 字节 NIC 标识并拼接；同批 N 条记录的 MAC 前 6 位完全一致。6 台真实样机验收：6 条记录的 MAC 前 6 位字符串完全相同，后 3 字节每台唯一；样机端能正确识别。
+- **2026-07-19 SSID 末 4 位 MAC 强关联（已确认验收）**：2.4G / 5G SSID 后缀不再随机生成，改为 `mac.replace(":", "")[-4:]` 取本机 MAC 末 4 位十六进制（大写），便于操作员把同一行 SSID 与本机 MAC 一眼对应。例：`MAC=CA:7A:85:18:B0:E8` → 2.4G SSID = `ssid_24_prefix` + `B0E8`；5G SSID = `ssid_5_prefix` + `B0E8`（共享同一后缀）。6 台真实样机验收：6 条记录的 2.4G / 5G SSID 后缀全部等于各自 MAC 末 4 位，且同一行两个 SSID 互相一致；样机端能正确识别。
+- **2026-07-19 label 优化（已确认验收）**：生成窗口输入框 label 从 "随机后缀长度" 改为 "SN/GPON SN 随机后缀长度"，与 SN/GPON SN 两个字段字面对齐，避免操作员误以为该字段也控制 2.4G / 5G SSID 长度。
 - **对应测试**：`tests/test_sample_parameter_table.py`
 
 ### 2.9 页面升级 - UBUS 批量

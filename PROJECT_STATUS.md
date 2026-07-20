@@ -1,6 +1,6 @@
 # 项目交接状态
 
-更新：2026-07-19
+更新：2026-07-20（测试项配置窗口改造为 ini 编辑器，283 → 296 项单测全过；不接主程序执行）
 
 ## 项目目标与当前实现进度
 
@@ -16,11 +16,12 @@
 | 批量写样机参数（VLAN 表匹配、并行、set/get 校验） | 已 1 台（2026-07-17）/ 6 台独立 VLAN 并行（2026-07-19）真实样机验收，Telnet 路径；2 / 8 台端点并行待真实样机验收（如现场需要） |
 | 写样机参数 UBUS 启用 telnet（按 VLAN 网卡 IP 锁源） | 已 1 台（2026-07-17）/ 6 台独立 VLAN 并行（2026-07-19）真实样机验收，UBUS 三段日志确认；2 / 8 台端点并行待真实样机验收（如现场需要） |
 | 写样机参数 7 个节奏常量（set 后 settle / get 超时 / 重试退避 / 项间间隔 / 登录超时 / 错峰启动） | 单元测试通过（2026-07-18，15 项 Pacing 回归） |
-| 写样机参数可选 `ppctl clear` / `AGING_STATE=1`（主界面 Checkbutton） | 单元测试通过（2026-07-19），已实现未验收 |
-| 自动生成参数表 MAC 同批 OUI 固定 | 单元测试通过（2026-07-19），已实现未验收 |
-| 随机批量参数表生成（`.xlsx`） | 单元测试通过 |
+| 写样机参数可选 `ppctl clear` / `AGING_STATE=1`（主界面 Checkbutton）+ 默认并行 1 + 确认框 9 步自然顺序 + 清理失败步骤名标识 | 已 6 台独立 VLAN 并行（2026-07-19）真实样机验收 |
+| 自动生成参数表 MAC 同批 OUI 固定 + 2.4G / 5G SSID 后缀取 MAC 末 4 位 + label 优化 | 已 6 台独立 VLAN 并行（2026-07-19）真实样机验收 |
+| 随机批量参数表生成（`.xlsx`） | 已 6 台独立 VLAN 并行（2026-07-19）真实样机验收 |
 | ZTE OLT ONU 查询、注册、离线 ONU 清理重试 | 已完成 |
-| 单元测试 | 273 项通过（2026-07-19，含 270 + 退出工厂模式清理失败步骤名标识 3 项） |
+| 单元测试 | 299 项通过（2026-07-20，原 283 + 测试项配置 ini 编辑器 store 13 + per-segment 否定 3） |
+| 测试项配置 ini 编辑器（`test_project_config.ini` 加载/编辑/保存，Q1=A 不接执行） | 已完成（2026-07-20，283 → 296 项单测全过；待 Windows 桌面真实交互验证） |
 
 ## 关键文件及其作用
 
@@ -34,6 +35,7 @@
 - `Cheating_machine_execution_tool/src/models/sample_parameter_models.py`：15 项标准写参字段、记录、请求和结果模型。
 - `Cheating_machine_execution_tool/src/ui/serial_terminal.py`：多 VLAN 终端与高频日志节流渲染。
 - `Cheating_machine_execution_tool/line_check_assistant/page_upgrade.py`：UBUS 页面升级与升级后恢复出厂。
+- `Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`：测试项配置 ini（`test_project_config.ini`）的加载 / 编辑 / 保存服务（Q1=A：仅编辑器，不接主程序执行）。
 - `Cheating_machine_execution_tool/tests/`：单元测试；`line_check_assistant_README.md`：操作说明。
 
 ## 已完成、待完成和当前问题
@@ -44,7 +46,8 @@
 - `Tftp指令` 是样机从本机 TFTPy Server 拉取固件；`Tftp Put` 是本机 TFTPy Client 向样机 `192.168.1.1:69` 推送固件，两条链路均已真实验收。
 - 并行升级最大 8 台、默认 2 台；同 COM 程控电源批次内复用长连接，串口终端仅重绘当前 Tab，避免高频日志卡死 UI。
 - 串口日志记录终端已支持命令输入框回车发送：非空等价「发送」按钮、空字符串等价「回车」按钮，自动升级占用与危险命令二次确认仍生效（2026-07-15 真实样机验收通过）。
-- 批量写参可按参数表 `VLAN` 匹配已勾选通道，预检重复/缺失 VLAN、重复 COM、MAC 和危险字符；写入前二次确认，标准流程为 `ppctl clear → FACTORY_MODE=1 → firstboot -yr → 等待 100 秒 → 二次登录 → set/get → FACTORY_MODE=0 → firstboot -yr`。随机生成表只导出/加载预检，不自动下发。
+- 批量写参可按参数表 `VLAN` 匹配已勾选通道，预检重复/缺失 VLAN、重复 COM、MAC 和危险字符；写入前二次确认，标准流程为（2026-07-19 9 步自然顺序）1. 进入工厂模式（`ppctl set FACTORY_MODE=1`）→ 2. `firstboot -yr` → 3. 等待 100 秒 → 4. 工厂模式二次登录 → 5.（可选 `ppctl set AGING_STATE=1`）→ 6.（可选 `ppctl clear`）→ 7. 15 项 `ppctl set/get` 读回校验 → 8. 退出工厂模式（`ppctl set FACTORY_MODE=0`）→ 9. `firstboot -yr`（8/9 步在 `finally` 中执行）。默认并行 1（Spinbox 仍允许 1–8 现场上调），6 台真实样机验收通过。随机生成表只导出/加载预检，不自动下发；同批 MAC 前 6 位 OUI 固定 + 2.4G / 5G SSID 后缀取本机 MAC 末 4 位，6 台真实样机验收通过。
+- 「测试项配置」窗口改造为 `test_project_config.ini` 编辑器（Q1=A：仅展示 + 编辑 + 保存，不接主程序执行）。三 Tab（Telnet / 测试项 / WiFi）覆盖 ini 三段；测试项 Tab 支持「否定勾选 + 动态段列表」表达 `!段A&&段B`，每条命令独立重试次数（1–99），顶部全局「指令重试间隔（秒）」默认 60 写到 `[order]` 段顶部；表单 dirty 时「重新加载」「关闭」弹「放弃修改？」二次确认；保存覆盖原 ini（标准 `configparser` 不保留注释，`[connect_wifi]` 段上方 `;` 中文注释会丢失）；283 → 296 项单测全过（store 13 项）。
 
 **待完成**：
 
@@ -77,7 +80,7 @@ python -m py_compile line_check_assistant\app.py src\services\serial_upgrade_ser
 python -m unittest discover -s tests -v
 ```
 
-- 当前全量测试预期：`Ran N tests ... OK`（2026-07-19 实跑；本轮新增 8 项：同 OUI 1 + 流水线选项 5 + 持久化 2，并在原有基础上把 3 项断言 ppctl clear 必现的测试改为显式 `clear_parameters=True`）。
+- 当前全量测试预期：`Ran 299 tests ... OK`（2026-07-20 实跑；原 283 + 测试项配置 store 16 项 = load 默认 / round-trip / [order] 顶部全局值 / 多段拼接 / 命令级否定前缀（已替换为 per-segment） / 空段跳过 / 命令 key retry_times 拆分 / 缺 retry_times 默认 5 / retry_times_0 回退默认 / 特殊字符密码 / 未识别 key 容错 / WiFi enable 0-1 / product_solution 小写 + per-segment 否定 3 项 = 混合拼接 / 混合往返 / `_split_expected` 解析）。
 - VS Code 使用 `.vscode/launch.json` 的 `LineCheckAssistant`，工作目录为 `Cheating_machine_execution_tool`。
 - 打包：`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1`；构建后不要在当前 PC 运行 `dist\LineCheckAssistant.exe`，仅确认构建成功并报告路径。
 - 每次代码、测试或文档改动后追加 `DEVELOPMENT_LOG.md`；影响本文件结论时同步更新本文件。

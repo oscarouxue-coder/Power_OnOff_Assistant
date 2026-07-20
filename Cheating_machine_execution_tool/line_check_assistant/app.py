@@ -4,7 +4,7 @@ import queue
 import threading
 from datetime import datetime
 from pathlib import Path
-from tkinter import BooleanVar, Button, Checkbutton, DoubleVar, END, Frame, IntVar, Label, Listbox, Tk, StringVar, Text, Toplevel, filedialog, messagebox, ttk
+from tkinter import BooleanVar, Button, Canvas, Checkbutton, DoubleVar, END, Frame, IntVar, Label, Listbox, Tk, StringVar, Text, Toplevel, filedialog, messagebox, ttk
 
 from .config_store import ChannelConfig, ChannelConfigStore, DEFAULT_POWER_SERIAL_PORT, DEFAULT_SUBNET_MASK
 from .network_ops import (
@@ -38,6 +38,16 @@ from .sample_upgrade_settings_store import (
     clamp_parallel_count,
 )
 from .serial_ports import list_prolific_ports, port_from_display
+from .test_item_config_store import (
+    DEFAULT_COMMAND_FAIL_RETRY_INTERVAL,
+    ConnectWifiSettings,
+    ExpectedSegment,
+    OrderConfig,
+    OrderItem,
+    TelnetSettings,
+    TestItemConfigStore,
+    TestProjectConfig,
+)
 from src.core import (
     SerialSessionManager,
     generate_parameter_records,
@@ -69,6 +79,8 @@ CONFIG_DIR = resolve_config_dir(APP_DIR)
 NETWORK_CONFIG_PATH = CONFIG_DIR / "network_card_ip.ini"
 ONU_REGISTRATION_CONFIG_PATH = CONFIG_DIR / "onu_registration.ini"
 SAMPLE_UPGRADE_SETTINGS_PATH = CONFIG_DIR / "sample_upgrade_settings.ini"
+# 测试项配置 ini:由主界面「测试项配置」按钮打开的窗口加载/保存(Q1=A:仅编辑,不接执行)。
+TEST_ITEM_CONFIG_PATH = CONFIG_DIR / "test_project_config.ini"
 LOG_DIR = APP_DIR / "assistant_logs"
 POWER_SUPPLY_COUNT = 6
 TOTAL_CHANNEL_COUNT = 16
@@ -2322,6 +2334,10 @@ class LineCheckAssistant(Tk):
             self.upgrade_status_var.set(stage or "尚未开始升级")
 
     def _open_test_item_config(self) -> None:
+        """打开「测试项配置」窗口(Q1=A):加载并允许编辑 test_project_config.ini。
+
+        仅做编辑器,不会驱动任何 telnet / 上下电 / 测试项执行流程。
+        """
         if self.test_item_config_window is not None and self.test_item_config_window.winfo_exists():
             self.test_item_config_window.deiconify()
             self.test_item_config_window.lift()
@@ -2331,8 +2347,8 @@ class LineCheckAssistant(Tk):
         dialog = Toplevel(self)
         self.test_item_config_window = dialog
         dialog.title("测试项配置")
-        dialog.geometry("820x580")
-        dialog.minsize(760, 530)
+        dialog.geometry("960x940")
+        dialog.minsize(960, 940)
         dialog.transient(self)
         dialog.configure(background=COLOR_BG)
 
@@ -2347,39 +2363,560 @@ class LineCheckAssistant(Tk):
         ).pack(anchor="w")
         Label(
             content,
-            text="查看线路检查当前执行的测试项目。",
+            text=(
+                "编辑测试项 ini（telnet / 测试项命令 / WiFi 连接）。当前仅提供编辑入口，"
+                "不会改变主程序的执行流程。"
+            ),
             foreground=COLOR_MUTED,
             background=COLOR_BG,
-        ).pack(anchor="w", pady=(6, 16))
+            wraplength=920,
+            justify="left",
+        ).pack(anchor="w", pady=(6, 12))
 
-        overview = ttk.LabelFrame(content, text="当前测试项")
-        overview.pack(fill="x")
-        rows = [
-            ("01", "启用 VLAN 网卡", "固定启用"),
-            ("02", "配置 PC 静态 IP", "固定启用"),
-            ("03", "Ping 样机管理 IP", "固定启用"),
-        ]
-        for row, (number, item, status) in enumerate(rows):
-            Label(overview, text=number, width=6, anchor="w").grid(row=row, column=0, sticky="w", padx=(12, 0), pady=10)
-            Label(overview, text=item, width=28, anchor="w").grid(row=row, column=1, sticky="w", padx=12, pady=10)
-            Label(overview, text=status, foreground=COLOR_SUCCESS, anchor="w").grid(row=row, column=2, sticky="w", padx=12, pady=10)
-        overview.columnconfigure(1, weight=1)
+        store = TestItemConfigStore(TEST_ITEM_CONFIG_PATH)
+        if not TEST_ITEM_CONFIG_PATH.exists():
+            messagebox.showwarning(
+                "未找到测试项 ini",
+                (
+                    f"未找到 {TEST_ITEM_CONFIG_PATH}。\n\n"
+                    "将以空白表单打开，保存后自动创建。"
+                    "默认值与老工具原 ini 保持一致。"
+                ),
+                parent=dialog,
+            )
+        config = store.load()
 
-        Label(
-            content,
-            text="当前版本仅提供测试项入口与状态说明，不会改变既有线路检查流程。",
-            foreground=COLOR_WARNING,
-            background=COLOR_BG,
-        ).pack(anchor="w", pady=(16, 0))
+        notebook = ttk.Notebook(content)
+        notebook.pack(fill="both", expand=True, pady=(0, 12))
+
+        dirty = [False]
+
+        def mark_dirty(*_args) -> None:
+            dirty[0] = True
+
+        telnet_vars = self._build_test_item_telnet_tab(notebook, config.telnet, mark_dirty)
+        order_control = self._build_test_item_order_tab(notebook, config.order, mark_dirty)
+        wifi_vars = self._build_test_item_wifi_tab(notebook, config.connect_wifi, mark_dirty)
+
+        button_bar = Frame(content, background=COLOR_BG)
+        button_bar.pack(fill="x", side="bottom", anchor="e")
+
+        def reset_dirty() -> None:
+            dirty[0] = False
+
+        def reload() -> None:
+            if dirty[0]:
+                if not messagebox.askyesno(
+                    "放弃修改",
+                    "当前有未保存的修改，重新加载将丢弃这些改动。是否继续？",
+                    parent=dialog,
+                ):
+                    return
+            try:
+                reloaded = store.load()
+            except Exception as exc:  # noqa: BLE001 - ini 损坏需明确提示
+                messagebox.showerror("加载失败", f"读取 ini 失败：{exc}", parent=dialog)
+                return
+            telnet_vars["load"](reloaded.telnet)
+            order_control["load"](reloaded.order)
+            wifi_vars["load"](reloaded.connect_wifi)
+            reset_dirty()
+            self._log("[测试项配置] 已从磁盘重新加载（未保存改动已丢弃）")
+
+        def save() -> None:
+            try:
+                captured = TestProjectConfig(
+                    telnet=telnet_vars["capture"](),
+                    order=order_control["capture"](),
+                    connect_wifi=wifi_vars["capture"](),
+                )
+            except ValueError as exc:
+                messagebox.showerror("数据不合法", str(exc), parent=dialog)
+                return
+            if not messagebox.askyesno(
+                "保存测试项 ini",
+                (
+                    f"将覆盖 {TEST_ITEM_CONFIG_PATH}。\n\n"
+                    f"- Telnet 字段：{len(captured.telnet.__dict__)} 项\n"
+                    f"- 测试项命令：{len(captured.order.items)} 条\n"
+                    f"- 指令重试间隔：{captured.order.command_fail_retry_interval_time} 秒\n"
+                    f"- WiFi 连接：{'启用' if captured.connect_wifi.enable else '关闭'}\n\n"
+                    "原 ini 中的注释（以 ; 开头）会在保存后丢失。是否继续？"
+                ),
+                parent=dialog,
+            ):
+                return
+            try:
+                store.save(captured)
+            except OSError as exc:
+                messagebox.showerror("保存失败", f"写入 ini 失败：{exc}", parent=dialog)
+                self._log(f"[测试项配置] 保存失败：{exc}")
+                return
+            reset_dirty()
+            self._log(
+                f"[测试项配置] 已保存 {len(captured.order.items)} 条测试项命令到 {TEST_ITEM_CONFIG_PATH.name}"
+            )
+            messagebox.showinfo(
+                "保存成功",
+                f"已保存到 {TEST_ITEM_CONFIG_PATH}。",
+                parent=dialog,
+            )
 
         def close_dialog() -> None:
+            if dirty[0]:
+                if not messagebox.askyesno(
+                    "放弃修改",
+                    "当前有未保存的修改，关闭窗口将丢弃这些改动。是否继续？",
+                    parent=dialog,
+                ):
+                    return
             dialog.destroy()
             self.test_item_config_window = None
 
-        ttk.Button(content, text="关闭", width=12, command=close_dialog, style="Secondary.TButton").pack(
-            side="bottom", anchor="e", pady=(18, 0)
-        )
+        ttk.Button(button_bar, text="重新加载", command=reload, style="Secondary.TButton").pack(side="left")
+        ttk.Button(button_bar, text="关闭", command=close_dialog, style="Secondary.TButton").pack(side="right")
+        ttk.Button(button_bar, text="保存", command=save, style="Primary.TButton").pack(side="right", padx=(0, 8))
+
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+
+    # -- 测试项配置：三个 Tab 的具体构建 ----------------------------------
+
+    def _build_test_item_telnet_tab(
+        self,
+        notebook: ttk.Notebook,
+        telnet: TelnetSettings,
+        mark_dirty,
+    ) -> dict:
+        """构建 [telnet] 段 Tab。返回 ``{"capture": Callable, "load": Callable}``。"""
+        frame = ttk.Frame(notebook, style="App.TFrame", padding=(16, 14))
+        notebook.add(frame, text="Telnet")
+
+        request_url_var = StringVar(value=telnet.request_url)
+        port_var = IntVar(value=telnet.port)
+        user_var = StringVar(value=telnet.user)
+        password_var = StringVar(value=telnet.password)
+        timeout_var = IntVar(value=telnet.timeout)
+        input_user_flag_var = StringVar(value=telnet.input_user_flag)
+        input_password_flag_var = StringVar(value=telnet.input_password_flag)
+        login_success_flag_var = StringVar(value=telnet.login_success_flag)
+        need_pwd_flag_var = IntVar(value=telnet.telnet_need_enter_password_flag)
+        no_user_pwd_flag_var = IntVar(value=telnet.telnet_no_user_password_flag)
+        only_power_var = IntVar(value=telnet.only_power_off_on)
+
+        password_visible = [False]
+
+        for var in (
+            request_url_var,
+            user_var,
+            password_var,
+            input_user_flag_var,
+            input_password_flag_var,
+            login_success_flag_var,
+        ):
+            var.trace_add("write", lambda *_a: mark_dirty())
+        for var in (port_var, timeout_var, need_pwd_flag_var, no_user_pwd_flag_var, only_power_var):
+            var.trace_add("write", lambda *_a: mark_dirty())
+
+        def int_field(parent: ttk.Frame, row: int, label: str, var: IntVar, from_: int = 0, to: int = 65535) -> None:
+            Label(parent, text=label, width=32, anchor="w", background=COLOR_BG).grid(
+                row=row, column=0, sticky="w", padx=(0, 12), pady=6
+            )
+            ttk.Spinbox(parent, from_=from_, to=to, textvariable=var, width=10).grid(
+                row=row, column=1, sticky="w", pady=6
+            )
+
+        Label(
+            frame,
+            text="Telnet 连接参数",
+            font=(FONT_FAMILY, 12, "bold"),
+            foreground=COLOR_TEXT,
+            background=COLOR_BG,
+        ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
+
+        Label(frame, text="request_url", width=32, anchor="w", background=COLOR_BG).grid(
+            row=1, column=0, sticky="w", padx=(0, 12), pady=6
+        )
+        ttk.Entry(frame, textvariable=request_url_var, width=36).grid(row=1, column=1, sticky="ew", pady=6)
+
+        Label(frame, text="user", width=32, anchor="w", background=COLOR_BG).grid(
+            row=2, column=0, sticky="w", padx=(0, 12), pady=6
+        )
+        ttk.Entry(frame, textvariable=user_var, width=24).grid(row=2, column=1, sticky="ew", pady=6)
+
+        Label(frame, text="password（明文）", width=32, anchor="w", background=COLOR_BG).grid(
+            row=3, column=0, sticky="w", padx=(0, 12), pady=6
+        )
+        pwd_container = Frame(frame, background=COLOR_BG)
+        pwd_container.grid(row=3, column=1, sticky="ew", pady=6)
+        pwd_entry = ttk.Entry(pwd_container, textvariable=password_var, width=24)
+        pwd_entry.pack(side="left", fill="x", expand=True)
+
+        def toggle_password_visibility() -> None:
+            password_visible[0] = not password_visible[0]
+            pwd_entry.configure(show="" if password_visible[0] else "*")
+            toggle_btn.configure(text="🙈" if password_visible[0] else "👁")
+
+        toggle_btn = Button(pwd_container, text="👁", width=3, command=toggle_password_visibility)
+        toggle_btn.pack(side="left", padx=(8, 0))
+
+        int_field(frame, 4, "port", port_var, from_=1, to=65535)
+        int_field(frame, 5, "timeout", timeout_var, from_=1, to=600)
+
+        Label(frame, text="input_user_flag", width=32, anchor="w", background=COLOR_BG).grid(
+            row=6, column=0, sticky="w", padx=(0, 12), pady=6
+        )
+        ttk.Entry(frame, textvariable=input_user_flag_var, width=18).grid(row=6, column=1, sticky="w", pady=6)
+        Label(frame, text="input_password_flag", width=32, anchor="w", background=COLOR_BG).grid(
+            row=7, column=0, sticky="w", padx=(0, 12), pady=6
+        )
+        ttk.Entry(frame, textvariable=input_password_flag_var, width=18).grid(row=7, column=1, sticky="w", pady=6)
+        Label(frame, text="login_success_flag", width=32, anchor="w", background=COLOR_BG).grid(
+            row=8, column=0, sticky="w", padx=(0, 12), pady=6
+        )
+        ttk.Entry(frame, textvariable=login_success_flag_var, width=18).grid(row=8, column=1, sticky="w", pady=6)
+
+        int_field(frame, 9, "telnet_need_enter_password_flag", need_pwd_flag_var, from_=0, to=1)
+        int_field(frame, 10, "telnet_no_user_password_flag", no_user_pwd_flag_var, from_=0, to=1)
+        int_field(frame, 11, "only_power_off_on", only_power_var, from_=0, to=1)
+
+        frame.columnconfigure(1, weight=1)
+
+        def capture() -> TelnetSettings:
+            return TelnetSettings(
+                request_url=request_url_var.get().strip(),
+                port=int(port_var.get()),
+                user=user_var.get(),
+                password=password_var.get(),
+                timeout=int(timeout_var.get()),
+                input_user_flag=input_user_flag_var.get(),
+                input_password_flag=input_password_flag_var.get(),
+                login_success_flag=login_success_flag_var.get(),
+                telnet_need_enter_password_flag=int(need_pwd_flag_var.get()),
+                telnet_no_user_password_flag=int(no_user_pwd_flag_var.get()),
+                only_power_off_on=int(only_power_var.get()),
+            )
+
+        def load(new_telnet: TelnetSettings) -> None:
+            request_url_var.set(new_telnet.request_url)
+            port_var.set(new_telnet.port)
+            user_var.set(new_telnet.user)
+            password_var.set(new_telnet.password)
+            timeout_var.set(new_telnet.timeout)
+            input_user_flag_var.set(new_telnet.input_user_flag)
+            input_password_flag_var.set(new_telnet.input_password_flag)
+            login_success_flag_var.set(new_telnet.login_success_flag)
+            need_pwd_flag_var.set(new_telnet.telnet_need_enter_password_flag)
+            no_user_pwd_flag_var.set(new_telnet.telnet_no_user_password_flag)
+            only_power_var.set(new_telnet.only_power_off_on)
+
+        return {"capture": capture, "load": load}
+
+    def _build_test_item_order_tab(
+        self,
+        notebook: ttk.Notebook,
+        order: OrderConfig,
+        mark_dirty,
+    ) -> dict:
+        """构建 [order] 段 Tab。返回 ``{"capture": Callable, "load": Callable}``。"""
+        frame = ttk.Frame(notebook, style="App.TFrame", padding=(16, 14))
+        notebook.add(frame, text="测试项")
+
+        # 顶部全局控件：指令重试间隔
+        header = ttk.Frame(frame, style="App.TFrame")
+        header.pack(fill="x", pady=(0, 8))
+        Label(
+            header,
+            text="测试项命令",
+            font=(FONT_FAMILY, 12, "bold"),
+            foreground=COLOR_TEXT,
+            background=COLOR_BG,
+        ).pack(side="left")
+        interval_container = ttk.Frame(header, style="App.TFrame")
+        interval_container.pack(side="right")
+        Label(
+            interval_container,
+            text="指令重试间隔（秒，全局）",
+            background=COLOR_BG,
+            foreground=COLOR_MUTED,
+        ).pack(side="left", padx=(0, 6))
+        interval_var = IntVar(value=order.command_fail_retry_interval_time or DEFAULT_COMMAND_FAIL_RETRY_INTERVAL)
+        interval_var.trace_add("write", lambda *_a: mark_dirty())
+        ttk.Spinbox(interval_container, from_=0, to=999, textvariable=interval_var, width=6).pack(side="left")
+
+        Label(
+            frame,
+            text=(
+                "每条命令可设置独立的重试次数；期望匹配默认正向，「否定」勾选后整段反向匹配；"
+                "多段用 && 拼接表示全部命中。"
+            ),
+            foreground=COLOR_MUTED,
+            background=COLOR_BG,
+            wraplength=880,
+            justify="left",
+        ).pack(anchor="w", pady=(0, 8))
+
+        # 中间滚动列表 + 底部新增按钮
+        list_outer = ttk.Frame(frame, style="App.TFrame")
+        list_outer.pack(fill="both", expand=True)
+        canvas = Canvas(list_outer, highlightthickness=0, borderwidth=0, background=COLOR_BG)
+        scrollbar = ttk.Scrollbar(list_outer, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        rows_frame = ttk.Frame(canvas, style="App.TFrame")
+        rows_window = canvas.create_window((0, 0), window=rows_frame, anchor="nw")
+
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(rows_window, width=e.width))
+        rows_frame.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        # Windows 鼠标滚轮支持
+        def _on_mousewheel(event) -> None:
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        canvas.bind("<Enter>", lambda _e: canvas.bind_all("<MouseWheel>", _on_mousewheel))
+        canvas.bind("<Leave>", lambda _e: canvas.unbind_all("<MouseWheel>"))
+
+        row_widgets: list[dict] = []
+
+        def _add_segment_row(
+            parent: ttk.Frame,
+            segments_list: list[dict],
+            text: str = "",
+            negate: bool = False,
+        ) -> dict:
+            seg_frame = ttk.Frame(parent, style="App.TFrame")
+            seg_frame.pack(fill="x", pady=2)
+
+            negate_var = BooleanVar(value=negate)
+            negate_var.trace_add("write", lambda *_a: mark_dirty())
+            Checkbutton(
+                seg_frame,
+                text="否定",
+                variable=negate_var,
+                background=COLOR_SURFACE,
+                activebackground=COLOR_SURFACE,
+                highlightthickness=0,
+                borderwidth=0,
+            ).pack(side="left", padx=(0, 6))
+
+            seg_var = StringVar(value=text)
+            seg_var.trace_add("write", lambda *_a: mark_dirty())
+            ttk.Entry(seg_frame, textvariable=seg_var).pack(side="left", fill="x", expand=True)
+
+            def remove_segment() -> None:
+                seg_frame.destroy()
+                if seg_dict in segments_list:
+                    segments_list.remove(seg_dict)
+
+            ttk.Button(seg_frame, text="删除段", width=8, command=remove_segment, style="Secondary.TButton").pack(
+                side="left", padx=(6, 0)
+            )
+            seg_dict = {
+                "frame": seg_frame,
+                "var": seg_var,
+                "negate_var": negate_var,
+                "remove": remove_segment,
+            }
+            segments_list.append(seg_dict)
+            return seg_dict
+
+        def _build_row_widgets(item: OrderItem, row_index: int) -> dict:
+            row_frame = ttk.Frame(rows_frame, style="Surface.TFrame", padding=(8, 6))
+            row_frame.pack(fill="x", pady=(0, 6))
+
+            top = ttk.Frame(row_frame, style="Surface.TFrame")
+            top.pack(fill="x")
+
+            number_var = StringVar(value=f"{row_index + 1:02d}")
+            Label(top, textvariable=number_var, width=4, anchor="w", background=COLOR_SURFACE).pack(
+                side="left", padx=(0, 6)
+            )
+
+            command_var = StringVar(value=item.command)
+            command_var.trace_add("write", lambda *_a: mark_dirty())
+            ttk.Entry(top, textvariable=command_var, width=44).pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+            Label(top, text="重试次数", background=COLOR_SURFACE, foreground=COLOR_MUTED).pack(
+                side="left", padx=(0, 4)
+            )
+            retry_var = IntVar(value=item.retry_times or 1)
+            retry_var.trace_add("write", lambda *_a: mark_dirty())
+            ttk.Spinbox(top, from_=1, to=99, textvariable=retry_var, width=5).pack(side="left", padx=(0, 6))
+
+            def remove_row() -> None:
+                row_frame.destroy()
+                if row_dict in row_widgets:
+                    row_widgets.remove(row_dict)
+                _renumber_rows()
+
+            ttk.Button(top, text="删除命令", width=10, command=remove_row, style="Secondary.TButton").pack(side="right")
+
+            # 期望区域(per-segment 否定:每段独立 Checkbutton,见 _add_segment_row)
+            expected_frame = ttk.Frame(row_frame, style="Surface.TFrame")
+            expected_frame.pack(fill="x", pady=(6, 0))
+
+            segments_list: list[dict] = []
+
+            def add_segment() -> None:
+                _add_segment_row(segments_holder, segments_list)
+
+            segments_holder = ttk.Frame(expected_frame, style="Surface.TFrame")
+            segments_holder.pack(fill="x", pady=(4, 0))
+            for seg in item.expected_segments:
+                _add_segment_row(segments_holder, segments_list, text=seg.text, negate=bool(seg.negate))
+
+            seg_actions = ttk.Frame(expected_frame, style="Surface.TFrame")
+            seg_actions.pack(fill="x", pady=(4, 0))
+            ttk.Button(seg_actions, text="+ 增加段", width=10, command=add_segment, style="Secondary.TButton").pack(
+                side="left"
+            )
+
+            row_dict = {
+                "frame": row_frame,
+                "number_var": number_var,
+                "command_var": command_var,
+                "retry_var": retry_var,
+                "segments": segments_list,
+                "remove": remove_row,
+            }
+            return row_dict
+
+        def _renumber_rows() -> None:
+            for index, row_dict in enumerate(row_widgets):
+                row_dict["number_var"].set(f"{index + 1:02d}")
+
+        def add_row(item: OrderItem | None = None) -> None:
+            new_item = item or OrderItem()
+            row_widgets.append(_build_row_widgets(new_item, len(row_widgets)))
+            _renumber_rows()
+
+        # 填充初始数据
+        if order.items:
+            for item in order.items:
+                add_row(item)
+        else:
+            add_row(OrderItem())
+
+        # 底部新增按钮
+        bottom_bar = ttk.Frame(frame, style="App.TFrame")
+        bottom_bar.pack(fill="x", pady=(8, 0))
+        ttk.Button(bottom_bar, text="+ 新增测试项", width=14, command=lambda: add_row(), style="Secondary.TButton").pack(
+            side="left"
+        )
+
+        def capture() -> OrderConfig:
+            items: list[OrderItem] = []
+            for row_dict in row_widgets:
+                segments = [
+                    ExpectedSegment(
+                        text=seg["var"].get(),
+                        negate=bool(seg["negate_var"].get()),
+                    )
+                    for seg in row_dict["segments"]
+                    if seg["var"].get().strip()
+                ]
+                command = row_dict["command_var"].get().strip()
+                if not command and not segments:
+                    # 完全空行跳过,不写入 ini。
+                    continue
+                items.append(
+                    OrderItem(
+                        command=command,
+                        expected_segments=segments,
+                        retry_times=int(row_dict["retry_var"].get() or 1),
+                    )
+                )
+            return OrderConfig(
+                command_fail_retry_interval_time=int(interval_var.get() or DEFAULT_COMMAND_FAIL_RETRY_INTERVAL),
+                items=items,
+            )
+
+        def load(new_order: OrderConfig) -> None:
+            interval_var.set(new_order.command_fail_retry_interval_time or DEFAULT_COMMAND_FAIL_RETRY_INTERVAL)
+            for row_dict in row_widgets:
+                row_dict["remove"]()
+            row_widgets.clear()
+            if new_order.items:
+                for item in new_order.items:
+                    add_row(item)
+            else:
+                add_row(OrderItem())
+
+        return {"capture": capture, "load": load}
+
+    def _build_test_item_wifi_tab(
+        self,
+        notebook: ttk.Notebook,
+        wifi: ConnectWifiSettings,
+        mark_dirty,
+    ) -> dict:
+        """构建 [connect_wifi] 段 Tab。返回 ``{"capture": Callable, "load": Callable}``。"""
+        frame = ttk.Frame(notebook, style="App.TFrame", padding=(16, 14))
+        notebook.add(frame, text="WiFi")
+
+        enable_var = IntVar(value=wifi.enable)
+        enable_var.trace_add("write", lambda *_a: mark_dirty())
+        solution_var = StringVar(value=wifi.product_solution or "openwrt")
+        solution_var.trace_add("write", lambda *_a: mark_dirty())
+
+        Label(
+            frame,
+            text="WiFi 连接测试",
+            font=(FONT_FAMILY, 12, "bold"),
+            foreground=COLOR_TEXT,
+            background=COLOR_BG,
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
+
+        Checkbutton(
+            frame,
+            text="启用 WiFi 连接测试（enable = 1）",
+            variable=enable_var,
+            onvalue=1,
+            offvalue=0,
+            background=COLOR_BG,
+            activebackground=COLOR_BG,
+            highlightthickness=0,
+            borderwidth=0,
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=6)
+
+        Label(frame, text="product_solution", width=24, anchor="w", background=COLOR_BG).grid(
+            row=2, column=0, sticky="w", padx=(0, 12), pady=6
+        )
+        solution_combo = ttk.Combobox(
+            frame,
+            textvariable=solution_var,
+            values=("openwrt", "bcm", "mtk"),
+            state="readonly",
+            width=18,
+        )
+        solution_combo.grid(row=2, column=1, sticky="w", pady=6)
+
+        Label(
+            frame,
+            text=(
+                "老工具当前仅支持 openwrt；bcm / mtk 已定义但执行时会提示未实现。"
+                "保存时统一小写。"
+            ),
+            foreground=COLOR_MUTED,
+            background=COLOR_BG,
+            wraplength=560,
+            justify="left",
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+        frame.columnconfigure(1, weight=1)
+
+        def capture() -> ConnectWifiSettings:
+            return ConnectWifiSettings(
+                enable=int(enable_var.get()),
+                product_solution=(solution_var.get() or "openwrt").strip().lower(),
+            )
+
+        def load(new_wifi: ConnectWifiSettings) -> None:
+            enable_var.set(int(new_wifi.enable))
+            solution_var.set((new_wifi.product_solution or "openwrt").strip().lower())
+
+        return {"capture": capture, "load": load}
 
     def _serial_log_directory(self) -> Path:
         return DEFAULT_LOG_DIR

@@ -2,6 +2,60 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-07-20 - 测试项配置「期望」改为 per-segment 否定
+
+- 类型：功能 / 重构 / 测试 / 文档
+- 背景：上一轮把「测试项配置」窗口改造为 ini 编辑器时，「否定匹配」是命令级单 Checkbutton：所有期望段共享同一个 negate 标志。但实际场景常需要混合——例如 `ifconfig ra0` 应同时满足「MAC 全零应**不**出现」与「UP BROADCAST 应**出现**」，单标志位无法表达这种 A 否定 ∧ B 肯定的组合。同时重新审视老工具 `Auto_power_on_off_tool/common/fuzzy_match.py`：其 `&&` 循环里**每段独立**调 `Fuzzy_Match_01`，每段自带 `!` 前缀解析——per-segment 才是老工具的真实语义，先前的单标志是过度简化。
+- 完成内容：
+  1. **`line_check_assistant/test_item_config_store.py`** —— `ExpectedSegment` 新增 `negate: bool = False` 字段（per-segment）；`OrderItem` 移除冗余的命令级 `negate` 字段。`_split_expected` 重写：返回 `List[tuple[bool, str]]`，按段独立解析 `!` 前缀。`_join_expected` 重写：参数改为 `List[ExpectedSegment]`，每段独立加 `!` 前缀，`&&` 拼接。`_load_order` / `_dump_order` 同步更新。空段仍跳过拼接。docstring 注明「更贴近老工具真实语义」。
+  2. **`tests/test_test_item_config_store.py`** —— 调整 3 项旧用例（`test_save_and_load_round_trip` / `test_negate_prefix_serializes_with_bang` / skip_empty_expected_segments_when_joining）的数据结构以反映新模型；新增 3 项：① `test_per_segment_negate_mixed_serialization` 验证 `!A&&B&&!C` 混合拼接；② `test_per_segment_negate_round_trip_mixed` 验证混合 negate 往返保留每段独立标志；③ `test_parse_per_segment_negate_helper` 覆盖 `_split_expected` 的 6 种输入（全肯定 / 全否定 / 混合 / 单段 / 空串）。13 → 16 项。
+  3. **`line_check_assistant/app.py` `_build_test_item_order_tab`** —— 移除命令级「否定匹配」Checkbutton 与 `row_dict["negate_var"]` 字段；`_add_segment_row` 新增 `negate: bool = False` 形参，每段渲染独立「否定」Checkbutton（与 Entry、删除段按钮并排）；`_build_row_widgets` 初始化段时读 `seg.negate` 传入；`capture` 按段读 `seg["negate_var"]` 写回 `ExpectedSegment(text=..., negate=...)`。
+  4. **`line_check_assistant_README.md`** —— 「期望」拼接规则描述更新：勾否定 → 该段前加 `!`；并以 `!00:00:00:00:00:00&&UP BROADCAST` 为例说明混合语义。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`、`tests/test_test_item_config_store.py`、`line_check_assistant/app.py`、`line_check_assistant_README.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile line_check_assistant/app.py line_check_assistant/test_item_config_store.py`；`python -m unittest discover -s tests -v`；smoke test 用混合 negate 数据走一遍 `_build_test_item_order_tab` + `capture` 确认每段独立读出。
+- 验证结果：`py_compile` 通过；完整单测 `Ran 299 tests ... OK`（原 296 + per-segment negate 3 项）。Smoke test 加载 `[ExpectedSegment('00:00:00:00:00:00', negate=True), ExpectedSegment('UP BROADCAST', negate=False)]` 后 capture 返回一致数据结构。
+- 后续待办：用户线下重启主程序 → 打开「测试项配置」→ 切到「测试项」Tab → 在已加载的 9 条命令上独立勾选每段的「否定」（例如保留原 ini 的 ifconfig ra0: `00:00:00:00:00:00` 勾否定、`UP BROADCAST` 不勾）→ 保存 → 检查 ini 内容 `!00:00:00:00:00:00&&UP BROADCAST`；重新加载确认段级勾选状态恢复。
+
+## 2026-07-20 - 测试项配置窗口改造为 ini 编辑器（不接执行）
+
+- 类型：功能 / 重构 / 测试 / 文档
+- 背景：用户希望把老工具 `Auto_power_on_off_tool/config/test_project_config.ini` 映射到主程序的「测试项配置」窗口。`PROJECT_STATUS.md` 中的 `测试项配置` 当前实现是「只读占位 + 固定启用 3 行」；用户明确选择 **Q1=A**（仅展示+编辑+保存 ini，不接主程序执行）+ Q2 表单化（命令/期望/重试次数三个独立控件）+ Q3 保留 `Auto_power_on_off_tool/config/` 路径不动 + Q4 密码明文显示。「期望」按 `!段A&&段B` 拆为「否定勾选 + 动态段列表」；「重试次数」为每条命令 Spinbox（1–99）。本轮同步澄清了「重试间隔」的真实语义：老工具 `wait_time_N` 是 sleep 秒数、不是 retry interval；与 `config.ini` `[other_config] command_fail_retry_interval_time = 60` 同名字段含义不同——`test_project_config.ini` 当前没有「重试间隔」位置，按用户决定在 `[order]` 段顶部独立写 `command_fail_retry_interval_time = 60`，仅作为 ini 内全局参考值，不被主程序或老工具读取。
+- 完成内容：
+  1. **`line_check_assistant/test_item_config_store.py`（新）** —— 参照 `sample_upgrade_settings_store.py` / `config_store.py` 模式新增 ini 读写服务：`TelnetSettings` / `OrderConfig` / `OrderItem` / `ExpectedSegment` / `ConnectWifiSettings` / `TestProjectConfig` 6 个 dataclass + `TestItemConfigStore`。`RawConfigParser` + `optionxform=str`，与既有 store 一致；`[order]` 顶部独立写 `command_fail_retry_interval_time`，命令 key 拼为 `命令 retry_times_N`（不写 `wait_time_N`，避免与老工具 sleep 语义冲突）；期望值拼接「`!段1&&段2&&...`」（勾选否定时加 `!` 前缀）/「`段1&&段2&&...`」（未勾选）；空段不写入拼接结果；`bool` 强制转 `0/1` 防止保存为 `True/False`；`retry_times_0` / `port=0` 等非法值回退默认；缺失段（如老 ini 没有 `[order]`）不抛 `NoSectionError`，全字段回退默认值。
+  2. **`tests/test_test_item_config_store.py`（新，13 项）** —— 覆盖：缺 ini 全字段回退默认；save/load 往返（含 `!`、`&&`、空段、长命令、含 `%`/`*`/`#` 的密码）；`[order]` 顶部全局值在命令之前；期望段 `&&` 拼接；勾选否定加 `!`；空段跳过；命令 key 含管道空格时正确拆分 retry_times；缺 retry_times 默认 5；`retry_times_0` 回退默认；`enable` bool→`0/1`；`product_solution` 保存时统一小写；未识别 key 容错。
+  3. **`line_check_assistant/app.py`** —— `tkinter` 导入加 `Canvas`；新增模块常量 `TEST_ITEM_CONFIG_PATH = CONFIG_DIR / "test_project_config.ini"`。`_open_test_item_config` 占位（3 行固定启用 + 不会改变流程注释）替换为「`Toplevel(960x640)` + `ttk.Notebook` 三 Tab + 底部『重新加载 / 保存 / 关闭』」：
+     - **Tab 1: Telnet** —— 11 字段表单（request_url / port / user / password + 👁 明文切换 / timeout / input_user_flag / input_password_flag / login_success_flag / 三个 0-1 flag），password 按 Q4 明文保存。
+     - **Tab 2: 测试项** —— 顶部全局 Spinbox「指令重试间隔（秒）」默认 60；中间 `Canvas` 滚动列表，每行 `序号 Label + 命令 Entry + 重试次数 Spinbox + 删除命令按钮 + 期望子表单（否定勾选 + 动态段列表 + + 增加段按钮 + 每段独立删除按钮）`；底部「+ 新增测试项」按钮。空行在保存时跳过。
+     - **Tab 3: WiFi** —— enable Checkbutton（0/1）+ product_solution Combobox（openwrt/bcm/mtk readonly，保存时小写）。
+     - 行为：打开时自动加载 ini；缺失 ini 弹一次「将以空白表单打开」提示；任意 widget 改动标记 dirty；「重新加载」「关闭」有 dirty 时弹「放弃修改？」；「保存」二次确认 + 写入磁盘 + 主执行日志 `[测试项配置] 已保存 N 条测试项命令到 test_project_config.ini` + 失败原因；ini 文件不存在时自动创建；保留 `_open_test_item_config` 签名 + `self.test_item_config_window` 单例引用；样式与 `Primary.TButton` / `Secondary.TButton` / `CardTitle.TLabel` 等保持一致。
+  4. **`line_check_assistant_README.md` / `PROJECT_STATUS.md`** —— 同步 README「测试项配置窗口」说明（Q1=A、密码明文、保存覆盖、注释丢失、不接执行）+ 表格「测试项配置窗口」从「占位」升级为「ini 编辑器（Q1=A）」，移除「待完成」中相关描述。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`（新）、`tests/test_test_item_config_store.py`（新）、`line_check_assistant/app.py`、`line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：
+  ```powershell
+  cd F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool
+  python -m py_compile line_check_assistant\app.py line_check_assistant\test_item_config_store.py
+  python -m unittest discover -s tests -v
+  python .\run_line_check_assistant.py   # 启动后点测试项配置→改几项→保存→检查 ini
+  ```
+- 验证结果：`py_compile` 通过；完整 `python -m unittest discover -s tests -v` **共 296 项 OK**（原 283 + 本轮新增 13）。`from line_check_assistant.app import LineCheckAssistant` 导入正常；`_open_test_item_config` docstring 含 Q1=A 说明。真实交互验证待用户线下 Windows 桌面跑通。
+- 后续待办：
+  - 用户线下点击「测试项配置」→ 改 Telnet / 测试项 / WiFi 各字段 → 保存 → 检查 `Auto_power_on_off_tool/config/test_project_config.ini` 内容（含 `!`、`&&`、`retry_times_N`、顶部 `command_fail_retry_interval_time`、WiFi enable 0/1）。
+  - 验证 `[order]` 段动态段列表：「+ 增加段」/「删除段」、「否定」勾选加 `!`、空行保存时被跳过。
+  - 验证「重新加载」「关闭」在 dirty 时弹「放弃修改？」二次确认。
+  - 验证删除 ini 后重新打开：弹「将以空白表单打开」+ 保存后自动创建。
+  - 验证注释丢失：原 `[connect_wifi]` 段上方 `;` 中文注释保存后被清空（已确认接受）。
+  - **本轮明确不实现**：`wait_time_N` 序列化（与老工具 sleep 语义冲突，避免误导）；不接主程序执行（Q1=A）；不引入 `configobj` 依赖（标准 `configparser` 已确认可接受注释丢失）。
+
+## 2026-07-19 - 写样机参数 telnet 6 台并行 + 生成批量参数表 真实样机验收通过
+
+- 类型：真实样机验收 / 状态更新
+- 背景：用户在 6 台独立 VLAN110–VLAN115 真实样机上对 `Cheating_machine_execution_tool/line_check_assistant/app.py` 主程序跑了 ① 批量写样机参数 telnet 6 台并行（默认并行 1，依次勾选/不勾选「清空参数」/「退出老化」跑通 9 步自然顺序） ② 生成批量样机参数表（同批 MAC 前 6 位 OUI 固定 + 2.4G / 5G SSID 后缀取本机 MAC 末 4 位 + label "SN/GPON SN 随机后缀长度" 优化）。两项功能均验收通过。
+- 完成内容：本轮无新代码改动,仅同步状态。把 `ACCEPTANCE_BASELINE.md` §2.7（批量写样机参数）从"已确认验收（1 台 / 6 台）+ 已实现未验收（流水线下发命令由可选 Checkbutton 控制）"升级为"已确认验收（1 台 / 6 台,流水线下发命令由可选 Checkbutton 控制已含 6 台真实样机回归）"；§2.8（随机参数表生成）从"已实现未验收"升级为"已确认验收（6 台真实样机）",并把 2026-07-19 同 OUI 改动、SSID 末 4 位 MAC 强关联、label 优化三条子改动都标"已确认验收"。§0 测试基线从 273 → 283（与单测实际一致）。`PROJECT_STATUS.md` 表格对应行 + 单元测试行 + 已完成段 + 抬头日期同步刷新。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile line_check_assistant/app.py src/core/sample_parameter_table.py src/services/sample_parameter_service.py`；`python -m unittest discover -s tests -v`（应仍为 283 项全过,本轮仅改文档不涉及业务逻辑）。
+- 验证结果：本次纯文档/状态刷新,无代码改动;`py_compile`/`unittest` 与上一轮一致（283 项全过）。
+- 后续待办：现场若 2 / 8 台端点并行需要补验收,按 `ACCEPTANCE_BASELINE.md` §2.7 / §2.8 "已实现未验收"标记执行。
+
 ## 2026-07-19 - 生成批量样机参数表 label "随机后缀长度" 改名为 "SN/GPON SN 随机后缀长度"
 
 - 类型：界面优化
