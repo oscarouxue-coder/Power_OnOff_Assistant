@@ -122,7 +122,12 @@ class PipelineWindow:
         ).pack(side="right", padx=(0, 8))
 
     def _build_row(self, parent: Frame, code: str, index: int) -> None:
-        """单行:Checkbutton + label + summary + missing + 去配置 按钮。"""
+        """单行:Checkbutton + label + summary + missing + 去配置 按钮。
+
+        布局(2026-07-20 按用户反馈调整):summary(黑字)与 missing(红字)互换行——
+          第 0 行: missing 红字(若有)　　—— 提示更醒目
+          第 1 行: summary 描述　　　　　 —— 详细参数放次行
+        """
         row = Frame(parent, background=COLOR_SURFACE, padx=10, pady=8, relief="solid", borderwidth=1)
         row.pack(fill="x", pady=(0, 6))
 
@@ -134,18 +139,18 @@ class PipelineWindow:
         check = ttk.Checkbutton(row, text=SUBTASK_LABELS[code], variable=var, command=self._refresh_statuses)
         check.grid(row=0, column=0, sticky="w", padx=(0, 10))
 
-        # 摘要 + 缺项
+        # 缺项(红字)在上、summary(黑字)在下一行(用户 2026-07-20 反馈:红字提示更醒目)
         summary_var = StringVar(value="(计算中...)")
         missing_var = StringVar(value="")
         self._status_summary_vars[code] = summary_var
         self._status_missing_vars[code] = missing_var
         Label(
-            row, textvariable=summary_var, background=COLOR_SURFACE,
-            foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 9),
-        ).grid(row=0, column=1, sticky="w")
-        Label(
             row, textvariable=missing_var, background=COLOR_SURFACE,
             foreground=COLOR_DANGER, font=("Microsoft YaHei UI", 9, "bold"),
+        ).grid(row=0, column=1, sticky="w")
+        Label(
+            row, textvariable=summary_var, background=COLOR_SURFACE,
+            foreground=COLOR_TEXT, font=("Microsoft YaHei UI", 9),
         ).grid(row=1, column=1, sticky="w", pady=(2, 0))
 
         # 去配置按钮
