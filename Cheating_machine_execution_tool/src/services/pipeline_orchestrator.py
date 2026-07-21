@@ -38,8 +38,10 @@ from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSett
 from line_check_assistant.test_item_config_store import TestProjectConfig
 
 
-# 6 个子任务的 code + 窗口显示名 + 排序。固定顺序由用户决策(2026-07-20)。
+# 7 个子任务的 code + 窗口显示名 + 排序。固定顺序由用户决策。
+# 2026-07-20 在最前面新增「环境线路检查」;其余 6 个编号顺延 1→2 ... 6→7。
 SUBTASK_CODES: Tuple[str, ...] = (
+    "env_check",
     "power_cycle",
     "sample_upgrade",
     "sample_parameter_write",
@@ -49,17 +51,19 @@ SUBTASK_CODES: Tuple[str, ...] = (
 )
 
 SUBTASK_LABELS: dict[str, str] = {
-    "power_cycle": "1. 自动上/下电",
-    "sample_upgrade": "2. 样机升级",
-    "sample_parameter_write": "3. 写样机参数",
-    "onu_registration": "4. ONU 注册",
-    "serial_terminal": "5. 串口日志（管道期间持续记录）",
-    "test_item_execution": "6. 测试项配置（[order] 执行）",
+    "env_check": "1. 环境线路检查",
+    "power_cycle": "2. 自动上/下电",
+    "sample_upgrade": "3. 样机升级",
+    "sample_parameter_write": "4. 写样机参数",
+    "onu_registration": "5. ONU 注册",
+    "serial_terminal": "6. 串口日志（管道期间持续记录）",
+    "test_item_execution": "7. 测试项配置（[order] 执行）",
 }
 
 # config_target:窗口「去配置」按钮跳到主程序的哪个子窗口方法名。
 # 主程序实现 ``_open_power_cycle()`` / ``_open_sample_upgrade()`` 等时,按此 dict 走。
 SUBTASK_CONFIG_TARGETS: dict[str, str] = {
+    "env_check": "_open_network_config",
     "power_cycle": "_open_power_control",
     "sample_upgrade": "_open_upgrade_module",
     "sample_parameter_write": "_open_sample_parameter_writer",
@@ -119,6 +123,44 @@ Output = Callable[[str], None]
 def _get_attr(obj: Any, name: str, default: Any = None) -> Any:
     """安全取属性,允许 mock / 部分初始化。"""
     return getattr(obj, name, default)
+
+
+def _summarize_env_check(ctx: PipelineContext) -> SubTaskStatus:
+    """1. 环境线路检查 必填项:≥1 已勾选通道 + 每通道 vlan_name/adapter_alias/network_card_ip/device_manage_ip 非空。
+
+    ping 是否通放到执行阶段(``_run_env_check``)才做;此处只校验必填项完整性,
+    保证操作员至少能在「点击开始执行前」看到「哪些通道缺哪些字段」的红字提示。
+    """
+    channels = ctx.enabled_channels
+    if not channels:
+        return SubTaskStatus(
+            code="env_check",
+            ready=False,
+            summary="0 通道已勾选",
+            missing=("已勾选通道",),
+        )
+    bad_channels: List[str] = []
+    for channel in channels:
+        bad: List[str] = []
+        if not (channel.vlan_name or "").strip():
+            bad.append("VLAN")
+        if not (channel.adapter_alias or "").strip():
+            bad.append("网卡")
+        if not (channel.network_card_ip or "").strip():
+            bad.append("PC 静态 IP")
+        if not (channel.device_manage_ip or "").strip():
+            bad.append("样机管理 IP")
+        if bad:
+            bad_channels.append(f"{channel.section}({'/'.join(bad)})")
+    summary = f"{len(channels)} 通道已勾选"
+    if bad_channels:
+        summary += f" / 缺配置:{', '.join(bad_channels)}"
+    return SubTaskStatus(
+        code="env_check",
+        ready=not bad_channels,
+        summary=summary,
+        missing=tuple(f"通道 {bc} 缺配置" for bc in bad_channels),
+    )
 
 
 def _summarize_power_cycle(ctx: PipelineContext) -> SubTaskStatus:
@@ -262,6 +304,7 @@ def _summarize_test_item_execution(ctx: PipelineContext) -> SubTaskStatus:
 
 
 _SUMMARIZERS = {
+    "env_check": _summarize_env_check,
     "power_cycle": _summarize_power_cycle,
     "sample_upgrade": _summarize_sample_upgrade,
     "sample_parameter_write": _summarize_sample_parameter_write,
@@ -351,6 +394,7 @@ class PipelineOrchestrator:
 
     def _run_subtask(self, code: str) -> None:
         runner = {
+            "env_check": self._run_env_check,
             "power_cycle": self._run_power_cycle,
             "sample_upgrade": self._run_sample_upgrade,
             "sample_parameter_write": self._run_sample_parameter_write,
@@ -359,6 +403,54 @@ class PipelineOrchestrator:
             "test_item_execution": self._run_test_item_execution,
         }[code]
         runner()
+
+    def _run_env_check(self) -> None:
+        """1. 环境线路检查:复用 ``network_ops.run_line_check()`` 逐通道 ping。
+
+        致命失败:任一通道 ping 不通 → 整个管道停止(网络不通则后续子任务均无意义)。
+        """
+        from line_check_assistant.network_ops import run_line_check
+
+        channels = self.ctx.enabled_channels
+        if not channels:
+            raise RuntimeError("已勾选通道为空,无法执行环境线路检查")
+        total = len(channels)
+        passed = 0
+        failed: List[str] = []
+        for index, channel in enumerate(channels, start=1):
+            if self.ctx.stop_event.is_set():
+                self.emit(f"[环境检查] 已请求停止,跳过 {channel.section}")
+                break
+            self.emit(
+                f"[环境检查] ({index}/{total}) {channel.section} "
+                f"VLAN={channel.vlan_name} 网卡={channel.adapter_alias} "
+                f"PC IP={channel.network_card_ip} → 样机 {channel.device_manage_ip}"
+            )
+            try:
+                result = run_line_check(
+                    channel.adapter_alias,
+                    channel.network_card_ip,
+                    channel.subnet_mask,
+                    channel.device_manage_ip,
+                )
+            except Exception as exc:  # noqa: BLE001 - 网络准备本身就可能抛(网卡不存在等)
+                self.emit(f"[环境检查] {channel.section} 启动失败:{exc}")
+                failed.append(channel.section)
+                continue
+            if result.ok:
+                passed += 1
+                self.emit(f"[环境检查] {channel.section} 通过:{result.message}")
+            else:
+                failed.append(channel.section)
+                self.emit(f"[环境检查] {channel.section} 失败:{result.message}")
+                if result.output.strip():
+                    for line in result.output.strip().splitlines():
+                        self.emit(f"    {line}")
+        if failed:
+            raise RuntimeError(
+                f"环境线路检查失败:{len(failed)}/{total} 通道不通 ({', '.join(failed)})"
+            )
+        self.emit(f"[环境检查] 完成:{passed}/{total} 通道全部 ping 通")
 
     def _run_power_cycle(self) -> None:
         """1. 自动上/下电:直接调 power_on_service(同步)。"""

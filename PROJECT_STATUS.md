@@ -1,6 +1,6 @@
 # 项目交接状态
 
-更新：2026-07-20（主界面「检查并执行测试」按钮升级为「全流程执行」管道编排器：6 子任务 1→6 串行 / 必填项状态展示 / 失败停止；新增 fuzzy_match_runner / test_item_execution_service / pipeline_orchestrator / pipeline_window；verify_baseline.py 29 文件 / 374 项单测全过）
+更新：2026-07-20（主界面「检查并执行测试」按钮升级为「全流程执行」管道编排器：6 子任务 1→6 串行 / 必填项状态展示 / 失败停止；新增 fuzzy_match_runner / test_item_execution_service / pipeline_orchestrator / pipeline_window；verify_baseline.py 29 文件 / 374 项单测全过）。同日第二轮：「1. 环境线路检查」子任务加入 7→7 项（其余编号顺延）；app 新增 `_open_network_config()` 占位；pipeline_window default-checked 加 `env_check`；verify_baseline.py 381 项单测全过。
 
 ## 项目目标与当前实现进度
 
@@ -22,7 +22,7 @@
 | ZTE OLT ONU 查询、注册、离线 ONU 清理重试 | 已完成 |
 | 单元测试 | 313 项通过（2026-07-20，原 283 + 测试项配置 store 13 + per-segment 否定 3 + verify_baseline 11 + 项目信息 Tab 2 + Telnet 默认已开启 1 + 内部软件版本扩展 0） |
 | 测试项配置 ini 编辑器（`test_project_config.ini` 加载/编辑/保存，4 个 Tab：Telnet / 测试项 / WiFi / 项目信息；Q1=A 不接执行；Telnet Tab 顶部「Telnet 默认已开启」Checkbutton 默认勾选） | 已完成（2026-07-20，283 → 296 项单测全过；新增项目信息 Tab + Telnet 默认已开启 后 310 → 313；待 Windows 桌面真实交互验证） |
-| 「全流程执行」管道编排器（主界面「检查并执行测试」按钮升级：6 子任务 1→6 串行 / 必填项状态 / 失败停止 / 弹「全流程执行」窗口） | 已实现未验收（2026-07-20，313 → 374 项单测全过；pipeline_orchestrator 26 项 / test_item_execution 14 项 / fuzzy_match_runner 18 项 / sample_upgrade_settings 3 项；待 Windows 桌面真实交互验证 + 真实样机串行 6 子任务全流程跑通） |
+| 「全流程执行」管道编排器（主界面「检查并执行测试」按钮升级：**7** 子任务 1→7 串行 / 必填项状态 / 失败停止 / 弹「全流程执行」窗口） | 已实现未验收（2026-07-20，313 → 381 项单测全过；pipeline_orchestrator 31 项 / test_item_execution 14 项 / fuzzy_match_runner 18 项 / sample_upgrade_settings 3 项 / pipeline_window 2 项；2026-07-20 二轮加入「1. 环境线路检查」；待 Windows 桌面真实交互验证 + 真实样机串行 7 子任务全流程跑通） |
 | `scripts/verify_baseline.py` 回归门禁（py_compile + unittest + §1.3/§1.4 grep 不变量） | 已落地（2026-07-20，AGENTS.md 规则 13 强制提交前全绿；故意破坏实验证明可拦截不变量修改；本轮扩到 29 个 .py 文件 + 374 项单测） |
 
 ## 关键文件及其作用
@@ -51,7 +51,7 @@
 - 串口日志记录终端已支持命令输入框回车发送：非空等价「发送」按钮、空字符串等价「回车」按钮，自动升级占用与危险命令二次确认仍生效（2026-07-15 真实样机验收通过）。
 - 批量写参可按参数表 `VLAN` 匹配已勾选通道，预检重复/缺失 VLAN、重复 COM、MAC 和危险字符；写入前二次确认，标准流程为（2026-07-19 9 步自然顺序）1. 进入工厂模式（`ppctl set FACTORY_MODE=1`）→ 2. `firstboot -yr` → 3. 等待 100 秒 → 4. 工厂模式二次登录 → 5.（可选 `ppctl set AGING_STATE=1`）→ 6.（可选 `ppctl clear`）→ 7. 15 项 `ppctl set/get` 读回校验 → 8. 退出工厂模式（`ppctl set FACTORY_MODE=0`）→ 9. `firstboot -yr`（8/9 步在 `finally` 中执行）。默认并行 1（Spinbox 仍允许 1–8 现场上调），6 台真实样机验收通过。随机生成表只导出/加载预检，不自动下发；同批 MAC 前 6 位 OUI 固定 + 2.4G / 5G SSID 后缀取本机 MAC 末 4 位，6 台真实样机验收通过。
 - 「测试项配置」窗口改造为 `test_project_config.ini` 编辑器（Q1=A：仅展示 + 编辑 + 保存，不接主程序执行）。四 Tab（Telnet / 测试项 / WiFi / **项目信息**）覆盖 ini 四段；项目信息 Tab 包含项目名称 / 软件版本 / ONU 软件编译时间 3 个字符串字段，**仅编辑器不被主程序消费**，用于操作员肉眼对照样机实际值。测试项 Tab 支持「否定勾选 + 动态段列表」表达 `!段A&&段B`，每条命令独立重试次数（1–99），顶部全局「指令重试间隔（秒）」默认 60 写到 `[order]` 段顶部；表单 dirty 时「重新加载」「关闭」弹「放弃修改？」二次确认；保存覆盖原 ini（标准 `configparser` 不保留注释，`[connect_wifi]` 段上方 `;` 中文注释会丢失）；283 → 296 项单测全过（store 13 项），新增项目信息 Tab 后 310 → 312 项全过。
-- **「全流程执行」管道编排器（2026-07-20）**：主界面「检查并执行测试」按钮升级为弹「全流程执行」窗口，6 个子任务（自动上/下电 / 样机升级 / 写样机参数 / ONU 注册 / 串口日志 / 测试项配置）可勾选，按 1→6 固定顺序串行执行，任一「致命」失败（串口日志除外）→ 整个管道停止，弹错误框。窗口展示每行「必填项当前状态」（绿色就绪 / 红色「缺: 字段1, 字段2」），「去配置」按钮跳到主程序对应子窗口，「开始执行」走「必填项未就绪警告 + 全流程执行确认」二次确认后启动后台线程。子任务 1/5/6 同步执行（电源 / 串口 / 测试项），子任务 2/3/4 调主程序既有 `_start_*` 方法（异步起线程 + 弹确认框由操作员点「是」），不重写任何业务逻辑。新增模块：`src/core/fuzzy_match_runner.py`（移植老工具 `fuzzy_match.py` per-segment `!A&&B` 语义，AGENTS 硬规则不改老工具源码）、`src/services/test_item_execution_service.py`（[order] telnet 下发 + fuzzy 匹配 + per-command retry + per-channel 结果文件，源 IP 锁源复用 `TelnetSession`）、`src/services/pipeline_orchestrator.py`（6 子任务调度 + 状态评估 + 失败传播）、`line_check_assistant/pipeline_window.py`（弹窗 UI）；新增持久化字段 `sample_upgrade_settings.ini` 的 `power_operation` / `parameter_table_path`；`scripts/verify_baseline.py` 增 3 个 py_compile 路径；374 项单测全过（313 + 18 fuzzy + 14 test_item + 26 pipeline + 3 settings）；本轮「已实现未验收」待 Windows 桌面真实交互 + 真实样机 6 子任务全流程跑通。
+- **「全流程执行」管道编排器（2026-07-20，第二轮：新增 1. 环境线路检查）**：主界面「检查并执行测试」按钮升级为弹「全流程执行」窗口，**7** 个子任务（1. 环境线路检查 / 2. 自动上/下电 / 3. 样机升级 / 4. 写样机参数 / 5. ONU 注册 / 6. 串口日志 / 7. 测试项配置）可勾选，按 1→7 固定顺序串行执行，任一「致命」失败（串口日志除外）→ 整个管道停止，弹错误框。窗口展示每行「必填项当前状态」（绿色就绪 / 红色「缺: 字段1, 字段2」），「去配置」按钮跳到主程序对应子窗口或方法（「环境线路检查」去配置调 `_open_network_config()`：隐藏全流程窗口 + 把主界面拉到前台 + 主执行日志提示操作员去顶部「网络配置」卡片编辑），「开始执行」走「必填项未就绪警告 + 全流程执行确认」二次确认后启动后台线程。子任务 1/2/6/7 同步执行（环境检查 / 电源 / 串口 / 测试项），子任务 3/4/5 调主程序既有 `_start_*` 方法（异步起线程 + 弹确认框由操作员点「是」），不重写任何业务逻辑。新增模块：`src/core/fuzzy_match_runner.py`（移植老工具 `fuzzy_match.py` per-segment `!A&&B` 语义，AGENTS 硬规则不改老工具源码）、`src/services/test_item_execution_service.py`（[order] telnet 下发 + fuzzy 匹配 + per-command retry + per-channel 结果文件，源 IP 锁源复用 `TelnetSession`）、`src/services/pipeline_orchestrator.py`（7 子任务调度 + 状态评估 + 失败传播）、`line_check_assistant/pipeline_window.py`（弹窗 UI）；新增持久化字段 `sample_upgrade_settings.ini` 的 `power_operation` / `parameter_table_path`；app 新增 `_open_network_config()` 占位方法；`scripts/verify_baseline.py` 增 3 个 py_compile 路径；**381** 项单测全过（374 + 4 env_check evaluate + 1 label-numbering + 2 pipeline_window regression）；本轮「已实现未验收」待 Windows 桌面真实交互 + 真实样机 7 子任务全流程跑通。
 
 **待完成**：
 

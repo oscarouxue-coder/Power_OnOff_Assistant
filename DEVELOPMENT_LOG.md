@@ -31,6 +31,25 @@
   - 异常场景验证：2/3/4 异步子任务（升级 / 写参 / ONU 注册）失败如何传播到编排器（当前靠主程序 worker 异常冒泡 + 用户观察主执行日志；是否需要 polling 状态轮询机制待 v2 评估）
   - v2 候选：多通道并行、test_number 循环、WiFi 验证子任务、钉钉/邮件上报
 
+## 2026-07-20 - 「全流程执行」第二轮：新增「1. 环境线路检查」子任务（6→7 项 / 编号顺延）
+
+- 类型：功能追加 / 测试 / 文档
+- 背景：用户线下看 6 子任务窗口截图后反馈:在最前面（1. 自动上/下电 之前）需要增加一项「环境线路检查」作为整个管道的预校验门——网络不通时上下电 / 升级 / 写参都无意义。三轮 AskUserQuestion 已确认:① 检查范围 = Ping + 必填项预校验（更严格）;② 失败处理 = 致命失败（与 2/3/4/7 同款）;③ 「去配置」按钮 = 调起现有网络配置页（主界面顶部 VLAN / IP 区）。
+- 完成内容:
+  1. **`src/services/pipeline_orchestrator.py`（改）** —— `SUBTASK_CODES` 在最前面插入 `env_check`,7 项顺序 `env_check → power_cycle → sample_upgrade → sample_parameter_write → onu_registration → serial_terminal → test_item_execution`;`SUBTASK_LABELS` 编号顺延 1→2 ... 6→7;`SUBTASK_CONFIG_TARGETS["env_check"] = "_open_network_config"`;新增 `_summarize_env_check()` —— 校验每通道 `vlan_name / adapter_alias / network_card_ip / device_manage_ip` 全部非空（复用 `_validate_channels()` 校验逻辑的字段子集）;新增 `_run_env_check()` —— 复用 `network_ops.run_line_check()` 逐通道 ping,任一失败抛 `RuntimeError` → 编排器捕获后抛 `PipelineError` 终止管道;`_SUMMARIZERS` 注册 `env_check`;`_run_subtask` 的 runner dict 头部加 `"env_check": self._run_env_check`。
+  2. **`line_check_assistant/app.py`（改）** —— 在 `_open_sample_parameter_writer` 旁边新增 `_open_network_config()` 占位方法:隐藏全流程执行窗口（`withdraw`）+ 主界面 `deiconify/lift/focus_force` + `_log` 提示「请在主界面顶部「网络配置」卡片编辑 VLAN / 网卡 / PC 静态 IP / 样机管理 IP;完成后再次点击「检查并执行测试」重开全流程执行窗口」。无独立子窗口,不引入新 Tk 实例,符合 v1 范围。
+  3. **`line_check_assistant/pipeline_window.py`（改）** —— `_build_row` 的 `default_checked` 集合加 `env_check`,1/2/6/7 默认勾选（3/4/5 默认不勾,需预先配置）。
+  4. **`tests/test_pipeline_orchestrator.py`（改+新增 5 项）** —— 头部 docstring「6 个 sub-task」→「7 个 sub-task」;`PipelineRunOrderTests` docstring「1→6」→「1→7」;`test_run_all_six_subtasks_in_order` 改名为 `test_run_all_seven_subtasks_in_order`,断言 `len(results) == 7`;`test_run_only_selected_subtasks` 改用 `{"env_check", "power_cycle", "test_item_execution"}`;`test_fatal_subtask_failure_raises_pipeline_error` 新增 `method_mocks["env_check"].assert_called_once()` + 失败消息断言改 `"子任务 3. 样机升级 失败"`;`test_non_fatal_subtask_failure_continues` 注释改「7 项全选」;`test_request_stop_skips_subsequent_subtasks` 改用 `env_check` 触发 stop;`ConstantsTests.test_subtask_codes_in_order` 改 7 元组;新增 `test_subtask_labels_numbering_is_one_to_seven` —— 守门 `SUBTASK_LABELS` 编号 1→7;新增 4 项 `ComputeSubTaskStatusTests.test_env_check_status_*`（complete / no_enabled_channels / missing_vlan / missing_multiple_fields）。**26 → 31 项**。
+  5. **`tests/test_pipeline_window.py`（改）** —— `_build_context` 路径测试断言改 `len(statuses) == 7` + 枚举加 `env_check`。
+- 修改文件: `Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`ACCEPTANCE_BASELINE.md`（§2.12 全文 6→7 项 / 子任务编号 / 1 改 `_open_network_config` / 26 项 → 31 项 / 374 → 381 项）、`PROJECT_STATUS.md`（能力矩阵行 6 → 7 / 374 → 381 项）、`DEVELOPMENT_LOG.md`。
+- 验证方法: `python -m py_compile src\services\pipeline_orchestrator.py line_check_assistant\pipeline_window.py line_check_assistant\app.py`;`python -m unittest discover -s tests -p "test_pipeline_orchestrator.py" -v`（应 31 项 OK）;`python -m unittest discover -s tests -p "test_pipeline_window.py" -v`（应 2 项 OK）;`python scripts\verify_baseline.py`（应 `ALL CHECKS PASSED`,381 项单测）。
+- 验证结果: py_compile OK;`test_pipeline_orchestrator.py` 31 项 OK（26 + 4 env_check evaluate + 1 label-numbering）;`test_pipeline_window.py` 2 项 OK;`verify_baseline.py` `ALL CHECKS PASSED`(29 个 .py / **381** 项单测全绿,原 376 + 本轮新增 5 项)。
+- 后续待办:
+  - 用户线下 Windows 桌面重新打开「全流程执行」窗口核对 7 行(新 1. 环境线路检查 在最前);状态显示正确;`env_check` 默认勾选;「去配置」按钮隐藏窗口 + 主界面提示正常出现
+  - 真实样机端到端跑通 7 子任务全流程:环境检查 → 上下电 → 升级 → 写参 → ONU 注册 → 串口日志（持续）→ [order] 执行
+  - 异常场景验证:env_check 任一通道 ping 不通 → 整个管道停止（致命失败规则生效）;3/4/5 异步子任务失败传播机制评估
+  - v2 候选:并行 ping 多通道;env_check 失败非致命化选项;网络配置做成独立子窗口
+
 ## 2026-07-20 - 「全流程执行」窗口尺寸 + 必填项状态计算修复（第二次：`_get_attr` 拿模块常量）
 
 - 类型：BUG 修复 / 测试

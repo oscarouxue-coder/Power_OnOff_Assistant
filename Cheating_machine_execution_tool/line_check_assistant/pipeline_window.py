@@ -56,8 +56,8 @@ class PipelineWindow:
         self.window.title("全流程执行")
         # 6 行 Checkbutton + 必填项状态 + 底部按钮需要至少 ~640px 高度
         # （2026-07-20 实际跑出 560 不够,「6. 测试项配置」行被切;调整为 640）
-        self.window.geometry("820x640")
-        self.window.minsize(780, 620)
+        self.window.geometry("920x740")
+        self.window.minsize(880, 720)
         self.window.transient(app)
         self.window.configure(background=COLOR_BG)
         # 状态变量
@@ -131,8 +131,9 @@ class PipelineWindow:
         row = Frame(parent, background=COLOR_SURFACE, padx=10, pady=8, relief="solid", borderwidth=1)
         row.pack(fill="x", pady=(0, 6))
 
-        # 默认勾选:1, 5, 6(开箱即用最常用);其它默认不勾(需要预先配置)
-        default_checked = code in {"power_cycle", "serial_terminal", "test_item_execution"}
+        # 默认勾选:1(环境检查), 2(电源), 6(串口日志), 7(测试项)(开箱即用最常用);
+        # 3/4/5 默认不勾(需要预先配置:升级 / 写参 / ONU 注册)
+        default_checked = code in {"env_check", "power_cycle", "serial_terminal", "test_item_execution"}
         var = BooleanVar(value=default_checked)
         self._check_vars[code] = var
 

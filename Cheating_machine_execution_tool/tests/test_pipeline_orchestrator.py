@@ -1,8 +1,8 @@
 """pipeline_orchestrator 单元测试。
 
 覆盖:
-- 6 个 sub-task 状态评估(ready / missing / summary)
-- run() 按 1→6 顺序执行
+- 7 个 sub-task 状态评估(ready / missing / summary)
+- run() 按 1→7 顺序执行
 - NON_FATAL_SUBTASKS 失败不阻塞后续
 - 致命子任务失败 → 抛 PipelineError + 停止后续
 - request_stop() 阻止后续子任务
@@ -231,9 +231,47 @@ class ComputeSubTaskStatusTests(unittest.TestCase):
         self.assertFalse(status.ready)
         self.assertIn("[order]", "".join(status.missing))
 
+    # ---- 2026-07-20 新增:环境线路检查(env_check) ----
+
+    def test_env_check_status_complete(self) -> None:
+        ctx = _make_context()  # _make_channel 已包含完整 VLAN/IP
+        status = compute_all_subtask_statuses(ctx)["env_check"]
+        self.assertTrue(status.ready)
+        self.assertEqual(status.missing, ())
+        self.assertIn("1 通道已勾选", status.summary)
+
+    def test_env_check_status_no_enabled_channels(self) -> None:
+        ctx = _make_context(channels=[_make_channel(enabled=False)])
+        status = compute_all_subtask_statuses(ctx)["env_check"]
+        self.assertFalse(status.ready)
+        self.assertIn("已勾选通道", status.missing)
+
+    def test_env_check_status_missing_vlan(self) -> None:
+        bad = _make_channel()
+        bad.vlan_name = ""
+        ctx = _make_context(channels=[bad])
+        status = compute_all_subtask_statuses(ctx)["env_check"]
+        self.assertFalse(status.ready)
+        self.assertTrue(any("VLAN" in m for m in status.missing))
+
+    def test_env_check_status_missing_multiple_fields(self) -> None:
+        bad = _make_channel()
+        bad.vlan_name = ""
+        bad.adapter_alias = ""
+        bad.network_card_ip = ""
+        bad.device_manage_ip = ""
+        ctx = _make_context(channels=[bad])
+        status = compute_all_subtask_statuses(ctx)["env_check"]
+        self.assertFalse(status.ready)
+        joined = "".join(status.missing)
+        self.assertIn("VLAN", joined)
+        self.assertIn("网卡", joined)
+        self.assertIn("PC 静态 IP", joined)
+        self.assertIn("样机管理 IP", joined)
+
 
 class PipelineRunOrderTests(unittest.TestCase):
-    """验证 run() 按 1→6 顺序执行,以及 NON_FATAL_SUBTASKS 失败不阻塞。"""
+    """验证 run() 按 1→7 顺序执行,以及 NON_FATAL_SUBTASKS 失败不阻塞。"""
 
     @staticmethod
     def _patch_all_subtasks():
@@ -253,7 +291,7 @@ class PipelineRunOrderTests(unittest.TestCase):
             )
         return stack, method_mocks
 
-    def test_run_all_six_subtasks_in_order(self) -> None:
+    def test_run_all_seven_subtasks_in_order(self) -> None:
         ctx = _make_context()
         emit_msgs: List[str] = []
         stack, method_mocks = self._patch_all_subtasks()
@@ -264,8 +302,8 @@ class PipelineRunOrderTests(unittest.TestCase):
         # 每个子任务方法都被调用 1 次
         for code in SUBTASK_CODES:
             method_mocks[code].assert_called_once()
-        # 6 个结果都成功
-        self.assertEqual(len(results), 6)
+        # 7 个结果都成功
+        self.assertEqual(len(results), 7)
         self.assertTrue(all(r.ok for r in results))
         # 主日志含「开始 / 结束 子任务」 + 「管道开始 / 结束」
         self.assertIn("全流程执行管道开始", "".join(emit_msgs))
@@ -279,14 +317,15 @@ class PipelineRunOrderTests(unittest.TestCase):
         stack, method_mocks = self._patch_all_subtasks()
         with stack:
             orchestrator = PipelineOrchestrator(ctx, emit_msgs.append)
-            results = orchestrator.run({"power_cycle", "test_item_execution"})
+            results = orchestrator.run({"env_check", "power_cycle", "test_item_execution"})
 
-        # 只调用了选中的 2 个
+        # 只调用了选中的 3 个
+        method_mocks["env_check"].assert_called_once()
         method_mocks["power_cycle"].assert_called_once()
         method_mocks["test_item_execution"].assert_called_once()
         self.assertFalse(method_mocks["sample_upgrade"].called)
         self.assertFalse(method_mocks["onu_registration"].called)
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 3)
 
     def test_fatal_subtask_failure_raises_pipeline_error(self) -> None:
         ctx = _make_context()
@@ -298,14 +337,15 @@ class PipelineRunOrderTests(unittest.TestCase):
             with self.assertRaises(PipelineError) as ctx_exc:
                 orchestrator.run(set(SUBTASK_CODES))
         self.assertIn("sample_upgrade", str(ctx_exc.exception))
-        # power_cycle 已执行
+        # env_check / power_cycle 已执行
+        method_mocks["env_check"].assert_called_once()
         method_mocks["power_cycle"].assert_called_once()
         # 升级失败后,后续子任务(写参 / ONU / 串口 / 测试项)不执行
         method_mocks["sample_parameter_write"].assert_not_called()
         method_mocks["onu_registration"].assert_not_called()
         method_mocks["test_item_execution"].assert_not_called()
-        # 主日志含失败消息
-        self.assertIn("子任务 2. 样机升级 失败", "".join(emit_msgs))
+        # 主日志含失败消息(编号 3 = sample_upgrade)
+        self.assertIn("子任务 3. 样机升级 失败", "".join(emit_msgs))
         self.assertIn("全流程执行管道因失败提前终止", "".join(emit_msgs))
 
     def test_non_fatal_subtask_failure_continues(self) -> None:
@@ -316,7 +356,7 @@ class PipelineRunOrderTests(unittest.TestCase):
         with stack:
             method_mocks["serial_terminal"].side_effect = RuntimeError("终端打不开")
             orchestrator = PipelineOrchestrator(ctx, emit_msgs.append)
-            # 串口日志失败,6 项全选 → 不应抛 PipelineError
+            # 串口日志失败,7 项全选 → 不应抛 PipelineError
             results = orchestrator.run(set(SUBTASK_CODES))
 
         # 串口已执行(失败);后续子任务(测试项)继续
@@ -335,14 +375,14 @@ class PipelineRunOrderTests(unittest.TestCase):
         orchestrator_ref: List[PipelineOrchestrator] = []
         stack, method_mocks = self._patch_all_subtasks()
         with stack:
-            def stop_after_power_cycle() -> None:
+            def stop_after_env_check() -> None:
                 orchestrator_ref[0].request_stop()
-            method_mocks["power_cycle"].side_effect = stop_after_power_cycle
+            method_mocks["env_check"].side_effect = stop_after_env_check
             orchestrator_ref.append(PipelineOrchestrator(ctx, emit_msgs.append))
             orchestrator_ref[0].run(set(SUBTASK_CODES))
 
-        # power_cycle 已执行;后续全部跳过
-        method_mocks["power_cycle"].assert_called_once()
+        # env_check 已执行;后续全部跳过
+        method_mocks["env_check"].assert_called_once()
         for code in SUBTASK_CODES[1:]:
             method_mocks[code].assert_not_called()
         self.assertIn("已请求停止", "".join(emit_msgs))
@@ -364,11 +404,37 @@ class ConstantsTests(unittest.TestCase):
     def test_subtask_codes_in_order(self) -> None:
         self.assertEqual(
             SUBTASK_CODES,
-            ("power_cycle", "sample_upgrade", "sample_parameter_write", "onu_registration", "serial_terminal", "test_item_execution"),
+            (
+                "env_check",
+                "power_cycle",
+                "sample_upgrade",
+                "sample_parameter_write",
+                "onu_registration",
+                "serial_terminal",
+                "test_item_execution",
+            ),
         )
 
     def test_non_fatal_subtasks_contains_only_serial(self) -> None:
         self.assertEqual(NON_FATAL_SUBTASKS, frozenset({"serial_terminal"}))
+
+    def test_subtask_labels_numbering_is_one_to_seven(self) -> None:
+        """用户 2026-07-20 反馈后编号从 1 开始到 7;守门防止以后再次调整编号漏改。"""
+        expected = {
+            "env_check": "1. ",
+            "power_cycle": "2. ",
+            "sample_upgrade": "3. ",
+            "sample_parameter_write": "4. ",
+            "onu_registration": "5. ",
+            "serial_terminal": "6. ",
+            "test_item_execution": "7. ",
+        }
+        self.assertEqual(set(SUBTASK_LABELS.keys()), set(expected.keys()))
+        for code, prefix in expected.items():
+            self.assertTrue(
+                SUBTASK_LABELS[code].startswith(prefix),
+                f"SUBTASK_LABELS[{code!r}] = {SUBTASK_LABELS[code]!r}, 期望以 {prefix!r} 开头",
+            )
 
 
 if __name__ == "__main__":

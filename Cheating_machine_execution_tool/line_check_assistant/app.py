@@ -328,6 +328,7 @@ class LineCheckAssistant(Tk):
         ttk.Button(toolbar, text="写样机参数", command=self._open_sample_parameter_writer, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="ONU注册", command=self._open_onu_registration_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="串口日志", command=self._open_serial_log_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(toolbar, text="测试项配置", command=self._open_test_item_config, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="刷新网卡", command=self._refresh_adapters, style="Secondary.TButton").pack(side="right", padx=(0, 8))
         ttk.Button(toolbar, text="刷新串口", command=self._refresh_power_serial_ports, style="Secondary.TButton").pack(side="right", padx=(0, 8))
 
@@ -378,12 +379,6 @@ class LineCheckAssistant(Tk):
         config_header = ttk.Frame(config_card, style="Surface.TFrame")
         config_header.pack(fill="x")
         ttk.Label(config_header, text="2  配置测试参数", style="CardTitle.TLabel").pack(side="left")
-        ttk.Button(
-            config_header,
-            text="测试项配置",
-            command=self._open_test_item_config,
-            style="Secondary.TButton",
-        ).pack(side="right")
         ttk.Label(config_card, text="通道勾选和 VLAN 选择会实时保存", style="CardHint.TLabel").pack(anchor="w", pady=(3, 10))
 
         self.enabled_var = BooleanVar(value=True)
@@ -485,6 +480,28 @@ class LineCheckAssistant(Tk):
             self.vlan_combo = widget
             widget.bind("<<ComboboxSelected>>", self._on_vlan_changed)
             widget.bind("<FocusOut>", self._on_vlan_changed)
+
+    def _open_network_config(self) -> None:
+        """「全流程执行」窗口中「环境线路检查」行的「去配置」按钮入口(2026-07-20 新增)。
+
+        网络配置目前内嵌在主界面顶部 VLAN / IP 区,没有独立子窗口。
+        这里:隐藏全流程执行窗口 + 把主界面拉到前台 + emit 一行提示,
+        操作员在主界面顶部左侧「网络配置」卡片编辑 VLAN / 网卡 / PC IP / 样机 IP,
+        完成后再次点击「检查并执行测试」即可重开全流程执行窗口(原窗口已隐藏)。
+
+        注意:``self.pipeline_window`` 是 ``PipelineWindow`` 包装器(持有 ``self.window`` 这个 Toplevel),
+        ``winfo_exists()`` / ``withdraw()`` 必须走 ``.window``,不能直接调包装器。
+        """
+        pipeline_window = self.pipeline_window
+        if pipeline_window is not None and pipeline_window.window.winfo_exists():
+            pipeline_window.window.withdraw()
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+        self._log(
+            "请在主界面顶部「网络配置」卡片编辑 VLAN / 网卡 / PC 静态 IP / 样机管理 IP;"
+            "完成后再次点击「检查并执行测试」重开全流程执行窗口。"
+        )
 
     def _open_sample_parameter_writer(self) -> None:
         if self.parameter_writer_window is not None and self.parameter_writer_window.winfo_exists():
@@ -3515,14 +3532,18 @@ class LineCheckAssistant(Tk):
         写样机参数 / ONU 注册 / 串口日志 / 测试项配置)后,按 1→6 顺序串行执行,
         任一失败(串口日志除外)→ 整个管道停止。
         ``_run_checks`` / ``_check_worker`` 仍保留供单通道 ping 检查场景使用。
+
+        注意:``self.pipeline_window`` 是 ``PipelineWindow`` 包装器(持有 ``self.window`` 这个 Toplevel),
+        ``winfo_exists()`` / ``deiconify()`` / ``lift()`` / ``focus_force()`` 必须走 ``.window``,不能直接调包装器。
         """
         # 旧逻辑保留作为兜底(直接跳弹窗失败时,仍可走 ping 检查)
         if self.running:
             return
-        if self.pipeline_window is not None and self.pipeline_window.winfo_exists():
-            self.pipeline_window.deiconify()
-            self.pipeline_window.lift()
-            self.pipeline_window.focus_force()
+        pipeline_window = self.pipeline_window
+        if pipeline_window is not None and pipeline_window.window.winfo_exists():
+            pipeline_window.window.deiconify()
+            pipeline_window.window.lift()
+            pipeline_window.window.focus_force()
             return
         # 2026-07-20 引入:PipelineWindow 在 ``line_check_assistant.pipeline_window``;
         # 引用放在这里(而非 ``__init__``)以避免与 ``app.py`` 的 tkinter 启动顺序耦合。
