@@ -328,7 +328,6 @@ class LineCheckAssistant(Tk):
         ttk.Button(toolbar, text="写样机参数", command=self._open_sample_parameter_writer, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="ONU注册", command=self._open_onu_registration_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="串口日志", command=self._open_serial_log_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(toolbar, text="测试项配置", command=self._open_test_item_config, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="刷新网卡", command=self._refresh_adapters, style="Secondary.TButton").pack(side="right", padx=(0, 8))
         ttk.Button(toolbar, text="刷新串口", command=self._refresh_power_serial_ports, style="Secondary.TButton").pack(side="right", padx=(0, 8))
 
@@ -379,6 +378,7 @@ class LineCheckAssistant(Tk):
         config_header = ttk.Frame(config_card, style="Surface.TFrame")
         config_header.pack(fill="x")
         ttk.Label(config_header, text="2  配置测试参数", style="CardTitle.TLabel").pack(side="left")
+        ttk.Button(config_header, text="测试项配置", command=self._open_test_item_config, style="Tool.TButton").pack(side="right")
         ttk.Label(config_card, text="通道勾选和 VLAN 选择会实时保存", style="CardHint.TLabel").pack(anchor="w", pady=(3, 10))
 
         self.enabled_var = BooleanVar(value=True)

@@ -2,6 +2,16 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-07-23 - 调整测试项配置入口位置
+
+- 类型：优化 / 文档
+- 背景：用户要求将主界面「测试项配置」按钮移动到截图红框所示的「2 配置测试参数」卡片右上角。
+- 完成内容：保持按钮文字、样式与 `_open_test_item_config` 打开逻辑不变；从常用工具栏移除，改放到「2 配置测试参数」标题右侧。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`DEVELOPMENT_LOG.md`
+- 验证方法：运行 `python -m py_compile line_check_assistant\app.py` 与 `python scripts\verify_baseline.py`；启动源码界面后核对按钮位置并点击确认仍能打开配置窗口。
+- 验证结果：`py_compile` 通过；`python scripts\verify_baseline.py` 全绿（29 个 .py 编译、388 项单测、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：用户在线下 Windows 桌面确认截图箭头所示位置符合预期。
+
 ## 2026-07-20 - 「全流程执行」管道编排器（主界面「检查并执行测试」按钮升级）
 
 - 类型：功能 / 重构 / 测试 / 文档
