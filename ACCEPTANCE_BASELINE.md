@@ -1,6 +1,6 @@
 # Acceptance Baseline
 
-更新：2026-07-20（新增 §2.12 「全流程执行」管道编排器；状态初始「已实现未验收」；同日追加「1. 环境线路检查」子任务 7→7 项、编号顺延）
+更新：2026-07-23（文档职责与回归基线整理；§2.12 保持 7 子任务，状态仍为「已实现未验收」）
 
 > 与 `PROJECT_STATUS.md` 的关系：本文按"实现 → 单测 → 真实样机验收"三态罗列验收证据与不变量，作为独立验收基线。`PROJECT_STATUS.md` 保留面向项目的进度叙述；两者冲突时以本文为准。
 >
@@ -13,11 +13,10 @@
 
 ```powershell
 cd F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool
-python -m py_compile line_check_assistant\app.py src\ui\serial_terminal.py src\services\serial_upgrade_service.py src\services\sample_parameter_service.py src\core\tftp_transport.py src\core\telnet_transport.py src\core\ubus_http_client.py src\core\ubus_enable_telnet.py src\core\bind_socket.py src\core\parameter_session.py line_check_assistant\network_ops.py
-python -m unittest discover -s tests -v
+python scripts\verify_baseline.py
 ```
 
-预期 `Ran 283 tests ... OK`（2026-07-19 实跑；原 270 → 273（清理失败步骤名标识 3 项）→ 283（本轮新增 10 项：同 OUI 1 + 流水线选项 5 + 持久化 2 + 写样机参数默认并行 1 回归 1 + SSID 末 4 位 MAC 强关联 1））。
+预期 `ALL CHECKS PASSED`，其中包括编译、全量单元测试和 §1.3 / §1.4 不变量检查。测试数量会随测试增加变化，不在本文件固化；最近一次已记录结果见 `PROJECT_STATUS.md`，历史增量见 `DEVELOPMENT_LOG.md`。
 
 ## 1. 全局不可破坏规则
 
@@ -30,7 +29,8 @@ python -m unittest discover -s tests -v
 
 ### 1.2 测试与目录基线
 
-- 全量：`python -m unittest discover -s tests -v` → **283 项全过**（2026-07-19 实跑，对应 `tests/` 下 19 个 unittest 文件）
+- 全量：`python -m unittest discover -s tests -v`；提交前统一执行 `python scripts\verify_baseline.py`
+- 测试数量和文件数量属于运行结果，不在本节固化；新增测试后由实施者在 `PROJECT_STATUS.md` 记录最近一次完整验证结果，并在 `DEVELOPMENT_LOG.md` 保留本轮增量依据
 - 不动 `build/`、`dist/`、`logs/`、`.venv/`
 
 ### 1.3 协议不变性自检（grep 必须命中）
@@ -240,7 +240,7 @@ python -m unittest discover -s tests -v
   - 任一「致命」子任务（含「环境线路检查」）抛异常 → 整个管道停止，弹错误框；串口日志失败只记结果不阻塞
   - 「停止」按钮：编排器在当前子任务结束后终止后续子任务
 - **核心验收行为（2026-07-20 单测全过，真实样机待验收）**：
-  - 全量 **381** 项单测（374 → +4 env_check evaluate + 1 label-numbering + 2 pipeline_window regression）全过；`scripts/verify_baseline.py` `ALL CHECKS PASSED`（29 个 .py 编译 + 381 项单测 + 8 条 MUST_EXIST + 1 条 MUST_NOT_EXIST 全绿）
+  - 实现轮已执行 `scripts/verify_baseline.py` 并通过；当前完整测试结果以 `PROJECT_STATUS.md` 的最近一次记录为准，历史增量依据保留在 `DEVELOPMENT_LOG.md`
   - per-segment fuzzy 语义与老工具 `common/fuzzy_match.py` 一致：`!段A&&段B` 拆为 `[(True,"段A"), (False,"段B")]`；肯定段 `in` 子串匹配、否定段 `re.escape(segment)` 搜索；空段跳过；老工具 `tcapi get WanInfo_Entry` IPv6 特殊分支不移植
   - 测试项执行 service 复用 `TelnetSession` 协议（按 VLAN `bind_ip` 锁源 `source_address=(bind_ip, 0)`，不绑直接抛错不回退 `0.0.0.0`）；登录阶段按 `telnet.input_user_flag` / `input_password_flag` / `login_success_flag` 三段等
   - per-channel 结果文件路径生成 `Cheating_machine_execution_tool/test_results/device_{section}_command_results_{YYYYMMDD_HHMMSS}.log`（用户决策：与老工具 `Auto_power_on_off_tool/test_results/` 分离）
@@ -278,6 +278,6 @@ python -m unittest discover -s tests -v
 
 2. **§2.4 §Tftp指令 中"串口乱码盲发密码补救登录（`peek_since` salvage 路径）"** — 同样在已读到的 `DEVELOPMENT_LOG.md`（至 2026-07-12）中未找到对应的真实样机验收条目。**暂保留"已确认验收"标签**，需用户二次核对日期后确认或降级。
 
-3. **测试文件数**：原文件抬头列"tests/ 下 14 个 unittest 文件"，实测 **16 个**（新增 `test_sample_parameter_app.py`、`test_sample_parameter_table.py`）。本文已统一为 16，未来请以实际 `ls tests/` 为准。
+3. **历史测试数量**：旧版本在本文件多个章节写入 283、381 等阶段性数字，容易与后续测试数冲突。自 2026-07-23 起，本文件不再固化总数；最新完整验证结果只记录在 `PROJECT_STATUS.md`，每次增量保留在 `DEVELOPMENT_LOG.md`。
 
-4. **`PROJECT_STATUS.md`** 抬头日期写"更新：2026-07-13"，但表格内已含 2026-07-15 的 199 项基线 — 不在本任务范围，但提示 `ACCEPTANCE_BASELINE.md` 与 `PROJECT_STATUS.md` 都存在更新日期与内容时间不一致，统一时建议同步刷新。
+4. **文档职责**：`PROJECT_STATUS.md` 是当前交接状态，`ACCEPTANCE_BASELINE.md` 是验收与不变量依据。两者冲突时以本文的功能状态和不变量为准；操作步骤以 `Cheating_machine_execution_tool/line_check_assistant_README.md` 为准。

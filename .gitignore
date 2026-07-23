@@ -6,12 +6,18 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv_serial_upgrade/
+.claude/settings.local.json
 
 # Local build and run outputs
 # Local saved form state
 Cheating_machine_execution_tool/Auto_power_on_off_tool/config/onu_registration.ini
 Cheating_machine_execution_tool/Auto_power_on_off_tool/config/sample_upgrade_settings.ini
 Cheating_machine_execution_tool/Auto_power_on_off_tool/config/network_card_ip.ini
+
+# Current LineCheckAssistant build and runtime outputs
+Cheating_machine_execution_tool/build/
+Cheating_machine_execution_tool/dist/
+Cheating_machine_execution_tool/logs/
 开关机执行工具/build_pending/
 开关机执行工具/dist_pending/
 开关机执行工具/assistant_logs/

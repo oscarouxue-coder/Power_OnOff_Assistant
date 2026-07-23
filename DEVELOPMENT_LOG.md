@@ -2,6 +2,16 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-07-23 - 整理项目管理文档
+
+- 类型：文档 / 状态更新
+- 背景：项目已具备验收基线、开发记录和回归门禁，但 `PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、操作 README 对测试数、子任务数和路径存在阶段性描述混杂，后续 AI 容易据此产生错误判断。
+- 完成内容：① 新增根目录 `README.md` 作为源码入口、文档职责和历史目录边界导航；② 将 `PROJECT_STATUS.md` 收敛为当前状态、待办、关键入口和继续开发命令；③ 将 `ACCEPTANCE_BASELINE.md` 的测试总数改为引用状态页的最近一次记录，保留验收状态与不变量；④ 同步 `AGENTS.md`、工作流说明、操作 README、`.gitignore` 与第三方声明，并修复开发日志中的本地链接。
+- 修改文件：`README.md`、`AGENTS.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/THIRD_PARTY_NOTICES.md`、`.claude/skills/line-check-dev/SKILL.md`、`.gitignore`、`DEVELOPMENT_LOG.md`。
+- 验证方法：检查文档职责、主源码路径、7 子任务描述、测试基线引用和 Markdown 本地链接；运行 `git diff --check`。
+- 验证结果：未修改业务代码、验收状态或历史记录；当前状态文档不再含旧测试总数或 6 子任务描述，Markdown 本地链接检查通过。
+- 后续待办：下次业务代码改动前实跑 `python scripts\verify_baseline.py`，以实际结果更新 `PROJECT_STATUS.md` 的最近一次验证记录；凭据模板化、依赖锁定和 CI 仍按独立任务评估。
+
 ## 2026-07-23 - 调整测试项配置入口位置
 
 - 类型：优化 / 文档
@@ -17,7 +27,7 @@
 - 类型：功能 / 重构 / 测试 / 文档
 - 背景：用户对 `app.py:431` 的「检查并执行测试」按钮不满意——当前只调 `_start_all_checks` 做已勾选通道的 ping 通过性检查，不消费 `test_project_config.ini` 的 `[order]` 段。**用户目标**：把「自动上/下电 / 样机升级 / 写样机参数 / ONU 注册 / 串口日志 / 测试项配置」6 个已有功能作为可勾选的子任务，由用户勾选后按 1→6 固定顺序串行执行，任一失败（串口日志除外）→ 整个管道停止；用户连接好样机 + 填好所有配置后，一键跑通全流程。
 - 完成内容：
-  1. **`src/core/fuzzy_match_runner.py`（新）** —— 移植老工具 [Auto_power_on_off_tool/common/fuzzy_match.py](../../Cheating_machine_execution_tool/Auto_power_on_off_tool/common/fuzzy_match.py) 的 per-segment `!A&&B` 语义；纯函数无 IO，`match_expected(result, expected) -> bool` 入口；`iter_segments(expected)` 暴露拆分；老工具 `tcapi get WanInfo_Entry` IPv6 特殊分支不移植（用 `re.escape` 保证「字面匹配」）。AGENTS 硬规则：不改老工具源码，独立模块移植。
+  1. **`src/core/fuzzy_match_runner.py`（新）** —— 移植老工具 [Auto_power_on_off_tool/common/fuzzy_match.py](Cheating_machine_execution_tool/Auto_power_on_off_tool/common/fuzzy_match.py) 的 per-segment `!A&&B` 语义；纯函数无 IO，`match_expected(result, expected) -> bool` 入口；`iter_segments(expected)` 暴露拆分；老工具 `tcapi get WanInfo_Entry` IPv6 特殊分支不移植（用 `re.escape` 保证「字面匹配」）。AGENTS 硬规则：不改老工具源码，独立模块移植。
   2. **`src/services/test_item_execution_service.py`（新）** —— 跑 `[order]` 段的 service：单台样机 → `prepare_network_for_sample` 切网卡 IP → `TelnetSession`（复用 `src/core/telnet_transport.py`）按 VLAN `bind_ip` 锁源 → `_login` 按 `telnet.input_user_flag` / `input_password_flag` / `login_success_flag` 三段登录 → 顺序执行 `[order]` 每条命令：send_line → `_read_until_stable`（连续 `READ_STABLE_SECONDS=1.0s` 无新数据 / 总 `READ_MAX_SECONDS=8.0s` 视完成）→ `match_expected` 判定 → 失败重试 `retry_times` 次（间隔 `command_fail_retry_interval_time` 秒）→ per-channel 结果文件 `Cheating_machine_execution_tool/test_results/device_{section}_command_results_{YYYYMMDD_HHMMSS}.log`。返回 `TestItemRunResult{channel_section, total, passed, failed, log_path}`；网络/登录失败抛 `RuntimeError`，由编排器统一 stop pipeline。
   3. **`src/services/pipeline_orchestrator.py`（新）** —— 全流程执行管道：`PipelineContext` 包装 app + 通道 + 3 个 store + serial_log_dir；`compute_all_subtask_statuses(ctx)` 6 子任务必填项评估；`PipelineOrchestrator.run(selected: set[str])` 按 `SUBTASK_CODES` 1→6 固定顺序执行勾选子任务；每个子任务调 `app._start_*` 方法（既有逻辑，不重写）或直接调 service（1 电源 / 6 测试项）；致命失败抛 `PipelineError` + 停止后续；`NON_FATAL_SUBTASKS = {"serial_terminal"}` 失败只记结果；`request_stop()` 在当前子任务结束后终止后续。
   4. **`line_check_assistant/pipeline_window.py`（新）** —— 「全流程执行」弹窗 UI（`Toplevel(780x560)` + 6 行 Checkbutton + 必填项状态 + 「去配置」按钮 + 「开始执行 / 停止 / 取消」）；每行右侧实时刷新「必填项当前状态」（绿色就绪 / 红色「缺: 字段1, 字段2」），「去配置」按钮调 `app._open_power_control` / `_open_upgrade_module` 等 6 个既有子窗口方法；「开始执行」走「必填项未就绪警告 + 全流程执行确认」二次确认后启动后台线程；主线程 UI 回调用 `window.after(0, ...)`；emit 投到主程序 `log_queue`。

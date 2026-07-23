@@ -104,20 +104,21 @@ python .\run_line_check_assistant.py
 
 ## 全流程执行窗口（2026-07-20）
 
-主界面「检查并执行测试」按钮按下后，弹出本窗口（替代旧实现的「直接跑 ping 检查」）。操作员可勾选 6 个子任务，按 **1→6 固定顺序** 串行执行，任一失败（串口日志除外）将停止整个管道。
+主界面「检查并执行测试」按钮按下后，弹出本窗口（替代旧实现的「直接跑 ping 检查」）。操作员可勾选 7 个子任务，按 **1→7 固定顺序** 串行执行；任一致命失败会停止后续子任务，串口日志失败不阻塞后续。
 
-- **6 个子任务**（每行 Checkbutton + 必填项状态 + 「去配置」按钮）：
-  1. **自动上/下电**（默认勾选）—— 调用 `power_on_service` 中的 `power_on_selected_channels` / `turn_off_selected_channels` 同步执行；必填项：程控电源 COM 口（主界面「程控电源串口」）+ 上/下电（`sample_upgrade_settings.ini` 新增的 `power_operation` 字段，默认 `up`）+ 至少 1 个已勾选通道。
-  2. **样机升级**（默认不勾）—— 调主程序既有的 `_start_page_upgrade()` / `_start_tftp_command_upgrade()` / `_start_tftp_put_upgrade()`（异步起线程，弹确认框由操作员点「是」）；必填项：升级方式 / 固件路径 / 超级用户凭据（页面升级）/ Tftp 指令或 Put（全包升级）。
-  3. **写样机参数**（默认不勾）—— 调主程序既有的 `_start_sample_parameter_write()`（异步起线程，弹确认框）；必填项：参数表文件路径（`sample_upgrade_settings.ini` 新增的 `parameter_table_path` 字段）+ 写参首次登录账号 / 密码（`parameter_initial_*`）。
-  4. **ONU 注册**（默认不勾）—— 调主程序既有的 `_on_onu_query_clicked()` + `_on_onu_register_clicked()`（异步起线程，弹确认框）；必填项：OLT IP / 用户名 / 密码（`onu_registration.ini`）。
-  5. **串口日志（管道期间持续记录）**（默认勾选）—— 调主程序既有的 `_open_serial_log_module()` 打开 `SerialTerminalWindow`；管道运行期间窗口保持开启，持续记录各通道输出。**「非致命」子任务**：打开失败不阻塞后续。
-  6. **测试项配置（[order] 执行）**（默认勾选）—— 调新 `test_item_execution_service.run_test_item_execution` 同步执行（每台串行）；按 `[order]` 段顺序逐条 telnet 下发 + per-segment fuzzy 匹配（`!A&&B`）+ 每条命令 `retry_times` 次重试（间隔 `command_fail_retry_interval_time` 秒）；per-channel 结果文件写到 `Cheating_machine_execution_tool/test_results/device_{section}_command_results_{YYYYMMDD_HHMMSS}.log`，主执行日志按 `[order]` 顺序输出每条命令的 TX / 读回 / 匹配结果。必填项：`test_project_config.ini` 中 `[telnet]` 段用户名 / 密码 + `[order]` 段至少 1 条命令。
+- **7 个子任务**（每行 Checkbutton + 必填项状态 + 「去配置」按钮）：
+  1. **环境线路检查**（默认勾选）—— 逐通道启用网卡、设置 PC 静态 IP 并 Ping 样机管理 IP；必填项为至少一个启用通道及每通道 VLAN、网卡、PC IP、样机 IP。
+  2. **自动上/下电**（默认勾选）—— 必填项：程控电源 COM、上/下电选项和至少一个已勾选通道。
+  3. **样机升级**（默认不勾）—— 必填项：升级方式、固件及对应凭据或传输方式；`Tftp指令` 与 `Tftp Put` 保持两条独立流程。
+  4. **写样机参数**（默认不勾）—— 必填项：参数表路径和首次登录账号、密码。
+  5. **ONU 注册**（默认不勾）—— 必填项：OLT IP、用户名、密码。
+  6. **串口日志（管道期间持续记录）**（默认勾选）—— 打开多 VLAN 终端持续记录；这是非致命子任务。
+  7. **测试项配置（[order] 执行）**（默认勾选）—— 按 `[order]` 顺序执行 telnet 命令、匹配预期并写入每通道结果文件；必填项为 `[telnet]` 凭据和至少一条命令。
 - **必填项状态展示**：每行右侧实时显示当前 store / main UI 状态（绿色就绪 / 红色「缺: 字段1, 字段2」），打开窗口时自动计算，勾选 / 切换 Checkbutton 时也会刷新。
 - **二次确认**：点击「开始执行」时若任一勾选子任务就绪 = False，弹「必填项未就绪」警告询问是否继续；继续后弹「确认全流程执行」显示勾选清单，操作员点「是」后启动后台线程。
 - **失败处理**：任一「致命」子任务抛异常 → 整个管道停止，弹「全流程执行失败」错误框；串口日志失败只记结果不阻塞。
 - **「停止」按钮**：管道运行期间可点击「停止」，编排器在当前子任务结束后终止后续子任务。
-- **子任务底层不重写**：本窗口不重写 6 个子任务的业务逻辑，全部走主程序既有的 `_open_*` / `_start_*` 方法 + 新 `test_item_execution_service`；编排器只负责调度 + 状态展示 + 失败传播。
+- **子任务底层不重写**：窗口复用主程序既有业务入口；编排器只负责调度、状态展示和失败传播。
 
 新增持久化字段（`Auto_power_on_off_tool/config/sample_upgrade_settings.ini`）：
 

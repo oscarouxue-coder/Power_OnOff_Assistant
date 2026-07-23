@@ -1,12 +1,13 @@
 ---
 name: line-check-dev
-description: LineCheckAssistant 开发工作流。开工前先读 AGENTS.md + PROJECT_STATUS.md + DEVELOPMENT_LOG.md（最近 3 条）+ ACCEPTANCE_BASELINE.md 相关章节；按 ui/core/services/models 分层；改完代码必跑 `python -m unittest discover -s tests`（基线 246 项），按规范追加 DEVELOPMENT_LOG.md 条目；默认不自动 commit；构建后不运行 dist\LineCheckAssistant.exe。覆盖任何代码改动、BUG 修复、重构、文档同步、真实样机验收记录。
+description: LineCheckAssistant 开发工作流。开工前先读 AGENTS.md + PROJECT_STATUS.md + DEVELOPMENT_LOG.md（最近 3 条）+ ACCEPTANCE_BASELINE.md 相关章节；按 ui/core/services/models 分层；改完代码必跑 `python -m unittest discover -s tests`，按规范追加 DEVELOPMENT_LOG.md 条目；默认不自动 commit；构建后不运行 dist\LineCheckAssistant.exe。覆盖任何代码改动、BUG 修复、重构、文档同步、真实样机验收记录。
 ---
 
 # LineCheckAssistant 开发工作流
 
 > 适用场景：开关机测试环境搭建助手（Windows Tkinter 桌面工具）的任何代码改动、Bug 修复、文档同步、真实样机验收记录。
 > 工作目录：`F:\Aouxue\Power_OnOff_Assistant\`；主源码：`Cheating_machine_execution_tool\`。
+> 所有 `src/`、`line_check_assistant/`、`tests/`、`scripts/` 相对路径均以主源码目录为准；先 `cd Cheating_machine_execution_tool` 再运行命令。
 
 ---
 
@@ -19,13 +20,13 @@ description: LineCheckAssistant 开发工作流。开工前先读 AGENTS.md + PR
 | `AGENTS.md` | 全文件 | 项目硬规则、目录分层、文档纪律 |
 | `PROJECT_STATUS.md` | 表格 + 「已完成/待完成/限制」 | 当前能力清单与未验收项 |
 | `ACCEPTANCE_BASELINE.md` | §0 基线 + §1 全局不变量 + 改动章节 | 验收标签、grep 自检项、禁止破坏点 |
-| `DEVELOPMENT_LOG.md` | 顶部最近 3 条 | 最近一次同类改动的写法与坑点 |
+| `DEVELOPMENT_LOG.md` | 顶部最近 3 条 | 已完成改动的时间顺序记录与最近同类改动的写法 |
 | 改动相关章节的单元测试 | `tests/test_<相关>.py` | 看现有断言、约定 mock 风格 |
 
 **关键 grep 自检项（验收基线 §1.3）**：
 
 ```bash
-# 全部必须命中
+# 以下命令在主源码目录执行；全部必须命中
 grep -r "bbfdm.operate" src/
 grep -r "tclinux_allinone" src/
 grep -r "192.168.1.1" src/
@@ -68,7 +69,7 @@ line_check_assistant/  Tk 主程序、配置 store、UI 窗口、网络/页面�
 
 | 改动类型 | DEVELOPMENT_LOG.md | PROJECT_STATUS.md | ACCEPTANCE_BASELINE.md | README / 子 README | tests/ |
 | --- | --- | --- | --- | --- | --- |
-| 新功能 | ✅ | ✅ 若改表格行 | ✅ 若改 §2.x 状态/不变量 | ✅ 用户可见功能 | ✅ |
+| 新功能 | ✅ | ✅ 若改表格行 | ✅ 若改 §2.x 状态/不变量 | ✅ `line_check_assistant_README.md` 用户可见功能 | ✅ |
 | Bug 修复 | ✅ | 一般不改 | ✅ 若改状态/边界 | 一般不改 | ✅ 至少 1 项回归 |
 | 重构（无行为变化） | ✅ | 一般不改 | 一般不改 | 一般不改 | ✅ 全绿 |
 | 真实样机验收 | ✅「真实样机验收 / 状态更新」段 | ✅ 升级状态标签 | ✅ §2.x 状态从「已实现未验收」→「已确认验收」 | 一般不改 | 一般不需新测 |
