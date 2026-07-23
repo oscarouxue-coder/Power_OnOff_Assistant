@@ -13,6 +13,7 @@ from line_check_assistant.app import (
     COLOR_WARNING,
     LineCheckAssistant,
     MAIN_LOG_EVENTS_PER_TICK,
+    vlan_options_for_power_serial_port,
 )
 from line_check_assistant.config_store import ChannelConfig
 from line_check_assistant.network_ops import CommandResult, UnregisteredOnu
@@ -22,6 +23,34 @@ from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSett
 
 
 class CurrentChannelSelectionTests(unittest.TestCase):
+    def test_power_serial_port_limits_vlan_options_to_its_eight_vlan_group(self):
+        adapters = [
+            "VLAN100 [Up]",
+            "VLAN101 [Up]",
+            "VLAN108 [Down]",
+            "VLAN109 [Up]",
+            "VLAN116 [Up]",
+            "VLAN117 [Up]",
+            "Ethernet [Up]",
+        ]
+
+        self.assertEqual(
+            vlan_options_for_power_serial_port(adapters, "COM101"),
+            ["VLAN101 [Up]", "VLAN108 [Down]"],
+        )
+        self.assertEqual(
+            vlan_options_for_power_serial_port(adapters, "COM102"),
+            ["VLAN109 [Up]", "VLAN116 [Up]"],
+        )
+
+    def test_power_serial_port_accepts_operator_com_group_number(self):
+        adapters = ["VLAN109", "VLAN116", "VLAN117"]
+
+        self.assertEqual(
+            vlan_options_for_power_serial_port(adapters, "COM2"),
+            ["VLAN109", "VLAN116"],
+        )
+
     def test_drain_log_queue_limits_each_ui_tick_and_continues_when_backlogged(self):
         log_queue = queue.Queue()
         for index in range(MAIN_LOG_EVENTS_PER_TICK + 5):

@@ -2,6 +2,16 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-07-23 - 按程控电源分组筛选 VLAN 网卡
+
+- 类型：优化 / 测试 / 文档
+- 背景：主界面切换任意程控电源 COM 口时，「通道对应 VLAN」下拉框仍展示全部 VLAN 网卡，操作员需要手动从无关网卡中辨认本台电源对应范围。
+- 完成内容：① 新增 COM 与 VLAN 的每组 8 个映射：`COM101` → `VLAN101`–`VLAN108`、`COM102` → `VLAN109`–`VLAN116`，后续 COM 口顺延；② 切换程控电源 COM 口后立即重建 VLAN 下拉候选，并在主执行日志记录筛选结果；③ 保留已有通道 VLAN 配置，不会因切换 COM 口而自动清空或改写；④ 增加 COM101 / COM102 以及操作员口头 `COM2` 输入的筛选回归测试。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`cd Cheating_machine_execution_tool; python -m unittest discover -s tests -p "test_app.py" -v`；`python -m py_compile line_check_assistant\app.py`；`python scripts\verify_baseline.py`。
+- 验证结果：`test_app.py` 62 项通过；`py_compile` 通过；基线检查全绿（29 个 `.py` 编译、390 项单测、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：操作员在线下 Windows 主界面切换 `COM101` / `COM102`，确认 VLAN 下拉候选分别只显示 `VLAN101`–`VLAN108` / `VLAN109`–`VLAN116`；无需真实样机验收。
+
 ## 2026-07-23 - 整理项目管理文档
 
 - 类型：文档 / 状态更新

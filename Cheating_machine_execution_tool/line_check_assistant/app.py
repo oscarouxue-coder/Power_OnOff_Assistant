@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import queue
+import re
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -85,6 +86,8 @@ TEST_ITEM_CONFIG_PATH = CONFIG_DIR / "test_project_config.ini"
 LOG_DIR = APP_DIR / "assistant_logs"
 POWER_SUPPLY_COUNT = 6
 TOTAL_CHANNEL_COUNT = 16
+VLAN_PER_POWER_SUPPLY = 8
+FIRST_VLAN_ID = 101
 POWER_ON_WAIT_SECONDS = 0
 POWER_ACTION_ON = "上电"
 POWER_ACTION_OFF = "下电"
@@ -98,6 +101,53 @@ def power_channel_from_section(section: str) -> int:
         return int(section.lower().replace("channel_", ""))
     except ValueError:
         return 0
+
+
+def vlan_options_for_power_serial_port(adapters: list[str], serial_port: str) -> list[str]:
+    """返回指定程控电源 COM 口对应的 VLAN 网卡候选。
+
+    每台程控电源管理连续 8 个 VLAN：COM101 对应 VLAN101–108、
+    COM102 对应 VLAN109–116，依此类推。传入未知 COM 口时保留全部
+    VLAN 网卡，避免异常配置导致配置页没有可选项。
+    """
+    normalized_port = (port_from_display(serial_port) or serial_port or "").strip().upper()
+    port_number = normalized_port[3:] if normalized_port.startswith("COM") else ""
+    try:
+        raw_index = int(port_number)
+    except ValueError:
+        raw_index = 0
+
+    if 101 <= raw_index < 101 + POWER_SUPPLY_COUNT:
+        power_index = raw_index - 100
+    elif 1 <= raw_index <= POWER_SUPPLY_COUNT:
+        # 兼容操作员口头所说的 COM1 / COM2；实际下拉项仍为 COM101 / COM102。
+        power_index = raw_index
+    else:
+        power_index = 0
+
+    start_vlan = FIRST_VLAN_ID + (power_index - 1) * VLAN_PER_POWER_SUPPLY
+    end_vlan = start_vlan + VLAN_PER_POWER_SUPPLY - 1
+
+    options_by_alias: dict[str, str] = {}
+    for adapter in adapters:
+        alias = adapter_alias_from_display(adapter)
+        match = re.fullmatch(r"vlan(\d+)", alias, flags=re.IGNORECASE)
+        if not match:
+            continue
+        vlan_id = int(match.group(1))
+        if power_index and not start_vlan <= vlan_id <= end_vlan:
+            continue
+        options_by_alias.setdefault(alias.lower(), adapter)
+
+    return sorted(
+        options_by_alias.values(),
+        key=lambda value: (
+            int(re.search(r"\d+", adapter_alias_from_display(value)).group())
+            if re.search(r"\d+", adapter_alias_from_display(value))
+            else 999999,
+            adapter_alias_from_display(value).lower(),
+        ),
+    )
 CHANNEL_TABLE_COMBO_WIDTH = 32
 CHANNEL_TABLE_GROUP_GAP = 24
 CHANNEL_TABLE_ROWS_PER_GROUP = 4
@@ -3206,12 +3256,7 @@ class LineCheckAssistant(Tk):
         return self._vlan_adapter_options()
 
     def _vlan_adapter_options(self) -> list[str]:
-        options = [
-            adapter
-            for adapter in self.adapters
-            if adapter_alias_from_display(adapter).lower().startswith("vlan")
-        ]
-        return sorted(self._unique_options(options), key=self._vlan_sort_key)
+        return vlan_options_for_power_serial_port(self.adapters, self._selected_power_serial_port())
 
     def _vlan_sort_key(self, value: str) -> tuple[int, str]:
         alias = adapter_alias_from_display(value).lower()
@@ -3221,8 +3266,18 @@ class LineCheckAssistant(Tk):
     def _on_power_serial_changed(self, _event=None) -> None:
         selected = self._selected_power_serial_port()
         if selected:
+            self._capture_channel_rows()
             self.power_serial_var.set(selected)
+            self._rebuild_channel_config_rows()
             self._persist_config()
+            options = self._current_vlan_options()
+            if options:
+                self._log(
+                    f"程控电源串口已切换为 {selected}；VLAN 下拉框仅展示 "
+                    f"{adapter_alias_from_display(options[0])} 到 {adapter_alias_from_display(options[-1])}。"
+                )
+            else:
+                self._log(f"程控电源串口已切换为 {selected}；未找到该程控电源对应的 VLAN 网卡。")
 
     def _on_vlan_changed(self, _event=None) -> None:
         matched_adapter = self._find_adapter_for_vlan(self.vlan_var.get())
