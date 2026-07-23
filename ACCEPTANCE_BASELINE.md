@@ -62,11 +62,13 @@ python scripts\verify_baseline.py
 
 ### 2.1 通道 / 网卡 / Ping
 
-- **状态**：已实现未验收
+- **状态**：已确认验收（程控电源 COM 与 VLAN 下拉分组筛选，2026-07-23）/ 已实现未验收（网卡刷新、子网配置、线路 Ping 等其余场景）
 - **核心行为**：按 VLAN 标识已勾选通道；支持网卡刷新 / 子网配置 / Ping 样机管理 IP；现场配置写 `Auto_power_on_off_tool/config/network_card_ip.ini`
+- **已确认验收行为（2026-07-23）**：切换程控电源 `COM101` 时 VLAN 下拉候选仅显示 `VLAN101`–`VLAN108`；切换 `COM102` 时仅显示 `VLAN109`–`VLAN116`；切换不会自动改写已保存通道配置。
+- **已实现未验收行为**：程控电源 COM 为空时，VLAN 下拉候选展示所有已识别网卡；空值可保存到 `network_card_ip.ini`，不会被读取逻辑回填为 `COM101`。
 - **边界与异常**：写网卡静态 IP 需管理员权限；源 IP 不可绑时**强提示人工检查 ini**，不回退 `0.0.0.0`
 - **禁止破坏**：配置写入位置唯一（不可再新建 `Cheating_machine_execution_tool/config/`）
-- **待确认**：现场通道变更 → `network_card_ip.ini` 端到端真实样机验证
+- **待确认**：现场通道变更 → `network_card_ip.ini` 端到端真实样机验证；空 COM 时所有网卡展示和配置保存。
 - **对应测试**：`tests/test_app.py`、`tests/test_paths.py`
 
 ### 2.2 程控电源（COM101-COM116 直连）
@@ -78,6 +80,7 @@ python scripts\verify_baseline.py
   - 自动下电：仅发关闭帧、相邻 1 秒，**不发全断电帧**
   - 同批次程控电源 COM 由 `UpgradePowerCycleCoordinator` 持有长连接（`open` 仅一次，`close()` 幂等）
   - 并行 1-8 台、默认 2 台（`MAX_PARALLEL_UPGRADES=8`、`clamp_parallel_count`）
+  - 未选择程控电源 COM 时，自动上/下电、全包升级和全流程管道均要求操作员确认样机已手动重启后才开始后续步骤，不打开任何程控电源串口（已实现未验收）
 - **禁止破坏**：
   - 串口参数 **19200 8N1**
   - **不发送全断电帧**

@@ -138,6 +138,27 @@ class PowerSupplyTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(opened, [])
 
+    def test_empty_power_serial_port_skips_power_operation_without_opening_port(self):
+        opened = []
+        messages = []
+
+        result = power_on_selected_channels(
+            "",
+            [1],
+            on_output=messages.append,
+            serial_factory=lambda **_kwargs: opened.append(True),
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(opened, [])
+        self.assertIn("请手动重启样机后", result.message)
+        self.assertEqual(messages, [result.message])
+
+        result = turn_off_selected_channels("", [1], on_output=messages.append)
+
+        self.assertTrue(result.ok)
+        self.assertIn("请手动重启样机后", result.message)
+
     def test_turn_on_service_spaces_selected_channels_without_extra_startup_wait(self):
         fake_serial = FakeSerial()
         clock = FakeClock()

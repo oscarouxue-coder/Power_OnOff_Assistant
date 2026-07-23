@@ -7,7 +7,8 @@ from typing import List
 
 
 DEFAULT_SUBNET_MASK = "255.255.255.0"
-DEFAULT_POWER_SERIAL_PORT = "COM101"
+# 未配置程控电源时保持空值：业务流程会跳过上下电，而不是擅自使用 COM101。
+DEFAULT_POWER_SERIAL_PORT = ""
 POWER_SUPPLY_SECTION = "power_supply"
 
 
@@ -64,13 +65,15 @@ class ChannelConfigStore:
         parser = configparser.ConfigParser()
         parser.optionxform = str
         parser.read(self.config_path, encoding="utf-8")
-        return parser.get(POWER_SUPPLY_SECTION, "serial_port", fallback=DEFAULT_POWER_SERIAL_PORT).strip() or DEFAULT_POWER_SERIAL_PORT
+        # 空值表示“不使用程控电源”，必须原样保留，不能在读取时又回填默认 COM101。
+        return parser.get(POWER_SUPPLY_SECTION, "serial_port", fallback=DEFAULT_POWER_SERIAL_PORT).strip()
 
     def save(self, channels: List[ChannelConfig], power_serial_port: str = DEFAULT_POWER_SERIAL_PORT) -> None:
         parser = configparser.ConfigParser()
         parser.optionxform = str
         parser[POWER_SUPPLY_SECTION] = {
-            "serial_port": (power_serial_port or DEFAULT_POWER_SERIAL_PORT).strip().upper(),
+            # 空值是有效配置：后续业务跳过程控电源操作。
+            "serial_port": (power_serial_port or "").strip().upper(),
         }
 
         for channel in sorted(channels, key=lambda item: _channel_sort_key(item.section)):

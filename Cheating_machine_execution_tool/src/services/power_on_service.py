@@ -7,6 +7,17 @@ from line_check_assistant.network_ops import CommandResult
 from src.core.power_supply import POWER_SUPPLY_BAUDRATE, ProgrammablePowerSupply, SerialFactory, channel_power_frame
 
 
+def _skip_when_power_serial_port_is_empty(
+    serial_port: str,
+    emit: Callable[[str], None],
+) -> CommandResult | None:
+    if (serial_port or "").strip():
+        return None
+    message = "未选择程控电源 COM 口。请手动重启样机后，再进行后续步骤；不会向任何 COM 口下发指令。"
+    emit(message)
+    return CommandResult(True, message)
+
+
 def power_on_selected_channels(
     serial_port: str,
     channels: Iterable[int],
@@ -24,6 +35,9 @@ def power_on_selected_channels(
         if on_output:
             on_output(message)
 
+    skipped = _skip_when_power_serial_port_is_empty(serial_port, emit)
+    if skipped is not None:
+        return skipped
     started_at = monotonic_fn()
     try:
         selected_channels = list(channels)
@@ -108,6 +122,9 @@ def _set_selected_channels_power(
         if on_output:
             on_output(message)
 
+    skipped = _skip_when_power_serial_port_is_empty(serial_port, emit)
+    if skipped is not None:
+        return skipped
     try:
         selected_channels = list(channels)
         if not selected_channels:

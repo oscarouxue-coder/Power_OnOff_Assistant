@@ -262,9 +262,23 @@ class PipelineWindow:
                 return
         # 二次确认
         confirm_lines: List[str] = [f"  ✓ {SUBTASK_LABELS[code]}" for code in SUBTASK_CODES if code in selected]
+        power_var = _get_attr(ctx.app, "power_serial_var", None)
+        power_serial_port = power_var.get().strip() if power_var is not None and hasattr(power_var, "get") else ""
+        requires_manual_reboot = "power_cycle" in selected or (
+            "sample_upgrade" in selected and ctx.sample_upgrade_settings.upgrade_mode == "全包升级"
+        )
+        manual_reboot_note = ""
+        if requires_manual_reboot and not power_serial_port:
+            manual_reboot_note = (
+                "\n\n未选择程控电源 COM 口。请先手动重启样机，"
+                "确认样机已重启后再点击“是”继续；程序不会向任何 COM 口下发上下电指令。"
+            )
         proceed = messagebox.askyesno(
             "确认全流程执行",
-            "将按以下顺序执行勾选的子任务:\n" + "\n".join(confirm_lines) + "\n\n是否继续?",
+            "将按以下顺序执行勾选的子任务:\n"
+            + "\n".join(confirm_lines)
+            + manual_reboot_note
+            + "\n\n是否继续?",
             parent=self.window,
         )
         if not proceed:

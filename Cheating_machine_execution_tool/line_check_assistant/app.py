@@ -107,10 +107,19 @@ def vlan_options_for_power_serial_port(adapters: list[str], serial_port: str) ->
     """返回指定程控电源 COM 口对应的 VLAN 网卡候选。
 
     每台程控电源管理连续 8 个 VLAN：COM101 对应 VLAN101–108、
-    COM102 对应 VLAN109–116，依此类推。传入未知 COM 口时保留全部
-    VLAN 网卡，避免异常配置导致配置页没有可选项。
+    COM102 对应 VLAN109–116，依此类推。未选择 COM 时展示所有识别
+    网卡；传入未知 COM 口时保留全部 VLAN 网卡，避免异常配置导致
+    配置页没有可选项。
     """
     normalized_port = (port_from_display(serial_port) or serial_port or "").strip().upper()
+    if not normalized_port:
+        options_by_alias: dict[str, str] = {}
+        for adapter in adapters:
+            alias = adapter_alias_from_display(adapter)
+            if alias:
+                options_by_alias.setdefault(alias.lower(), adapter)
+        return sorted(options_by_alias.values(), key=lambda value: adapter_alias_from_display(value).lower())
+
     port_number = normalized_port[3:] if normalized_port.startswith("COM") else ""
     try:
         raw_index = int(port_number)
@@ -2101,10 +2110,16 @@ class LineCheckAssistant(Tk):
             f"并行（最多 {parallel_count} 台，完成即补位）" if parallel_serial_tftp else "串行"
         )
         restore_factory_text = "开启，会在最终系统登录后执行恢复出厂" if bool(self.upgrade_restore_factory_var.get()) else "关闭，不会执行恢复出厂"
+        power_instruction = (
+            "每台样机会自动上电、进入 boot、"
+            if power_serial_port
+            else "未选择程控电源 COM 口。请先手动重启样机，确认样机已重启后再点击“是”继续；随后将进入 boot、"
+        )
+        post_transfer_instruction = "并复位/重新上电。" if power_serial_port else "及后续升级流程。"
         if not messagebox.askyesno(
             "确认样机升级",
             f"将升级 {len(upgrade_items)} 台样机：{target_text}\n执行方式：{execution_text}\n\n"
-            f"升级过程不会改写 network_card_ip.ini；每台样机会自动上电、进入 boot、{transfer_action}并复位/重新上电。\n"
+            f"升级过程不会改写 network_card_ip.ini；{power_instruction}{transfer_action}{post_transfer_instruction}\n"
             f"恢复出厂：{restore_factory_text}\n\n是否继续？",
             parent=self.upgrade_window,
         ):
@@ -3241,7 +3256,7 @@ class LineCheckAssistant(Tk):
             return ""
 
     def _build_power_serial_options(self) -> list[str]:
-        return [f"COM{101 + index}" for index in range(POWER_SUPPLY_COUNT)]
+        return ["", *[f"COM{101 + index}" for index in range(POWER_SUPPLY_COUNT)]]
 
     def _refresh_power_serial_ports(self) -> None:
         self.power_serial_options = self._build_power_serial_options()
@@ -3265,19 +3280,20 @@ class LineCheckAssistant(Tk):
 
     def _on_power_serial_changed(self, _event=None) -> None:
         selected = self._selected_power_serial_port()
-        if selected:
-            self._capture_channel_rows()
-            self.power_serial_var.set(selected)
-            self._rebuild_channel_config_rows()
-            self._persist_config()
-            options = self._current_vlan_options()
-            if options:
-                self._log(
-                    f"程控电源串口已切换为 {selected}；VLAN 下拉框仅展示 "
-                    f"{adapter_alias_from_display(options[0])} 到 {adapter_alias_from_display(options[-1])}。"
-                )
-            else:
-                self._log(f"程控电源串口已切换为 {selected}；未找到该程控电源对应的 VLAN 网卡。")
+        self._capture_channel_rows()
+        self.power_serial_var.set(selected)
+        self._rebuild_channel_config_rows()
+        self._persist_config()
+        options = self._current_vlan_options()
+        if not selected:
+            self._log("未选择程控电源串口；通道对应 VLAN 下拉框展示所有识别网卡。请手动重启样机后，再进行后续步骤。")
+        elif options:
+            self._log(
+                f"程控电源串口已切换为 {selected}；VLAN 下拉框仅展示 "
+                f"{adapter_alias_from_display(options[0])} 到 {adapter_alias_from_display(options[-1])}。"
+            )
+        else:
+            self._log(f"程控电源串口已切换为 {selected}；未找到该程控电源对应的 VLAN 网卡。")
 
     def _on_vlan_changed(self, _event=None) -> None:
         matched_adapter = self._find_adapter_for_vlan(self.vlan_var.get())
@@ -3413,7 +3429,7 @@ class LineCheckAssistant(Tk):
             return
         wait_seconds = self._power_on_wait_seconds(enabled_channels)
         selected_com, power_action = self._select_power_com_port()
-        if not selected_com:
+        if selected_com is None:
             return
         if power_action not in POWER_ACTION_OPTIONS:
             messagebox.showwarning("操作类型不正确", "程控电源操作只能选择上电或下电。", parent=self)
@@ -3423,17 +3439,25 @@ class LineCheckAssistant(Tk):
             messagebox.showwarning("程控电源通道不正确", "存在无法识别的 channel 编号，已取消自动上/下电。", parent=self)
             return
         channel_text = "、".join(str(channel) for channel in power_channels)
-        action_description = (
-            "确认后会按勾选顺序开启全部通道，相邻开启指令间隔 1 秒；执行前不会关闭任何程控电源通道。"
-            if power_action == POWER_ACTION_ON
-            else "确认后会按勾选顺序关闭全部勾选通道，相邻关闭指令间隔 1 秒；只关闭勾选通道，不会执行全部断电。"
-        )
+        if selected_com:
+            action_description = (
+                "确认后会按勾选顺序开启全部通道，相邻开启指令间隔 1 秒；执行前不会关闭任何程控电源通道。"
+                if power_action == POWER_ACTION_ON
+                else "确认后会按勾选顺序关闭全部勾选通道，相邻关闭指令间隔 1 秒；只关闭勾选通道，不会执行全部断电。"
+            )
+            confirm_text = (
+                f"将直接通过程控电源串口 {selected_com} 操作通道 {channel_text}。\n\n"
+                f"{action_description}\n\n不会启动旧的 Auto_Power_On_Off_Tool。\n\n是否继续？"
+            )
+        else:
+            confirm_text = (
+                "未选择程控电源串口。\n\n"
+                "请先手动重启样机，确认样机已重启后再继续。\n"
+                "不会向任何 COM 口下发指令。\n\n是否继续？"
+            )
         if not messagebox.askyesno(
             f"确认自动{power_action}",
-            f"将直接通过程控电源串口 {selected_com} 操作通道 {channel_text}。\n\n"
-            f"{action_description}\n\n"
-            "不会启动旧的 Auto_Power_On_Off_Tool。\n\n"
-            "是否继续？",
+            confirm_text,
             parent=self,
         ):
             return
@@ -3442,7 +3466,7 @@ class LineCheckAssistant(Tk):
         thread = threading.Thread(target=self._power_on_worker, args=(selected_com, power_channels, power_action, wait_seconds), daemon=True)
         thread.start()
 
-    def _select_power_com_port(self) -> tuple[str, str]:
+    def _select_power_com_port(self) -> tuple[str | None, str]:
         dialog = Toplevel(self)
         dialog.title("选择自动上/下电操作")
         dialog.transient(self)
@@ -3453,7 +3477,7 @@ class LineCheckAssistant(Tk):
         current = self._selected_power_serial_port()
         selected = StringVar(value=current if current in options else DEFAULT_POWER_SERIAL_PORT)
         action = StringVar(value=POWER_ACTION_ON)
-        result = {"port": "", "action": POWER_ACTION_ON}
+        result = {"port": None, "action": POWER_ACTION_ON}
 
         Frame(dialog, padx=16, pady=12).pack(fill="both", expand=True)
         container = dialog.winfo_children()[0]
@@ -3461,6 +3485,7 @@ class LineCheckAssistant(Tk):
         Label(container, text=prompt).pack(anchor="w", pady=(0, 8))
         combo = ttk.Combobox(container, textvariable=selected, values=options, width=58, state="readonly")
         combo.pack(fill="x", pady=(0, 12))
+        Label(container, text="留空：请手动重启样机后，再进行后续流程。", foreground=COLOR_MUTED).pack(anchor="w", pady=(-7, 12))
 
         Label(container, text="请选择操作类型：").pack(anchor="w", pady=(0, 8))
         action_combo = ttk.Combobox(container, textvariable=action, values=POWER_ACTION_OPTIONS, width=58, state="readonly")
@@ -3482,7 +3507,10 @@ class LineCheckAssistant(Tk):
                     return
                 result["port"] = selected_port
                 result["action"] = selected_action
-                self._log(f"已选择程控电源串口：{selected_port}，操作：{selected_action}")
+                if selected_port:
+                    self._log(f"已选择程控电源串口：{selected_port}，操作：{selected_action}")
+                else:
+                    self._log(f"未选择程控电源串口：请手动重启样机后，再进行本次{selected_action}后的步骤。")
                 dialog.grab_release()
                 dialog.destroy()
             except Exception as exc:

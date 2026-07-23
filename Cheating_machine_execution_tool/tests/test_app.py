@@ -23,6 +23,14 @@ from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSett
 
 
 class CurrentChannelSelectionTests(unittest.TestCase):
+    def test_empty_power_serial_port_shows_all_detected_adapters(self):
+        adapters = ["VLAN109 [Up]", "Ethernet [Up]", "VLAN101 [Down]"]
+
+        self.assertEqual(
+            vlan_options_for_power_serial_port(adapters, ""),
+            ["Ethernet [Up]", "VLAN101 [Down]", "VLAN109 [Up]"],
+        )
+
     def test_power_serial_port_limits_vlan_options_to_its_eight_vlan_group(self):
         adapters = [
             "VLAN100 [Up]",
@@ -880,6 +888,34 @@ class CurrentChannelSelectionTests(unittest.TestCase):
     @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
     @patch("line_check_assistant.app.Path.is_file", return_value=True)
     @patch("line_check_assistant.app.threading.Thread")
+    def test_serial_tftp_copy_requires_manual_reboot_confirmation_when_power_port_empty(self, thread_class, _is_file, askyesno):
+        channel = ChannelConfig(section="channel_1", vlan_name="VLAN101", enabled=True)
+        context = SimpleNamespace(
+            upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\tclinux_allinone")),
+            upgrade_username_var=Mock(get=Mock(return_value="root")),
+            upgrade_password_var=Mock(get=Mock(return_value="secret")),
+            upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
+            upgrade_transfer_var=Mock(get=Mock(return_value="Tftp指令")),
+            upgrade_execution_var=Mock(get=Mock(return_value="串行")),
+            upgrade_parallel_count_var=Mock(get=Mock(return_value=1)),
+            upgrade_window=Mock(),
+            _selected_tftp_copy_upgrade_channels=Mock(return_value=[channel]),
+            _tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
+            _selected_power_serial_port=Mock(return_value=""),
+            _set_upgrade_status=Mock(),
+            _serial_tftp_copy_upgrade_worker=Mock(),
+            _parallel_tftp_command_upgrade_worker=Mock(),
+        )
+
+        LineCheckAssistant._start_serial_tftp_copy_upgrade(context)
+
+        self.assertIn("请先手动重启样机", askyesno.call_args.args[1])
+        self.assertIn("确认样机已重启后", askyesno.call_args.args[1])
+        thread_class.return_value.start.assert_called_once_with()
+
+    @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
+    @patch("line_check_assistant.app.Path.is_file", return_value=True)
+    @patch("line_check_assistant.app.threading.Thread")
     def test_tftp_command_parallel_mode_uses_parallel_worker(self, thread_class, _is_file, _askyesno):
         channel = ChannelConfig(section="channel_1", vlan_name="VLAN101", enabled=True)
         context = SimpleNamespace(
@@ -1128,6 +1164,26 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         thread.assert_called_once_with(target=context._power_on_worker, args=("COM106", [1, 2, 3], "上电", 15), daemon=True)
         thread.return_value.start.assert_called_once_with()
         self.assertTrue(context.power_on_running)
+
+    def test_launch_power_on_allows_empty_power_serial_port_after_manual_reboot_confirmation(self):
+        channels = [ChannelConfig(section="channel_1", enabled=True)]
+        context = SimpleNamespace(
+            power_on_running=False,
+            _capture_current_channel=Mock(),
+            _selected_channels=Mock(return_value=channels),
+            _power_on_wait_seconds=Mock(return_value=0),
+            _select_power_com_port=Mock(return_value=("", "上电")),
+            power_serial_var=Mock(),
+            _power_on_worker=Mock(),
+        )
+
+        with patch("line_check_assistant.app.messagebox.askyesno", return_value=True) as askyesno, patch("line_check_assistant.app.threading.Thread") as thread:
+            LineCheckAssistant._launch_power_on(context)
+
+        self.assertIn("请先手动重启样机", askyesno.call_args.args[1])
+        context.power_serial_var.set.assert_called_once_with("")
+        thread.assert_called_once_with(target=context._power_on_worker, args=("", [1], "上电", 0), daemon=True)
+        thread.return_value.start.assert_called_once_with()
 
     def test_launch_power_on_routes_selected_channels_to_power_off(self):
         channels = [ChannelConfig(section="channel_2", enabled=True), ChannelConfig(section="channel_5", enabled=True)]

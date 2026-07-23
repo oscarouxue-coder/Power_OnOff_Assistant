@@ -120,12 +120,22 @@ class ComputeSubTaskStatusTests(unittest.TestCase):
         self.assertIn("COM102", status.summary)
         self.assertIn("up", status.summary)
 
-    def test_power_cycle_status_missing_com(self) -> None:
+    def test_power_cycle_status_without_com_is_ready_to_skip(self) -> None:
         ctx = _make_context()
         ctx.app.power_serial_var.get.return_value = ""
         status = compute_all_subtask_statuses(ctx)["power_cycle"]
-        self.assertFalse(status.ready)
-        self.assertIn("程控电源 COM", status.missing)
+        self.assertTrue(status.ready)
+        self.assertEqual(status.missing, ())
+        self.assertIn("未选，需手动重启", status.summary)
+
+    def test_power_cycle_without_com_logs_skip_and_continues(self) -> None:
+        ctx = _make_context()
+        ctx.app.power_serial_var.get.return_value = ""
+        messages: List[str] = []
+
+        PipelineOrchestrator(ctx, messages.append)._run_power_cycle()
+
+        self.assertIn("请手动重启样机后，再进行后续子任务", "".join(messages))
 
     def test_power_cycle_status_missing_operation(self) -> None:
         ctx = _make_context(settings=_make_settings(power_operation="invalid"))

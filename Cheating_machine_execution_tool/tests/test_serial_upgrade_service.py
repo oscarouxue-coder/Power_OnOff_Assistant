@@ -214,6 +214,22 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         coordinator.close()
         self.assertEqual(closed, ["COM106", "COM107"])
 
+    def test_parallel_power_cycle_coordinator_skips_empty_power_port(self):
+        supply_factory = Mock()
+        messages = []
+        coordinator = UpgradePowerCycleCoordinator(
+            sleep_fn=lambda _seconds: None,
+            supply_factory=supply_factory,
+        )
+
+        result = coordinator.power_on_channel("", 1, wait_seconds=0, on_output=messages.append)
+
+        self.assertTrue(result.ok)
+        self.assertIn("请手动重启样机后", result.message)
+        self.assertEqual(messages, [result.message])
+        supply_factory.assert_not_called()
+        self.assertEqual(coordinator._supplies, {})
+
     @patch("src.services.serial_upgrade_service.run_single_full_package_upgrade")
     def test_parallel_tftp_command_limits_running_workers_and_continues_after_failure(self, run_upgrade):
         requests = [
@@ -445,6 +461,43 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         result = run_single_full_package_upgrade(request, manager, sleep_fn=lambda _seconds: None)
 
         self.assertTrue(result.ok)
+
+    @patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=True)
+    @patch("src.services.serial_upgrade_service.upload_firmware")
+    @patch("src.services.serial_upgrade_service.prepare_tftp_network", return_value=CommandResult(True, "network ready"))
+    def test_full_package_upgrade_tftp_put_continues_when_power_port_is_empty(
+        self,
+        _prepare_network,
+        _upload_firmware,
+        _monitor_post_tftp,
+    ):
+        session = FakeSession(
+            any_results=["username:", "password:", "#", "login", "password", "#"]
+        )
+        messages = []
+        request = FullPackageUpgradeRequest(
+            vlan="vlan102",
+            server_interface="VLAN102",
+            tftp_server_ip="192.168.1.102",
+            firmware_path=Path(r"F:\firmware\tclinux_allinone"),
+            power_serial_port="",
+            final_username="root",
+            final_password="secret",
+            transfer_method=TRANSFER_TFTP_PUT,
+            power_channel=2,
+        )
+        manager = FakeSessionManager(session)
+
+        result = run_single_full_package_upgrade(
+            request,
+            manager,
+            on_output=messages.append,
+            sleep_fn=lambda _seconds: None,
+        )
+
+        self.assertTrue(result.ok)
+        self.assertIn("请手动重启样机后，再进行 Tftp Put boot 登录", "".join(messages))
+        self.assertIn("请手动重启样机后", "".join(messages))
         # UserName 后直接进行 boot 登录，不再先登录最终系统或发送 reboot。
         decoded = [item[0].decode("utf-8", "ignore").rstrip("\r") for item in session.writes]
         self.assertIn(BOOT_USERNAME, decoded)

@@ -164,7 +164,7 @@ def _summarize_env_check(ctx: PipelineContext) -> SubTaskStatus:
 
 
 def _summarize_power_cycle(ctx: PipelineContext) -> SubTaskStatus:
-    """1. 自动上/下电 必填项:程控电源 COM + 上/下电 operation + ≥1 已勾选通道。"""
+    """1. 自动上/下电：未选 COM 时视为可执行的跳过步骤。"""
     app = ctx.app
     settings = ctx.sample_upgrade_settings
     com = _get_attr(app, "power_serial_var", None)
@@ -173,13 +173,11 @@ def _summarize_power_cycle(ctx: PipelineContext) -> SubTaskStatus:
     operation = (settings.power_operation or "up").strip().lower()
     n_channels = len(ctx.enabled_channels)
     missing_list: List[str] = []
-    if not com_value:
-        missing_list.append("程控电源 COM")
     if operation not in ("up", "down"):
         missing_list.append("上/下电选项")
     if n_channels == 0:
         missing_list.append("已勾选通道")
-    summary = f"COM={com_value or '(未选)'} / 操作={operation or 'up'} / {n_channels} 通道已勾选"
+    summary = f"COM={com_value or '(未选，需手动重启)'} / 操作={operation or 'up'} / {n_channels} 通道已勾选"
     return SubTaskStatus(
         code="power_cycle",
         ready=not missing_list,
@@ -471,7 +469,8 @@ class PipelineOrchestrator:
         com = _get_attr(app, "power_serial_var", None)
         com_value = com.get().strip() if com is not None and hasattr(com, "get") else ""
         if not com_value:
-            raise RuntimeError("未选择程控电源 COM 口")
+            self.emit("未选择程控电源 COM 口。请手动重启样机后，再进行后续子任务；不会向任何 COM 口下发指令。")
+            return
         operation = (self.ctx.sample_upgrade_settings.power_operation or "up").strip().lower()
         if operation not in ("up", "down"):
             raise RuntimeError(f"非法 operation: {operation}")

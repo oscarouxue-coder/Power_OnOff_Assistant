@@ -34,6 +34,15 @@ class FakeApp:
 
 
 class BuildContextRegressionTests(unittest.TestCase):
+    def test_pipeline_confirmation_contains_manual_reboot_guard_for_empty_com(self) -> None:
+        """空 COM 的全流程执行必须在启动后台线程前要求操作员确认手动重启。"""
+        import inspect
+        import line_check_assistant.pipeline_window as pw_mod
+
+        source = inspect.getsource(pw_mod.PipelineWindow._on_start)
+        self.assertIn("请先手动重启样机", source)
+        self.assertIn("确认样机已重启后再点击", source)
+
     def test_build_context_does_not_use_getattr_for_module_constant(self) -> None:
         """_build_context 必须从 app 模块取 TEST_ITEM_CONFIG_PATH,不能 ``_get_attr(app, ...)``。
 

@@ -2,6 +2,26 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-07-23 - 支持空 COM 手动重启提示
+
+- 类型：功能 / 测试 / 文档
+- 背景：无需程控电源的现场仍被默认 COM 或必填校验限制，且无法在同一界面查看所有本机网卡。
+- 完成内容：① 程控电源 COM 下拉新增空值并可持久保存；② 空 COM 时展示所有识别网卡，选择 COM 后仍按每组 8 个 VLAN 筛选；③ 自动上/下电、全包升级（串行/并行、`Tftp指令` / `Tftp Put`）和全流程管道在空 COM 时要求操作员先手动重启样机、点击“是”确认后才开始后续步骤，且不打开程控电源串口；④ 补充配置保存、界面、普通电源 service、升级协调器、Tftp Put 和管道手动重启提示的回归测试。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/config_store.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/services/power_on_service.py`、`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_channel_config.py`、`Cheating_machine_execution_tool/tests/test_power_supply.py`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行各专项 unittest；在主源码目录执行 `python scripts\verify_baseline.py`。
+- 验证结果：`test_app.py` 65 项、`test_pipeline_window.py` 10 项及其它专项测试通过；基线检查全绿（29 个 `.py` 编译、399 项单测、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 主界面确认空 COM 可选、展示全部网卡；分别验证全流程和全包升级在空 COM 时主日志显示跳过后仍继续后续步骤。
+
+## 2026-07-23 - 确认 COM 分组筛选真实样机验收
+
+- 类型：真实样机验收 / 状态更新
+- 背景：程控电源 COM 与 VLAN 下拉分组筛选已通过 390 项单元测试，需依据项目负责人提供的现场结果确认实际界面行为。
+- 完成内容：项目负责人确认现场验收通过：`COM101` 只展示 `VLAN101`–`VLAN108`，`COM102` 只展示 `VLAN109`–`VLAN116`；不自动改写原有通道 VLAN 配置。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：Windows 主界面切换程控电源 `COM101` / `COM102`，打开「通道对应 VLAN」下拉框核对候选范围和已有配置。
+- 验证结果：真实样机验收通过。
+- 后续待办：网卡刷新、子网配置和线路 Ping 等通道/网卡模块的其余场景仍按验收基线继续跟踪。
+
 ## 2026-07-23 - 按程控电源分组筛选 VLAN 网卡
 
 - 类型：优化 / 测试 / 文档

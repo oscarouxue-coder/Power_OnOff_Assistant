@@ -113,6 +113,11 @@ class UpgradePowerCycleCoordinator:
         on_channel_powered: Callable[[int], None] | None = None,
     ) -> CommandResult:
         port = serial_port.strip().upper()
+        if not port:
+            message = "未选择程控电源 COM 口。请手动重启样机后，再进行后续步骤；不会向任何 COM 口下发指令。"
+            if on_output:
+                on_output(message)
+            return CommandResult(True, message)
         with self._locks_guard:
             lock = self._locks.setdefault(port, threading.Lock())
 
@@ -559,10 +564,14 @@ def _run_tftp_command_with_power_supply(
     串口已开启且 controller 已绑定,本函数在 run_single_full_package_upgrade 的 try 块内调用,
     异常由调用方统一捕获。
     """
-    emit(
-        f"开始直接控制程控电源，串口：{request.power_serial_port}，"
-        f"通道：{request.power_channel}。"
-    )
+    power_enabled = bool((request.power_serial_port or "").strip())
+    if power_enabled:
+        emit(
+            f"开始直接控制程控电源，串口：{request.power_serial_port}，"
+            f"通道：{request.power_channel}。"
+        )
+    else:
+        emit("未选择程控电源 COM 口。请手动重启样机后，再进行 Tftp指令 boot 登录。")
     power_started = threading.Event()
     boot_result: list[CommandResult] = []
 
@@ -599,7 +608,8 @@ def _run_tftp_command_with_power_supply(
         return power
     # 程控电源动作完成后间隔 1 秒再触发 worker 发送首帧 \r;
     # 现场需求:先让上电状态稳定,再开始串口交互,避免首帧 \r 与上电瞬态信号叠加。
-    sleep_fn(1.0)
+    if power_enabled:
+        sleep_fn(1.0)
     # 在电源函数返回且稳定等待结束后才放行 worker，避免 on_channel_powered 回调过早启动登录。
     power_started.set()
     worker.join(timeout=BOOT_LOGIN_TIMEOUT_SECONDS + 5)
@@ -637,11 +647,12 @@ def _run_tftp_command_with_power_supply(
         emit("检测到 Boot/Bood，已发送 reset，等待 120 秒。")
         sleep_fn(POWER_ON_SETTLE_SECONDS)
     else:
-        emit("未检测到 boot reset，开始重新上电。")
+        emit("未检测到 boot reset，开始重新上电。" if power_enabled else "未检测到 boot reset；未配置程控电源，跳过重新上电。")
         repower = power_on_current_channel()
         if not repower.ok:
             return repower
-        sleep_fn(POWER_ON_SETTLE_SECONDS)
+        if power_enabled:
+            sleep_fn(POWER_ON_SETTLE_SECONDS)
     final = controller.login_final_system(request.final_username, request.final_password)
     if not final.ok:
         return final
@@ -698,10 +709,14 @@ def run_single_full_package_upgrade(
         # Tftp Put(本机推到 192.168.1.1):先对当前通道下电 + 上电；
         # 串口看到 UserName 后，按同事 serial_upgrade.py 的 boot 登录时序进入 shell，
         # 上传仍使用主程序的 TFTPy Client。
-        emit(
-            f"Tftp Put 前置下电 + 上电：程控电源串口 {request.power_serial_port}，"
-            f"通道 {request.power_channel}。"
-        )
+        power_enabled = bool((request.power_serial_port or "").strip())
+        if power_enabled:
+            emit(
+                f"Tftp Put 前置下电 + 上电：程控电源串口 {request.power_serial_port}，"
+                f"通道 {request.power_channel}。"
+            )
+        else:
+            emit("未选择程控电源 COM 口。请手动重启样机后，再进行 Tftp Put boot 登录。")
         power_cycle = _power_cycle_current_channel(
             request=request,
             emit=emit,
@@ -711,11 +726,12 @@ def run_single_full_package_upgrade(
         )
         if not power_cycle.ok:
             return power_cycle
-        emit(f"程控电源下电 + 上电完成:{power_cycle.message}")
+        emit(f"程控电源下电 + 上电完成:{power_cycle.message}" if power_enabled else power_cycle.message)
         emit(f"串口 {port} 已开启，准备等待 UserName 提示符进入 boot。")
 
         # 电源动作结束后先留出 1 秒稳定窗口，再开始循环回车等待 UserName。
-        sleep_fn(1.0)
+        if power_enabled:
+            sleep_fn(1.0)
         username_prompt = controller.wait_for_tftp_put_boot_username()
         if not username_prompt.ok:
             return username_prompt

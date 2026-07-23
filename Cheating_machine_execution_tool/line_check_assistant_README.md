@@ -7,7 +7,7 @@
 本文后续出现的 `config/...` 均指 `Auto_power_on_off_tool/config/...`；主程序不再使用 `Cheating_machine_execution_tool/config`。
 
 - 读取和实时维护 `Auto_power_on_off_tool/config/network_card_ip.ini` 的通道配置。
-- 主界面选择程控电源串口后，「通道对应 VLAN」下拉框只展示该电源对应的 8 个 VLAN 网卡：`COM101` 为 `VLAN101`–`VLAN108`，`COM102` 为 `VLAN109`–`VLAN116`，后续 COM 口按每组 8 个 VLAN 顺延；切换 COM 口不会自动改写已保存的通道 VLAN 配置。
+- 主界面「程控电源串口」下拉框首项为空值。未选择 COM 时，「通道对应 VLAN」下拉框展示 PC 中所有已识别网卡；自动上/下电、全包升级和全流程执行的确认框会要求操作员先手动重启样机，点击“是”确认已重启后才开始后续步骤，且不会向任何 COM 口下发上下电指令。选择 COM 后，下拉框只展示该电源对应的 8 个 VLAN 网卡：`COM101` 为 `VLAN101`–`VLAN108`，`COM102` 为 `VLAN109`–`VLAN116`，后续 COM 口按每组 8 个 VLAN 顺延；切换 COM 口不会自动改写已保存的通道 VLAN 配置。
 - 主界面顶部提供“样机升级”入口，支持“页面升级”和“全包升级”两类流程。
 - 样机升级窗口支持自定义项目/型号、输入超级用户凭据、选择升级固件、同步主界面目标 VLAN，并显示实时状态和进度。
 - 样机升级窗口会保存上一次关闭时的升级方式、固件传输方式、`Tftp指令` / `Tftp Put` 的执行方式（串行/并行）、恢复出厂选项、超级用户名、密码和固件路径；恢复出厂显示会按真实保存值刷新，开始升级确认框会明确显示“恢复出厂：开启/关闭”；状态保存到本机 `Auto_power_on_off_tool/config/sample_upgrade_settings.ini`，该文件不提交 Git。

@@ -93,6 +93,15 @@ class ChannelConfigFactoryModeFieldsTests(unittest.TestCase):
             self.assertEqual(reloaded[0].factory_device_host, "192.168.29.1")
             self.assertEqual(reloaded[0].factory_bind_ip, "192.168.29.107")
 
+    def test_save_and_load_preserves_empty_power_serial_port(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "network_card_ip.ini"
+            store = ChannelConfigStore(config_path)
+
+            store.save([], power_serial_port="")
+
+            self.assertEqual(store.load_power_serial_port(), "")
+
 
 if __name__ == "__main__":
     unittest.main()
