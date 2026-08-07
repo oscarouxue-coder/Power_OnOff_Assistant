@@ -192,6 +192,13 @@ COLOR_DANGER = "#b42318"
 COLOR_DANGER_BG = "#fbe9e7"
 
 
+def _finish_pipeline_subtask_if_waiting(app, code: str, ok: bool, detail: str) -> None:
+    """仅在全流程等待该异步任务时回传完成结果；单功能入口保持原行为。"""
+    finish = getattr(app, "_finish_pipeline_subtask", None)
+    if callable(finish):
+        finish(code, ok, detail)
+
+
 class LineCheckAssistant(Tk):
     def __init__(self) -> None:
         super().__init__()
@@ -216,12 +223,19 @@ class LineCheckAssistant(Tk):
         self.current_index = 0 if self.channels else -1
         self._last_selected_index = self.current_index
         self.log_queue: "queue.Queue[str]" = queue.Queue()
+        # 全流程编排器在后台线程运行；涉及 Tk 窗口/确认框的子任务必须投回主线程，
+        # 不能由编排线程直接操作 Toplevel。
+        self.pipeline_ui_task_queue: "queue.Queue[tuple]" = queue.Queue()
+        self._pipeline_subtask_events: dict[str, threading.Event] = {}
+        self._pipeline_subtask_results: dict[str, tuple[bool, str]] = {}
         self.running = False
         self.power_on_running = False
         self.upgrade_window = None
         self.parameter_writer_window = None
         self.parameter_write_running = False
         self.parameter_records = []
+        # 当前内存中已成功加载的参数表。窗口重新打开时用它判断是否需要从持久化路径恢复记录。
+        self.parameter_loaded_table_path = ""
         self.parameter_preflight = None
         self.parameter_cancel_event = None
         self.serial_session_manager = SerialSessionManager()
@@ -287,6 +301,7 @@ class LineCheckAssistant(Tk):
         self._show_startup_warnings()
         self.after_idle(self._maximize_window)
         self.after(200, self._drain_log_queue)
+        self.after(50, self._drain_pipeline_ui_tasks)
         self.protocol("WM_DELETE_WINDOW", self._on_app_close)
 
     def _maximize_window(self) -> None:
@@ -334,6 +349,94 @@ class LineCheckAssistant(Tk):
             except Exception:
                 pass
             self.sample_upgrade_save_after_id = None
+
+    # -- 全流程异步子任务桥接 ------------------------------------------
+
+    def _drain_pipeline_ui_tasks(self) -> None:
+        """在 Tk 主线程执行全流程子任务提交动作（确认框 / 窗口 / 线程启动）。"""
+        for _index in range(8):
+            try:
+                action, completed, outcome = self.pipeline_ui_task_queue.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                outcome["result"] = action()
+            except Exception as exc:  # noqa: BLE001 - 必须把主线程提交错误回传给编排器
+                outcome["error"] = exc
+            finally:
+                completed.set()
+        try:
+            self.after(50, self._drain_pipeline_ui_tasks)
+        except Exception:
+            # 主窗口销毁时不再继续调度。
+            return
+
+    def _invoke_pipeline_ui_action(self, action) -> bool:
+        """后台编排线程同步提交一个主线程 UI 动作，并取得“是否真正启动”。"""
+        completed = threading.Event()
+        outcome: dict[str, object] = {}
+        self.pipeline_ui_task_queue.put((action, completed, outcome))
+        completed.wait()
+        error = outcome.get("error")
+        if error is not None:
+            raise error  # type: ignore[misc]
+        return bool(outcome.get("result"))
+
+    def _begin_pipeline_subtask(self, code: str) -> None:
+        self._pipeline_subtask_results.pop(code, None)
+        self._pipeline_subtask_events[code] = threading.Event()
+
+    def _finish_pipeline_subtask(self, code: str, ok: bool, detail: str) -> None:
+        event = self._pipeline_subtask_events.get(code)
+        if event is None:
+            return
+        self._pipeline_subtask_results[code] = (ok, detail)
+        event.set()
+
+    def _wait_pipeline_subtask(self, code: str) -> None:
+        event = self._pipeline_subtask_events.get(code)
+        if event is None:
+            raise RuntimeError(f"全流程子任务 {code} 未建立完成事件")
+        event.wait()
+        ok, detail = self._pipeline_subtask_results.pop(code, (False, "未收到完成结果"))
+        self._pipeline_subtask_events.pop(code, None)
+        if not ok:
+            raise RuntimeError(detail)
+
+    def _run_pipeline_sample_upgrade(self) -> None:
+        """供后台编排器调用：主线程确认并启动升级，完成后才允许下一子任务。"""
+        self._begin_pipeline_subtask("sample_upgrade")
+        started = self._invoke_pipeline_ui_action(self._start_pipeline_sample_upgrade_on_ui)
+        if not started:
+            self._finish_pipeline_subtask("sample_upgrade", False, "样机升级未启动：操作员取消或配置未通过")
+        self._wait_pipeline_subtask("sample_upgrade")
+
+    def _start_pipeline_sample_upgrade_on_ui(self) -> bool:
+        # 去配置窗口可能已被操作员关闭；管道重新创建/拉起有效窗口，
+        # 使确认框不再引用已销毁的 Toplevel。
+        self._open_upgrade_module()
+        self._capture_current_channel()
+        if not self._validate_upgrade_required_fields():
+            return False
+        transfer_method = LineCheckAssistant._normalize_upgrade_transfer_method(self.upgrade_transfer_var.get())
+        if self.upgrade_mode_var.get() == "页面升级":
+            return self._start_page_upgrade()
+        if self.upgrade_mode_var.get() == "全包升级" and transfer_method in SERIAL_FULL_PACKAGE_TRANSFERS:
+            return self._start_serial_tftp_copy_upgrade()
+        messagebox.showwarning("升级方式不支持", "请在样机升级窗口选择页面升级、Tftp指令或 Tftp Put。", parent=self.upgrade_window)
+        return False
+
+    def _run_pipeline_sample_parameter_write(self) -> None:
+        """供后台编排器调用：重新打开写参窗口，完成后才允许下一子任务。"""
+        self._begin_pipeline_subtask("sample_parameter_write")
+        started = self._invoke_pipeline_ui_action(self._start_pipeline_sample_parameter_write_on_ui)
+        if not started:
+            self._finish_pipeline_subtask("sample_parameter_write", False, "写样机参数未启动：操作员取消或预检未通过")
+        self._wait_pipeline_subtask("sample_parameter_write")
+
+    def _start_pipeline_sample_parameter_write_on_ui(self) -> bool:
+        self._open_sample_parameter_writer()
+        return self._start_sample_parameter_write()
 
     def _configure_theme(self) -> None:
         style = ttk.Style(self)
@@ -577,7 +680,9 @@ class LineCheckAssistant(Tk):
         dialog.minsize(860, 590)
         dialog.transient(self)
 
-        self.parameter_table_var = StringVar()
+        # 参数表路径是全流程子任务 4 的必填项，必须直接复用实例级持久变量；
+        # 不能每次开写参窗口再新建临时 StringVar，否则选表后全流程仍会读到空路径。
+        self.parameter_table_var = self.parameter_table_path_var
         # 写样机参数窗口的「首次登录账号 / 密码」直接复用主程序实例级 StringVar,
         # 由 ``__init__`` 阶段从 sample_upgrade_settings.ini 加载,值变更经 trace_add 自动写盘。
         # 写样机参数默认并行 1(2026-07-19 用户要求):多台并发容易撞 UBUS HTTP / telnet login / NIC,
@@ -632,7 +737,13 @@ class LineCheckAssistant(Tk):
             dialog.destroy()
 
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
-        self._refresh_parameter_preflight()
+        # 程序重开后内存记录为空，但路径已由 sample_upgrade_settings.ini 恢复；
+        # 自动重新加载，使窗口预检和全流程状态都基于同一份已选参数表。
+        saved_table_path = self.parameter_table_path_var.get().strip()
+        if saved_table_path and self.parameter_loaded_table_path != saved_table_path:
+            self._load_parameter_table(Path(saved_table_path), report_error=False)
+        else:
+            self._refresh_parameter_preflight()
 
     def _parameter_channel_ports(self) -> list[tuple[str, str]]:
         self._capture_current_channel()
@@ -712,15 +823,25 @@ class LineCheckAssistant(Tk):
         if path:
             self._load_parameter_table(Path(path))
 
-    def _load_parameter_table(self, path: Path) -> None:
+    def _load_parameter_table(self, path: Path, *, report_error: bool = True) -> bool:
         try:
             self.parameter_records = load_parameter_records(path)
         except Exception as exc:
-            messagebox.showerror("读取参数表失败", str(exc), parent=self.parameter_writer_window)
-            return
-        self.parameter_table_var.set(str(path))
+            self.parameter_loaded_table_path = ""
+            if report_error:
+                messagebox.showerror("读取参数表失败", str(exc), parent=self.parameter_writer_window)
+            else:
+                self._log(f"写样机参数：未能恢复已保存参数表 {path}：{exc}")
+            self._refresh_parameter_preflight()
+            return False
+        saved_path = str(path)
+        # 选表后立即同步全流程读取的路径变量；其 trace 会将值写入
+        # sample_upgrade_settings.ini，关闭/重开窗口也不会丢失。
+        self.parameter_table_path_var.set(saved_path)
+        self.parameter_loaded_table_path = saved_path
         self._log(f"写样机参数：已加载参数表 {path}，共 {len(self.parameter_records)} 条记录。")
         self._refresh_parameter_preflight()
+        return True
 
     def _refresh_parameter_preflight(self) -> None:
         if self.parameter_writer_window is None or not self.parameter_writer_window.winfo_exists():
@@ -753,19 +874,19 @@ class LineCheckAssistant(Tk):
         self.parameter_preview_text.insert(END, "\n".join(lines))
         self.parameter_preview_text.configure(state="disabled")
 
-    def _start_sample_parameter_write(self) -> None:
+    def _start_sample_parameter_write(self) -> bool:
         if self.parameter_write_running:
-            return
+            return False
         self._refresh_parameter_preflight()
         preflight = self.parameter_preflight
         if preflight is None or not preflight.ok:
             messagebox.showwarning("参数表未通过预检", "请先处理预检错误后再写入参数。", parent=self.parameter_writer_window)
-            return
+            return False
         username = self.parameter_initial_username_var.get().strip()
         password = self.parameter_initial_password_var.get()
         if not username or not password:
             messagebox.showwarning("登录信息不完整", "请填写首次登录账号和密码。", parent=self.parameter_writer_window)
-            return
+            return False
         try:
             parallel_count = max(1, min(int(self.parameter_parallel_count_var.get()), PARAMETER_MAX_PARALLEL))
         except (TypeError, ValueError):
@@ -791,7 +912,7 @@ class LineCheckAssistant(Tk):
                     f"将该通道的 device_manage_ip 改为样机实际管理 IP（典型 192.168.1.1）后重试。",
                     parent=self.parameter_writer_window,
                 )
-                return
+                return False
         # 验证走 telnet 路径的目标必须有 factory_bind_ip / factory_device_host:
         # 工厂模式 reboot 后,样机管理 IP 切到另一网段(如 192.168.29.1),PC 端 VLAN 网卡也
         # 必须切到该网段才能继续工厂模式二次登录。
@@ -816,7 +937,7 @@ class LineCheckAssistant(Tk):
                     "请在主界面表格中补齐 network_card_ip / device_manage_ip 或手动填写 factory_bind_ip / factory_device_host 后重试。",
                     parent=self.parameter_writer_window,
                 )
-                return
+                return False
         # 写样机参数可选行为(2026-07-19):确认框描述按 9 步自然顺序生成,
         # 严格匹配 sample_parameter_service.run_parameter_write_pipeline 实际下发顺序,
         # 避免描述与现场实际下发的命令列表不符。勾选的可选项打勾并显示命令,
@@ -849,7 +970,7 @@ class LineCheckAssistant(Tk):
             f"每台会依次：\n{action_summary}\n\n是否继续？",
             parent=self.parameter_writer_window,
         ):
-            return
+            return False
         requests = [
             SampleParameterWriteRequest(
                 vlan=target.vlan,
@@ -879,6 +1000,7 @@ class LineCheckAssistant(Tk):
             daemon=True,
         )
         thread.start()
+        return True
 
     def _sample_parameter_write_worker(self, requests: list[SampleParameterWriteRequest], parallel_count: int, cancel_event: threading.Event) -> None:
         # 端到端 telnet 写参:UBUS 启用 telnet → TelnetSession(未登录)→ run_parameter_write_pipeline 内部 _login。
@@ -1120,6 +1242,12 @@ class LineCheckAssistant(Tk):
             messagebox.showinfo("批量写参完成", f"全部 {success_count} 台样机写参并读回校验成功。", parent=self.parameter_writer_window)
         else:
             messagebox.showerror("批量写参存在失败", f"成功 {success_count}/{len(results)} 台。\n\n{summary}", parent=self.parameter_writer_window)
+        _finish_pipeline_subtask_if_waiting(
+            self,
+            "sample_parameter_write",
+            success_count == len(results),
+            f"写样机参数完成：{success_count}/{len(results)} 台成功。",
+        )
 
     def _open_parameter_generator(self) -> None:
         channel_ports = self._parameter_channel_ports()
@@ -1947,14 +2075,14 @@ class LineCheckAssistant(Tk):
         self._set_upgrade_status("", f"已打开 {len(vlans)} 个内置串口监控，未下发升级命令", 0)
         messagebox.showinfo("串口日志已启动", "已打开内置串口监控，当前未下发升级命令。", parent=self.upgrade_window)
 
-    def _start_page_upgrade(self) -> None:
+    def _start_page_upgrade(self) -> bool:
         channels = self._selected_page_upgrade_channels()
         if not channels:
-            return
+            return False
         firmware_path = Path(self.upgrade_firmware_var.get().strip())
         if not firmware_path.is_file():
             messagebox.showwarning("未选择升级固件", "请先选择需要升级的固件文件。", parent=self.upgrade_window)
-            return
+            return False
 
         requests: list[PageUpgradeRequest] = []
         for channel in channels:
@@ -1966,10 +2094,10 @@ class LineCheckAssistant(Tk):
                     bind_ip = self._tftp_server_ip_for_channel(channel)
                 except ValueError as exc:
                     messagebox.showwarning("绑定 IP 不正确", str(exc), parent=self.upgrade_window)
-                    return
+                    return False
             if not device_ip:
                 messagebox.showwarning("样机 IP 不完整", f"{channel.label} 未配置样机 IP。", parent=self.upgrade_window)
-                return
+                return False
             requests.append(
                 PageUpgradeRequest(
                     vlan=vlan_name.lower() if vlan_name.lower().startswith("vlan") else vlan_name,
@@ -1996,11 +2124,12 @@ class LineCheckAssistant(Tk):
             f"该操作会上传固件、触发升级并等待设备重启上线。\n恢复出厂：{restore_factory_text}\n\n是否继续？",
             parent=self.upgrade_window,
         ):
-            return
+            return False
 
         self._set_upgrade_status("", f"准备页面升级 {len(requests)} 台样机", 0)
         thread = threading.Thread(target=self._page_upgrade_worker, args=(requests,), daemon=True)
         thread.start()
+        return True
 
     def _selected_page_upgrade_channels(self) -> list[ChannelConfig]:
         channels_by_vlan: dict[str, ChannelConfig] = {}
@@ -2042,11 +2171,13 @@ class LineCheckAssistant(Tk):
         if success_count == total:
             self._set_upgrade_status("", f"页面升级完成：{success_count}/{total} 台", 100)
             messagebox.showinfo("样机升级完成", f"页面升级完成：{success_count}/{total} 台样机已升级。", parent=self.upgrade_window)
+            _finish_pipeline_subtask_if_waiting(self, "sample_upgrade", True, f"页面升级完成：{success_count}/{total} 台成功。")
             return
         failed_messages = [item.result.message for item in results if not item.result.ok]
         progress = (success_count / total) * 100 if total else 0
         self._set_upgrade_status("", f"页面升级完成：{success_count}/{total} 台成功", progress)
         messagebox.showerror("样机升级失败", "\n".join(failed_messages), parent=self.upgrade_window)
+        _finish_pipeline_subtask_if_waiting(self, "sample_upgrade", False, f"页面升级完成：{success_count}/{total} 台成功。")
 
     def _validate_upgrade_required_fields(self) -> bool:
         required_fields = [
@@ -2060,14 +2191,14 @@ class LineCheckAssistant(Tk):
             return False
         return True
 
-    def _start_serial_tftp_copy_upgrade(self) -> None:
+    def _start_serial_tftp_copy_upgrade(self) -> bool:
         channels = self._selected_tftp_copy_upgrade_channels()
         if not channels:
-            return
+            return False
         firmware_path = Path(self.upgrade_firmware_var.get().strip())
         if not firmware_path.is_file():
             messagebox.showwarning("未选择升级固件", "请先选择需要升级的固件文件。", parent=self.upgrade_window)
-            return
+            return False
 
         upgrade_items: list[tuple[ChannelConfig, FullPackageUpgradeRequest]] = []
         power_serial_port = self._selected_power_serial_port()
@@ -2077,13 +2208,13 @@ class LineCheckAssistant(Tk):
                 tftp_server_ip = self._tftp_server_ip_for_channel(channel)
             except ValueError as exc:
                 messagebox.showwarning("VLAN IP 不正确", str(exc), parent=self.upgrade_window)
-                return
+                return False
 
             vlan_name = adapter_alias_from_display(channel.vlan_name or channel.adapter_alias).strip()
             power_channel = power_channel_from_section(channel.section)
             if not 1 <= power_channel <= TOTAL_CHANNEL_COUNT:
                 messagebox.showwarning("程控电源通道不正确", f"无法从 {channel.section} 确定程控电源通道。", parent=self.upgrade_window)
-                return
+                return False
             request = FullPackageUpgradeRequest(
                 vlan=vlan_name.lower(),
                 server_interface=vlan_name,
@@ -2123,7 +2254,7 @@ class LineCheckAssistant(Tk):
             f"恢复出厂：{restore_factory_text}\n\n是否继续？",
             parent=self.upgrade_window,
         ):
-            return
+            return False
 
         terminal = getattr(self, "serial_terminal", None)
         if terminal is not None:
@@ -2140,6 +2271,7 @@ class LineCheckAssistant(Tk):
             self._set_upgrade_status("", f"准备串行升级 {len(upgrade_items)} 台样机", 0)
             thread = threading.Thread(target=self._serial_tftp_copy_upgrade_worker, args=(upgrade_items,), daemon=True)
         thread.start()
+        return True
 
     def _selected_upgrade_transfer_method(self) -> str:
         return LineCheckAssistant._normalize_upgrade_transfer_method(self.upgrade_transfer_var.get())
@@ -2341,6 +2473,7 @@ class LineCheckAssistant(Tk):
             self._set_upgrade_status("", "并行升级启动失败", 0)
             self._log(orchestration_error)
             messagebox.showerror("并行升级失败", orchestration_error, parent=self.upgrade_window)
+            _finish_pipeline_subtask_if_waiting(self, "sample_upgrade", False, orchestration_error)
             return
         succeeded = [item for item in results if item.result.ok]
         failed = [item for item in results if not item.result.ok]
@@ -2353,12 +2486,16 @@ class LineCheckAssistant(Tk):
             messagebox.showwarning("样机升级完成", detail, parent=self.upgrade_window)
         else:
             messagebox.showinfo("样机升级完成", detail, parent=self.upgrade_window)
+        _finish_pipeline_subtask_if_waiting(
+            self, "sample_upgrade", not failed, f"并行 Tftp指令 升级完成：成功 {len(succeeded)}/{total} 台。"
+        )
 
     def _complete_parallel_tftp_put_upgrade(self, total: int, results, orchestration_error: str | None = None) -> None:
         if orchestration_error:
             self._set_upgrade_status("", "并行升级启动失败", 0)
             self._log(orchestration_error)
             messagebox.showerror("并行升级失败", orchestration_error, parent=self.upgrade_window)
+            _finish_pipeline_subtask_if_waiting(self, "sample_upgrade", False, orchestration_error)
             return
         succeeded = [item for item in results if item.result.ok]
         failed = [item for item in results if not item.result.ok]
@@ -2371,17 +2508,22 @@ class LineCheckAssistant(Tk):
             messagebox.showwarning("样机升级完成", detail, parent=self.upgrade_window)
         else:
             messagebox.showinfo("样机升级完成", detail, parent=self.upgrade_window)
+        _finish_pipeline_subtask_if_waiting(
+            self, "sample_upgrade", not failed, f"并行 Tftp Put 升级完成：成功 {len(succeeded)}/{total} 台。"
+        )
 
     def _complete_serial_tftp_copy_upgrade(self, total: int, completed: int, failed_request, failed_result) -> None:
         if failed_result is None:
             self._set_upgrade_status("", f"串行升级完成：{completed}/{total} 台", 100)
             messagebox.showinfo("样机升级完成", f"串行升级完成：{completed}/{total} 台样机已升级。", parent=self.upgrade_window)
+            _finish_pipeline_subtask_if_waiting(self, "sample_upgrade", True, f"串行升级完成：{completed}/{total} 台成功。")
             return
         progress = (completed / total) * 100 if total else 0
         vlan = failed_request.vlan if failed_request is not None else ""
         self._set_upgrade_status(vlan, f"升级失败，已停止后续样机（已完成 {completed}/{total} 台）", progress)
         self._log(failed_result.message)
         messagebox.showerror("样机升级失败", failed_result.message, parent=self.upgrade_window)
+        _finish_pipeline_subtask_if_waiting(self, "sample_upgrade", False, failed_result.message)
 
     def _toggle_upgrade_password_visibility(self) -> None:
         self.upgrade_password_visible = not self.upgrade_password_visible
@@ -3466,7 +3608,30 @@ class LineCheckAssistant(Tk):
         thread = threading.Thread(target=self._power_on_worker, args=(selected_com, power_channels, power_action, wait_seconds), daemon=True)
         thread.start()
 
-    def _select_power_com_port(self) -> tuple[str | None, str]:
+    def _open_power_control(self) -> None:
+        """供全流程窗口「自动上/下电 → 去配置」使用，只保存配置不执行电源操作。"""
+        configured_operation = (self.power_operation_var.get() or "up").strip().lower()
+        initial_action = POWER_ACTION_OFF if configured_operation == "down" else POWER_ACTION_ON
+        selected_com, power_action = self._select_power_com_port(initial_action=initial_action)
+        if selected_com is None:
+            return
+
+        operation = "down" if power_action == POWER_ACTION_OFF else "up"
+        self.power_serial_var.set(selected_com)
+        self.power_operation_var.set(operation)
+        self._persist_config()
+        self._save_sample_upgrade_settings()
+        self._log(
+            f"全流程自动上/下电配置已更新：COM={selected_com or '(未选，需手动重启)'} / 操作={operation}；"
+            "仅保存配置，未下发任何程控电源指令。"
+        )
+
+        pipeline_window = self.pipeline_window
+        refresh_statuses = getattr(pipeline_window, "_refresh_statuses", None)
+        if callable(refresh_statuses):
+            refresh_statuses()
+
+    def _select_power_com_port(self, initial_action: str = POWER_ACTION_ON) -> tuple[str | None, str]:
         dialog = Toplevel(self)
         dialog.title("选择自动上/下电操作")
         dialog.transient(self)
@@ -3476,8 +3641,9 @@ class LineCheckAssistant(Tk):
         options = self._build_power_serial_options()
         current = self._selected_power_serial_port()
         selected = StringVar(value=current if current in options else DEFAULT_POWER_SERIAL_PORT)
-        action = StringVar(value=POWER_ACTION_ON)
-        result = {"port": None, "action": POWER_ACTION_ON}
+        action_default = initial_action if initial_action in POWER_ACTION_OPTIONS else POWER_ACTION_ON
+        action = StringVar(value=action_default)
+        result = {"port": None, "action": action_default}
 
         Frame(dialog, padx=16, pady=12).pack(fill="both", expand=True)
         container = dialog.winfo_children()[0]
@@ -3485,7 +3651,7 @@ class LineCheckAssistant(Tk):
         Label(container, text=prompt).pack(anchor="w", pady=(0, 8))
         combo = ttk.Combobox(container, textvariable=selected, values=options, width=58, state="readonly")
         combo.pack(fill="x", pady=(0, 12))
-        Label(container, text="留空：请手动重启样机后，再进行后续流程。", foreground=COLOR_MUTED).pack(anchor="w", pady=(-7, 12))
+        Label(container, text="留空：请手动重启样机后，再进行后续流程。", foreground=COLOR_MUTED).pack(anchor="w", pady=(0, 12))
 
         Label(container, text="请选择操作类型：").pack(anchor="w", pady=(0, 8))
         action_combo = ttk.Combobox(container, textvariable=action, values=POWER_ACTION_OPTIONS, width=58, state="readonly")
@@ -3611,8 +3777,8 @@ class LineCheckAssistant(Tk):
         """2026-07-20: 主界面「检查并执行测试」按钮升级为「全流程执行」弹窗入口。
 
         旧实现:直接调 ``_run_checks``(仅做已勾选通道的 ping 通过性检查)。
-        新实现:弹「全流程执行」窗口,操作员勾选 6 个子任务(自动上/下电 / 样机升级 /
-        写样机参数 / ONU 注册 / 串口日志 / 测试项配置)后,按 1→6 顺序串行执行,
+        新实现:弹「全流程执行」窗口,操作员勾选 7 个子任务(自动上/下电 / 环境线路检查 /
+        样机升级 / 写样机参数 / ONU 注册 / 串口日志 / 测试项配置)后,按 1→7 顺序串行执行,
         任一失败(串口日志除外)→ 整个管道停止。
         ``_run_checks`` / ``_check_worker`` 仍保留供单通道 ping 检查场景使用。
 

@@ -1,8 +1,8 @@
 """「全流程执行」窗口 UI(2026-07-20 新增)。
 
-主界面「检查并执行测试」按钮按下后,弹出本窗口,操作员可勾选 6 个子任务(自动上/下电
-/ 样机升级 / 写样机参数 / ONU 注册 / 串口日志 / 测试项配置),每行右侧展示「必填项当前
-状态」(就绪 / 缺项),「去配置」按钮跳到主程序对应子窗口;底部「开始执行」按 1→6
+主界面「检查并执行测试」按钮按下后,弹出本窗口,操作员可勾选 7 个子任务(自动上/下电
+/ 环境线路检查 / 样机升级 / 写样机参数 / ONU 注册 / 串口日志 / 测试项配置),每行右侧展示「必填项当前
+状态」(就绪 / 缺项),「去配置」按钮跳到主程序对应子窗口;底部「开始执行」按 1→7
 固定顺序串行执行勾选子任务,任一失败(串口日志除外)→ 整个管道停止。
 
 入口:主程序 ``LineCheckAssistant._start_all_checks`` 改为 ``_open_pipeline_window``,
@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 import threading
-from tkinter import BooleanVar, Frame, Label, StringVar, Toplevel, messagebox, ttk
+from tkinter import BooleanVar, Canvas, Frame, Label, StringVar, Toplevel, messagebox, ttk
 from typing import Any, Callable, Dict, List, Set
 
 from src.services.pipeline_orchestrator import (
@@ -54,14 +54,14 @@ class PipelineWindow:
         self.app = app
         self.window: Toplevel = Toplevel(app)
         self.window.title("全流程执行")
-        # 6 行 Checkbutton + 必填项状态 + 底部按钮需要至少 ~640px 高度
-        # （2026-07-20 实际跑出 560 不够,「6. 测试项配置」行被切;调整为 640）
+        # 7 行选择框 + 必填项状态 + 底部按钮需要至少 ~720px 高度。
         self.window.geometry("920x740")
         self.window.minsize(880, 720)
         self.window.transient(app)
         self.window.configure(background=COLOR_BG)
         # 状态变量
         self._check_vars: Dict[str, BooleanVar] = {}
+        self._selection_indicators: Dict[str, Canvas] = {}
         self._status_labels: Dict[str, Label] = {}
         self._status_summary_vars: Dict[str, StringVar] = {}
         self._status_missing_vars: Dict[str, StringVar] = {}
@@ -70,6 +70,8 @@ class PipelineWindow:
 
         self._build()
         self._refresh_statuses()
+        # 从「去配置」打开的子窗口返回时，立即用当前输入刷新缺项状态。
+        self.window.bind("<FocusIn>", self._on_focus_in)
         # 操作员关闭窗口时若正在跑,提示
         self.window.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -90,7 +92,7 @@ class PipelineWindow:
             content,
             text=(
                 "勾选需要执行的子任务;必填项未就绪时整行红字提示,可点「去配置」"
-                "跳到对应子窗口填写。点击「开始执行」后,按 1→6 固定顺序串行执行,"
+                "跳到对应子窗口填写。点击「开始执行」后,按 1→7 固定顺序串行执行,"
                 "任一失败(串口日志除外)将停止整个管道。"
             ),
             background=COLOR_BG,
@@ -99,7 +101,7 @@ class PipelineWindow:
             justify="left",
         ).pack(anchor="w", pady=(6, 14))
 
-        # 6 行子任务
+        # 7 行子任务
         rows = Frame(content, background=COLOR_BG)
         rows.pack(fill="both", expand=True)
         for index, code in enumerate(SUBTASK_CODES):
@@ -118,11 +120,40 @@ class PipelineWindow:
         self._stop_button.pack(side="right")
         self._stop_button.configure(state="disabled")
         ttk.Button(
+            button_bar, text="刷新状态", command=self._refresh_statuses, style="Secondary.TButton"
+        ).pack(side="right", padx=(0, 8))
+        ttk.Button(
             button_bar, text="取消", command=self._on_close, style="Secondary.TButton"
         ).pack(side="right", padx=(0, 8))
 
+    @staticmethod
+    def _selection_fill(selected: bool) -> str:
+        """选中框使用实心黑色，避免系统主题将勾选态画成 ``×``。"""
+        return "#000000" if selected else COLOR_SURFACE
+
+    def _draw_selection_indicator(self, code: str) -> None:
+        """按当前 BooleanVar 重绘 14px 选择框。"""
+        indicator = self._selection_indicators[code]
+        selected = self._check_vars[code].get()
+        indicator.delete("all")
+        indicator.create_rectangle(
+            0,
+            0,
+            13,
+            13,
+            fill=self._selection_fill(selected),
+            outline="#000000",
+        )
+
+    def _toggle_subtask(self, code: str) -> None:
+        """点击小选择框或任务标题时切换选择状态。"""
+        var = self._check_vars[code]
+        var.set(not var.get())
+        self._draw_selection_indicator(code)
+        self._refresh_statuses()
+
     def _build_row(self, parent: Frame, code: str, index: int) -> None:
-        """单行:Checkbutton + label + summary + missing + 去配置 按钮。
+        """单行:实心选择框 + label + summary + missing + 去配置 按钮。
 
         布局(2026-07-20 按用户反馈调整):summary(黑字)与 missing(红字)互换行——
           第 0 行: missing 红字(若有)　　—— 提示更醒目
@@ -131,14 +162,35 @@ class PipelineWindow:
         row = Frame(parent, background=COLOR_SURFACE, padx=10, pady=8, relief="solid", borderwidth=1)
         row.pack(fill="x", pady=(0, 6))
 
-        # 默认勾选:1(环境检查), 2(电源), 6(串口日志), 7(测试项)(开箱即用最常用);
-        # 3/4/5 默认不勾(需要预先配置:升级 / 写参 / ONU 注册)
-        default_checked = code in {"env_check", "power_cycle", "serial_terminal", "test_item_execution"}
+        # 默认只勾选环境线路检查；其余操作由操作员按本次测试需要选择，
+        # 避免打开窗口后误触发上/下电、升级、写参、ONU 注册、串口日志或测试项执行。
+        default_checked = code == "env_check"
         var = BooleanVar(value=default_checked)
         self._check_vars[code] = var
 
-        check = ttk.Checkbutton(row, text=SUBTASK_LABELS[code], variable=var, command=self._refresh_statuses)
-        check.grid(row=0, column=0, sticky="w", padx=(0, 10))
+        selector = Frame(row, background=COLOR_SURFACE)
+        selector.grid(row=0, column=0, sticky="w", padx=(0, 10))
+        indicator = Canvas(
+            selector,
+            width=14,
+            height=14,
+            background=COLOR_SURFACE,
+            highlightthickness=0,
+            cursor="hand2",
+        )
+        indicator.grid(row=0, column=0, padx=(0, 4))
+        self._selection_indicators[code] = indicator
+        self._draw_selection_indicator(code)
+        title = Label(
+            selector,
+            text=SUBTASK_LABELS[code],
+            background=COLOR_SURFACE,
+            foreground=COLOR_TEXT,
+            cursor="hand2",
+        )
+        title.grid(row=0, column=1, sticky="w")
+        indicator.bind("<Button-1>", lambda _event, c=code: self._toggle_subtask(c))
+        title.bind("<Button-1>", lambda _event, c=code: self._toggle_subtask(c))
 
         # 缺项(红字)在上、summary(黑字)在下一行(用户 2026-07-20 反馈:红字提示更醒目)
         summary_var = StringVar(value="(计算中...)")
@@ -184,6 +236,11 @@ class PipelineWindow:
 
     # -- 状态刷新 -------------------------------------------------------
 
+    def _on_focus_in(self, _event=None) -> None:
+        """重新回到全流程窗口时，刷新刚在子窗口修改的配置状态。"""
+        if not (self._running_thread and self._running_thread.is_alive()):
+            self._refresh_statuses()
+
     def _refresh_statuses(self) -> None:
         """按当前 store / main UI 状态刷新每行就绪 / 缺项。"""
         try:
@@ -208,11 +265,16 @@ class PipelineWindow:
         """构造 PipelineContext;若无 store 字段(如 test_project_config 未加载),传空 dataclass。"""
         app = self.app
         channels = _get_attr(app, "channels", [])
-        settings = _get_attr(app, "sample_upgrade_settings", None)
+        # 升级窗口编辑的是 Tk 变量；不能只读启动时加载的缓存，否则界面已填的
+        # 超级用户名 / 密码 / 固件路径会被管道误判为缺失。
+        current_settings = _get_attr(app, "_current_sample_upgrade_settings", None)
+        settings = current_settings() if callable(current_settings) else _get_attr(app, "sample_upgrade_settings", None)
         if settings is None:
             from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
             settings = SampleUpgradeSettings()
-        onu = _get_attr(app, "onu_registration_config", None)
+        # ONU 窗口同样优先读当前输入，避免保存延迟造成管道状态滞后。
+        current_onu = _get_attr(app, "_current_onu_registration_config", None)
+        onu = current_onu() if callable(current_onu) else _get_attr(app, "onu_registration_config", None)
         if onu is None:
             from line_check_assistant.onu_registration_store import OnuRegistrationConfig
             onu = OnuRegistrationConfig()

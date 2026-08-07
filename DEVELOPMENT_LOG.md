@@ -2,6 +2,136 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-07-24 - 串行等待全流程升级与写参完成
+
+- 类型：BUG 修复 / 优化 / 测试 / 文档
+- 背景：全流程子任务 3 只启动全包升级 worker 就被标记结束，子任务 4 随即并发启动，导致升级与写参争用同一台样机；此前关闭过写参配置窗口时，子任务 4 还会把已销毁的 `.toplevel...` 作为弹窗父窗口，报 `bad window path name`。
+- 完成内容：① 主程序新增管道专用 UI 任务队列，确认框与窗口创建固定在 Tk 主线程；② 子任务 3、4 创建完成事件，worker 的成功/失败完成回调才解除管道等待；③ 管道写参启动时重新打开有效写参窗口；④ 升级/写参未启动、被取消或执行失败会返回管道并阻止后续致命子任务；⑤ 保留 `Tftp指令` / `Tftp Put` 两条独立链路。
+- 修改文件：`.claude/plans/pipeline-async-subtask-sequencing.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_app.py" -v`、`python -m unittest discover -s tests -p "test_pipeline_orchestrator.py" -v`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：`test_app.py` 70 项通过；`test_pipeline_orchestrator.py` 35 项通过；`python scripts/verify_baseline.py` 全绿（29 个 `.py` 编译、412 项单测、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面选择子任务 3、4，确认日志必须在升级完成结果后才出现「开始子任务 4」，且不再出现 `bad window path name`。
+
+## 2026-07-24 - 对接全流程全包升级入口
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：全流程子任务 3 选择全包升级后，环境检查通过即报「主程序未实现 `_start_tftp_command_upgrade / _start_tftp_put_upgrade`」并中止。两个名称是管道残留的旧接口，主程序实际入口为 `_start_serial_tftp_copy_upgrade()`。
+- 完成内容：① 管道全包升级改调主程序当前存在的统一入口；② 入口仍按当前配置独立分流 `Tftp指令` / `Tftp Put`，未合并两条传输链路；③ 主执行日志输出本次选择的传输方式；④ 新增两种传输方式的回归测试。
+- 修改文件：`Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_pipeline_orchestrator.py" -v`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：`test_pipeline_orchestrator.py` 34 项通过；`python scripts/verify_baseline.py` 全绿（29 个 `.py` 编译、410 项单测、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面全流程选择子任务 3「全包升级 + Tftp指令」，确认环境检查后出现升级确认框并继续进入对应升级链路。
+
+## 2026-07-24 - 保持写参参数表路径与全流程同步
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：操作员从全流程子任务 4「写样机参数 → 去配置」选择参数表后，返回全流程仍提示「缺：参数表路径」；重开写参窗口时已选择的路径也丢失。原因是写参窗口每次新建临时路径变量，未更新全流程读取的实例级持久变量。
+- 完成内容：① 写参窗口直接复用 `parameter_table_path_var`；② 选表成功后立即更新该变量并触发 `sample_upgrade_settings.ini` 保存；③ 重开写参窗口时自动恢复并加载已保存参数表；④ 已保存文件无法读取时保留路径、写主执行日志并要求操作员重新选择，不误清空配置。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_app.py" -v`、`python -m unittest discover -s tests -p "test_pipeline_window.py" -v`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：`test_app.py` 69 项通过；`test_pipeline_window.py` 15 项通过；`python scripts/verify_baseline.py` 全绿（29 个 `.py` 编译、409 项单测、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面选择参数表、关闭并重开写参窗口，确认路径和预检结果恢复；回到全流程点击「刷新状态」或返回后自动刷新，确认「缺：参数表路径」消失。
+
+## 2026-07-24 - 增加全流程状态刷新按钮
+
+- 类型：优化 / 测试 / 文档
+- 背景：从去配置窗口返回全流程窗口时，部分 Windows 焦点切换不触发自动刷新，操作员需要额外点击窗口才能看到最新必填项状态。
+- 完成内容：① 底部增加「刷新状态」按钮；② 点击只重算当前状态、不执行任何设备或电源操作；③ 保留原有回焦自动刷新。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_pipeline_window.py" -v`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：`test_pipeline_window.py` 15 项通过；`python scripts/verify_baseline.py` 全绿（29 个 `.py` 编译、407 项单测、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面从样机升级去配置返回后，点击「刷新状态」确认超级用户名缺项立即消失。
+
+## 2026-07-24 - 刷新全流程升级凭据状态
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：操作员在「样机升级 → 去配置」窗口已填写超级用户名，但全流程子任务 3 仍提示缺少超级用户名；原因是管道读取了启动时缓存，未读取当前 Tk 输入。
+- 完成内容：① 管道上下文优先调用 `_current_sample_upgrade_settings()` 读取升级窗口当前值；② ONU 配置同步优先读取 `_current_onu_registration_config()`；③ 关闭去配置窗口回到全流程窗口时自动刷新状态；④ 增加回归测试，锁定实时输入覆盖旧缓存与回焦刷新。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_pipeline_window.py" -v`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：`test_pipeline_window.py` 14 项通过；`python scripts/verify_baseline.py` 全绿（29 个 `.py` 编译、406 项单测、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面在样机升级窗口填写超级用户名后，确认全流程子任务 3 立即不再提示缺少该字段。
+
+## 2026-07-24 - 修正全流程上电指令
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：现场日志显示全流程子任务「自动上/下电」选择上电时先下发关闭帧再下发开启帧，与主界面自动上电“只发开启帧”的已验收语义不一致。
+- 完成内容：① 管道上电分支从 `power_on_selected_channels()` 改为 `turn_on_selected_channels()`；② 上电只下发开启帧，下电仍只下发关闭帧；③ 增加回归测试，锁定上电不得调用断电再上电接口。
+- 修改文件：`Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_pipeline_orchestrator.py" -v`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：`test_pipeline_orchestrator.py` 33 项通过；`python scripts/verify_baseline.py` 全绿（29 个 `.py` 编译、404 项单测、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：现场再次选择「上电」执行全流程，确认主日志只出现「开启通道」帧、不出现「关闭通道」帧。
+
+## 2026-07-24 - 调整全流程前两项顺序
+
+- 类型：优化 / 测试 / 文档
+- 背景：操作员确认全流程执行应先进行自动上/下电，再进行环境线路检查。
+- 完成内容：① 子任务 1 改为自动上/下电、子任务 2 改为环境线路检查；② 实际调度、窗口编号、主执行日志编号和顺序守门测试同步调整；③ 环境线路检查仍是致命步骤，但发生在自动上/下电之后；默认仍只选环境线路检查。
+- 修改文件：`Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`、`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`.claude/plans/power-before-env-pipeline-order.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_pipeline_orchestrator.py" -v`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：`test_pipeline_orchestrator.py` 32 项通过；`python scripts/verify_baseline.py` 全绿（29 个 `.py` 编译、403 项单测、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面确认前两行显示为「1. 自动上/下电」「2. 环境线路检查」；真实样机验证“上下电 → 环境检查”新顺序。
+
+## 2026-07-24 - 修正电源配置弹窗边距
+
+- 类型：BUG 修复 / 测试
+- 背景：点击「自动上/下电 → 去配置」时，Tk 报 `bad pad value "-7"`，导致 COM 与操作类型选择弹窗无法打开。
+- 完成内容：将 COM 留空提示的负 `pady` 改为非负边距，保留原有弹窗布局、配置保存和「不下发电源指令」语义。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_app.py" -v`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：`test_app.py` 67 项通过；`python scripts/verify_baseline.py` 全绿（29 个 `.py` 编译、403 项单测、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面点击「自动上/下电 → 去配置」，确认 COM 与操作类型选择框能正常打开。
+
+## 2026-07-24 - 补全全流程电源配置入口
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：全流程「自动上/下电」的「去配置」映射 `_open_power_control` 在主程序中不存在，点击后弹出「未找到配置入口」警告。
+- 完成内容：① 新增 `_open_power_control`，复用 COM 与上电/下电选择弹窗；② 选择结果同步保存程控电源 COM 和管道 `up/down` 操作类型；③ 刷新全流程本行状态并记录「仅保存配置，未下发任何程控电源指令」，不创建执行线程。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_app.py" -v`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：`test_app.py` 66 项通过；`python scripts/verify_baseline.py` 全绿（29 个 `.py` 编译、402 项单测、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面依次点击「自动上/下电 → 去配置」，确认选择 COM / 操作类型后本行摘要刷新且未出现任何电源下发日志。
+
+## 2026-07-24 - 改用实心选择框标识
+
+- 类型：优化 / 测试 / 文档
+- 背景：全流程窗口的系统 Checkbutton 选中态显示「×」，操作员要求保留小方框位置但改用更直观的实心黑色状态。
+- 完成内容：① 子任务左侧改为 14px 自绘选择框；② 选中填满黑色、未选白底黑边；③ 点击小方框或任务标题均可切换，默认仅选环境线路检查不变。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_pipeline_window.py" -v`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：`test_pipeline_window.py` 12 项通过；`python scripts/verify_baseline.py` 全绿（29 个 `.py` 编译、401 项单测、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面打开「全流程执行」窗口，确认选中框为实心黑色。
+
+## 2026-07-24 - 收紧全流程默认勾选
+
+- 类型：优化 / 测试 / 文档
+- 背景：操作员要求打开「全流程执行」窗口时只默认选择环境线路检查，避免其它具备设备操作的子任务被预选。
+- 完成内容：① 默认仅勾选「1. 环境线路检查」；② 自动上/下电、样机升级、写样机参数、ONU 注册、串口日志、测试项执行均默认不勾选；③ 保持 1→7 固定执行顺序、必填项提示和二次确认不变。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_pipeline_window.py" -v`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：`test_pipeline_window.py` 11 项通过；`python scripts/verify_baseline.py` 全绿（29 个 `.py` 编译、400 项单测、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面打开「全流程执行」窗口，确认仅「环境线路检查」处于勾选状态。
+
+## 2026-07-24 - 确认通道与电源其余场景验收
+
+- 类型：真实样机验收 / 状态更新
+- 背景：项目负责人补充确认通道 / 网卡 / Ping 与程控电源模块的其余现场场景均已通过，需清理两模块的残留待验收状态。
+- 完成内容：① 通道 / 网卡配置、线路 Ping、`network_card_ip.ini` 端到端变更均确认通过；② 自动下电、同批次 COM 长连接复用、1–8 台并行均确认通过；③ 2.1、2.2 状态统一更新为“已确认验收”。
+- 修改文件：`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：项目负责人提供的真实样机验收结果。
+- 验证结果：真实样机验收通过。
+- 后续待办：通道 / 网卡 / Ping 与程控电源模块无；串口终端高频场景及其它独立模块仍按各自验收基线跟踪。
+
+## 2026-07-24 - 确认空 COM 手动重启流程验收
+
+- 类型：真实样机验收 / 状态更新
+- 背景：空 COM 展示所有网卡、配置保存，以及手动重启样机后点击确认再继续的流程已完成单元测试，需依据项目负责人现场结果更新验收状态。
+- 完成内容：项目负责人确认真实样机验收通过：① COM 留空时展示 PC 中所有识别网卡且空值可保存；② 自动上/下电、全包升级和全流程执行会要求操作员确认样机已手动重启，确认后才继续；③ 全程未向任何程控电源 COM 口下发上下电指令。
+- 修改文件：`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：Windows 主界面留空程控电源 COM，核对全网卡下拉候选和配置保存；分别进入自动上/下电、全包升级、全流程执行，手动重启样机后点击“是”确认继续并核对主执行日志。
+- 验证结果：真实样机验收通过。
+- 后续待办：自动下电、同批次 COM 长连接复用、4 / 8 台并行及通道/网卡其余现场场景仍按验收基线跟踪。
+
 ## 2026-07-23 - 支持空 COM 手动重启提示
 
 - 类型：功能 / 测试 / 文档

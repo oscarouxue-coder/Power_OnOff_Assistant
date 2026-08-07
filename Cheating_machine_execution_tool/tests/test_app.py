@@ -2,6 +2,7 @@ import os
 import queue
 import sys
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
@@ -543,6 +544,49 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(settings.execution_mode, "串行")
         self.assertEqual(settings.power_operation, "up")
         self.assertEqual(settings.parameter_table_path, "")
+
+    def test_loading_parameter_table_updates_persisted_pipeline_path(self):
+        """写参窗口选表后，全流程子任务 4 必须立刻读到同一条路径。"""
+        table_path = r"F:\fixture\batch_parameters.xlsx"
+        context = SimpleNamespace(
+            parameter_records=[],
+            parameter_loaded_table_path="",
+            parameter_table_path_var=Mock(),
+            _log=Mock(),
+            _refresh_parameter_preflight=Mock(),
+        )
+
+        with patch("line_check_assistant.app.load_parameter_records", return_value=["record"]):
+            loaded = LineCheckAssistant._load_parameter_table(context, Path(table_path))
+
+        self.assertTrue(loaded)
+        self.assertEqual(context.parameter_records, ["record"])
+        self.assertEqual(context.parameter_loaded_table_path, table_path)
+        context.parameter_table_path_var.set.assert_called_once_with(table_path)
+        context._refresh_parameter_preflight.assert_called_once_with()
+
+    def test_parameter_writer_reuses_persisted_path_and_restores_saved_table(self):
+        """重开写参窗口必须显示并恢复上次已保存的参数表。"""
+        import inspect
+        import line_check_assistant.app as app_module
+
+        source = inspect.getsource(app_module.LineCheckAssistant._open_sample_parameter_writer)
+        self.assertIn("self.parameter_table_var = self.parameter_table_path_var", source)
+        self.assertIn("self._load_parameter_table(Path(saved_table_path), report_error=False)", source)
+
+    def test_pipeline_subtask_wait_returns_only_after_completion_result(self):
+        """异步升级/写参只有完成回调通知后，管道才能执行下一项。"""
+        context = SimpleNamespace(
+            _pipeline_subtask_events={},
+            _pipeline_subtask_results={},
+        )
+
+        LineCheckAssistant._begin_pipeline_subtask(context, "sample_upgrade")
+        LineCheckAssistant._finish_pipeline_subtask(context, "sample_upgrade", True, "升级完成")
+        LineCheckAssistant._wait_pipeline_subtask(context, "sample_upgrade")
+
+        self.assertEqual(context._pipeline_subtask_events, {})
+        self.assertEqual(context._pipeline_subtask_results, {})
 
     def test_save_sample_upgrade_settings_writes_current_inputs(self):
         settings = SampleUpgradeSettings(upgrade_mode="页面升级", transfer_method="Tftp Put")
@@ -1164,6 +1208,35 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         thread.assert_called_once_with(target=context._power_on_worker, args=("COM106", [1, 2, 3], "上电", 15), daemon=True)
         thread.return_value.start.assert_called_once_with()
         self.assertTrue(context.power_on_running)
+
+    def test_open_power_control_saves_pipeline_settings_without_power_execution(self):
+        """全流程「去配置」只保存 COM/操作类型，绝不能下发电源指令。"""
+        context = SimpleNamespace(
+            power_operation_var=Mock(get=Mock(return_value="down")),
+            _select_power_com_port=Mock(return_value=("COM102", "下电")),
+            power_serial_var=Mock(),
+            _persist_config=Mock(),
+            _save_sample_upgrade_settings=Mock(),
+            _log=Mock(),
+            pipeline_window=None,
+        )
+
+        LineCheckAssistant._open_power_control(context)
+
+        context._select_power_com_port.assert_called_once_with(initial_action="下电")
+        context.power_serial_var.set.assert_called_once_with("COM102")
+        context.power_operation_var.set.assert_called_once_with("down")
+        context._persist_config.assert_called_once_with()
+        context._save_sample_upgrade_settings.assert_called_once_with()
+        self.assertIn("未下发任何程控电源指令", context._log.call_args.args[0])
+
+    def test_power_selector_does_not_use_negative_padding(self):
+        """COM 选择弹窗在当前 Tk 环境中不能传负的 pack pady。"""
+        import inspect
+
+        source = inspect.getsource(LineCheckAssistant._select_power_com_port)
+        self.assertNotIn("pady=(-7, 12)", source)
+        self.assertIn("pady=(0, 12)", source)
 
     def test_launch_power_on_allows_empty_power_serial_port_after_manual_reboot_confirmation(self):
         channels = [ChannelConfig(section="channel_1", enabled=True)]

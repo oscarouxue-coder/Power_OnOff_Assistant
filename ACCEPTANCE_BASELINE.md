@@ -1,6 +1,6 @@
 # Acceptance Baseline
 
-更新：2026-07-23（文档职责与回归基线整理；§2.12 保持 7 子任务，状态仍为「已实现未验收」）
+更新：2026-07-24（§2.12 保持 7 子任务，默认仅勾选环境线路检查；状态仍为「已实现未验收」）
 
 > 与 `PROJECT_STATUS.md` 的关系：本文按"实现 → 单测 → 真实样机验收"三态罗列验收证据与不变量，作为独立验收基线。`PROJECT_STATUS.md` 保留面向项目的进度叙述；两者冲突时以本文为准。
 >
@@ -62,25 +62,25 @@ python scripts\verify_baseline.py
 
 ### 2.1 通道 / 网卡 / Ping
 
-- **状态**：已确认验收（程控电源 COM 与 VLAN 下拉分组筛选，2026-07-23）/ 已实现未验收（网卡刷新、子网配置、线路 Ping 等其余场景）
+- **状态**：已确认验收（通道 / 网卡配置、线路 Ping、程控电源 COM 与 VLAN 下拉分组筛选、空 COM 全网卡展示与配置保存，2026-07-24）
 - **核心行为**：按 VLAN 标识已勾选通道；支持网卡刷新 / 子网配置 / Ping 样机管理 IP；现场配置写 `Auto_power_on_off_tool/config/network_card_ip.ini`
 - **已确认验收行为（2026-07-23）**：切换程控电源 `COM101` 时 VLAN 下拉候选仅显示 `VLAN101`–`VLAN108`；切换 `COM102` 时仅显示 `VLAN109`–`VLAN116`；切换不会自动改写已保存通道配置。
-- **已实现未验收行为**：程控电源 COM 为空时，VLAN 下拉候选展示所有已识别网卡；空值可保存到 `network_card_ip.ini`，不会被读取逻辑回填为 `COM101`。
+- **已确认验收行为（2026-07-24）**：程控电源 COM 为空时，VLAN 下拉候选展示所有已识别网卡；空值可保存到 `network_card_ip.ini`，不会被读取逻辑回填为 `COM101`。
 - **边界与异常**：写网卡静态 IP 需管理员权限；源 IP 不可绑时**强提示人工检查 ini**，不回退 `0.0.0.0`
 - **禁止破坏**：配置写入位置唯一（不可再新建 `Cheating_machine_execution_tool/config/`）
-- **待确认**：现场通道变更 → `network_card_ip.ini` 端到端真实样机验证；空 COM 时所有网卡展示和配置保存。
+- **待确认**：无。
 - **对应测试**：`tests/test_app.py`、`tests/test_paths.py`
 
 ### 2.2 程控电源（COM101-COM116 直连）
 
-- **状态**：已确认验收（直连程控电源 + 自动上电新流程）/ 已实现未验收（自动下电 / 同批次 COM 长连接复用 / 并行 1-8 台）
+- **状态**：已确认验收（直连程控电源、自动上/下电、同批次 COM 长连接复用、1-8 台并行、空 COM 手动重启确认后继续流程，2026-07-24）
 - **核心验收行为**：
   - 主程序直连程控电源；移除旧 `Auto_Power_On_Off_Tool.exe` / UI Automation
   - 自动上电：相邻开启帧间隔 1 秒、取消末尾 10 秒启动等待 — 现场已验收
-  - 自动下电：仅发关闭帧、相邻 1 秒，**不发全断电帧**
-  - 同批次程控电源 COM 由 `UpgradePowerCycleCoordinator` 持有长连接（`open` 仅一次，`close()` 幂等）
-  - 并行 1-8 台、默认 2 台（`MAX_PARALLEL_UPGRADES=8`、`clamp_parallel_count`）
-  - 未选择程控电源 COM 时，自动上/下电、全包升级和全流程管道均要求操作员确认样机已手动重启后才开始后续步骤，不打开任何程控电源串口（已实现未验收）
+  - 自动下电：仅发关闭帧、相邻 1 秒，**不发全断电帧** — 现场已验收
+  - 同批次程控电源 COM 由 `UpgradePowerCycleCoordinator` 持有长连接（`open` 仅一次，`close()` 幂等）— 现场已验收
+  - 并行 1-8 台、默认 2 台（`MAX_PARALLEL_UPGRADES=8`、`clamp_parallel_count`）— 现场已验收
+  - 未选择程控电源 COM 时，自动上/下电、全包升级和全流程管道均要求操作员确认样机已手动重启后才开始后续步骤，不打开任何程控电源串口（2026-07-24 已确认验收）
 - **禁止破坏**：
   - 串口参数 **19200 8N1**
   - **不发送全断电帧**
@@ -230,15 +230,19 @@ python scripts\verify_baseline.py
 - **状态**：已实现未验收
 - **核心行为**：
   - 主界面「检查并执行测试」按钮按下后弹出「全流程执行」窗口（替代旧实现的「直接跑 ping 检查」）
-  - **7 个子任务（1→7 固定顺序；2026-07-20 在最前面新增「环境线路检查」，其余编号顺延 1→2 ... 6→7）**：
-    1. **环境线路检查**（默认勾选）—— 复用 `network_ops.run_line_check()` 对每个已勾选通道做「VLAN 网卡启用 + 设 PC 静态 IP + ping 样机管理 IP」；**致命失败**（任一通道 ping 不通 → 整个管道停止）；必填项：≥1 已勾选通道 + 每通道 `vlan_name / adapter_alias / network_card_ip / device_manage_ip` 全部非空
-    2. **自动上/下电**（默认勾选）—— 调 `power_on_service.power_on_selected_channels` / `turn_off_selected_channels` 同步执行；必填项：程控电源 COM + 上/下电（`sample_upgrade_settings.ini` 新增 `power_operation`）+ ≥1 已勾选通道
-    3. **样机升级**（默认不勾）—— 调主程序既有 `_start_page_upgrade` / `_start_tftp_command_upgrade` / `_start_tftp_put_upgrade`（异步起线程 + 弹确认框）；必填项：升级方式 / 固件 / 超级用户凭据 / Tftp 指令或 Put
+  - **7 个子任务（1→7 固定顺序；2026-07-24 用户确认自动上/下电与环境线路检查互换）**：
+    1. **自动上/下电**（默认不勾）—— 调 `power_on_service.power_on_selected_channels` / `turn_off_selected_channels` 同步执行；必填项：程控电源 COM + 上/下电（`sample_upgrade_settings.ini` 新增 `power_operation`）+ ≥1 已勾选通道
+    2. **环境线路检查**（默认勾选）—— 复用 `network_ops.run_line_check()` 对每个已勾选通道做「VLAN 网卡启用 + 设 PC 静态 IP + ping 样机管理 IP」；**致命失败**（任一通道 ping 不通 → 整个管道停止）；必填项：≥1 已勾选通道 + 每通道 `vlan_name / adapter_alias / network_card_ip / device_manage_ip` 全部非空
+    3. **样机升级**（默认不勾）—— 调主程序既有 `_start_page_upgrade` / `_start_serial_tftp_copy_upgrade`（异步起线程 + 弹确认框）；后者按当前设置继续分流 `Tftp指令` 与 `Tftp Put` 两条独立链路；必填项：升级方式 / 固件 / 超级用户凭据 / Tftp 指令或 Put
     4. **写样机参数**（默认不勾）—— 调主程序既有 `_start_sample_parameter_write`（异步起线程 + 弹确认框）；必填项：参数表路径（`sample_upgrade_settings.ini` 新增 `parameter_table_path`）+ 写参首次登录账号 / 密码
     5. **ONU 注册**（默认不勾）—— 调主程序既有 `_on_onu_query_clicked` + `_on_onu_register_clicked`（异步起线程 + 弹确认框）；必填项：OLT IP / 用户名 / 密码
-    6. **串口日志（管道期间持续记录）**（默认勾选）—— 调主程序既有 `_open_serial_log_module` 打开 `SerialTerminalWindow`；**非致命**（打开失败不阻塞后续）
-    7. **测试项配置（[order] 执行）**（默认勾选）—— 调新 `test_item_execution_service.run_test_item_execution` 同步执行（每台串行）；按 `[order]` 顺序逐条 telnet 下发 + per-segment fuzzy 匹配（`!A&&B`）+ 每条命令 `retry_times` 次重试（间隔 `command_fail_retry_interval_time` 秒）；per-channel 结果文件写到 `Cheating_machine_execution_tool/test_results/device_{section}_command_results_{YYYYMMDD_HHMMSS}.log`
-  - 每行右侧实时显示「必填项当前状态」（绿色就绪 / 红色「缺: 字段1, 字段2」），「去配置」按钮跳到主程序对应子窗口或方法（「环境线路检查」去配置调 `_open_network_config()`：隐藏全流程窗口 + 把主界面拉到前台 + 主执行日志提示操作员去顶部「网络配置」卡片编辑）
+    6. **串口日志（管道期间持续记录）**（默认不勾）—— 调主程序既有 `_open_serial_log_module` 打开 `SerialTerminalWindow`；**非致命**（打开失败不阻塞后续）
+    7. **测试项配置（[order] 执行）**（默认不勾）—— 调新 `test_item_execution_service.run_test_item_execution` 同步执行（每台串行）；按 `[order]` 顺序逐条 telnet 下发 + per-segment fuzzy 匹配（`!A&&B`）+ 每条命令 `retry_times` 次重试（间隔 `command_fail_retry_interval_time` 秒）；per-channel 结果文件写到 `Cheating_machine_execution_tool/test_results/device_{section}_command_results_{YYYYMMDD_HHMMSS}.log`
+  - 每行任务标题左侧为实心选择框：选中时填满黑色、未选时白底黑边，点击小方框或任务标题可切换；右侧实时显示「必填项当前状态」（绿色就绪 / 红色「缺: 字段1, 字段2」），「去配置」按钮跳到主程序对应子窗口或方法（「环境线路检查」去配置调 `_open_network_config()`：隐藏全流程窗口 + 把主界面拉到前台 + 主执行日志提示操作员去顶部「网络配置」卡片编辑）
+  - 底部「刷新状态」只重算当前必填项状态，不下发设备或电源操作；用于去配置后主动核对状态
+  - 管道构造上下文时优先读取升级 / ONU 窗口的当前输入，不依赖启动时缓存或本机 ini 的延迟保存；写样机参数的参数表路径也直接复用同一实例级持久变量，选表后立即同步管道状态，重开写参窗口自动恢复并加载已选表；从配置窗口返回时自动刷新状态，避免已填写的字段被误判为缺失
+  - 「自动上/下电」去配置调 `_open_power_control()`：弹出 COM 与上电/下电选择框，确认后保存配置、刷新本行状态并输出主执行日志；**不下发任何程控电源指令**
+  - 管道子任务 1 选择「上电」时只调用 `turn_on_selected_channels()`、只发开启帧；选择「下电」时调用 `turn_off_selected_channels()`、只发关闭帧
   - 「开始执行」走「必填项未就绪警告 + 全流程执行确认」二次确认后启动后台线程
   - 任一「致命」子任务（含「环境线路检查」）抛异常 → 整个管道停止，弹错误框；串口日志失败只记结果不阻塞
   - 「停止」按钮：编排器在当前子任务结束后终止后续子任务
@@ -251,17 +255,17 @@ python scripts\verify_baseline.py
 - **边界与异常**：
   - 必填项未就绪时弹「必填项未就绪」警告询问是否继续（不强阻，便于操作员知情决策）
   - 关闭窗口时若管道运行中弹「全流程执行正在进行」二次确认
-  - 异步子任务（3/4/5）由主程序既有 worker 完成，编排器不阻塞等待；失败传播靠用户点击确认 + 主程序 worker 异常冒泡
+  - 异步子任务（3/4）由主程序既有 worker 完成；管道在 Tk 主线程提交确认框和 worker 启动后，必须等待当前完成回调才执行下一子任务。写参启动时重新打开有效窗口，不得引用已关闭的 `Toplevel`；失败结果会停止后续致命子任务
 - **禁止破坏**：
   - `TelnetSession` 协议（按 VLAN `bind_ip` 锁源）必须复用，不重写 telnet 客户端
-  - 子任务 2/6/7 调既有 service，不绕过主程序中间层
+  - 子任务 1/6/7 调既有 service，不绕过主程序中间层
   - 子任务 3/4/5 调主程序既有 `_start_*` 方法，弹确认框由操作员点「是」（与单功能窗口一致）
-  - 子任务 1 调既有 `network_ops.run_line_check()`，不绕过主程序的网络准备流程
+  - 子任务 2 调既有 `network_ops.run_line_check()`，不绕过主程序的网络准备流程
   - `0.0.0.0` 不出现在 telnet / tftp 路径（与 §1.4 一致）
   - AGENTS 硬规则：不修改老工具 `Auto_Power_On_Off_Tool.py` 源码；fuzzy 逻辑从老工具 `fuzzy_match.py` 移植而非直接 import
 - **待确认**：
   - Windows 桌面真实交互：弹窗 / Checkbutton / 二次确认 / 必填项状态刷新
-  - 真实样机端到端跑通 7 子任务全流程：环境检查 → 上下电 → 升级 → 写参 → ONU 注册 → 串口日志（持续）→ [order] 执行
+  - 真实样机端到端跑通 7 子任务全流程：上下电 → 环境检查 → 升级 → 写参 → ONU 注册 → 串口日志（持续）→ [order] 执行
   - 异常场景：3/4/5 异步子任务失败传播（当前靠主程序 worker 异常冒泡 + 用户观察主执行日志；是否需要 polling + 状态轮询机制待定）
 - **对应测试**：
   - `tests/test_fuzzy_match_runner.py`（18 项：单段 / 多段 / 否定 / 混合 / 空段 / re.escape / IPv6 边界 / 性能）

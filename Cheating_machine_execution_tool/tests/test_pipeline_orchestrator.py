@@ -137,6 +137,20 @@ class ComputeSubTaskStatusTests(unittest.TestCase):
 
         self.assertIn("请手动重启样机后，再进行后续子任务", "".join(messages))
 
+    @patch("src.services.power_on_service.power_on_selected_channels")
+    @patch("src.services.power_on_service.turn_on_selected_channels")
+    def test_power_cycle_up_only_sends_turn_on_commands(self, turn_on, power_cycle) -> None:
+        """管道选择上电时只发开启帧，不能走断电再上电的旧接口。"""
+        ctx = _make_context(settings=_make_settings(power_operation="up"))
+        turn_on.return_value = MagicMock(ok=True, message="程控电源已上电。")
+
+        PipelineOrchestrator(ctx, lambda _message: None)._run_power_cycle()
+
+        turn_on.assert_called_once()
+        self.assertEqual(turn_on.call_args.args, ("COM102", [2]))
+        self.assertEqual(turn_on.call_args.kwargs["wait_seconds"], 0)
+        power_cycle.assert_not_called()
+
     def test_power_cycle_status_missing_operation(self) -> None:
         ctx = _make_context(settings=_make_settings(power_operation="invalid"))
         status = compute_all_subtask_statuses(ctx)["power_cycle"]
@@ -241,7 +255,7 @@ class ComputeSubTaskStatusTests(unittest.TestCase):
         self.assertFalse(status.ready)
         self.assertIn("[order]", "".join(status.missing))
 
-    # ---- 2026-07-20 新增:环境线路检查(env_check) ----
+    # ---- 环境线路检查(env_check)：当前固定为第 2 个致命步骤 ----
 
     def test_env_check_status_complete(self) -> None:
         ctx = _make_context()  # _make_channel 已包含完整 VLAN/IP
@@ -315,6 +329,7 @@ class PipelineRunOrderTests(unittest.TestCase):
         # 7 个结果都成功
         self.assertEqual(len(results), 7)
         self.assertTrue(all(r.ok for r in results))
+        self.assertEqual([result.code for result in results], list(SUBTASK_CODES))
         # 主日志含「开始 / 结束 子任务」 + 「管道开始 / 结束」
         self.assertIn("全流程执行管道开始", "".join(emit_msgs))
         self.assertIn("全流程执行管道结束", "".join(emit_msgs))
@@ -385,17 +400,58 @@ class PipelineRunOrderTests(unittest.TestCase):
         orchestrator_ref: List[PipelineOrchestrator] = []
         stack, method_mocks = self._patch_all_subtasks()
         with stack:
-            def stop_after_env_check() -> None:
+            def stop_after_power_cycle() -> None:
                 orchestrator_ref[0].request_stop()
-            method_mocks["env_check"].side_effect = stop_after_env_check
+            method_mocks["power_cycle"].side_effect = stop_after_power_cycle
             orchestrator_ref.append(PipelineOrchestrator(ctx, emit_msgs.append))
             orchestrator_ref[0].run(set(SUBTASK_CODES))
 
-        # env_check 已执行;后续全部跳过
-        method_mocks["env_check"].assert_called_once()
+        # power_cycle 已执行;后续全部跳过
+        method_mocks["power_cycle"].assert_called_once()
         for code in SUBTASK_CODES[1:]:
             method_mocks[code].assert_not_called()
         self.assertIn("已请求停止", "".join(emit_msgs))
+
+
+class SampleUpgradeDispatchTests(unittest.TestCase):
+    def test_full_package_upgrade_uses_main_program_unified_serial_entry(self) -> None:
+        """Tftp指令 / Tftp Put 必须共用当前存在的主程序入口，再由其内部独立分流。"""
+        for transfer_method in ("Tftp指令", "Tftp Put"):
+            with self.subTest(transfer_method=transfer_method):
+                ctx = _make_context(settings=_make_settings(transfer_method=transfer_method))
+                start_serial_upgrade = MagicMock()
+                ctx.app = type(
+                    "UpgradeApp",
+                    (),
+                    {"_start_serial_tftp_copy_upgrade": start_serial_upgrade},
+                )()
+                messages: List[str] = []
+
+                PipelineOrchestrator(ctx, messages.append)._run_sample_upgrade()
+
+                start_serial_upgrade.assert_called_once_with()
+                self.assertIn(transfer_method, "".join(messages))
+
+    def test_async_subtasks_use_main_program_completion_bridges(self) -> None:
+        """真实主程序有桥接时，管道不能只启动线程就进入下一项。"""
+        ctx = _make_context()
+        run_upgrade = MagicMock()
+        run_parameter_write = MagicMock()
+        ctx.app = type(
+            "PipelineApp",
+            (),
+            {
+                "_run_pipeline_sample_upgrade": run_upgrade,
+                "_run_pipeline_sample_parameter_write": run_parameter_write,
+            },
+        )()
+
+        orchestrator = PipelineOrchestrator(ctx, lambda _line: None)
+        orchestrator._run_sample_upgrade()
+        orchestrator._run_sample_parameter_write()
+
+        run_upgrade.assert_called_once_with()
+        run_parameter_write.assert_called_once_with()
 
 
 class SubTaskResultTests(unittest.TestCase):
@@ -415,8 +471,8 @@ class ConstantsTests(unittest.TestCase):
         self.assertEqual(
             SUBTASK_CODES,
             (
-                "env_check",
                 "power_cycle",
+                "env_check",
                 "sample_upgrade",
                 "sample_parameter_write",
                 "onu_registration",
@@ -431,8 +487,8 @@ class ConstantsTests(unittest.TestCase):
     def test_subtask_labels_numbering_is_one_to_seven(self) -> None:
         """用户 2026-07-20 反馈后编号从 1 开始到 7;守门防止以后再次调整编号漏改。"""
         expected = {
-            "env_check": "1. ",
-            "power_cycle": "2. ",
+            "power_cycle": "1. ",
+            "env_check": "2. ",
             "sample_upgrade": "3. ",
             "sample_parameter_write": "4. ",
             "onu_registration": "5. ",

@@ -1,27 +1,28 @@
 """「检查并执行测试 → 全流程执行」管道编排器。
 
 背景：
-- 主界面「检查并执行测试」按钮触发的全流程管道(2026-07-20 新增):
-  把 6 个子任务(自动上/下电 / 样机升级 / 写样机参数 / ONU注册 / 串口日志 / 测试项配置)
-  作为可勾选的子任务,按 1→6 固定顺序串行执行,任一子任务失败 → 整个管道停止。
+- 主界面「检查并执行测试」按钮触发的全流程管道:
+  把 7 个子任务(自动上/下电 / 环境线路检查 / 样机升级 / 写样机参数 / ONU注册 / 串口日志 / 测试项配置)
+  作为可勾选的子任务,按 1→7 固定顺序串行执行,任一子任务失败 → 整个管道停止。
 - 本模块负责:
-  ① 评估 6 个子任务「必填项当前状态」→ 弹窗展示给操作员确认
-  ② 按 1→6 顺序执行勾选的子任务
+  ① 评估 7 个子任务「必填项当前状态」→ 弹窗展示给操作员确认
+  ② 按 1→7 顺序执行勾选的子任务
   ③ 失败传播(任一失败 → 停止后续 + 主日志留痕)
 
 子任务执行策略(v1):
   - 1. 自动上/下电: 直接调 ``power_on_service`` 中的 ``power_on_selected_channels`` / ``turn_off_selected_channels``(同步,实时返回)。
-  - 2. 样机升级: 调 ``app._start_page_upgrade()`` / ``app._start_full_upgrade()``(异步起线程,弹确认框由操作员点「是」;
+  - 2. 环境线路检查: 调 ``network_ops.run_line_check()``，任一通道失败即停止后续。
+  - 3. 样机升级: 调 ``app._start_page_upgrade()`` / ``app._start_full_upgrade()``(异步起线程,弹确认框由操作员点「是」;
     编排器只负责引导 + 兜底,后台线程由 app 的既有 worker 完成)。
-  - 3. 写样机参数: 调 ``app._start_sample_parameter_write()``(异步起线程,弹确认框由操作员点「是」;同 2)。
-  - 4. ONU 注册: 调 ``app._on_onu_query_clicked()`` + ``app._on_onu_register_clicked()``(异步起线程,弹确认框;同 2)。
-  - 5. 串口日志: 调 ``app._open_serial_log_module()``(打开终端窗口,管道运行期间持续记录)。
-  - 6. 测试项配置: 调新 ``test_item_execution_service.run_test_item_execution`` 同步执行(每台串行,默认 1)。
+  - 4. 写样机参数: 调 ``app._start_sample_parameter_write()``(异步起线程,弹确认框由操作员点「是」;同 3)。
+  - 5. ONU 注册: 调 ``app._on_onu_query_clicked()`` + ``app._on_onu_register_clicked()``(异步起线程,弹确认框;同 3)。
+  - 6. 串口日志: 调 ``app._open_serial_log_module()``(打开终端窗口,管道运行期间持续记录)。
+  - 7. 测试项配置: 调新 ``test_item_execution_service.run_test_item_execution`` 同步执行(每台串行,默认 1)。
 
 不变量:
 - 任一子任务抛异常 → 整个管道停止(串口日志除外,因不致命)。
-- 1/5/6 同步执行,操作员看到的「实时主日志」就是编排器的 ``emit`` 输出。
-- 2/3/4 异步执行,操作员看到的「实时主日志」来自 app 既有 worker 的 ``log_queue``。
+- 1/2/6/7 同步执行,操作员看到的「实时主日志」就是编排器的 ``emit`` 输出。
+- 3/4/5 异步执行,操作员看到的「实时主日志」来自 app 既有 worker 的 ``log_queue``。
 - 编排器本身不发任何危险操作命令(无 telnet / 串口 / UBUS);只调度既有方法。
 """
 from __future__ import annotations
@@ -39,10 +40,10 @@ from line_check_assistant.test_item_config_store import TestProjectConfig
 
 
 # 7 个子任务的 code + 窗口显示名 + 排序。固定顺序由用户决策。
-# 2026-07-20 在最前面新增「环境线路检查」;其余 6 个编号顺延 1→2 ... 6→7。
+# 2026-07-24 用户确认：自动上/下电先执行，环境线路检查作为第 2 个致命步骤。
 SUBTASK_CODES: Tuple[str, ...] = (
-    "env_check",
     "power_cycle",
+    "env_check",
     "sample_upgrade",
     "sample_parameter_write",
     "onu_registration",
@@ -51,8 +52,8 @@ SUBTASK_CODES: Tuple[str, ...] = (
 )
 
 SUBTASK_LABELS: dict[str, str] = {
-    "env_check": "1. 环境线路检查",
-    "power_cycle": "2. 自动上/下电",
+    "power_cycle": "1. 自动上/下电",
+    "env_check": "2. 环境线路检查",
     "sample_upgrade": "3. 样机升级",
     "sample_parameter_write": "4. 写样机参数",
     "onu_registration": "5. ONU 注册",
@@ -63,8 +64,8 @@ SUBTASK_LABELS: dict[str, str] = {
 # config_target:窗口「去配置」按钮跳到主程序的哪个子窗口方法名。
 # 主程序实现 ``_open_power_cycle()`` / ``_open_sample_upgrade()`` 等时,按此 dict 走。
 SUBTASK_CONFIG_TARGETS: dict[str, str] = {
-    "env_check": "_open_network_config",
     "power_cycle": "_open_power_control",
+    "env_check": "_open_network_config",
     "sample_upgrade": "_open_upgrade_module",
     "sample_parameter_write": "_open_sample_parameter_writer",
     "onu_registration": "_open_onu_registration_module",
@@ -126,7 +127,7 @@ def _get_attr(obj: Any, name: str, default: Any = None) -> Any:
 
 
 def _summarize_env_check(ctx: PipelineContext) -> SubTaskStatus:
-    """1. 环境线路检查 必填项:≥1 已勾选通道 + 每通道 vlan_name/adapter_alias/network_card_ip/device_manage_ip 非空。
+    """2. 环境线路检查 必填项:≥1 已勾选通道 + 每通道 vlan_name/adapter_alias/network_card_ip/device_manage_ip 非空。
 
     ping 是否通放到执行阶段(``_run_env_check``)才做;此处只校验必填项完整性,
     保证操作员至少能在「点击开始执行前」看到「哪些通道缺哪些字段」的红字提示。
@@ -313,7 +314,7 @@ _SUMMARIZERS = {
 
 
 def compute_all_subtask_statuses(ctx: PipelineContext) -> dict[str, SubTaskStatus]:
-    """按 1→6 顺序计算所有 6 个子任务的状态。"""
+    """按 1→7 顺序计算所有 7 个子任务的状态。"""
     return {code: _SUMMARIZERS[code](ctx) for code in SUBTASK_CODES}
 
 
@@ -356,7 +357,7 @@ class PipelineOrchestrator:
         self.ctx.stop_event.set()
 
     def run(self, selected: set[str]) -> List[SubTaskResult]:
-        """按 1→6 顺序执行勾选的子任务。
+        """按 1→7 顺序执行勾选的子任务。
 
         Returns:
             各子任务执行结果(按执行顺序;被跳过的子任务不包含)。
@@ -403,7 +404,7 @@ class PipelineOrchestrator:
         runner()
 
     def _run_env_check(self) -> None:
-        """1. 环境线路检查:复用 ``network_ops.run_line_check()`` 逐通道 ping。
+        """2. 环境线路检查:复用 ``network_ops.run_line_check()`` 逐通道 ping。
 
         致命失败:任一通道 ping 不通 → 整个管道停止(网络不通则后续子任务均无意义)。
         """
@@ -453,7 +454,7 @@ class PipelineOrchestrator:
     def _run_power_cycle(self) -> None:
         """1. 自动上/下电:直接调 power_on_service(同步)。"""
         from src.services.power_on_service import (
-            power_on_selected_channels,
+            turn_on_selected_channels,
             turn_off_selected_channels,
         )
 
@@ -484,7 +485,7 @@ class PipelineOrchestrator:
             raise RuntimeError("已勾选通道为空")
         self.emit(f"程控电源 {com_value} 通道 {channels} 操作:{'上电' if operation == 'up' else '下电'}")
         if operation == "up":
-            result = power_on_selected_channels(
+            result = turn_on_selected_channels(
                 com_value,
                 channels,
                 wait_seconds=0,
@@ -501,11 +502,16 @@ class PipelineOrchestrator:
         self.emit(f"程控电源{operation}完成:{result.message}")
 
     def _run_sample_upgrade(self) -> None:
-        """2. 样机升级:调 app._start_page_upgrade() 或 _start_full_upgrade()(异步,弹确认框)。
-
-        v1 仅负责引导 + 兜底;真正执行由 app 既有 worker 完成,主程序执行日志来自 ``log_queue``。
-        """
+        """3. 样机升级：等待主程序异步升级真实完成后才继续下一项。"""
         app = self.ctx.app
+        pipeline_method = _get_attr(app, "_run_pipeline_sample_upgrade", None)
+        if callable(pipeline_method):
+            self.emit("全流程样机升级：等待操作员确认及升级完成。")
+            pipeline_method()
+            self.emit("全流程样机升级已完成。")
+            return
+
+        # 兼容最小 mock / 历史入口：真实主程序必须提供上面的顺序化桥接。
         settings = self.ctx.sample_upgrade_settings
         if settings.upgrade_mode == "页面升级":
             start_method = _get_attr(app, "_start_page_upgrade", None)
@@ -514,20 +520,30 @@ class PipelineOrchestrator:
             self.emit("已启动页面升级(请在弹窗确认);后续进度见主执行日志。")
             start_method()
         elif settings.upgrade_mode == "全包升级":
-            if settings.transfer_method == "Tftp指令":
-                start_method = _get_attr(app, "_start_tftp_command_upgrade", None)
-            else:
-                start_method = _get_attr(app, "_start_tftp_put_upgrade", None)
+            # 主程序目前由同一入口读取 upgrade_transfer_var 后，继续分流到
+            # Tftp指令 / Tftp Put 两条独立链路；不能再调用历史上未实现的
+            # _start_tftp_command_upgrade / _start_tftp_put_upgrade 名称。
+            start_method = _get_attr(app, "_start_serial_tftp_copy_upgrade", None)
             if not callable(start_method):
-                raise RuntimeError("主程序未实现 _start_tftp_command_upgrade / _start_tftp_put_upgrade")
-            self.emit("已启动全包升级(请在弹窗确认);后续进度见主执行日志。")
+                raise RuntimeError("主程序未实现 _start_serial_tftp_copy_upgrade")
+            self.emit(
+                f"已启动全包升级（{settings.transfer_method}，请在弹窗确认）；后续进度见主执行日志。"
+            )
             start_method()
         else:
             raise RuntimeError(f"未配置升级方式: {settings.upgrade_mode!r}")
 
     def _run_sample_parameter_write(self) -> None:
-        """3. 写样机参数:调 app._start_sample_parameter_write()(异步,弹确认框)。"""
+        """4. 写样机参数：等待写参完成后才继续下一项。"""
         app = self.ctx.app
+        pipeline_method = _get_attr(app, "_run_pipeline_sample_parameter_write", None)
+        if callable(pipeline_method):
+            self.emit("全流程写样机参数：等待操作员确认及写参完成。")
+            pipeline_method()
+            self.emit("全流程写样机参数已完成。")
+            return
+
+        # 兼容最小 mock / 历史入口：真实主程序必须提供上面的顺序化桥接。
         start_method = _get_attr(app, "_start_sample_parameter_write", None)
         if not callable(start_method):
             raise RuntimeError("主程序未实现 _start_sample_parameter_write")

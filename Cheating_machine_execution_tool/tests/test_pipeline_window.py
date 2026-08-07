@@ -10,6 +10,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 
@@ -34,6 +35,22 @@ class FakeApp:
 
 
 class BuildContextRegressionTests(unittest.TestCase):
+    def test_pipeline_defaults_to_environment_check_only(self) -> None:
+        """打开全流程窗口时，只默认勾选环境线路检查。"""
+        import inspect
+        import line_check_assistant.pipeline_window as pw_mod
+
+        source = inspect.getsource(pw_mod.PipelineWindow._build_row)
+        self.assertIn('default_checked = code == "env_check"', source)
+        self.assertNotIn('"power_cycle", "serial_terminal", "test_item_execution"', source)
+
+    def test_pipeline_selection_uses_solid_black_fill(self) -> None:
+        """选中态必须是实心黑色小方框，不能使用主题的 × 标记。"""
+        from line_check_assistant.pipeline_window import PipelineWindow
+
+        self.assertEqual(PipelineWindow._selection_fill(True), "#000000")
+        self.assertEqual(PipelineWindow._selection_fill(False), "#ffffff")
+
     def test_pipeline_confirmation_contains_manual_reboot_guard_for_empty_com(self) -> None:
         """空 COM 的全流程执行必须在启动后台线程前要求操作员确认手动重启。"""
         import inspect
@@ -42,6 +59,24 @@ class BuildContextRegressionTests(unittest.TestCase):
         source = inspect.getsource(pw_mod.PipelineWindow._on_start)
         self.assertIn("请先手动重启样机", source)
         self.assertIn("确认样机已重启后再点击", source)
+
+    def test_pipeline_refreshes_statuses_after_returning_from_configuration(self) -> None:
+        """关闭去配置子窗口并回到全流程窗口时，必须自动刷新缺项状态。"""
+        import inspect
+        import line_check_assistant.pipeline_window as pw_mod
+
+        init_source = inspect.getsource(pw_mod.PipelineWindow.__init__)
+        focus_source = inspect.getsource(pw_mod.PipelineWindow._on_focus_in)
+        self.assertIn('self.window.bind("<FocusIn>", self._on_focus_in)', init_source)
+        self.assertIn("self._refresh_statuses()", focus_source)
+
+    def test_pipeline_provides_manual_status_refresh_button(self) -> None:
+        """操作员必须能显式刷新去配置后的必填项状态。"""
+        import inspect
+        import line_check_assistant.pipeline_window as pw_mod
+
+        source = inspect.getsource(pw_mod.PipelineWindow._build)
+        self.assertIn('text="刷新状态", command=self._refresh_statuses', source)
 
     def test_build_context_does_not_use_getattr_for_module_constant(self) -> None:
         """_build_context 必须从 app 模块取 TEST_ITEM_CONFIG_PATH,不能 ``_get_attr(app, ...)``。
@@ -68,6 +103,29 @@ class BuildContextRegressionTests(unittest.TestCase):
         # 2. 必须从 line_check_assistant.app 模块导入并直接访问
         self.assertIn("line_check_assistant.app", source)
         self.assertIn("TEST_ITEM_CONFIG_PATH", source)
+
+    def test_build_context_prefers_live_upgrade_and_onu_inputs(self) -> None:
+        """去配置后，管道必须立即读取窗口当前输入而非启动时缓存。"""
+        from line_check_assistant.onu_registration_store import OnuRegistrationConfig
+        from line_check_assistant.pipeline_window import PipelineWindow
+        from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
+
+        fake = FakeApp()
+        stale_settings = SampleUpgradeSettings(username="")
+        live_settings = SampleUpgradeSettings(username="sdmc", password="secret")
+        stale_onu = OnuRegistrationConfig(username="")
+        live_onu = OnuRegistrationConfig(username="zte")
+        fake.sample_upgrade_settings = stale_settings
+        fake.onu_registration_config = stale_onu
+        fake._current_sample_upgrade_settings = MagicMock(return_value=live_settings)
+        fake._current_onu_registration_config = MagicMock(return_value=live_onu)
+
+        context = PipelineWindow._build_context(SimpleNamespace(app=fake))
+
+        self.assertIs(context.sample_upgrade_settings, live_settings)
+        self.assertIs(context.onu_registration, live_onu)
+        fake._current_sample_upgrade_settings.assert_called_once_with()
+        fake._current_onu_registration_config.assert_called_once_with()
 
     def test_compute_subtask_statuses_succeeds_with_minimal_app(self) -> None:
         """真实 _build_context 路径上 compute_all_subtask_statuses 必须不抛。"""
