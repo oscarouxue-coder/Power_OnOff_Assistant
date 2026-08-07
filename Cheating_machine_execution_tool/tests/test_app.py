@@ -574,6 +574,16 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("self.parameter_table_var = self.parameter_table_path_var", source)
         self.assertIn("self._load_parameter_table(Path(saved_table_path), report_error=False)", source)
 
+    def test_parameter_option_checkbuttons_use_native_checkmark_indicator(self):
+        """写参可选项必须使用 Windows 原生勾选框，不显示 ttk clam 的叉号。"""
+        import inspect
+        import line_check_assistant.app as app_module
+
+        source = inspect.getsource(app_module.LineCheckAssistant._open_sample_parameter_writer)
+        self.assertEqual(source.count("Checkbutton("), 2)
+        self.assertNotIn("ttk.Checkbutton(option_row", source)
+        self.assertIn('selectcolor="#ffffff"', source)
+
     def test_pipeline_subtask_wait_returns_only_after_completion_result(self):
         """异步升级/写参只有完成回调通知后，管道才能执行下一项。"""
         context = SimpleNamespace(

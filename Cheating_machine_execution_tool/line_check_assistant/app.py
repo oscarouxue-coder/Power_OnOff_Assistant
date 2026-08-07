@@ -713,8 +713,26 @@ class LineCheckAssistant(Tk):
         # 写样机参数流水线两个可选行为(2026-07-19):勾选后才下发,默认关闭。
         option_row = ttk.Frame(container)
         option_row.pack(fill="x", pady=(0, 8))
-        ttk.Checkbutton(option_row, text="清空参数", variable=self.parameter_clear_parameters_var).pack(side="left")
-        ttk.Checkbutton(option_row, text="退出老化", variable=self.parameter_exit_aging_var).pack(side="left", padx=(16, 0))
+        # ttk 的 clam 主题会把选中态绘制为叉号；这里使用 Windows 原生 Checkbutton，
+        # 让两个危险可选项在选中时明确显示标准勾选标记。
+        Checkbutton(
+            option_row,
+            text="清空参数",
+            variable=self.parameter_clear_parameters_var,
+            selectcolor="#ffffff",
+            background=COLOR_SURFACE,
+            activebackground=COLOR_SURFACE,
+            foreground=COLOR_TEXT,
+        ).pack(side="left")
+        Checkbutton(
+            option_row,
+            text="退出老化",
+            variable=self.parameter_exit_aging_var,
+            selectcolor="#ffffff",
+            background=COLOR_SURFACE,
+            activebackground=COLOR_SURFACE,
+            foreground=COLOR_TEXT,
+        ).pack(side="left", padx=(16, 0))
         ttk.Label(option_row, text="（勾选后,工厂模式二次登录成功时下发对应命令；不勾选则下发跳过日志）", style="CardHint.TLabel").pack(side="left", padx=(12, 0))
 
         ttk.Label(container, text="本次目标与预检结果", style="CardTitle.TLabel").pack(anchor="w", pady=(4, 4))

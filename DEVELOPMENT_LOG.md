@@ -2,6 +2,16 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-07 - 调整写参可选项勾选标识
+
+- 类型：优化 / 测试 / 文档
+- 背景：写样机参数窗口中「清空参数」「退出老化」使用 ttk Clam 主题的选中态，显示为叉号，容易让操作员误判为未选中或否定状态。
+- 完成内容：① 两个可选项改用 Windows 原生 `Checkbutton`，选中时显示标准“✓”；② 保持默认不勾选、配置持久化、确认框内容和勾选后才下发对应命令的既有语义不变；③ 补充界面回归断言与操作员说明。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m py_compile line_check_assistant\app.py`、`python -m unittest discover -s tests -p "test_app.py" -v`、`python scripts\verify_baseline.py`。
+- 验证结果：`test_app.py` 71 项通过；`python scripts\verify_baseline.py` 全绿（29 个 `.py` 编译、413 项单测、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面打开「写样机参数」窗口，确认两个选项选中态为“✓”。
+
 ## 2026-07-24 - 串行等待全流程升级与写参完成
 
 - 类型：BUG 修复 / 优化 / 测试 / 文档
