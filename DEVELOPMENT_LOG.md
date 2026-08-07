@@ -2,6 +2,36 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-07 - 加宽测试项命令组间距
+
+- 类型：界面优化 / 测试 / 文档
+- 背景：「测试项配置」窗口的不同测试项命令组之间仅有 6px 底部间隔，视觉分组过密。
+- 完成内容：① 命令组底部间隔从 6px 调整为 14px；② 保持同一命令组内期望条件行的紧凑间距、滚动列表和增删逻辑不变；③ 增加布局回归断言并同步操作说明。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m py_compile line_check_assistant\app.py`、`python -m unittest discover -s tests -p "test_app.py" -v`、`python scripts\verify_baseline.py`。
+- 验证结果：`app.py` 编译通过；`test_app.py` 72 项通过；`python scripts\verify_baseline.py` 全绿（40 个 `.py` 编译、编译清单完整、420 项单测、10 个关键基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面打开「测试项配置 → 测试项」，确认相邻命令组之间留白更明显且段内布局正常。
+
+## 2026-08-07 - 全流程管道选中态改为勾号
+
+- 类型：界面优化 / 测试 / 文档
+- 背景：「全流程执行」窗口左侧管道选择框当前以实心黑块表示选中，不符合操作员希望的标准打勾效果。
+- 完成内容：① 7 个管道未选中时继续显示白底黑边空框；② 选中时在框内显示黑色“✓”，不再填充为实心黑块；③ 保持默认只勾选「环境线路检查」、点击方框或任务标题切换、状态刷新和执行逻辑不变。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m py_compile line_check_assistant\pipeline_window.py`、`python -m unittest discover -s tests -p "test_pipeline_window.py" -v`、`python scripts\verify_baseline.py`。
+- 验证结果：`pipeline_window.py` 编译通过；`test_pipeline_window.py` 15 项通过；`python scripts\verify_baseline.py` 全绿（40 个 `.py` 编译、编译清单完整、419 项单测、10 个关键基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面打开「全流程执行」，确认每个管道选中时显示“✓”、取消后恢复空框。
+
+## 2026-08-07 - 加强已验收功能回归门禁
+
+- 类型：回归约束 / 测试 / 开发流程
+- 背景：原 `verify_baseline.py` 能检查编译、全量单测与关键协议字符串，但新增源码可能漏出编译清单，关键测试也可能被删除或改名后仍只剩“全量单测通过”的表象；本地 Git 提交默认不会自动执行门禁。
+- 完成内容：① `PY_COMPILE_FILES` 补齐 40 个当前主程序 Python 文件，并新增源码编译清单完整性检查；② 新增 10 个已验收关键行为测试 ID（TFTP 双链路/源 IP 绑定、电源、写参可选命令、全流程顺序与失败停止），全量单测必须实际执行它们；③ 在输出中独立显示 `required_baseline_tests` 结果；④ 新增版本化 `.githooks/pre-commit` 与 `scripts/install_git_hooks.ps1`，首次安装后本地 `git commit` 自动执行基线门禁；⑤ 同步验收基线、项目状态和开发规则，修正状态页历史测试数。
+- 修改文件：`AGENTS.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`.githooks/pre-commit`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/scripts/install_git_hooks.ps1`、`Cheating_machine_execution_tool/tests/test_verify_baseline.py`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_verify_baseline.py" -v`、`python scripts\verify_baseline.py`。
+- 验证结果：`test_verify_baseline.py` 17 项通过；`python scripts\verify_baseline.py` 全绿（40 个 `.py` 编译、编译清单完整、419 项单测、10 个关键基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：远端代码托管启用后，为主分支配置同一基线命令的 CI 必过检查；本地 hook 可被 `git commit --no-verify` 绕过，不能替代远端保护。
+
 ## 2026-08-07 - 调整写参可选项勾选标识
 
 - 类型：优化 / 测试 / 文档

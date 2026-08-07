@@ -1,6 +1,6 @@
 # Acceptance Baseline
 
-更新：2026-07-24（§2.12 保持 7 子任务，默认仅勾选环境线路检查；状态仍为「已实现未验收」）
+更新：2026-08-07（已新增关键行为测试执行与源码编译清单完整性门禁；§2.12 保持 7 子任务，默认仅勾选环境线路检查；状态仍为「已实现未验收」）
 
 > 与 `PROJECT_STATUS.md` 的关系：本文按"实现 → 单测 → 真实样机验收"三态罗列验收证据与不变量，作为独立验收基线。`PROJECT_STATUS.md` 保留面向项目的进度叙述；两者冲突时以本文为准。
 >
@@ -16,7 +16,7 @@ cd F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool
 python scripts\verify_baseline.py
 ```
 
-预期 `ALL CHECKS PASSED`，其中包括编译、全量单元测试和 §1.3 / §1.4 不变量检查。测试数量会随测试增加变化，不在本文件固化；最近一次已记录结果见 `PROJECT_STATUS.md`，历史增量见 `DEVELOPMENT_LOG.md`。
+预期 `ALL CHECKS PASSED`，其中包括编译、源码编译清单完整性、全量单元测试、已验收关键行为测试实际执行，以及 §1.3 / §1.4 不变量检查。测试数量会随测试增加变化，不在本文件固化；最近一次已记录结果见 `PROJECT_STATUS.md`，历史增量见 `DEVELOPMENT_LOG.md`。
 
 ## 1. 全局不可破坏规则
 
@@ -30,6 +30,9 @@ python scripts\verify_baseline.py
 ### 1.2 测试与目录基线
 
 - 全量：`python -m unittest discover -s tests -v`；提交前统一执行 `python scripts\verify_baseline.py`
+- `scripts/verify_baseline.py` 中的 `REQUIRED_BASELINE_TEST_IDS` 是已验收关键行为的最小回归集合。重构若需删除或改名其中任一测试，必须先补等价或更强的测试、同步该清单与本文件的对应验收项，并在 `DEVELOPMENT_LOG.md` 说明。
+- `src/` 或 `line_check_assistant/` 新增 Python 源文件时，必须同步加入 `PY_COMPILE_FILES`；基线脚本会拒绝遗漏编译清单的新增源码。
+- 首次开发环境执行 `powershell -ExecutionPolicy Bypass -File scripts\install_git_hooks.ps1`，使版本化 `.githooks/pre-commit` 在每次 `git commit` 前自动运行基线门禁。该本地钩子可被 Git 的 `--no-verify` 绕过，远端合并仍应要求 CI 基线检查通过。
 - 测试数量和文件数量属于运行结果，不在本节固化；新增测试后由实施者在 `PROJECT_STATUS.md` 记录最近一次完整验证结果，并在 `DEVELOPMENT_LOG.md` 保留本轮增量依据
 - 不动 `build/`、`dist/`、`logs/`、`.venv/`
 
@@ -238,7 +241,7 @@ python scripts\verify_baseline.py
     5. **ONU 注册**（默认不勾）—— 调主程序既有 `_on_onu_query_clicked` + `_on_onu_register_clicked`（异步起线程 + 弹确认框）；必填项：OLT IP / 用户名 / 密码
     6. **串口日志（管道期间持续记录）**（默认不勾）—— 调主程序既有 `_open_serial_log_module` 打开 `SerialTerminalWindow`；**非致命**（打开失败不阻塞后续）
     7. **测试项配置（[order] 执行）**（默认不勾）—— 调新 `test_item_execution_service.run_test_item_execution` 同步执行（每台串行）；按 `[order]` 顺序逐条 telnet 下发 + per-segment fuzzy 匹配（`!A&&B`）+ 每条命令 `retry_times` 次重试（间隔 `command_fail_retry_interval_time` 秒）；per-channel 结果文件写到 `Cheating_machine_execution_tool/test_results/device_{section}_command_results_{YYYYMMDD_HHMMSS}.log`
-  - 每行任务标题左侧为实心选择框：选中时填满黑色、未选时白底黑边，点击小方框或任务标题可切换；右侧实时显示「必填项当前状态」（绿色就绪 / 红色「缺: 字段1, 字段2」），「去配置」按钮跳到主程序对应子窗口或方法（「环境线路检查」去配置调 `_open_network_config()`：隐藏全流程窗口 + 把主界面拉到前台 + 主执行日志提示操作员去顶部「网络配置」卡片编辑）
+  - 每行任务标题左侧为勾选框：选中时白底黑边小方框内显示“✓”、未选时保持空框，点击小方框或任务标题可切换；右侧实时显示「必填项当前状态」（绿色就绪 / 红色「缺: 字段1, 字段2」），「去配置」按钮跳到主程序对应子窗口或方法（「环境线路检查」去配置调 `_open_network_config()`：隐藏全流程窗口 + 把主界面拉到前台 + 主执行日志提示操作员去顶部「网络配置」卡片编辑）
   - 底部「刷新状态」只重算当前必填项状态，不下发设备或电源操作；用于去配置后主动核对状态
   - 管道构造上下文时优先读取升级 / ONU 窗口的当前输入，不依赖启动时缓存或本机 ini 的延迟保存；写样机参数的参数表路径也直接复用同一实例级持久变量，选表后立即同步管道状态，重开写参窗口自动恢复并加载已选表；从配置窗口返回时自动刷新状态，避免已填写的字段被误判为缺失
   - 「自动上/下电」去配置调 `_open_power_control()`：弹出 COM 与上电/下电选择框，确认后保存配置、刷新本行状态并输出主执行日志；**不下发任何程控电源指令**

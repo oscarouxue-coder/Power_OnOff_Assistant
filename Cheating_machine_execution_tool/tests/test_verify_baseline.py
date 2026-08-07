@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -24,8 +25,12 @@ from verify_baseline import (  # noqa: E402  (sys.path mutation above)
     MUST_EXIST,
     MUST_NOT_EXIST,
     PY_COMPILE_FILES,
+    REQUIRED_BASELINE_TEST_IDS,
+    check_py_compile_inventory,
+    check_required_baseline_tests,
     check_must_exist,
     check_must_not_exist,
+    missing_required_baseline_tests,
 )
 
 
@@ -70,6 +75,61 @@ class VerifyBaselineStructureTests(unittest.TestCase):
                 f"{f!r} must be under line_check_assistant/ or src/",
             )
             self.assertTrue(f.endswith(".py"), f"{f!r} should end with '.py'")
+
+    def test_required_baseline_test_ids_are_unique_and_fully_qualified(self):
+        self.assertGreater(len(REQUIRED_BASELINE_TEST_IDS), 0)
+        self.assertEqual(len(REQUIRED_BASELINE_TEST_IDS), len(set(REQUIRED_BASELINE_TEST_IDS)))
+        for test_id in REQUIRED_BASELINE_TEST_IDS:
+            self.assertRegex(test_id, r"^test_[\w.]+\.test_\w+$")
+
+
+class CompileInventoryTests(unittest.TestCase):
+    """新增主程序源码必须加入编译清单。"""
+
+    def test_reports_source_file_missing_from_compile_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "src" / "core"
+            source.mkdir(parents=True)
+            (source / "new_module.py").write_text("VALUE = 1\n", encoding="utf-8")
+            with patch("verify_baseline.PY_COMPILE_FILES", ()):
+                result = check_py_compile_inventory(root)
+            self.assertFalse(result.passed)
+            self.assertIn("src/core/new_module.py", result.detail)
+
+    def test_passes_when_every_source_file_is_declared(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "line_check_assistant"
+            source.mkdir()
+            (source / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+            with patch("verify_baseline.PY_COMPILE_FILES", ("line_check_assistant/app.py",)):
+                result = check_py_compile_inventory(root)
+            self.assertTrue(result.passed, result.detail)
+
+
+class RequiredBaselineTestTests(unittest.TestCase):
+    """关键验收测试必须出现在 verbose unittest 执行输出中。"""
+
+    def test_reports_every_missing_test_id(self):
+        missing = missing_required_baseline_tests("Ran 1 test in 0.001s\nOK\n")
+        self.assertEqual(missing, list(REQUIRED_BASELINE_TEST_IDS))
+
+    def test_accepts_output_containing_every_required_test_id(self):
+        output = "\n".join(
+            f"{test_id.rsplit('.', 1)[1]} ({test_id.rsplit('.', 1)[0]}) ... ok"
+            for test_id in REQUIRED_BASELINE_TEST_IDS
+        )
+        self.assertEqual(missing_required_baseline_tests(output), [])
+
+    def test_reports_passed_result_when_every_required_test_executed(self):
+        output = "\n".join(
+            f"{test_id.rsplit('.', 1)[1]} ({test_id.rsplit('.', 1)[0]}) ... ok"
+            for test_id in REQUIRED_BASELINE_TEST_IDS
+        )
+        result = check_required_baseline_tests(output)
+        self.assertTrue(result.passed, result.detail)
+        self.assertIn(str(len(REQUIRED_BASELINE_TEST_IDS)), result.detail)
 
 
 class CheckMustExistTests(unittest.TestCase):

@@ -3,11 +3,13 @@
 封装 `ACCEPTANCE_BASELINE.md §0 / §1.3 / §1.4` 的全部检查,作为提交前必跑的最低门禁
 (参见 `AGENTS.md` 规则 13 与 `.claude/skills/line-check-dev/SKILL.md §5 / §11`)。
 
-执行 4 类检查:
+执行 6 类检查:
 1. **py_compile**: 全量 `src/` + `line_check_assistant/` 下的关键模块能编译
-2. **unittest**: 全量测试通过,且能解析 `Ran N tests` 行(防止静默 0 项 / 误报 OK)
-3. **must_exist**: §1.3 的 8 条协议不变量必须在指定目录下命中
-4. **must_not_exist**: §1.3 / §1.4 的禁止模式(`0.0.0.0` 等)不能在指定文件的**代码行**中出现
+2. **compile_inventory**: `src/` / `line_check_assistant/` 的每个 Python 源文件都必须纳入编译清单
+3. **unittest**: 全量测试通过,且能解析 `Ran N tests` 行(防止静默 0 项 / 误报 OK)
+4. **required_baseline_tests**: 已验收关键行为的指定测试 ID 必须实际执行
+5. **must_exist**: §1.3 的 8 条协议不变量必须在指定目录下命中
+6. **must_not_exist**: §1.3 / §1.4 的禁止模式(`0.0.0.0` 等)不能在指定文件的**代码行**中出现
    (跳过注释 / 文档字符串,避免反向语义误报)
 
 退出码: 0 全部通过 / 1 任一失败。
@@ -50,18 +52,26 @@ class CheckResult(NamedTuple):
 #    下全部 .py 为准;新增 .py 后必须手工补到本列表)。
 PY_COMPILE_FILES: tuple[str, ...] = (
     # line_check_assistant 包
+    "line_check_assistant/__init__.py",
     "line_check_assistant/app.py",
     "line_check_assistant/config_store.py",
     "line_check_assistant/network_ops.py",
     "line_check_assistant/onu_registration_store.py",
+    "line_check_assistant/old_tool_automation.py",
+    "line_check_assistant/old_tool_config.py",
+    "line_check_assistant/packaging_hooks/hook-_tkinter.py",
+    "line_check_assistant/packaging_hooks/pre_find_module_path/hook-tkinter.py",
     "line_check_assistant/page_upgrade.py",
     "line_check_assistant/paths.py",
     "line_check_assistant/pipeline_window.py",
     "line_check_assistant/sample_upgrade_settings_store.py",
     "line_check_assistant/serial_ports.py",
+    "line_check_assistant/subprocess_window.py",
     "line_check_assistant/test_item_config_store.py",
     # src 包
+    "src/__init__.py",
     "src/config.py",
+    "src/core/__init__.py",
     "src/ui/serial_terminal.py",
     "src/services/pipeline_orchestrator.py",
     "src/services/power_on_service.py",
@@ -80,6 +90,24 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/core/ubus_http_client.py",
     "src/models/sample_parameter_models.py",
     "src/models/serial_models.py",
+    "src/models/__init__.py",
+    "src/services/__init__.py",
+    "src/ui/__init__.py",
+)
+
+# 关键已验收行为的回归用例。全量 unittest 必须实际执行这些 ID，避免测试文件或
+# 用例在重构时被静默删除 / 改名而使已验收边界失去保护。
+REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
+    "test_tftp_transport.TftpTransportTests.test_server_binds_transfer_data_socket_to_listening_vlan_ip",
+    "test_tftp_transport.TftpTransportTests.test_upload_binds_requested_source_ip_and_uses_requested_remote_name",
+    "test_serial_upgrade_service.SerialUpgradeControllerTests.test_full_package_upgrade_tftp_put_runs_full_flow_after_power_cycle",
+    "test_serial_upgrade_service.SerialUpgradeControllerTests.test_login_boot_salvages_after_garbled_username_echo",
+    "test_power_supply.PowerSupplyTests.test_controller_turns_on_all_requested_channels_one_second_apart_without_powering_off",
+    "test_power_supply.PowerSupplyTests.test_empty_power_serial_port_skips_power_operation_without_opening_port",
+    "test_sample_parameter_service.SampleParameterPipelineOptionTests.test_clear_parameters_default_off_does_not_send_ppctl_clear",
+    "test_sample_parameter_service.SampleParameterPipelineOptionTests.test_both_options_off_skips_both_commands",
+    "test_pipeline_orchestrator.PipelineRunOrderTests.test_run_all_seven_subtasks_in_order",
+    "test_pipeline_orchestrator.PipelineRunOrderTests.test_fatal_subtask_failure_raises_pipeline_error",
 )
 
 # 2. 必须命中(§1.3 / §1.4) - (pattern, 搜索目录组)
@@ -163,10 +191,58 @@ def run_py_compile(project_root: Path) -> CheckResult:
     return CheckResult("py_compile", False, (proc.stderr or proc.stdout).strip().splitlines()[-1] if (proc.stderr or proc.stdout) else "unknown error")
 
 
-def run_unittest(project_root: Path) -> CheckResult:
-    """运行 `python -m unittest discover -s tests` 并解析 `Ran N tests` 行。"""
+def check_py_compile_inventory(project_root: Path) -> CheckResult:
+    """保证新增主程序 Python 文件不会漏出 `PY_COMPILE_FILES`。"""
+    discovered = {
+        str(path.relative_to(project_root)).replace("\\", "/")
+        for path in _glob_py_files(project_root, ("src/", "line_check_assistant/"))
+    }
+    declared = set(PY_COMPILE_FILES)
+    undeclared = sorted(discovered - declared)
+    if undeclared:
+        return CheckResult(
+            "compile_inventory",
+            False,
+            f"source files missing from PY_COMPILE_FILES: {', '.join(undeclared)}",
+        )
+    return CheckResult("compile_inventory", True, f"{len(discovered)} source files covered")
+
+
+def missing_required_baseline_tests(unittest_output: str) -> list[str]:
+    """从 verbose unittest 输出中找出未执行的关键回归用例。"""
+    executed_test_ids = {
+        f"{test_class}.{test_name}"
+        for test_name, test_class in re.findall(
+            r"(?m)^(test_\w+) \(([\w.]+)\)", unittest_output
+        )
+    }
+    return [
+        test_id
+        for test_id in REQUIRED_BASELINE_TEST_IDS
+        if test_id not in executed_test_ids
+    ]
+
+
+def check_required_baseline_tests(unittest_output: str) -> CheckResult:
+    """输出关键已验收行为测试的实际执行结果。"""
+    missing = missing_required_baseline_tests(unittest_output)
+    if missing:
+        return CheckResult(
+            "required_baseline_tests",
+            False,
+            f"not executed: {', '.join(missing)}",
+        )
+    return CheckResult(
+        "required_baseline_tests",
+        True,
+        f"{len(REQUIRED_BASELINE_TEST_IDS)} required tests executed",
+    )
+
+
+def run_unittest(project_root: Path) -> tuple[CheckResult, str]:
+    """运行全量单测，并返回 verbose 输出供关键测试执行检查复用。"""
     proc = subprocess.run(
-        [sys.executable, "-m", "unittest", "discover", "-s", "tests"],
+        [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
         capture_output=True,
         text=True,
         cwd=str(project_root),
@@ -175,14 +251,17 @@ def run_unittest(project_root: Path) -> CheckResult:
     match = re.search(r"Ran (\d+) tests?", output)
     if proc.returncode != 0:
         tail = "\n".join(output.strip().splitlines()[-5:])
-        return CheckResult("unittest", False, f"non-zero exit; tail: {tail}")
+        return CheckResult("unittest", False, f"non-zero exit; tail: {tail}"), output
     if match is None:
-        return CheckResult(
-            "unittest",
-            False,
-            f"could not parse 'Ran N tests' from output; tail: {output[-200:]}",
+        return (
+            CheckResult(
+                "unittest",
+                False,
+                f"could not parse 'Ran N tests' from output; tail: {output[-200:]}",
+            ),
+            output,
         )
-    return CheckResult("unittest", True, f"Ran {match.group(1)} tests")
+    return CheckResult("unittest", True, f"Ran {match.group(1)} tests"), output
 
 
 def check_must_exist(project_root: Path) -> list[CheckResult]:
@@ -257,10 +336,14 @@ def check_must_not_exist(project_root: Path) -> list[CheckResult]:
 
 
 def collect_results(project_root: Path) -> list[CheckResult]:
-    """串联所有 4 类检查,返回完整结果列表。"""
+    """串联所有基线检查,返回完整结果列表。"""
     results: list[CheckResult] = []
     results.append(run_py_compile(project_root))
-    results.append(run_unittest(project_root))
+    results.append(check_py_compile_inventory(project_root))
+    unittest_result, unittest_output = run_unittest(project_root)
+    results.append(unittest_result)
+    if unittest_result.passed:
+        results.append(check_required_baseline_tests(unittest_output))
     results.extend(check_must_exist(project_root))
     results.extend(check_must_not_exist(project_root))
     return results

@@ -14,6 +14,7 @@ from line_check_assistant.app import (
     COLOR_WARNING,
     LineCheckAssistant,
     MAIN_LOG_EVENTS_PER_TICK,
+    TEST_ITEM_COMMAND_GROUP_SPACING,
     vlan_options_for_power_serial_port,
 )
 from line_check_assistant.config_store import ChannelConfig
@@ -96,6 +97,17 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         config_window.deiconify.assert_called_once_with()
         config_window.lift.assert_called_once_with()
         config_window.focus_force.assert_called_once_with()
+
+    def test_test_item_command_groups_use_wider_vertical_spacing(self):
+        """测试项命令组之间应有明显留白，段内布局保持不变。"""
+        import inspect
+
+        source = inspect.getsource(LineCheckAssistant._build_test_item_order_tab)
+        self.assertEqual(TEST_ITEM_COMMAND_GROUP_SPACING, 14)
+        self.assertIn(
+            'row_frame.pack(fill="x", pady=(0, TEST_ITEM_COMMAND_GROUP_SPACING))',
+            source,
+        )
 
     def test_serial_log_entry_opens_internal_terminal_for_selected_vlans(self):
         context = SimpleNamespace(serial_terminal=Mock(), _selected_upgrade_vlans=Mock(return_value=["vlan101"]))

@@ -53,7 +53,7 @@
 10. 涉及设备登录、升级、重启等危险操作时，必须加确认提示和日志记录。
 11. 每次完成的功能、优化、修改、BUG 修复、文档、构建或测试调整，都必须追加记录到 `DEVELOPMENT_LOG.md`；如果影响项目概览或后续入口，同步更新 `PROJECT_STATUS.md`；**真实样机验收或破坏 / 补全验收状态时，同步更新 `ACCEPTANCE_BASELINE.md §2.x 状态标签与 §3 待确认清单**。实施者负责本轮同步，真实样机结论只能依据项目负责人提供的现场结果。
 12. 每个新增功能点都必须在主程序执行日志输出关键阶段、实际命令下发、成功、跳过或失败提示，便于操作员核对真实执行结果。
-13. **提交代码前必须在主源码目录运行 `python scripts/verify_baseline.py` 且全部通过** —— 这是拦截破坏已验收功能（`ACCEPTANCE_BASELINE §0 / §1.3 / §1.4`）的最低门禁。脚本封装 4 类检查：① 全量 py_compile ② 全量 unittest（解析 `Ran N tests`）③ §1.3 必须命中不变量 grep ④ §1.3 / §1.4 必须不出现模式 grep。任一失败 exit 1，不可绕开。
+13. **提交代码前必须在主源码目录运行 `python scripts/verify_baseline.py` 且全部通过** —— 这是拦截破坏已验收功能（`ACCEPTANCE_BASELINE §0 / §1.3 / §1.4`）的最低门禁。脚本封装 6 类检查：① 编译清单全量 py_compile ② 新增 `src/` / `line_check_assistant/` 源码必须纳入编译清单 ③ 全量 unittest（解析 `Ran N tests`）④ 已验收关键行为的指定测试 ID 必须实际执行 ⑤ §1.3 必须命中不变量 grep ⑥ §1.3 / §1.4 必须不出现模式 grep。任一失败 exit 1，不可绕开；首次开发环境运行 `powershell -ExecutionPolicy Bypass -File scripts\install_git_hooks.ps1`，使本地 `git commit` 自动执行该门禁。
 14. 详细工作流（改动分类 → 文档同步矩阵、真实样机验收流程、完成一次改动标准动作清单）见 `.claude/skills/line-check-dev/SKILL.md`。
 
 ## 验收不变量（来自 `ACCEPTANCE_BASELINE.md §1.3 / §1.4`，不可破坏）

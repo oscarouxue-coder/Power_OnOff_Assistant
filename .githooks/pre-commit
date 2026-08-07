@@ -1,0 +1,8 @@
+#!/bin/sh
+# 版本化提交门禁：在提交前执行项目基线检查。
+# 首次使用请运行 Cheating_machine_execution_tool\scripts\install_git_hooks.ps1。
+set -eu
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root/Cheating_machine_execution_tool"
+exec python scripts/verify_baseline.py

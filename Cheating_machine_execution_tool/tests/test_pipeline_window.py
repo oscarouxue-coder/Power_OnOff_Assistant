@@ -44,12 +44,12 @@ class BuildContextRegressionTests(unittest.TestCase):
         self.assertIn('default_checked = code == "env_check"', source)
         self.assertNotIn('"power_cycle", "serial_terminal", "test_item_execution"', source)
 
-    def test_pipeline_selection_uses_solid_black_fill(self) -> None:
-        """选中态必须是实心黑色小方框，不能使用主题的 × 标记。"""
+    def test_pipeline_selection_uses_check_mark(self) -> None:
+        """选中态必须显示标准勾号，未选中时保持空框。"""
         from line_check_assistant.pipeline_window import PipelineWindow
 
-        self.assertEqual(PipelineWindow._selection_fill(True), "#000000")
-        self.assertEqual(PipelineWindow._selection_fill(False), "#ffffff")
+        self.assertEqual(PipelineWindow._selection_mark(True), "✓")
+        self.assertEqual(PipelineWindow._selection_mark(False), "")
 
     def test_pipeline_confirmation_contains_manual_reboot_guard_for_empty_com(self) -> None:
         """空 COM 的全流程执行必须在启动后台线程前要求操作员确认手动重启。"""

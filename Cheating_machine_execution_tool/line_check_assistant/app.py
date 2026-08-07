@@ -94,6 +94,7 @@ POWER_ACTION_OFF = "下电"
 POWER_ACTION_OPTIONS = (POWER_ACTION_ON, POWER_ACTION_OFF)
 CHANNEL_LIST_FONT = ("Microsoft YaHei UI", 11)
 CHANNEL_FIELD_WIDTH = 42
+TEST_ITEM_COMMAND_GROUP_SPACING = 14
 
 
 def power_channel_from_section(section: str) -> int:
@@ -3011,7 +3012,8 @@ class LineCheckAssistant(Tk):
 
         def _build_row_widgets(item: OrderItem, row_index: int) -> dict:
             row_frame = ttk.Frame(rows_frame, style="Surface.TFrame", padding=(8, 6))
-            row_frame.pack(fill="x", pady=(0, 6))
+            # 命令组之间保留更明显的空白；段内期望条件仍使用紧凑间距。
+            row_frame.pack(fill="x", pady=(0, TEST_ITEM_COMMAND_GROUP_SPACING))
 
             top = ttk.Frame(row_frame, style="Surface.TFrame")
             top.pack(fill="x")

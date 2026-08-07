@@ -127,23 +127,31 @@ class PipelineWindow:
         ).pack(side="right", padx=(0, 8))
 
     @staticmethod
-    def _selection_fill(selected: bool) -> str:
-        """选中框使用实心黑色，避免系统主题将勾选态画成 ``×``。"""
-        return "#000000" if selected else COLOR_SURFACE
+    def _selection_mark(selected: bool) -> str:
+        """选中时显示标准勾选标记，未选中时保持空框。"""
+        return "✓" if selected else ""
 
     def _draw_selection_indicator(self, code: str) -> None:
         """按当前 BooleanVar 重绘 14px 选择框。"""
         indicator = self._selection_indicators[code]
-        selected = self._check_vars[code].get()
+        mark = self._selection_mark(self._check_vars[code].get())
         indicator.delete("all")
         indicator.create_rectangle(
             0,
             0,
             13,
             13,
-            fill=self._selection_fill(selected),
+            fill=COLOR_SURFACE,
             outline="#000000",
         )
+        if mark:
+            indicator.create_text(
+                6.5,
+                6.5,
+                text=mark,
+                fill="#000000",
+                font=("Segoe UI Symbol", 10, "bold"),
+            )
 
     def _toggle_subtask(self, code: str) -> None:
         """点击小选择框或任务标题时切换选择状态。"""
@@ -153,7 +161,7 @@ class PipelineWindow:
         self._refresh_statuses()
 
     def _build_row(self, parent: Frame, code: str, index: int) -> None:
-        """单行:实心选择框 + label + summary + missing + 去配置 按钮。
+        """单行:勾选框 + label + summary + missing + 去配置 按钮。
 
         布局(2026-07-20 按用户反馈调整):summary(黑字)与 missing(红字)互换行——
           第 0 行: missing 红字(若有)　　—— 提示更醒目
