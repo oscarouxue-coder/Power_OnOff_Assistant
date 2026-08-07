@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
+from .legacy_ui_defaults_store import LegacyUiDefaultsStore
+
 
 TELNET_SECTION = "telnet"
 ORDER_SECTION = "order"
@@ -19,6 +21,7 @@ CONNECT_WIFI_SECTION = "connect_wifi"
 # ``[project_info]`` 段(Q1=A:仅做编辑器,不被主程序消费);包含项目名称 / 软件版本 /
 # ONU 软件编译时间等参考信息,操作员肉眼对照样机实际值。
 PROJECT_INFO_SECTION = "project_info"
+LEGACY_UI_CONFIG_FILENAME = "config.ini"
 
 # ``[order]`` 段顶部独立 key,语义对齐老工具 ``config.ini`` 中 ``command_fail_retry_interval_time``:
 # 表示两次失败重试之间的等待秒数。
@@ -219,6 +222,14 @@ class TestItemConfigStore:
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         with self.config_path.open("w", encoding="utf-8") as file:
             parser.write(file)
+        self._sync_legacy_telnet_enable(config.telnet.telnet_default_on)
+
+    def _sync_legacy_telnet_enable(self, telnet_default_on: object) -> None:
+        """把反向值镜像到旧工具 config.ini，并保留该文件其它原始内容。"""
+        legacy_config_path = self.config_path.with_name(LEGACY_UI_CONFIG_FILENAME)
+        LegacyUiDefaultsStore(legacy_config_path).update_telnet_enable_mirror(
+            telnet_default_on
+        )
 
     # -- 解析 ------------------------------------------------------------
 

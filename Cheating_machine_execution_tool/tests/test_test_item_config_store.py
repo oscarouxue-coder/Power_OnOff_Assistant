@@ -113,6 +113,29 @@ class TestItemConfigStoreTests(unittest.TestCase):
                 self.assertEqual(loaded_item.retry_times, saved_item.retry_times)
             self.assertEqual(loaded.connect_wifi, saved.connect_wifi)
 
+    def test_save_mirrors_inverse_telnet_enable_to_legacy_config(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_dir = Path(temp_dir)
+            legacy_config_path = config_dir / "config.ini"
+            legacy_config_path.write_text(
+                "[ui_defaults]\n"
+                "# keep this comment\n"
+                "telnet_enable = 1\n"
+                "baud_rate = 19200\n",
+                encoding="utf-8",
+            )
+            store = TestItemConfigStore(config_dir / "test_project_config.ini")
+
+            store.save(TestProjectConfig(telnet=TelnetSettings(telnet_default_on=1)))
+            enabled_content = legacy_config_path.read_text(encoding="utf-8")
+            self.assertIn("telnet_enable = 0", enabled_content)
+            self.assertIn("# keep this comment", enabled_content)
+
+            store.save(TestProjectConfig(telnet=TelnetSettings(telnet_default_on=0)))
+            disabled_content = legacy_config_path.read_text(encoding="utf-8")
+            self.assertIn("telnet_enable = 1", disabled_content)
+            self.assertIn("# keep this comment", disabled_content)
+
     def test_save_writes_command_fail_retry_interval_at_order_section_top(self):
         # [order] 段顶部必须是 command_fail_retry_interval_time,然后才是各命令。
         # configparser 写入顺序按 dict 插入顺序保证(Python 3.7+)。

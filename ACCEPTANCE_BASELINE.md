@@ -87,7 +87,7 @@ python scripts\verify_baseline.py
 - **禁止破坏**：
   - 串口参数 **19200 8N1**
   - **不发送全断电帧**
-  - **不修改** `Auto_power_on_off_tool/Auto_Power_On_Off_Tool.py` 源码
+  - 当前主程序不得重新依赖或调用 `Auto_power_on_off_tool/Auto_Power_On_Off_Tool.py`；旧工具源码仅在项目负责人明确提出的独立维护任务中修改，且不得改变当前主程序直连程控电源的已验收路径
   - 串口路径 `vlan{N} -> COM{N-100}` 硬编码（未配置化）
 - **对应测试**：`tests/test_power_supply.py`、`tests/test_app.py`、`tests/test_serial_upgrade_service.py`
 
@@ -215,10 +215,19 @@ python scripts\verify_baseline.py
 
 ### 2.11 输入持久化与启动 / 打包
 
-- **状态**：已实现未验收
+- **状态**：已确认验收（测试项「恢复默认」清除全部手动命令并加载固定模板，2026-08-07）/ 已实现未验收（其余输入持久化与打包交互）
 - **核心行为**：
   - 升级方式 / 固件路径 / 恢复出厂 / 超级凭据 / 并行数 → `Auto_power_on_off_tool/config/sample_upgrade_settings.ini`
   - OLT IP / 用户名 / 密码 → `Auto_power_on_off_tool/config/onu_registration.ini`
+  - 测试项默认模板 → `Auto_power_on_off_tool/config/test_project_config.default.ini`；「测试项」页点击「恢复默认」只恢复 `[order]` 的重试间隔和测试命令，确认后先加载到界面、再由操作员点击「保存」写入 `test_project_config.ini`，不得覆盖 Telnet / WiFi / 项目信息
+  - 2026-08-07 Windows 桌面确认：先手动增加测试命令，再点击「恢复默认」，手动命令全部消失，界面不再出现旧命令与默认命令混排或重复编号
+  - 旧工具顶部其它启动参数由 `Auto_power_on_off_tool/config/config.ini [ui_defaults]` 加载；其中 `serial_num` 必须始终严格等于新工具保存在 `network_card_ip.ini [power_supply] serial_port` 的“程控电源 COM”，新工具 COM 为空或尚未保存时旧工具也必须为空，严禁回退或自动选择其它 COM；成功日志必须显示实际 COM 及来源，配置缺失或校验失败时保留旧界面的回退值并记录错误日志
+  - 旧工具 `Telnet Enable` 必须与新工具 `test_project_config.ini [telnet] telnet_default_on` 反向：`1 → 0`、`0 → 1`；旧工具启动时直接以新配置计算，新工具保存时同步更新 `config.ini [ui_defaults] telnet_enable` 镜像值且不得破坏该文件其它内容
+  - 「测试项配置」第五个 Tab 固定命名“开关机运行参数”，只展示 `startup_time`、`interval_time`、`number_of_tests`、`wait_command_done` 对应的四项中文名称；左侧必须使用黑色中文名称，不得显示原始键名或右侧灰色说明列；`communication_method`、`baud_rate`、`selected_profile`、`telnet_enable` 均不得显示，保存时前三项必须保持原值，`telnet_enable` 必须由 Telnet 页反向计算并自动写入
+  - 「测试项配置」Telnet 与 WiFi 页所有字段标签必须显示中文含义，不得直接显示 `request_url`、`input_user_flag`、`product_solution` 等 INI 原始键名；仅改变 UI 文案，INI 键名、取值和保存格式不得改变
+  - 点击「测试项配置」后，窗口必须先隐藏构建五个 Tab 和动态命令控件，再于下一轮 Tk 事件循环显示并处理完整绘制队列；不得依赖移动鼠标或其它额外输入才完成 Windows 客户区绘制
+  - 2026-08-07 Windows 桌面确认：项目负责人确认窗口绘制 BUG 已解决，点击后不再出现只有标题的透明窗口，无需移动鼠标即可完整显示
+  - 旧工具“电源控制”channel 1～16 的复选框必须严格等于新工具选中配置：`network_card_ip.ini` 中存在且 `enabled=1` 的 `channel_N` 才勾选，其余（不存在或 `enabled=0`）全部取消勾选；同步只读配置，不得改写新工具通道
   - 串口终端窗口位置 + 日志目录 → `~/.aouxue_serial_terminal.json`
   - VS Code `.vscode/launch.json` 中 `LineCheckAssistant` 入口以 `Cheating_machine_execution_tool` 为工作目录；`.venv_serial_upgrade` 配套 `tftpy==0.8.7`
   - 打包脚本非交互式；`.spec` 落 `line_check_assistant/packaging_specs`
@@ -226,7 +235,8 @@ python scripts\verify_baseline.py
   - 本机配置文件不入 Git
   - INI 转义（含 `%`）不得再触发 `ConfigParser` 内插崩溃
   - 开发使用 `.venv_serial_upgrade`，不污染全局或 `.venv`
-- **对应测试**：`tests/test_sample_upgrade_settings_store.py`、`tests/test_onu_registration_store.py`
+- **对应测试**：`tests/test_sample_upgrade_settings_store.py`、`tests/test_onu_registration_store.py`、`tests/test_legacy_ui_defaults.py`、`tests/test_legacy_ui_defaults_store.py`、`tests/test_app.py`
+- **待确认**：Windows 桌面确认第五个 Tab 只显示四项时间/次数参数，不显示通信方式、Telnet Enable、波特率和默认方案；修改四项并保存/重开确认生效，隐藏三项保持原值；再分别保存 `telnet_default_on=1/0`，确认旧配置镜像及旧工具复选框分别为 `telnet_enable=0/1`
 
 ### 2.12 「全流程执行」管道编排器（主界面「检查并执行测试」按钮升级）
 
@@ -265,7 +275,7 @@ python scripts\verify_baseline.py
   - 子任务 3/4/5 调主程序既有 `_start_*` 方法，弹确认框由操作员点「是」（与单功能窗口一致）
   - 子任务 2 调既有 `network_ops.run_line_check()`，不绕过主程序的网络准备流程
   - `0.0.0.0` 不出现在 telnet / tftp 路径（与 §1.4 一致）
-  - AGENTS 硬规则：不修改老工具 `Auto_Power_On_Off_Tool.py` 源码；fuzzy 逻辑从老工具 `fuzzy_match.py` 移植而非直接 import
+  - 当前全流程不得 import 或调用老工具 `Auto_Power_On_Off_Tool.py`；项目负责人明确要求的旧工具独立维护不得改变这一隔离边界；fuzzy 逻辑从老工具 `fuzzy_match.py` 移植而非直接 import
 - **待确认**：
   - Windows 桌面真实交互：弹窗 / Checkbutton / 二次确认 / 必填项状态刷新
   - 真实样机端到端跑通 7 子任务全流程：上下电 → 环境检查 → 升级 → 写参 → ONU 注册 → 串口日志（持续）→ [order] 执行

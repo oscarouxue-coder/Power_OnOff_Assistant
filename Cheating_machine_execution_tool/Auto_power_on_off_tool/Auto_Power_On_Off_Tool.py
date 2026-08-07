@@ -5,6 +5,7 @@ import random
 import sys
 import threading
 import time
+from pathlib import Path
 
 from PyQt5.QtCore import pyqtSignal, QTimer
 
@@ -19,6 +20,11 @@ from common.stop_thread import StoppableThread
 from test_case.powe_on_off_telnet import PowerOnOffTelnet
 from test_case.power_on_off_ssh import PowerOnOffSsh
 from config.config_driver import OperationConfig
+from config.ui_defaults import (
+    apply_legacy_power_channel_selection,
+    apply_legacy_ui_defaults,
+    load_legacy_ui_defaults,
+)
 from common.read_config_netword_card_ip import get_network_card_ip
 from common.delete_files import FileDeleteWorker
 
@@ -114,6 +120,7 @@ class UiCase(QMainWindow, Ui_MainWindow):
                                  self.checkBox_power_1_channel_11, self.checkBox_power_1_channel_12,
                                  self.checkBox_power_1_channel_13, self.checkBox_power_1_channel_14,
                                  self.checkBox_power_1_channel_15, self.checkBox_power_1_channel_16]
+        self.apply_loaded_power_channel_selection()
         # start_times 统计start all运行次数
         self.start_all_times = 0
         self.ButtonTaskQueue = queue.Queue()
@@ -150,6 +157,51 @@ class UiCase(QMainWindow, Ui_MainWindow):
             self.textEdit_email_list.setText(email)
         except Exception as e:
             self.logger.error(f'Failed to add config file:{e}')
+        self.load_ui_defaults()
+
+    def load_ui_defaults(self):
+        """加载顶部参数；COM 优先采用新工具当前保存值。"""
+        config_path = './config/config.ini'
+        try:
+            defaults = load_legacy_ui_defaults(Path(config_path))
+            apply_legacy_ui_defaults(self, defaults)
+            self.loaded_ui_defaults = defaults
+        except Exception as e:
+            message = f'加载旧工具界面默认参数失败，保留界面回退值：{e}'
+            self.logger.error(message)
+            self.append_text_to_text_browser(message)
+            return False
+
+        self.logger.info(
+            '已加载旧工具界面默认参数：'
+            f'通信={defaults.communication_method}，Telnet Enable={int(defaults.telnet_enable)}'
+            f'（来源：{defaults.telnet_enable_source}），'
+            f'COM={defaults.serial_num}（来源：{defaults.serial_num_source}），'
+            f'波特率={defaults.baud_rate}，'
+            f'方案={defaults.selected_profile}，启动等待={defaults.startup_time}s，'
+            f'断电间隔={defaults.interval_time}s，次数={defaults.number_of_tests}，'
+            f'指令完成等待={defaults.wait_command_done}s'
+        )
+        return True
+
+    def apply_loaded_power_channel_selection(self):
+        """在旧工具通道复选框创建完成后同步新工具选中状态。"""
+        defaults = getattr(self, 'loaded_ui_defaults', None)
+        if defaults is None:
+            message = '未加载新工具通道配置，旧工具电源通道全部取消勾选'
+            for check_box in self.channel_box_list:
+                check_box.setChecked(False)
+            self.logger.error(message)
+            self.append_text_to_text_browser(message)
+            return False
+
+        apply_legacy_power_channel_selection(self, defaults)
+        selected_text = ', '.join(
+            f'channel {channel_number}'
+            for channel_number in defaults.enabled_power_channels
+        ) or '无'
+        self.logger.info(f'已同步新工具选中通道：{selected_text}')
+        return True
 
     def get_onu_config_info(self):
         enable_status = OnuCongfig.connect_wifi_enable_status

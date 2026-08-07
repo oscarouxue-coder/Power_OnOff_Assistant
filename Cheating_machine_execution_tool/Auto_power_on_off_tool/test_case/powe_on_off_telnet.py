@@ -75,6 +75,7 @@ class PowerOnOffTelnet(QThread):
         self.ser = ser
         self.startup_time = int(startup_time)
         self.interval_time = int(interval_time)
+        self.telnet_enable_fail_retry_interval = 10
         self.logger.info(f"间隔时间 {self.interval_time} {telnet_enable_flag}")
         self.test_number = int(test_number)
         self.wait_command_done = int(wait_command_done)
@@ -281,7 +282,7 @@ class PowerOnOffTelnet(QThread):
                 self.cf.read_ini('other_config', 'commands_execute_times', './config/config.ini'))
             self.retry_times = int(
                 self.cf.read_ini('other_config', 'telnet_enable_fail_retry_times', './config/config.ini'))
-            self.interval_time = int(
+            self.telnet_enable_fail_retry_interval = int(
                 self.cf.read_ini('other_config', 'telnet_enable_fail_retry_interval', './config/config.ini'))
 
             self.logger.info(f'{self.url},{self.password},{self.username}')
@@ -538,7 +539,7 @@ class PowerOnOffTelnet(QThread):
 
                     commands_loop_times = self.commands_loop_times
                     retry_times = self.retry_times
-                    interval_time = self.interval_time
+                    interval_time = self.telnet_enable_fail_retry_interval
 
                     if self.flag:
                         self.reset_status(power_num - 1)

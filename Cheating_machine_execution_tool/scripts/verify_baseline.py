@@ -55,6 +55,7 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "line_check_assistant/__init__.py",
     "line_check_assistant/app.py",
     "line_check_assistant/config_store.py",
+    "line_check_assistant/legacy_ui_defaults_store.py",
     "line_check_assistant/network_ops.py",
     "line_check_assistant/onu_registration_store.py",
     "line_check_assistant/old_tool_automation.py",

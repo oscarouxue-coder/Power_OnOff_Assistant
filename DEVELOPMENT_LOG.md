@@ -2,6 +2,85 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-07 - 修复测试项配置窗口需移动鼠标才显示
+
+- 类型：BUG 修复 / Windows 窗口绘制 / 回归测试 / 文档
+- 根因：测试项配置窗口包含五个 Tab 和多条动态命令，初版直接显示时 Windows 可能先呈现未完成绘制的客户区；第一版修复又在隐藏状态先执行 `update_idletasks()`、随后才显示，只计算了隐藏布局，没有处理显示后产生的 Windows 绘制消息，因此现场仍需鼠标事件触发重绘。
+- 完成内容：① 创建窗口后先 `withdraw()`，在隐藏状态完成全部控件构建；② 当前按钮回调结束后通过 `after(0, ...)` 进入下一轮 Tk 事件循环，再按 `deiconify → lift → update_idletasks → update → focus_force` 显示窗口并处理完整绘制队列；③ 新增显示调用顺序和“先隐藏构建、下一轮事件显示”的回归测试。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：编译 `app.py`；执行 `test_app.py`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：`app.py` 编译通过；`test_app.py` 79 项通过；`python scripts/verify_baseline.py` 全绿（41 个当前主程序 `.py` 编译、编译清单完整、439 项单测、10 个关键基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- Windows 桌面验收：2026-08-07 项目负责人确认 BUG 已解决；点击「测试项配置」后窗口可正常绘制，不再只显示标题透明窗口，也不需移动鼠标触发刷新。
+- 后续待办：本轮窗口绘制 BUG 无。
+
+## 2026-08-07 - Telnet 与 WiFi 配置字段改为中文显示
+
+- 类型：UI 文案 / 易用性 / 回归测试 / 文档
+- 完成内容：① Telnet 页将 12 项原始配置键标签全部改为对应中文含义，并移除“设备默认已开启 Telnet”中的原始键名提示；② WiFi 页将 `product_solution` 改为“产品方案”，复选框改为“启用 WiFi 连接测试”且不再显示 `enable=1`；③ 仅修改界面标签，内存字段、INI 键名、值和保存格式完全不变；④ 新增中文标签存在、旧英文键标签不存在的界面回归测试。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：编译 `app.py`；执行 `test_app.py`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：`app.py` 编译通过；`test_app.py` 77 项通过；`python scripts/verify_baseline.py` 全绿（41 个当前主程序 `.py` 编译、编译清单完整、437 项单测、10 个关键基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面确认 Telnet 与 WiFi 页不再显示原始配置键名，中文标签与输入框对齐，保存并重新加载后配置值不变。
+
+## 2026-08-07 - 测试项配置新增“开关机运行参数”Tab
+
+- 类型：功能 / 配置编辑器 / UI / 测试 / 文档
+- 完成内容：① 「测试项配置」新增第五个 Tab，名称按项目负责人要求固定为“开关机运行参数”；② 页面仅展示 `startup_time`、`interval_time`、`number_of_tests`、`wait_command_done` 四项，并按项目负责人要求删除左侧原始键名和右侧灰色说明列，改为左侧黑色中文名称 + 右侧输入框；③ `communication_method`、`baud_rate`、`selected_profile`、`telnet_enable` 不显示，保存时前三项保留原值，`telnet_enable` 由 Telnet 页反向计算并自动写入；④ “重新加载”同时重读测试项配置与旧工具参数，“保存”同时写入两份配置；⑤ 仅更新 `[ui_defaults]`，保留 `config.ini` 其它段、未知键和注释；⑥ 保存确认、主执行日志和成功提示明确记录旧工具参数数量及目标文件；⑦ 新增字段隐藏、中文标签布局与原值保留、字段校验、注释/其它段保留和第五 Tab 接线回归测试。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/legacy_ui_defaults_store.py`、`Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_legacy_ui_defaults_store.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：编译三个相关源码；执行 `test_legacy_ui_defaults_store.py`、`test_test_item_config_store.py`、`test_app.py`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：三个相关源码编译通过；`test_legacy_ui_defaults_store.py` 3 项、`test_test_item_config_store.py` 20 项、`test_app.py` 76 项通过；首次基线按预期拦截新增源码未登记编译清单，补入 `PY_COMPILE_FILES` 后 `python scripts/verify_baseline.py` 全绿（41 个当前主程序 `.py` 编译、编译清单完整、436 项单测、10 个关键基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面打开「测试项配置」，确认第五个 Tab 只显示 4 项黑色中文名称与输入框，无原始键名和右侧灰色说明；修改后保存/重开确认四项生效、隐藏三项原值不变，并确认 Telnet 页保存仍会更新反向镜像。
+
+## 2026-08-07 - 旧工具 Telnet、COM 与通道选择复用新工具配置
+
+- 类型：旧工具独立维护 / 配置统一 / 回归测试 / 文档
+- 完成内容：① 旧工具 `Telnet Enable` 严格反向读取新工具 `test_project_config.ini [telnet] telnet_default_on`，即 `1 → 0`、`0 → 1`；② 新工具保存测试项配置时同步更新 `config.ini [ui_defaults] telnet_enable` 镜像行，并保留旧配置其它内容和注释；③ 旧工具 `serial_num` 严格读取新工具保存的程控电源 COM，删除重复配置及回退逻辑，新工具 COM 为空时旧工具也为空；④ 旧工具“电源控制”channel 1～16 逐项同步新工具选中通道，存在且 `enabled=1` 才勾选，其余全部取消；⑤ 启动日志增加 Telnet Enable、COM 配置来源和同步通道；⑥ 新增反向 Telnet、配置镜像、COM 唯一来源、空 COM、通道同步回归测试；⑦ 不改写本机 `network_card_ip.ini`。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/Auto_power_on_off_tool/Auto_Power_On_Off_Tool.py`、`Cheating_machine_execution_tool/Auto_power_on_off_tool/config/config.ini`、`Cheating_machine_execution_tool/Auto_power_on_off_tool/config/ui_defaults.py`、`Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`、`Cheating_machine_execution_tool/tests/test_legacy_ui_defaults.py`、`Cheating_machine_execution_tool/tests/test_test_item_config_store.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：编译旧工具主入口与配置加载器；执行 `python -m unittest discover -s tests -p "test_legacy_ui_defaults.py" -v`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：旧工具主入口、配置加载器和测试项配置存储编译通过；`test_legacy_ui_defaults.py` 8 项、`test_test_item_config_store.py` 20 项通过；`python scripts/verify_baseline.py` 全绿（40 个当前主程序 `.py` 编译、编译清单完整、432 项单测、10 个关键基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面分别保存 `telnet_default_on=1/0` 并启动旧工具，确认旧配置镜像和旧工具 Telnet Enable 分别为 `0/1`；同时确认不同 COM、通道组合以及全部清空场景均与新工具一致。
+
+## 2026-08-07 - 旧工具顶部参数统一从 config.ini 加载
+
+- 类型：旧工具独立维护 / 配置化 / BUG 修复 / 测试 / 文档
+- 授权边界：项目负责人明确要求修改 `Auto_power_on_off_tool/Auto_Power_On_Off_Tool.py`；当前 `LineCheckAssistant` 继续直连程控电源，不重新依赖旧工具源码、EXE 或 UI Automation。
+- 完成内容：① `config.ini` 新增 `[ui_defaults]`，集中配置 ONU 通信方式、Telnet Enable、程控电源 COM、波特率、默认方案、Startup time、Interval time、Number of tests、Wait command done；② 新增 `config/ui_defaults.py` 负责读取、范围校验和界面加载；③ COM/波特率未出现在启动时下拉列表时自动加入并选中，默认方案按 `[config]` 键名不区分大小写匹配；④ 配置缺失或无效时保留 UI 回退值并输出失败日志，成功时输出实际加载结果；⑤ 修复 Telnet 路径把界面断电间隔错误覆盖为 `telnet_enable_fail_retry_interval` 的问题，两项改用独立变量。
+- 当时配置的初始值：`telnet / Telnet Enable=1 / COM105 / 19200 / TEST_PROJECT / 240 / 20 / 500 / 20`；后续已按项目负责人要求删除 `serial_num` 重复配置，改为严格复用新工具 COM（见上一条记录）。
+- 修改文件：`README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/Auto_power_on_off_tool/config/config.ini`、`Cheating_machine_execution_tool/Auto_power_on_off_tool/config/ui_defaults.py`、`Cheating_machine_execution_tool/Auto_power_on_off_tool/Auto_Power_On_Off_Tool.py`、`Cheating_machine_execution_tool/Auto_power_on_off_tool/test_case/powe_on_off_telnet.py`、`Cheating_machine_execution_tool/tests/test_legacy_ui_defaults.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：编译旧工具主入口、配置加载器和 Telnet 流程；执行 `python -m unittest discover -s tests -p "test_legacy_ui_defaults.py" -v`；执行 `python scripts\verify_baseline.py`。
+- 验证结果：旧工具 3 个相关 Python 文件编译通过；`test_legacy_ui_defaults.py` 4 项通过；`python scripts\verify_baseline.py` 全绿（40 个当前主程序 `.py` 编译、编译清单完整、427 项单测、10 个关键基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面启动旧工具，核对九项默认值全部加载；修改 `[ui_defaults]` 后重启，确认界面随配置变化；实际连接 COM105 前确认该串口存在且对应程控电源。
+
+## 2026-08-07 - 确认恢复默认残留 BUG 修复
+
+- 类型：Windows 桌面验收 / 状态更新
+- 验收依据：项目负责人确认“BUG 已确认修复”。
+- 验收结果：在「测试项配置 → 测试项」使用「恢复默认」后，之前手动添加的测试项命令不再残留；默认命令与旧命令混排、编号重复问题已消除。
+- 回归结果：`python scripts\verify_baseline.py` 全绿（40 个 `.py` 编译、编译清单完整、423 项单测、10 个关键基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 状态同步：`ACCEPTANCE_BASELINE.md §2.11` 将该独立交互更新为“已确认验收”；测试项保存后重新加载以及其它页签互不覆盖仍保留为后续确认边界。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+
+## 2026-08-07 - 修复恢复默认后残留手动测试项
+
+- 类型：BUG 修复 / 测试 / 文档
+- 背景：现场点击「恢复默认」后，之前手动添加的命令仍隔行残留，且新加载的默认命令编号从 01 重新开始，出现重复编号。
+- 根因：`load()` 直接遍历 `row_widgets`，而每次调用行的 `remove()` 又会从同一个列表删除当前元素，导致 Python 迭代游标跳过下一行；随后 `row_widgets.clear()` 只清除了引用，未销毁被跳过的 Tk 控件。
+- 完成内容：① 新增 `_clear_test_item_rows()`，基于列表快照逐个调用删除逻辑，确保所有旧命令控件均被销毁；② 「恢复默认」与「重新加载」统一复用该安全清理；③ 新增 4 行混合数据回归测试，锁定每一行均被删除且列表最终为空；④ 保留现场已修改的正式 `test_project_config.ini`，不覆盖用户配置，默认模板仍为固定 9 条基线命令。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m py_compile line_check_assistant\app.py`、`python -m unittest discover -s tests -p "test_app.py" -v`、`python scripts\verify_baseline.py`。
+- 验证结果：`app.py` 编译通过；`test_app.py` 75 项通过，其中混合 4 行清理回归确认所有旧行均执行删除且列表为空；`python scripts\verify_baseline.py` 全绿（40 个 `.py` 编译、编译清单完整、423 项单测、10 个关键基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：旧命令清理已于 2026-08-07 完成 Windows 桌面确认；后续仅需在需要时补充「保存 → 重新加载」持久化及其它三个页签内容不变的现场确认。
+
+## 2026-08-07 - 增加测试项恢复默认配置
+
+- 类型：功能 / 界面 / 测试 / 文档
+- 背景：操作员修改 `[order]` 测试项后缺少可回退的固定模板，需要能从「测试项」页一键恢复当前确认的默认测试命令。
+- 完成内容：① 将当前 `test_project_config.ini` 完整复制为版本化 `test_project_config.default.ini`；② 「测试项」页底部新增「恢复默认」按钮；③ 点击后先二次确认，只恢复默认模板的 `[order]` 指令重试间隔和 9 条测试命令，不覆盖 Telnet、WiFi、项目信息；④ 恢复结果先进入界面并标记未保存，操作员点击窗口底部「保存」后才写入正式配置；⑤ 主执行日志记录等待确认、取消跳过、失败或恢复成功结果。
+- 修改文件：`Cheating_machine_execution_tool/Auto_power_on_off_tool/config/test_project_config.default.ini`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m py_compile line_check_assistant\app.py`、`python -m unittest discover -s tests -p "test_app.py" -v`、`python scripts\verify_baseline.py`。
+- 验证结果：默认快照与当前 `test_project_config.ini` 逐行一致；`app.py` 编译通过；`test_app.py` 74 项通过；`python scripts\verify_baseline.py` 全绿（40 个 `.py` 编译、编译清单完整、422 项单测、10 个关键基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面修改或删除若干测试项，点击「恢复默认」并确认，核对恢复为 9 条默认命令；再点击「保存」并重新加载，确认正式配置已写回且其它三个页签内容未变化。
+
 ## 2026-08-07 - 加宽测试项命令组间距
 
 - 类型：界面优化 / 测试 / 文档

@@ -85,24 +85,30 @@ python .\run_line_check_assistant.py
 9. 打开“写样机参数”，先使用“生成批量参数表...”为已勾选 VLAN 生成 Excel 表，或选择已有 `.xlsx` / `.xlsm` / `.xls` / `.csv` 参数表；确认预检清单中的 VLAN、COM、MAC 一一对应。
    - 点击“写入参数”后，确认框会提示清空参数、工厂模式和两次重启；仅在确认后才实际下发命令。
    - 现场先以 2 台独立 VLAN / COM 样机验证，确认每台写入后读回校验成功、日志未暴露密码，并确认设备已完成退出工厂模式后的重启。
-10. 打开“测试项配置”，可加载并编辑 `Auto_power_on_off_tool/config/test_project_config.ini`，详见下方「测试项配置窗口」。
+10. 打开“测试项配置”，可加载并编辑 `Auto_power_on_off_tool/config/test_project_config.ini`，并在“开关机运行参数”页编辑 `config.ini [ui_defaults]`，详见下方「测试项配置窗口」。
 
 ## 测试项配置窗口
 
 主界面工具栏「测试项配置」按钮打开的窗口是一个**编辑入口**，不接主程序执行流程（Q1=A 决策）：
 
-- **四 Tab 结构**：
-  - **Telnet** —— 编辑 `[telnet]` 段的 12 个字段。顶部「Telnet 默认已开启」Checkbutton（`telnet_default_on`，默认 1 = 勾选）位于标题正下方，可由用户切换；下面是 request_url / port / user / **password（明文）** / timeout / input_user_flag / input_password_flag / login_success_flag / 三个 0/1 flag；password 输入框右侧小眼睛可在 `*` 密文 / 明文之间切换。
-  - **测试项** —— 编辑 `[order]` 段：顶部全局 Spinbox「指令重试间隔（秒）」默认 60，写到 ini 的 `[order]` 段**第一行**（`command_fail_retry_interval_time = 60`）；中间滚动列表，每条命令一行（命令 + 重试次数 Spinbox 1-99 + 删除按钮），不同命令组之间保留加宽的纵向留白，展开后是「期望」子表单（否定勾选 + 动态段列表 + 增加/删除段按钮）；底部「+ 新增测试项」。
-  - **WiFi** —— `[connect_wifi]` 段：`enable` Checkbutton（0/1）+ `product_solution` Combobox（openwrt / bcm / mtk，保存时统一小写）。
+- **五 Tab 结构**：
+  - **Telnet** —— 编辑 `[telnet]` 段的 12 个字段。界面只显示中文含义：设备默认已开启 Telnet、Telnet 开启地址、登录用户名、登录密码（明文）、Telnet 端口、连接超时时间、用户名提示符、密码提示符、登录成功提示符、是否需要输入密码、免用户名密码登录、仅执行上下电；INI 原始键名和保存格式保持不变。密码输入框右侧小眼睛可在 `*` 密文 / 明文之间切换。
+  - **测试项** —— 编辑 `[order]` 段：顶部全局 Spinbox「指令重试间隔（秒）」默认 60，写到 ini 的 `[order]` 段**第一行**（`command_fail_retry_interval_time = 60`）；中间滚动列表，每条命令一行（命令 + 重试次数 Spinbox 1-99 + 删除按钮），不同命令组之间保留加宽的纵向留白，展开后是「期望」子表单（否定勾选 + 动态段列表 + 增加/删除段按钮）；底部提供「+ 新增测试项」和「恢复默认」。默认模板固定为 `Auto_power_on_off_tool/config/test_project_config.default.ini`；点击「恢复默认」并确认后会先清除当前页面全部测试命令，再恢复 `[order]` 的默认重试间隔和全部默认命令，不改 Telnet、WiFi、项目信息，恢复到界面后需再点击窗口底部「保存」才写入正式配置。
+  - **WiFi** —— `[connect_wifi]` 段界面显示“启用 WiFi 连接测试”和“产品方案”，不显示 `enable` / `product_solution` 原始键名；产品方案候选为 openwrt / bcm / mtk，保存时统一小写。
   - **项目信息** —— `[project_info]` 段：4 个字符串字段（项目名称 / 软件版本 / 内部软件版本 / ONU 软件编译时间），全部按自由文本存取；**仅做编辑器，不被主程序消费**，用于操作员在执行测试时肉眼对照样机输出的版本 / 编译时间。
+- **开关机运行参数** —— 加载 `Auto_power_on_off_tool/config/config.ini [ui_defaults]`，页面只展示 `startup_time`、`interval_time`、`number_of_tests`、`wait_command_done` 四项。界面左侧使用黑色中文名称（设备启动等待时间、每轮断电等待时间、测试循环次数、命令完成后等待时间），不显示原始键名，也没有右侧灰色说明列。`communication_method`、`baud_rate`、`selected_profile` 和 `telnet_enable` 不展示，保存时保留前三项原值；`telnet_enable` 由 Telnet 页 `telnet_default_on` 按 `1 → 0`、`0 → 1` 反向计算并自动写入。
 - **底部按钮**：「重新加载」（从磁盘重读 ini，丢弃未保存改动）/「保存」（二次确认后写回 ini）/「关闭」。
 - **Dirty 跟踪**：任意控件改动标记 dirty，「重新加载」和「关闭」在 dirty 时弹「放弃修改？」二次确认；「保存」成功后 dirty 清零。
-- **保存行为**：直接覆盖 `Auto_power_on_off_tool/config/test_project_config.ini`；标准 `configparser` 不支持保留注释，原 ini 中以 `;` 开头的注释会在保存后丢失；ini 文件不存在时打开窗口会提示「将以空白表单打开」，保存后自动创建。
+- **窗口显示**：打开时先在隐藏状态完成五个 Tab 和测试项命令控件布局，当前按钮回调结束后的下一轮事件循环再显示窗口，并主动处理一次完整绘制队列；无需移动鼠标触发界面绘制。
+- **保存行为**：保存会写入 `test_project_config.ini`，同时只更新 `config.ini [ui_defaults]`；测试项 ini 的原注释会丢失，`config.ini` 的其它配置段、未知键和注释保持不变。测试项 ini 不存在时打开窗口会提示「将以空白表单打开」，保存后自动创建。
 - **「期望」拼接规则**：每段独立勾选「否定」→ 该段前加 `!`；多段 → 用 `&&` 拼接；空段不写入拼接结果。例如第二段的 `00:00:00:00:00:00` 勾否定、`UP BROADCAST` 不勾，保存为 `!00:00:00:00:00:00&&UP BROADCAST`（前者应**不**出现，后者应**出现**）。
 - **「重试间隔」语义**：本字段名为 `command_fail_retry_interval_time`，写到 `[order]` 段**顶部独立行**，与老工具 `wait_time_N`（sleep 秒数，**语义不同**）不共用。**主程序不消费此字段**，仅作为 ini 内的全局参考值；若日后主程序按 ini 驱动执行，可从这里读出。
-- **主执行日志**：保存成功 / 失败都会写一条主程序执行日志；成功格式 `[测试项配置] 已保存 N 条测试项命令到 test_project_config.ini`。
+- **主执行日志**：保存成功 / 失败都会写一条主程序执行日志；成功日志同时记录测试项命令数和更新的旧工具参数数量。
 - **不接执行**：本窗口**不会**驱动任何 telnet / 上下电 / 测试项执行，仅做 ini 编辑器。**「测试项配置」子任务在「全流程执行」窗口中独立执行**（见下），不走本窗口的 Start 按钮。
+
+### 旧工具顶部参数配置（独立维护，不影响当前主程序）
+
+旧 `Auto_power_on_off_tool/Auto_Power_On_Off_Tool.py` 顶部的通信方式、波特率、默认方案及运行时间参数从 `Auto_power_on_off_tool/config/config.ini [ui_defaults]` 读取。旧工具 `Telnet Enable` 与新工具 `test_project_config.ini [telnet] telnet_default_on` 使用反向关系：`telnet_default_on=1` 表示设备默认已开启，旧工具 `telnet_enable=0`；`telnet_default_on=0` 时旧工具 `telnet_enable=1`。旧工具启动时直接按此关系加载，新工具保存测试项配置时同时更新 `config.ini [ui_defaults] telnet_enable` 镜像值并保留其它内容。旧工具的 `serial_num` 与新工具“程控电源 COM”严格共用同一值，固定读取 `network_card_ip.ini [power_supply] serial_port`；新工具 COM 为空时旧工具同样为空，不回退、不自动选择其它 COM。“电源控制”的 channel 1～16 复选框也严格同步同一文件中的新工具选中配置：存在且 `enabled=1` 的 `channel_N` 才勾选，其余通道全部取消。日志会显示 Telnet Enable 与 COM 的来源以及同步后的通道。当前 `LineCheckAssistant` 的程控电源直连、全流程和升级路径不调用旧工具源码或 EXE。
 
 ## 全流程执行窗口（2026-07-20）
 

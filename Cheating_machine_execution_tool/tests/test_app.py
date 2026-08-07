@@ -14,7 +14,11 @@ from line_check_assistant.app import (
     COLOR_WARNING,
     LineCheckAssistant,
     MAIN_LOG_EVENTS_PER_TICK,
+    TEST_ITEM_DEFAULT_CONFIG_PATH,
     TEST_ITEM_COMMAND_GROUP_SPACING,
+    TEST_ITEM_HIDDEN_UI_DEFAULT_OPTIONS,
+    _clear_test_item_rows,
+    _reveal_completed_dialog,
     vlan_options_for_power_serial_port,
 )
 from line_check_assistant.config_store import ChannelConfig
@@ -22,6 +26,7 @@ from line_check_assistant.network_ops import CommandResult, UnregisteredOnu
 from line_check_assistant.onu_registration_store import OnuRegistrationConfig
 from line_check_assistant.page_upgrade import PageUpgradeItemResult, PageUpgradeRequest
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
+from line_check_assistant.test_item_config_store import TestItemConfigStore
 
 
 class CurrentChannelSelectionTests(unittest.TestCase):
@@ -98,6 +103,97 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         config_window.lift.assert_called_once_with()
         config_window.focus_force.assert_called_once_with()
 
+    def test_reveal_completed_dialog_flushes_layout_before_showing(self):
+        dialog = Mock()
+
+        _reveal_completed_dialog(dialog)
+
+        self.assertEqual(
+            dialog.method_calls,
+            [
+                call.deiconify(),
+                call.lift(),
+                call.update_idletasks(),
+                call.update(),
+                call.focus_force(),
+            ],
+        )
+
+    def test_test_item_config_builds_while_hidden_then_reveals(self):
+        """测试项窗口不得先显示空壳，再等待鼠标移动触发重绘。"""
+        import inspect
+
+        source = inspect.getsource(LineCheckAssistant._open_test_item_config)
+        self.assertLess(source.index("dialog.withdraw()"), source.index("content = Frame"))
+        self.assertGreater(
+            source.index("dialog.after(0, lambda: _reveal_completed_dialog(dialog))"),
+            source.index('dialog.protocol("WM_DELETE_WINDOW", close_dialog)'),
+        )
+
+    def test_test_item_config_has_power_cycle_runtime_parameters_tab(self):
+        """第五个 Tab 必须接入 config.ini [ui_defaults] 的加载、重载和保存。"""
+        import inspect
+
+        builder_source = inspect.getsource(LineCheckAssistant._build_test_item_ui_defaults_tab)
+        open_source = inspect.getsource(LineCheckAssistant._open_test_item_config)
+
+        self.assertIn('notebook.add(frame, text="开关机运行参数")', builder_source)
+        self.assertIn('legacy_defaults_store.load()', open_source)
+        self.assertIn('legacy_defaults_control["load"]', open_source)
+        self.assertIn('legacy_defaults_store.save(captured_legacy_defaults)', open_source)
+        self.assertEqual(
+            TEST_ITEM_HIDDEN_UI_DEFAULT_OPTIONS,
+            {
+                "telnet_enable",
+                "communication_method",
+                "baud_rate",
+                "selected_profile",
+            },
+        )
+        self.assertIn('if option.lower() in TEST_ITEM_HIDDEN_UI_DEFAULT_OPTIONS:', builder_source)
+        self.assertIn('continue', builder_source)
+        self.assertNotIn('entry.configure(state="readonly")', builder_source)
+        self.assertIn('captured = dict(loaded_values)', builder_source)
+        self.assertIn('text=descriptions.get(option.lower(), option)', builder_source)
+        self.assertIn('foreground=COLOR_TEXT', builder_source)
+        self.assertNotIn('column=2', builder_source)
+
+    def test_telnet_and_wifi_tabs_use_chinese_field_labels(self):
+        """配置键名保留在存储层，操作员界面只显示对应中文含义。"""
+        import inspect
+
+        telnet_source = inspect.getsource(LineCheckAssistant._build_test_item_telnet_tab)
+        wifi_source = inspect.getsource(LineCheckAssistant._build_test_item_wifi_tab)
+
+        for label in (
+            "设备默认已开启 Telnet",
+            "Telnet 开启地址",
+            "登录用户名",
+            "登录密码（明文）",
+            "Telnet 端口",
+            "连接超时时间（秒）",
+            "用户名提示符",
+            "密码提示符",
+            "登录成功提示符",
+            "是否需要输入密码（0/1）",
+            "免用户名密码登录（0/1）",
+            "仅执行上下电（0/1）",
+        ):
+            self.assertIn(label, telnet_source)
+        for old_label in (
+            'text="request_url"',
+            'text="user"',
+            'text="password（明文）"',
+            'text="input_user_flag"',
+            'text="input_password_flag"',
+            'text="login_success_flag"',
+        ):
+            self.assertNotIn(old_label, telnet_source)
+
+        self.assertIn('text="启用 WiFi 连接测试"', wifi_source)
+        self.assertIn('text="产品方案"', wifi_source)
+        self.assertNotIn('text="product_solution"', wifi_source)
+
     def test_test_item_command_groups_use_wider_vertical_spacing(self):
         """测试项命令组之间应有明显留白，段内布局保持不变。"""
         import inspect
@@ -108,6 +204,50 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             'row_frame.pack(fill="x", pady=(0, TEST_ITEM_COMMAND_GROUP_SPACING))',
             source,
         )
+
+    def test_default_test_item_snapshot_contains_current_order_baseline(self):
+        """默认模板必须存在，并保存当前 9 条测试项命令。"""
+        self.assertTrue(TEST_ITEM_DEFAULT_CONFIG_PATH.is_file())
+        default_order = TestItemConfigStore(TEST_ITEM_DEFAULT_CONFIG_PATH).load().order
+        self.assertEqual(default_order.command_fail_retry_interval_time, 60)
+        self.assertEqual(len(default_order.items), 9)
+        self.assertEqual(default_order.items[0].command, "/userfs/bin/ponmgr gpon get info")
+        self.assertEqual(default_order.items[-1].command, "ip route show table main | grep default")
+
+    def test_test_item_tab_provides_confirmed_restore_default_action(self):
+        """恢复默认必须只加载默认 [order]，并保留保存确认边界。"""
+        import inspect
+
+        source = inspect.getsource(LineCheckAssistant._build_test_item_order_tab)
+        self.assertIn('text="恢复默认"', source)
+        self.assertIn('messagebox.askyesno(', source)
+        self.assertIn('TestItemConfigStore(default_config_path).load().order', source)
+        self.assertIn('load(default_order)', source)
+        self.assertIn('mark_dirty()', source)
+        self.assertIn('仍需点击窗口底部“保存”', source)
+
+    def test_restore_default_clears_every_existing_test_item_row(self):
+        """清空动态命令行时不得边遍历边删除而隔行残留。"""
+        row_widgets: list[dict] = []
+        removed: list[str] = []
+
+        def add_fake_row(name: str) -> None:
+            row: dict = {}
+
+            def remove() -> None:
+                removed.append(name)
+                row_widgets.remove(row)
+
+            row["remove"] = remove
+            row_widgets.append(row)
+
+        for name in ("manual-1", "default-1", "manual-2", "default-2"):
+            add_fake_row(name)
+
+        _clear_test_item_rows(row_widgets)
+
+        self.assertEqual(removed, ["manual-1", "default-1", "manual-2", "default-2"])
+        self.assertEqual(row_widgets, [])
 
     def test_serial_log_entry_opens_internal_terminal_for_selected_vlans(self):
         context = SimpleNamespace(serial_terminal=Mock(), _selected_upgrade_vlans=Mock(return_value=["vlan101"]))

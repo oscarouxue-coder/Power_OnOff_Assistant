@@ -8,6 +8,7 @@ from pathlib import Path
 from tkinter import BooleanVar, Button, Canvas, Checkbutton, DoubleVar, END, Frame, IntVar, Label, Listbox, Tk, StringVar, Text, Toplevel, filedialog, messagebox, ttk
 
 from .config_store import ChannelConfig, ChannelConfigStore, DEFAULT_POWER_SERIAL_PORT, DEFAULT_SUBNET_MASK
+from .legacy_ui_defaults_store import LegacyUiDefaultsStore, TELNET_ENABLE_OPTION
 from .network_ops import (
     CommandResult,
     adapter_alias_from_display,
@@ -83,6 +84,8 @@ ONU_REGISTRATION_CONFIG_PATH = CONFIG_DIR / "onu_registration.ini"
 SAMPLE_UPGRADE_SETTINGS_PATH = CONFIG_DIR / "sample_upgrade_settings.ini"
 # 测试项配置 ini:由主界面「测试项配置」按钮打开的窗口加载/保存(Q1=A:仅编辑,不接执行)。
 TEST_ITEM_CONFIG_PATH = CONFIG_DIR / "test_project_config.ini"
+TEST_ITEM_DEFAULT_CONFIG_PATH = CONFIG_DIR / "test_project_config.default.ini"
+LEGACY_UI_DEFAULTS_CONFIG_PATH = CONFIG_DIR / "config.ini"
 LOG_DIR = APP_DIR / "assistant_logs"
 POWER_SUPPLY_COUNT = 6
 TOTAL_CHANNEL_COUNT = 16
@@ -95,6 +98,30 @@ POWER_ACTION_OPTIONS = (POWER_ACTION_ON, POWER_ACTION_OFF)
 CHANNEL_LIST_FONT = ("Microsoft YaHei UI", 11)
 CHANNEL_FIELD_WIDTH = 42
 TEST_ITEM_COMMAND_GROUP_SPACING = 14
+TEST_ITEM_HIDDEN_UI_DEFAULT_OPTIONS = frozenset(
+    {
+        TELNET_ENABLE_OPTION,
+        "communication_method",
+        "baud_rate",
+        "selected_profile",
+    }
+)
+
+
+def _clear_test_item_rows(row_widgets: list[dict]) -> None:
+    """销毁全部测试项命令行，避免遍历时删除原列表导致隔行残留。"""
+    for row_dict in tuple(row_widgets):
+        row_dict["remove"]()
+    row_widgets.clear()
+
+
+def _reveal_completed_dialog(dialog) -> None:
+    """显示后处理完整绘制队列，避免 Windows 客户区等待鼠标消息才重绘。"""
+    dialog.deiconify()
+    dialog.lift()
+    dialog.update_idletasks()
+    dialog.update()
+    dialog.focus_force()
 
 
 def power_channel_from_section(section: str) -> int:
@@ -2604,6 +2631,8 @@ class LineCheckAssistant(Tk):
 
         dialog = Toplevel(self)
         self.test_item_config_window = dialog
+        # 测试项命令较多，构建过程中先隐藏，避免 Windows 提前显示未绘制完成的空窗口。
+        dialog.withdraw()
         dialog.title("测试项配置")
         dialog.geometry("960x940")
         dialog.minsize(960, 940)
@@ -2622,7 +2651,7 @@ class LineCheckAssistant(Tk):
         Label(
             content,
             text=(
-                "编辑测试项 ini（telnet / 测试项命令 / WiFi 连接 / 项目信息）。当前仅提供编辑入口，"
+                "编辑测试项 ini（Telnet / 测试项命令 / WiFi / 项目信息）及旧工具参数。当前仅提供编辑入口，"
                 "不会改变主程序的执行流程。"
             ),
             foreground=COLOR_MUTED,
@@ -2643,6 +2672,8 @@ class LineCheckAssistant(Tk):
                 parent=dialog,
             )
         config = store.load()
+        legacy_defaults_store = LegacyUiDefaultsStore(LEGACY_UI_DEFAULTS_CONFIG_PATH)
+        legacy_defaults = legacy_defaults_store.load()
 
         notebook = ttk.Notebook(content)
         notebook.pack(fill="both", expand=True, pady=(0, 12))
@@ -2653,9 +2684,19 @@ class LineCheckAssistant(Tk):
             dirty[0] = True
 
         telnet_vars = self._build_test_item_telnet_tab(notebook, config.telnet, mark_dirty)
-        order_control = self._build_test_item_order_tab(notebook, config.order, mark_dirty)
+        order_control = self._build_test_item_order_tab(
+            notebook,
+            config.order,
+            mark_dirty,
+            TEST_ITEM_DEFAULT_CONFIG_PATH,
+        )
         wifi_vars = self._build_test_item_wifi_tab(notebook, config.connect_wifi, mark_dirty)
         project_info_vars = self._build_test_item_project_info_tab(notebook, config.project_info, mark_dirty)
+        legacy_defaults_control = self._build_test_item_ui_defaults_tab(
+            notebook,
+            legacy_defaults,
+            mark_dirty,
+        )
 
         button_bar = Frame(content, background=COLOR_BG)
         button_bar.pack(fill="x", side="bottom", anchor="e")
@@ -2673,9 +2714,11 @@ class LineCheckAssistant(Tk):
                     return
             try:
                 reloaded = store.load()
+                reloaded_legacy_defaults = legacy_defaults_store.load()
             except Exception as exc:  # noqa: BLE001 - ini 损坏需明确提示
                 messagebox.showerror("加载失败", f"读取 ini 失败：{exc}", parent=dialog)
                 return
+            legacy_defaults_control["load"](reloaded_legacy_defaults)
             telnet_vars["load"](reloaded.telnet)
             order_control["load"](reloaded.order)
             wifi_vars["load"](reloaded.connect_wifi)
@@ -2691,13 +2734,20 @@ class LineCheckAssistant(Tk):
                     connect_wifi=wifi_vars["capture"](),
                     project_info=project_info_vars["capture"](),
                 )
+                captured_legacy_defaults = legacy_defaults_control["capture"]()
+                captured_legacy_defaults[TELNET_ENABLE_OPTION] = (
+                    "0" if bool(captured.telnet.telnet_default_on) else "1"
+                )
+                captured_legacy_defaults = legacy_defaults_store.validate(
+                    captured_legacy_defaults
+                )
             except ValueError as exc:
                 messagebox.showerror("数据不合法", str(exc), parent=dialog)
                 return
             if not messagebox.askyesno(
                 "保存测试项 ini",
                 (
-                    f"将覆盖 {TEST_ITEM_CONFIG_PATH}。\n\n"
+                    f"将更新 {TEST_ITEM_CONFIG_PATH} 和 {LEGACY_UI_DEFAULTS_CONFIG_PATH}。\n\n"
                     f"- Telnet 字段：{len(captured.telnet.__dict__)} 项\n"
                     f"- 测试项命令：{len(captured.order.items)} 条\n"
                     f"- 指令重试间隔：{captured.order.command_fail_retry_interval_time} 秒\n"
@@ -2705,25 +2755,28 @@ class LineCheckAssistant(Tk):
                     f"- 项目信息：项目={captured.project_info.project_name or '(空)'}，"
                     f"软件版本={captured.project_info.software_version or '(空)'}，"
                     f"内部软件版本={captured.project_info.internal_software_version or '(空)'}，"
-                    f"编译时间={captured.project_info.onu_compile_time or '(空)'}\n\n"
-                    "原 ini 中的注释（以 ; 开头）会在保存后丢失。是否继续？"
+                    f"编译时间={captured.project_info.onu_compile_time or '(空)'}\n"
+                    f"- 旧工具参数：[ui_defaults] {len(captured_legacy_defaults)} 项\n\n"
+                    "测试项 ini 中的原注释会在保存后丢失；config.ini 的其它段和注释会保留。是否继续？"
                 ),
                 parent=dialog,
             ):
                 return
             try:
                 store.save(captured)
+                legacy_defaults_store.save(captured_legacy_defaults)
             except OSError as exc:
                 messagebox.showerror("保存失败", f"写入 ini 失败：{exc}", parent=dialog)
                 self._log(f"[测试项配置] 保存失败：{exc}")
                 return
             reset_dirty()
             self._log(
-                f"[测试项配置] 已保存 {len(captured.order.items)} 条测试项命令到 {TEST_ITEM_CONFIG_PATH.name}"
+                f"[测试项配置] 已保存 {len(captured.order.items)} 条测试项命令，"
+                f"并更新 {len(captured_legacy_defaults)} 项旧工具参数"
             )
             messagebox.showinfo(
                 "保存成功",
-                f"已保存到 {TEST_ITEM_CONFIG_PATH}。",
+                f"已保存到 {TEST_ITEM_CONFIG_PATH} 和 {LEGACY_UI_DEFAULTS_CONFIG_PATH}。",
                 parent=dialog,
             )
 
@@ -2743,8 +2796,10 @@ class LineCheckAssistant(Tk):
         ttk.Button(button_bar, text="保存", command=save, style="Primary.TButton").pack(side="right", padx=(0, 8))
 
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+        # 必须让当前按钮回调先结束，再显示并处理一次完整 WM_PAINT 队列。
+        dialog.after(0, lambda: _reveal_completed_dialog(dialog))
 
-    # -- 测试项配置：三个 Tab 的具体构建 ----------------------------------
+    # -- 测试项配置：各 Tab 的具体构建 ------------------------------------
 
     def _build_test_item_telnet_tab(
         self,
@@ -2810,7 +2865,7 @@ class LineCheckAssistant(Tk):
         # 新增的 Checkbutton 放在标题下方(原 request_url 行的位置),其他字段全部下移 1 行。
         Checkbutton(
             frame,
-            text="Telnet 默认已开启（telnet_default_on = 1，默认勾选）",
+            text="设备默认已开启 Telnet",
             variable=telnet_default_on_var,
             onvalue=1,
             offvalue=0,
@@ -2820,17 +2875,17 @@ class LineCheckAssistant(Tk):
             borderwidth=0,
         ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(2, 8))
 
-        Label(frame, text="request_url", width=32, anchor="w", background=COLOR_BG).grid(
+        Label(frame, text="Telnet 开启地址", width=32, anchor="w", background=COLOR_BG).grid(
             row=2, column=0, sticky="w", padx=(0, 12), pady=6
         )
         ttk.Entry(frame, textvariable=request_url_var, width=36).grid(row=2, column=1, sticky="ew", pady=6)
 
-        Label(frame, text="user", width=32, anchor="w", background=COLOR_BG).grid(
+        Label(frame, text="登录用户名", width=32, anchor="w", background=COLOR_BG).grid(
             row=3, column=0, sticky="w", padx=(0, 12), pady=6
         )
         ttk.Entry(frame, textvariable=user_var, width=24).grid(row=3, column=1, sticky="ew", pady=6)
 
-        Label(frame, text="password（明文）", width=32, anchor="w", background=COLOR_BG).grid(
+        Label(frame, text="登录密码（明文）", width=32, anchor="w", background=COLOR_BG).grid(
             row=4, column=0, sticky="w", padx=(0, 12), pady=6
         )
         pwd_container = Frame(frame, background=COLOR_BG)
@@ -2846,25 +2901,25 @@ class LineCheckAssistant(Tk):
         toggle_btn = Button(pwd_container, text="👁", width=3, command=toggle_password_visibility)
         toggle_btn.pack(side="left", padx=(8, 0))
 
-        int_field(frame, 5, "port", port_var, from_=1, to=65535)
-        int_field(frame, 6, "timeout", timeout_var, from_=1, to=600)
+        int_field(frame, 5, "Telnet 端口", port_var, from_=1, to=65535)
+        int_field(frame, 6, "连接超时时间（秒）", timeout_var, from_=1, to=600)
 
-        Label(frame, text="input_user_flag", width=32, anchor="w", background=COLOR_BG).grid(
+        Label(frame, text="用户名提示符", width=32, anchor="w", background=COLOR_BG).grid(
             row=7, column=0, sticky="w", padx=(0, 12), pady=6
         )
         ttk.Entry(frame, textvariable=input_user_flag_var, width=18).grid(row=7, column=1, sticky="w", pady=6)
-        Label(frame, text="input_password_flag", width=32, anchor="w", background=COLOR_BG).grid(
+        Label(frame, text="密码提示符", width=32, anchor="w", background=COLOR_BG).grid(
             row=8, column=0, sticky="w", padx=(0, 12), pady=6
         )
         ttk.Entry(frame, textvariable=input_password_flag_var, width=18).grid(row=8, column=1, sticky="w", pady=6)
-        Label(frame, text="login_success_flag", width=32, anchor="w", background=COLOR_BG).grid(
+        Label(frame, text="登录成功提示符", width=32, anchor="w", background=COLOR_BG).grid(
             row=9, column=0, sticky="w", padx=(0, 12), pady=6
         )
         ttk.Entry(frame, textvariable=login_success_flag_var, width=18).grid(row=9, column=1, sticky="w", pady=6)
 
-        int_field(frame, 10, "telnet_need_enter_password_flag", need_pwd_flag_var, from_=0, to=1)
-        int_field(frame, 11, "telnet_no_user_password_flag", no_user_pwd_flag_var, from_=0, to=1)
-        int_field(frame, 12, "only_power_off_on", only_power_var, from_=0, to=1)
+        int_field(frame, 10, "是否需要输入密码（0/1）", need_pwd_flag_var, from_=0, to=1)
+        int_field(frame, 11, "免用户名密码登录（0/1）", no_user_pwd_flag_var, from_=0, to=1)
+        int_field(frame, 12, "仅执行上下电（0/1）", only_power_var, from_=0, to=1)
 
         frame.columnconfigure(1, weight=1)
 
@@ -2898,13 +2953,18 @@ class LineCheckAssistant(Tk):
             only_power_var.set(new_telnet.only_power_off_on)
             telnet_default_on_var.set(int(new_telnet.telnet_default_on))
 
-        return {"capture": capture, "load": load}
+        return {
+            "capture": capture,
+            "load": load,
+            "telnet_default_on_var": telnet_default_on_var,
+        }
 
     def _build_test_item_order_tab(
         self,
         notebook: ttk.Notebook,
         order: OrderConfig,
         mark_dirty,
+        default_config_path: Path,
     ) -> dict:
         """构建 [order] 段 Tab。返回 ``{"capture": Callable, "load": Callable}``。"""
         frame = ttk.Frame(notebook, style="App.TFrame", padding=(16, 14))
@@ -3095,6 +3155,54 @@ class LineCheckAssistant(Tk):
             side="left"
         )
 
+        def restore_default() -> None:
+            self._log("[测试项配置] 恢复默认测试项：等待操作员确认")
+            if not messagebox.askyesno(
+                "恢复默认测试项",
+                (
+                    "将用默认模板恢复当前页面的指令重试间隔和全部测试项命令。\n\n"
+                    "Telnet、WiFi 和项目信息不会改变；恢复后仍需点击窗口底部“保存”才会写入正式配置。\n\n"
+                    "是否继续？"
+                ),
+                parent=self.test_item_config_window,
+            ):
+                self._log("[测试项配置] 恢复默认测试项：操作员取消，跳过")
+                return
+            if not default_config_path.is_file():
+                message = f"未找到默认测试项配置：{default_config_path}"
+                messagebox.showerror("恢复默认失败", message, parent=self.test_item_config_window)
+                self._log(f"[测试项配置] 恢复默认测试项失败：{message}")
+                return
+            try:
+                default_order = TestItemConfigStore(default_config_path).load().order
+            except Exception as exc:  # noqa: BLE001 - 默认模板损坏需明确提示
+                messagebox.showerror(
+                    "恢复默认失败",
+                    f"读取默认测试项配置失败：{exc}",
+                    parent=self.test_item_config_window,
+                )
+                self._log(f"[测试项配置] 恢复默认测试项失败：{exc}")
+                return
+            load(default_order)
+            mark_dirty()
+            self._log(
+                f"[测试项配置] 已从 {default_config_path.name} 恢复 "
+                f"{len(default_order.items)} 条默认测试项到界面，等待保存"
+            )
+            messagebox.showinfo(
+                "已恢复默认",
+                f"已恢复 {len(default_order.items)} 条默认测试项。\n请点击窗口底部“保存”写入正式配置。",
+                parent=self.test_item_config_window,
+            )
+
+        ttk.Button(
+            bottom_bar,
+            text="恢复默认",
+            width=12,
+            command=restore_default,
+            style="Secondary.TButton",
+        ).pack(side="left", padx=(8, 0))
+
         def capture() -> OrderConfig:
             items: list[OrderItem] = []
             for row_dict in row_widgets:
@@ -3124,15 +3232,100 @@ class LineCheckAssistant(Tk):
 
         def load(new_order: OrderConfig) -> None:
             interval_var.set(new_order.command_fail_retry_interval_time or DEFAULT_COMMAND_FAIL_RETRY_INTERVAL)
-            for row_dict in row_widgets:
-                row_dict["remove"]()
-            row_widgets.clear()
+            _clear_test_item_rows(row_widgets)
             if new_order.items:
                 for item in new_order.items:
                     add_row(item)
             else:
                 add_row(OrderItem())
 
+        return {"capture": capture, "load": load}
+
+    def _build_test_item_ui_defaults_tab(
+        self,
+        notebook: ttk.Notebook,
+        values: dict[str, str],
+        mark_dirty,
+    ) -> dict:
+        """动态构建旧工具 ``config.ini [ui_defaults]`` 独立 Tab。"""
+        frame = ttk.Frame(notebook, style="App.TFrame", padding=(16, 14))
+        notebook.add(frame, text="开关机运行参数")
+
+        Label(
+            frame,
+            text="旧工具界面与运行参数",
+            font=(FONT_FAMILY, 12, "bold"),
+            foreground=COLOR_TEXT,
+            background=COLOR_BG,
+        ).pack(anchor="w", pady=(0, 6))
+        Label(
+            frame,
+            text=(
+                "这里显示 config.ini [ui_defaults] 的开关机运行时间参数。"
+                "通信方式、Telnet Enable、波特率和默认方案由其它配置维护，本页不重复显示；"
+                "保存不会改动 config.ini 的其它配置段。"
+            ),
+            foreground=COLOR_MUTED,
+            background=COLOR_BG,
+            wraplength=880,
+            justify="left",
+        ).pack(anchor="w", pady=(0, 12))
+
+        rows_frame = ttk.Frame(frame, style="App.TFrame")
+        rows_frame.pack(fill="both", expand=True)
+        variables: dict[str, StringVar] = {}
+        option_order: list[str] = []
+        loaded_values: dict[str, str] = {}
+        descriptions = {
+            "communication_method": "ONU 通信方式（telnet / ssh）",
+            "telnet_enable": "是否执行 Telnet 开启动作（由 Telnet 页反向同步）",
+            "baud_rate": "程控电源串口波特率",
+            "selected_profile": "旧工具默认测试方案",
+            "startup_time": "设备启动等待时间（秒）",
+            "interval_time": "每轮断电等待时间（秒）",
+            "number_of_tests": "测试循环次数",
+            "wait_command_done": "命令完成后等待时间（秒）",
+        }
+
+        def render(new_values: dict[str, str]) -> None:
+            for child in rows_frame.winfo_children():
+                child.destroy()
+            variables.clear()
+            option_order.clear()
+            loaded_values.clear()
+            loaded_values.update({key: str(value) for key, value in new_values.items()})
+            row = 0
+            for option, value in new_values.items():
+                if option.lower() in TEST_ITEM_HIDDEN_UI_DEFAULT_OPTIONS:
+                    continue
+                option_order.append(option)
+                Label(
+                    rows_frame,
+                    text=descriptions.get(option.lower(), option),
+                    width=32,
+                    anchor="w",
+                    background=COLOR_BG,
+                    foreground=COLOR_TEXT,
+                ).grid(row=row, column=0, sticky="w", padx=(0, 12), pady=7)
+                variable = StringVar(value=str(value))
+                variable.trace_add("write", lambda *_args: mark_dirty())
+                variables[option] = variable
+                entry = ttk.Entry(rows_frame, textvariable=variable, width=28)
+                entry.grid(row=row, column=1, sticky="ew", pady=7)
+                row += 1
+            rows_frame.columnconfigure(1, weight=1)
+
+        def capture() -> dict[str, str]:
+            captured = dict(loaded_values)
+            captured.update(
+                {option: variables[option].get().strip() for option in option_order}
+            )
+            return captured
+
+        def load(new_values: dict[str, str]) -> None:
+            render(new_values)
+
+        render(values)
         return {"capture": capture, "load": load}
 
     def _build_test_item_wifi_tab(
@@ -3160,7 +3353,7 @@ class LineCheckAssistant(Tk):
 
         Checkbutton(
             frame,
-            text="启用 WiFi 连接测试（enable = 1）",
+            text="启用 WiFi 连接测试",
             variable=enable_var,
             onvalue=1,
             offvalue=0,
@@ -3170,7 +3363,7 @@ class LineCheckAssistant(Tk):
             borderwidth=0,
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=6)
 
-        Label(frame, text="product_solution", width=24, anchor="w", background=COLOR_BG).grid(
+        Label(frame, text="产品方案", width=24, anchor="w", background=COLOR_BG).grid(
             row=2, column=0, sticky="w", padx=(0, 12), pady=6
         )
         solution_combo = ttk.Combobox(
