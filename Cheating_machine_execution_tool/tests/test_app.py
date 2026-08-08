@@ -203,6 +203,21 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         pipeline_window.request_stop.assert_called_once_with()
         context._log.assert_not_called()
 
+    def test_main_stop_button_recovers_stale_running_status(self):
+        pipeline_window = Mock()
+        pipeline_window.request_stop.return_value = False
+        context = SimpleNamespace(
+            pipeline_window=pipeline_window,
+            power_test_running=True,
+            _set_power_test_status=Mock(),
+            _log=Mock(),
+        )
+
+        LineCheckAssistant._stop_power_test(context)
+
+        context._set_power_test_status.assert_called_once_with("idle")
+        self.assertIn("残留状态恢复为未运行", context._log.call_args.args[0])
+
     def test_dut_config_entry_reuses_open_window(self):
         dut_window = Mock()
         dut_window.winfo_exists.return_value = True

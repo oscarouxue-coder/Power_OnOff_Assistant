@@ -4113,8 +4113,12 @@ class LineCheckAssistant(Tk):
             return
         pipeline_window = self.pipeline_window
         if self.power_test_running:
-            self._log("开关机测试：当前全流程仍在执行或停止中，请在主界面查看状态。")
-            return
+            is_running = getattr(pipeline_window, "is_running", None)
+            if callable(is_running) and is_running():
+                self._log("开关机测试：当前全流程仍在执行或停止中，请在主界面查看状态。")
+                return
+            self._set_power_test_status("idle")
+            self._log("开关机测试：检测到后台全流程已结束，已将残留状态恢复为未运行。")
         if pipeline_window is not None and pipeline_window.window.winfo_exists():
             pipeline_window.window.deiconify()
             pipeline_window.window.lift()
@@ -4146,8 +4150,13 @@ class LineCheckAssistant(Tk):
     def _stop_power_test(self) -> None:
         """主界面停止入口；委派给当前全流程编排器的既有停止事件。"""
         pipeline_window = self.pipeline_window
-        if pipeline_window is None or not pipeline_window.request_stop():
-            self._log("开关机测试：当前没有正在执行的全流程，无需停止。")
+        if pipeline_window is not None and pipeline_window.request_stop():
+            return
+        if self.power_test_running:
+            self._set_power_test_status("idle")
+            self._log("开关机测试：后台全流程已结束，已将残留状态恢复为未运行。")
+            return
+        self._log("开关机测试：当前没有正在执行的全流程，无需停止。")
 
     def _selected_channels(self) -> list[ChannelConfig]:
         return [channel for channel in self.channels if channel.enabled]

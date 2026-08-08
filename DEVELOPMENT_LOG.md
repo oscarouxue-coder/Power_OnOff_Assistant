@@ -2,6 +2,37 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-08 - 合并连续重复的旧工具日志
+
+- 类型：BUG 修复 / 执行日志 / 旧业务适配 / 回归测试 / 文档
+- 背景：真实运行中连续出现两条相同的 `[旧工具Logs][INFO] 192.168.1.112登录成功`，两次到达间隔略超过原有 2 秒时间去重窗口，导致新工具执行日志重复显示同一结果。
+- 完成内容：① 保留既有 2 秒短时去重，同时增加“连续可见旧日志”去重；② 同级同文旧日志只要连续出现，无论相隔多久均只显示第一条；③ 出现其它可见旧日志或执行阶段日志后重置连续判定，下一轮相同登录结果仍可正常显示；④ 不修改旧工具登录、Telnet/SSH 或 logger 业务；⑤ 回归测试主动关闭 2 秒时间窗口并连续投递两条相同登录成功日志，确认仍只输出一次。
+- 修改文件：`.claude/plans/legacy_power_log_noise_reduction.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`、`Cheating_machine_execution_tool/tests/test_legacy_power_test_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_legacy_power_test_service.py" -v`、`python scripts\verify_baseline.py`、`git diff --check`。
+- 验证结果：旧工具无 GUI 服务 8 项专项测试通过；`python scripts\verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、481 项单测、25 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：真实运行确认连续两条同 IP“登录成功”只显示一次，同时下一测试轮开始后仍能显示该轮新的登录成功结果。
+
+## 2026-08-08 - 中文化旧工具 Ping 成功结果
+
+- 类型：优化 / 执行日志 / 旧业务适配 / 回归测试 / 文档
+- 背景：旧工具会输出 `The network card with IP 192.168.1.112 has been pinged`，只能看出源网卡，不能直观看出实际 Ping 目标和结果；项目负责人要求改为清晰的 Ping 成功日志。
+- 完成内容：① 不修改旧工具 Ping 业务，在新工具旧日志适配层精确识别该英文成功行；② 从当前测试方案、当前 Telnet/SSH 通信段的 `request_url` 提取旧业务实际使用的目标样机 IP；③ 新工具统一显示为 `[旧工具Logs][INFO] Ping 成功：源网卡 192.168.1.112 → 目标样机 192.168.1.1`，英文原文不再重复透传；④ 无法提取目标 IP 时仍明确显示源网卡已连通目标样机，不伪造固定地址；⑤ 其它旧工具日志、过滤、去重和真实 Ping 行为保持不变；⑥ 扩展既有强制基线测试，覆盖目标地址加载、中文转换及英文原文消失。
+- 修改文件：`.claude/plans/legacy_power_log_noise_reduction.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`、`Cheating_machine_execution_tool/tests/test_legacy_power_test_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_legacy_power_test_service.py" -v`、`python scripts\verify_baseline.py`、`git diff --check`。
+- 验证结果：旧工具无 GUI 服务 8 项专项测试通过；`python scripts\verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、481 项单测、25 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：真实开关机测试中确认源网卡 `192.168.1.112/113` 成功 Ping 当前测试方案目标时，新工具日志显示各自“源网卡 → 目标样机 → 成功”结果。真实样机结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-08 - 修复全流程结束后运行状态残留
+
+- 类型：BUG 修复 / Tk 主线程 / 全流程状态 / 停止控制 / 回归测试 / 文档
+- 背景：项目负责人现场日志先出现“开关机测试：当前全流程仍在执行或停止中”，随后点击停止又出现“当前没有正在执行的全流程”，说明后台编排器已经结束，但隐藏全流程窗口后的完成回调没有稳定清理主界面运行状态，造成状态与真实线程互相矛盾。
+- 根因：`PipelineWindow._run_pipeline_thread()` 在后台线程中通过已隐藏 `Toplevel.after()` 安排完成/失败回调；窗口隐藏后该跨线程 Tk 调度不可靠，而 worker 的 `finally` 已先清空 `_orchestrator`，最终形成“主界面仍是运行态、停止入口却找不到编排器”。
+- 完成内容：① 完成和失败回调统一改走主程序既有 `pipeline_ui_task_queue / _invoke_pipeline_ui_action`，由 Tk 主线程执行状态回收和结果提示；② 后台线程不再调用隐藏窗口的 `after()`；③ 新增 `PipelineWindow.is_running()` 返回线程真实存活状态；④ 主入口看到运行态时先核对真实线程，线程已结束则自动恢复“未运行”并允许重新显示配置窗口；⑤ 停止按钮发现无可停止编排器但仍残留运行态时也自动恢复，避免矛盾日志继续重复；⑥ lambda 显式捕获完成结果/异常，避免异常变量离开 `except` 后失效；⑦ 新增主线程队列回调、主入口残留恢复和停止按钮残留恢复回归，并把前两项纳入强制基线。
+- 修改文件：`.claude/plans/main_power_test_status_stop_control.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p test_app.py -v`、`python -m unittest discover -s tests -p test_pipeline_window.py -v`、`python scripts\verify_baseline.py`、`git diff --check`。
+- 验证结果：主界面 90 项、全流程窗口 28 项专项测试通过；`python scripts\verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、481 项单测、25 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面重新执行一次“自动上/下电”全流程，确认结束后主界面及时显示“已完成”、停止按钮禁用，再次点击“检查并执行测试”可重新显示配置窗口，且不再出现两条矛盾提示。真实样机结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-08 - 删除执行日志说明行
 
 - 类型：优化 / 主界面布局 / 回归测试 / 文档

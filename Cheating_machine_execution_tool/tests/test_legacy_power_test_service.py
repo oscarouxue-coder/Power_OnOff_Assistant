@@ -53,6 +53,7 @@ network_card_ip = 192.168.1.105
     )
     (config_dir / "test_project_config.ini").write_text(
         """[telnet]
+request_url = http://192.168.1.1
 telnet_default_on = 1
 password = secret
 
@@ -98,6 +99,22 @@ class _CompletedProcess:
                 "type": "log",
                 "level": "info",
                 "message": "192.168.1.105登录成功",
+                "source": "logger",
+            }
+        )
+        message_queue.put(
+            {
+                "type": "log",
+                "level": "info",
+                "message": "192.168.1.105登录成功",
+                "source": "logger",
+            }
+        )
+        message_queue.put(
+            {
+                "type": "log",
+                "level": "info",
+                "message": "The network card with IP 192.168.1.105 has been pinged",
                 "source": "logger",
             }
         )
@@ -161,6 +178,7 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
         self.assertEqual(request.number_of_tests, 500)
         self.assertTrue(request.connect_wifi_enable)
         self.assertEqual(request.channels[0].number, 5)
+        self.assertEqual(request.ping_target_ip, "192.168.1.1")
 
     def test_prepare_request_rejects_empty_power_com(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -219,19 +237,34 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
             connect_wifi_enable=False,
             product_solution="openwrt",
             channels=(LegacyPowerChannel(5, "192.168.1.105"),),
+            ping_target_ip="192.168.1.1",
         )
         emitted = []
 
-        result = run_legacy_power_test(
-            request,
-            emitted.append,
-            _FakeEvent(),
-            process_context=_FakeProcessContext(),
-        )
+        original_dedup_seconds = service_module.LEGACY_LOG_DEDUP_SECONDS
+        service_module.LEGACY_LOG_DEDUP_SECONDS = 0.0
+        try:
+            result = run_legacy_power_test(
+                request,
+                emitted.append,
+                _FakeEvent(),
+                process_context=_FakeProcessContext(),
+            )
+        finally:
+            service_module.LEGACY_LOG_DEDUP_SECONDS = original_dedup_seconds
 
         self.assertTrue(result.ok)
         self.assertIn("[旧工具Logs][WARNING] 旧Logs内容", emitted)
-        self.assertIn("[旧工具Logs][INFO] 192.168.1.105登录成功", emitted)
+        self.assertEqual(
+            sum("[旧工具Logs][INFO] 192.168.1.105登录成功" == line for line in emitted),
+            1,
+        )
+        self.assertIn(
+            "[旧工具Logs][INFO] Ping 成功：源网卡 192.168.1.105 → "
+            "目标样机 192.168.1.1",
+            emitted,
+        )
+        self.assertFalse(any("has been pinged" in line for line in emitted))
         self.assertIn(
             "[旧工具Logs][INFO] 2026-08-08 15:37:41.904434: "
             "通道9下挂的设备在第1次测试时正常",

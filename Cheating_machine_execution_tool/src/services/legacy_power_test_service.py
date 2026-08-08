@@ -32,6 +32,12 @@ LEGACY_PROCESS_POLL_SECONDS = 0.2
 LEGACY_RESULT_DRAIN_SECONDS = 1.0
 LEGACY_LOG_DEDUP_SECONDS = 2.0
 LEGACY_LOG_WHITESPACE_PATTERN = re.compile(r"\s+")
+LEGACY_IPV4_PATTERN = re.compile(r"(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)")
+LEGACY_NETWORK_CARD_PINGED_PATTERN = re.compile(
+    r"^The network card with IP\s+(?P<source_ip>(?:\d{1,3}\.){3}\d{1,3})\s+"
+    r"has been pinged$",
+    re.IGNORECASE,
+)
 LEGACY_NORMAL_CYCLE_RESULT_PATTERN = re.compile(
     r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?:\s*"
     r"通道\d+下挂的设备在第\d+次测试时正常$"
@@ -77,6 +83,7 @@ class LegacyPowerTestRequest:
     connect_wifi_enable: bool
     product_solution: str
     channels: tuple[LegacyPowerChannel, ...]
+    ping_target_ip: str = ""
 
 
 @dataclass(frozen=True)
@@ -112,6 +119,23 @@ def _legacy_log_dedup_key(level: str, text: str) -> tuple[str, str]:
         level.strip().lower(),
         LEGACY_LOG_WHITESPACE_PATTERN.sub(" ", text).strip(),
     )
+
+
+def _extract_ipv4(value: str) -> str:
+    match = LEGACY_IPV4_PATTERN.search(value)
+    return match.group(0) if match is not None else ""
+
+
+def _format_legacy_operator_log(text: str, ping_target_ip: str) -> str:
+    """把旧工具英文关键结果转换为新工具的操作员日志。"""
+    compact_text = LEGACY_LOG_WHITESPACE_PATTERN.sub(" ", text).strip()
+    match = LEGACY_NETWORK_CARD_PINGED_PATTERN.fullmatch(compact_text)
+    if match is None:
+        return text
+    source_ip = match.group("source_ip")
+    if ping_target_ip:
+        return f"Ping 成功：源网卡 {source_ip} → 目标样机 {ping_target_ip}"
+    return f"Ping 成功：源网卡 {source_ip} 已连通目标样机"
 
 
 def prepare_legacy_power_test_request(
@@ -170,6 +194,10 @@ def prepare_legacy_power_test_request(
     product_solution = profile_parser.get(
         "connect_wifi", "product_solution", fallback=""
     ).strip().lower()
+    request_url = profile_parser.get(
+        defaults["communication_method"], "request_url", fallback=""
+    ).strip()
+    ping_target_ip = _extract_ipv4(request_url)
     emails = parser.get("Emails", "emails", fallback="").strip().replace('"', "")
 
     return LegacyPowerTestRequest(
@@ -188,6 +216,7 @@ def prepare_legacy_power_test_request(
         connect_wifi_enable=connect_wifi_enable,
         product_solution=product_solution,
         channels=selected_channels,
+        ping_target_ip=ping_target_ip,
     )
 
 
@@ -218,6 +247,7 @@ def run_legacy_power_test(
     stop_deadline: float | None = None
     exit_drain_deadline: float | None = None
     recent_log_times: dict[tuple[str, str], float] = {}
+    last_forwarded_log_key: tuple[str, str] | None = None
     emit(
         "[执行开关机测试] 已启用精简日志：保留每轮开始/正常结论、关键结果、"
         "警告/错误、程控电源指令和最终结论。"
@@ -246,12 +276,15 @@ def run_legacy_power_test(
         message_type = message.get("type")
         if message_type == "log":
             level = str(message.get("level", "info")).upper()
-            text = str(message.get("message", ""))
+            raw_text = str(message.get("message", ""))
             source = str(message.get("source", "signal")).lower()
-            if not _should_forward_legacy_log(level, text, source):
+            if not _should_forward_legacy_log(level, raw_text, source):
+                continue
+            text = _format_legacy_operator_log(raw_text, request.ping_target_ip)
+            dedup_key = _legacy_log_dedup_key(level, text)
+            if dedup_key == last_forwarded_log_key:
                 continue
             now = time.monotonic()
-            dedup_key = _legacy_log_dedup_key(level, text)
             if now - recent_log_times.get(dedup_key, float("-inf")) < LEGACY_LOG_DEDUP_SECONDS:
                 continue
             recent_log_times[dedup_key] = now
@@ -262,8 +295,10 @@ def run_legacy_power_test(
                     if now - seen_at < LEGACY_LOG_DEDUP_SECONDS
                 }
             emit(f"[旧工具Logs][{level}] {text}")
+            last_forwarded_log_key = dedup_key
         elif message_type == "stage":
             emit(f"[执行开关机测试] {message.get('message', '')}")
+            last_forwarded_log_key = None
         elif message_type == "result":
             final_result = LegacyPowerTestResult(
                 bool(message.get("ok")),

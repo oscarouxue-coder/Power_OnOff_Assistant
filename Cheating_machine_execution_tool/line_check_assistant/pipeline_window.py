@@ -385,14 +385,33 @@ class PipelineWindow:
             if self._stop_requested:
                 orchestrator.request_stop()
             results = orchestrator.run(selected)
-            # 主线程弹结果框
-            self.window.after(0, lambda: self._on_pipeline_complete(results))
+            self._invoke_on_main_thread(
+                lambda completed_results=results: self._on_pipeline_complete(
+                    completed_results
+                )
+            )
         except PipelineError as exc:
-            self.window.after(0, lambda: self._on_pipeline_failed(exc))
+            self._invoke_on_main_thread(
+                lambda error=exc: self._on_pipeline_failed(error)
+            )
         except Exception as exc:  # noqa: BLE001 - 后台线程异常需兜底
-            self.window.after(0, lambda: self._on_pipeline_failed(exc))
+            self._invoke_on_main_thread(
+                lambda error=exc: self._on_pipeline_failed(error)
+            )
         finally:
             self._orchestrator = None
+
+    def _invoke_on_main_thread(self, action) -> None:
+        """通过主程序既有 UI 队列执行 Tk 回调，兼容不带队列的最小测试替身。"""
+        invoke = getattr(self.app, "_invoke_pipeline_ui_action", None)
+        if callable(invoke):
+            invoke(action)
+            return
+        action()
+
+    def is_running(self) -> bool:
+        """返回后台全流程线程的真实存活状态。"""
+        return bool(self._running_thread and self._running_thread.is_alive())
 
     def _on_pipeline_complete(self, results: List[SubTaskResult]) -> None:
         self._set_running_ui(False)

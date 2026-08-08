@@ -5,7 +5,7 @@ import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 # 把 ``line_check_assistant`` / ``src`` 加进 path,与其它测试一致
@@ -143,6 +143,39 @@ class BuildContextRegressionTests(unittest.TestCase):
         self.assertIn("parent=self.app", failed_source)
         self.assertNotIn("parent=self.window", complete_source)
         self.assertNotIn("parent=self.window", failed_source)
+
+    @patch("line_check_assistant.pipeline_window.PipelineOrchestrator")
+    def test_pipeline_thread_dispatches_completion_through_main_ui_queue(
+        self, orchestrator_class
+    ) -> None:
+        """隐藏窗口后，完成回调必须走主程序 UI 队列，不能依赖 Toplevel.after。"""
+        from line_check_assistant.pipeline_window import PipelineWindow
+
+        results = [MagicMock()]
+        orchestrator = orchestrator_class.return_value
+        orchestrator.run.return_value = results
+        app = SimpleNamespace(
+            _invoke_pipeline_ui_action=MagicMock(
+                side_effect=lambda action: action()
+            )
+        )
+        context = PipelineWindow.__new__(PipelineWindow)
+        context.app = app
+        context._stop_requested = False
+        context._orchestrator = None
+        context._build_context = MagicMock(return_value=MagicMock())
+        context._emit_to_main_log = MagicMock()
+        context._on_pipeline_complete = MagicMock()
+        context._on_pipeline_failed = MagicMock()
+
+        context._run_pipeline_thread({"env_check"})
+
+        app._invoke_pipeline_ui_action.assert_called_once()
+        context._on_pipeline_complete.assert_called_once_with(results)
+        context._on_pipeline_failed.assert_not_called()
+        self.assertIsNone(context._orchestrator)
+        source = __import__("inspect").getsource(PipelineWindow._run_pipeline_thread)
+        self.assertNotIn("self.window.after", source)
 
     def test_main_stop_request_is_remembered_during_orchestrator_startup(self) -> None:
         """按钮刚启用但编排器尚未赋值时，停止请求不能丢失。"""
@@ -424,7 +457,8 @@ class StartAllChecksRegressionTests(unittest.TestCase):
         )
         fake_app.running = False
         fake_app.power_test_running = True
-        fake_pipeline_window = MagicMock(spec=["window"])
+        fake_pipeline_window = MagicMock(spec=["window", "is_running"])
+        fake_pipeline_window.is_running.return_value = True
         fake_app.pipeline_window = fake_pipeline_window
 
         app_module.LineCheckAssistant._start_all_checks(fake_app)
@@ -433,6 +467,32 @@ class StartAllChecksRegressionTests(unittest.TestCase):
         fake_pipeline_window.window.lift.assert_not_called()
         fake_pipeline_window.window.focus_force.assert_not_called()
         fake_app._log.assert_called_once()
+
+    def test_start_all_checks_recovers_stale_running_status(self) -> None:
+        """线程已结束时不得继续提示“仍在执行”，应恢复状态并重新显示配置窗口。"""
+        import line_check_assistant.app as app_module
+
+        fake_app = MagicMock(
+            spec=[
+                "running",
+                "pipeline_window",
+                "power_test_running",
+                "_set_power_test_status",
+                "_log",
+            ]
+        )
+        fake_app.running = False
+        fake_app.power_test_running = True
+        fake_pipeline_window = MagicMock(spec=["window", "is_running"])
+        fake_pipeline_window.is_running.return_value = False
+        fake_pipeline_window.window.winfo_exists.return_value = True
+        fake_app.pipeline_window = fake_pipeline_window
+
+        app_module.LineCheckAssistant._start_all_checks(fake_app)
+
+        fake_app._set_power_test_status.assert_called_once_with("idle")
+        self.assertIn("残留状态恢复为未运行", fake_app._log.call_args.args[0])
+        fake_pipeline_window.window.deiconify.assert_called_once_with()
 
     def test_start_all_checks_noop_when_already_running(self) -> None:
         """``self.running`` 为 True 时,_start_all_checks 直接 return,不调 window。"""

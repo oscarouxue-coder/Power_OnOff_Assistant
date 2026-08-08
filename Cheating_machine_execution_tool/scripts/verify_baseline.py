@@ -115,6 +115,8 @@ REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
     "test_app.CurrentChannelSelectionTests.test_main_card_shows_power_test_status_and_stop_button",
     "test_pipeline_window.BuildContextRegressionTests.test_pipeline_start_hides_configuration_window_after_thread_starts",
     "test_app.CurrentChannelSelectionTests.test_main_header_copy_is_removed_and_admin_status_moves_to_toolbar",
+    "test_pipeline_window.BuildContextRegressionTests.test_pipeline_thread_dispatches_completion_through_main_ui_queue",
+    "test_pipeline_window.StartAllChecksRegressionTests.test_start_all_checks_recovers_stale_running_status",
     "test_app.CurrentChannelSelectionTests.test_pipeline_serial_logs_show_then_open_all",
     "test_pipeline_orchestrator.PipelineRunOrderTests.test_fatal_subtask_failure_raises_pipeline_error",
     "test_test_item_config_store.TestItemConfigStoreTests.test_save_writes_retry_interval_only_to_legacy_other_config",

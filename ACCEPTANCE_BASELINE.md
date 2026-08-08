@@ -1,6 +1,6 @@
 # Acceptance Baseline
 
-更新：2026-08-08（精简主界面顶部说明并将管理员状态移入常用工具栏）
+更新：2026-08-08（合并连续重复的旧工具日志）
 
 > 与 `PROJECT_STATUS.md` 的关系：本文按"实现 → 单测 → 真实样机验收"三态罗列验收证据与不变量，作为独立验收基线。`PROJECT_STATUS.md` 保留面向项目的进度叙述；两者冲突时以本文为准。
 >
@@ -254,7 +254,7 @@ python scripts\verify_baseline.py
     4. **写样机参数**（默认不勾）—— 调主程序既有 `_start_sample_parameter_write`（异步起线程 + 弹确认框）；必填项：参数表路径（`sample_upgrade_settings.ini` 新增 `parameter_table_path`）+ 写参首次登录账号 / 密码
     5. **ONU 注册**（默认不勾）—— 调主程序既有 `_on_onu_query_clicked` + `_on_onu_register_clicked`（异步起线程 + 弹确认框）；必填项：OLT IP / 用户名 / 密码
     6. **串口日志（管道期间持续记录）**（默认不勾）—— 界面仍保留第 6 行；勾选时在其它子任务前预启动，通过 Tk 主线程调全流程专用 `_open_pipeline_serial_logs`，先显示 `SerialTerminalWindow`，再执行窗口同一套 `open_all()` 动作打开当前全部 VLAN/COM；全部打开动作返回后才进入后续上下电、环境检查、升级、写参和开关机测试；**非致命**（任一串口打开失败需记录失败结果，但不阻塞后续）
-    7. **执行开关机测试**（默认不勾）—— 通过 `legacy_power_test_service` 在独立无 GUI 子进程直接复用旧工具 `PowerOnOffTelnet` / `PowerOnOffSsh`、程控电源和 Start All 通道业务；严格读取当前 `config.ini [ui_defaults]`、当前方案、`network_card_ip.ini [power_supply] serial_port` 和新工具已勾选通道。初始化会先下发旧 Start All 的全通道断电帧 `55 00 AD 00 00 AD`，因此二次确认必须显示危险操作提示；之后仅启动新工具当前勾选通道。旧业务 `show_signal/show_signal_warning/show_signal_error` 操作员日志继续转发；logger 的 WARNING / ERROR 全部保留，INFO 只保留登录、连接、Ping、WiFi、重试、测试完成等关键结果，短时间内同级同文日志只显示一次；实际电源帧必须以十六进制记录，最终结论不得过滤；`[旧工具Logs][INFO] *******通道 【N】 开始第M次测试*******` 正文必须在新工具执行日志中显示为绿色；旧工具真实结果路径 `test_results/device_N/device_N_command_results_*.log` 中形如 `2026-08-08 15:37:41.904434: 通道9下挂的设备在第1次测试时正常` 的完整行必须实时桥接为新工具 `[旧工具Logs][INFO]`，且不得改变旧结果文件字节内容。全部通道结束才判定子任务完成，任一通道失败为致命失败
+    7. **执行开关机测试**（默认不勾）—— 通过 `legacy_power_test_service` 在独立无 GUI 子进程直接复用旧工具 `PowerOnOffTelnet` / `PowerOnOffSsh`、程控电源和 Start All 通道业务；严格读取当前 `config.ini [ui_defaults]`、当前方案、`network_card_ip.ini [power_supply] serial_port` 和新工具已勾选通道。初始化会先下发旧 Start All 的全通道断电帧 `55 00 AD 00 00 AD`，因此二次确认必须显示危险操作提示；之后仅启动新工具当前勾选通道。旧业务 `show_signal/show_signal_warning/show_signal_error` 操作员日志继续转发；logger 的 WARNING / ERROR 全部保留，INFO 只保留登录、连接、Ping、WiFi、重试、测试完成等关键结果；2 秒内同级同文日志只显示一次，同级同文旧日志连续出现时无论间隔多久也只显示第一条，出现其它可见旧日志或执行阶段日志后才允许再次显示；旧英文 `The network card with IP <源IP> has been pinged` 必须按当前通信方式从当前方案 `request_url` 提取实际 Ping 目标，并在新工具显示为 `[旧工具Logs][INFO] Ping 成功：源网卡 <源IP> → 目标样机 <目标IP>`，不得写死目标地址或重复透传英文原文；实际电源帧必须以十六进制记录，最终结论不得过滤；`[旧工具Logs][INFO] *******通道 【N】 开始第M次测试*******` 正文必须在新工具执行日志中显示为绿色；旧工具真实结果路径 `test_results/device_N/device_N_command_results_*.log` 中形如 `2026-08-08 15:37:41.904434: 通道9下挂的设备在第1次测试时正常` 的完整行必须实时桥接为新工具 `[旧工具Logs][INFO]`，且不得改变旧结果文件字节内容。全部通道结束才判定子任务完成，任一通道失败为致命失败
   - “测试项配置（[order] 执行）”不得出现在全流程子任务列表、状态计算、确认顺序或执行分发中；主界面的“测试项配置”编辑器继续保留，仅用于编辑配置。
   - 每行任务标题左侧为勾选框：选中时白底黑边小方框内显示“✓”、未选时保持空框，点击小方框或任务标题可切换；右侧实时显示「必填项当前状态」（绿色就绪 / 红色「缺: 字段1, 字段2」），「去配置」按钮跳到主程序对应子窗口或方法（「环境线路检查」去配置调 `_open_network_config()`：隐藏全流程窗口 + 把主界面拉到前台 + 主执行日志提示操作员去顶部「网络配置」卡片编辑）
   - 底部「刷新状态」只重算当前必填项状态，不下发设备或电源操作；用于去配置后主动核对状态
@@ -268,6 +268,7 @@ python scripts\verify_baseline.py
   - 主界面“环境检查与开关机测试”卡片必须实时显示“未运行 / 正在执行 / 正在停止 / 已完成 / 已停止 / 执行失败”；“停止测试”按钮仅在“正在执行”时启用
   - “停止测试”按钮必须从全流程弹窗移动到主界面，不得在弹窗重复显示；点击后仍调用当前 `PipelineOrchestrator.request_stop()`，状态立即变为“正在停止”，普通子任务在安全退出后停止后续，旧 Start All 子任务直接接收同一停止事件
   - 二次确认后必须先成功启动后台线程，再调用 `withdraw()` 隐藏全流程配置窗口；运行期间主入口不得重新显示该窗口，完成/部分失败/异常提示必须以主界面为父窗口，流程结束后才允许再次显示配置窗口
+  - 后台全流程完成/失败回调必须通过主程序 `pipeline_ui_task_queue` 回到 Tk 主线程，不得从后台线程调用隐藏 `Toplevel.after()`；主入口和停止按钮必须核对线程真实存活状态，线程已结束时自动清理残留运行态，不得连续出现“当前全流程仍在执行”和“当前没有正在执行的全流程”矛盾提示
 - **核心验收行为（2026-07-20 单测全过，真实样机待验收）**：
   - 实现轮已执行 `scripts/verify_baseline.py` 并通过；当前完整测试结果以 `PROJECT_STATUS.md` 的最近一次记录为准，历史增量依据保留在 `DEVELOPMENT_LOG.md`
   - 编排器 7 子任务调度顺序与失败传播：已勾选串口日志必须最先预启动并执行“显示窗口 + 打开全部”，其余任务保持 1→7 相对顺序；子任务1与任意下一子任务之间必须调用可停止的120秒等待；致命失败抛 `PipelineError`、任一串口打开失败则串口日志任务记失败但不阻塞、用户点主界面“停止测试”时 `request_stop` 在当前子任务或等待结束后终止后续
