@@ -1,7 +1,7 @@
 """「全流程执行」窗口 UI(2026-07-20 新增)。
 
 主界面「检查并执行测试」按钮按下后,弹出本窗口,操作员可勾选 7 个子任务(自动上/下电
-/ 环境线路检查 / 样机升级 / 写样机参数 / ONU 注册 / 串口日志 / 测试项配置),每行右侧展示「必填项当前
+/ 环境线路检查 / 样机升级 / 写样机参数 / ONU 注册 / 串口日志 / 执行开关机测试),每行右侧展示「必填项当前
 状态」(就绪 / 缺项),「去配置」按钮跳到主程序对应子窗口;底部「开始执行」若勾选
 串口日志则先预启动终端，其余子任务按 1→7 相对顺序串行执行,任一失败(串口日志除外)→ 整个全流程停止。
 
@@ -55,9 +55,9 @@ class PipelineWindow:
         self.app = app
         self.window: Toplevel = Toplevel(app)
         self.window.title("全流程执行")
-        # 7 行选择框 + 必填项状态 + 底部按钮需要至少 ~720px 高度。
-        self.window.geometry("920x740")
-        self.window.minsize(880, 720)
+        # 7 行选择框 + 必填项状态 + 底部按钮需要至少 ~730px 高度。
+        self.window.geometry("920x750")
+        self.window.minsize(880, 730)
         self.window.transient(app)
         self.window.configure(background=COLOR_BG)
         # 状态变量
@@ -68,6 +68,7 @@ class PipelineWindow:
         self._status_missing_vars: Dict[str, StringVar] = {}
         self._orchestrator: PipelineOrchestrator | None = None
         self._running_thread: threading.Thread | None = None
+        self._stop_requested = False
 
         self._build()
         self._refresh_statuses()
@@ -116,11 +117,6 @@ class PipelineWindow:
             button_bar, text="开始执行", command=self._on_start, style="Primary.TButton"
         )
         self._start_button.pack(side="right", padx=(8, 0))
-        self._stop_button = ttk.Button(
-            button_bar, text="停止", command=self._on_stop, style="Secondary.TButton"
-        )
-        self._stop_button.pack(side="right")
-        self._stop_button.configure(state="disabled")
         ttk.Button(
             button_bar, text="刷新状态", command=self._refresh_statuses, style="Secondary.TButton"
         ).pack(side="right", padx=(0, 8))
@@ -272,7 +268,7 @@ class PipelineWindow:
             self._status_missing_vars[code].set("")
 
     def _build_context(self) -> PipelineContext:
-        """构造 PipelineContext;若无 store 字段(如 test_project_config 未加载),传空 dataclass。"""
+        """构造 PipelineContext，并优先读取各配置窗口中的当前输入。"""
         app = self.app
         channels = _get_attr(app, "channels", [])
         # 升级窗口编辑的是 Tk 变量；不能只读启动时加载的缓存，否则界面已填的
@@ -288,20 +284,14 @@ class PipelineWindow:
         if onu is None:
             from line_check_assistant.onu_registration_store import OnuRegistrationConfig
             onu = OnuRegistrationConfig()
-        # test_project_config 实时从磁盘加载(操作员可能在子窗口改过)。
-        # ``TEST_ITEM_CONFIG_PATH`` 是 ``line_check_assistant.app`` 模块级常量,
-        # 不在实例属性上,必须从模块取,否则 ``configparser.read(None)`` 会抛
-        # ``TypeError: 'NoneType' object is not iterable``(见 2026-07-20 bug)。
         import line_check_assistant.app as _app_module
-        from line_check_assistant.test_item_config_store import TestItemConfigStore
-        test_project = TestItemConfigStore(_app_module.TEST_ITEM_CONFIG_PATH).load()
         return PipelineContext(
             app=app,
             channels=channels,
             sample_upgrade_settings=settings,
             onu_registration=onu,
-            test_project_config=test_project,
             serial_log_dir=_get_attr(app, "_serial_log_directory", lambda: None)(),
+            legacy_tool_root=_app_module.APP_DIR / "Auto_power_on_off_tool",
         )
 
     # -- 开始 / 停止 -----------------------------------------------------
@@ -352,19 +342,28 @@ class PipelineWindow:
                 "\n\n未选择程控电源 COM 口。请先手动重启样机，"
                 "确认样机已重启后再点击“是”继续；程序不会向任何 COM 口下发上下电指令。"
             )
+        legacy_power_note = ""
+        if "legacy_power_test" in selected:
+            legacy_power_note = (
+                "\n\n危险操作提示：子任务7会复用旧 Start All 业务；初始化时先向程控电源"
+                "下发全通道断电指令，再启动新工具当前勾选的通道。"
+            )
         proceed = messagebox.askyesno(
             "确认全流程执行",
             "将按以下实际顺序执行勾选的子任务:\n"
             + "\n".join(confirm_lines)
             + power_to_next_wait_note
             + manual_reboot_note
+            + legacy_power_note
             + "\n\n是否继续?",
             parent=self.window,
         )
         if not proceed:
             return
         # 锁定按钮
+        self._stop_requested = False
         self._set_running_ui(True)
+        self._update_main_power_test_status("running")
         # 启动后台线程
         self._running_thread = threading.Thread(
             target=self._run_pipeline_thread,
@@ -373,12 +372,18 @@ class PipelineWindow:
             name="pipeline-orchestrator",
         )
         self._running_thread.start()
+        self.window.withdraw()
+        self._emit_to_main_log(
+            "[全流程] 已开始后台执行，全流程配置窗口已自动隐藏；请在主界面查看状态或停止。"
+        )
 
     def _run_pipeline_thread(self, selected: Set[str]) -> None:
         try:
             ctx = self._build_context()
             orchestrator = PipelineOrchestrator(ctx, self._emit_to_main_log)
             self._orchestrator = orchestrator
+            if self._stop_requested:
+                orchestrator.request_stop()
             results = orchestrator.run(selected)
             # 主线程弹结果框
             self.window.after(0, lambda: self._on_pipeline_complete(results))
@@ -391,6 +396,9 @@ class PipelineWindow:
 
     def _on_pipeline_complete(self, results: List[SubTaskResult]) -> None:
         self._set_running_ui(False)
+        self._update_main_power_test_status(
+            "stopped" if self._stop_requested else "completed"
+        )
         n_ok = sum(1 for r in results if r.ok)
         n_fail = sum(1 for r in results if not r.ok)
         failed_codes = [SUBTASK_LABELS[r.code] for r in results if not r.ok]
@@ -398,29 +406,41 @@ class PipelineWindow:
             messagebox.showinfo(
                 "全流程执行完成",
                 f"全部 {n_ok} 个勾选子任务执行完成。",
-                parent=self.window,
+                parent=self.app,
             )
         else:
             messagebox.showwarning(
                 "全流程执行部分失败",
                 f"成功:{n_ok};失败:{n_fail}\n失败项:{', '.join(failed_codes)}",
-                parent=self.window,
+                parent=self.app,
             )
         self._refresh_statuses()
 
     def _on_pipeline_failed(self, exc: Exception) -> None:
         self._set_running_ui(False)
+        self._update_main_power_test_status(
+            "stopped" if self._stop_requested else "failed"
+        )
         messagebox.showerror(
             "全流程执行失败",
             f"全流程异常终止:{exc}",
-            parent=self.window,
+            parent=self.app,
         )
         self._refresh_statuses()
 
-    def _on_stop(self) -> None:
-        if self._orchestrator is not None:
+    def request_stop(self) -> bool:
+        """供主界面停止按钮调用；返回是否已向当前编排器发出停止请求。"""
+        if self._orchestrator is None:
+            if self._running_thread is None or not self._running_thread.is_alive():
+                return False
+        else:
             self._orchestrator.request_stop()
-            self._emit_to_main_log("[窗口] 用户点击「停止」;全流程将在当前子任务结束后终止")
+        self._stop_requested = True
+        self._update_main_power_test_status("stopping")
+        self._emit_to_main_log(
+            "[主界面] 用户点击「停止测试」；全流程将在当前子任务安全退出后终止"
+        )
+        return True
 
     def _on_close(self) -> None:
         if self._running_thread and self._running_thread.is_alive():
@@ -430,8 +450,7 @@ class PipelineWindow:
                 parent=self.window,
             ):
                 return
-            if self._orchestrator is not None:
-                self._orchestrator.request_stop()
+            self.request_stop()
         if hasattr(self.app, "pipeline_window"):
             self.app.pipeline_window = None
         self.window.destroy()
@@ -447,13 +466,16 @@ class PipelineWindow:
         # 切换按钮状态
         if running:
             self._start_button.configure(state="disabled")
-            self._stop_button.configure(state="normal")
             for var in self._check_vars.values():
                 # 锁定勾选状态
                 pass
         else:
             self._start_button.configure(state="normal")
-            self._stop_button.configure(state="disabled")
+
+    def _update_main_power_test_status(self, status: str) -> None:
+        setter = getattr(self.app, "_set_power_test_status", None)
+        if callable(setter):
+            setter(status)
 
 
 def _get_attr(obj: Any, name: str, default: Any = None) -> Any:

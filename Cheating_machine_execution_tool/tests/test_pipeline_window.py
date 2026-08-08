@@ -1,10 +1,4 @@
-"""「全流程执行」窗口 ``_build_context`` 的回归测试。
-
-2026-07-20 bug:``_build_context`` 用 ``_get_attr(app, "TEST_ITEM_CONFIG_PATH")`` 取配置路径,
-但 ``TEST_ITEM_CONFIG_PATH`` 是 ``line_check_assistant.app`` 模块级常量、不在实例属性上,
-结果拿到 ``None`` → ``configparser.read(None)`` 抛 ``TypeError: 'NoneType' object is not iterable``。
-本测试构造一个不挂 tk 的 ``FakeApp``,模拟真实窗口调用路径,锁定该 bug 不再回归。
-"""
+"""「全流程执行」窗口构造、确认提示与上下文回归测试。"""
 from __future__ import annotations
 
 import sys
@@ -30,7 +24,6 @@ class FakeApp:
         self.channels = []
         self.sample_upgrade_settings = None  # 触发 _build_context 内的 fallback
         self.onu_registration_config = None
-        # 不挂 TEST_ITEM_CONFIG_PATH,模拟真实实例(常量在模块上)
         self._serial_log_directory = lambda: None
 
 
@@ -60,6 +53,16 @@ class BuildContextRegressionTests(unittest.TestCase):
         self.assertIn("请先手动重启样机", source)
         self.assertIn("确认样机已重启后再点击", source)
 
+    def test_pipeline_confirmation_warns_legacy_start_all_powers_every_channel_off(self) -> None:
+        """子任务7必须在启动前明确提示旧 Start All 的全通道断电动作。"""
+        import inspect
+        import line_check_assistant.pipeline_window as pw_mod
+
+        source = inspect.getsource(pw_mod.PipelineWindow._on_start)
+        self.assertIn('"legacy_power_test" in selected', source)
+        self.assertIn("危险操作提示：子任务7", source)
+        self.assertIn("下发全通道断电指令", source)
+
     def test_pipeline_refreshes_statuses_after_returning_from_configuration(self) -> None:
         """关闭去配置子窗口并回到全流程窗口时，必须自动刷新缺项状态。"""
         import inspect
@@ -77,6 +80,89 @@ class BuildContextRegressionTests(unittest.TestCase):
 
         source = inspect.getsource(pw_mod.PipelineWindow._build)
         self.assertIn('text="刷新状态", command=self._refresh_statuses', source)
+
+    def test_pipeline_stop_button_is_moved_to_main_window(self) -> None:
+        """全流程弹窗不再重复创建停止按钮。"""
+        import inspect
+        import line_check_assistant.pipeline_window as pw_mod
+
+        source = inspect.getsource(pw_mod.PipelineWindow._build)
+        self.assertNotIn("self._stop_button", source)
+        self.assertNotIn("command=self._on_stop", source)
+
+    def test_main_stop_request_uses_existing_orchestrator_stop_event(self) -> None:
+        from line_check_assistant.pipeline_window import PipelineWindow
+
+        orchestrator = MagicMock()
+        context = SimpleNamespace(
+            _orchestrator=orchestrator,
+            _stop_requested=False,
+            _update_main_power_test_status=MagicMock(),
+            _emit_to_main_log=MagicMock(),
+        )
+
+        stopped = PipelineWindow.request_stop(context)
+
+        self.assertTrue(stopped)
+        self.assertTrue(context._stop_requested)
+        orchestrator.request_stop.assert_called_once_with()
+        context._update_main_power_test_status.assert_called_once_with("stopping")
+        context._emit_to_main_log.assert_called_once()
+
+    def test_pipeline_lifecycle_updates_main_power_test_status(self) -> None:
+        """开始、完成和失败路径都必须刷新主界面状态。"""
+        import inspect
+        import line_check_assistant.pipeline_window as pw_mod
+
+        start_source = inspect.getsource(pw_mod.PipelineWindow._on_start)
+        complete_source = inspect.getsource(pw_mod.PipelineWindow._on_pipeline_complete)
+        failed_source = inspect.getsource(pw_mod.PipelineWindow._on_pipeline_failed)
+
+        self.assertIn('_update_main_power_test_status("running")', start_source)
+        self.assertIn('"stopped" if self._stop_requested else "completed"', complete_source)
+        self.assertIn('"stopped" if self._stop_requested else "failed"', failed_source)
+
+    def test_pipeline_start_hides_configuration_window_after_thread_starts(self) -> None:
+        """二次确认后必须先启动后台线程，再隐藏全流程配置窗口。"""
+        import inspect
+        import line_check_assistant.pipeline_window as pw_mod
+
+        source = inspect.getsource(pw_mod.PipelineWindow._on_start)
+        self.assertIn("self.window.withdraw()", source)
+        self.assertLess(source.index("self._running_thread.start()"), source.index("self.window.withdraw()"))
+        self.assertIn("全流程配置窗口已自动隐藏", source)
+
+    def test_pipeline_completion_dialogs_use_main_window_as_parent(self) -> None:
+        """隐藏配置窗口后，完成和失败提示必须挂到可见主界面。"""
+        import inspect
+        import line_check_assistant.pipeline_window as pw_mod
+
+        complete_source = inspect.getsource(pw_mod.PipelineWindow._on_pipeline_complete)
+        failed_source = inspect.getsource(pw_mod.PipelineWindow._on_pipeline_failed)
+        self.assertIn("parent=self.app", complete_source)
+        self.assertIn("parent=self.app", failed_source)
+        self.assertNotIn("parent=self.window", complete_source)
+        self.assertNotIn("parent=self.window", failed_source)
+
+    def test_main_stop_request_is_remembered_during_orchestrator_startup(self) -> None:
+        """按钮刚启用但编排器尚未赋值时，停止请求不能丢失。"""
+        from line_check_assistant.pipeline_window import PipelineWindow
+
+        running_thread = MagicMock()
+        running_thread.is_alive.return_value = True
+        context = SimpleNamespace(
+            _orchestrator=None,
+            _running_thread=running_thread,
+            _stop_requested=False,
+            _update_main_power_test_status=MagicMock(),
+            _emit_to_main_log=MagicMock(),
+        )
+
+        stopped = PipelineWindow.request_stop(context)
+
+        self.assertTrue(stopped)
+        self.assertTrue(context._stop_requested)
+        context._update_main_power_test_status.assert_called_once_with("stopping")
 
     def test_pipeline_confirmation_uses_actual_prestart_order(self) -> None:
         """确认框必须把已勾选的串口日志显示在实际执行顺序首位。"""
@@ -108,31 +194,15 @@ class BuildContextRegressionTests(unittest.TestCase):
         self.assertIn("子任务1", source)
         self.assertIn("后续已勾选子任务", source)
 
-    def test_build_context_does_not_use_getattr_for_module_constant(self) -> None:
-        """_build_context 必须从 app 模块取 TEST_ITEM_CONFIG_PATH,不能 ``_get_attr(app, ...)``。
-
-        旧实现 ``_get_attr(app, "TEST_ITEM_CONFIG_PATH")`` 拿到 None,后续 ``configparser.read(None)``
-        抛 ``TypeError: 'NoneType' object is not iterable``。
-        """
-        from line_check_assistant.pipeline_window import PipelineWindow  # noqa: F401
-
-        # 直接 import pipeline_window 的源码并粗略检查关键路径
-        # (不实例化 PipelineWindow,因为它要 tk root)
+    def test_build_context_does_not_load_test_item_order_config(self) -> None:
+        """移除 `[order]` 子任务后，全流程上下文不得再读取测试项目配置。"""
         import line_check_assistant.pipeline_window as pw_mod
-
-        # 1. _get_attr(app, "TEST_ITEM_CONFIG_PATH") 必须不存在于 _build_context
-        #    通过源码字符串静态检查(防止以后误回滚)
         import inspect
 
         source = inspect.getsource(pw_mod.PipelineWindow._build_context)
-        self.assertNotIn(
-            '_get_attr(app, "TEST_ITEM_CONFIG_PATH")',
-            source,
-            "_build_context 不能用 _get_attr 拿模块级常量,会拿到 None → configparser 报错",
-        )
-        # 2. 必须从 line_check_assistant.app 模块导入并直接访问
-        self.assertIn("line_check_assistant.app", source)
-        self.assertIn("TEST_ITEM_CONFIG_PATH", source)
+        self.assertNotIn("TEST_ITEM_CONFIG_PATH", source)
+        self.assertNotIn("TestItemConfigStore", source)
+        self.assertNotIn("test_project_config=", source)
 
     def test_build_context_prefers_live_upgrade_and_onu_inputs(self) -> None:
         """去配置后，管道必须立即读取窗口当前输入而非启动时缓存。"""
@@ -159,9 +229,7 @@ class BuildContextRegressionTests(unittest.TestCase):
 
     def test_compute_subtask_statuses_succeeds_with_minimal_app(self) -> None:
         """真实 _build_context 路径上 compute_all_subtask_statuses 必须不抛。"""
-        import line_check_assistant.app as app_module
         from line_check_assistant.onu_registration_store import OnuRegistrationConfig
-        from line_check_assistant.pipeline_window import PipelineWindow  # noqa: F401
         from line_check_assistant.sample_upgrade_settings_store import (
             SampleUpgradeSettings,
         )
@@ -169,20 +237,16 @@ class BuildContextRegressionTests(unittest.TestCase):
             PipelineContext,
             compute_all_subtask_statuses,
         )
-        from line_check_assistant.test_item_config_store import TestItemConfigStore
-
         fake = FakeApp()
-        # 构造与 _build_context 完全一致的 PipelineContext(只走模块常量路径)
         ctx = PipelineContext(
             app=fake,
             channels=fake.channels,
             sample_upgrade_settings=SampleUpgradeSettings(),
             onu_registration=OnuRegistrationConfig(),
-            test_project_config=TestItemConfigStore(app_module.TEST_ITEM_CONFIG_PATH).load(),
             serial_log_dir=None,
         )
         statuses = compute_all_subtask_statuses(ctx)
-        # 7 个子任务都必须有结果(2026-07-20 新增 env_check 在首位)
+        # 7 个子任务都必须有结果，且不包含 `[order]` 执行。
         self.assertEqual(len(statuses), 7)
         for code in (
             "env_check",
@@ -191,11 +255,12 @@ class BuildContextRegressionTests(unittest.TestCase):
             "sample_parameter_write",
             "onu_registration",
             "serial_terminal",
-            "test_item_execution",
+            "legacy_power_test",
         ):
             self.assertIn(code, statuses)
             self.assertIsNotNone(statuses[code].summary)
             self.assertIsInstance(statuses[code].missing, tuple)
+        self.assertNotIn("test_item_execution", statuses)
 
 
 class OpenNetworkConfigRegressionTests(unittest.TestCase):
@@ -334,8 +399,9 @@ class StartAllChecksRegressionTests(unittest.TestCase):
         """已存在 pipeline_window 包装器时,操作员再点「检查并执行测试」应把窗口拉到前台。"""
         import line_check_assistant.app as app_module
 
-        fake_app = MagicMock(spec=["running", "pipeline_window"])
+        fake_app = MagicMock(spec=["running", "pipeline_window", "power_test_running"])
         fake_app.running = False
+        fake_app.power_test_running = False
         # pipeline_window 包装器只挂 .window(只用到 winfo_exists/deiconify/lift/focus_force)
         fake_pipeline_window = MagicMock(spec=["window"])
         fake_pipeline_window.window.winfo_exists.return_value = True
@@ -348,6 +414,25 @@ class StartAllChecksRegressionTests(unittest.TestCase):
         fake_pipeline_window.window.deiconify.assert_called_once()
         fake_pipeline_window.window.lift.assert_called_once()
         fake_pipeline_window.window.focus_force.assert_called_once()
+
+    def test_start_all_checks_keeps_pipeline_window_hidden_while_running(self) -> None:
+        """执行期间再次点击主入口，只提示状态，不重新弹出配置窗口。"""
+        import line_check_assistant.app as app_module
+
+        fake_app = MagicMock(
+            spec=["running", "pipeline_window", "power_test_running", "_log"]
+        )
+        fake_app.running = False
+        fake_app.power_test_running = True
+        fake_pipeline_window = MagicMock(spec=["window"])
+        fake_app.pipeline_window = fake_pipeline_window
+
+        app_module.LineCheckAssistant._start_all_checks(fake_app)
+
+        fake_pipeline_window.window.deiconify.assert_not_called()
+        fake_pipeline_window.window.lift.assert_not_called()
+        fake_pipeline_window.window.focus_force.assert_not_called()
+        fake_app._log.assert_called_once()
 
     def test_start_all_checks_noop_when_already_running(self) -> None:
         """``self.running`` 为 True 时,_start_all_checks 直接 return,不调 window。"""

@@ -5,6 +5,12 @@ This file records the direct runtime dependencies declared in `requirements.txt`
 - pySerial 3.5 — BSD-3-Clause License, Copyright (c) 2001-2020 Chris Liechti.
 - TFTPy 0.8.7 — MIT License, Copyright (c) 2010+ Michael P. Soulier.
 - requests 2.x — Apache-2.0 License, Copyright 2019 Kenneth Reitz.
+- requests-toolbelt 1.x — Apache-2.0 License.
+- Paramiko 3.x — LGPL License.
+- ping3 4.x — MIT License, Copyright (c) 2016 Kyan.
+- pywifi 1.x — MIT License.
+- configobj 5.x — BSD-3-Clause License.
+- psutil 5.x–7.x — BSD-3-Clause License.
 - openpyxl 3.x — MIT License, Copyright (c) 2010-2024 openpyxl.
 - xlrd 2.x — BSD-3-Clause License, Copyright (c) 2005-2024 Python Excel Team.
 

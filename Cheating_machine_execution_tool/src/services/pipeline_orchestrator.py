@@ -2,7 +2,7 @@
 
 背景：
 - 主界面「检查并执行测试」按钮触发的全流程管道:
-  把 7 个子任务(自动上/下电 / 环境线路检查 / 样机升级 / 写样机参数 / ONU注册 / 串口日志 / 测试项配置)
+  把 7 个子任务(自动上/下电 / 环境线路检查 / 样机升级 / 写样机参数 / ONU注册 / 串口日志 / 执行开关机测试)
   作为可勾选的子任务；串口日志若勾选则在全流程开始时预启动，其余任务按 1→7 相对顺序串行执行。
 - 本模块负责:
   ① 评估 7 个子任务「必填项当前状态」→ 弹窗展示给操作员确认
@@ -17,7 +17,7 @@
   - 4. 写样机参数: 调 ``app._start_sample_parameter_write()``(异步起线程,弹确认框由操作员点「是」;同 3)。
   - 5. ONU 注册: 调 ``app._on_onu_query_clicked()`` + ``app._on_onu_register_clicked()``(异步起线程,弹确认框;同 3)。
   - 6. 串口日志: 若勾选，在其它子任务前调 ``app._open_pipeline_serial_logs()``，显示窗口并打开全部串口，从全流程开始持续记录。
-  - 7. 测试项配置: 调新 ``test_item_execution_service.run_test_item_execution`` 同步执行(每台串行,默认 1)。
+  - 7. 执行开关机测试: 无 GUI 调旧 ``Start All`` 业务，转发旧 ``Logs``，等待全部通道结束。
 
 不变量:
 - 任一子任务抛异常 → 整个全流程停止(串口日志除外,因不致命)。
@@ -37,7 +37,6 @@ from typing import Any, Callable, List, Optional, Tuple
 from line_check_assistant.config_store import ChannelConfig
 from line_check_assistant.onu_registration_store import OnuRegistrationConfig
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
-from line_check_assistant.test_item_config_store import TestProjectConfig
 
 
 # 7 个子任务的 code + 窗口显示名 + 排序。固定顺序由用户决策。
@@ -49,7 +48,7 @@ SUBTASK_CODES: Tuple[str, ...] = (
     "sample_parameter_write",
     "onu_registration",
     "serial_terminal",
-    "test_item_execution",
+    "legacy_power_test",
 )
 
 SUBTASK_LABELS: dict[str, str] = {
@@ -59,7 +58,7 @@ SUBTASK_LABELS: dict[str, str] = {
     "sample_parameter_write": "4. 写样机参数",
     "onu_registration": "5. ONU 注册",
     "serial_terminal": "6. 串口日志（全流程期间持续记录）",
-    "test_item_execution": "7. 测试项配置（[order] 执行）",
+    "legacy_power_test": "7. 执行开关机测试",
 }
 
 # config_target:窗口「去配置」按钮跳到主程序的哪个子窗口方法名。
@@ -71,14 +70,14 @@ SUBTASK_CONFIG_TARGETS: dict[str, str] = {
     "sample_parameter_write": "_open_sample_parameter_writer",
     "onu_registration": "_open_onu_registration_module",
     "serial_terminal": "_open_serial_log_module",
-    "test_item_execution": "_open_test_item_config",
+    "legacy_power_test": "_open_test_item_config",
 }
 
 # 哪些子任务不计入「致命失败」(失败后继续后续)。
 # 「串口日志」是辅助任务,打不开终端不应阻塞后续子任务。
 NON_FATAL_SUBTASKS: frozenset[str] = frozenset({"serial_terminal"})
 
-# 保留主界面原有 1→7 行布局，但已勾选的辅助日志任务必须在其它任务前预启动，
+# 保留主界面 1→7 行布局，但已勾选的辅助日志任务必须在其它任务前预启动，
 # 才能记录上下电、升级和写参阶段的串口输出。
 PIPELINE_PRESTART_SUBTASKS: Tuple[str, ...] = ("serial_terminal",)
 
@@ -113,9 +112,9 @@ class PipelineContext:
     channels: List[ChannelConfig]     # 已勾选通道
     sample_upgrade_settings: SampleUpgradeSettings
     onu_registration: OnuRegistrationConfig
-    test_project_config: TestProjectConfig
     # 选填
     serial_log_dir: Optional[Path] = None
+    legacy_tool_root: Optional[Path] = None
     # 运行控制
     stop_event: threading.Event = field(default_factory=threading.Event)
 
@@ -296,25 +295,54 @@ def _summarize_serial_terminal(ctx: PipelineContext) -> SubTaskStatus:
     )
 
 
-def _summarize_test_item_execution(ctx: PipelineContext) -> SubTaskStatus:
-    """6. 测试项配置 必填项:ini 存在 / [order] 非空 / [telnet] user+password 非空。"""
-    cfg = ctx.test_project_config
-    telnet = cfg.telnet
-    order = cfg.order
-    n_items = len(order.items)
-    missing_list: List[str] = []
-    if not telnet.user.strip():
-        missing_list.append("[telnet] user")
-    if not telnet.password:
-        missing_list.append("[telnet] password")
-    if n_items == 0:
-        missing_list.append("[order] 至少 1 条命令")
-    summary = f"[order]={n_items} 条 / Telnet 凭据={'已填' if telnet.user.strip() and telnet.password else '未填'}"
+def _power_channel_number(section: str) -> int:
+    try:
+        return int((section or "").strip().lower().replace("channel_", ""))
+    except ValueError:
+        return 0
+
+
+def _summarize_legacy_power_test(ctx: PipelineContext) -> SubTaskStatus:
+    """7. 执行开关机测试：旧配置、COM、方案与已勾选通道必须完整。"""
+    from src.services.legacy_power_test_service import (
+        LegacyPowerChannel,
+        prepare_legacy_power_test_request,
+    )
+
+    if ctx.legacy_tool_root is None:
+        return SubTaskStatus(
+            code="legacy_power_test",
+            ready=False,
+            summary="旧工具业务目录未定位",
+            missing=("旧工具业务目录",),
+        )
+    try:
+        request = prepare_legacy_power_test_request(
+            ctx.legacy_tool_root,
+            (
+                LegacyPowerChannel(
+                    number=_power_channel_number(channel.section),
+                    network_card_ip=channel.network_card_ip,
+                )
+                for channel in ctx.enabled_channels
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001 - 就绪状态必须展示具体缺项
+        return SubTaskStatus(
+            code="legacy_power_test",
+            ready=False,
+            summary="旧 Start All 配置未就绪",
+            missing=(str(exc),),
+        )
     return SubTaskStatus(
-        code="test_item_execution",
-        ready=not missing_list,
-        summary=summary,
-        missing=tuple(missing_list),
+        code="legacy_power_test",
+        ready=True,
+        summary=(
+            f"通信={request.communication_method} / COM={request.serial_port} / "
+            f"方案={request.selected_profile} / {len(request.channels)} 通道 / "
+            f"循环={request.number_of_tests}次"
+        ),
+        missing=(),
     )
 
 
@@ -325,7 +353,7 @@ _SUMMARIZERS = {
     "sample_parameter_write": _summarize_sample_parameter_write,
     "onu_registration": _summarize_onu_registration,
     "serial_terminal": _summarize_serial_terminal,
-    "test_item_execution": _summarize_test_item_execution,
+    "legacy_power_test": _summarize_legacy_power_test,
 }
 
 
@@ -348,11 +376,10 @@ class PipelineOrchestrator:
             channels=app.channels,
             sample_upgrade_settings=app.sample_upgrade_settings,
             onu_registration=app.onu_registration_config,
-            test_project_config=app.test_project_config_store.load(),
         )
         orchestrator = PipelineOrchestrator(ctx, emit=app._log)
         try:
-            results = orchestrator.run({"power_cycle", "test_item_execution"})
+            results = orchestrator.run({"power_cycle", "legacy_power_test"})
         except PipelineError:
             # 任一子任务失败(串口除外)
             ...
@@ -442,7 +469,7 @@ class PipelineOrchestrator:
             "sample_parameter_write": self._run_sample_parameter_write,
             "onu_registration": self._run_onu_registration,
             "serial_terminal": self._run_serial_terminal,
-            "test_item_execution": self._run_test_item_execution,
+            "legacy_power_test": self._run_legacy_power_test,
         }[code]
         runner()
 
@@ -627,56 +654,29 @@ class PipelineOrchestrator:
             # 兼容单元测试和历史最小 app 替身。
             open_method()
 
-    def _run_test_item_execution(self) -> None:
-        """6. 测试项配置:同步跑各通道的 [order] 命令 + fuzzy 匹配。"""
-        from src.services.test_item_execution_service import (
-            TestItemRunRequest,
-            build_log_path,
-            run_test_item_execution,
+    def _run_legacy_power_test(self) -> None:
+        """7. 执行开关机测试：无 GUI 运行旧 Start All 并桥接 Logs。"""
+        from src.services.legacy_power_test_service import (
+            LegacyPowerChannel,
+            prepare_legacy_power_test_request,
+            run_legacy_power_test,
         )
-        cfg = self.ctx.test_project_config
-        if not cfg.order.items:
-            raise RuntimeError("[order] 段为空,无命令可执行")
-        if not cfg.telnet.user.strip() or not cfg.telnet.password:
-            raise RuntimeError("[telnet] 段用户名 / 密码未填")
-        channels = self.ctx.enabled_channels
-        if not channels:
-            raise RuntimeError("已勾选通道为空")
-        total = len(channels)
-        passed_channels = 0
-        failed_channels = 0
-        for index, channel in enumerate(channels, start=1):
-            if self.ctx.stop_event.is_set():
-                self.emit(f"[全流程] 已请求停止,跳过 {channel.section}")
-                break
-            self.emit(
-                f"[测试项配置] ({index}/{total}) 通道 {channel.section} "
-                f"({channel.vlan_name or channel.adapter_alias})"
-            )
-            log_path = build_log_path(channel)
-            req = TestItemRunRequest(
-                channel=channel,
-                order=cfg.order,
-                telnet=cfg.telnet,
-                retry_interval_seconds=int(cfg.order.command_fail_retry_interval_time or 0),
-                log_path=log_path,
-            )
-            try:
-                result = run_test_item_execution(req, self.emit)
-            except Exception as exc:
-                self.emit(f"[测试项配置] 通道 {channel.section} 启动失败:{exc}")
-                failed_channels += 1
-                raise
-            if result.failed == 0:
-                passed_channels += 1
-            else:
-                failed_channels += 1
-        self.emit(
-            f"[测试项配置] 完成:{passed_channels}/{total} 通道全部匹配, "
-            f"{failed_channels} 通道有失败项"
+
+        if self.ctx.legacy_tool_root is None:
+            raise RuntimeError("旧工具业务目录未定位")
+        request = prepare_legacy_power_test_request(
+            self.ctx.legacy_tool_root,
+            (
+                LegacyPowerChannel(
+                    number=_power_channel_number(channel.section),
+                    network_card_ip=channel.network_card_ip,
+                )
+                for channel in self.ctx.enabled_channels
+            ),
         )
-        if failed_channels > 0:
-            raise RuntimeError(f"{failed_channels} 通道存在失败项")
+        result = run_legacy_power_test(request, self.emit, self.ctx.stop_event)
+        if not result.ok:
+            raise RuntimeError(result.detail)
 
 
 __all__ = [

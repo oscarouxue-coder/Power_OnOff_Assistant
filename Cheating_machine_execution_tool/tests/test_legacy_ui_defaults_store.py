@@ -95,13 +95,26 @@ class LegacyUiDefaultsStoreTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            LegacyUiDefaultsStore(config_path).update_command_fail_retry_interval_mirror(10)
+            LegacyUiDefaultsStore(config_path).update_command_fail_retry_interval(10)
             content = config_path.read_text(encoding="utf-8")
 
         self.assertIn("command_fail_retry_interval_time = 10", content)
         self.assertIn("# keep retry comment", content)
         self.assertIn("telnet_enable_fail_retry_times = 5", content)
         self.assertIn("telnet_enable = 0", content)
+
+    def test_retry_interval_is_created_and_loaded_from_other_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "config.ini"
+            store = LegacyUiDefaultsStore(config_path)
+
+            store.update_command_fail_retry_interval(25)
+
+            self.assertEqual(store.load_command_fail_retry_interval(), 25)
+            self.assertIn(
+                "command_fail_retry_interval_time = 25",
+                config_path.read_text(encoding="utf-8"),
+            )
 
 
 if __name__ == "__main__":

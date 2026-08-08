@@ -5,7 +5,7 @@
   ``Auto_power_on_off_tool/config/test_project_config.ini`` 的 ``[order]`` 段下发命令
   并匹配读回结果。
 - 本模块负责：单台样机 → 准备网络 → TelnetSession 登录 → 顺序执行 ``[order]`` 每条命令
-  → per-command ``retry_times`` 次重试（每次间隔 ``command_fail_retry_interval_time``）
+  → per-command ``retry_times`` 次重试（间隔来自 ``config.ini [other_config]``）
   → 写 per-channel 结果文件 → 返回汇总。
 - 不包含：程控电源上下电（由子任务 1 负责）、test_number 循环（本轮 v1 不实现）、
   WiFi 验证（本轮 v1 不实现）、多通道并行（本轮 v1 串行,与「写样机参数」默认并行 1 一致）。
@@ -70,7 +70,7 @@ class TestItemRunRequest:
     channel: ChannelConfig
     order: OrderConfig
     telnet: TelnetSettings
-    # 重试间隔（秒）:来自 [order].command_fail_retry_interval_time,缺省 60。
+    # 重试间隔（秒）:来自 config.ini [other_config],缺省 60。
     retry_interval_seconds: int
     # per-channel 结果文件路径（由 caller 预生成,避免多线程时间戳竞争）。
     log_path: Path

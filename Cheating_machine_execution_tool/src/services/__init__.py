@@ -10,6 +10,13 @@ from .pipeline_orchestrator import (
     SubTaskStatus,
     compute_all_subtask_statuses,
 )
+from .legacy_power_test_service import (
+    LegacyPowerChannel,
+    LegacyPowerTestRequest,
+    LegacyPowerTestResult,
+    prepare_legacy_power_test_request,
+    run_legacy_power_test,
+)
 from .power_on_service import power_on_selected_channels, turn_off_selected_channels, turn_on_selected_channels
 from .sample_parameter_service import (
     PARAMETER_MAX_PARALLEL,
@@ -47,6 +54,9 @@ __all__ = [
     "LOGIN_PASSWORD_PROMPT_TIMEOUT_SECONDS",
     "LOGIN_SUCCESS_TIMEOUT_SECONDS",
     "LOGIN_USER_PROMPT_TIMEOUT_SECONDS",
+    "LegacyPowerChannel",
+    "LegacyPowerTestRequest",
+    "LegacyPowerTestResult",
     "NON_FATAL_SUBTASKS",
     "PARAMETER_MAX_PARALLEL",
     "PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS",
@@ -71,12 +81,14 @@ __all__ = [
     "build_log_path",
     "compute_all_subtask_statuses",
     "power_on_selected_channels",
+    "prepare_legacy_power_test_request",
     "preflight_parameter_targets",
     "run_parallel_sample_parameter_writes",
     "run_parallel_tftp_command_upgrades",
     "run_parallel_tftp_put_upgrades",
     "run_single_full_package_upgrade",
     "run_single_sample_parameter_write",
+    "run_legacy_power_test",
     "run_test_item_execution",
     "turn_off_selected_channels",
     "turn_on_selected_channels",

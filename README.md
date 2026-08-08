@@ -27,7 +27,7 @@
 - `Cheating_machine_execution_tool/src/`：当前主程序的 core / services / models / ui。
 - `Cheating_machine_execution_tool/line_check_assistant/`：Tk 主窗口、配置 store、窗口和页面升级集成。
 - `Cheating_machine_execution_tool/tests/`：当前主程序单元测试。
-- `Cheating_machine_execution_tool/Auto_power_on_off_tool/`：旧工具源码与当前程序仍使用的本机配置目录；默认不扩展旧工具业务代码，仅在项目负责人明确提出旧工具维护需求时独立修改，且不得让当前主程序重新依赖旧工具。
+- `Cheating_machine_execution_tool/Auto_power_on_off_tool/`：旧工具源码与当前程序仍使用的本机配置目录；默认不扩展旧工具业务代码。全流程子任务7按项目负责人明确要求，通过新 service 的独立无 GUI 子进程复用旧 `test_case/common/clients` 业务类，但不启动或实例化旧 GUI；其它当前主程序路径继续与旧业务隔离。
 - `Cheating_machine_execution_tool/test_boot_upgrade/`、`Page_upgrade/`、`SdmcUbusLib/`：历史实现或协议参考；修改前必须先确认当前主程序是否依赖。
 
 ## 本机文件与发布边界

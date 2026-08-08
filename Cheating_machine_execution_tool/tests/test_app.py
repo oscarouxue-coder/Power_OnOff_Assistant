@@ -92,6 +92,32 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(log_queue.qsize(), 0)
         self.assertEqual(context.after.call_args.args[0], 200)
 
+    def test_legacy_channel_cycle_start_log_uses_green_success_tag(self):
+        """旧工具每轮通道测试开始日志应在新工具执行日志中显示为绿色。"""
+        context = SimpleNamespace()
+
+        self.assertEqual(
+            LineCheckAssistant._log_tag_for(
+                context,
+                "[旧工具Logs][INFO] *******通道 【9】 开始第2次测试*******",
+            ),
+            "success",
+        )
+        self.assertEqual(
+            LineCheckAssistant._log_tag_for(
+                context,
+                "[旧工具Logs][INFO] *******通道 【16】 开始第 12 次测试*******",
+            ),
+            "success",
+        )
+        self.assertEqual(
+            LineCheckAssistant._log_tag_for(
+                context,
+                "[旧工具Logs][INFO] 通道 【9】 正在执行测试命令",
+            ),
+            "",
+        )
+
     def test_test_item_config_entry_reuses_open_window(self):
         config_window = Mock()
         config_window.winfo_exists.return_value = True
@@ -114,6 +140,52 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn(serial_entry, source)
         self.assertIn(dut_entry, source)
         self.assertLess(source.index(serial_entry), source.index(dut_entry))
+
+    def test_main_card_shows_power_test_status_and_stop_button(self):
+        """主界面空白区显示状态，并承接从全流程窗口移出的停止按钮。"""
+        import inspect
+
+        source = inspect.getsource(LineCheckAssistant._build_ui)
+        self.assertIn("textvariable=self.power_test_status_var", source)
+        self.assertIn('text="停止测试"', source)
+        self.assertIn("command=self._stop_power_test", source)
+        self.assertIn('state="disabled"', source)
+
+    def test_power_test_status_controls_main_stop_button(self):
+        status_var = Mock()
+        stop_button = Mock()
+        context = SimpleNamespace(
+            power_test_running=False,
+            power_test_status_var=status_var,
+            stop_power_test_button=stop_button,
+        )
+
+        LineCheckAssistant._set_power_test_status(context, "running")
+        self.assertTrue(context.power_test_running)
+        status_var.set.assert_called_with("开关机测试状态：正在执行")
+        stop_button.configure.assert_called_with(state="normal")
+
+        LineCheckAssistant._set_power_test_status(context, "stopping")
+        self.assertTrue(context.power_test_running)
+        status_var.set.assert_called_with(
+            "开关机测试状态：正在停止（等待当前子任务安全退出）"
+        )
+        stop_button.configure.assert_called_with(state="disabled")
+
+        LineCheckAssistant._set_power_test_status(context, "completed")
+        self.assertFalse(context.power_test_running)
+        status_var.set.assert_called_with("开关机测试状态：已完成")
+        stop_button.configure.assert_called_with(state="disabled")
+
+    def test_main_stop_button_delegates_to_pipeline_window(self):
+        pipeline_window = Mock()
+        pipeline_window.request_stop.return_value = True
+        context = SimpleNamespace(pipeline_window=pipeline_window, _log=Mock())
+
+        LineCheckAssistant._stop_power_test(context)
+
+        pipeline_window.request_stop.assert_called_once_with()
+        context._log.assert_not_called()
 
     def test_dut_config_entry_reuses_open_window(self):
         dut_window = Mock()
@@ -240,6 +312,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
     def test_default_test_item_snapshot_contains_current_order_baseline(self):
         """默认模板必须存在，并保存当前 9 条测试项命令。"""
         self.assertTrue(TEST_ITEM_DEFAULT_CONFIG_PATH.is_file())
+        default_content = TEST_ITEM_DEFAULT_CONFIG_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("command_fail_retry_interval_time", default_content)
         default_order = TestItemConfigStore(TEST_ITEM_DEFAULT_CONFIG_PATH).load().order
         self.assertEqual(default_order.command_fail_retry_interval_time, 60)
         self.assertEqual(len(default_order.items), 9)
@@ -257,6 +331,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn('load(default_order)', source)
         self.assertIn('mark_dirty()', source)
         self.assertIn('仍需点击窗口底部“保存”', source)
+        self.assertIn("指令重试间隔继续使用 config.ini 中的当前值", source)
 
     def test_restore_default_clears_every_existing_test_item_row(self):
         """清空动态命令行时不得边遍历边删除而隔行残留。"""

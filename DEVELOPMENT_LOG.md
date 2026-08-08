@@ -2,6 +2,85 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-08 - 全流程启动后自动隐藏配置窗口
+
+- 类型：优化 / 全流程窗口 / 主界面状态 / 回归测试 / 文档
+- 背景：项目负责人确认采用“隐藏”方式：全流程执行界面点击“开始执行”后应自动隐藏，执行期间由主界面状态与停止按钮承接操作。
+- 完成内容：① 完成必填项检查和二次确认后，严格先启动后台编排线程，再 `withdraw()` 隐藏全流程配置窗口；② 主执行日志明确提示配置窗口已隐藏、应在主界面查看状态或停止；③ 执行期间再次点击“检查并执行测试”只输出当前仍在执行的提示，不重新显示配置窗口；④ 流程结束后再次点击才重新显示并复用原窗口；⑤ 完成、部分失败和异常提示均改以主界面为父窗口，避免隐藏父窗口导致提示不可见；⑥ 保留项目负责人手动调整后的按钮文案“停止测试”，同步修正日志与当前行为文档；⑦ 新增启动后隐藏、执行中禁止重显和结果弹窗父窗口回归，并把隐藏时序测试纳入强制基线。
+- 修改文件：`.claude/plans/main_power_test_status_stop_control.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p test_app.py -v`、`python -m unittest discover -s tests -p test_pipeline_window.py -v`、`python scripts\verify_baseline.py`、`git diff --check`。
+- 验证结果：主界面 88 项、全流程窗口 26 项专项测试通过；首次完整基线因回归仍硬编码旧按钮文案而失败，保留当前“停止测试”并同步断言后，`python scripts\verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、477 项单测、22 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面点击“开始执行”并完成确认，确认全流程配置窗口自动隐藏、主界面状态变为“正在执行”；执行中再次点击主入口不应重新弹窗，结束后再次点击应正常显示原配置窗口。真实样机结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-08 - 移动停止按钮并显示开关机状态
+
+- 类型：功能 / 主界面状态 / 全流程停止控制 / 回归测试 / 文档
+- 背景：项目负责人要求在主界面“环境检查与开关机测试”卡片的空白位置显示当前是否正在执行开关机测试，并将全流程弹窗中的停止按钮移动到该区域，命名为“停止开关机测试”。
+- 完成内容：① 主界面新增“开关机测试状态”，覆盖未运行、正在执行、正在停止、已完成、已停止和执行失败；② 主界面新增“停止开关机测试”按钮，只有正在执行时启用，发出停止请求后立即禁用并显示“等待当前子任务安全退出”；③ 停止按钮继续委派给当前 `PipelineOrchestrator.request_stop()`，没有复制第二套停止逻辑；旧 Start All 子任务继续直接接收同一停止事件，其它子任务保持既有安全停止边界；④ 全流程弹窗移除原停止按钮，开始、正常完成、异常失败和操作员停止均同步刷新主界面；⑤ 停止期间阻止再次新建全流程窗口，按钮刚启用但后台编排器尚未完成创建时也会记住停止请求并在就绪后立即下发；⑥ 顺带修正操作员说明中已移除 `[order]` 子任务的残留描述；⑦ 新增主界面布局、状态按钮联动、停止委派、启动竞态、弹窗按钮移除和生命周期回归，并将主入口与停止事件两项纳入强制基线。
+- 修改文件：`.claude/plans/main_power_test_status_stop_control.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p test_app.py -v`、`python -m unittest discover -s tests -p test_pipeline_window.py -v`、`python scripts\verify_baseline.py`、`git diff --check`。
+- 验证结果：主界面 88 项、全流程窗口 23 项专项测试通过；`python scripts\verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、474 项单测、21 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面启动一次全流程，确认主界面状态依次显示“正在执行 → 已完成”；再次运行并点击主界面“停止开关机测试”，确认显示“正在停止 → 已停止”，且全流程弹窗不再显示停止按钮。真实样机结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-08 - 修正每轮正常结果真实路径匹配
+
+- 类型：BUG 修复 / 执行日志 / 旧业务适配 / 回归测试 / 文档
+- 背景：项目负责人真实运行确认，新工具执行日志没有出现 `[旧工具Logs][INFO] 2026-08-08 15:37:41.904434: 通道9下挂的设备在第1次测试时正常`。复查旧 Telnet/SSH 源码确认真实结果文件位于 `test_results/device_9/device_9_command_results_*.log`，上一版错误地只匹配了直接位于 `test_results` 下的模拟路径，导致现场文件写入未被捕获。
+- 完成内容：① 结果文件识别改为严格匹配旧工具真实的 `test_results/device_N/device_N_command_results_*.log` 两层目录；② 同时校验目录通道号与文件名设备号一致，避免扩大拦截范围；③ 回归测试改用真实嵌套目录结构，并继续验证分段写入只转发一次、原文件字节不变；④ 强制基线继续锁定该真实路径回归。
+- 修改文件：`.claude/plans/legacy_cycle_success_log_bridge.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`、`Cheating_machine_execution_tool/tests/test_legacy_power_test_service.py`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p test_legacy_power_test_service.py -v`、`python scripts\verify_baseline.py`、`git diff --check`。
+- 验证结果：旧工具无 GUI 服务 8 项专项测试通过；首次完整基线出现1项未复现的偶发失败，随后单独全量 467 项测试通过，再次执行 `python scripts\verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、467 项单测、19 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：请项目负责人再次用真实通道运行至少一轮，确认新工具执行日志实时出现对应正常结论；现场结论确认后再更新验收状态。
+
+## 2026-08-08 - 桥接旧工具每轮正常结果日志
+
+- 类型：功能 / 执行日志 / 旧业务适配 / 回归测试 / 文档
+- 背景：旧工具会把 `2026-08-08 15:37:41.904434: 通道9下挂的设备在第1次测试时正常` 这类单轮正常结论只写入 `test_results/device_*_command_results_*.log`，既有 signal/logger 桥接无法捕获，因此新工具执行日志看不到该关键结果。
+- 完成内容：① 在旧 Start All 无 GUI 专用子进程中增加窄范围结果文件转发器，仅识别目标 `device_*_command_results_*.log` 的二进制写入；② 支持一行被多次分段写入，只有完整匹配“通道N下挂的设备在第M次测试时正常”后才转发一次；③ 新工具执行日志按 `[旧工具Logs][INFO] 原始完整行` 展示；④ 始终先完成旧文件写入再转发，保留原文件字节内容和旧业务逻辑；⑤ 无关文件及不匹配内容不转发，子进程退出时恢复原始文件打开函数；⑥ 将原文件不变且结果成功转发的测试加入强制基线。
+- 修改文件：`.claude/plans/legacy_cycle_success_log_bridge.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`、`Cheating_machine_execution_tool/tests/test_legacy_power_test_service.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p test_legacy_power_test_service.py -v`、`python scripts\verify_baseline.py`、`git diff --check`。
+- 验证结果：旧工具无 GUI 服务 8 项专项测试通过；`python scripts\verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、467 项单测、19 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面勾选子任务7并用真实程控电源与样机运行至少一轮，确认新工具执行日志实时出现对应 `[旧工具Logs][INFO]` 正常结论，同时旧 `test_results` 结果文件内容仍完整；真实样机结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-08 - 移除全流程测试项执行子任务
+
+- 类型：修改 / 全流程编排 / UI 列表 / 回归测试 / 文档
+- 背景：项目负责人明确不再需要全流程中的原第7项“测试项配置（[order] 执行）”，要求从子任务列表去除。
+- 完成内容：① 从 `SUBTASK_CODES`、显示标签、去配置映射、状态计算和执行分发表中完整移除 `test_item_execution`，不是仅隐藏界面行；② 删除全流程上下文对 `test_project_config.ini` 的加载和 `TestProjectConfig` 依赖；③ 原第8项“执行开关机测试”顺延为第7项，危险操作提示和全部当前文档同步改为子任务7；④ 全流程窗口由8行调整为7行并相应缩短默认高度，串口日志预启动、子任务1后120秒等待、失败传播和默认仅勾选环境检查均保持不变；⑤ 主界面的“测试项配置”五 Tab 编辑器、INI 保存及既有独立 service 源码保持不变；⑥ 回归测试明确断言全流程状态和执行类中不存在 `test_item_execution`，7项编号连续且全选执行顺序正确；⑦ 强制基线测试 ID 从“全部8项”更新为“全部7项”。
+- 修改文件：`.claude/plans/remove_pipeline_order_subtask.md`、`README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`、`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_pipeline_orchestrator.py" -v`、`python -m unittest discover -s tests -p "test_pipeline_window.py" -v`、`python scripts\verify_baseline.py`、`git diff --check`。
+- 验证结果：全流程编排器 41 项、全流程窗口 19 项专项测试通过；`python scripts\verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、465 项单测、18 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面打开“全流程执行”，确认列表仅显示连续编号1～7，不再出现“测试项配置（[order] 执行）”，原“执行开关机测试”显示为第7项；真实样机结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-08 - 精简旧工具日志并高亮轮次开始
+
+- 类型：优化 / UI 日志 / 旧业务适配 / 回归测试 / 文档
+- 背景：全流程子任务8会把旧工具 Logs 与 logger 输出汇总到新工具主执行日志，底层配置路径、原始命令回显及重复上报导致日志过多；项目负责人同时要求形如 `[旧工具Logs][INFO] *******通道 【9】 开始第2次测试*******` 的轮次开始日志使用绿色字体。
+- 完成内容：① 在新工具执行日志标签选择器中精确识别旧工具“通道开始第 N 次测试”INFO 日志并复用绿色成功标签，不扩大到其它普通 INFO；② 在 `legacy_power_test_service` 桥接层增加精简策略，不修改旧工具源码和执行逻辑；③ `show_signal*` 操作员日志继续保留，logger 的 WARNING / ERROR 全部保留，INFO 只保留登录、连接、Ping、WiFi、重试、测试完成等关键结果；④ 配置路径、原始命令回显、串口状态等底层 INFO 不再写入新工具主执行日志；⑤ logger 与 signal 在 2 秒内上报的同级同文日志只显示一次；⑥ 实际程控电源帧、子任务阶段和最终成功/失败不参与过滤；⑦ 增加高亮、来源过滤、关键结果保留、错误保留和重复合并回归测试。
+- 修改文件：`.claude/plans/legacy_power_log_noise_reduction.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_legacy_power_test_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_app.py" -v`、`python -m unittest discover -s tests -p "test_legacy_power_test_service.py" -v`、`python scripts\verify_baseline.py`。
+- 验证结果：主界面 85 项、旧工具无 GUI 服务 6 项专项测试通过；`python scripts\verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、467 项单测、18 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面勾选全流程子任务8，确认轮次开始正文为绿色，主日志量明显减少，警告/错误、电源帧和最终结论仍完整可见；真实样机结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-08 - 收敛指令重试间隔配置源
+
+- 类型：修改 / 配置持久化 / 回归测试 / 文档
+- 背景：项目负责人要求“测试项配置 → 测试项 → 指令重试间隔（秒，全局）”只保存到 `Auto_power_on_off_tool/config/config.ini`，并删除 `test_project_config.ini` 中重复的 `command_fail_retry_interval_time`。
+- 完成内容：① 将 `config.ini [other_config] command_fail_retry_interval_time` 定为唯一持久化位置，页面加载、保存和全流程测试项执行都使用该值；② `test_project_config.ini [order]` 序列化时只保存测试命令，加载历史文件时忽略残留同名键且不覆盖 `config.ini`；③ 从当前 `test_project_config.ini` 和默认模板 `test_project_config.default.ini` 删除重复键，避免“恢复默认”重新带回；④ “恢复默认”只恢复测试命令并明确保留当前重试间隔；⑤ 保存确认和主执行日志明确说明重试间隔仅写入 `config.ini [other_config]`；⑥ 将“只写 config.ini、不写测试项目文件”的用例纳入强制基线。
+- 修改文件：`.claude/plans/retry_interval_single_config_source.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/Auto_power_on_off_tool/config/test_project_config.ini`、`Cheating_machine_execution_tool/Auto_power_on_off_tool/config/test_project_config.default.ini`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/legacy_ui_defaults_store.py`、`Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`、`Cheating_machine_execution_tool/src/services/test_item_execution_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_legacy_ui_defaults_store.py`、`Cheating_machine_execution_tool/tests/test_test_item_config_store.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：编译三个相关源码；执行 `test_test_item_config_store.py`、`test_legacy_ui_defaults_store.py`、`test_app.py`；核对三个实际 INI；执行 `python scripts/verify_baseline.py` 和 `git diff --check`。
+- 验证结果：配置存储 21 项、旧配置存储 5 项、主界面 84 项专项测试通过；实际文件核对仅 `config.ini` 保留 `command_fail_retry_interval_time = 60`，当前及默认测试项目配置均无该键，加载仍得到 60 秒；完整基线全绿（42 个源码文件编译、465 项单测、18 个强制基线测试、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面修改重试间隔并保存，确认重开页面仍显示新值，`config.ini [other_config]` 更新，而 `test_project_config.ini [order]` 只保留测试命令。
+
+## 2026-08-08 - 全流程新增子任务8“执行开关机测试”
+
+- 类型：全流程功能 / 旧业务无 GUI 适配 / 程控电源危险操作 / Logs 桥接 / 回归门禁 / 文档
+- 完成内容：① 全流程新增默认不勾选的第8项“执行开关机测试”，保持串口日志预启动及其余子任务1→8相对顺序；② 新增 `legacy_power_test_service`，在 Windows `spawn` 独立子进程中直接复用旧 `PowerOnOffTelnet` / `PowerOnOffSsh`、程控电源和通道业务，不启动旧 EXE，不 import / 实例化 `Auto_Power_On_Off_Tool.py` GUI 主类；③ 严格加载当前 `config.ini [ui_defaults]`、当前测试方案、`network_card_ip.ini [power_supply] serial_port` 和新工具已勾选通道，COM 为空、方案缺失、通道或 PC IP 无效时在开始前显示缺项；④ 转发旧 `show_signal/show_signal_warning/show_signal_error` 与 logger 内容到新工具主执行日志，并记录每条实际下发的十六进制程控电源帧；⑤ 旧 Start All 初始化先发全通道断电帧，二次确认新增明确危险提示，之后只启动新工具当前勾选通道；⑥ 全部通道结束才返回结果，任一通道失败作为致命失败停止全流程；“停止”会通知旧 Telnet 业务，10秒内未退出则只终止本次无 GUI 子进程；⑦ 增加冻结程序多进程入口、旧业务运行依赖和打包 hidden import；旧 GUI 主文件与本机配置均未改写。
+- 修改文件：`.claude/plans/legacy_power_test_subtask.md`、`README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/run_line_check_assistant.py`、`requirements.txt`、`THIRD_PARTY_NOTICES.md`、`build_line_check_assistant.ps1`、`line_check_assistant/pipeline_window.py`、`src/services/__init__.py`、`src/services/pipeline_orchestrator.py`、`src/services/legacy_power_test_service.py`、`tests/test_legacy_power_test_service.py`、`tests/test_pipeline_orchestrator.py`、`tests/test_pipeline_window.py`、`scripts/verify_baseline.py`、`line_check_assistant_README.md`。
+- 验证方法：读取当前真实配置做无设备预检；执行旧 Start All service、全流程编排和窗口专项测试；执行 `python scripts/verify_baseline.py`；执行 `git diff --check`。未打开真实程控电源串口、未启动旧 GUI、未运行真实样机开关机循环。
+- 验证结果：当前配置只读预检成功，解析为 `Telnet / COM102 / TEST_PROJECT / channel 9`；service 5 项、编排器 43 项、窗口 19 项专项测试通过；`python scripts/verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、464 项单测、18 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面勾选第8项，确认危险提示后用真实程控电源和样机验收：旧 GUI 不出现、初始化全断电帧与后续通道帧可在主日志核对、只运行当前勾选通道、旧 Logs 持续转发、停止按钮可终止、全部循环结束后最终结果正确。真实样机结论须由项目负责人提供后再更新验收状态。
+
 ## 2026-08-08 - 全流程编号项统一使用“子任务”术语
 
 - 类型：UI 文案 / 执行日志 / 术语统一 / 回归测试 / 文档

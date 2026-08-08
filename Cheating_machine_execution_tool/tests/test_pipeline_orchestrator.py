@@ -22,13 +22,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from line_check_assistant.config_store import ChannelConfig
 from line_check_assistant.onu_registration_store import OnuRegistrationConfig
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
-from line_check_assistant.test_item_config_store import (
-    ExpectedSegment,
-    OrderConfig,
-    OrderItem,
-    TelnetSettings,
-    TestProjectConfig,
-)
 from src.services.pipeline_orchestrator import (
     NON_FATAL_SUBTASKS,
     SUBTASK_CODES,
@@ -86,16 +79,6 @@ def _make_onu(**overrides) -> OnuRegistrationConfig:
     return OnuRegistrationConfig(**defaults)
 
 
-def _make_test_project() -> TestProjectConfig:
-    return TestProjectConfig(
-        telnet=TelnetSettings(user="sdmc", password="1234"),
-        order=OrderConfig(
-            command_fail_retry_interval_time=60,
-            items=[OrderItem(command="ifconfig ra0", expected_segments=[ExpectedSegment(text="UP BROADCAST", negate=False)], retry_times=5)],
-        ),
-    )
-
-
 def _make_context(**overrides) -> PipelineContext:
     """构造 PipelineContext,app 字段用 MagicMock 替代真实 LineCheckAssistant。"""
     app = MagicMock()
@@ -107,8 +90,8 @@ def _make_context(**overrides) -> PipelineContext:
         channels=channels,
         sample_upgrade_settings=overrides.pop("settings", _make_settings()),
         onu_registration=overrides.pop("onu", _make_onu()),
-        test_project_config=overrides.pop("test_project", _make_test_project()),
         serial_log_dir=overrides.pop("serial_log_dir", None),
+        legacy_tool_root=overrides.pop("legacy_tool_root", None),
     )
 
 
@@ -226,35 +209,37 @@ class ComputeSubTaskStatusTests(unittest.TestCase):
         self.assertFalse(status.ready)
         self.assertIn("已勾选通道", status.missing)
 
-    def test_test_item_execution_status_complete(self) -> None:
-        ctx = _make_context()
-        status = compute_all_subtask_statuses(ctx)["test_item_execution"]
+    def test_order_execution_is_not_a_pipeline_subtask(self) -> None:
+        """测试项配置保留为编辑器，但不得再出现在全流程状态或调度入口。"""
+        import inspect
+
+        statuses = compute_all_subtask_statuses(_make_context())
+        source = inspect.getsource(PipelineOrchestrator)
+
+        self.assertNotIn("test_item_execution", statuses)
+        self.assertNotIn("_run_test_item_execution", source)
+
+    @patch("src.services.legacy_power_test_service.prepare_legacy_power_test_request")
+    def test_legacy_power_test_status_ready(self, prepare_request) -> None:
+        prepare_request.return_value = MagicMock(
+            communication_method="telnet",
+            serial_port="COM102",
+            selected_profile="TEST_PROJECT",
+            channels=(MagicMock(),),
+            number_of_tests=500,
+        )
+        ctx = _make_context(legacy_tool_root=Path("legacy-tool"))
+
+        status = compute_all_subtask_statuses(ctx)["legacy_power_test"]
+
         self.assertTrue(status.ready)
-        self.assertIn("1 条", status.summary)
+        self.assertIn("COM102", status.summary)
+        prepare_request.assert_called_once()
 
-    def test_test_item_execution_status_missing_credentials(self) -> None:
-        bad_project = TestProjectConfig(
-            telnet=TelnetSettings(user="", password=""),
-            order=OrderConfig(
-                command_fail_retry_interval_time=60,
-                items=[OrderItem(command="ifconfig ra0", expected_segments=[], retry_times=5)],
-            ),
-        )
-        ctx = _make_context(test_project=bad_project)
-        status = compute_all_subtask_statuses(ctx)["test_item_execution"]
+    def test_legacy_power_test_status_missing_tool_root(self) -> None:
+        status = compute_all_subtask_statuses(_make_context())["legacy_power_test"]
         self.assertFalse(status.ready)
-        self.assertIn("[telnet] user", status.missing)
-        self.assertIn("[telnet] password", status.missing)
-
-    def test_test_item_execution_status_no_items(self) -> None:
-        empty_project = TestProjectConfig(
-            telnet=TelnetSettings(user="sdmc", password="1234"),
-            order=OrderConfig(command_fail_retry_interval_time=60, items=[]),
-        )
-        ctx = _make_context(test_project=empty_project)
-        status = compute_all_subtask_statuses(ctx)["test_item_execution"]
-        self.assertFalse(status.ready)
-        self.assertIn("[order]", "".join(status.missing))
+        self.assertIn("旧工具业务目录", status.missing)
 
     # ---- 环境线路检查(env_check)：当前固定为第 2 个致命步骤 ----
 
@@ -340,7 +325,7 @@ class PipelineRunOrderTests(unittest.TestCase):
             "sample_upgrade",
             "sample_parameter_write",
             "onu_registration",
-            "test_item_execution",
+            "legacy_power_test",
         ]
         self.assertEqual([result.code for result in results], expected_order)
         # 主日志含「开始 / 结束 子任务」 + 「全流程开始 / 结束」
@@ -352,8 +337,8 @@ class PipelineRunOrderTests(unittest.TestCase):
 
     def test_execution_order_keeps_serial_unselected_tasks_unchanged(self) -> None:
         self.assertEqual(
-            execution_order_for({"power_cycle", "env_check", "test_item_execution"}),
-            ("power_cycle", "env_check", "test_item_execution"),
+            execution_order_for({"power_cycle", "env_check", "legacy_power_test"}),
+            ("power_cycle", "env_check", "legacy_power_test"),
         )
 
     def test_power_selected_waits_120_seconds_before_any_next_task(self) -> None:
@@ -369,13 +354,13 @@ class PipelineRunOrderTests(unittest.TestCase):
             side_effect=lambda: events.append("power_cycle"),
         ), patch.object(
             PipelineOrchestrator,
-            "_run_test_item_execution",
-            side_effect=lambda: events.append("test_item_execution"),
+            "_run_env_check",
+            side_effect=lambda: events.append("env_check"),
         ):
-            PipelineOrchestrator(ctx, events.append).run({"power_cycle", "test_item_execution"})
+            PipelineOrchestrator(ctx, events.append).run({"power_cycle", "env_check"})
 
         ctx.stop_event.wait.assert_called_once_with(120.0)
-        self.assertLess(events.index("power_cycle"), events.index("test_item_execution"))
+        self.assertLess(events.index("power_cycle"), events.index("env_check"))
         self.assertIn("等待 120 秒后再开始后续子任务", "".join(events))
         self.assertIn("120 秒等待完成", "".join(events))
 
@@ -429,12 +414,12 @@ class PipelineRunOrderTests(unittest.TestCase):
         stack, method_mocks = self._patch_all_subtasks()
         with stack:
             orchestrator = PipelineOrchestrator(ctx, emit_msgs.append)
-            results = orchestrator.run({"env_check", "power_cycle", "test_item_execution"})
+            results = orchestrator.run({"env_check", "power_cycle", "legacy_power_test"})
 
         # 只调用了选中的 3 个
         method_mocks["env_check"].assert_called_once()
         method_mocks["power_cycle"].assert_called_once()
-        method_mocks["test_item_execution"].assert_called_once()
+        method_mocks["legacy_power_test"].assert_called_once()
         self.assertFalse(method_mocks["sample_upgrade"].called)
         self.assertFalse(method_mocks["onu_registration"].called)
         self.assertEqual(len(results), 3)
@@ -453,10 +438,10 @@ class PipelineRunOrderTests(unittest.TestCase):
         method_mocks["serial_terminal"].assert_called_once()
         method_mocks["env_check"].assert_called_once()
         method_mocks["power_cycle"].assert_called_once()
-        # 升级失败后,后续子任务(写参 / ONU / 串口 / 测试项)不执行
+        # 升级失败后,后续子任务(写参 / ONU / 开关机测试)不执行
         method_mocks["sample_parameter_write"].assert_not_called()
         method_mocks["onu_registration"].assert_not_called()
-        method_mocks["test_item_execution"].assert_not_called()
+        method_mocks["legacy_power_test"].assert_not_called()
         # 主日志含失败消息(编号 3 = sample_upgrade)
         self.assertIn("子任务 3. 样机升级 失败", "".join(emit_msgs))
         self.assertIn("全流程执行因失败提前终止", "".join(emit_msgs))
@@ -472,15 +457,15 @@ class PipelineRunOrderTests(unittest.TestCase):
             # 串口日志失败,7 项全选 → 不应抛 PipelineError
             results = orchestrator.run(set(SUBTASK_CODES))
 
-        # 串口已执行(失败);后续子任务(测试项)继续
+        # 串口已执行(失败);后续子任务(执行开关机测试)继续
         method_mocks["serial_terminal"].assert_called_once()
-        method_mocks["test_item_execution"].assert_called_once()
+        method_mocks["legacy_power_test"].assert_called_once()
         # 串口结果 ok=False
         serial_result = next(r for r in results if r.code == "serial_terminal")
         self.assertFalse(serial_result.ok)
-        # 测试项结果 ok=True
-        test_result = next(r for r in results if r.code == "test_item_execution")
-        self.assertTrue(test_result.ok)
+        # 执行开关机测试结果 ok=True
+        legacy_result = next(r for r in results if r.code == "legacy_power_test")
+        self.assertTrue(legacy_result.ok)
 
     def test_request_stop_skips_subsequent_subtasks(self) -> None:
         ctx = _make_context()
@@ -502,7 +487,7 @@ class PipelineRunOrderTests(unittest.TestCase):
             "sample_upgrade",
             "sample_parameter_write",
             "onu_registration",
-            "test_item_execution",
+            "legacy_power_test",
         ):
             method_mocks[code].assert_not_called()
         self.assertIn("已请求停止", "".join(emit_msgs))
@@ -549,6 +534,29 @@ class SampleUpgradeDispatchTests(unittest.TestCase):
         run_parameter_write.assert_called_once_with()
 
 
+class LegacyPowerTestDispatchTests(unittest.TestCase):
+    @patch("src.services.legacy_power_test_service.run_legacy_power_test")
+    @patch("src.services.legacy_power_test_service.prepare_legacy_power_test_request")
+    def test_legacy_power_test_delegates_to_headless_service(
+        self,
+        prepare_request,
+        run_power_test,
+    ) -> None:
+        prepared = MagicMock()
+        prepare_request.return_value = prepared
+        run_power_test.return_value = MagicMock(ok=True, detail="完成")
+        ctx = _make_context(legacy_tool_root=Path("legacy-tool"))
+        emitted: List[str] = []
+
+        PipelineOrchestrator(ctx, emitted.append)._run_legacy_power_test()
+
+        prepare_request.assert_called_once()
+        channels = tuple(prepare_request.call_args.args[1])
+        self.assertEqual(channels[0].number, 2)
+        self.assertEqual(channels[0].network_card_ip, "192.168.1.110")
+        run_power_test.assert_called_once_with(prepared, emitted.append, ctx.stop_event)
+
+
 class SubTaskResultTests(unittest.TestCase):
     def test_subtask_result_ok(self) -> None:
         r = SubTaskResult(code="power_cycle", ok=True)
@@ -572,7 +580,7 @@ class ConstantsTests(unittest.TestCase):
                 "sample_parameter_write",
                 "onu_registration",
                 "serial_terminal",
-                "test_item_execution",
+                "legacy_power_test",
             ),
         )
 
@@ -580,7 +588,7 @@ class ConstantsTests(unittest.TestCase):
         self.assertEqual(NON_FATAL_SUBTASKS, frozenset({"serial_terminal"}))
 
     def test_subtask_labels_numbering_is_one_to_seven(self) -> None:
-        """用户 2026-07-20 反馈后编号从 1 开始到 7;守门防止以后再次调整编号漏改。"""
+        """编号从 1 开始到 7，且 `[order]` 执行不得回到全流程。"""
         expected = {
             "power_cycle": "1. ",
             "env_check": "2. ",
@@ -588,8 +596,10 @@ class ConstantsTests(unittest.TestCase):
             "sample_parameter_write": "4. ",
             "onu_registration": "5. ",
             "serial_terminal": "6. ",
-            "test_item_execution": "7. ",
+            "legacy_power_test": "7. ",
         }
+        self.assertNotIn("test_item_execution", SUBTASK_CODES)
+        self.assertNotIn("test_item_execution", SUBTASK_LABELS)
         self.assertEqual(set(SUBTASK_LABELS.keys()), set(expected.keys()))
         for code, prefix in expected.items():
             self.assertTrue(

@@ -18,9 +18,18 @@ try {
         --name LineCheckAssistant `
         --specpath $specDir `
         --additional-hooks-dir $hookDir `
+        --paths .\Auto_power_on_off_tool `
         --collect-submodules tftpy `
         --collect-submodules openpyxl `
         --collect-submodules xlrd `
+        --hidden-import requests_toolbelt.adapters.source `
+        --hidden-import paramiko `
+        --hidden-import ping3 `
+        --hidden-import pywifi `
+        --hidden-import configobj `
+        --hidden-import psutil `
+        --hidden-import test_case.powe_on_off_telnet `
+        --hidden-import test_case.power_on_off_ssh `
         .\run_line_check_assistant.py
 
     if (Test-Path -LiteralPath $thirdPartyNotice) {

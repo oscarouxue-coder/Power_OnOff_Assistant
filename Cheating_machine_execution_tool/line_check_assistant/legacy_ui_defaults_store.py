@@ -61,14 +61,29 @@ class LegacyUiDefaultsStore:
         mirrored_value = "0" if bool(telnet_default_on) else "1"
         self._update_section({TELNET_ENABLE_OPTION: mirrored_value})
 
-    def update_command_fail_retry_interval_mirror(self, interval: object) -> None:
-        """同步旧工具 ``[other_config]`` 的同名重试间隔。"""
-        if not self.config_path.is_file():
-            return
+    def update_command_fail_retry_interval(self, interval: object) -> None:
+        """把全局指令重试间隔写入唯一配置源 ``[other_config]``。"""
         self._update_section(
             {COMMAND_FAIL_RETRY_INTERVAL_OPTION: str(interval).strip()},
             section_name=OTHER_CONFIG_SECTION,
         )
+
+    def load_command_fail_retry_interval(self, default: int = 60) -> int:
+        """从唯一配置源 ``[other_config]`` 读取非负重试间隔。"""
+        if not self.config_path.is_file():
+            return default
+        parser = configparser.RawConfigParser()
+        parser.read(self.config_path, encoding="utf-8")
+        raw_value = parser.get(
+            OTHER_CONFIG_SECTION,
+            COMMAND_FAIL_RETRY_INTERVAL_OPTION,
+            fallback=str(default),
+        )
+        try:
+            value = int(raw_value.strip())
+        except (AttributeError, ValueError):
+            return default
+        return value if value >= 0 else default
 
     @staticmethod
     def _validate(values: Mapping[str, object]) -> dict[str, str]:

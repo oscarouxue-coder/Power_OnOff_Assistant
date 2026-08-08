@@ -98,6 +98,9 @@ POWER_ACTION_OPTIONS = (POWER_ACTION_ON, POWER_ACTION_OFF)
 CHANNEL_LIST_FONT = ("Microsoft YaHei UI", 11)
 CHANNEL_FIELD_WIDTH = 42
 TEST_ITEM_COMMAND_GROUP_SPACING = 14
+LEGACY_CHANNEL_TEST_START_PATTERN = re.compile(
+    r"^\[旧工具Logs\]\[INFO\].*通道\s*【\d+】\s*开始第\s*\d+\s*次测试"
+)
 TEST_ITEM_HIDDEN_UI_DEFAULT_OPTIONS = frozenset(
     {
         TELNET_ENABLE_OPTION,
@@ -271,6 +274,8 @@ class LineCheckAssistant(Tk):
         self.dut_config_window = None
         self.test_item_config_window = None
         self.pipeline_window = None
+        self.power_test_running = False
+        self.power_test_status_var = StringVar(value="开关机测试状态：未运行")
         self.onu_registration_window = None
         self.onu_telnet_test_running = False
         self.onu_query_running = False
@@ -618,10 +623,31 @@ class LineCheckAssistant(Tk):
             run_copy,
             text="检查全部启用通道。环境检查通过后，系统将自动开始执行开关机测试。",
             style="CardHint.TLabel",
-        ).pack(anchor="w", pady=(3, 8))
+        ).pack(anchor="w", pady=(3, 4))
+        self.power_test_status_label = ttk.Label(
+            run_copy,
+            textvariable=self.power_test_status_var,
+            style="CardHint.TLabel",
+        )
+        self.power_test_status_label.pack(anchor="w", pady=(0, 4))
         self.progress = ttk.Progressbar(run_copy, mode="determinate")
         self.progress.pack(fill="x")
-        ttk.Button(run_card, text="检查并执行测试", command=self._start_all_checks, style="Primary.TButton").pack(side="right", padx=(20, 0))
+        run_actions = ttk.Frame(run_card, style="Surface.TFrame")
+        run_actions.pack(side="right", padx=(20, 0))
+        ttk.Button(
+            run_actions,
+            text="检查并执行测试",
+            command=self._start_all_checks,
+            style="Primary.TButton",
+        ).pack(side="right")
+        self.stop_power_test_button = ttk.Button(
+            run_actions,
+            text="停止测试",
+            command=self._stop_power_test,
+            style="Secondary.TButton",
+            state="disabled",
+        )
+        self.stop_power_test_button.pack(side="right", padx=(0, 8))
 
         log_card = ttk.Frame(right, style="Surface.TFrame", padding=14)
         log_card.pack(fill="both", expand=True)
@@ -2752,7 +2778,8 @@ class LineCheckAssistant(Tk):
                     f"将更新 {TEST_ITEM_CONFIG_PATH} 和 {LEGACY_UI_DEFAULTS_CONFIG_PATH}。\n\n"
                     f"- Telnet 字段：{len(captured.telnet.__dict__)} 项\n"
                     f"- 测试项命令：{len(captured.order.items)} 条\n"
-                    f"- 指令重试间隔：{captured.order.command_fail_retry_interval_time} 秒\n"
+                    f"- 指令重试间隔：{captured.order.command_fail_retry_interval_time} 秒"
+                    "（仅写入 config.ini [other_config]）\n"
                     f"- WiFi 连接：{'启用' if captured.connect_wifi.enable else '关闭'}\n"
                     f"- 项目信息：项目={captured.project_info.project_name or '(空)'}，"
                     f"软件版本={captured.project_info.software_version or '(空)'}，"
@@ -2774,7 +2801,8 @@ class LineCheckAssistant(Tk):
             reset_dirty()
             self._log(
                 f"[测试项配置] 已保存 {len(captured.order.items)} 条测试项命令，"
-                f"同步指令重试间隔 {captured.order.command_fail_retry_interval_time} 秒，"
+                f"已将指令重试间隔 {captured.order.command_fail_retry_interval_time} 秒"
+                "保存到 config.ini [other_config]，"
                 f"并更新 {len(captured_legacy_defaults)} 项旧工具参数"
             )
             messagebox.showinfo(
@@ -3163,7 +3191,8 @@ class LineCheckAssistant(Tk):
             if not messagebox.askyesno(
                 "恢复默认测试项",
                 (
-                    "将用默认模板恢复当前页面的指令重试间隔和全部测试项命令。\n\n"
+                    "将用默认模板恢复当前页面的全部测试项命令。\n\n"
+                    "指令重试间隔继续使用 config.ini 中的当前值，不会恢复或覆盖。\n\n"
                     "Telnet、WiFi 和项目信息不会改变；恢复后仍需点击窗口底部“保存”才会写入正式配置。\n\n"
                     "是否继续？"
                 ),
@@ -4086,6 +4115,9 @@ class LineCheckAssistant(Tk):
         if self.running:
             return
         pipeline_window = self.pipeline_window
+        if self.power_test_running:
+            self._log("开关机测试：当前全流程仍在执行或停止中，请在主界面查看状态。")
+            return
         if pipeline_window is not None and pipeline_window.window.winfo_exists():
             pipeline_window.window.deiconify()
             pipeline_window.window.lift()
@@ -4095,6 +4127,30 @@ class LineCheckAssistant(Tk):
         # 引用放在这里(而非 ``__init__``)以避免与 ``app.py`` 的 tkinter 启动顺序耦合。
         from .pipeline_window import PipelineWindow
         self.pipeline_window = PipelineWindow(self)
+
+    def _set_power_test_status(self, status: str) -> None:
+        """在 Tk 主线程同步主界面的全流程状态与停止按钮。"""
+        labels = {
+            "idle": "开关机测试状态：未运行",
+            "running": "开关机测试状态：正在执行",
+            "stopping": "开关机测试状态：正在停止（等待当前子任务安全退出）",
+            "completed": "开关机测试状态：已完成",
+            "stopped": "开关机测试状态：已停止",
+            "failed": "开关机测试状态：执行失败",
+        }
+        if status not in labels:
+            raise ValueError(f"未知开关机测试状态：{status}")
+        self.power_test_running = status in {"running", "stopping"}
+        self.power_test_status_var.set(labels[status])
+        self.stop_power_test_button.configure(
+            state="normal" if status == "running" else "disabled"
+        )
+
+    def _stop_power_test(self) -> None:
+        """主界面停止入口；委派给当前全流程编排器的既有停止事件。"""
+        pipeline_window = self.pipeline_window
+        if pipeline_window is None or not pipeline_window.request_stop():
+            self._log("开关机测试：当前没有正在执行的全流程，无需停止。")
 
     def _selected_channels(self) -> list[ChannelConfig]:
         return [channel for channel in self.channels if channel.enabled]
@@ -4182,6 +4238,8 @@ class LineCheckAssistant(Tk):
         self.log_text.configure(state="disabled")
 
     def _log_tag_for(self, message: str) -> str:
+        if LEGACY_CHANNEL_TEST_START_PATTERN.search(message):
+            return "success"
         if message.startswith("[通过]") or "成功" in message or "完成" in message:
             return "success"
         if message.startswith("[失败]") or "失败" in message or "异常" in message:

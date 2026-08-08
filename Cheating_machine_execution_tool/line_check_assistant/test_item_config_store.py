@@ -1,8 +1,8 @@
 """测试项配置 ini 的读写服务。
 
 把 ``Auto_power_on_off_tool/config/test_project_config.ini`` 解析为 dataclass 内存模型,
-也可以把内存模型写回 ini。当前实现只提供"加载 + 编辑 + 保存"入口,主程序不会消费 ini 内容,
-不会驱动任何 telnet/上下电/测试项执行流程(参考 PROJECT_STATUS.md 的 Q1=A 决策)。
+也可以把内存模型写回 ini。配置窗口本身只负责“加载 + 编辑 + 保存”；全流程执行
+通过 service 消费加载后的内存模型，配置存储层本身不驱动 telnet 或上下电。
 """
 from __future__ import annotations
 
@@ -23,8 +23,9 @@ CONNECT_WIFI_SECTION = "connect_wifi"
 PROJECT_INFO_SECTION = "project_info"
 LEGACY_UI_CONFIG_FILENAME = "config.ini"
 
-# ``[order]`` 段顶部独立 key,语义对齐老工具 ``config.ini`` 中 ``command_fail_retry_interval_time``:
-# 表示两次失败重试之间的等待秒数。
+# 全局指令重试间隔的内存字段名。持久化唯一来源是同目录
+# ``config.ini [other_config] command_fail_retry_interval_time``；测试项目
+# ``[order]`` 只保存命令。加载历史测试项目文件时仍忽略同名残留键。
 ORDER_GLOBAL_RETRY_INTERVAL_KEY = "command_fail_retry_interval_time"
 
 # 默认值:与老工具 ``config.ini`` 的 ``command_fail_retry_interval_time = 60`` 保持一致。
@@ -80,7 +81,7 @@ class OrderItem:
 
 @dataclass
 class OrderConfig:
-    """``[order]`` 段。``command_fail_retry_interval_time`` 写在段顶部第一行。"""
+    """``[order]`` 命令及从 ``config.ini`` 加载的全局重试间隔。"""
 
     command_fail_retry_interval_time: int = DEFAULT_COMMAND_FAIL_RETRY_INTERVAL
     items: List[OrderItem] = field(default_factory=list)
@@ -225,7 +226,7 @@ class TestItemConfigStore:
             parser.write(file)
         self._sync_legacy_values(
             config.telnet.telnet_default_on,
-            dumped_order[ORDER_GLOBAL_RETRY_INTERVAL_KEY],
+            config.order.command_fail_retry_interval_time,
         )
 
     def _sync_legacy_values(
@@ -233,11 +234,11 @@ class TestItemConfigStore:
         telnet_default_on: object,
         command_fail_retry_interval: object,
     ) -> None:
-        """把共用值镜像到旧工具 config.ini，并保留其它原始内容。"""
+        """把共用值写入 ``config.ini``，并保留其它原始内容。"""
         legacy_config_path = self.config_path.with_name(LEGACY_UI_CONFIG_FILENAME)
         legacy_store = LegacyUiDefaultsStore(legacy_config_path)
         legacy_store.update_telnet_enable_mirror(telnet_default_on)
-        legacy_store.update_command_fail_retry_interval_mirror(
+        legacy_store.update_command_fail_retry_interval(
             command_fail_retry_interval
         )
 
@@ -271,9 +272,10 @@ class TestItemConfigStore:
 
     def _load_order(self, parser: configparser.RawConfigParser) -> OrderConfig:
         section = ORDER_SECTION
-        interval = _parse_int(
-            parser.get(section, ORDER_GLOBAL_RETRY_INTERVAL_KEY, fallback=str(DEFAULT_COMMAND_FAIL_RETRY_INTERVAL)),
-            DEFAULT_COMMAND_FAIL_RETRY_INTERVAL,
+        interval = LegacyUiDefaultsStore(
+            self.config_path.with_name(LEGACY_UI_CONFIG_FILENAME)
+        ).load_command_fail_retry_interval(
+            DEFAULT_COMMAND_FAIL_RETRY_INTERVAL
         )
         items: List[OrderItem] = []
         if not parser.has_section(section):
@@ -342,8 +344,6 @@ class TestItemConfigStore:
 
     def _dump_order(self, order: OrderConfig) -> dict:
         result: dict = {}
-        interval = _parse_int(order.command_fail_retry_interval_time, DEFAULT_COMMAND_FAIL_RETRY_INTERVAL)
-        result[ORDER_GLOBAL_RETRY_INTERVAL_KEY] = str(interval)
         for item in order.items:
             key = _build_order_key(item.command, _parse_int(item.retry_times, DEFAULT_ORDER_RETRY_TIMES))
             value = _join_expected(list(item.expected_segments))

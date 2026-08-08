@@ -136,7 +136,7 @@ class TestItemConfigStoreTests(unittest.TestCase):
             self.assertIn("telnet_enable = 1", disabled_content)
             self.assertIn("# keep this comment", disabled_content)
 
-    def test_save_mirrors_retry_interval_to_legacy_other_config(self):
+    def test_save_writes_retry_interval_only_to_legacy_other_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             config_dir = Path(temp_dir)
             legacy_config_path = config_dir / "config.ini"
@@ -161,14 +161,13 @@ class TestItemConfigStoreTests(unittest.TestCase):
             )
             legacy_content = legacy_config_path.read_text(encoding="utf-8")
 
-        self.assertIn("command_fail_retry_interval_time = 25", test_project_content)
+        self.assertNotIn("command_fail_retry_interval_time", test_project_content)
         self.assertIn("command_fail_retry_interval_time = 25", legacy_content)
         self.assertIn("# keep interval comment", legacy_content)
         self.assertIn("command_fail_retry_success_times = 10", legacy_content)
 
-    def test_save_writes_command_fail_retry_interval_at_order_section_top(self):
-        # [order] 段顶部必须是 command_fail_retry_interval_time,然后才是各命令。
-        # configparser 写入顺序按 dict 插入顺序保证(Python 3.7+)。
+    def test_save_omits_global_retry_interval_from_order_section(self):
+        # [order] 只保存测试命令；全局重试间隔唯一写入 config.ini。
         with tempfile.TemporaryDirectory() as temp_dir:
             store = TestItemConfigStore(Path(temp_dir) / "test_project_config.ini")
             config = TestProjectConfig(
@@ -187,14 +186,13 @@ class TestItemConfigStoreTests(unittest.TestCase):
             order_section_start = content.find("[order]")
             order_section_end = content.find("[", order_section_start + 1)
             order_section_body = content[order_section_start:order_section_end]
-            interval_line_index = order_section_body.find(ORDER_GLOBAL_RETRY_INTERVAL_KEY)
-            command_line_index = order_section_body.find("ls")
-            self.assertGreater(interval_line_index, 0, "全局重试间隔 key 必须出现在 [order] 段内")
-            self.assertLess(interval_line_index, command_line_index, "全局重试间隔必须位于命令之前")
-            self.assertIn("command_fail_retry_interval_time = 42", order_section_body)
+            self.assertNotIn(ORDER_GLOBAL_RETRY_INTERVAL_KEY, order_section_body)
+            self.assertIn("ls retry_times_3 = file1", order_section_body)
+            legacy_content = (Path(temp_dir) / "config.ini").read_text(encoding="utf-8")
+            self.assertIn("command_fail_retry_interval_time = 42", legacy_content)
 
-    def test_load_preserves_command_fail_retry_interval_in_order_section(self):
-        # 旧 ini 里没有 command_fail_retry_interval_time 时回退默认值;新增 ini 时能正确读出。
+    def test_load_reads_retry_interval_from_legacy_config_and_ignores_stale_order_key(self):
+        # 即使旧测试项目仍残留同名 key，也必须以 config.ini 为唯一来源。
         from configparser import RawConfigParser
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -202,14 +200,19 @@ class TestItemConfigStoreTests(unittest.TestCase):
             parser = RawConfigParser()
             parser.optionxform = str
             parser["order"] = {
-                "command_fail_retry_interval_time": "120",
+                "command_fail_retry_interval_time": "33",
                 "ifconfig ra0 retry_times_5": "UP BROADCAST",
             }
             with config_path.open("w", encoding="utf-8") as file:
                 parser.write(file)
+            (Path(temp_dir) / "config.ini").write_text(
+                "[other_config]\ncommand_fail_retry_interval_time = 120\n",
+                encoding="utf-8",
+            )
 
             loaded = TestItemConfigStore(config_path).load()
             self.assertEqual(loaded.order.command_fail_retry_interval_time, 120)
+            self.assertEqual([item.command for item in loaded.order.items], ["ifconfig ra0"])
 
     def test_expected_segments_serialize_with_double_ampersand_join(self):
         with tempfile.TemporaryDirectory() as temp_dir:

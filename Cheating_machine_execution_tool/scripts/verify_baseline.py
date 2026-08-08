@@ -75,6 +75,7 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/core/__init__.py",
     "src/ui/serial_terminal.py",
     "src/services/pipeline_orchestrator.py",
+    "src/services/legacy_power_test_service.py",
     "src/services/power_on_service.py",
     "src/services/sample_parameter_service.py",
     "src/services/serial_upgrade_service.py",
@@ -110,9 +111,17 @@ REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
     "test_pipeline_orchestrator.PipelineRunOrderTests.test_run_all_seven_subtasks_in_order",
     "test_pipeline_orchestrator.PipelineRunOrderTests.test_power_selected_waits_120_seconds_before_any_next_task",
     "test_pipeline_window.BuildContextRegressionTests.test_pipeline_confirmation_does_not_call_numbered_items_pipelines",
+    "test_pipeline_window.BuildContextRegressionTests.test_main_stop_request_uses_existing_orchestrator_stop_event",
+    "test_app.CurrentChannelSelectionTests.test_main_card_shows_power_test_status_and_stop_button",
+    "test_pipeline_window.BuildContextRegressionTests.test_pipeline_start_hides_configuration_window_after_thread_starts",
     "test_app.CurrentChannelSelectionTests.test_pipeline_serial_logs_show_then_open_all",
     "test_pipeline_orchestrator.PipelineRunOrderTests.test_fatal_subtask_failure_raises_pipeline_error",
-    "test_test_item_config_store.TestItemConfigStoreTests.test_save_mirrors_retry_interval_to_legacy_other_config",
+    "test_test_item_config_store.TestItemConfigStoreTests.test_save_writes_retry_interval_only_to_legacy_other_config",
+    "test_legacy_power_test_service.LegacyPowerTestServiceTests.test_parent_forwards_legacy_logs_and_waits_for_result",
+    "test_legacy_power_test_service.LegacyPowerTestServiceTests.test_service_does_not_import_or_construct_old_gui_entry",
+    "test_legacy_power_test_service.LegacyPowerTestServiceTests.test_power_frame_is_rendered_in_execution_log_format",
+    "test_legacy_power_test_service.LegacyPowerTestServiceTests.test_result_file_success_line_is_forwarded_without_changing_file",
+    "test_pipeline_orchestrator.LegacyPowerTestDispatchTests.test_legacy_power_test_delegates_to_headless_service",
 )
 
 # 2. 必须命中(§1.3 / §1.4) - (pattern, 搜索目录组)
