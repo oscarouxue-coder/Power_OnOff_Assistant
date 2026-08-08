@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import threading
 import time
 from collections import defaultdict
@@ -45,12 +46,14 @@ class PySerialSession:
         self._serial = None
         self._condition = threading.Condition()
         self._write_lock = threading.Lock()
+        self._log_lock = threading.Lock()
         self._history = bytearray()
         self._subscribers: set[Subscriber] = set()
         self._stop = threading.Event()
         self._closed = False
         self._reader: threading.Thread | None = None
         self._log_handle = None
+        self._rx_log_line_buffer = ""
         self.error: Exception | None = None
 
     def open(self) -> None:
@@ -172,6 +175,7 @@ class PySerialSession:
             self._condition.notify_all()
         if self._reader is not None and self._reader is not threading.current_thread():
             self._reader.join(timeout=2)
+        self._flush_pending_rx_log_line()
         self._emit("STATE", b"CLOSED", "串口已关闭")
         if self._log_handle is not None:
             self._log_handle.close()
@@ -201,9 +205,7 @@ class PySerialSession:
     def _emit(self, direction: str, data: bytes, text: str, sensitive: bool = False) -> None:
         event = SerialEvent(self.settings.port, direction, data, text, sensitive)
         if self._log_handle is not None and direction in {"RX", "TX", "ERROR", "STATE"}:
-            timestamp = time.strftime("[%Y-%m-%d %H:%M:%S] ")
-            self._log_handle.write(f"{timestamp}{direction} {text}\n")
-            self._log_handle.flush()
+            self._write_timestamped_log_event(direction, text)
         with self._condition:
             subscribers = tuple(self._subscribers)
         for subscriber in subscribers:
@@ -211,6 +213,54 @@ class PySerialSession:
                 subscriber(event)
             except Exception:
                 continue
+
+    def _write_timestamped_log_event(self, direction: str, text: str) -> None:
+        """逐行写入带时间戳的日志，RX 半行允许跨串口读取块拼接。"""
+        with self._log_lock:
+            if self._log_handle is None:
+                return
+            if direction == "RX":
+                self._rx_log_line_buffer += text
+                self._drain_complete_rx_log_lines_locked()
+            else:
+                self._flush_pending_rx_log_line_locked()
+                lines = text.splitlines() or [""]
+                for line in lines:
+                    self._write_timestamped_log_line_locked(direction, line)
+            self._log_handle.flush()
+
+    def _drain_complete_rx_log_lines_locked(self) -> None:
+        while self._rx_log_line_buffer:
+            line_end = re.search(r"\r\n|\n|\r", self._rx_log_line_buffer)
+            if line_end is None:
+                return
+            if line_end.group(0) == "\r" and line_end.end() == len(self._rx_log_line_buffer):
+                # 等待下一读取块，避免把跨块的 CRLF 拆成两行。
+                return
+            line = self._rx_log_line_buffer[: line_end.start()]
+            self._rx_log_line_buffer = self._rx_log_line_buffer[line_end.end() :]
+            self._write_timestamped_log_line_locked("RX", line)
+
+    def _flush_pending_rx_log_line(self) -> None:
+        with self._log_lock:
+            self._flush_pending_rx_log_line_locked()
+            if self._log_handle is not None:
+                self._log_handle.flush()
+
+    def _flush_pending_rx_log_line_locked(self) -> None:
+        if not self._rx_log_line_buffer:
+            return
+        line = self._rx_log_line_buffer
+        if line.endswith("\r"):
+            line = line[:-1]
+        self._rx_log_line_buffer = ""
+        self._write_timestamped_log_line_locked("RX", line)
+
+    def _write_timestamped_log_line_locked(self, direction: str, line: str) -> None:
+        if self._log_handle is None:
+            return
+        timestamp = time.strftime("%Y-%m-%d_%H:%M:%S")
+        self._log_handle.write(f"{timestamp} {direction} {line}\n")
 
 
 class SerialSessionManager:

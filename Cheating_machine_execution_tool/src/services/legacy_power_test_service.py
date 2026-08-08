@@ -38,9 +38,15 @@ LEGACY_NETWORK_CARD_PINGED_PATTERN = re.compile(
     r"has been pinged$",
     re.IGNORECASE,
 )
+LEGACY_LOGIN_SUCCESS_PATTERN = re.compile(
+    r"^(?P<source_ip>(?:\d{1,3}\.){3}\d{1,3})\s*登录成功$"
+)
 LEGACY_NORMAL_CYCLE_RESULT_PATTERN = re.compile(
     r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?:\s*"
-    r"通道\d+下挂的设备在第\d+次测试时正常$"
+    r"通道(?P<channel>\d+)下挂的设备在第(?P<cycle>\d+)次测试时正常$"
+)
+LEGACY_CYCLE_START_PATTERN = re.compile(
+    r"^\*+\s*通道\s*【(?P<channel>\d+)】\s*开始第\s*(?P<cycle>\d+)\s*次测试\s*\*+$"
 )
 LEGACY_COMMAND_RESULT_FILENAME_PATTERN = re.compile(
     r"^device_(?P<device_number>\d+)_command_results_.+\.log$"
@@ -93,6 +99,7 @@ class LegacyPowerTestResult:
 
 
 Output = Callable[[str], None]
+ProgressOutput = Callable[[int, int], None]
 
 
 def _format_power_frame(payload) -> str:
@@ -119,6 +126,30 @@ def _legacy_log_dedup_key(level: str, text: str) -> tuple[str, str]:
         level.strip().lower(),
         LEGACY_LOG_WHITESPACE_PATTERN.sub(" ", text).strip(),
     )
+
+
+def _overall_completed_cycle(
+    completed_by_channel: dict[int, int],
+    result_line: str,
+    total_cycles: int,
+) -> int | None:
+    """记录单通道正常完成轮次，返回所有已选通道都完成的最小轮次。"""
+    normalized_line = result_line.strip()
+    match = LEGACY_NORMAL_CYCLE_RESULT_PATTERN.fullmatch(normalized_line)
+    if match is not None:
+        completed_cycle = int(match.group("cycle"))
+    else:
+        match = LEGACY_CYCLE_START_PATTERN.fullmatch(normalized_line)
+        if match is None:
+            return None
+        # 新一轮已开始，说明上一轮已经完成；兼容 only_power_off_on 不写正常结果行的路径。
+        completed_cycle = int(match.group("cycle")) - 1
+    channel = int(match.group("channel"))
+    if channel not in completed_by_channel:
+        return None
+    cycle = max(0, min(completed_cycle, total_cycles))
+    completed_by_channel[channel] = max(completed_by_channel[channel], cycle)
+    return min(completed_by_channel.values()) if completed_by_channel else 0
 
 
 def _extract_ipv4(value: str) -> str:
@@ -226,6 +257,7 @@ def run_legacy_power_test(
     stop_event: threading.Event,
     *,
     process_context=None,
+    on_progress: ProgressOutput | None = None,
 ) -> LegacyPowerTestResult:
     """在独立无 GUI 子进程运行旧 ``Start All``，同步等待最终结果。"""
     context = process_context or multiprocessing.get_context("spawn")
@@ -241,6 +273,10 @@ def run_legacy_power_test(
         f"通信={request.communication_method}，COM={request.serial_port}，"
         f"通道={[item.number for item in request.channels]}，循环={request.number_of_tests}次"
     )
+    completed_by_channel = {item.number: 0 for item in request.channels}
+    last_reported_cycle = 0
+    if on_progress is not None:
+        on_progress(0, request.number_of_tests)
     process.start()
 
     final_result: LegacyPowerTestResult | None = None
@@ -248,6 +284,7 @@ def run_legacy_power_test(
     exit_drain_deadline: float | None = None
     recent_log_times: dict[tuple[str, str], float] = {}
     last_forwarded_log_key: tuple[str, str] | None = None
+    forwarded_login_success_ips: set[str] = set()
     emit(
         "[执行开关机测试] 已启用精简日志：保留每轮开始/正常结论、关键结果、"
         "警告/错误、程控电源指令和最终结论。"
@@ -278,9 +315,29 @@ def run_legacy_power_test(
             level = str(message.get("level", "info")).upper()
             raw_text = str(message.get("message", ""))
             source = str(message.get("source", "signal")).lower()
+            completed_cycle = _overall_completed_cycle(
+                completed_by_channel,
+                raw_text,
+                request.number_of_tests,
+            )
+            if (
+                on_progress is not None
+                and completed_cycle is not None
+                and completed_cycle > last_reported_cycle
+            ):
+                last_reported_cycle = completed_cycle
+                on_progress(completed_cycle, request.number_of_tests)
             if not _should_forward_legacy_log(level, raw_text, source):
                 continue
             text = _format_legacy_operator_log(raw_text, request.ping_target_ip)
+            login_match = LEGACY_LOGIN_SUCCESS_PATTERN.fullmatch(
+                LEGACY_LOG_WHITESPACE_PATTERN.sub(" ", text).strip()
+            )
+            if login_match is not None:
+                source_ip = login_match.group("source_ip")
+                if source_ip in forwarded_login_success_ips:
+                    continue
+                forwarded_login_success_ips.add(source_ip)
             dedup_key = _legacy_log_dedup_key(level, text)
             if dedup_key == last_forwarded_log_key:
                 continue
@@ -310,6 +367,8 @@ def run_legacy_power_test(
         detail = f"旧业务子进程异常退出，exitcode={process.exitcode}"
         emit(f"[执行开关机测试] 失败：{detail}")
         return LegacyPowerTestResult(False, detail)
+    if final_result.ok and on_progress is not None and last_reported_cycle < request.number_of_tests:
+        on_progress(request.number_of_tests, request.number_of_tests)
     emit(
         f"[执行开关机测试] {'成功' if final_result.ok else '失败'}：{final_result.detail}"
     )

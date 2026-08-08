@@ -6,6 +6,7 @@ import queue
 import re
 import time
 from collections import deque
+from datetime import date
 from pathlib import Path
 from tkinter import END, Frame, Label, StringVar, Text, Toplevel, filedialog, messagebox, ttk
 
@@ -25,6 +26,17 @@ _RENDER_ACTIVE_DELAY_MS = 33
 _RENDER_IDLE_DELAY_MS = 80
 _PENDING_CHARS_PER_VLAN = 64 * 1024
 _DISPLAY_MAX_LINES = 5000
+
+
+def build_serial_log_path(
+    log_dir: Path,
+    vlan: str,
+    port: str,
+    opened_on: date | None = None,
+) -> Path:
+    """按 VLAN、COM 和打开日期生成串口日志文件名。"""
+    day = opened_on or date.today()
+    return Path(log_dir) / f"{vlan}_{port}_{day:%Y%m%d}.log"
 
 
 class SerialTerminalWindow:
@@ -132,7 +144,7 @@ class SerialTerminalWindow:
         try:
             self.log_dir.mkdir(parents=True, exist_ok=True)
             owner = f"terminal:{id(self)}:{item['port']}"
-            path = self.log_dir / f"{vlan}_{item['port']}.log"
+            path = build_serial_log_path(self.log_dir, vlan, item["port"])
             session = self.manager.acquire_monitor(owner, SerialSettings(item["port"]), path)
             subscriber = lambda event, v=vlan: self.events.put_nowait((v, event))
             session.subscribe(subscriber)

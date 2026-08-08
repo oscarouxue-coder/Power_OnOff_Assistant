@@ -674,9 +674,31 @@ class PipelineOrchestrator:
                 for channel in self.ctx.enabled_channels
             ),
         )
-        result = run_legacy_power_test(request, self.emit, self.ctx.stop_event)
+        result = run_legacy_power_test(
+            request,
+            self.emit,
+            self.ctx.stop_event,
+            on_progress=self._report_legacy_power_progress,
+        )
         if not result.ok:
             raise RuntimeError(result.detail)
+
+    def _report_legacy_power_progress(self, completed: int, total: int) -> None:
+        """把后台开关机轮次进度安全投递到 Tk 主线程。"""
+        app = self.ctx.app
+        setter = _get_attr(app, "_set_power_test_progress", None)
+        if not callable(setter):
+            return
+
+        def update_on_ui() -> bool:
+            setter(completed, total)
+            return True
+
+        invoke_on_ui = _get_attr(app, "_invoke_pipeline_ui_action", None)
+        if callable(invoke_on_ui):
+            invoke_on_ui(update_on_ui)
+        else:
+            update_on_ui()
 
 
 __all__ = [

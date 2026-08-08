@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import unittest
+from io import StringIO
 from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -41,6 +42,32 @@ class FakeSerial:
 
 
 class SerialTransportTests(unittest.TestCase):
+    def test_log_file_prefixes_every_serial_line_and_joins_split_rx_chunks(self):
+        session = PySerialSession(SerialSettings("COM1"), serial_factory=lambda **_k: FakeSerial(**_k))
+        session._log_handle = StringIO()
+
+        with mock.patch(
+            "src.core.serial_transport.time.strftime",
+            return_value="2026-08-08_19:12:10",
+        ):
+            session._emit("RX", b"", "第一行\r\n第二")
+            session._emit("RX", b"", "行\n第三行\r")
+            session._emit("RX", b"", "\n末尾残留")
+            session._flush_pending_rx_log_line()
+            session._emit("TX", b"", "发送一\r\n发送二")
+            session._emit("STATE", b"", "串口已关闭")
+
+        self.assertEqual(
+            session._log_handle.getvalue(),
+            "2026-08-08_19:12:10 RX 第一行\n"
+            "2026-08-08_19:12:10 RX 第二行\n"
+            "2026-08-08_19:12:10 RX 第三行\n"
+            "2026-08-08_19:12:10 RX 末尾残留\n"
+            "2026-08-08_19:12:10 TX 发送一\n"
+            "2026-08-08_19:12:10 TX 发送二\n"
+            "2026-08-08_19:12:10 STATE 串口已关闭\n",
+        )
+
     def test_vlan_mapping_and_default_settings(self):
         self.assertEqual(vlan_to_serial_port("VLAN148"), "COM48")
         self.assertEqual(SerialSettings("COM1").baudrate, 115200)

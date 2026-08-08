@@ -546,6 +546,7 @@ class LegacyPowerTestDispatchTests(unittest.TestCase):
         prepare_request.return_value = prepared
         run_power_test.return_value = MagicMock(ok=True, detail="完成")
         ctx = _make_context(legacy_tool_root=Path("legacy-tool"))
+        ctx.app._invoke_pipeline_ui_action.side_effect = lambda action: action()
         emitted: List[str] = []
 
         PipelineOrchestrator(ctx, emitted.append)._run_legacy_power_test()
@@ -554,7 +555,13 @@ class LegacyPowerTestDispatchTests(unittest.TestCase):
         channels = tuple(prepare_request.call_args.args[1])
         self.assertEqual(channels[0].number, 2)
         self.assertEqual(channels[0].network_card_ip, "192.168.1.110")
-        run_power_test.assert_called_once_with(prepared, emitted.append, ctx.stop_event)
+        run_power_test.assert_called_once()
+        args = run_power_test.call_args.args
+        self.assertEqual(args, (prepared, emitted.append, ctx.stop_event))
+        progress_callback = run_power_test.call_args.kwargs["on_progress"]
+        progress_callback(12, 500)
+        ctx.app._set_power_test_progress.assert_called_once_with(12, 500)
+        ctx.app._invoke_pipeline_ui_action.assert_called_once()
 
 
 class SubTaskResultTests(unittest.TestCase):

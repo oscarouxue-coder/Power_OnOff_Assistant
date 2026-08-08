@@ -163,22 +163,28 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         source = inspect.getsource(LineCheckAssistant._build_ui)
         self.assertIn("textvariable=self.power_test_status_var", source)
+        self.assertIn("textvariable=self.power_test_progress_text_var", source)
+        self.assertIn('mode="determinate", maximum=1, value=0', source)
+        self.assertIn('style="PowerStatusIdle.TLabel"', source)
         self.assertIn('text="停止测试"', source)
         self.assertIn("command=self._stop_power_test", source)
         self.assertIn('state="disabled"', source)
 
     def test_power_test_status_controls_main_stop_button(self):
         status_var = Mock()
+        status_label = Mock()
         stop_button = Mock()
         context = SimpleNamespace(
             power_test_running=False,
             power_test_status_var=status_var,
+            power_test_status_label=status_label,
             stop_power_test_button=stop_button,
         )
 
         LineCheckAssistant._set_power_test_status(context, "running")
         self.assertTrue(context.power_test_running)
         status_var.set.assert_called_with("开关机测试状态：正在执行")
+        status_label.configure.assert_called_with(style="PowerStatusRunning.TLabel")
         stop_button.configure.assert_called_with(state="normal")
 
         LineCheckAssistant._set_power_test_status(context, "stopping")
@@ -186,12 +192,66 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         status_var.set.assert_called_with(
             "开关机测试状态：正在停止（等待当前子任务安全退出）"
         )
+        status_label.configure.assert_called_with(style="PowerStatusStopping.TLabel")
         stop_button.configure.assert_called_with(state="disabled")
 
         LineCheckAssistant._set_power_test_status(context, "completed")
         self.assertFalse(context.power_test_running)
         status_var.set.assert_called_with("开关机测试状态：已完成")
+        status_label.configure.assert_called_with(style="PowerStatusCompleted.TLabel")
         stop_button.configure.assert_called_with(state="disabled")
+
+    def test_power_test_progress_uses_configured_total_and_clamps_value(self):
+        progress = Mock()
+        progress_text = Mock()
+        context = SimpleNamespace(
+            progress=progress,
+            power_test_progress_text_var=progress_text,
+        )
+
+        LineCheckAssistant._set_power_test_progress(context, 12, 500)
+        progress.configure.assert_called_with(maximum=500, value=12)
+        progress_text.set.assert_called_with("开关机测试进度：12/500")
+
+        LineCheckAssistant._set_power_test_progress(context, 600, 500)
+        progress.configure.assert_called_with(maximum=500, value=500)
+        progress_text.set.assert_called_with("开关机测试进度：500/500")
+
+    def test_power_test_progress_resets_when_total_is_unknown(self):
+        progress = Mock()
+        progress_text = Mock()
+        context = SimpleNamespace(
+            progress=progress,
+            power_test_progress_text_var=progress_text,
+        )
+
+        LineCheckAssistant._set_power_test_progress(context, 9, 0)
+
+        progress.configure.assert_called_once_with(maximum=1, value=0)
+        progress_text.set.assert_called_once_with("开关机测试进度：等待开始")
+
+    def test_power_test_status_styles_are_prominent_and_state_specific(self):
+        """运行态使用高对比徽标，其余状态也有独立颜色语义。"""
+        import inspect
+
+        theme_source = inspect.getsource(LineCheckAssistant._configure_theme)
+        status_source = inspect.getsource(LineCheckAssistant._set_power_test_status)
+
+        self.assertIn('"padding": (14, 8)', theme_source)
+        self.assertIn('"font": (FONT_FAMILY, 11, "bold")', theme_source)
+        self.assertIn(
+            '"PowerStatusRunning.TLabel", background=COLOR_PRIMARY, foreground="#ffffff"',
+            theme_source,
+        )
+        for style_name in (
+            "PowerStatusIdle.TLabel",
+            "PowerStatusRunning.TLabel",
+            "PowerStatusStopping.TLabel",
+            "PowerStatusCompleted.TLabel",
+            "PowerStatusStopped.TLabel",
+            "PowerStatusFailed.TLabel",
+        ):
+            self.assertIn(style_name, status_source)
 
     def test_main_stop_button_delegates_to_pipeline_window(self):
         pipeline_window = Mock()

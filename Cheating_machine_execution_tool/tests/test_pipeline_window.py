@@ -28,14 +28,13 @@ class FakeApp:
 
 
 class BuildContextRegressionTests(unittest.TestCase):
-    def test_pipeline_defaults_to_environment_check_only(self) -> None:
-        """打开全流程窗口时，只默认勾选环境线路检查。"""
-        import inspect
-        import line_check_assistant.pipeline_window as pw_mod
+    def test_pipeline_defaults_to_no_selected_subtasks(self) -> None:
+        """打开全流程窗口时，7 个子任务必须全部不勾选。"""
+        from line_check_assistant.pipeline_window import PipelineWindow
+        from src.services.pipeline_orchestrator import SUBTASK_CODES
 
-        source = inspect.getsource(pw_mod.PipelineWindow._build_row)
-        self.assertIn('default_checked = code == "env_check"', source)
-        self.assertNotIn('"power_cycle", "serial_terminal", "test_item_execution"', source)
+        self.assertTrue(SUBTASK_CODES)
+        self.assertTrue(all(not PipelineWindow._default_checked(code) for code in SUBTASK_CODES))
 
     def test_pipeline_selection_uses_check_mark(self) -> None:
         """选中态必须显示标准勾号，未选中时保持空框。"""
@@ -119,6 +118,7 @@ class BuildContextRegressionTests(unittest.TestCase):
         failed_source = inspect.getsource(pw_mod.PipelineWindow._on_pipeline_failed)
 
         self.assertIn('_update_main_power_test_status("running")', start_source)
+        self.assertIn("_update_main_power_test_progress(0, 0)", start_source)
         self.assertIn('"stopped" if self._stop_requested else "completed"', complete_source)
         self.assertIn('"stopped" if self._stop_requested else "failed"', failed_source)
 

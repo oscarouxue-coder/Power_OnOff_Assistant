@@ -98,7 +98,23 @@ class _CompletedProcess:
             {
                 "type": "log",
                 "level": "info",
+                "message": "192.168.1.106登录成功",
+                "source": "logger",
+            }
+        )
+        message_queue.put(
+            {
+                "type": "log",
+                "level": "info",
                 "message": "192.168.1.105登录成功",
+                "source": "logger",
+            }
+        )
+        message_queue.put(
+            {
+                "type": "log",
+                "level": "info",
+                "message": "192.168.1.106登录成功",
                 "source": "logger",
             }
         )
@@ -123,6 +139,14 @@ class _CompletedProcess:
                 "type": "log",
                 "level": "info",
                 "message": "2026-08-08 15:37:41.904434: 通道9下挂的设备在第1次测试时正常",
+                "source": "result_file",
+            }
+        )
+        message_queue.put(
+            {
+                "type": "log",
+                "level": "info",
+                "message": "2026-08-08 15:37:42.904434: 通道5下挂的设备在第1次测试时正常",
                 "source": "result_file",
             }
         )
@@ -190,6 +214,81 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
                     (LegacyPowerChannel(5, "192.168.1.105"),),
                 )
 
+    def test_cycle_progress_uses_slowest_selected_channel(self) -> None:
+        completed_by_channel = {5: 0, 6: 0}
+
+        self.assertEqual(
+            service_module._overall_completed_cycle(
+                completed_by_channel,
+                "2026-08-08 20:00:00: 通道5下挂的设备在第3次测试时正常",
+                500,
+            ),
+            0,
+        )
+        self.assertEqual(
+            service_module._overall_completed_cycle(
+                completed_by_channel,
+                "2026-08-08 20:00:01: 通道6下挂的设备在第2次测试时正常",
+                500,
+            ),
+            2,
+        )
+        self.assertEqual(
+            service_module._overall_completed_cycle(
+                completed_by_channel,
+                "2026-08-08 20:00:02: 通道5下挂的设备在第9次测试时正常",
+                500,
+            ),
+            2,
+        )
+        self.assertEqual(
+            service_module._overall_completed_cycle(
+                completed_by_channel,
+                "2026-08-08 20:00:03: 通道6下挂的设备在第9次测试时正常",
+                500,
+            ),
+            9,
+        )
+
+    def test_cycle_progress_ignores_unselected_channel_and_clamps_total(self) -> None:
+        completed_by_channel = {5: 0}
+
+        self.assertIsNone(
+            service_module._overall_completed_cycle(
+                completed_by_channel,
+                "2026-08-08 20:00:00: 通道9下挂的设备在第1次测试时正常",
+                10,
+            )
+        )
+        self.assertEqual(
+            service_module._overall_completed_cycle(
+                completed_by_channel,
+                "2026-08-08 20:00:01: 通道5下挂的设备在第12次测试时正常",
+                10,
+            ),
+            10,
+        )
+
+    def test_cycle_start_confirms_previous_cycle_for_power_only_mode(self) -> None:
+        completed_by_channel = {9: 0}
+
+        self.assertEqual(
+            service_module._overall_completed_cycle(
+                completed_by_channel,
+                "*******通道 【9】 开始第1次测试*******",
+                500,
+            ),
+            0,
+        )
+        self.assertEqual(
+            service_module._overall_completed_cycle(
+                completed_by_channel,
+                "*******通道 【9】 开始第 4 次测试*******",
+                500,
+            ),
+            3,
+        )
+
     def test_log_filter_keeps_operator_signals_and_key_results(self) -> None:
         self.assertTrue(
             service_module._should_forward_legacy_log(
@@ -240,6 +339,7 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
             ping_target_ip="192.168.1.1",
         )
         emitted = []
+        progress = []
 
         original_dedup_seconds = service_module.LEGACY_LOG_DEDUP_SECONDS
         service_module.LEGACY_LOG_DEDUP_SECONDS = 0.0
@@ -249,6 +349,7 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
                 emitted.append,
                 _FakeEvent(),
                 process_context=_FakeProcessContext(),
+                on_progress=lambda completed, total: progress.append((completed, total)),
             )
         finally:
             service_module.LEGACY_LOG_DEDUP_SECONDS = original_dedup_seconds
@@ -257,6 +358,10 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
         self.assertIn("[旧工具Logs][WARNING] 旧Logs内容", emitted)
         self.assertEqual(
             sum("[旧工具Logs][INFO] 192.168.1.105登录成功" == line for line in emitted),
+            1,
+        )
+        self.assertEqual(
+            sum("[旧工具Logs][INFO] 192.168.1.106登录成功" == line for line in emitted),
             1,
         )
         self.assertIn(
@@ -277,6 +382,7 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
         )
         self.assertTrue(any("已启用精简日志" in line for line in emitted))
         self.assertIn("成功：1 个通道全部完成", emitted[-1])
+        self.assertEqual(progress, [(0, 1), (1, 1)])
 
     def test_result_file_success_line_is_forwarded_without_changing_file(self) -> None:
         expected_line = "2026-08-08 15:37:41.904434: 通道9下挂的设备在第1次测试时正常"

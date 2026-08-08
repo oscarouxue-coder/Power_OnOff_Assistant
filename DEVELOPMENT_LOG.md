@@ -2,6 +2,66 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-08 - 展示开关机测试轮次进度
+
+- 类型：功能 / 全流程执行 / 开关机测试 / 主界面 / 回归测试 / 文档
+- 背景：主界面“环境检查与开关机测试”已有确定型进度条，但它只服务于历史线路检查通道计数，无 GUI 开关机测试运行时不会变化。项目负责人要求按 `Auto_power_on_off_tool/config/config.ini` 的 `number_of_tests` 总次数和当前测试进度动态展示。
+- 完成内容：① 子任务7启动时使用本次从 `config.ini [ui_defaults]` 加载到请求中的 `number_of_tests` 设置进度总轮次并显示 `0/总轮次`；② 从旧结果文件的“通道N下挂的设备在第M次测试时正常”结论解析真实完成轮次；③ `only_power_off_on` 不写正常结论时，以进入第 N 轮确认前 N-1 轮完成，最终成功再补齐满格；④ 单通道逐轮推进，多通道按所有已选通道的最小完成轮次推进，避免快通道让进度提前满格；⑤ 进度通过编排器既有 UI 队列回到 Tk 主线程，不从后台线程直接操作控件；⑥ 全流程启动时重置为“等待开始”，停止/失败保留最后进度，全部成功强制显示满格；⑦ 主界面进度条右上方增加“开关机测试进度：当前/总轮次”文字；⑧ 增加轮次解析、仅上下电模式、跨通道聚合、数值钳制、状态重置及主线程委派回归，并将关键用例加入强制基线。
+- 修改文件：`.claude/plans/legacy_power_test_progress.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`、`Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_legacy_power_test_service.py`、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行 4 组相关专项 `unittest discover`、`python scripts/verify_baseline.py`、`git diff --check`。
+- 验证结果：旧工具无 GUI 服务 11 项、全流程编排器 41 项、主界面 93 项、全流程窗口 28 项专项测试均通过；`python scripts/verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、489 项单测、32 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面用 `number_of_tests` 小值（建议 3）运行单通道和双通道，确认主界面依次显示 `0/3 → 1/3 → 2/3 → 3/3`，双通道不会因单个快通道提前推进；真实样机结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-08 - 全流程默认不选择任何子任务
+
+- 类型：行为调整 / 全流程执行 / 防误操作 / 回归测试 / 文档
+- 背景：全流程窗口原先会自动勾选“环境线路检查”。项目负责人要求打开窗口时不默认勾选任何子任务，所有设备相关动作都由操作员按本次测试需要明确选择。
+- 完成内容：① 取消“环境线路检查”的默认选中特例；② 现有 7 个子任务首次打开时统一为空框；③ 保留手动勾选、必填项状态、二次确认、串口日志预启动、子任务1后120秒等待、停止事件和执行顺序；④ 增加统一的默认状态入口及覆盖全部 7 个子任务的回归断言；⑤ 将该用例纳入强制基线，防止后续再次引入自动勾选；⑥ 同步操作员说明、验收基线、项目状态和实施计划。
+- 修改文件：`.claude/plans/pipeline_default_no_selection.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_pipeline_window.py" -v`、`python scripts/verify_baseline.py`、`git diff --check`。
+- 验证结果：全流程窗口 28 项专项测试通过；`python scripts/verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、484 项单测、29 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面首次打开“全流程执行”，目视确认 7 行均为空框；再手动勾选任一子任务确认状态刷新和二次确认仍正常。真实桌面结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-08 - 串口原始日志逐行增加时间戳
+
+- 类型：功能 / 串口日志 / 底层传输 / 回归测试 / 文档
+- 背景：项目负责人要求所有落盘的串口打印每一行都自动增加 `年月日_时分秒` 前缀，例如 `2026-08-08_19:12:10 打印内容`。原实现按串口读取块写日志，一个读取块包含多行时只有第一行前有旧格式时间戳，半行分包也无法按逻辑行处理。
+- 完成内容：① 串口磁盘日志格式统一为 `YYYY-MM-DD_HH:MM:SS RX/TX/STATE/ERROR 内容`；② RX 增加按行缓冲，一个读取块含多行时逐行加时间戳，同一行跨多个读取块时先拼接再只加一次；③ TX 多行、STATE 和 ERROR 同样逐行加时间戳；④ TX/状态/错误到达或串口关闭前安全写出尚未换行的 RX 残留；⑤ 增加日志写锁，避免读取线程与发送线程同时写文件时互相穿插；⑥ 时间戳只写入磁盘文件，不修改串口原始字节历史、界面事件文本和升级标记判断；⑦ 首次专项测试发现遗漏 `re` 导入导致读取线程退出，补齐后复测通过；⑧ 新增跨块 CRLF/LF、末尾残留和多行 TX/STATE 回归并纳入强制基线。
+- 修改文件：`.claude/plans/serial_log_line_timestamps.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/src/core/serial_transport.py`、`Cheating_machine_execution_tool/tests/test_serial_transport.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_serial_transport.py" -v`、`python scripts\verify_baseline.py`、`git diff --check`。
+- 验证结果：串口传输 5 项专项测试通过；`python scripts\verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、484 项单测、28 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面查看新生成的串口日志，确认连续设备打印、多行同包和无换行末尾内容均按 `YYYY-MM-DD_HH:MM:SS` 逐行记录；真实样机结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-08 - 串口日志文件名增加日期
+
+- 类型：优化 / 串口日志 / 文件命名 / 回归测试 / 文档
+- 背景：串口终端原始日志当前按 `vlan名_COM口.log` 保存，项目负责人要求在原格式后增加年月日，示例为 `vlan112_COM12_20260808.log`，便于按日期归档和查找。
+- 完成内容：① 新增统一的串口日志路径生成函数，格式固定为 `<vlan>_<COM>_<YYYYMMDD>.log`；② 日期取打开串口监控时的本机日期；③ `open_monitor()` 统一调用该入口，因此手动打开、“打开全部”和全流程预启动均使用相同格式；④ 同一天重新打开相同 VLAN/COM 使用同名文件，下一日期打开生成新文件名；⑤ Tab 显示、VLAN→COM 映射、日志目录、串口参数和原始日志写入保持不变；⑥ 新增固定日期命名回归并纳入强制基线。
+- 修改文件：`.claude/plans/serial_log_daily_filename.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/src/ui/serial_terminal.py`、`Cheating_machine_execution_tool/tests/test_serial_terminal.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_serial_terminal.py" -v`、`python scripts\verify_baseline.py`、`git diff --check`。
+- 验证结果：串口终端 10 项专项测试通过；`python scripts\verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、483 项单测、27 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面打开 `vlan112 / COM12`，确认状态栏路径和日志目录中的文件名为当日 `vlan112_COM12_YYYYMMDD.log`，且串口内容持续正常追加。
+
+## 2026-08-08 - 修正交替 IP 登录日志去重
+
+- 类型：BUG 修复 / 执行日志 / 旧业务适配 / 回归测试 / 文档
+- 背景：上一版只合并相邻且同文的旧日志；真实运行按 `192.168.1.113 → 192.168.1.112 → 192.168.1.113 → 192.168.1.112` 交替输出“登录成功”时，相同 IP 中间隔着另一个 IP，仍会重复显示。
+- 完成内容：① 增加对 `<IP>登录成功` 的精确识别；② 在单次开关机测试运行期间按 IP 记录已显示结果，同一 IP 无论是否与其它 IP 交替，都只显示第一次；③ 不同 IP 各保留一条，避免丢失各通道首次登录结果；④ 下一次重新启动开关机测试会创建新的去重集合，不影响新一轮结果；⑤ 保留其它日志的既有2秒去重和连续同文去重；⑥ 回归测试关闭2秒时间去重并模拟 `105 → 106 → 105 → 106`，确认最终只显示105和106各一条。
+- 修改文件：`.claude/plans/legacy_power_log_noise_reduction.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`、`Cheating_machine_execution_tool/tests/test_legacy_power_test_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_legacy_power_test_service.py" -v`、`python scripts\verify_baseline.py`、`git diff --check`。
+- 验证结果：旧工具无 GUI 服务 8 项专项测试通过；`python scripts\verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、482 项单测、26 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：真实运行确认 `113/112/113/112` 最终只显示113和112各一条；真实样机结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-08 - 强化开关机测试状态显示
+
+- 类型：优化 / 主界面状态 / 视觉层级 / 回归测试 / 文档
+- 背景：主界面“开关机测试状态：正在执行”沿用 9 号灰色提示文字，项目负责人现场反馈存在感太低，不便于操作员快速确认当前是否仍在测试。
+- 完成内容：① 状态文字改为独立状态徽标，统一使用 11 号粗体和 `14×8` 内边距；② “正在执行”使用深绿色底白字高对比样式；③ 未运行、正在停止、已完成、已停止、执行失败分别使用灰、警告黄、成功绿、灰和危险红颜色语义；④ 状态变化时同步切换徽标样式，原状态文案、停止按钮启停和全流程业务逻辑保持不变；⑤ 新增六状态样式映射和高对比运行态回归，并加入强制基线。
+- 修改文件：`.claude/plans/main_power_test_status_stop_control.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p "test_app.py" -v`、`python scripts\verify_baseline.py`、`git diff --check`。
+- 验证结果：主界面 91 项专项测试通过；`python scripts\verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、482 项单测、26 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面目视确认“正在执行”深绿色徽标足够醒目，较长的“正在停止（等待当前子任务安全退出）”在当前窗口宽度下完整显示。
+
 ## 2026-08-08 - 合并连续重复的旧工具日志
 
 - 类型：BUG 修复 / 执行日志 / 旧业务适配 / 回归测试 / 文档

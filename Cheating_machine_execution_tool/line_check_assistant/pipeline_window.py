@@ -129,6 +129,11 @@ class PipelineWindow:
         """选中时显示标准勾选标记，未选中时保持空框。"""
         return "✓" if selected else ""
 
+    @staticmethod
+    def _default_checked(_code: str) -> bool:
+        """全流程窗口首次打开时不自动选择任何子任务。"""
+        return False
+
     def _draw_selection_indicator(self, code: str) -> None:
         """按当前 BooleanVar 重绘 14px 选择框。"""
         indicator = self._selection_indicators[code]
@@ -168,10 +173,8 @@ class PipelineWindow:
         row = Frame(parent, background=COLOR_SURFACE, padx=10, pady=8, relief="solid", borderwidth=1)
         row.pack(fill="x", pady=(0, 6))
 
-        # 默认只勾选环境线路检查；其余操作由操作员按本次测试需要选择，
-        # 避免打开窗口后误触发上/下电、升级、写参、ONU 注册、串口日志或测试项执行。
-        default_checked = code == "env_check"
-        var = BooleanVar(value=default_checked)
+        # 所有子任务都由操作员按本次测试需要明确选择，避免打开窗口后误执行。
+        var = BooleanVar(value=self._default_checked(code))
         self._check_vars[code] = var
 
         selector = Frame(row, background=COLOR_SURFACE)
@@ -363,6 +366,7 @@ class PipelineWindow:
         # 锁定按钮
         self._stop_requested = False
         self._set_running_ui(True)
+        self._update_main_power_test_progress(0, 0)
         self._update_main_power_test_status("running")
         # 启动后台线程
         self._running_thread = threading.Thread(
@@ -495,6 +499,11 @@ class PipelineWindow:
         setter = getattr(self.app, "_set_power_test_status", None)
         if callable(setter):
             setter(status)
+
+    def _update_main_power_test_progress(self, completed: int, total: int) -> None:
+        setter = getattr(self.app, "_set_power_test_progress", None)
+        if callable(setter):
+            setter(completed, total)
 
 
 def _get_attr(obj: Any, name: str, default: Any = None) -> Any:

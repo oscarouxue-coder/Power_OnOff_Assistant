@@ -276,6 +276,7 @@ class LineCheckAssistant(Tk):
         self.pipeline_window = None
         self.power_test_running = False
         self.power_test_status_var = StringVar(value="开关机测试状态：未运行")
+        self.power_test_progress_text_var = StringVar(value="开关机测试进度：等待开始")
         self.onu_registration_window = None
         self.onu_telnet_test_running = False
         self.onu_query_running = False
@@ -489,6 +490,13 @@ class LineCheckAssistant(Tk):
         style.configure("Muted.TLabel", background=COLOR_SURFACE, foreground=COLOR_MUTED)
         style.configure("Success.TLabel", background=COLOR_SUCCESS_BG, foreground=COLOR_SUCCESS, padding=(10, 6), font=(FONT_FAMILY, 9, "bold"))
         style.configure("Danger.TLabel", background=COLOR_DANGER_BG, foreground=COLOR_DANGER, padding=(10, 6), font=(FONT_FAMILY, 9, "bold"))
+        power_status_style = {"padding": (14, 8), "font": (FONT_FAMILY, 11, "bold")}
+        style.configure("PowerStatusIdle.TLabel", background=COLOR_SECONDARY, foreground=COLOR_MUTED, **power_status_style)
+        style.configure("PowerStatusRunning.TLabel", background=COLOR_PRIMARY, foreground="#ffffff", **power_status_style)
+        style.configure("PowerStatusStopping.TLabel", background=COLOR_WARNING_BG, foreground=COLOR_WARNING, **power_status_style)
+        style.configure("PowerStatusCompleted.TLabel", background=COLOR_SUCCESS_BG, foreground=COLOR_SUCCESS, **power_status_style)
+        style.configure("PowerStatusStopped.TLabel", background=COLOR_SECONDARY, foreground=COLOR_TEXT, **power_status_style)
+        style.configure("PowerStatusFailed.TLabel", background=COLOR_DANGER_BG, foreground=COLOR_DANGER, **power_status_style)
         style.configure("TButton", padding=(12, 7), font=(FONT_FAMILY, 9))
         style.configure("Primary.TButton", background=COLOR_PRIMARY, foreground="#ffffff", padding=(16, 9), font=(FONT_FAMILY, 10, "bold"))
         style.map("Primary.TButton", background=[("active", COLOR_PRIMARY_DARK), ("pressed", COLOR_PRIMARY_DARK)])
@@ -622,13 +630,20 @@ class LineCheckAssistant(Tk):
             text="检查全部启用通道。环境检查通过后，系统将自动开始执行开关机测试。",
             style="CardHint.TLabel",
         ).pack(anchor="w", pady=(3, 4))
+        power_test_status_row = ttk.Frame(run_copy, style="Surface.TFrame")
+        power_test_status_row.pack(fill="x", pady=(3, 8))
         self.power_test_status_label = ttk.Label(
-            run_copy,
+            power_test_status_row,
             textvariable=self.power_test_status_var,
-            style="CardHint.TLabel",
+            style="PowerStatusIdle.TLabel",
         )
-        self.power_test_status_label.pack(anchor="w", pady=(0, 4))
-        self.progress = ttk.Progressbar(run_copy, mode="determinate")
+        self.power_test_status_label.pack(side="left")
+        ttk.Label(
+            power_test_status_row,
+            textvariable=self.power_test_progress_text_var,
+            style="CardHint.TLabel",
+        ).pack(side="right", padx=(12, 0))
+        self.progress = ttk.Progressbar(run_copy, mode="determinate", maximum=1, value=0)
         self.progress.pack(fill="x")
         run_actions = ttk.Frame(run_card, style="Surface.TFrame")
         run_actions.pack(side="right", padx=(20, 0))
@@ -4139,12 +4154,39 @@ class LineCheckAssistant(Tk):
             "stopped": "开关机测试状态：已停止",
             "failed": "开关机测试状态：执行失败",
         }
+        styles = {
+            "idle": "PowerStatusIdle.TLabel",
+            "running": "PowerStatusRunning.TLabel",
+            "stopping": "PowerStatusStopping.TLabel",
+            "completed": "PowerStatusCompleted.TLabel",
+            "stopped": "PowerStatusStopped.TLabel",
+            "failed": "PowerStatusFailed.TLabel",
+        }
         if status not in labels:
             raise ValueError(f"未知开关机测试状态：{status}")
         self.power_test_running = status in {"running", "stopping"}
         self.power_test_status_var.set(labels[status])
+        self.power_test_status_label.configure(style=styles[status])
         self.stop_power_test_button.configure(
             state="normal" if status == "running" else "disabled"
+        )
+
+    def _set_power_test_progress(self, completed: int, total: int) -> None:
+        """显示开关机测试已完成轮次；调用方必须位于 Tk 主线程。"""
+        try:
+            total_cycles = int(total)
+            completed_cycles = int(completed)
+        except (TypeError, ValueError):
+            total_cycles = 0
+            completed_cycles = 0
+        if total_cycles <= 0:
+            self.progress.configure(maximum=1, value=0)
+            self.power_test_progress_text_var.set("开关机测试进度：等待开始")
+            return
+        completed_cycles = max(0, min(completed_cycles, total_cycles))
+        self.progress.configure(maximum=total_cycles, value=completed_cycles)
+        self.power_test_progress_text_var.set(
+            f"开关机测试进度：{completed_cycles}/{total_cycles}"
         )
 
     def _stop_power_test(self) -> None:

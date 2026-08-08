@@ -1,16 +1,28 @@
 import os
 import sys
 import unittest
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.ui.serial_terminal import SerialTerminalWindow
+from src.ui.serial_terminal import SerialTerminalWindow, build_serial_log_path
 
 
 class SerialTerminalPersistenceTests(unittest.TestCase):
+    def test_serial_log_path_includes_vlan_port_and_open_date(self):
+        path = build_serial_log_path(
+            Path(r"D:\Serial_Log"),
+            "vlan112",
+            "COM12",
+            date(2026, 8, 8),
+        )
+
+        self.assertEqual(path.name, "vlan112_COM12_20260808.log")
+        self.assertEqual(path.parent, Path(r"D:\Serial_Log"))
+
     def test_open_all_opens_every_current_tab_and_returns_failures(self):
         terminal = SerialTerminalWindow(Mock(), Mock(), Path(r"D:\Serial_Log"))
         terminal.tabs = {"vlan112": {}, "vlan113": {}, "vlan114": {}}
