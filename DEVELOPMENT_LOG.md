@@ -2,6 +2,26 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-08 - 删除执行日志说明行
+
+- 类型：优化 / 主界面布局 / 回归测试 / 文档
+- 背景：项目负责人要求删除主界面“执行日志”标题下方的“运行步骤、检查结果和异常信息”描述。
+- 完成内容：① 删除该提示标签，缩短日志卡片顶部占用；② “执行日志”标题、“清空日志”按钮、日志文本框、日志样式和写入逻辑保持不变；③ 扩展上一轮主界面精简强制回归，明确禁止该文案重新出现。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p test_app.py -v`、`python scripts\verify_baseline.py`、`git diff --check`。
+- 验证结果：主界面 89 项专项测试通过；`python scripts\verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、478 项单测、23 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面确认“执行日志”标题下方直接显示日志框，不再有提示行。
+
+## 2026-08-08 - 精简主界面顶部并移动管理员状态
+
+- 类型：优化 / 主界面布局 / 权限状态 / 回归测试 / 文档
+- 背景：项目负责人在截图中要求删除内容区顶部重复显示的“开关机测试环境搭建助手”和“配置测试通道、完成自动上/下电并检查全部线路”，并把右上角管理员权限状态移动到常用工具栏右侧的空白位置。
+- 完成内容：① 删除主界面内容区独立 header 和两行重复文案，Windows 标题栏名称保持不变；② 管理员权限检测逻辑不变，将状态标签移动到常用工具栏；③ 利用右侧 `pack` 顺序把状态放在“刷新串口”左侧，“刷新串口 / 刷新网卡”的视觉顺序保持不变；④ 管理员权限已就绪继续使用绿色成功样式，权限不足继续使用红色危险样式和原提示；⑤ 新增布局回归，锁定文案删除、权限状态位置、刷新按钮顺序与颜色语义，并纳入强制基线。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p test_app.py -v`、`python scripts\verify_baseline.py`、`git diff --check`。
+- 验证结果：主界面 89 项专项测试通过；`python scripts\verify_baseline.py` 全绿（42 个当前主程序 `.py` 编译、编译清单完整、478 项单测、23 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面确认内容区顶部两行文案已消失，管理员权限状态位于截图标注的常用工具栏空白区域，且刷新串口、刷新网卡按钮仍完整可见。真实桌面结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-08 - 全流程启动后自动隐藏配置窗口
 
 - 类型：优化 / 全流程窗口 / 主界面状态 / 回归测试 / 文档

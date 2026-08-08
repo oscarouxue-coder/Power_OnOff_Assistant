@@ -141,6 +141,22 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn(dut_entry, source)
         self.assertLess(source.index(serial_entry), source.index(dut_entry))
 
+    def test_main_header_copy_is_removed_and_admin_status_moves_to_toolbar(self):
+        """内容区不重复标题，管理员状态位于两个刷新按钮左侧。"""
+        import inspect
+
+        source = inspect.getsource(LineCheckAssistant._build_ui)
+        self.assertNotIn('text="开关机测试环境搭建助手"', source)
+        self.assertNotIn('text="配置测试通道、完成自动上/下电并检查全部线路"', source)
+        self.assertNotIn('text="运行步骤、检查结果和异常信息"', source)
+        self.assertNotIn("title_area", source)
+        refresh_adapter = 'text="刷新网卡", command=self._refresh_adapters'
+        refresh_serial = 'text="刷新串口", command=self._refresh_power_serial_ports'
+        admin_status = "text=admin_text"
+        self.assertLess(source.index(refresh_adapter), source.index(refresh_serial))
+        self.assertLess(source.index(refresh_serial), source.index(admin_status))
+        self.assertIn('style="Success.TLabel" if admin_ok else "Danger.TLabel"', source)
+
     def test_main_card_shows_power_test_status_and_stop_button(self):
         """主界面空白区显示状态，并承接从全流程窗口移出的停止按钮。"""
         import inspect

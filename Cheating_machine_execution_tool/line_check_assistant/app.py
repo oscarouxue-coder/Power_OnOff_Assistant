@@ -506,15 +506,8 @@ class LineCheckAssistant(Tk):
         root = ttk.Frame(self, style="App.TFrame", padding=(20, 16, 20, 18))
         root.pack(fill="both", expand=True)
 
-        header = ttk.Frame(root, style="App.TFrame")
-        header.pack(fill="x", pady=(0, 14))
-        title_area = ttk.Frame(header, style="App.TFrame")
-        title_area.pack(side="left", fill="x", expand=True)
-        ttk.Label(title_area, text="开关机测试环境搭建助手", style="Header.TLabel").pack(anchor="w")
-        ttk.Label(title_area, text="配置测试通道、完成自动上/下电并检查全部线路", style="Subtitle.TLabel").pack(anchor="w", pady=(3, 0))
         admin_ok = is_admin()
         admin_text = "管理员权限已就绪" if admin_ok else "缺少管理员权限，请右键以管理员身份运行"
-        ttk.Label(header, text=admin_text, style="Success.TLabel" if admin_ok else "Danger.TLabel").pack(side="right", anchor="n", pady=3)
 
         toolbar = ttk.Frame(root, style="Surface.TFrame", padding=(12, 10))
         toolbar.pack(fill="x", pady=(0, 14))
@@ -527,6 +520,11 @@ class LineCheckAssistant(Tk):
         ttk.Button(toolbar, text="DUT配置", command=self._open_dut_config_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="刷新网卡", command=self._refresh_adapters, style="Secondary.TButton").pack(side="right", padx=(0, 8))
         ttk.Button(toolbar, text="刷新串口", command=self._refresh_power_serial_ports, style="Secondary.TButton").pack(side="right", padx=(0, 8))
+        ttk.Label(
+            toolbar,
+            text=admin_text,
+            style="Success.TLabel" if admin_ok else "Danger.TLabel",
+        ).pack(side="right", padx=(0, 16))
 
         body = ttk.Frame(root, style="App.TFrame")
         body.pack(fill="both", expand=True)
@@ -655,7 +653,6 @@ class LineCheckAssistant(Tk):
         log_header.pack(fill="x")
         ttk.Label(log_header, text="执行日志", style="CardTitle.TLabel").pack(side="left")
         ttk.Button(log_header, text="清空日志", command=self._clear_log, style="Secondary.TButton").pack(side="right")
-        ttk.Label(log_card, text="运行步骤、检查结果和异常信息", style="CardHint.TLabel").pack(anchor="w", pady=(3, 9))
         self.log_text = Text(
             log_card,
             height=18,
