@@ -8,7 +8,9 @@ from typing import Mapping
 
 
 UI_DEFAULTS_SECTION = "ui_defaults"
+OTHER_CONFIG_SECTION = "other_config"
 TELNET_ENABLE_OPTION = "telnet_enable"
+COMMAND_FAIL_RETRY_INTERVAL_OPTION = "command_fail_retry_interval_time"
 REQUIRED_OPTIONS = (
     "communication_method",
     TELNET_ENABLE_OPTION,
@@ -59,6 +61,15 @@ class LegacyUiDefaultsStore:
         mirrored_value = "0" if bool(telnet_default_on) else "1"
         self._update_section({TELNET_ENABLE_OPTION: mirrored_value})
 
+    def update_command_fail_retry_interval_mirror(self, interval: object) -> None:
+        """同步旧工具 ``[other_config]`` 的同名重试间隔。"""
+        if not self.config_path.is_file():
+            return
+        self._update_section(
+            {COMMAND_FAIL_RETRY_INTERVAL_OPTION: str(interval).strip()},
+            section_name=OTHER_CONFIG_SECTION,
+        )
+
     @staticmethod
     def _validate(values: Mapping[str, object]) -> dict[str, str]:
         normalized = {
@@ -90,7 +101,11 @@ class LegacyUiDefaultsStore:
             raise ValueError("[ui_defaults] number_of_tests 不能小于 1")
         return normalized
 
-    def _update_section(self, updates: Mapping[str, str]) -> None:
+    def _update_section(
+        self,
+        updates: Mapping[str, str],
+        section_name: str = UI_DEFAULTS_SECTION,
+    ) -> None:
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         if self.config_path.is_file():
             with self.config_path.open("r", encoding="utf-8", newline="") as file:
@@ -99,13 +114,13 @@ class LegacyUiDefaultsStore:
             lines = []
 
         newline = "\r\n" if any(line.endswith("\r\n") for line in lines) else "\n"
-        section_start, section_end = _find_section_bounds(lines, UI_DEFAULTS_SECTION)
+        section_start, section_end = _find_section_bounds(lines, section_name)
         if section_start is None:
             if lines and not lines[-1].endswith(("\n", "\r")):
                 lines[-1] += newline
             if lines and lines[-1].strip():
                 lines.append(newline)
-            lines.append(f"[{UI_DEFAULTS_SECTION}]{newline}")
+            lines.append(f"[{section_name}]{newline}")
             section_start = len(lines) - 1
             section_end = len(lines)
 
@@ -164,7 +179,9 @@ def _find_section_bounds(
 
 
 __all__ = [
+    "COMMAND_FAIL_RETRY_INTERVAL_OPTION",
     "LegacyUiDefaultsStore",
+    "OTHER_CONFIG_SECTION",
     "REQUIRED_OPTIONS",
     "TELNET_ENABLE_OPTION",
     "UI_DEFAULTS_SECTION",

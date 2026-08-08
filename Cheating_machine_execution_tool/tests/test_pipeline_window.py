@@ -78,6 +78,36 @@ class BuildContextRegressionTests(unittest.TestCase):
         source = inspect.getsource(pw_mod.PipelineWindow._build)
         self.assertIn('text="刷新状态", command=self._refresh_statuses', source)
 
+    def test_pipeline_confirmation_uses_actual_prestart_order(self) -> None:
+        """确认框必须把已勾选的串口日志显示在实际执行顺序首位。"""
+        import inspect
+        import line_check_assistant.pipeline_window as pw_mod
+
+        source = inspect.getsource(pw_mod.PipelineWindow._on_start)
+        self.assertIn("actual_order = execution_order_for(selected)", source)
+        self.assertIn("for code in actual_order:", source)
+        self.assertIn("全流程开始时提前启动", source)
+
+    def test_pipeline_confirmation_shows_power_to_next_wait_constraint(self) -> None:
+        """勾选子任务 1 且有后续子任务时，确认框必须提示中间等待 120 秒。"""
+        import inspect
+        import line_check_assistant.pipeline_window as pw_mod
+
+        source = inspect.getsource(pw_mod.PipelineWindow._on_start)
+        self.assertIn('"power_cycle" in actual_order', source)
+        self.assertIn("子任务1完成后等待 120 秒，再开始后续已勾选子任务", source)
+
+    def test_pipeline_confirmation_does_not_call_numbered_items_pipelines(self) -> None:
+        """面向操作员的编号项统一称为子任务，不再显示管道1/后续管道。"""
+        import inspect
+        import line_check_assistant.pipeline_window as pw_mod
+
+        source = inspect.getsource(pw_mod.PipelineWindow._on_start)
+        self.assertNotIn("管道1", source)
+        self.assertNotIn("后续已勾选管道", source)
+        self.assertIn("子任务1", source)
+        self.assertIn("后续已勾选子任务", source)
+
     def test_build_context_does_not_use_getattr_for_module_constant(self) -> None:
         """_build_context 必须从 app 模块取 TEST_ITEM_CONFIG_PATH,不能 ``_get_attr(app, ...)``。
 

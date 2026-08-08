@@ -82,6 +82,27 @@ class LegacyUiDefaultsStoreTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "number_of_tests"):
                 store.validate(_valid_values(number_of_tests="0"))
 
+    def test_update_retry_interval_preserves_other_config_content(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "config.ini"
+            config_path.write_text(
+                "[ui_defaults]\n"
+                "telnet_enable = 0\n\n"
+                "[other_config]\n"
+                "# keep retry comment\n"
+                "command_fail_retry_interval_time = 60\n"
+                "telnet_enable_fail_retry_times = 5\n",
+                encoding="utf-8",
+            )
+
+            LegacyUiDefaultsStore(config_path).update_command_fail_retry_interval_mirror(10)
+            content = config_path.read_text(encoding="utf-8")
+
+        self.assertIn("command_fail_retry_interval_time = 10", content)
+        self.assertIn("# keep retry comment", content)
+        self.assertIn("telnet_enable_fail_retry_times = 5", content)
+        self.assertIn("telnet_enable = 0", content)
+
 
 if __name__ == "__main__":
     unittest.main()

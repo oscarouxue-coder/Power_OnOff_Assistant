@@ -2,8 +2,8 @@
 
 主界面「检查并执行测试」按钮按下后,弹出本窗口,操作员可勾选 7 个子任务(自动上/下电
 / 环境线路检查 / 样机升级 / 写样机参数 / ONU 注册 / 串口日志 / 测试项配置),每行右侧展示「必填项当前
-状态」(就绪 / 缺项),「去配置」按钮跳到主程序对应子窗口;底部「开始执行」按 1→7
-固定顺序串行执行勾选子任务,任一失败(串口日志除外)→ 整个管道停止。
+状态」(就绪 / 缺项),「去配置」按钮跳到主程序对应子窗口;底部「开始执行」若勾选
+串口日志则先预启动终端，其余子任务按 1→7 相对顺序串行执行,任一失败(串口日志除外)→ 整个全流程停止。
 
 入口:主程序 ``LineCheckAssistant._start_all_checks`` 改为 ``_open_pipeline_window``,
 构造 ``PipelineWindow(self)`` 后自动弹窗。
@@ -31,6 +31,7 @@ from src.services.pipeline_orchestrator import (
     SubTaskResult,
     SubTaskStatus,
     compute_all_subtask_statuses,
+    execution_order_for,
 )
 
 
@@ -92,8 +93,9 @@ class PipelineWindow:
             content,
             text=(
                 "勾选需要执行的子任务;必填项未就绪时整行红字提示,可点「去配置」"
-                "跳到对应子窗口填写。点击「开始执行」后,按 1→7 固定顺序串行执行,"
-                "任一失败(串口日志除外)将停止整个管道。"
+                "跳到对应子窗口填写。若勾选串口日志，将在全流程开始时先打开；"
+                "其余子任务按 1→7 相对顺序串行执行,"
+                "任一失败(串口日志除外)将停止整个全流程。"
             ),
             background=COLOR_BG,
             foreground=COLOR_MUTED,
@@ -331,7 +333,14 @@ class PipelineWindow:
             if not proceed:
                 return
         # 二次确认
-        confirm_lines: List[str] = [f"  ✓ {SUBTASK_LABELS[code]}" for code in SUBTASK_CODES if code in selected]
+        confirm_lines: List[str] = []
+        actual_order = execution_order_for(selected)
+        for code in actual_order:
+            suffix = "（全流程开始时提前启动）" if code == "serial_terminal" else ""
+            confirm_lines.append(f"  ✓ {SUBTASK_LABELS[code]}{suffix}")
+        power_to_next_wait_note = ""
+        if "power_cycle" in actual_order and actual_order.index("power_cycle") + 1 < len(actual_order):
+            power_to_next_wait_note = "\n\n执行约束：子任务1完成后等待 120 秒，再开始后续已勾选子任务。"
         power_var = _get_attr(ctx.app, "power_serial_var", None)
         power_serial_port = power_var.get().strip() if power_var is not None and hasattr(power_var, "get") else ""
         requires_manual_reboot = "power_cycle" in selected or (
@@ -345,8 +354,9 @@ class PipelineWindow:
             )
         proceed = messagebox.askyesno(
             "确认全流程执行",
-            "将按以下顺序执行勾选的子任务:\n"
+            "将按以下实际顺序执行勾选的子任务:\n"
             + "\n".join(confirm_lines)
+            + power_to_next_wait_note
             + manual_reboot_note
             + "\n\n是否继续?",
             parent=self.window,
@@ -402,7 +412,7 @@ class PipelineWindow:
         self._set_running_ui(False)
         messagebox.showerror(
             "全流程执行失败",
-            f"管道异常终止:{exc}",
+            f"全流程异常终止:{exc}",
             parent=self.window,
         )
         self._refresh_statuses()
@@ -410,13 +420,13 @@ class PipelineWindow:
     def _on_stop(self) -> None:
         if self._orchestrator is not None:
             self._orchestrator.request_stop()
-            self._emit_to_main_log("[窗口] 用户点击「停止」;管道将在当前子任务结束后终止")
+            self._emit_to_main_log("[窗口] 用户点击「停止」;全流程将在当前子任务结束后终止")
 
     def _on_close(self) -> None:
         if self._running_thread and self._running_thread.is_alive():
             if not messagebox.askyesno(
                 "全流程执行正在进行",
-                "管道仍在运行,确认关闭窗口?操作员在主程序后台线程可能继续运行。",
+                "全流程仍在运行,确认关闭窗口?操作员在主程序后台线程可能继续运行。",
                 parent=self.window,
             ):
                 return

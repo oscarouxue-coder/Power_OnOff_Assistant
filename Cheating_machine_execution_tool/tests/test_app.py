@@ -103,6 +103,38 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         config_window.lift.assert_called_once_with()
         config_window.focus_force.assert_called_once_with()
 
+    def test_dut_config_toolbar_entry_is_next_to_serial_log(self):
+        """DUT 配置入口必须位于主界面串口日志右侧。"""
+        import inspect
+
+        source = inspect.getsource(LineCheckAssistant._build_ui)
+        serial_entry = 'text="串口日志", command=self._open_serial_log_module'
+        dut_entry = 'text="DUT配置", command=self._open_dut_config_module'
+
+        self.assertIn(serial_entry, source)
+        self.assertIn(dut_entry, source)
+        self.assertLess(source.index(serial_entry), source.index(dut_entry))
+
+    def test_dut_config_entry_reuses_open_window(self):
+        dut_window = Mock()
+        dut_window.winfo_exists.return_value = True
+        context = SimpleNamespace(dut_config_window=dut_window)
+
+        LineCheckAssistant._open_dut_config_module(context)
+
+        dut_window.deiconify.assert_called_once_with()
+        dut_window.lift.assert_called_once_with()
+        dut_window.focus_force.assert_called_once_with()
+
+    def test_dut_config_placeholder_explicitly_skips_ubus_dispatch(self):
+        """占位入口不得在逻辑未确认前下发 UBUS 命令。"""
+        import inspect
+
+        source = inspect.getsource(LineCheckAssistant._open_dut_config_module)
+        self.assertIn("本次未下发任何设备命令", source)
+        self.assertNotIn("UbusHttpClient(", source)
+        self.assertNotIn("bbfdm.", source)
+
     def test_reveal_completed_dialog_flushes_layout_before_showing(self):
         dialog = Mock()
 
@@ -255,6 +287,39 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         LineCheckAssistant._open_serial_log_module(context)
 
         context.serial_terminal.show.assert_called_once_with(["vlan101"])
+
+    def test_pipeline_serial_logs_show_then_open_all(self):
+        calls = []
+        terminal = Mock()
+        terminal.show.side_effect = lambda targets: calls.append(("show", targets))
+        terminal.open_all.side_effect = lambda: calls.append(("open_all",)) or ()
+        context = SimpleNamespace(
+            serial_terminal=terminal,
+            _selected_upgrade_vlans=Mock(return_value=["vlan112", "vlan113"]),
+            _log=Mock(),
+        )
+
+        LineCheckAssistant._open_pipeline_serial_logs(context)
+
+        self.assertEqual(calls, [("show", ["vlan112", "vlan113"]), ("open_all",)])
+        context._log.assert_called_once()
+        self.assertIn("已执行打开全部，共 2 个通道", context._log.call_args.args[0])
+
+    def test_pipeline_serial_logs_raise_when_any_port_cannot_open(self):
+        terminal = Mock()
+        terminal.open_all.return_value = ("vlan113",)
+        context = SimpleNamespace(
+            serial_terminal=terminal,
+            _selected_upgrade_vlans=Mock(return_value=["vlan112", "vlan113"]),
+            _log=Mock(),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "部分串口未能打开：vlan113"):
+            LineCheckAssistant._open_pipeline_serial_logs(context)
+
+        terminal.show.assert_called_once_with(["vlan112", "vlan113"])
+        terminal.open_all.assert_called_once_with()
+        self.assertIn("失败通道：vlan113", context._log.call_args.args[0])
 
     def test_onu_registration_entry_reuses_open_window(self):
         onu_registration_window = Mock()

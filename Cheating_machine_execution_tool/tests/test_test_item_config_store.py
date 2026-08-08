@@ -136,6 +136,36 @@ class TestItemConfigStoreTests(unittest.TestCase):
             self.assertIn("telnet_enable = 1", disabled_content)
             self.assertIn("# keep this comment", disabled_content)
 
+    def test_save_mirrors_retry_interval_to_legacy_other_config(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_dir = Path(temp_dir)
+            legacy_config_path = config_dir / "config.ini"
+            legacy_config_path.write_text(
+                "[ui_defaults]\n"
+                "telnet_enable = 0\n\n"
+                "[other_config]\n"
+                "# keep interval comment\n"
+                "command_fail_retry_interval_time = 60\n"
+                "command_fail_retry_success_times = 10\n",
+                encoding="utf-8",
+            )
+            store = TestItemConfigStore(config_dir / "test_project_config.ini")
+
+            store.save(
+                TestProjectConfig(
+                    order=OrderConfig(command_fail_retry_interval_time=25)
+                )
+            )
+            test_project_content = (config_dir / "test_project_config.ini").read_text(
+                encoding="utf-8"
+            )
+            legacy_content = legacy_config_path.read_text(encoding="utf-8")
+
+        self.assertIn("command_fail_retry_interval_time = 25", test_project_content)
+        self.assertIn("command_fail_retry_interval_time = 25", legacy_content)
+        self.assertIn("# keep interval comment", legacy_content)
+        self.assertIn("command_fail_retry_success_times = 10", legacy_content)
+
     def test_save_writes_command_fail_retry_interval_at_order_section_top(self):
         # [order] 段顶部必须是 command_fail_retry_interval_time,然后才是各命令。
         # configparser 写入顺序按 dict 插入顺序保证(Python 3.7+)。

@@ -268,6 +268,7 @@ class LineCheckAssistant(Tk):
         self.parameter_cancel_event = None
         self.serial_session_manager = SerialSessionManager()
         self.serial_terminal = SerialTerminalWindow(self, self.serial_session_manager, self._serial_log_directory())
+        self.dut_config_window = None
         self.test_item_config_window = None
         self.pipeline_window = None
         self.onu_registration_window = None
@@ -518,6 +519,7 @@ class LineCheckAssistant(Tk):
         ttk.Button(toolbar, text="写样机参数", command=self._open_sample_parameter_writer, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="ONU注册", command=self._open_onu_registration_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="串口日志", command=self._open_serial_log_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(toolbar, text="DUT配置", command=self._open_dut_config_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar, text="刷新网卡", command=self._refresh_adapters, style="Secondary.TButton").pack(side="right", padx=(0, 8))
         ttk.Button(toolbar, text="刷新串口", command=self._refresh_power_serial_ports, style="Secondary.TButton").pack(side="right", padx=(0, 8))
 
@@ -2772,6 +2774,7 @@ class LineCheckAssistant(Tk):
             reset_dirty()
             self._log(
                 f"[测试项配置] 已保存 {len(captured.order.items)} 条测试项命令，"
+                f"同步指令重试间隔 {captured.order.command_fail_retry_interval_time} 秒，"
                 f"并更新 {len(captured_legacy_defaults)} 项旧工具参数"
             )
             messagebox.showinfo(
@@ -3486,6 +3489,87 @@ class LineCheckAssistant(Tk):
             return
         self.serial_terminal.show(targets)
 
+    def _open_pipeline_serial_logs(self, vlans: list[str] | None = None) -> None:
+        """全流程专用：显示串口日志窗口，并打开窗口中的全部串口。"""
+        targets = vlans or self._selected_upgrade_vlans()
+        if not targets:
+            raise RuntimeError("没有已勾选通道，无法打开串口日志")
+        self.serial_terminal.show(targets)
+        failed = self.serial_terminal.open_all()
+        ports = ", ".join(
+            f"{vlan.lower()}/{vlan_to_serial_port(vlan)}"
+            for vlan in targets
+        )
+        if failed:
+            failed_text = ", ".join(failed)
+            self._log(
+                f"[全流程][串口日志] 已执行打开全部；失败通道：{failed_text}；"
+                f"目标：{ports}"
+            )
+            raise RuntimeError(f"部分串口未能打开：{failed_text}")
+        self._log(
+            f"[全流程][串口日志] 已执行打开全部，共 {len(targets)} 个通道：{ports}"
+        )
+
+    def _open_dut_config_module(self) -> None:
+        """打开 DUT 配置功能入口。
+
+        当前只建立 UI 边界；后续再在 service / core 层接入 UBUS 配置逻辑。
+        """
+        if self.dut_config_window is not None and self.dut_config_window.winfo_exists():
+            self.dut_config_window.deiconify()
+            self.dut_config_window.lift()
+            self.dut_config_window.focus_force()
+            return
+
+        dialog = Toplevel(self)
+        self.dut_config_window = dialog
+        dialog.title("DUT配置")
+        dialog.geometry("620x300")
+        dialog.minsize(620, 300)
+        dialog.transient(self)
+        dialog.configure(background=COLOR_BG)
+
+        content = Frame(dialog, padx=24, pady=22, background=COLOR_BG)
+        content.pack(fill="both", expand=True)
+        Label(
+            content,
+            text="DUT配置",
+            font=(FONT_FAMILY, 18, "bold"),
+            background=COLOR_BG,
+            foreground=COLOR_TEXT,
+        ).pack(anchor="w")
+        Label(
+            content,
+            text="计划使用 UBUS 实现 DUT 配置，具体配置项和执行逻辑待后续完善。",
+            background=COLOR_BG,
+            foreground=COLOR_TEXT,
+            anchor="w",
+            justify="left",
+        ).pack(fill="x", anchor="w", pady=(18, 8))
+        Label(
+            content,
+            text="当前页面仅作为功能入口，不会连接 DUT，也不会下发任何 UBUS 命令。",
+            background=COLOR_BG,
+            foreground=COLOR_MUTED,
+            anchor="w",
+            justify="left",
+        ).pack(fill="x", anchor="w")
+
+        def close_dialog() -> None:
+            dialog.destroy()
+            if self.dut_config_window is dialog:
+                self.dut_config_window = None
+
+        ttk.Button(
+            content,
+            text="关闭",
+            command=close_dialog,
+            style="Secondary.TButton",
+        ).pack(side="bottom", anchor="e")
+        dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+        self._log("[DUT配置] 已打开功能入口；UBUS 实现待完善，本次未下发任何设备命令。")
+
     def _rebuild_channel_config_rows(self) -> None:
         for child in self.channel_table.winfo_children():
             child.destroy()
@@ -3992,7 +4076,7 @@ class LineCheckAssistant(Tk):
         旧实现:直接调 ``_run_checks``(仅做已勾选通道的 ping 通过性检查)。
         新实现:弹「全流程执行」窗口,操作员勾选 7 个子任务(自动上/下电 / 环境线路检查 /
         样机升级 / 写样机参数 / ONU 注册 / 串口日志 / 测试项配置)后,按 1→7 顺序串行执行,
-        任一失败(串口日志除外)→ 整个管道停止。
+        任一失败(串口日志除外)→ 整个全流程停止。
         ``_run_checks`` / ``_check_worker`` 仍保留供单通道 ping 检查场景使用。
 
         注意:``self.pipeline_window`` 是 ``PipelineWindow`` 包装器(持有 ``self.window`` 这个 Toplevel),

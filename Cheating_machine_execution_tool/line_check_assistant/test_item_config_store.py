@@ -214,21 +214,31 @@ class TestItemConfigStore:
     def save(self, config: TestProjectConfig) -> None:
         parser = configparser.RawConfigParser()
         parser.optionxform = str
+        dumped_order = self._dump_order(config.order)
         parser[TELNET_SECTION] = self._dump_telnet(config.telnet)
-        parser[ORDER_SECTION] = self._dump_order(config.order)
+        parser[ORDER_SECTION] = dumped_order
         parser[CONNECT_WIFI_SECTION] = self._dump_connect_wifi(config.connect_wifi)
         parser[PROJECT_INFO_SECTION] = self._dump_project_info(config.project_info)
 
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         with self.config_path.open("w", encoding="utf-8") as file:
             parser.write(file)
-        self._sync_legacy_telnet_enable(config.telnet.telnet_default_on)
+        self._sync_legacy_values(
+            config.telnet.telnet_default_on,
+            dumped_order[ORDER_GLOBAL_RETRY_INTERVAL_KEY],
+        )
 
-    def _sync_legacy_telnet_enable(self, telnet_default_on: object) -> None:
-        """把反向值镜像到旧工具 config.ini，并保留该文件其它原始内容。"""
+    def _sync_legacy_values(
+        self,
+        telnet_default_on: object,
+        command_fail_retry_interval: object,
+    ) -> None:
+        """把共用值镜像到旧工具 config.ini，并保留其它原始内容。"""
         legacy_config_path = self.config_path.with_name(LEGACY_UI_CONFIG_FILENAME)
-        LegacyUiDefaultsStore(legacy_config_path).update_telnet_enable_mirror(
-            telnet_default_on
+        legacy_store = LegacyUiDefaultsStore(legacy_config_path)
+        legacy_store.update_telnet_enable_mirror(telnet_default_on)
+        legacy_store.update_command_fail_retry_interval_mirror(
+            command_fail_retry_interval
         )
 
     # -- 解析 ------------------------------------------------------------

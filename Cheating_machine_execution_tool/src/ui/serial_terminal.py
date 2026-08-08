@@ -78,7 +78,7 @@ class SerialTerminalWindow:
         self.window.minsize(_MIN_WIDTH, _MIN_HEIGHT)
         toolbar = Frame(self.window)
         toolbar.pack(fill="x", padx=12, pady=8)
-        ttk.Button(toolbar, text="打开全部", command=lambda: [self.open_monitor(v) for v in list(self.tabs)]).pack(side="left")
+        ttk.Button(toolbar, text="打开全部", command=self.open_all).pack(side="left")
         ttk.Button(toolbar, text="停止全部", command=self.stop_all).pack(side="left", padx=8)
         # 右侧:日志目录选择(只读展示 + 浏览/打开文件夹)
         self.log_dir_var = StringVar(value=str(self.log_dir))
@@ -125,10 +125,10 @@ class SerialTerminalWindow:
         self.tabs[normalized] = {"port": port, "frame": frame, "status": status, "output": output, "command": command, "owner": None, "session": None, "subscriber": None}
         self.notebook.add(frame, text=f"{normalized} / {port}")
 
-    def open_monitor(self, vlan: str) -> None:
+    def open_monitor(self, vlan: str) -> bool:
         item = self.tabs[vlan]
         if item["session"] is not None:
-            return
+            return True
         try:
             self.log_dir.mkdir(parents=True, exist_ok=True)
             owner = f"terminal:{id(self)}:{item['port']}"
@@ -138,10 +138,20 @@ class SerialTerminalWindow:
             session.subscribe(subscriber)
             item.update(owner=owner, session=session, subscriber=subscriber)
             item["status"].set(f"{item['port']} 监控中，日志：{path}")
+            return True
         except queue.Full:
-            pass
+            return False
         except Exception as exc:
             messagebox.showerror("打开串口失败", str(exc), parent=self.window)
+            return False
+
+    def open_all(self) -> tuple[str, ...]:
+        """打开当前窗口中的全部串口，返回未能打开的 VLAN。"""
+        failed = []
+        for vlan in tuple(self.tabs):
+            if not self.open_monitor(vlan):
+                failed.append(vlan)
+        return tuple(failed)
 
     def attach_upgrade(self, vlan: str, session, log_path: Path) -> None:
         opened_by_upgrade = self.window is None or not self.window.winfo_exists()

@@ -2,7 +2,7 @@
 
 覆盖:
 - 7 个 sub-task 状态评估(ready / missing / summary)
-- run() 按 1→7 顺序执行
+- run() 先预启动串口日志，其余任务按 1→7 相对顺序执行
 - NON_FATAL_SUBTASKS 失败不阻塞后续
 - 致命子任务失败 → 抛 PipelineError + 停止后续
 - request_stop() 阻止后续子任务
@@ -39,6 +39,7 @@ from src.services.pipeline_orchestrator import (
     SubTaskResult,
     SubTaskStatus,
     compute_all_subtask_statuses,
+    execution_order_for,
 )
 
 
@@ -295,7 +296,7 @@ class ComputeSubTaskStatusTests(unittest.TestCase):
 
 
 class PipelineRunOrderTests(unittest.TestCase):
-    """验证 run() 按 1→7 顺序执行,以及 NON_FATAL_SUBTASKS 失败不阻塞。"""
+    """验证串口日志预启动、其余任务顺序及非致命失败边界。"""
 
     @staticmethod
     def _patch_all_subtasks():
@@ -309,6 +310,9 @@ class PipelineRunOrderTests(unittest.TestCase):
         from contextlib import ExitStack
         method_mocks = {code: MagicMock() for code in SUBTASK_CODES}
         stack = ExitStack()
+        stack.enter_context(
+            patch.object(PipelineOrchestrator, "POWER_TO_NEXT_WAIT_SECONDS", 0)
+        )
         for code, mock_obj in method_mocks.items():
             stack.enter_context(
                 patch.object(PipelineOrchestrator, f"_run_{code}", mock_obj)
@@ -329,12 +333,95 @@ class PipelineRunOrderTests(unittest.TestCase):
         # 7 个结果都成功
         self.assertEqual(len(results), 7)
         self.assertTrue(all(r.ok for r in results))
-        self.assertEqual([result.code for result in results], list(SUBTASK_CODES))
-        # 主日志含「开始 / 结束 子任务」 + 「管道开始 / 结束」
-        self.assertIn("全流程执行管道开始", "".join(emit_msgs))
-        self.assertIn("全流程执行管道结束", "".join(emit_msgs))
+        expected_order = [
+            "serial_terminal",
+            "power_cycle",
+            "env_check",
+            "sample_upgrade",
+            "sample_parameter_write",
+            "onu_registration",
+            "test_item_execution",
+        ]
+        self.assertEqual([result.code for result in results], expected_order)
+        # 主日志含「开始 / 结束 子任务」 + 「全流程开始 / 结束」
+        self.assertIn("全流程执行开始", "".join(emit_msgs))
+        self.assertIn("全流程执行结束", "".join(emit_msgs))
         for code in SUBTASK_CODES:
             self.assertIn(f"开始子任务 {SUBTASK_LABELS[code]}", "".join(emit_msgs))
+        self.assertIn("全流程预启动子任务 6. 串口日志", "".join(emit_msgs))
+
+    def test_execution_order_keeps_serial_unselected_tasks_unchanged(self) -> None:
+        self.assertEqual(
+            execution_order_for({"power_cycle", "env_check", "test_item_execution"}),
+            ("power_cycle", "env_check", "test_item_execution"),
+        )
+
+    def test_power_selected_waits_120_seconds_before_any_next_task(self) -> None:
+        ctx = _make_context()
+        ctx.stop_event = MagicMock()
+        ctx.stop_event.is_set.return_value = False
+        ctx.stop_event.wait.return_value = False
+        events: List[str] = []
+
+        with patch.object(
+            PipelineOrchestrator,
+            "_run_power_cycle",
+            side_effect=lambda: events.append("power_cycle"),
+        ), patch.object(
+            PipelineOrchestrator,
+            "_run_test_item_execution",
+            side_effect=lambda: events.append("test_item_execution"),
+        ):
+            PipelineOrchestrator(ctx, events.append).run({"power_cycle", "test_item_execution"})
+
+        ctx.stop_event.wait.assert_called_once_with(120.0)
+        self.assertLess(events.index("power_cycle"), events.index("test_item_execution"))
+        self.assertIn("等待 120 秒后再开始后续子任务", "".join(events))
+        self.assertIn("120 秒等待完成", "".join(events))
+
+    def test_power_only_does_not_wait_after_pipeline_finishes(self) -> None:
+        ctx = _make_context()
+        ctx.stop_event = MagicMock()
+        ctx.stop_event.is_set.return_value = False
+
+        with patch.object(PipelineOrchestrator, "_run_power_cycle"):
+            PipelineOrchestrator(ctx, lambda _message: None).run({"power_cycle"})
+
+        ctx.stop_event.wait.assert_not_called()
+
+    def test_power_to_next_wait_can_be_stopped(self) -> None:
+        ctx = _make_context()
+        ctx.stop_event = MagicMock()
+        ctx.stop_event.is_set.return_value = False
+        ctx.stop_event.wait.return_value = True
+
+        with patch.object(PipelineOrchestrator, "_run_power_cycle") as run_power, patch.object(
+            PipelineOrchestrator, "_run_env_check"
+        ) as run_next:
+            messages: List[str] = []
+            PipelineOrchestrator(ctx, messages.append).run({"power_cycle", "env_check"})
+
+        run_power.assert_called_once_with()
+        run_next.assert_not_called()
+        self.assertIn("等待期间已请求停止", "".join(messages))
+
+    def test_serial_terminal_prestart_is_marshaled_to_tk_ui_thread(self) -> None:
+        open_serial = MagicMock()
+        invoke_on_ui = MagicMock(side_effect=lambda action: action())
+        ctx = _make_context()
+        ctx.app = type(
+            "SerialApp",
+            (),
+            {
+                "_open_pipeline_serial_logs": open_serial,
+                "_invoke_pipeline_ui_action": invoke_on_ui,
+            },
+        )()
+
+        PipelineOrchestrator(ctx, lambda _message: None)._run_serial_terminal()
+
+        invoke_on_ui.assert_called_once()
+        open_serial.assert_called_once()
 
     def test_run_only_selected_subtasks(self) -> None:
         ctx = _make_context()
@@ -362,7 +449,8 @@ class PipelineRunOrderTests(unittest.TestCase):
             with self.assertRaises(PipelineError) as ctx_exc:
                 orchestrator.run(set(SUBTASK_CODES))
         self.assertIn("sample_upgrade", str(ctx_exc.exception))
-        # env_check / power_cycle 已执行
+        # 串口日志已预启动，然后 power_cycle / env_check 已执行
+        method_mocks["serial_terminal"].assert_called_once()
         method_mocks["env_check"].assert_called_once()
         method_mocks["power_cycle"].assert_called_once()
         # 升级失败后,后续子任务(写参 / ONU / 串口 / 测试项)不执行
@@ -371,7 +459,7 @@ class PipelineRunOrderTests(unittest.TestCase):
         method_mocks["test_item_execution"].assert_not_called()
         # 主日志含失败消息(编号 3 = sample_upgrade)
         self.assertIn("子任务 3. 样机升级 失败", "".join(emit_msgs))
-        self.assertIn("全流程执行管道因失败提前终止", "".join(emit_msgs))
+        self.assertIn("全流程执行因失败提前终止", "".join(emit_msgs))
 
     def test_non_fatal_subtask_failure_continues(self) -> None:
         """「串口日志」失败不阻塞后续。"""
@@ -406,9 +494,16 @@ class PipelineRunOrderTests(unittest.TestCase):
             orchestrator_ref.append(PipelineOrchestrator(ctx, emit_msgs.append))
             orchestrator_ref[0].run(set(SUBTASK_CODES))
 
-        # power_cycle 已执行;后续全部跳过
+        # 串口日志先预启动，power_cycle 执行后请求停止；后续全部跳过。
+        method_mocks["serial_terminal"].assert_called_once()
         method_mocks["power_cycle"].assert_called_once()
-        for code in SUBTASK_CODES[1:]:
+        for code in (
+            "env_check",
+            "sample_upgrade",
+            "sample_parameter_write",
+            "onu_registration",
+            "test_item_execution",
+        ):
             method_mocks[code].assert_not_called()
         self.assertIn("已请求停止", "".join(emit_msgs))
 

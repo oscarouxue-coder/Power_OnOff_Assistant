@@ -11,6 +11,23 @@ from src.ui.serial_terminal import SerialTerminalWindow
 
 
 class SerialTerminalPersistenceTests(unittest.TestCase):
+    def test_open_all_opens_every_current_tab_and_returns_failures(self):
+        terminal = SerialTerminalWindow(Mock(), Mock(), Path(r"D:\Serial_Log"))
+        terminal.tabs = {"vlan112": {}, "vlan113": {}, "vlan114": {}}
+        terminal.open_monitor = Mock(side_effect=[True, False, True])
+
+        failed = terminal.open_all()
+
+        self.assertEqual(
+            terminal.open_monitor.call_args_list,
+            [
+                unittest.mock.call("vlan112"),
+                unittest.mock.call("vlan113"),
+                unittest.mock.call("vlan114"),
+            ],
+        )
+        self.assertEqual(failed, ("vlan113",))
+
     def test_poll_batches_high_frequency_events_by_vlan_and_yields_to_ui(self):
         terminal = SerialTerminalWindow(Mock(), Mock(), Path(r"D:\Serial_Log"))
         window = Mock()

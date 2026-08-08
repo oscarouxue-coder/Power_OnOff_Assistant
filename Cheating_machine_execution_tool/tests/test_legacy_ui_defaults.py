@@ -77,12 +77,16 @@ def _fake_window() -> SimpleNamespace:
 
 class LegacyUiDefaultsTests(unittest.TestCase):
     def test_current_config_contains_all_legacy_ui_defaults(self) -> None:
-        defaults = load_legacy_ui_defaults(
-            _OLD_TOOL_ROOT / "config" / "config.ini"
-        )
+        config_path = _OLD_TOOL_ROOT / "config" / "config.ini"
+        defaults = load_legacy_ui_defaults(config_path)
+        config_parser = configparser.RawConfigParser()
+        config_parser.read(config_path, encoding="utf-8")
+        ui_defaults = config_parser["ui_defaults"]
 
-        self.assertEqual(defaults.communication_method, "telnet")
-        self.assertFalse(defaults.telnet_enable)
+        self.assertEqual(
+            defaults.communication_method,
+            ui_defaults.get("communication_method").strip().lower(),
+        )
         power_parser = configparser.RawConfigParser()
         power_parser.read(
             _OLD_TOOL_ROOT / "config" / "network_card_ip.ini",
@@ -93,12 +97,18 @@ class LegacyUiDefaultsTests(unittest.TestCase):
             power_parser.get("power_supply", "serial_port").strip().upper(),
         )
         self.assertEqual(defaults.serial_num_source, POWER_SERIAL_SOURCE)
-        self.assertEqual(defaults.baud_rate, "19200")
-        self.assertEqual(defaults.selected_profile, "TEST_PROJECT")
-        self.assertEqual(defaults.startup_time, 240)
-        self.assertEqual(defaults.interval_time, 20)
-        self.assertEqual(defaults.number_of_tests, 500)
-        self.assertEqual(defaults.wait_command_done, 20)
+        self.assertEqual(defaults.baud_rate, ui_defaults.get("baud_rate").strip())
+        self.assertEqual(
+            defaults.selected_profile,
+            ui_defaults.get("selected_profile").strip().upper(),
+        )
+        self.assertEqual(defaults.startup_time, ui_defaults.getint("startup_time"))
+        self.assertEqual(defaults.interval_time, ui_defaults.getint("interval_time"))
+        self.assertEqual(defaults.number_of_tests, ui_defaults.getint("number_of_tests"))
+        self.assertEqual(
+            defaults.wait_command_done,
+            ui_defaults.getint("wait_command_done"),
+        )
 
     def test_apply_loads_every_configured_value_into_ui(self) -> None:
         window = _fake_window()

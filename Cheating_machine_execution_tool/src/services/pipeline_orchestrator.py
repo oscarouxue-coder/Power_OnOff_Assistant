@@ -3,10 +3,10 @@
 背景：
 - 主界面「检查并执行测试」按钮触发的全流程管道:
   把 7 个子任务(自动上/下电 / 环境线路检查 / 样机升级 / 写样机参数 / ONU注册 / 串口日志 / 测试项配置)
-  作为可勾选的子任务,按 1→7 固定顺序串行执行,任一子任务失败 → 整个管道停止。
+  作为可勾选的子任务；串口日志若勾选则在全流程开始时预启动，其余任务按 1→7 相对顺序串行执行。
 - 本模块负责:
   ① 评估 7 个子任务「必填项当前状态」→ 弹窗展示给操作员确认
-  ② 按 1→7 顺序执行勾选的子任务
+  ② 先预启动已勾选的串口日志，其余子任务按 1→7 相对顺序执行
   ③ 失败传播(任一失败 → 停止后续 + 主日志留痕)
 
 子任务执行策略(v1):
@@ -16,11 +16,12 @@
     编排器只负责引导 + 兜底,后台线程由 app 的既有 worker 完成)。
   - 4. 写样机参数: 调 ``app._start_sample_parameter_write()``(异步起线程,弹确认框由操作员点「是」;同 3)。
   - 5. ONU 注册: 调 ``app._on_onu_query_clicked()`` + ``app._on_onu_register_clicked()``(异步起线程,弹确认框;同 3)。
-  - 6. 串口日志: 调 ``app._open_serial_log_module()``(打开终端窗口,管道运行期间持续记录)。
+  - 6. 串口日志: 若勾选，在其它子任务前调 ``app._open_pipeline_serial_logs()``，显示窗口并打开全部串口，从全流程开始持续记录。
   - 7. 测试项配置: 调新 ``test_item_execution_service.run_test_item_execution`` 同步执行(每台串行,默认 1)。
 
 不变量:
-- 任一子任务抛异常 → 整个管道停止(串口日志除外,因不致命)。
+- 任一子任务抛异常 → 整个全流程停止(串口日志除外,因不致命)。
+- 只要勾选子任务 1 且后面还有任意已勾选子任务，子任务 1 成功结束后等待 120 秒再启动下一个子任务；等待可被停止事件中断。
 - 1/2/6/7 同步执行,操作员看到的「实时主日志」就是编排器的 ``emit`` 输出。
 - 3/4/5 异步执行,操作员看到的「实时主日志」来自 app 既有 worker 的 ``log_queue``。
 - 编排器本身不发任何危险操作命令(无 telnet / 串口 / UBUS);只调度既有方法。
@@ -57,7 +58,7 @@ SUBTASK_LABELS: dict[str, str] = {
     "sample_upgrade": "3. 样机升级",
     "sample_parameter_write": "4. 写样机参数",
     "onu_registration": "5. ONU 注册",
-    "serial_terminal": "6. 串口日志（管道期间持续记录）",
+    "serial_terminal": "6. 串口日志（全流程期间持续记录）",
     "test_item_execution": "7. 测试项配置（[order] 执行）",
 }
 
@@ -76,6 +77,21 @@ SUBTASK_CONFIG_TARGETS: dict[str, str] = {
 # 哪些子任务不计入「致命失败」(失败后继续后续)。
 # 「串口日志」是辅助任务,打不开终端不应阻塞后续子任务。
 NON_FATAL_SUBTASKS: frozenset[str] = frozenset({"serial_terminal"})
+
+# 保留主界面原有 1→7 行布局，但已勾选的辅助日志任务必须在其它任务前预启动，
+# 才能记录上下电、升级和写参阶段的串口输出。
+PIPELINE_PRESTART_SUBTASKS: Tuple[str, ...] = ("serial_terminal",)
+
+
+def execution_order_for(selected: set[str]) -> Tuple[str, ...]:
+    """返回实际执行顺序：预启动任务在前，其余任务保持界面 1→7 相对顺序。"""
+    prestart = tuple(code for code in PIPELINE_PRESTART_SUBTASKS if code in selected)
+    remaining = tuple(
+        code
+        for code in SUBTASK_CODES
+        if code in selected and code not in PIPELINE_PRESTART_SUBTASKS
+    )
+    return prestart + remaining
 
 
 @dataclass(frozen=True)
@@ -346,6 +362,8 @@ class PipelineOrchestrator:
     POLL_INTERVAL_SECONDS = 0.5
     # 单个被编排子任务最大等待时间(秒);超时强制往下走
     MAX_SUBTASK_WAIT_SECONDS = 60.0 * 60.0    # 1 小时(给升级 / 写参留足时间)
+    # 子任务 1 自动上/下电与任意后续子任务之间的设备稳定等待。
+    POWER_TO_NEXT_WAIT_SECONDS = 120.0
 
     def __init__(self, ctx: PipelineContext, emit: Output) -> None:
         self.ctx = ctx
@@ -357,37 +375,62 @@ class PipelineOrchestrator:
         self.ctx.stop_event.set()
 
     def run(self, selected: set[str]) -> List[SubTaskResult]:
-        """按 1→7 顺序执行勾选的子任务。
+        """先预启动已勾选的串口日志，其余子任务按 1→7 相对顺序执行。
 
         Returns:
             各子任务执行结果(按执行顺序;被跳过的子任务不包含)。
         Raises:
             PipelineError: 任一「致命」子任务失败时抛出(非致命子任务如串口日志失败只记结果)。
         """
-        self.emit("=== 全流程执行管道开始 ===")
-        for code in SUBTASK_CODES:
-            if code not in selected:
-                continue
+        self.emit("=== 全流程执行开始 ===")
+        execution_order = execution_order_for(selected)
+        for index, code in enumerate(execution_order):
             if self.ctx.stop_event.is_set():
-                self.emit(f"[管道] 已请求停止,跳过子任务 {SUBTASK_LABELS[code]}")
+                self.emit(f"[全流程] 已请求停止,跳过子任务 {SUBTASK_LABELS[code]}")
                 break
+            if code in PIPELINE_PRESTART_SUBTASKS:
+                self.emit(f"=== 全流程预启动子任务 {SUBTASK_LABELS[code]} ===")
             self.emit(f"=== 开始子任务 {SUBTASK_LABELS[code]} ===")
+            succeeded = False
             try:
                 self._run_subtask(code)
             except Exception as exc:  # noqa: BLE001 - 编排器统一捕获
-                self.emit(f"[管道] 子任务 {SUBTASK_LABELS[code]} 失败:{exc}")
+                self.emit(f"[全流程] 子任务 {SUBTASK_LABELS[code]} 失败:{exc}")
                 self._results.append(SubTaskResult(code=code, ok=False, error=str(exc)))
                 if code not in NON_FATAL_SUBTASKS:
-                    self.emit("=== 全流程执行管道因失败提前终止 ===")
+                    self.emit("=== 全流程执行因失败提前终止 ===")
                     raise PipelineError(f"子任务 {code} 失败:{exc}") from exc
                 # 非致命:继续下一个
                 continue
             else:
                 self._results.append(SubTaskResult(code=code, ok=True))
+                succeeded = True
             finally:
                 self.emit(f"=== 结束子任务 {SUBTASK_LABELS[code]} ===")
-        self.emit("=== 全流程执行管道结束 ===")
+            if (
+                succeeded
+                and code == "power_cycle"
+                and index + 1 < len(execution_order)
+                and not self._wait_after_power_cycle_before_next(execution_order[index + 1])
+            ):
+                self.emit(
+                    f"[全流程] 等待期间收到停止请求,跳过后续子任务 {SUBTASK_LABELS[execution_order[index + 1]]}"
+                )
+                break
+        self.emit("=== 全流程执行结束 ===")
         return self._results
+
+    def _wait_after_power_cycle_before_next(self, next_code: str) -> bool:
+        """等待设备在子任务 1 后稳定；返回 False 表示操作员已请求停止。"""
+        seconds = self.POWER_TO_NEXT_WAIT_SECONDS
+        self.emit(
+            f"[子任务约束] 子任务1“自动上/下电”已完成，等待 {seconds:.0f} 秒后再开始后续子任务“{SUBTASK_LABELS[next_code]}”。"
+        )
+        if self.ctx.stop_event.wait(seconds):
+            self.emit(f"[子任务约束] {seconds:.0f} 秒等待期间已请求停止。")
+            return False
+        self.emit(f"[子任务约束] {seconds:.0f} 秒等待完成，开始后续子任务“{SUBTASK_LABELS[next_code]}”。")
+        return True
 
     # -- 子任务入口 -----------------------------------------------------
 
@@ -406,7 +449,7 @@ class PipelineOrchestrator:
     def _run_env_check(self) -> None:
         """2. 环境线路检查:复用 ``network_ops.run_line_check()`` 逐通道 ping。
 
-        致命失败:任一通道 ping 不通 → 整个管道停止(网络不通则后续子任务均无意义)。
+        致命失败:任一通道 ping 不通 → 整个全流程停止(网络不通则后续子任务均无意义)。
         """
         from line_check_assistant.network_ops import run_line_check
 
@@ -564,16 +607,25 @@ class PipelineOrchestrator:
         # 失败传播靠 ONT_ONU 的运行标志或操作员主动停止。
         # 当前实现:把 register_method 也调起来(若操作员在查询结果中已勾选 ONU)。
         # 但 register_method 自身有「未选择 ONU」校验,所以可能 noop;先 emit 提示。
-        self.emit("ONU 注册由操作员在主程序查询结果中勾选后点击「开始注册」;管道不强制。")
+        self.emit("ONU 注册由操作员在主程序查询结果中勾选后点击「开始注册」;全流程不强制。")
 
     def _run_serial_terminal(self) -> None:
-        """5. 串口日志:打开 SerialTerminalWindow;管道运行期间窗口保持开启。"""
+        """串口日志：在 Tk 主线程显示终端并打开全部串口，管道期间保持开启。"""
         app = self.ctx.app
-        open_method = _get_attr(app, "_open_serial_log_module", None)
+        open_method = _get_attr(app, "_open_pipeline_serial_logs", None)
         if not callable(open_method):
-            raise RuntimeError("主程序未实现 _open_serial_log_module")
-        self.emit("打开串口日志窗口;管道运行期间窗口保持开启,持续记录各通道输出。")
-        open_method()
+            raise RuntimeError("主程序未实现 _open_pipeline_serial_logs")
+        self.emit("全流程开始时提前显示串口日志窗口并执行“打开全部”；全部串口打开后再执行后续子任务。")
+        invoke_on_ui = _get_attr(app, "_invoke_pipeline_ui_action", None)
+        if callable(invoke_on_ui):
+            def open_on_ui() -> bool:
+                open_method()
+                return True
+
+            invoke_on_ui(open_on_ui)
+        else:
+            # 兼容单元测试和历史最小 app 替身。
+            open_method()
 
     def _run_test_item_execution(self) -> None:
         """6. 测试项配置:同步跑各通道的 [order] 命令 + fuzzy 匹配。"""
@@ -595,7 +647,7 @@ class PipelineOrchestrator:
         failed_channels = 0
         for index, channel in enumerate(channels, start=1):
             if self.ctx.stop_event.is_set():
-                self.emit(f"[管道] 已请求停止,跳过 {channel.section}")
+                self.emit(f"[全流程] 已请求停止,跳过 {channel.section}")
                 break
             self.emit(
                 f"[测试项配置] ({index}/{total}) 通道 {channel.section} "
@@ -629,6 +681,7 @@ class PipelineOrchestrator:
 
 __all__ = [
     "NON_FATAL_SUBTASKS",
+    "PIPELINE_PRESTART_SUBTASKS",
     "PipelineContext",
     "PipelineError",
     "PipelineOrchestrator",
@@ -638,4 +691,5 @@ __all__ = [
     "SubTaskResult",
     "SubTaskStatus",
     "compute_all_subtask_statuses",
+    "execution_order_for",
 ]

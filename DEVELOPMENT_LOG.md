@@ -2,6 +2,61 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-08 - 全流程编号项统一使用“子任务”术语
+
+- 类型：UI 文案 / 执行日志 / 术语统一 / 回归测试 / 文档
+- 完成内容：① 全流程界面、二次确认框和主执行日志中，编号执行项统一称为“子任务”，不再显示“管道1 / 后续管道”等描述；② 120秒约束统一表述为“子任务1完成后等待120秒，再开始后续子任务”；③ 串口日志提示改为“全流程开始时提前启动”，总体流程异常和停止提示使用“全流程”，避免把总体编排与单个编号项混称；④ 底层 `pipeline_*` 文件名、类名和内部架构术语保持不变，避免仅因文案发生无意义重构；⑤ 同步更新当前状态、验收基线、操作员说明和文案回归测试。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`、`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：执行全流程编排和窗口专项测试；执行 `python scripts/verify_baseline.py`。
+- 验证结果：全流程编排与窗口相关源码编译通过；`test_pipeline_window.py` 18 项通过；术语守门测试已加入强制基线；`python scripts/verify_baseline.py` 全绿（41 个当前主程序 `.py` 编译、编译清单完整、455 项单测、14 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续约定：项目负责人后续使用“子任务1～子任务7”表达全流程中的编号执行项；“全流程”表示整体执行过程。
+
+## 2026-08-08 - 子任务1完成后统一等待120秒再执行后续子任务
+
+- 类型：全流程执行约束 / 设备稳定等待 / 停止响应 / 回归门禁 / 文档
+- 完成内容：① 只要勾选“1. 自动上/下电”且实际执行顺序中还有任意后续已勾选子任务，子任务1成功完成后固定等待120秒，再启动下一个子任务，不再限定后续必须是子任务2；② 只勾选子任务1、子任务1位于全部已勾选任务末尾或子任务1执行失败时不做无意义等待；③ 等待使用全流程停止事件，可由“停止”按钮立即中断并跳过全部后续任务；④ 主执行日志明确记录等待开始、目标后续子任务、等待完成或停止中断；⑤ 全流程二次确认框在满足条件时提前显示“子任务1完成后等待120秒”的约束；⑥ 新增任意后续子任务等待、仅子任务1不等待、等待可停止及确认框提示测试，并把120秒精确值纳入强制基线。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`、`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：编译编排器和全流程窗口；执行 `test_pipeline_orchestrator.py`、`test_pipeline_window.py`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：编排器和全流程窗口源码编译通过；`test_pipeline_orchestrator.py` 40 项、`test_pipeline_window.py` 17 项通过；`python scripts/verify_baseline.py` 全绿（41 个当前主程序 `.py` 编译、编译清单完整、454 项单测、13 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面勾选子任务1及任意后续子任务，确认子任务1结束后日志开始120秒等待、期间点击“停止”可立即结束；不点击停止时确认满120秒才出现下一个子任务的开始日志。
+
+## 2026-08-08 - 修复全流程串口日志只显示窗口但未打开 COM
+
+- 类型：BUG 修复 / 全流程编排 / 串口日志 / 回归门禁 / 文档
+- 根因：全流程预启动复用了手工工具栏的 `_open_serial_log_module()`，该入口只创建/显示 VLAN/COM Tab；真正启用串口的逻辑仍封在“打开全部”按钮的匿名回调里，因此窗口虽已出现，各 Tab 仍显示“COM 未打开”，无法接收设备打印。
+- 完成内容：① 将串口终端“打开全部”提取为可复用 `open_all()`，界面按钮和全流程共用同一动作；② 新增全流程专用 `_open_pipeline_serial_logs()`，在 Tk 主线程中严格执行“显示目标 Tab → 打开窗口当前全部串口”；③ 全部打开动作返回后才进入上下电等后续子任务；④ 主执行日志记录实际 VLAN/COM 目标和成功数量，任一串口失败则记录失败 VLAN，并按串口日志既有非致命规则继续后续；⑤ 手工点击主界面“串口日志”仍只显示窗口，不擅自打开串口；⑥ 新增终端全部打开、全流程显示/打开顺序、失败传播与 Tk 主线程调度回归测试，并把全流程自动“打开全部”纳入强制基线测试。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/src/ui/serial_terminal.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`、`Cheating_machine_execution_tool/tests/test_serial_terminal.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：编译串口终端、主程序和编排器源码；执行 `test_serial_terminal.py`、`test_app.py`、`test_pipeline_orchestrator.py`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：相关源码编译通过；`test_serial_terminal.py` 9 项、`test_app.py` 84 项、`test_pipeline_orchestrator.py` 37 项通过；`python scripts/verify_baseline.py` 全绿（41 个当前主程序 `.py` 编译、编译清单完整、450 项单测、12 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）。
+- 后续待办：Windows 桌面勾选“串口日志”和至少一个后续子任务，确认窗口出现后各目标 Tab 由“COM 未打开”变为“COM 监控中”，并确认第一个上下电动作前的设备打印已写入 `D:\Serial_Log`。
+
+## 2026-08-08 - 全流程串口日志改为全流程开始时预启动
+
+- 类型：全流程编排 / 串口日志 / Tk 线程边界 / 回归测试 / 文档
+- 完成内容：① 保留全流程界面原有 1→7 行布局和默认勾选规则；② 只要勾选“串口日志”，实际执行顺序就把它移到管道首位，先打开终端，再执行上下电、环境检查、升级、写参、ONU 和测试项；③ 串口窗口打开动作通过既有 UI 任务队列投回 Tk 主线程，入口返回后才继续其它管道；④ 串口日志仍为非致命任务，打开失败只记录失败并继续后续；⑤ 二次确认框改为显示真实执行顺序，串口日志位于首位并标注提前启动；⑥ 新增预启动顺序、未勾选时顺序不变、Tk 主线程调度和确认框回归测试。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`、`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：编译编排器和窗口源码；执行 `test_pipeline_orchestrator.py`、`test_pipeline_window.py`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：编排器和窗口源码编译通过；`test_pipeline_orchestrator.py` 37 项、`test_pipeline_window.py` 16 项通过；`python scripts/verify_baseline.py` 全绿（41 个当前主程序 `.py` 编译、编译清单完整、447 项单测、11 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）；`git diff --check` 通过，仅现有 LF/CRLF 换行提示。
+- 后续待办：Windows 桌面勾选串口日志和上下电/升级等任务，确认二次确认框把串口日志显示在首位，并确认日志已捕获从第一个设备操作开始的串口输出。
+
+## 2026-08-08 - 两份 INI 的指令重试间隔保持同步
+
+- 类型：配置同步 / 兼容旧工具 / 回归测试 / 文档
+- 完成内容：① 将 `test_project_config.ini [order] command_fail_retry_interval_time` 定为“测试项配置”的编辑主值；② 每次保存测试项配置时，同步将完全相同的值写入 `config.ini [other_config] command_fail_retry_interval_time`；③ 更新时保留 `config.ini` 其它段、配置项、注释和原换行风格；④ 当前两份实际配置已从 `10 / 60` 统一为 `10 / 10`；⑤ 主程序保存成功日志增加同步后重试间隔秒数；⑥ 新增直接更新保留注释和测试项保存双文件同值回归测试，并将双文件同步测试纳入 `verify_baseline.py` 强制基线；⑦ 修正旧工具当前配置回归测试，改为核对加载值与实际 INI 一致，不再将用户可编辑的 `startup_time` 硬编码为 240，保留当前用户配置 180。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/Auto_power_on_off_tool/config/config.ini`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/legacy_ui_defaults_store.py`、`Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/tests/test_legacy_ui_defaults.py`、`Cheating_machine_execution_tool/tests/test_legacy_ui_defaults_store.py`、`Cheating_machine_execution_tool/tests/test_test_item_config_store.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：编译 3 个相关源码；执行 `test_legacy_ui_defaults_store.py`、`test_test_item_config_store.py`、`test_app.py`；执行 `python scripts/verify_baseline.py`；核对两份实际 INI 值。
+- 验证结果：3 个相关源码编译通过；`test_legacy_ui_defaults_store.py` 4 项、`test_test_item_config_store.py` 21 项、`test_app.py` 82 项通过；首次完整基线发现旧测试将用户已改为 180 的 `startup_time` 错误硬编码为 240，保留用户配置并修正断言后，`python scripts/verify_baseline.py` 全绿（41 个当前主程序 `.py` 编译、编译清单完整、444 项单测、11 个强制基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）；实际文件核对为 `10 / 10`；`git diff --check` 通过，仅现有 LF/CRLF 换行提示。
+- 后续待办：Windows 桌面在“测试项”页把指令重试间隔改为任意值并保存，确认两份 INI 的同名字段值一致，且旧工具执行时使用该值。
+
+## 2026-08-08 - 主界面新增 DUT 配置占位入口
+
+- 类型：UI 功能入口 / 未来 UBUS 扩展边界 / 回归测试 / 文档
+- 完成内容：① 在主界面“串口日志”右侧新增“DUT配置”按钮；② 点击后打开独立占位窗口，明确显示计划使用 UBUS、具体配置项和执行逻辑待后续完善；③ 重复点击复用已打开的窗口；④ 当前不实例化 UBUS 客户端、不连接 DUT、不下发命令，执行日志明确记录本次跳过；⑤ 新增工具栏位置、窗口复用和无 UBUS 下发边界回归测试。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：编译 `app.py`；执行 `test_app.py`；执行 `python scripts/verify_baseline.py`。
+- 验证结果：`app.py` 编译通过；`test_app.py` 82 项通过；`python scripts/verify_baseline.py` 全绿（41 个当前主程序 `.py` 编译、编译清单完整、442 项单测、10 个关键基线测试实际执行、8 条 MUST_EXIST 与 1 条 MUST_NOT_EXIST 均通过）；`git diff --check` 通过，仅现有 LF/CRLF 换行提示。
+- 后续待办：① Windows 桌面确认按钮位置、占位窗口显示和重复打开；② 项目负责人后续明确 DUT 配置项、UBUS 对象/方法、登录凭据、并行范围及成功判据后，再将业务编排放入 `src/services`、底层 UBUS 能力放入 `src/core`。
+
 ## 2026-08-07 - 修复测试项配置窗口需移动鼠标才显示
 
 - 类型：BUG 修复 / Windows 窗口绘制 / 回归测试 / 文档
