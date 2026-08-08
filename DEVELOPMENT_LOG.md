@@ -12,6 +12,14 @@
 - 验证结果：DUT service 10项、Telnet 10项、UBUS开启Telnet 18项、主界面97项专项测试通过；全量单测509项通过；`python scripts/verify_baseline.py` 全绿（46个当前主程序`.py`编译、编译清单完整、509项单测、40个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
 - 后续待办：Windows 桌面确认 DUT 窗口首次完整绘制、Tab/表格/按钮与明文凭据；真实样机依次覆盖 already_present、reused、added_iface、lan 回退、禁用网卡自动启用、Access denied、1/8台并行、停止及单台失败隔离。真实样机结论由项目负责人提供后再更新验收状态。
 
+## 2026-08-08 - 精简 DUT Telnet 成功状态
+
+- 类型：界面优化 / 回归测试
+- 完成内容：DUT 配置 → Telnet配置的目标表在成功后固定显示“成功：Telnet 已开启并验证可用”，不再在表格中重复展示源 IP、目标 IP、端口和规则动作；完整信息继续写入主执行日志。
+- 修改文件：`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：执行主界面专项测试及 `python scripts/verify_baseline.py`、`git diff --check`。
+- 验证结果：主界面专项 98 项通过；`python scripts/verify_baseline.py` 全绿（46 个源码文件编译、510 项单测、40 个强制基线测试均通过）。
+
 ## 2026-08-08 - 完整映射 WiFi 连接参数
 
 - 类型：功能 / 测试项配置 / WiFi / 无 GUI 旧业务 / 回归测试 / 文档

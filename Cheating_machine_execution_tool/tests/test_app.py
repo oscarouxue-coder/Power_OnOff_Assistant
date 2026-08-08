@@ -311,6 +311,47 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertNotIn("UbusHttpClient(", open_source + worker_source)
         self.assertNotIn("bbfdm.", open_source + worker_source)
 
+    def test_dut_success_row_uses_concise_operator_message(self):
+        request = DutTelnetEnableRequest(
+            channel="通道 12",
+            vlan="vlan112",
+            adapter_alias="VLAN112",
+            bind_ip="192.168.1.112",
+            device_host="192.168.1.1",
+            subnet_mask="255.255.255.0",
+            username="user",
+            password="password",
+        )
+        result = DutTelnetEnableResult(
+            request,
+            True,
+            "completed",
+            "Telnet 已开启并验证可用：192.168.1.112 -> 192.168.1.1:23（LAN-telnet 规则已就绪）",
+        )
+        window = object.__new__(DutConfigWindow)
+        window._row_by_channel = {"通道 12": "row-12"}
+        window.target_tree = Mock()
+        window.target_tree.item.side_effect = [
+            ("通道 12", "vlan112", "VLAN112", "192.168.1.112", "192.168.1.1", "等待执行"),
+            None,
+        ]
+
+        window.update_result(result)
+
+        self.assertEqual(
+            window.target_tree.item.call_args_list[-1],
+            call(
+                "row-12",
+                values=[
+                    "通道 12",
+                    "vlan112",
+                    "VLAN112",
+                    "192.168.1.112",
+                    "192.168.1.1",
+                    "成功：Telnet 已开启并验证可用",
+                ],
+            ),
+        )
     def test_dut_request_snapshot_uses_enabled_channel_and_plaintext_shared_password(self):
         context = SimpleNamespace(
             _capture_current_channel=Mock(),

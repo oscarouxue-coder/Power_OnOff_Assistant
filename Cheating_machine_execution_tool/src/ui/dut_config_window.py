@@ -209,12 +209,11 @@ class DutConfigWindow:
             return
         values = list(self.target_tree.item(row_id, "values"))
         if result.ok:
-            prefix = "成功"
+            values[-1] = "成功：Telnet 已开启并验证可用"
         elif result.stage == "stopped":
-            prefix = "已停止"
+            values[-1] = f"已停止：{result.message}"
         else:
-            prefix = "失败"
-        values[-1] = f"{prefix}：{result.message}"
+            values[-1] = f"失败：{result.message}"
         self.target_tree.item(row_id, values=values)
 
     def set_summary(self, text: str) -> None:
