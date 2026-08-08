@@ -88,6 +88,12 @@ class LegacyPowerTestRequest:
     emails: str
     connect_wifi_enable: bool
     product_solution: str
+    wifi_test_2g_enable: bool
+    wifi_test_5g_enable: bool
+    wifi_auth_mode: str
+    wifi_cipher: str
+    wifi_choose_wireless_card: bool
+    wifi_wireless_card_name: str
     channels: tuple[LegacyPowerChannel, ...]
     ping_target_ip: str = ""
 
@@ -225,6 +231,26 @@ def prepare_legacy_power_test_request(
     product_solution = profile_parser.get(
         "connect_wifi", "product_solution", fallback=""
     ).strip().lower()
+    wifi_test_2g_enable = profile_parser.getboolean(
+        "connect_wifi", "test_2g_enable", fallback=True
+    )
+    wifi_test_5g_enable = profile_parser.getboolean(
+        "connect_wifi", "test_5g_enable", fallback=True
+    )
+    wifi_auth_mode = profile_parser.get(
+        "connect_wifi", "auth_mode", fallback="WPA2-PSK"
+    ).strip() or "WPA2-PSK"
+    wifi_cipher = profile_parser.get(
+        "connect_wifi", "cipher", fallback="AES"
+    ).strip() or "AES"
+    wifi_choose_wireless_card = profile_parser.getboolean(
+        "connect_wifi", "choose_wireless_card", fallback=False
+    )
+    wifi_wireless_card_name = profile_parser.get(
+        "connect_wifi", "wireless_card_name", fallback=""
+    ).strip()
+    if connect_wifi_enable and wifi_choose_wireless_card and not wifi_wireless_card_name:
+        raise ValueError("WiFi 连接测试已勾选指定无线网卡，但无线网卡名称为空")
     request_url = profile_parser.get(
         defaults["communication_method"], "request_url", fallback=""
     ).strip()
@@ -246,6 +272,12 @@ def prepare_legacy_power_test_request(
         emails=emails,
         connect_wifi_enable=connect_wifi_enable,
         product_solution=product_solution,
+        wifi_test_2g_enable=wifi_test_2g_enable,
+        wifi_test_5g_enable=wifi_test_5g_enable,
+        wifi_auth_mode=wifi_auth_mode,
+        wifi_cipher=wifi_cipher,
+        wifi_choose_wireless_card=wifi_choose_wireless_card,
+        wifi_wireless_card_name=wifi_wireless_card_name,
         channels=selected_channels,
         ping_target_ip=ping_target_ip,
     )
@@ -273,6 +305,21 @@ def run_legacy_power_test(
         f"通信={request.communication_method}，COM={request.serial_port}，"
         f"通道={[item.number for item in request.channels]}，循环={request.number_of_tests}次"
     )
+    if request.connect_wifi_enable:
+        wifi_card = (
+            request.wifi_wireless_card_name
+            if request.wifi_choose_wireless_card
+            else "自动选择首张可用无线网卡"
+        )
+        emit(
+            "[执行开关机测试] WiFi连接配置：主控=启用，"
+            f"2.4G={'启用' if request.wifi_test_2g_enable else '关闭'}，"
+            f"5G={'启用' if request.wifi_test_5g_enable else '关闭'}，"
+            f"方案={request.product_solution}，认证={request.wifi_auth_mode}，"
+            f"加密={request.wifi_cipher}，网卡={wifi_card}"
+        )
+    else:
+        emit("[执行开关机测试] WiFi连接配置：主控=关闭，本次跳过 WiFi 连接测试。")
     completed_by_channel = {item.number: 0 for item in request.channels}
     last_reported_cycle = 0
     if on_progress is not None:
@@ -424,13 +471,13 @@ def _install_headless_legacy_stubs(request: LegacyPowerTestRequest):
 
     class HeadlessOnuConfig:
         connect_wifi_enable_status = int(request.connect_wifi_enable)
-        choose_test_2g_flag = int(request.connect_wifi_enable)
-        choose_test_5g_flag = int(request.connect_wifi_enable)
-        connect_wifi_auth_mode = "WPA2-PSK"
-        connect_wifi_ciper = "AES"
+        choose_test_2g_flag = int(request.wifi_test_2g_enable)
+        choose_test_5g_flag = int(request.wifi_test_5g_enable)
+        connect_wifi_auth_mode = request.wifi_auth_mode
+        connect_wifi_ciper = request.wifi_cipher
         Onu_solution_type = request.product_solution
-        choose_wireless_card_flag = 0
-        choose_wireless_card_name = ""
+        choose_wireless_card_flag = int(request.wifi_choose_wireless_card)
+        choose_wireless_card_name = request.wifi_wireless_card_name
         iface_names: list[str] = []
 
     onu_module = types.ModuleType("test_case.Onu_config")
@@ -604,6 +651,15 @@ def _legacy_start_all_worker(request, message_queue, stop_event) -> None:
             ]
             if not onu_config_class.iface_names:
                 raise RuntimeError("已启用 WiFi 连接测试，但当前电脑没有可用无线网卡")
+            if (
+                request.wifi_choose_wireless_card
+                and request.wifi_wireless_card_name not in onu_config_class.iface_names
+            ):
+                raise RuntimeError(
+                    "指定的无线网卡不存在或未启用："
+                    f"{request.wifi_wireless_card_name}；当前可用："
+                    f"{', '.join(onu_config_class.iface_names)}"
+                )
 
         from common.serilal_client import Serial
         if request.communication_method == "telnet":

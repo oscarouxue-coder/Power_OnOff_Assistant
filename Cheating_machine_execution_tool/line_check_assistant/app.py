@@ -50,7 +50,10 @@ from .test_item_config_store import (
     TelnetSettings,
     TestItemConfigStore,
     TestProjectConfig,
+    WIFI_AUTH_MODE_OPTIONS,
+    WIFI_CIPHER_OPTIONS,
 )
+from src.core.wifi_interfaces import list_wifi_interface_names
 from src.core import (
     SerialSessionManager,
     generate_parameter_records,
@@ -59,13 +62,22 @@ from src.core import (
     vlan_to_serial_port,
 )
 from src.config import DEFAULT_LOG_DIR
-from src.models import FullPackageUpgradeRequest, ParameterGenerationTemplate, SampleParameterWriteRequest
+from src.models import (
+    DutTelnetEnableRequest,
+    DutTelnetEnableResult,
+    FullPackageUpgradeRequest,
+    ParameterGenerationTemplate,
+    SampleParameterWriteRequest,
+)
 from src.services import (
+    DEFAULT_DUT_PARALLEL_COUNT,
     PARAMETER_MAX_PARALLEL,
     PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS,
     TRANSFER_TFTP_COMMAND,
     TRANSFER_TFTP_PUT,
+    clamp_dut_parallel_count,
     preflight_parameter_targets,
+    run_dut_telnet_enable_batch,
     run_parallel_tftp_command_upgrades,
     run_parallel_tftp_put_upgrades,
     run_parallel_sample_parameter_writes,
@@ -73,8 +85,9 @@ from src.services import (
     run_single_full_package_upgrade,
     turn_off_selected_channels,
     turn_on_selected_channels,
+    validate_dut_telnet_request,
 )
-from src.ui import SerialTerminalWindow
+from src.ui import DutConfigWindow, SerialTerminalWindow
 
 
 APP_DIR = resolve_tool_root()
@@ -257,6 +270,7 @@ class LineCheckAssistant(Tk):
         # 全流程编排器在后台线程运行；涉及 Tk 窗口/确认框的子任务必须投回主线程，
         # 不能由编排线程直接操作 Toplevel。
         self.pipeline_ui_task_queue: "queue.Queue[tuple]" = queue.Queue()
+        self.dut_config_ui_queue: "queue.Queue[tuple]" = queue.Queue()
         self._pipeline_subtask_events: dict[str, threading.Event] = {}
         self._pipeline_subtask_results: dict[str, tuple[bool, str]] = {}
         self.running = False
@@ -272,6 +286,10 @@ class LineCheckAssistant(Tk):
         self.serial_session_manager = SerialSessionManager()
         self.serial_terminal = SerialTerminalWindow(self, self.serial_session_manager, self._serial_log_directory())
         self.dut_config_window = None
+        self.dut_config_running = False
+        self.dut_config_cancel_event = None
+        self.dut_config_requests: list[DutTelnetEnableRequest] = []
+        self.dut_config_validation_errors: dict[str, str] = {}
         self.test_item_config_window = None
         self.pipeline_window = None
         self.power_test_running = False
@@ -337,6 +355,7 @@ class LineCheckAssistant(Tk):
         self.after_idle(self._maximize_window)
         self.after(200, self._drain_log_queue)
         self.after(50, self._drain_pipeline_ui_tasks)
+        self.after(50, self._drain_dut_config_ui_tasks)
         self.protocol("WM_DELETE_WINDOW", self._on_app_close)
 
     def _maximize_window(self) -> None:
@@ -346,6 +365,9 @@ class LineCheckAssistant(Tk):
             return
 
     def _on_app_close(self) -> None:
+        dut_cancel_event = getattr(self, "dut_config_cancel_event", None)
+        if dut_cancel_event is not None:
+            dut_cancel_event.set()
         try:
             if self.onu_save_after_id is not None:
                 try:
@@ -416,6 +438,25 @@ class LineCheckAssistant(Tk):
         if error is not None:
             raise error  # type: ignore[misc]
         return bool(outcome.get("result"))
+
+    def _drain_dut_config_ui_tasks(self) -> None:
+        """在 Tk 主线程更新 DUT 表格和批次结束状态。"""
+        for _index in range(16):
+            try:
+                event = self.dut_config_ui_queue.get_nowait()
+            except queue.Empty:
+                break
+            kind = event[0]
+            if kind == "item":
+                window = self.dut_config_window
+                if window is not None and window.exists():
+                    window.update_result(event[1])
+            elif kind == "finished":
+                self._finish_dut_telnet_enable(event[1])
+        try:
+            self.after(50, self._drain_dut_config_ui_tasks)
+        except Exception:
+            return
 
     def _begin_pipeline_subtask(self, code: str) -> None:
         self._pipeline_subtask_results.pop(code, None)
@@ -2792,7 +2833,11 @@ class LineCheckAssistant(Tk):
                     f"- 测试项命令：{len(captured.order.items)} 条\n"
                     f"- 指令重试间隔：{captured.order.command_fail_retry_interval_time} 秒"
                     "（仅写入 config.ini [other_config]）\n"
-                    f"- WiFi 连接：{'启用' if captured.connect_wifi.enable else '关闭'}\n"
+                    f"- WiFi 连接：{'启用' if captured.connect_wifi.enable else '关闭'}；"
+                    f"2.4G={'启用' if captured.connect_wifi.test_2g_enable else '关闭'}；"
+                    f"5G={'启用' if captured.connect_wifi.test_5g_enable else '关闭'}；"
+                    f"认证={captured.connect_wifi.auth_mode}；加密={captured.connect_wifi.cipher}；"
+                    f"网卡={captured.connect_wifi.wireless_card_name if captured.connect_wifi.choose_wireless_card else '自动选择'}\n"
                     f"- 项目信息：项目={captured.project_info.project_name or '(空)'}，"
                     f"软件版本={captured.project_info.software_version or '(空)'}，"
                     f"内部软件版本={captured.project_info.internal_software_version or '(空)'}，"
@@ -3383,9 +3428,24 @@ class LineCheckAssistant(Tk):
         notebook.add(frame, text="WiFi")
 
         enable_var = IntVar(value=wifi.enable)
-        enable_var.trace_add("write", lambda *_a: mark_dirty())
+        test_2g_var = IntVar(value=wifi.test_2g_enable)
+        test_5g_var = IntVar(value=wifi.test_5g_enable)
         solution_var = StringVar(value=wifi.product_solution or "openwrt")
-        solution_var.trace_add("write", lambda *_a: mark_dirty())
+        auth_mode_var = StringVar(value=wifi.auth_mode or "WPA2-PSK")
+        cipher_var = StringVar(value=wifi.cipher or "AES")
+        choose_wireless_card_var = IntVar(value=wifi.choose_wireless_card)
+        wireless_card_name_var = StringVar(value=wifi.wireless_card_name or "")
+        for variable in (
+            enable_var,
+            test_2g_var,
+            test_5g_var,
+            solution_var,
+            auth_mode_var,
+            cipher_var,
+            choose_wireless_card_var,
+            wireless_card_name_var,
+        ):
+            variable.trace_add("write", lambda *_a: mark_dirty())
 
         Label(
             frame,
@@ -3395,19 +3455,28 @@ class LineCheckAssistant(Tk):
             background=COLOR_BG,
         ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
 
-        Checkbutton(
-            frame,
-            text="启用 WiFi 连接测试",
-            variable=enable_var,
-            onvalue=1,
-            offvalue=0,
-            background=COLOR_BG,
-            activebackground=COLOR_BG,
-            highlightthickness=0,
-            borderwidth=0,
-        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=6)
+        connection_frame = Frame(frame, background=COLOR_BG)
+        connection_frame.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(0, 10))
+        for column, (text, variable) in enumerate(
+            (
+                ("连接 WiFi（主控）", enable_var),
+                ("测试 2.4G WiFi", test_2g_var),
+                ("测试 5G WiFi", test_5g_var),
+            )
+        ):
+            Checkbutton(
+                connection_frame,
+                text=text,
+                variable=variable,
+                onvalue=1,
+                offvalue=0,
+                background=COLOR_BG,
+                activebackground=COLOR_BG,
+                highlightthickness=0,
+                borderwidth=0,
+            ).grid(row=0, column=column, sticky="w", padx=(0, 28))
 
-        Label(frame, text="产品方案", width=24, anchor="w", background=COLOR_BG).grid(
+        Label(frame, text="ONU 方案类型", width=18, anchor="w", background=COLOR_BG).grid(
             row=2, column=0, sticky="w", padx=(0, 12), pady=6
         )
         solution_combo = ttk.Combobox(
@@ -3419,31 +3488,122 @@ class LineCheckAssistant(Tk):
         )
         solution_combo.grid(row=2, column=1, sticky="w", pady=6)
 
+        Label(frame, text="认证方式", width=14, anchor="w", background=COLOR_BG).grid(
+            row=2, column=2, sticky="w", padx=(24, 12), pady=6
+        )
+        auth_values = tuple(dict.fromkeys((*WIFI_AUTH_MODE_OPTIONS, auth_mode_var.get())))
+        ttk.Combobox(
+            frame,
+            textvariable=auth_mode_var,
+            values=auth_values,
+            state="readonly",
+            width=24,
+        ).grid(row=2, column=3, sticky="w", pady=6)
+
+        Label(frame, text="加密算法", width=18, anchor="w", background=COLOR_BG).grid(
+            row=3, column=0, sticky="w", padx=(0, 12), pady=6
+        )
+        cipher_values = tuple(dict.fromkeys((*WIFI_CIPHER_OPTIONS, cipher_var.get())))
+        ttk.Combobox(
+            frame,
+            textvariable=cipher_var,
+            values=cipher_values,
+            state="readonly",
+            width=18,
+        ).grid(row=3, column=1, sticky="w", pady=6)
+
+        Checkbutton(
+            frame,
+            text="指定无线网卡",
+            variable=choose_wireless_card_var,
+            onvalue=1,
+            offvalue=0,
+            background=COLOR_BG,
+            activebackground=COLOR_BG,
+            highlightthickness=0,
+            borderwidth=0,
+        ).grid(row=4, column=0, sticky="w", pady=(14, 6))
+        initial_card_values = (
+            (wireless_card_name_var.get(),) if wireless_card_name_var.get().strip() else ()
+        )
+        wireless_card_combo = ttk.Combobox(
+            frame,
+            textvariable=wireless_card_name_var,
+            values=initial_card_values,
+            state="readonly",
+            width=34,
+        )
+        wireless_card_combo.grid(row=4, column=1, columnspan=2, sticky="ew", pady=(14, 6))
+
+        def refresh_wireless_cards() -> None:
+            try:
+                names = list_wifi_interface_names()
+            except Exception as exc:  # noqa: BLE001 - pywifi/驱动异常需反馈操作员
+                self._log(f"[测试项配置][WiFi] 刷新无线网卡失败：{exc}")
+                messagebox.showerror("刷新无线网卡失败", str(exc), parent=frame.winfo_toplevel())
+                return
+            wireless_card_combo.configure(values=names)
+            current_name = wireless_card_name_var.get().strip()
+            if not names:
+                self._log("[测试项配置][WiFi] 当前电脑没有检测到可用无线网卡。")
+                messagebox.showwarning(
+                    "未发现无线网卡",
+                    "当前电脑没有检测到可用无线网卡，请确认网卡已启用及驱动正常。",
+                    parent=frame.winfo_toplevel(),
+                )
+                return
+            if not current_name:
+                wireless_card_name_var.set(names[0])
+            self._log(
+                f"[测试项配置][WiFi] 已刷新无线网卡：{len(names)} 个，"
+                f"当前选择={wireless_card_name_var.get().strip() or '(未选择)'}"
+            )
+
+        ttk.Button(
+            frame,
+            text="刷新无线网卡",
+            command=refresh_wireless_cards,
+            style="Tool.TButton",
+        ).grid(row=4, column=3, sticky="w", padx=(12, 0), pady=(14, 6))
+
         Label(
             frame,
             text=(
-                "老工具当前仅支持 openwrt；bcm / mtk 已定义但执行时会提示未实现。"
-                "保存时统一小写。"
+                "主控关闭时不执行 WiFi 测试；2.4G / 5G 选择会保留。"
+                "ONU 方案保存时统一小写；指定网卡后，运行电脑找不到该网卡会明确失败，不会改用其它网卡。"
             ),
             foreground=COLOR_MUTED,
             background=COLOR_BG,
             wraplength=560,
             justify="left",
-        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        ).grid(row=5, column=0, columnspan=4, sticky="w", pady=(8, 0))
 
         frame.columnconfigure(1, weight=1)
+        frame.columnconfigure(3, weight=1)
 
         def capture() -> ConnectWifiSettings:
             return ConnectWifiSettings(
                 enable=int(enable_var.get()),
+                test_2g_enable=int(test_2g_var.get()),
+                test_5g_enable=int(test_5g_var.get()),
                 product_solution=(solution_var.get() or "openwrt").strip().lower(),
+                auth_mode=(auth_mode_var.get() or "WPA2-PSK").strip(),
+                cipher=(cipher_var.get() or "AES").strip(),
+                choose_wireless_card=int(choose_wireless_card_var.get()),
+                wireless_card_name=wireless_card_name_var.get().strip(),
             )
 
         def load(new_wifi: ConnectWifiSettings) -> None:
             enable_var.set(int(new_wifi.enable))
+            test_2g_var.set(int(new_wifi.test_2g_enable))
+            test_5g_var.set(int(new_wifi.test_5g_enable))
             solution_var.set((new_wifi.product_solution or "openwrt").strip().lower())
+            auth_mode_var.set(new_wifi.auth_mode or "WPA2-PSK")
+            cipher_var.set(new_wifi.cipher or "AES")
+            choose_wireless_card_var.set(int(new_wifi.choose_wireless_card))
+            wireless_card_name_var.set(new_wifi.wireless_card_name or "")
 
-        return {"capture": capture, "load": load}
+        return {"capture": capture, "load": load, "refresh_wireless_cards": refresh_wireless_cards}
 
     def _build_test_item_project_info_tab(
         self,
@@ -3553,63 +3713,240 @@ class LineCheckAssistant(Tk):
         )
 
     def _open_dut_config_module(self) -> None:
-        """打开 DUT 配置功能入口。
-
-        当前只建立 UI 边界；后续再在 service / core 层接入 UBUS 配置逻辑。
-        """
-        if self.dut_config_window is not None and self.dut_config_window.winfo_exists():
-            self.dut_config_window.deiconify()
-            self.dut_config_window.lift()
-            self.dut_config_window.focus_force()
+        """打开可扩展 DUT 配置窗口；首个 Tab 提供批量开启 Telnet。"""
+        if self.dut_config_window is not None and self.dut_config_window.exists():
+            self.dut_config_window.show()
+            if not getattr(self, "dut_config_running", False):
+                self._refresh_dut_config_targets()
             return
 
-        dialog = Toplevel(self)
-        self.dut_config_window = dialog
-        dialog.title("DUT配置")
-        dialog.geometry("620x300")
-        dialog.minsize(620, 300)
-        dialog.transient(self)
-        dialog.configure(background=COLOR_BG)
+        self.dut_config_window = DutConfigWindow(
+            self,
+            username_var=self.parameter_initial_username_var,
+            password_var=self.parameter_initial_password_var,
+            on_refresh=self._refresh_dut_config_targets,
+            on_start=self._start_dut_telnet_enable,
+            on_stop=self._stop_dut_telnet_enable,
+            on_close=self._close_dut_config_module,
+        )
+        self._refresh_dut_config_targets()
+        self._log("[DUT配置] 已打开 Telnet 配置页；目标来自主界面已勾选通道。")
 
-        content = Frame(dialog, padx=24, pady=22, background=COLOR_BG)
-        content.pack(fill="both", expand=True)
-        Label(
-            content,
-            text="DUT配置",
-            font=(FONT_FAMILY, 18, "bold"),
-            background=COLOR_BG,
-            foreground=COLOR_TEXT,
-        ).pack(anchor="w")
-        Label(
-            content,
-            text="计划使用 UBUS 实现 DUT 配置，具体配置项和执行逻辑待后续完善。",
-            background=COLOR_BG,
-            foreground=COLOR_TEXT,
-            anchor="w",
-            justify="left",
-        ).pack(fill="x", anchor="w", pady=(18, 8))
-        Label(
-            content,
-            text="当前页面仅作为功能入口，不会连接 DUT，也不会下发任何 UBUS 命令。",
-            background=COLOR_BG,
-            foreground=COLOR_MUTED,
-            anchor="w",
-            justify="left",
-        ).pack(fill="x", anchor="w")
+    def _collect_dut_telnet_requests(self) -> list[DutTelnetEnableRequest]:
+        """把主界面已勾选通道快照转换成 DUT service 请求。"""
+        self._capture_current_channel()
+        username = self.parameter_initial_username_var.get().strip()
+        password = self.parameter_initial_password_var.get()
+        requests: list[DutTelnetEnableRequest] = []
+        for channel in self.channels:
+            if not channel.enabled:
+                continue
+            vlan = adapter_alias_from_display(
+                channel.vlan_name or channel.adapter_alias
+            ).strip()
+            adapter_alias = adapter_alias_from_display(
+                channel.adapter_alias or channel.vlan_name
+            ).strip()
+            requests.append(
+                DutTelnetEnableRequest(
+                    channel=channel.label,
+                    vlan=vlan.lower() if vlan.lower().startswith("vlan") else vlan,
+                    adapter_alias=adapter_alias,
+                    bind_ip=(channel.network_card_ip or "").strip(),
+                    device_host=(channel.device_manage_ip or "").strip(),
+                    subnet_mask=(channel.subnet_mask or DEFAULT_SUBNET_MASK).strip(),
+                    username=username,
+                    password=password,
+                    ubus_port=80,
+                )
+            )
+        return requests
 
-        def close_dialog() -> None:
-            dialog.destroy()
-            if self.dut_config_window is dialog:
-                self.dut_config_window = None
+    def _dut_request_validation_errors(
+        self, requests: list[DutTelnetEnableRequest]
+    ) -> dict[str, str]:
+        errors_by_channel: dict[str, list[str]] = {}
+        channels_by_vlan: dict[str, list[str]] = {}
+        for request in requests:
+            errors_by_channel[request.channel] = list(
+                validate_dut_telnet_request(request)
+            )
+            normalized_vlan = request.vlan.strip().casefold()
+            if normalized_vlan:
+                channels_by_vlan.setdefault(normalized_vlan, []).append(request.channel)
+        for vlan, channels in channels_by_vlan.items():
+            if len(channels) <= 1:
+                continue
+            duplicate_message = (
+                f"VLAN {vlan} 被多个通道重复选择：{'、'.join(channels)}"
+            )
+            for channel in channels:
+                errors_by_channel[channel].append(duplicate_message)
+        return {
+            channel: "配置错误：" + "；".join(errors)
+            for channel, errors in errors_by_channel.items()
+            if errors
+        }
 
-        ttk.Button(
-            content,
-            text="关闭",
-            command=close_dialog,
-            style="Secondary.TButton",
-        ).pack(side="bottom", anchor="e")
-        dialog.protocol("WM_DELETE_WINDOW", close_dialog)
-        self._log("[DUT配置] 已打开功能入口；UBUS 实现待完善，本次未下发任何设备命令。")
+    def _refresh_dut_config_targets(self) -> None:
+        if self.dut_config_running:
+            return
+        requests = self._collect_dut_telnet_requests()
+        errors = self._dut_request_validation_errors(requests)
+        self.dut_config_requests = requests
+        self.dut_config_validation_errors = errors
+        window = self.dut_config_window
+        if window is not None and window.exists():
+            window.set_targets(requests, errors)
+        self._log(
+            f"[DUT配置] 已刷新目标：{len(requests)} 台，"
+            f"配置错误 {len(errors)} 台。"
+        )
+
+    def _start_dut_telnet_enable(self) -> None:
+        if self.dut_config_running:
+            return
+        self._refresh_dut_config_targets()
+        window = self.dut_config_window
+        if window is None or not window.exists():
+            return
+        requests = list(self.dut_config_requests)
+        if not requests:
+            messagebox.showwarning(
+                "没有目标 DUT",
+                "请先在主界面勾选至少一个通道并完成 VLAN 配置。",
+                parent=window.window,
+            )
+            return
+        if self.dut_config_validation_errors:
+            details = "\n".join(
+                f"- {channel}：{message.removeprefix('配置错误：')}"
+                for channel, message in self.dut_config_validation_errors.items()
+            )
+            messagebox.showerror(
+                "DUT 配置不完整",
+                f"请先修正以下配置：\n{details}",
+                parent=window.window,
+            )
+            return
+        parallel_count = clamp_dut_parallel_count(
+            window.parallel_count() or DEFAULT_DUT_PARALLEL_COUNT
+        )
+        target_lines = "\n".join(
+            f"- {request.channel} / {request.vlan} / "
+            f"{request.bind_ip} → {request.device_host}:23"
+            for request in requests
+        )
+        if not messagebox.askyesno(
+            "确认批量开启 Telnet",
+            f"将处理 {len(requests)} 台 DUT，并行数 {parallel_count}：\n"
+            f"{target_lines}\n\n"
+            "每台将依次启用 VLAN 网卡、设置 PC 静态 IP、通过 UBUS 修改 "
+            "AccessCtrl Telnet 规则，并从对应源 IP 验证 TCP 23 端口。\n\n"
+            "这会修改本机网卡配置和 DUT 防火墙规则，是否继续？",
+            parent=window.window,
+        ):
+            self._log("[DUT配置] 操作员取消批量开启 Telnet，本次未下发命令。")
+            return
+
+        self.dut_config_running = True
+        self.dut_config_cancel_event = threading.Event()
+        window.mark_all_pending()
+        window.set_running(True)
+        window.set_summary(
+            f"正在执行：共 {len(requests)} 台，并行数 {parallel_count}"
+        )
+        self._log(
+            f"[DUT配置] 开始批量开启 Telnet：{len(requests)} 台，"
+            f"并行数 {parallel_count}。"
+        )
+        threading.Thread(
+            target=self._dut_telnet_enable_worker,
+            args=(requests, parallel_count, self.dut_config_cancel_event),
+            name="dut-telnet-batch",
+            daemon=True,
+        ).start()
+
+    def _dut_telnet_enable_worker(
+        self,
+        requests: list[DutTelnetEnableRequest],
+        parallel_count: int,
+        cancel_event: threading.Event,
+    ) -> None:
+        try:
+            results = run_dut_telnet_enable_batch(
+                requests,
+                max_workers=parallel_count,
+                stop_event=cancel_event,
+                on_output=self.log_queue.put,
+                on_item_complete=lambda result: self.dut_config_ui_queue.put(
+                    ("item", result)
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001 - 批次边界必须回收 UI 状态
+            self.log_queue.put(f"[DUT配置] 批次异常：{exc}")
+            results = [
+                DutTelnetEnableResult(
+                    request,
+                    False,
+                    "exception",
+                    f"DUT 配置批次异常：{exc}",
+                )
+                for request in requests
+            ]
+            for result in results:
+                self.dut_config_ui_queue.put(("item", result))
+        self.dut_config_ui_queue.put(("finished", results))
+
+    def _finish_dut_telnet_enable(
+        self, results: list[DutTelnetEnableResult]
+    ) -> None:
+        success_count = sum(1 for result in results if result.ok)
+        stopped_count = sum(1 for result in results if result.stage == "stopped")
+        failure_count = len(results) - success_count - stopped_count
+        self.dut_config_running = False
+        self.dut_config_cancel_event = None
+        summary = (
+            f"DUT Telnet 配置结束：成功 {success_count}，失败 {failure_count}，"
+            f"停止/跳过 {stopped_count}，共 {len(results)} 台"
+        )
+        self._log(f"[DUT配置] {summary}")
+        window = self.dut_config_window
+        if window is not None and window.exists():
+            window.set_running(False)
+            window.set_summary(summary)
+            if failure_count or stopped_count:
+                messagebox.showwarning("DUT 配置结束", summary, parent=window.window)
+            else:
+                messagebox.showinfo("DUT 配置完成", summary, parent=window.window)
+
+    def _stop_dut_telnet_enable(self) -> None:
+        if not self.dut_config_running or self.dut_config_cancel_event is None:
+            self._log("[DUT配置] 当前没有正在执行的 Telnet 配置批次。")
+            return
+        self.dut_config_cancel_event.set()
+        window = self.dut_config_window
+        if window is not None and window.exists():
+            window.set_running(True, stopping=True)
+        self._log(
+            "[DUT配置] 操作员请求停止：尚未开始的 DUT 将跳过，"
+            "正在执行的网络或 UBUS 调用将在安全点结束。"
+        )
+
+    def _close_dut_config_module(self) -> None:
+        window = self.dut_config_window
+        if window is None:
+            return
+        if self.dut_config_running:
+            messagebox.showwarning(
+                "DUT 配置进行中",
+                "请先点击“停止”，等待当前批次安全结束后再关闭窗口。",
+                parent=window.window,
+            )
+            return
+        window.destroy()
+        if self.dut_config_window is window:
+            self.dut_config_window = None
 
     def _rebuild_channel_config_rows(self) -> None:
         for child in self.channel_table.winfo_children():

@@ -9,7 +9,7 @@
 - socket.create_connection(..., source_address=(bind_ip, 0)) 强制从 PC 指定网卡出口。
 - bind_ip 启动前由 bind_socket.ip_is_bindable_locally 预检；不可绑时直接抛错,不回退 0.0.0.0。
 - 单读线程把所有 RX 字节写入 ``bytearray _history``；cursor() 即 ``len(_history)``。
-- 支持 ``sensitive`` 标志：日志在 _display 中按 _known_secrets 脱敏。
+- 保留 ``sensitive`` / ``known_secrets`` 形参兼容旧调用方；按项目约定，终端与日志明文显示密码。
 - 与 PySerialSession 同语义：wait_for_any/all 在 cursor 之后字节历史里按 lowercase 子串匹配。
 
 限制（切片 3 阶段）：
@@ -32,6 +32,32 @@ Marker = Union[bytes, str]
 DEFAULT_TELNET_PORT = 23
 DEFAULT_CONNECT_TIMEOUT_SECONDS = 15.0
 DEFAULT_READ_TIMEOUT_SECONDS = 5.0
+
+
+def probe_telnet_port(
+    bind_ip: str,
+    device_host: str,
+    device_port: int = DEFAULT_TELNET_PORT,
+    timeout: float = 5.0,
+) -> None:
+    """严格绑定指定源 IP 探测 Telnet TCP 端口；成功后立即关闭连接。"""
+    if not ip_is_bindable_locally(bind_ip):
+        raise RuntimeError(
+            f"Telnet 探测源 IP 不属于本机网卡：{bind_ip}。"
+            "请检查对应 VLAN 网卡和 network_card_ip.ini。"
+        )
+    try:
+        with socket.create_connection(
+            (device_host, int(device_port)),
+            source_address=(bind_ip, 0),
+            timeout=float(timeout),
+        ):
+            return
+    except OSError as exc:
+        raise RuntimeError(
+            f"Telnet 端口不可连接 {device_host}:{int(device_port)} "
+            f"源 IP {bind_ip}：{exc}"
+        ) from exc
 
 
 def _normalize_marker(marker: Marker) -> bytes:

@@ -30,6 +30,15 @@ ORDER_GLOBAL_RETRY_INTERVAL_KEY = "command_fail_retry_interval_time"
 
 # 默认值:与老工具 ``config.ini`` 的 ``command_fail_retry_interval_time = 60`` 保持一致。
 DEFAULT_COMMAND_FAIL_RETRY_INTERVAL = 60
+WIFI_AUTH_MODE_OPTIONS = (
+    "WPA2-PSK",
+    "WPA-PSK",
+    "WPA-PSK/WPA2-PSK",
+    "WPA3-PSK",
+    "WPA2-PSK/WPA3-PSK",
+    "None",
+)
+WIFI_CIPHER_OPTIONS = ("AES", "TKIP", "TKIP+AES")
 
 # ``[order]`` 每条命令的默认重试次数;老工具不写 retry_times 时也按 5 次处理。
 DEFAULT_ORDER_RETRY_TIMES = 5
@@ -92,7 +101,13 @@ class ConnectWifiSettings:
     """``[connect_wifi]`` 段。"""
 
     enable: int = 0
+    test_2g_enable: int = 1
+    test_5g_enable: int = 1
     product_solution: str = "openwrt"
+    auth_mode: str = "WPA2-PSK"
+    cipher: str = "AES"
+    choose_wireless_card: int = 0
+    wireless_card_name: str = ""
 
 
 @dataclass
@@ -309,7 +324,21 @@ class TestItemConfigStore:
         section = CONNECT_WIFI_SECTION
         return ConnectWifiSettings(
             enable=_parse_int(parser.get(section, "enable", fallback="0"), 0),
+            test_2g_enable=_parse_int(
+                parser.get(section, "test_2g_enable", fallback="1"), 1
+            ),
+            test_5g_enable=_parse_int(
+                parser.get(section, "test_5g_enable", fallback="1"), 1
+            ),
             product_solution=parser.get(section, "product_solution", fallback="openwrt"),
+            auth_mode=parser.get(section, "auth_mode", fallback="WPA2-PSK"),
+            cipher=parser.get(section, "cipher", fallback="AES"),
+            choose_wireless_card=_parse_int(
+                parser.get(section, "choose_wireless_card", fallback="0"), 0
+            ),
+            wireless_card_name=parser.get(
+                section, "wireless_card_name", fallback=""
+            ),
         )
 
     def _load_project_info(self, parser: configparser.RawConfigParser) -> ProjectInfoSettings:
@@ -352,10 +381,15 @@ class TestItemConfigStore:
 
     def _dump_connect_wifi(self, wifi: ConnectWifiSettings) -> dict:
         # enable 字段统一为 0/1,即便 UI 传入 Python bool 也强制转换,避免保存为 "True"/"False"。
-        enable_int = 1 if bool(wifi.enable) else 0
         return {
-            "enable": str(enable_int),
+            "enable": str(1 if bool(wifi.enable) else 0),
+            "test_2g_enable": str(1 if bool(wifi.test_2g_enable) else 0),
+            "test_5g_enable": str(1 if bool(wifi.test_5g_enable) else 0),
             "product_solution": (wifi.product_solution or "openwrt").strip().lower(),
+            "auth_mode": (wifi.auth_mode or "WPA2-PSK").strip(),
+            "cipher": (wifi.cipher or "AES").strip(),
+            "choose_wireless_card": str(1 if bool(wifi.choose_wireless_card) else 0),
+            "wireless_card_name": (wifi.wireless_card_name or "").strip(),
         }
 
     def _dump_project_info(self, info: ProjectInfoSettings) -> dict:

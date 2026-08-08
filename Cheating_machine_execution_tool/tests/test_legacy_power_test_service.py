@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -60,6 +61,12 @@ password = secret
 [connect_wifi]
 enable = 1
 product_solution = openwrt
+test_2g_enable = 0
+test_5g_enable = 1
+auth_mode = WPA3-PSK
+cipher = TKIP+AES
+choose_wireless_card = 1
+wireless_card_name = Wi-Fi 2
 """,
         encoding="utf-8",
     )
@@ -201,6 +208,12 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
         self.assertEqual(request.profile_filename, "test_project_config.ini")
         self.assertEqual(request.number_of_tests, 500)
         self.assertTrue(request.connect_wifi_enable)
+        self.assertFalse(request.wifi_test_2g_enable)
+        self.assertTrue(request.wifi_test_5g_enable)
+        self.assertEqual(request.wifi_auth_mode, "WPA3-PSK")
+        self.assertEqual(request.wifi_cipher, "TKIP+AES")
+        self.assertTrue(request.wifi_choose_wireless_card)
+        self.assertEqual(request.wifi_wireless_card_name, "Wi-Fi 2")
         self.assertEqual(request.channels[0].number, 5)
         self.assertEqual(request.ping_target_ip, "192.168.1.1")
 
@@ -213,6 +226,42 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
                     root,
                     (LegacyPowerChannel(5, "192.168.1.105"),),
                 )
+
+    def test_prepare_request_rejects_selected_wifi_card_without_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = _write_config_tree(Path(temp_dir))
+            profile_path = root / "config" / "test_project_config.ini"
+            profile_path.write_text(
+                profile_path.read_text(encoding="utf-8").replace(
+                    "wireless_card_name = Wi-Fi 2",
+                    "wireless_card_name =",
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "无线网卡名称为空"):
+                prepare_legacy_power_test_request(
+                    root,
+                    (LegacyPowerChannel(5, "192.168.1.105"),),
+                )
+
+    def test_headless_onu_config_uses_all_wifi_profile_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            request = prepare_legacy_power_test_request(
+                _write_config_tree(Path(temp_dir)),
+                (LegacyPowerChannel(5, "192.168.1.105"),),
+            )
+
+        with patch.dict(sys.modules, {}, clear=False):
+            onu_config = service_module._install_headless_legacy_stubs(request)
+            self.assertEqual(onu_config.connect_wifi_enable_status, 1)
+            self.assertEqual(onu_config.choose_test_2g_flag, 0)
+            self.assertEqual(onu_config.choose_test_5g_flag, 1)
+            self.assertEqual(onu_config.connect_wifi_auth_mode, "WPA3-PSK")
+            self.assertEqual(onu_config.connect_wifi_ciper, "TKIP+AES")
+            self.assertEqual(onu_config.Onu_solution_type, "openwrt")
+            self.assertEqual(onu_config.choose_wireless_card_flag, 1)
+            self.assertEqual(onu_config.choose_wireless_card_name, "Wi-Fi 2")
 
     def test_cycle_progress_uses_slowest_selected_channel(self) -> None:
         completed_by_channel = {5: 0, 6: 0}
@@ -335,6 +384,12 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
             emails="",
             connect_wifi_enable=False,
             product_solution="openwrt",
+            wifi_test_2g_enable=True,
+            wifi_test_5g_enable=True,
+            wifi_auth_mode="WPA2-PSK",
+            wifi_cipher="AES",
+            wifi_choose_wireless_card=False,
+            wifi_wireless_card_name="",
             channels=(LegacyPowerChannel(5, "192.168.1.105"),),
             ping_target_ip="192.168.1.1",
         )
@@ -381,6 +436,10 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
             1,
         )
         self.assertTrue(any("已启用精简日志" in line for line in emitted))
+        self.assertIn(
+            "[执行开关机测试] WiFi连接配置：主控=关闭，本次跳过 WiFi 连接测试。",
+            emitted,
+        )
         self.assertIn("成功：1 个通道全部完成", emitted[-1])
         self.assertEqual(progress, [(0, 1), (1, 1)])
 

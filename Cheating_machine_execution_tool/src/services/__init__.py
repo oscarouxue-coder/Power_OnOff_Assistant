@@ -10,6 +10,14 @@ from .pipeline_orchestrator import (
     SubTaskStatus,
     compute_all_subtask_statuses,
 )
+from .dut_config_service import (
+    DEFAULT_DUT_PARALLEL_COUNT,
+    MAX_DUT_PARALLEL_COUNT,
+    clamp_dut_parallel_count,
+    run_dut_telnet_enable_batch,
+    run_single_dut_telnet_enable,
+    validate_dut_telnet_request,
+)
 from .legacy_power_test_service import (
     LegacyPowerChannel,
     LegacyPowerTestRequest,
@@ -51,6 +59,8 @@ from .test_item_execution_service import (
 
 __all__ = [
     "LOGIN_INTER_STEP_SLEEP_SECONDS",
+    "DEFAULT_DUT_PARALLEL_COUNT",
+    "MAX_DUT_PARALLEL_COUNT",
     "LOGIN_PASSWORD_PROMPT_TIMEOUT_SECONDS",
     "LOGIN_SUCCESS_TIMEOUT_SECONDS",
     "LOGIN_USER_PROMPT_TIMEOUT_SECONDS",
@@ -79,6 +89,7 @@ __all__ = [
     "SubTaskStatus",
     "UpgradePowerCycleCoordinator",
     "build_log_path",
+    "clamp_dut_parallel_count",
     "compute_all_subtask_statuses",
     "power_on_selected_channels",
     "prepare_legacy_power_test_request",
@@ -87,9 +98,12 @@ __all__ = [
     "run_parallel_tftp_command_upgrades",
     "run_parallel_tftp_put_upgrades",
     "run_single_full_package_upgrade",
+    "run_dut_telnet_enable_batch",
+    "run_single_dut_telnet_enable",
     "run_single_sample_parameter_write",
     "run_legacy_power_test",
     "run_test_item_execution",
     "turn_off_selected_channels",
     "turn_on_selected_channels",
+    "validate_dut_telnet_request",
 ]

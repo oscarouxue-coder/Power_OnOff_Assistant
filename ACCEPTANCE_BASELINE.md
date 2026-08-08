@@ -1,6 +1,6 @@
 # Acceptance Baseline
 
-更新：2026-08-08（开关机测试轮次进度展示）
+更新：2026-08-08（DUT 配置批量 UBUS 开启 Telnet）
 
 > 与 `PROJECT_STATUS.md` 的关系：本文按"实现 → 单测 → 真实样机验收"三态罗列验收证据与不变量，作为独立验收基线。`PROJECT_STATUS.md` 保留面向项目的进度叙述；两者冲突时以本文为准。
 >
@@ -58,7 +58,7 @@ python scripts\verify_baseline.py
 
 ### 1.5 主程序入口自检
 
-可分别打开且行为正常：页面升级、全包升级（Tftp指令 / Tftp Put）、写样机参数（默认 telnet 路径）、生成批量样机参数表、ONU 注册、串口日志记录。
+可分别打开且行为正常：页面升级、全包升级（Tftp指令 / Tftp Put）、写样机参数（默认 telnet 路径）、生成批量样机参数表、ONU 注册、串口日志记录、DUT 配置。
 
 ---
 
@@ -167,7 +167,7 @@ python scripts\verify_baseline.py
   - `factory_bind_ip` / `factory_device_host` 在 `network_card_ip.ini` 故意留空，由派生逻辑兜底；现场若需特殊工厂模式网段（与 192.168.29.x 不同），手动填入 ini 即可覆盖派生
 - **边界与异常**：
   - 参数值不允许双引号 / 回车 / 换行
-  - 密码类字段在终端与日志脱敏
+  - 按项目负责人 2026-08-08 最新约定，密码类字段允许在界面、终端和日志中明文显示，不设置脱敏验收要求
   - 源 IP 不可绑时强提示人工检查 `network_card_ip.ini`，不回退 `0.0.0.0`
   - 派生失败（`network_card_ip` / `device_manage_ip` 缺失或格式无效）时 `_start_sample_parameter_write` 弹错误并要求补齐
   - **`ppctl clear` 与 `ppctl set AGING_STATE=1` 选项化（2026-07-19）**：两个命令不再默认下发；`SampleParameterWriteRequest` 新增 `clear_parameters` / `exit_aging` 两个 `bool` 字段（默认 `False`），由主界面 Checkbutton「清空参数」/「退出老化」控制。勾选后，工厂模式二次登录成功时分别下发对应命令；未勾选时主执行日志输出 `清空参数：关闭，跳过` / `退出老化：关闭，跳过`，不实际下发命令。顺序固定为「退出老化 → 清空参数 → 15 项 ppctl set/get」。两个字段状态持久化到 `sample_upgrade_settings.ini`（`parameter_clear_parameters` / `parameter_exit_aging`），旧 ini 兼容回退 False。需在 6 / 8 台真实样机上回归确认现场是否符合"勾选才下发"的语义。
@@ -178,7 +178,7 @@ python scripts\verify_baseline.py
   - 串口路径保留作 transport 配置回退入口；其他功能（页面升级 / 全包升级 / 串口终端）不受影响
   - UBUS HTTP 客户端不复用 `SdmcUbusLib`（其会话静态、不允许多并发）— 如要替换须保证同等并发与源 IP 锁源语义
   - 工厂模式网段约定 29（第 3 段替换）必须保持稳定；变更前需通知所有现场并同步升级 `network_ops.py` 常量
-- **待确认**：2 / 8 台端点独立 VLAN 真实样机并行验收（VLAN/MAC 对应、`set/get` 读回校验、取消清理、退出工厂模式后的重启、日志脱敏、UBUS 启用 telnet 与 telnet 登录衔接时序；2026-07-19 已用 6 台覆盖了 2 / 4 / 8 区间中段代表性场景）
+- **待确认**：2 / 8 台端点独立 VLAN 真实样机并行验收（VLAN/MAC 对应、`set/get` 读回校验、取消清理、退出工厂模式后的重启、明文凭据核对、UBUS 启用 telnet 与 telnet 登录衔接时序；2026-07-19 已用 6 台覆盖了 2 / 4 / 8 区间中段代表性场景）
 - **对应测试**：`tests/test_sample_parameter_service.py`、`tests/test_telnet_transport.py`、`tests/test_ubus_http_client.py`、`tests/test_ubus_enable_telnet.py`、`tests/test_sample_parameter_table.py`、`tests/test_sample_parameter_app.py`、`tests/test_channel_config.py`、`tests/test_regression_sleep_fn.py`、`tests/test_network_ops.py`
 
 ### 2.8 随机参数表生成（`.xlsx`）
@@ -230,7 +230,9 @@ python scripts\verify_baseline.py
   - `config.ini [other_config] command_fail_retry_interval_time` 是指令重试间隔的唯一持久化位置；测试项页面从该处加载并只写回该处。`test_project_config.ini` 与默认模板的 `[order]` 只保存测试命令，不得出现同名键；加载历史测试项目文件时必须忽略残留同名键，不得把它识别为命令，也不得覆盖 `config.ini` 当前值。更新时不得破坏 `config.ini` 其它段、配置项或注释
     - 强制基线测试：`test_test_item_config_store.TestItemConfigStoreTests.test_save_writes_retry_interval_only_to_legacy_other_config`
   - 「测试项配置」第五个 Tab 固定命名“开关机运行参数”，只展示 `startup_time`、`interval_time`、`number_of_tests`、`wait_command_done` 对应的四项中文名称；左侧必须使用黑色中文名称，不得显示原始键名或右侧灰色说明列；`communication_method`、`baud_rate`、`selected_profile`、`telnet_enable` 均不得显示，保存时前三项必须保持原值，`telnet_enable` 必须由 Telnet 页反向计算并自动写入
-  - 「测试项配置」Telnet 与 WiFi 页所有字段标签必须显示中文含义，不得直接显示 `request_url`、`input_user_flag`、`product_solution` 等 INI 原始键名；仅改变 UI 文案，INI 键名、取值和保存格式不得改变
+  - 「测试项配置」Telnet 与 WiFi 页所有字段标签必须显示中文含义，不得直接显示 `request_url`、`input_user_flag`、`product_solution` 等 INI 原始键名
+  - WiFi 页必须完整映射旧 WiFi 参数窗口并保存到当前测试方案 `[connect_wifi]`：`enable`（主控）、`test_2g_enable`、`test_5g_enable`、`product_solution`、`auth_mode`、`cipher`、`choose_wireless_card`、`wireless_card_name`；老配置缺新增键时必须兼容回退为“2.4G/5G 开启、WPA2-PSK、AES、不指定网卡”。“刷新无线网卡”只枚举当前 pywifi 接口，不执行连接
+  - 全流程子任务7必须把上述 8 项映射到无 GUI `OnuCongfig`，不得继续把频段、认证、加密或网卡选择写死；主控关闭时明确记录跳过日志。指定网卡开启但名称为空时启动前失败，运行电脑不存在所选网卡时子进程明确失败，不得静默回退其它网卡
   - 点击「测试项配置」后，窗口必须先隐藏构建五个 Tab 和动态命令控件，再于下一轮 Tk 事件循环显示并处理完整绘制队列；不得依赖移动鼠标或其它额外输入才完成 Windows 客户区绘制
   - 2026-08-07 Windows 桌面确认：项目负责人确认窗口绘制 BUG 已解决，点击后不再出现只有标题的透明窗口，无需移动鼠标即可完整显示
   - 旧工具“电源控制”channel 1～16 的复选框必须严格等于新工具选中配置：`network_card_ip.ini` 中存在且 `enabled=1` 的 `channel_N` 才勾选，其余（不存在或 `enabled=0`）全部取消勾选；同步只读配置，不得改写新工具通道
@@ -241,8 +243,8 @@ python scripts\verify_baseline.py
   - 本机配置文件不入 Git
   - INI 转义（含 `%`）不得再触发 `ConfigParser` 内插崩溃
   - 开发使用 `.venv_serial_upgrade`，不污染全局或 `.venv`
-- **对应测试**：`tests/test_sample_upgrade_settings_store.py`、`tests/test_onu_registration_store.py`、`tests/test_legacy_ui_defaults.py`、`tests/test_legacy_ui_defaults_store.py`、`tests/test_app.py`
-- **待确认**：Windows 桌面确认第五个 Tab 只显示四项时间/次数参数，不显示通信方式、Telnet Enable、波特率和默认方案；修改四项并保存/重开确认生效，隐藏三项保持原值；再分别保存 `telnet_default_on=1/0`，确认旧配置镜像及旧工具复选框分别为 `telnet_enable=0/1`
+- **对应测试**：`tests/test_sample_upgrade_settings_store.py`、`tests/test_onu_registration_store.py`、`tests/test_legacy_ui_defaults.py`、`tests/test_legacy_ui_defaults_store.py`、`tests/test_test_item_config_store.py`、`tests/test_wifi_interfaces.py`、`tests/test_legacy_power_test_service.py`、`tests/test_app.py`
+- **待确认**：Windows 桌面确认第五个 Tab 只显示四项时间/次数参数，不显示通信方式、Telnet Enable、波特率和默认方案；修改四项并保存/重开确认生效，隐藏三项保持原值；再分别保存 `telnet_default_on=1/0`，确认旧配置镜像及旧工具复选框分别为 `telnet_enable=0/1`；WiFi 页确认 8 项加载/保存、无线网卡刷新及子任务7真实连接结果
 
 ### 2.12 「全流程执行」子任务编排器（主界面「检查并执行测试」按钮升级）
 
@@ -297,16 +299,20 @@ python scripts\verify_baseline.py
   - `tests/test_app.py`（+1 项：`_current_sample_upgrade_settings` 透传 2 个新字段）
   - `tests/test_pipeline_window.py`（窗口默认无勾选、确认提示、上下文不加载测试项目配置及 7 项状态完整性）
 
-### 2.13 DUT 配置入口
+### 2.13 DUT 配置 - UBUS 批量开启 Telnet
 
-- **状态**：入口已实现，UBUS 业务逻辑待定
+- **状态**：已实现未验收
 - **核心行为**：
-  - 主界面“串口日志”右侧固定显示“DUT配置”按钮
-  - 点击后打开可复用的独立占位窗口，显示“计划使用 UBUS，具体逻辑待完善”
-  - 当前仅建立 UI 入口，不得实例化 UBUS 客户端、连接 DUT 或下发任何设备命令
-  - 打开入口时主程序执行日志必须明确记录“UBUS 实现待完善，本次未下发任何设备命令”
-- **待确认**：Windows 桌面确认按钮位置、占位窗口文案和重复点击复用行为
-- **对应测试**：`tests/test_app.py`（工具栏相对位置、窗口复用、无 UBUS 下发边界）
+  - 主界面“串口日志”右侧固定显示“DUT配置”按钮；窗口采用 Notebook，首个 Tab 为“Telnet配置”，后续 DUT 能力通过新增 Tab 与独立 service 扩展
+  - 目标来自主界面已勾选通道；表格显示通道、VLAN、网卡、PC 静态 IP、样机管理 IP 和逐台状态；账号密码与写样机参数 `parameter_initial_*` 共享并明文显示、明文记录
+  - 启动前拒绝无目标、缺 VLAN/网卡/IP/凭据、IP 格式错误、源 IP 与样机 IP 相同以及重复 VLAN；确认框明确提示会修改本机网卡与 DUT AccessCtrl 规则
+  - 单台固定时序：`prepare_network_for_sample` 启用网卡和设置静态 IP → `wait_for_bindable_ip` 最多 15 秒 → 每台独立 `UbusHttpClient(bind_ip, device_host, 80)` → `enable_telnet_via_ubus` → 严格 `source_address=(bind_ip, 0)` 探测 TCP 23 端口；只有 UBUS 与端口探测均成功才标记成功
+  - UBUS 首次失败后最多重试 3 次、间隔 2 秒；端口最多探测 3 次、单次 5 秒、间隔 1 秒；UBUS client 每次尝试均关闭。Access denied 最终失败提示操作员退出样机 Web 管理页面后重试
+  - 支持 1–8 并行、默认 1；单台失败不阻断其它 DUT。点击停止后不再提交尚未开始的 DUT，已进入系统/HTTP 调用的任务在安全点结束；运行期间输入、刷新、开始和关闭均受控
+  - 主执行日志必须包含准备网络、明文 `session.login`、实际 `bbfdm get/set/add` 路径与参数、源/目标 TCP 23 验证以及逐台成功/失败/跳过和批次汇总
+- **禁止破坏**：不得复制第二份 AccessCtrl 协议；必须继续复用 `enable_telnet_via_ubus`，每台独立 UBUS client；Telnet 端口探测必须锁定对应 VLAN 源 IP且不得回退任意地址
+- **待确认**：Windows 桌面布局/Tab/按钮状态；真实样机覆盖 already_present、reused、added_iface、lan 回退、禁用网卡自动启用、Access denied 提示、1/8 台并行、停止和单台失败隔离
+- **对应测试**：`tests/test_dut_config_service.py`、`tests/test_telnet_transport.py`、`tests/test_ubus_enable_telnet.py`、`tests/test_app.py`
 
 ---
 

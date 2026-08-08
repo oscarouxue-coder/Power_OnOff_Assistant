@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.core.telnet_transport import TelnetSession
+from src.core.telnet_transport import TelnetSession, probe_telnet_port
 
 
 def free_port() -> int:
@@ -38,6 +38,25 @@ class _FakeSampleHandler(socketserver.BaseRequestHandler):
 
 
 class TelnetSessionTests(unittest.TestCase):
+    def test_probe_rejects_source_ip_that_is_not_bindable(self):
+        with patch("src.core.telnet_transport.ip_is_bindable_locally", return_value=False):
+            with self.assertRaisesRegex(RuntimeError, "探测源 IP"):
+                probe_telnet_port("192.168.1.112", "192.168.1.1")
+
+    def test_probe_binds_requested_source_ip_and_closes_immediately(self):
+        connection = unittest.mock.MagicMock()
+        connection.__enter__.return_value = connection
+        with patch("src.core.telnet_transport.ip_is_bindable_locally", return_value=True), \
+             patch("src.core.telnet_transport.socket.create_connection", return_value=connection) as create_connection:
+            probe_telnet_port("192.168.1.112", "192.168.1.1", timeout=5.0)
+
+        create_connection.assert_called_once_with(
+            ("192.168.1.1", 23),
+            source_address=("192.168.1.112", 0),
+            timeout=5.0,
+        )
+        connection.__exit__.assert_called_once()
+
     def test_constructor_rejects_ip_that_is_not_bindable(self):
         with patch("src.core.telnet_transport.ip_is_bindable_locally", return_value=False):
             with self.assertRaisesRegex(RuntimeError, "Telnet 源 IP"):

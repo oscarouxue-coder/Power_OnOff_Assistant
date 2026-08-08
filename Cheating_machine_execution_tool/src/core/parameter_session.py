@@ -6,8 +6,8 @@
 
 具体行为契约：
 - `cursor()`：返回历史中下一个\"未消费\"的位置（整型字节偏移）。
-- `write(data, sensitive=False)`：向底层写入原始字节；可选 `sensitive` 用于决定是否在
-   日志显示中把写入内容替换为脱敏字符串。
+- `write(data, sensitive=False)`：向底层写入原始字节；`sensitive` 仅为兼容旧调用方保留，
+   当前项目按操作员要求在终端和日志中明文显示密码类内容。
 - `send_line(text, sensitive=False)`：在 `write` 之外，对文本追加 `\\r`（或样机能识别的换行）后下发。
 - `wait_for_any(markers, timeout_seconds, cursor)`：阻塞至任一 marker（bytes/str，大小写不敏感）出现或超时；
    返回命中的 marker 或 None。`cursor` 是起始位置（与 `cursor()` 同语）。

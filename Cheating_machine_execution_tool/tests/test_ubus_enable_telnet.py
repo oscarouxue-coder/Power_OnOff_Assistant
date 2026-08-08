@@ -107,6 +107,27 @@ class BbfdmResponseValidationTests(unittest.TestCase):
 
 
 class EnableTelnetViaUbusTests(unittest.TestCase):
+    def test_operation_logs_include_real_paths_and_plaintext_password(self):
+        events: list[ubus_enable_telnet.EnableTelnetResult] = []
+        client = FakeClient(enable_state="0", rules=[])
+
+        enable_telnet_via_ubus(
+            client,
+            "telecomadmin",
+            "secret-password",
+            on_log=events.append,
+            sleep_fn=lambda _seconds: None,
+            sleep_after_seconds=0.0,
+        )
+
+        messages = "\n".join(event.message for event in events)
+        self.assertIn("TX UBUS session.login username=telecomadmin, password=secret-password", messages)
+        self.assertIn(f"TX UBUS bbfdm.get path={ACCESS_CTRL_ENABLE_PATH}", messages)
+        self.assertIn(f"TX UBUS bbfdm.set path={ACCESS_CTRL_ENABLE_OBJECT_PATH}", messages)
+        self.assertIn(f"TX UBUS bbfdm.get path={ACCESS_CTRL_RULE_BASE_PATH}", messages)
+        self.assertIn(f"TX UBUS bbfdm.add path={ACCESS_CTRL_RULE_BASE_PATH}", messages)
+        self.assertIn("secret-password", messages)
+
     def test_already_present_path_skips_set_and_logs(self):
         # 已有规则且 Enable=="True": 不应调 set/add,只走 already_present 且最终 sleep 1.0s。
         rules = [{

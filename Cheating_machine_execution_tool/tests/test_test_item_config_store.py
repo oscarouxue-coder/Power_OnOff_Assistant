@@ -46,7 +46,13 @@ class TestItemConfigStoreTests(unittest.TestCase):
             self.assertEqual(loaded.order.items, [])
             # [connect_wifi] 段默认值
             self.assertEqual(loaded.connect_wifi.enable, 0)
+            self.assertEqual(loaded.connect_wifi.test_2g_enable, 1)
+            self.assertEqual(loaded.connect_wifi.test_5g_enable, 1)
             self.assertEqual(loaded.connect_wifi.product_solution, "openwrt")
+            self.assertEqual(loaded.connect_wifi.auth_mode, "WPA2-PSK")
+            self.assertEqual(loaded.connect_wifi.cipher, "AES")
+            self.assertEqual(loaded.connect_wifi.choose_wireless_card, 0)
+            self.assertEqual(loaded.connect_wifi.wireless_card_name, "")
             # [project_info] 段缺省时 4 字段全部回退空串(Q1=A,仅编辑器)
             self.assertEqual(loaded.project_info.project_name, "")
             self.assertEqual(loaded.project_info.software_version, "")
@@ -89,7 +95,16 @@ class TestItemConfigStoreTests(unittest.TestCase):
                         ),
                     ],
                 ),
-                connect_wifi=ConnectWifiSettings(enable=1, product_solution="openwrt"),
+                connect_wifi=ConnectWifiSettings(
+                    enable=1,
+                    test_2g_enable=0,
+                    test_5g_enable=1,
+                    product_solution="openwrt",
+                    auth_mode="WPA3-PSK",
+                    cipher="TKIP+AES",
+                    choose_wireless_card=1,
+                    wireless_card_name="Wi-Fi 2",
+                ),
             )
 
             store.save(saved)

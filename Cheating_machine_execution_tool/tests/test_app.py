@@ -27,6 +27,8 @@ from line_check_assistant.onu_registration_store import OnuRegistrationConfig
 from line_check_assistant.page_upgrade import PageUpgradeItemResult, PageUpgradeRequest
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
 from line_check_assistant.test_item_config_store import TestItemConfigStore
+from src.models import DutTelnetEnableRequest, DutTelnetEnableResult
+from src.ui.dut_config_window import DutConfigWindow
 
 
 class CurrentChannelSelectionTests(unittest.TestCase):
@@ -280,23 +282,141 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
     def test_dut_config_entry_reuses_open_window(self):
         dut_window = Mock()
-        dut_window.winfo_exists.return_value = True
-        context = SimpleNamespace(dut_config_window=dut_window)
+        dut_window.exists.return_value = True
+        context = SimpleNamespace(
+            dut_config_window=dut_window,
+            dut_config_running=False,
+            _refresh_dut_config_targets=Mock(),
+        )
 
         LineCheckAssistant._open_dut_config_module(context)
 
-        dut_window.deiconify.assert_called_once_with()
-        dut_window.lift.assert_called_once_with()
-        dut_window.focus_force.assert_called_once_with()
+        dut_window.show.assert_called_once_with()
+        context._refresh_dut_config_targets.assert_called_once_with()
 
-    def test_dut_config_placeholder_explicitly_skips_ubus_dispatch(self):
-        """占位入口不得在逻辑未确认前下发 UBUS 命令。"""
+    def test_dut_config_window_is_extensible_and_dispatches_through_service(self):
+        """DUT 页面使用独立 Tab，UI 只调用 service，不复制 UBUS 协议。"""
         import inspect
 
-        source = inspect.getsource(LineCheckAssistant._open_dut_config_module)
-        self.assertIn("本次未下发任何设备命令", source)
-        self.assertNotIn("UbusHttpClient(", source)
-        self.assertNotIn("bbfdm.", source)
+        open_source = inspect.getsource(LineCheckAssistant._open_dut_config_module)
+        worker_source = inspect.getsource(LineCheckAssistant._dut_telnet_enable_worker)
+        window_source = inspect.getsource(DutConfigWindow.__init__)
+        self.assertIn("DutConfigWindow(", open_source)
+        self.assertIn("username_var=self.parameter_initial_username_var", open_source)
+        self.assertIn("password_var=self.parameter_initial_password_var", open_source)
+        self.assertIn('self.notebook.add(telnet_tab, text="Telnet配置")', window_source)
+        self.assertIn('text="开启 Telnet"', window_source)
+        self.assertNotIn('show="*"', window_source)
+        self.assertIn("run_dut_telnet_enable_batch(", worker_source)
+        self.assertNotIn("UbusHttpClient(", open_source + worker_source)
+        self.assertNotIn("bbfdm.", open_source + worker_source)
+
+    def test_dut_request_snapshot_uses_enabled_channel_and_plaintext_shared_password(self):
+        context = SimpleNamespace(
+            _capture_current_channel=Mock(),
+            parameter_initial_username_var=Mock(get=Mock(return_value="telecomadmin")),
+            parameter_initial_password_var=Mock(get=Mock(return_value="plain-password")),
+            channels=[
+                ChannelConfig(
+                    section="channel_12",
+                    vlan_name="VLAN112",
+                    adapter_alias="VLAN112",
+                    network_card_ip="192.168.1.112",
+                    device_manage_ip="192.168.1.1",
+                    enabled=True,
+                ),
+                ChannelConfig(section="channel_13", enabled=False),
+            ],
+        )
+
+        requests = LineCheckAssistant._collect_dut_telnet_requests(context)
+
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(requests[0].channel, "通道 12")
+        self.assertEqual(requests[0].vlan, "vlan112")
+        self.assertEqual(requests[0].password, "plain-password")
+
+    def test_start_dut_telnet_enable_confirms_and_starts_background_batch(self):
+        request = DutTelnetEnableRequest(
+            channel="通道 12",
+            vlan="vlan112",
+            adapter_alias="VLAN112",
+            bind_ip="192.168.1.112",
+            device_host="192.168.1.1",
+            subnet_mask="255.255.255.0",
+            username="telecomadmin",
+            password="plain-password",
+        )
+        window = Mock()
+        window.exists.return_value = True
+        window.parallel_count.return_value = "8"
+        context = SimpleNamespace(
+            dut_config_running=False,
+            dut_config_window=window,
+            dut_config_requests=[request],
+            dut_config_validation_errors={},
+            dut_config_cancel_event=None,
+            _refresh_dut_config_targets=Mock(),
+            _dut_telnet_enable_worker=Mock(),
+            _log=Mock(),
+        )
+        thread = Mock()
+        with patch("line_check_assistant.app.messagebox.askyesno", return_value=True), \
+             patch("line_check_assistant.app.threading.Thread", return_value=thread) as thread_class:
+            LineCheckAssistant._start_dut_telnet_enable(context)
+
+        self.assertTrue(context.dut_config_running)
+        self.assertIsInstance(context.dut_config_cancel_event, __import__("threading").Event)
+        window.mark_all_pending.assert_called_once_with()
+        window.set_running.assert_called_once_with(True)
+        thread_class.assert_called_once()
+        thread.start.assert_called_once_with()
+
+    def test_stop_dut_telnet_enable_sets_shared_cancel_event(self):
+        cancel_event = __import__("threading").Event()
+        window = Mock()
+        window.exists.return_value = True
+        context = SimpleNamespace(
+            dut_config_running=True,
+            dut_config_cancel_event=cancel_event,
+            dut_config_window=window,
+            _log=Mock(),
+        )
+
+        LineCheckAssistant._stop_dut_telnet_enable(context)
+
+        self.assertTrue(cancel_event.is_set())
+        window.set_running.assert_called_once_with(True, stopping=True)
+
+    def test_finish_dut_telnet_enable_restores_ui_and_summarizes(self):
+        request = DutTelnetEnableRequest(
+            channel="通道 12",
+            vlan="vlan112",
+            adapter_alias="VLAN112",
+            bind_ip="192.168.1.112",
+            device_host="192.168.1.1",
+            subnet_mask="255.255.255.0",
+            username="user",
+            password="pass",
+        )
+        window = Mock()
+        window.exists.return_value = True
+        context = SimpleNamespace(
+            dut_config_running=True,
+            dut_config_cancel_event=__import__("threading").Event(),
+            dut_config_window=window,
+            _log=Mock(),
+        )
+        result = DutTelnetEnableResult(request, True, "completed", "ok")
+
+        with patch("line_check_assistant.app.messagebox.showinfo") as showinfo:
+            LineCheckAssistant._finish_dut_telnet_enable(context, [result])
+
+        self.assertFalse(context.dut_config_running)
+        self.assertIsNone(context.dut_config_cancel_event)
+        window.set_running.assert_called_once_with(False)
+        self.assertIn("成功 1", window.set_summary.call_args.args[0])
+        showinfo.assert_called_once()
 
     def test_reveal_completed_dialog_flushes_layout_before_showing(self):
         dialog = Mock()
@@ -385,9 +505,21 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         ):
             self.assertNotIn(old_label, telnet_source)
 
-        self.assertIn('text="启用 WiFi 连接测试"', wifi_source)
-        self.assertIn('text="产品方案"', wifi_source)
+        for label in (
+            "连接 WiFi（主控）",
+            "测试 2.4G WiFi",
+            "测试 5G WiFi",
+            "ONU 方案类型",
+            "认证方式",
+            "加密算法",
+            "指定无线网卡",
+            "刷新无线网卡",
+        ):
+            self.assertIn(label, wifi_source)
         self.assertNotIn('text="product_solution"', wifi_source)
+        self.assertIn("list_wifi_interface_names()", wifi_source)
+        self.assertIn("wifi.test_2g_enable", wifi_source)
+        self.assertIn("wifi.wireless_card_name", wifi_source)
 
     def test_test_item_command_groups_use_wider_vertical_spacing(self):
         """测试项命令组之间应有明显留白，段内布局保持不变。"""

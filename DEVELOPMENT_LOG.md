@@ -2,6 +2,26 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-08 - 实现 DUT 批量开启 Telnet
+
+- 类型：功能
+- 背景：主界面“DUT配置”原来只有占位窗口。项目负责人要求参考写样机参数的 UBUS 能力，对主界面已勾选 DUT 批量开启 Telnet；随后确认 DUT 页未来还会增加其它功能，且项目密码无需保护、允许明文显示。
+- 完成内容：① DUT 窗口改为可扩展 Notebook，首个 Tab 为“Telnet配置”，后续功能可追加独立 Tab；② 目标表展示通道/VLAN/网卡/PC IP/样机 IP/状态，账号密码与写参首次登录凭据共享且明文显示；③ 新增 DUT 请求/结果模型和独立 service，单台按“准备网络→等源 IP 可绑→UBUS AccessCtrl 开 Telnet→锁源验证 TCP 23”执行；④ 1–8 并行默认1，单台失败隔离，动态提交使停止后不再启动后续 DUT；⑤ UBUS 首次失败后重试3次，端口探测3次，每次 client 确保关闭；⑥ 新增严格 `source_address=(bind_ip, 0)` 端口探测，不回退任意地址；⑦ UBUS 日志补齐明文 login 与实际 `bbfdm get/set/add` 路径/参数，Access denied 给出退出 Web 管理页提示；⑧ UI 结果通过主线程队列回收，运行中锁定输入/刷新/关闭并提供停止；⑨ 补齐 service、源绑定、真实 UBUS 日志、UI 共享凭据/并发/停止回归并加入强制基线；⑩ 同步密码明文验收口径。
+- 修改文件：`.claude/plans/dut_config_enable_telnet.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/core/parameter_session.py`、`Cheating_machine_execution_tool/src/core/telnet_transport.py`、`Cheating_machine_execution_tool/src/core/ubus_enable_telnet.py`、`Cheating_machine_execution_tool/src/models/dut_config_models.py`、`Cheating_machine_execution_tool/src/models/__init__.py`、`Cheating_machine_execution_tool/src/services/dut_config_service.py`、`Cheating_machine_execution_tool/src/services/__init__.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/src/ui/__init__.py`、`Cheating_machine_execution_tool/tests/test_dut_config_service.py`、`Cheating_machine_execution_tool/tests/test_telnet_transport.py`、`Cheating_machine_execution_tool/tests/test_ubus_enable_telnet.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行 DUT service、Telnet、UBUS、主界面专项 `unittest discover`，再执行 `python -m unittest discover -s tests -v`、`python scripts/verify_baseline.py`、`git diff --check`。
+- 验证结果：DUT service 10项、Telnet 10项、UBUS开启Telnet 18项、主界面97项专项测试通过；全量单测509项通过；`python scripts/verify_baseline.py` 全绿（46个当前主程序`.py`编译、编译清单完整、509项单测、40个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows 桌面确认 DUT 窗口首次完整绘制、Tab/表格/按钮与明文凭据；真实样机依次覆盖 already_present、reused、added_iface、lan 回退、禁用网卡自动启用、Access denied、1/8台并行、停止及单台失败隔离。真实样机结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-08 - 完整映射 WiFi 连接参数
+
+- 类型：功能 / 测试项配置 / WiFi / 无 GUI 旧业务 / 回归测试 / 文档
+- 背景：新工具“测试项配置 → WiFi”原来只编辑 `enable` 和 `product_solution`，全流程无 GUI 开关机测试则把2.4G/5G、WPA2-PSK、AES和不指定无线网卡写死，未完整覆盖旧“WIFI 连接参数”窗口。项目负责人要求把旧页功能映射到新工具 WiFi Tab。
+- 完成内容：① `[connect_wifi]` 从2项扩展为8项：主控、2.4G、5G、ONU方案、认证、加密、指定无线网卡、网卡名称；② 新 WiFi Tab 全部使用中文标签及旧窗口候选值，支持“刷新无线网卡”并对成功、无网卡和异常记录主日志/弹窗；③ 新增 pywifi 接口枚举 core，名称去空、去重且保留发现顺序；④ 老测试方案缺新键时兼容回退为2.4G/5G开启、WPA2-PSK、AES、不指定网卡；⑤ 当前配置与默认模板补齐新键；⑥ 无 GUI请求和 `HeadlessOnuConfig` 逐项映射，不再写死；⑦ 主控关闭时执行日志明确跳过，指定网卡开启但名称为空时启动前拦截，运行电脑不存在所选网卡时明确失败且不回退；⑧ 保存确认框显示频段、认证、加密和网卡选择；⑨ 增加配置往返、默认兼容、接口枚举、请求加载、空网卡拦截和旧业务映射回归并加入强制基线。
+- 修改文件：`.claude/plans/test_item_wifi_full_mapping.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/Auto_power_on_off_tool/config/test_project_config.ini`、`Cheating_machine_execution_tool/Auto_power_on_off_tool/config/test_project_config.default.ini`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`、`Cheating_machine_execution_tool/src/core/wifi_interfaces.py`、`Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_test_item_config_store.py`、`Cheating_machine_execution_tool/tests/test_wifi_interfaces.py`、`Cheating_machine_execution_tool/tests/test_legacy_power_test_service.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`。
+- 验证方法：在主源码目录执行测试项配置 store、无线网卡枚举、旧工具无 GUI 服务、主界面4组专项 `unittest discover`，再执行 `python scripts/verify_baseline.py`、`git diff --check`。
+- 验证结果：测试项配置 store 21项、无线网卡枚举1项、旧工具无 GUI服务13项、主界面93项专项测试均通过；`python scripts/verify_baseline.py` 全绿（43个当前主程序`.py`编译、编译清单完整、492项单测、35个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows 桌面打开 WiFi Tab，确认8项布局、保存/重载和“刷新无线网卡”；随后用小轮次真实运行子任务7，分别验证2.4G only、5G only、双频、指定网卡和不存在网卡失败提示。真实样机结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-08 - 展示开关机测试轮次进度
 
 - 类型：功能 / 全流程执行 / 开关机测试 / 主界面 / 回归测试 / 文档

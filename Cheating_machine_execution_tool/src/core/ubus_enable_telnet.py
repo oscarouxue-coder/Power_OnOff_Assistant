@@ -79,10 +79,16 @@ def enable_telnet_via_ubus(
         on_log(EnableTelnetResult(True, "started", "已发起 UBUS 启用 telnet 流程"))
 
     # 1) login
+    if on_log is not None:
+        on_log(EnableTelnetResult(True, "tx_login", f"TX UBUS session.login username={username}, password={password}"))
     session_id = client.login(username, password)
+    if on_log is not None:
+        on_log(EnableTelnetResult(True, "login_ok", "UBUS 登录成功"))
 
     # 2) 总开关
     try:
+        if on_log is not None:
+            on_log(EnableTelnetResult(True, "tx_get_total_enable", f"TX UBUS bbfdm.get path={ACCESS_CTRL_ENABLE_PATH}"))
         result_enable = client.bbfdm_get(session_id, ACCESS_CTRL_ENABLE_PATH)
         enable_state = None
         if isinstance(result_enable, list) and len(result_enable) > 1:
@@ -90,6 +96,8 @@ def enable_telnet_via_ubus(
             if isinstance(inner, dict):
                 enable_state = inner.get("Enable")
         if enable_state != "1":
+            if on_log is not None:
+                on_log(EnableTelnetResult(True, "tx_set_total_enable", f"TX UBUS bbfdm.set path={ACCESS_CTRL_ENABLE_OBJECT_PATH}, obj_path={{'Enable': '1'}}"))
             set_response = client.bbfdm_set(session_id, ACCESS_CTRL_ENABLE_OBJECT_PATH, {"Enable": "1"})
             if not _bbfdm_all_results_one(set_response):
                 raise UbusError(f"UBUS 设置访问控制总开关失败,响应 {set_response}")
@@ -102,6 +110,8 @@ def enable_telnet_via_ubus(
 
     # 3) 检查已有 telnet 规则
     try:
+        if on_log is not None:
+            on_log(EnableTelnetResult(True, "tx_get_rules", f"TX UBUS bbfdm.get path={ACCESS_CTRL_RULE_BASE_PATH}"))
         result_rule = client.bbfdm_get(session_id, ACCESS_CTRL_RULE_BASE_PATH)
     except UbusError as exc:
         if on_log is not None:
@@ -127,9 +137,12 @@ def enable_telnet_via_ubus(
         x_sdmc_instance = rule.get("X_SDMC_Instance", "")
         result: EnableTelnetResult
         if enable_flag != "True":
+            rule_path = f"{ACCESS_CTRL_RULE_BASE_PATH}{x_sdmc_instance}."
+            if on_log is not None:
+                on_log(EnableTelnetResult(True, "tx_set_rule", f"TX UBUS bbfdm.set path={rule_path}, obj_path={{'Enable': '1'}}"))
             set_response = client.bbfdm_set(
                 session_id,
-                f"{ACCESS_CTRL_RULE_BASE_PATH}{x_sdmc_instance}.",
+                rule_path,
                 {"Enable": "1"},
             )
             if not _bbfdm_all_results_one(set_response):
@@ -147,15 +160,18 @@ def enable_telnet_via_ubus(
 
     # 4) 没有规则: add Device.IP.Interface.1（默认）
     try:
+        iface_rule = {
+            "SourceInterface": "Device.IP.Interface.1",
+            "IPVersion": 4,
+            "SourceIP": "0.0.0.0",
+            "Application": "telnet",
+        }
+        if on_log is not None:
+            on_log(EnableTelnetResult(True, "tx_add_iface", f"TX UBUS bbfdm.add path={ACCESS_CTRL_RULE_BASE_PATH}, obj_path={iface_rule}"))
         add_response = client.bbfdm_add(
             session_id,
             ACCESS_CTRL_RULE_BASE_PATH,
-            {
-                "SourceInterface": "Device.IP.Interface.1",
-                "IPVersion": 4,
-                "SourceIP": "0.0.0.0",
-                "Application": "telnet",
-            },
+            iface_rule,
         )
         if not _bbfdm_all_results_one(add_response):
             raise UbusError(f"UBUS 添加 telnet 规则 (Device.IP.Interface.1) 失败,响应 {add_response}")
@@ -166,15 +182,18 @@ def enable_telnet_via_ubus(
         return EnableTelnetResult(True, "added_iface", "已添加 telnet 规则")
     except UbusError:
         # 回退到 lan
+        lan_rule = {
+            "SourceInterface": "lan",
+            "IPVersion": 4,
+            "SourceIP": "0.0.0.0",
+            "Application": "telnet",
+        }
+        if on_log is not None:
+            on_log(EnableTelnetResult(True, "tx_add_lan", f"TX UBUS bbfdm.add path={ACCESS_CTRL_RULE_BASE_PATH}, obj_path={lan_rule}"))
         add_response = client.bbfdm_add(
             session_id,
             ACCESS_CTRL_RULE_BASE_PATH,
-            {
-                "SourceInterface": "lan",
-                "IPVersion": 4,
-                "SourceIP": "0.0.0.0",
-                "Application": "telnet",
-            },
+            lan_rule,
         )
         if not _bbfdm_all_results_one(add_response):
             raise UbusError(f"UBUS 添加 telnet 规则 (lan 回退) 失败,响应 {add_response}")
