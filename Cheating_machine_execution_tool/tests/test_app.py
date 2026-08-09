@@ -28,11 +28,17 @@ from line_check_assistant.onu_registration_store import OnuRegistrationConfig
 from line_check_assistant.page_upgrade import PageUpgradeItemResult, PageUpgradeRequest
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
 from line_check_assistant.test_item_config_store import TestItemConfigStore
-from src.models import DutTelnetEnableRequest, DutTelnetEnableResult, DutWanQueryResult
+from src.models import (
+    DutTelnetEnableRequest,
+    DutTelnetEnableResult,
+    DutWanConnectionInfo,
+    DutWanQueryResult,
+)
 from src.ui.dut_config_window import (
     DutConfigWindow,
     normalize_wan_address_modes,
     resolve_wan_form_rules,
+    wan_connection_form_values,
 )
 
 
@@ -396,6 +402,25 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         ):
             self.assertIn(label, builder_source)
 
+    def test_dut_form_field_names_are_left_aligned_in_every_tab(self):
+        import inspect
+
+        field_source = inspect.getsource(DutConfigWindow._field)
+        wan_source = inspect.getsource(DutConfigWindow._build_wan_tab)
+        voice_source = inspect.getsource(DutConfigWindow._build_voice_tab)
+        tr069_source = inspect.getsource(DutConfigWindow._build_tr069_tab)
+        window_source = inspect.getsource(DutConfigWindow)
+
+        self.assertIn('anchor="w"', field_source)
+        self.assertIn('sticky="w"', field_source)
+        self.assertIn('text="现有连接名/索引：", anchor="w"', wan_source)
+        self.assertIn('index_label.grid(row=0, column=2, sticky="w"', wan_source)
+        self.assertIn("self._field(", wan_source)
+        self.assertIn("self._field(", voice_source)
+        self.assertIn("self._field(", tr069_source)
+        self.assertNotIn('sticky="e"', window_source)
+        self.assertNotIn('anchor="e"', window_source)
+
     def test_wan_form_rules_hide_irrelevant_fields_and_apply_protocol_mtu(self):
         import inspect
 
@@ -453,6 +478,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn('text="查询现有 WAN"', builder_source)
         self.assertIn("run_dut_wan_query_batch(", worker_source)
         self.assertIn("common_wan_connection_names(results)", finish_source)
+        self.assertIn("common_wan_connection_details(results)", finish_source)
+        self.assertIn('"<<ComboboxSelected>>"', builder_source)
         self.assertNotIn("UbusHttpClient(", query_source + worker_source)
         self.assertNotIn("bbfdm.", query_source + worker_source)
 
@@ -489,10 +516,93 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         LineCheckAssistant._finish_dut_wan_query(context, results)
 
         window.set_wan_connections.assert_called_once_with(
-            ("5_IPTV_B_VID_600",), target_count=2
+            ("5_IPTV_B_VID_600",), target_count=2, connection_details={}
         )
         self.assertFalse(context.dut_config_running)
         showinfo.assert_called_once()
+
+    def test_wan_connection_snapshot_maps_to_current_form_values(self):
+        values = wan_connection_form_values(
+            DutWanConnectionInfo(
+                name="3_INTERNET_R_VID_172",
+                index="3",
+                mode="router",
+                service_type="INTERNET",
+                vlan_id="172",
+                vlan_priority="0",
+                port_bind="9",
+                mtu="1500",
+                nat_enabled=True,
+                access_type="IPoE",
+                ip_protocol="IPv4IPv6",
+                ipv4_type="Dynamic",
+                ipv6_type="DHCPv6",
+            )
+        )
+
+        self.assertEqual(values["mode"], "路由")
+        self.assertEqual(values["service_type"], "INTERNET")
+        self.assertEqual(values["vlan_id"], "172")
+        self.assertEqual(values["port_bind"], "9")
+        self.assertEqual(values["ip_protocol"], "IPv4+IPv6（双栈）")
+        self.assertEqual(values["ipv4_type"], "DHCP")
+        self.assertEqual(values["ipv6_type"], "DHCPv6")
+
+    def test_selecting_existing_wan_replaces_stale_form_values(self):
+        class Var:
+            def __init__(self, value=""):
+                self.value = value
+
+            def get(self):
+                return self.value
+
+            def set(self, value):
+                self.value = value
+
+        info = DutWanConnectionInfo(
+            name="3_INTERNET_R_VID_172",
+            index="3",
+            mode="router",
+            service_type="INTERNET",
+            vlan_id="172",
+            vlan_priority="0",
+            port_bind="0",
+            mtu="1500",
+            nat_enabled=True,
+            access_type="IPoE",
+            ip_protocol="IPv4",
+            ipv4_type="Dynamic",
+        )
+        context = SimpleNamespace(
+            wan_index_var=Var(info.name),
+            _wan_connection_details={info.name: info},
+            _updating_wan_form=False,
+            _last_wan_access_type="PPPoE",
+            _update_wan_form_visibility=Mock(),
+            wan_query_status_var=Var(),
+            wan_nat_var=Var(False),
+        )
+        field_keys = (
+            "mode", "service_type", "vlan_id", "vlan_priority", "port_bind", "mtu",
+            "access_type", "ip_protocol", "ipv4_type", "ipv4_address", "ipv4_netmask",
+            "ipv4_gateway", "ipv4_primary_dns", "ipv4_secondary_dns", "ipv6_type",
+            "ipv6_address", "ipv6_prefix", "ipv6_gateway", "ipv6_primary_dns",
+            "ipv6_secondary_dns", "pppoe_username", "pppoe_password",
+        )
+        for key in field_keys:
+            setattr(context, f"wan_{key}_var", Var("stale-value"))
+
+        DutConfigWindow._apply_selected_wan_connection(context)
+
+        self.assertEqual(context.wan_service_type_var.get(), "INTERNET")
+        self.assertEqual(context.wan_vlan_id_var.get(), "172")
+        self.assertEqual(context.wan_access_type_var.get(), "IPoE")
+        self.assertEqual(context.wan_ip_protocol_var.get(), "IPv4")
+        self.assertEqual(context.wan_pppoe_username_var.get(), "")
+        self.assertEqual(context.wan_pppoe_password_var.get(), "")
+        self.assertTrue(context.wan_nat_var.get())
+        context._update_wan_form_visibility.assert_called_once_with("snapshot")
+        self.assertIn("已同步当前 WAN 完整信息", context.wan_query_status_var.get())
 
     def test_dut_request_snapshot_uses_enabled_channel_and_plaintext_shared_password(self):
         context = SimpleNamespace(

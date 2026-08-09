@@ -2,6 +2,36 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-09 - 统一DUT字段名称左对齐
+
+- 类型：修改
+- 背景：DUT配置的WAN页字段名称在各自网格单元内采用右对齐，操作、现有连接、业务VLAN、接入方式和IP协议等标签视觉起点不一致；项目负责人要求四个Tab的内容名称统一向左对齐。
+- 完成内容：① 公共 `_field()` 创建的所有字段标签统一设置 `anchor="w"` 与 `sticky="w"`，一次覆盖WAN、语音、TR069的普通字段和语音编码字段；② 单独创建的WAN“现有连接名/索引”标签同步左对齐；③ Telnet页原有标签已经按左侧顺序排列，复选框也已使用 `sticky="w"`，保持不变；④ 输入框、下拉框、字段显隐、复选框状态和业务执行逻辑均未改动；⑤ 新增整窗源码回归，禁止字段标签恢复 `sticky="e"` / `anchor="e"`，并纳入强制基线。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行字段左对齐专项测试、`python scripts\verify_baseline.py` 与 `git diff --check`。
+- 验证结果：字段左对齐专项测试通过；`python scripts\verify_baseline.py` 全绿（49个当前主程序`.py`编译、编译清单完整、549项单测、67个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows桌面打开Telnet、WAN、语音、TR069四页，目视确认所有字段名称左边缘一致，重点确认WAN首行和980×680最小窗口未发生遮挡。
+
+## 2026-08-09 - DUT WAN查询完整信息回填
+
+- 类型：功能完善 / WAN查询 / 界面联动
+- 背景：真实样机已能查询到 `3_INTERNET_R_VID_172` 等现有 WAN 名称，但下拉选中后表单仍保留新增页的 TR069、VLAN 46 等旧值。项目负责人要求把查询到的现有 WAN 完整信息同步展示到当前 WAN 表单。
+- 完成内容：① WAN只读查询从单一路径连接名扩展为一次多路径 `bbfdm.get`，覆盖IP Interface、Ethernet/VLAN、PPP、Bridge、DHCPv4/v6、DNS和NAT，不导入旧 `SdmcUbusLib`共享Session；② 新增现有WAN快照模型，解析连接索引、业务类型、VLAN/优先级、路由/桥接、端口绑定位掩码、IPoE/PPPoE、IPv4/IPv6/双栈、动态/静态、MTU、NAT、静态地址/网关/DNS和PPPoE凭据，设备字段缺失时仅对连接名中明确编码的索引/业务/模式/VLAN作安全回退；③ 查询下拉默认选择第一项，切换任一连接立即替换当前表单并清空上一连接遗留的地址/PPPoE文本，继续复用既有字段显隐和WAN规则；④ 单台直接回填完整快照，多台仍只显示名称完全一致的共同WAN，并且只有所有目标的完整快照也一致时才自动回填；参数不同则保留名称供删除选择，修改前明确提示人工核对；⑤ 主日志记录实际多路径查询和每条WAN的业务/VLAN/模式/接入摘要；⑥ 增加IPoE IPv4、PPPoE双栈静态、批量详情一致性、表单映射和旧值清理回归，全部纳入强制基线。
+- 修改文件：`.claude/plans/dut_wan_detail_prefill.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/core/dut_ubus_config.py`、`Cheating_machine_execution_tool/src/models/dut_config_models.py`、`Cheating_machine_execution_tool/src/models/__init__.py`、`Cheating_machine_execution_tool/src/services/dut_wan_query_service.py`、`Cheating_machine_execution_tool/src/services/__init__.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_dut_ubus_config.py`、`Cheating_machine_execution_tool/tests/test_dut_wan_query_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行WAN core、查询service、主界面专项测试，再执行 `python scripts\verify_baseline.py` 与 `git diff --check`。
+- 验证结果：`python scripts\verify_baseline.py` 全绿（49个当前主程序`.py`编译、编译清单完整、548项单测、66个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：真实样机重新查询 `3_INTERNET_R_VID_172`，确认业务类型为INTERNET、VLAN为172且其余设备字段正确；依次切换IPoE/PPPoE、桥接、IPv6/双栈、静态地址连接，确认旧字段被替换/清空；多台场景覆盖同名同参数自动回填与同名不同参数不回填。现场结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-09 - 释放DUT UBUS会话
+
+- 类型：BUG 修复
+- 背景：真实样机同一通道第一次“查询现有 WAN”成功，第二次 `session.login` 虽成功，但 `bbfdm.get Device.IP.Interface.` 连续返回 `Access denied`。日志表明第一轮只关闭了本机HTTP连接，未释放设备端UBUS session。
+- 完成内容：① `UbusHttpClient` 记录成功登录的session并新增 `logout()`，按项目协议参考下发 `bbfdm.unauthenticated_operate command=Device.X_SDMC_Login.logout()` 和当前 `SessionId`；② `close()` 对仍存在的session执行best-effort注销后再关闭本机连接，使DUT Telnet、高级配置和写参前置等共用调用也不会继续积累会话；③ WAN查询每次成功、失败或重试结束前显式注销，主日志记录注销TX、成功或可忽略失败；④ 注销失败不覆盖原查询结果，但本机连接仍会关闭；⑤ 新增设备只允许一个活动session的连续两次查询回归，并将显式注销、关闭兜底和连续查询纳入强制基线。
+- 修改文件：`.claude/plans/dut_ubus_session_cleanup.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/src/core/ubus_http_client.py`、`Cheating_machine_execution_tool/src/services/dut_wan_query_service.py`、`Cheating_machine_execution_tool/tests/test_ubus_http_client.py`、`Cheating_machine_execution_tool/tests/test_dut_wan_query_service.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行UBUS客户端、WAN查询service、DUT service和写参应用专项测试，再执行 `python scripts\verify_baseline.py` 与 `git diff --check`。
+- 验证结果：UBUS客户端15项、WAN查询service4项、DUT service23项、写参应用16项专项测试通过；`python scripts\verify_baseline.py` 全绿（49个当前主程序`.py`编译、编译清单完整、543项单测、61个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：真实样机对同一DUT连续点击至少两次“查询现有 WAN”，确认两次均成功，每轮均出现注销TX和“UBUS 会话已注销”，不再出现第二次 `Access denied`；通过后再更新验收状态。
+
 ## 2026-08-09 - 公共网卡准备按需复用
 
 - 类型：性能优化 / 公共网络准备

@@ -8,9 +8,13 @@ from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 
 from line_check_assistant.network_ops import prepare_network_for_sample
 from src.core.bind_socket import wait_for_bindable_ip
-from src.core.dut_ubus_config import query_wan_connection_names
+from src.core.dut_ubus_config import query_wan_connections
 from src.core.ubus_http_client import UbusHttpClient
-from src.models.dut_config_models import DutTelnetEnableRequest, DutWanQueryResult
+from src.models.dut_config_models import (
+    DutTelnetEnableRequest,
+    DutWanConnectionInfo,
+    DutWanQueryResult,
+)
 
 from .dut_config_service import (
     BIND_READY_TIMEOUT_SECONDS,
@@ -39,7 +43,7 @@ def run_single_dut_wan_query(
     network_prepare_fn: Callable = prepare_network_for_sample,
     bind_waiter: Callable[[str, float], bool] = wait_for_bindable_ip,
     client_factory: Callable[..., UbusHttpClient] = UbusHttpClient,
-    query_fn: Callable = query_wan_connection_names,
+    query_fn: Callable = query_wan_connections,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> DutWanQueryResult:
     """查询单台 DUT；所有异常收敛为结果，且每次 client 都会关闭。"""
@@ -96,6 +100,7 @@ def run_single_dut_wan_query(
 
         last_error: Exception | None = None
         for attempt in range(1, WAN_QUERY_LOGIN_MAX_RETRIES + 2):
+            session_id = ""
             ensure_not_stopped()
             if attempt > 1:
                 emit(
@@ -113,11 +118,24 @@ def run_single_dut_wan_query(
             try:
                 session_id = client.login(request.username, request.password)
                 emit("UBUS 登录成功")
-                names = tuple(query_fn(client, session_id, on_log=emit))
+                queried = tuple(query_fn(client, session_id, on_log=emit))
+                connections = tuple(
+                    item for item in queried if isinstance(item, DutWanConnectionInfo)
+                )
+                names = (
+                    tuple(item.name for item in connections)
+                    if len(connections) == len(queried)
+                    else tuple(str(item) for item in queried)
+                )
                 message = f"查询成功，发现 {len(names)} 个现有 WAN"
                 emit(f"成功：{message}：{list(names)}")
                 return DutWanQueryResult(
-                    request, True, "completed", message, connection_names=names
+                    request,
+                    True,
+                    "completed",
+                    message,
+                    connection_names=names,
+                    connections=connections,
                 )
             except _DutWanQueryCancelled:
                 raise
@@ -125,6 +143,16 @@ def run_single_dut_wan_query(
                 last_error = exc
                 emit(f"UBUS 查询现有 WAN 失败：{exc}")
             finally:
+                if session_id:
+                    emit(
+                        "TX UBUS bbfdm.unauthenticated_operate "
+                        "command=Device.X_SDMC_Login.logout()"
+                    )
+                    try:
+                        client.logout(session_id)
+                        emit("UBUS 会话已注销")
+                    except Exception as exc:  # noqa: BLE001 - 注销失败不覆盖查询结果
+                        emit(f"UBUS 会话注销失败（已继续关闭连接）：{exc}")
                 client.close()
                 client = None
 
@@ -157,6 +185,23 @@ def common_wan_connection_names(
     for result in items[1:]:
         common.intersection_update(result.connection_names)
     return tuple(sorted(common, key=lambda name: (int(name.split("_", 1)[0]), name)))
+
+
+def common_wan_connection_details(
+    results: Iterable[DutWanQueryResult],
+) -> dict[str, DutWanConnectionInfo]:
+    """返回所有目标详情完全一致的共同 WAN，避免批量界面展示任一台的特例值。"""
+    items = list(results)
+    common_names = common_wan_connection_names(items)
+    if not common_names:
+        return {}
+    per_target = [{item.name: item for item in result.connections} for result in items]
+    details: dict[str, DutWanConnectionInfo] = {}
+    for name in common_names:
+        snapshots = [mapping.get(name) for mapping in per_target]
+        if all(snapshot is not None for snapshot in snapshots) and len(set(snapshots)) == 1:
+            details[name] = snapshots[0]  # type: ignore[assignment]
+    return details
 
 
 def run_dut_wan_query_batch(
@@ -231,6 +276,7 @@ def run_dut_wan_query_batch(
 
 
 __all__ = [
+    "common_wan_connection_details",
     "common_wan_connection_names",
     "run_dut_wan_query_batch",
     "run_single_dut_wan_query",

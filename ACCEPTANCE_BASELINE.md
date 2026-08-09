@@ -305,6 +305,7 @@ python scripts\verify_baseline.py
 - **状态**：已实现未验收
 - **核心行为**：
   - 主界面“串口日志”右侧固定显示“DUT配置”按钮；窗口采用 Notebook，包含“Telnet配置”“WAN配置”“语音配置”“TR069配置”四个独立 Tab；协议在 core、批量流程在 service，UI 只收集输入和显示结果
+  - 四个 Tab 的字段名称必须在各自标签单元格内统一左对齐；公共 `_field()` 创建的 WAN、语音、TR069 标签及单独创建的“现有连接名/索引”不得恢复为右对齐，Telnet 页标签继续从左侧排列
   - 目标来自主界面已勾选通道；表格显示通道、VLAN、网卡、PC 静态 IP、样机管理 IP 和逐台状态；账号密码与写样机参数 `parameter_initial_*` 共享并明文显示、明文记录
   - 启动前拒绝无目标、缺 VLAN/网卡/IP/凭据、IP 格式错误、源 IP 与样机 IP 相同以及重复 VLAN；确认框明确提示会修改本机网卡与 DUT AccessCtrl 规则
   - 单台固定时序：`prepare_network_for_sample(reuse_if_ready=True)` 先只读查询目标网卡启用状态及 IPv4/前缀；已启用且目标地址/前缀完全匹配时跳过重复启用和静态 IP 设置，部分不匹配时只修复对应项，状态读取失败时回退原完整准备流程 → `wait_for_bindable_ip` 最多 15 秒（复用时也不得跳过）→ 每台独立 `UbusHttpClient(bind_ip, device_host, 80)` → `enable_telnet_via_ubus` → 严格 `source_address=(bind_ip, 0)` 探测 TCP 23 端口；只有 UBUS 与端口探测均成功才标记成功
@@ -313,14 +314,15 @@ python scripts\verify_baseline.py
   - 主执行日志必须包含准备网络、明文 `session.login`、实际 `bbfdm get/set/add` 路径与参数、源/目标 TCP 23 验证以及逐台成功/失败/跳过和批次汇总
   - WAN：同一参数批量应用到已勾选 DUT；支持新增、修改和按明确连接名/数字索引删除，不提供“删除全部”；支持 router/bridge、IPoE/PPPoE、IPv4、IPv6、`IPv4AndIPv6` 双栈，IPv4 支持 DHCP/静态，IPv6 支持 SLAAC/DHCPv6/静态。新增/修改/删除统一调用登录态 `bbfdm.operate command=Device.X_SDMC_CreateWAN()`，并校验 `Result=OK`；修改/删除必须预检索引，删除确认框明确不可自动恢复
   - WAN 表单必须按真实创建规则联动：新增隐藏索引，修改显示索引，删除只显示索引；bridge隐藏路由/IP参数且业务类型仅允许IPTV/INTERNET/OTHER，端口绑定默认1；IPoE隐藏PPPoE凭据并自动回填MTU 1500，PPPoE显示凭据并自动回填MTU 1492；IPv4/IPv6/双栈仅显示对应地址方式，动态方式隐藏静态地址字段。IPoE双栈只允许Dynamic+SLAAC、Dynamic+DHCPv6、Static+Static；PPPoE不得使用静态IPv4/IPv6，双栈只允许Dynamic+SLAAC或Dynamic+DHCPv6；UI收敛之外，service预检必须再次拒绝非法组合
-  - 修改/删除的“现有连接名/索引”必须是只读下拉框，并提供“查询现有 WAN”按钮；查询按每台目标执行网络准备、等待源IP可绑、独立锁源UBUS登录和只读 `bbfdm.get Device.IP.Interface.`，过滤LAN/透传等非可操作接口并按数字索引排序。单台显示本机连接；多台只显示所有查询成功目标名称完全一致的共同WAN，不能仅凭数字索引合并不同连接；任一目标失败/停止不得生成下拉项。目标集合变化或WAN配置执行后必须使旧列表失效，查询和共同项汇总必须写入主执行日志
+  - 修改/删除的“现有连接名/索引”必须是只读下拉框，并提供“查询现有 WAN”按钮；查询按每台目标执行网络准备、等待源IP可绑、独立锁源UBUS登录和一次只读多路径 `bbfdm.get`，覆盖 IP Interface、Ethernet/VLAN、PPP、Bridge、DHCP、DNS、NAT，过滤LAN/透传等非可操作接口并按数字索引排序。单台显示本机连接并把业务类型、VLAN、模式、端口绑定、接入方式、IP协议、地址方式、MTU、NAT及设备可返回的静态地址/DNS/PPPoE字段同步到当前表单；多台只显示所有查询成功目标名称完全一致的共同WAN，且只有完整参数在所有目标上一致时才自动回填，不能仅凭数字索引合并不同连接或拿任意一台参数覆盖整批；任一目标失败/停止不得生成下拉项。目标集合变化或WAN配置执行后必须使旧列表失效，查询完整信息和共同项汇总必须写入主执行日志
+  - 每次成功登录产生的设备端 UBUS session 必须在查询/配置/异常重试结束时调用 `bbfdm.unauthenticated_operate Device.X_SDMC_Login.logout()` 释放；关闭本机HTTP连接不能代替设备注销。WAN查询主日志必须记录注销TX和结果，连续点击两次“查询现有 WAN”不得因上一轮残留session触发 `Access denied`
   - 语音：按 `Device.Services.VoiceService.1` 路径设置 DTMF、SIP 模式、代理/出站代理/注册服务器、账号、5 项编码和 DigitMap，最后回读 SIP 路径；账号启用时必须预检显示名、认证账号和密码
   - TR069：设置并回读 `Device.ManagementServer.` 的 ACS URL/账号/密码、周期 Inform、连接请求和证书参数；可选触发 `X_SDMC_ManualInformStage=1_wait_inform` 并轮询最终 `X_SDMC_InformResult`，停止事件可中断 Inform 等待
   - WAN/语音/TR069 复用主界面通道和 Telnet 页 UBUS 凭据/并行数；同一时间只允许一个 DUT 配置批次。每台均执行“准备网络 → 等源 IP 可绑 → 每台独立 UBUS 登录 → 功能配置 → 回读/结果校验 → 关闭 client”，登录失败最多重试3次，功能下发不自动重试，避免 WAN 重复创建
   - 三个新增 Tab 的主执行日志必须包含功能阶段、明文登录、实际 UBUS method/path/input、成功/跳过/失败和批次汇总；表格只显示简短逐台结果
   - WAN“启用 NAT”、语音“启用 SIP 账号”、TR069“启用周期 Inform / 启用 HTTP 连接请求 / 启用证书 / 配置后手动 Inform”必须使用 Windows 原生 `Checkbutton`：选中显示标准“✓”，未选为空框，不得继续使用 Clam 主题下显示叉号的 `ttk.Checkbutton`；各 BooleanVar 默认值和配置语义保持不变
-- **禁止破坏**：不得复制第二份 AccessCtrl 协议；Telnet 必须继续复用 `enable_telnet_via_ubus`；每台功能必须使用独立 UBUS client 并绑定对应 VLAN 源 IP；网卡状态、目标 IPv4 或前缀任一不满足时不得错误复用，状态读取失败不得绕过原准备流程，任何复用路径不得跳过 `wait_for_bindable_ip`；不得直接导入使用共享静态 Session 的 `SdmcUbusLib`；WAN 删除不得自动扩大为删除全部或模糊匹配其它连接；不得重新向IPoE展示PPPoE凭据、向PPPoE提供静态地址或允许不受协议封装支持的双栈混合静态组合；不得把查询失败、仅部分DUT存在或同索引不同名称的WAN放入批量修改/删除下拉列表
-- **待确认**：Windows 桌面四个 Tab 的完整绘制、网卡已满足/仅地址不符/禁用/状态读取失败四类准备日志及真实耗时、WAN查询按钮和只读下拉、单台/多台共同连接展示、目标变化后的列表清空、WAN新增/修改/删除、router/bridge、IPoE/PPPoE、IPv4/IPv6/双栈、动态/静态切换时的字段显隐和MTU自动值、按钮状态、6个选择框选中显示“✓”及980×680最小窗口布局；真实样机分别覆盖 Telnet already_present/reused/added_iface/lan 回退，WAN查询/新增/修改/删除及 IPv4/IPv6/双栈组合，语音回读，TR069 回读/手动 Inform，禁用网卡自动启用、Access denied、1/8 台并行、停止和单台失败隔离
+- **禁止破坏**：不得复制第二份 AccessCtrl 协议；Telnet 必须继续复用 `enable_telnet_via_ubus`；每台功能必须使用独立 UBUS client 并绑定对应 VLAN 源 IP，结束时必须释放设备端session；网卡状态、目标 IPv4 或前缀任一不满足时不得错误复用，状态读取失败不得绕过原准备流程，任何复用路径不得跳过 `wait_for_bindable_ip`；不得直接导入使用共享静态 Session 的 `SdmcUbusLib`；WAN 删除不得自动扩大为删除全部或模糊匹配其它连接；不得重新向IPoE展示PPPoE凭据、向PPPoE提供静态地址或允许不受协议封装支持的双栈混合静态组合；不得把查询失败、仅部分DUT存在或同索引不同名称的WAN放入批量修改/删除下拉列表
+- **待确认**：Windows 桌面四个 Tab 的完整绘制和所有字段名称左对齐、同一DUT连续两次WAN查询均成功且每轮日志出现设备session注销、网卡已满足/仅地址不符/禁用/状态读取失败四类准备日志及真实耗时、WAN查询按钮和只读下拉、选择 `3_INTERNET_R_VID_172` 后业务类型/VLAN及其余完整字段正确回填、切换不同 WAN 时旧字段被替换或清空、多台同名但参数不同的 WAN 不自动回填、目标变化后的列表清空、WAN新增/修改/删除、router/bridge、IPoE/PPPoE、IPv4/IPv6/双栈、动态/静态切换时的字段显隐和MTU自动值、按钮状态、6个选择框选中显示“✓”及980×680最小窗口布局；真实样机分别覆盖 Telnet already_present/reused/added_iface/lan 回退，WAN查询/新增/修改/删除及 IPv4/IPv6/双栈组合，语音回读，TR069 回读/手动 Inform，禁用网卡自动启用、Access denied、1/8 台并行、停止和单台失败隔离
 - **对应测试**：`tests/test_network_ops.py`、`tests/test_dut_config_service.py`、`tests/test_dut_advanced_config_service.py`、`tests/test_dut_wan_query_service.py`、`tests/test_dut_ubus_config.py`、`tests/test_ubus_http_client.py`、`tests/test_telnet_transport.py`、`tests/test_ubus_enable_telnet.py`、`tests/test_app.py`
 
 ---

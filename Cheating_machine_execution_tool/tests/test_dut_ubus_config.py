@@ -11,6 +11,7 @@ from src.core.dut_ubus_config import (
     configure_voice,
     configure_wan,
     query_wan_connection_names,
+    query_wan_connections,
 )
 from src.models import DutTr069Settings, DutVoiceSettings, DutWanSettings
 
@@ -131,6 +132,139 @@ class DutUbusConfigTests(unittest.TestCase):
         )
         self.assertEqual(client.calls[0][2], WAN_INTERFACE_PATH)
         self.assertTrue(any("bbfdm.get" in line and WAN_INTERFACE_PATH in line for line in logs))
+
+    def test_query_wan_connections_parses_complete_ipoe_snapshot(self) -> None:
+        client = _FakeClient()
+        logs: list[str] = []
+
+        def get_all(session, service, method, payload):
+            client.calls.append(("call", session, service, method, payload))
+            return [
+                0,
+                {
+                    "Interface": [
+                        {
+                            "Name": "3_INTERNET_R_VID_172",
+                            "X_SDMC_Instance": 3,
+                            "X_SDMC_ServiceType": "INTERNET",
+                            "X_SDMC_PortBind": "Device.Ethernet.Interface.1,Device.Ethernet.Interface.4",
+                            "LowerLayers": "Device.Ethernet.VLANTermination.7",
+                            "MaxMTUSize": 1500,
+                            "IPv4Enable": True,
+                            "IPv6Enable": False,
+                        }
+                    ],
+                    "Ethernet": {
+                        "VLANTermination": [
+                            {
+                                "X_SDMC_Instance": 7,
+                                "VLANID": 172,
+                                "VLANPriority": 0,
+                            }
+                        ]
+                    },
+                    "NAT": {
+                        "InterfaceSetting": [
+                            {"X_SDMC_Instance": 3, "Enable": True}
+                        ]
+                    },
+                },
+            ]
+
+        client.call = get_all  # type: ignore[method-assign]
+
+        connections = query_wan_connections(client, "session", on_log=logs.append)
+
+        self.assertEqual(len(connections), 1)
+        info = connections[0]
+        self.assertEqual(info.name, "3_INTERNET_R_VID_172")
+        self.assertEqual(info.index, "3")
+        self.assertEqual(info.service_type, "INTERNET")
+        self.assertEqual(info.vlan_id, "172")
+        self.assertEqual(info.vlan_priority, "0")
+        self.assertEqual(info.port_bind, "9")
+        self.assertEqual(info.mode, "router")
+        self.assertEqual(info.access_type, "IPoE")
+        self.assertEqual(info.ip_protocol, "IPv4")
+        self.assertEqual(info.ipv4_type, "Dynamic")
+        self.assertEqual(info.mtu, "1500")
+        self.assertTrue(info.nat_enabled)
+        self.assertTrue(any("WAN 完整信息" in line and "VLAN=172" in line for line in logs))
+
+    def test_query_wan_connections_parses_pppoe_dual_stack_static_fields(self) -> None:
+        client = _FakeClient()
+
+        client.call = lambda *_args, **_kwargs: [  # type: ignore[method-assign]
+            0,
+            {
+                "Interface": [
+                    {
+                        "Name": "4_TR069_INTERNET_R_VID_200",
+                        "X_SDMC_Instance": 4,
+                        "X_SDMC_ServiceType": "TR069_INTERNET",
+                        "LowerLayers": "Device.PPP.Interface.2",
+                        "MaxMTUSize": 1492,
+                        "IPv4Enable": True,
+                        "IPv6Enable": True,
+                        "IPv4Address": [
+                            {
+                                "AddressingType": "Static",
+                                "IPAddress": "172.18.18.43",
+                                "SubnetMask": "255.255.255.0",
+                                "X_SDMC_DefaultGateway": "172.18.18.1",
+                            }
+                        ],
+                        "IPv6Address": [
+                            {
+                                "Origin": "Static",
+                                "X_SDMC_Instance": 9,
+                                "IPAddress": "2001:db8::43",
+                                "X_SDMC_DefaultGateway": "2001:db8::1",
+                            }
+                        ],
+                        "IPv6Prefix": [
+                            {"Origin": "Static", "X_SDMC_Instance": 9, "Prefix": "2001:db8::/64"}
+                        ],
+                    }
+                ],
+                "PPP": {
+                    "Interface": [
+                        {
+                            "X_SDMC_Instance": 2,
+                            "LowerLayers": "Device.Ethernet.VLANTermination.3",
+                            "Username": "pppoe-user",
+                            "X_SDMC_Password": "pppoe-password",
+                        }
+                    ]
+                },
+                "Ethernet": {
+                    "VLANTermination": [
+                        {"X_SDMC_Instance": 3, "VLANID": 200, "VLANPriority": 3}
+                    ]
+                },
+                "Server": [
+                    {"Interface": "Device.IP.Interface.4", "DNSServer": "8.8.8.8"},
+                    {"Interface": "Device.IP.Interface.4", "DNSServer": "2001:4860:4860::8888"},
+                ],
+            },
+        ]
+
+        info = query_wan_connections(client, "session")[0]
+
+        self.assertEqual(info.service_type, "TR069_INTERNET")
+        self.assertEqual(info.vlan_id, "200")
+        self.assertEqual(info.vlan_priority, "3")
+        self.assertEqual(info.access_type, "PPPoE")
+        self.assertEqual(info.pppoe_username, "pppoe-user")
+        self.assertEqual(info.pppoe_password, "pppoe-password")
+        self.assertEqual(info.ip_protocol, "IPv4IPv6")
+        self.assertEqual(info.ipv4_type, "Static")
+        self.assertEqual(info.ipv4_address, "172.18.18.43")
+        self.assertEqual(info.ipv4_primary_dns, "8.8.8.8")
+        self.assertEqual(info.ipv6_type, "Static")
+        self.assertEqual(info.ipv6_address, "2001:db8::43")
+        self.assertEqual(info.ipv6_prefix, "2001:db8::/64")
+        self.assertEqual(info.ipv6_primary_dns, "2001:4860:4860::8888")
 
     def test_voice_config_sets_server_account_codecs_and_reads_back(self) -> None:
         client = _FakeClient()

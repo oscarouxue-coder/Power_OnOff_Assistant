@@ -82,6 +82,7 @@ from src.services import (
     TRANSFER_TFTP_COMMAND,
     TRANSFER_TFTP_PUT,
     clamp_dut_parallel_count,
+    common_wan_connection_details,
     common_wan_connection_names,
     preflight_parameter_targets,
     run_dut_telnet_enable_batch,
@@ -4065,6 +4066,7 @@ class LineCheckAssistant(Tk):
         stopped_count = sum(1 for result in results if result.stage == "stopped")
         failure_count = len(results) - success_count - stopped_count
         common_names = common_wan_connection_names(results)
+        common_details = common_wan_connection_details(results)
         self.dut_config_running = False
         self.dut_config_active_feature = None
         self.dut_config_cancel_event = None
@@ -4084,7 +4086,11 @@ class LineCheckAssistant(Tk):
             )
             messagebox.showwarning("WAN 查询未完成", summary, parent=window.window)
         else:
-            window.set_wan_connections(common_names, target_count=len(results))
+            window.set_wan_connections(
+                common_names,
+                target_count=len(results),
+                connection_details=common_details,
+            )
             messagebox.showinfo("WAN 查询完成", summary, parent=window.window)
 
     def _start_dut_voice_config(self) -> None:

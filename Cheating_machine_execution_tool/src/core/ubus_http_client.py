@@ -67,6 +67,7 @@ class UbusHttpClient:
         self.ubus_port = int(ubus_port)
         self.timeout = float(timeout)
         self._connection: http.client.HTTPConnection | None = None
+        self._session_id = ""
 
     def _ensure_connection(self) -> http.client.HTTPConnection:
         if self._connection is not None:
@@ -135,7 +136,24 @@ class UbusHttpClient:
         session_id = session_payload.get("ubus_rpc_session") if isinstance(session_payload, dict) else None
         if not session_id:
             raise UbusError(f"UBUS login 未返回 ubus_rpc_session：{session_payload}")
+        self._session_id = session_id
         return session_id
+
+    def logout(self, session_id: str | None = None) -> Any:
+        """释放设备端 Web UBUS 会话；成功或失败后都清除本地会话引用。"""
+
+        active_session = str(session_id or self._session_id or "").strip()
+        if not active_session:
+            return None
+        try:
+            return self.bbfdm_unauthenticated_operate(
+                active_session,
+                "Device.X_SDMC_Login.logout()",
+                input_payload={"SessionId": active_session},
+            )
+        finally:
+            if self._session_id == active_session:
+                self._session_id = ""
 
     def call(self, session_id: str, service: str, method: str, payload: Mapping[str, Any]) -> Any:
         return self._post([session_id, service, method, dict(payload)])
@@ -212,6 +230,12 @@ class UbusHttpClient:
         return self.call(session_id, UBUS_SERVICE_BBFDM, "unauthenticated_operate", payload)
 
     def close(self) -> None:
+        if self._session_id:
+            try:
+                self.logout()
+            except Exception:
+                # close 是 finally 清理入口；设备会话已失效或网络中断时仍须关闭本机连接。
+                self._session_id = ""
         if self._connection is not None:
             try:
                 self._connection.close()

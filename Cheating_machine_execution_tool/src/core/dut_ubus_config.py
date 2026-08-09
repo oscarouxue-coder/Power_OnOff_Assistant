@@ -11,7 +11,12 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from src.models.dut_config_models import DutTr069Settings, DutVoiceSettings, DutWanSettings
+from src.models.dut_config_models import (
+    DutTr069Settings,
+    DutVoiceSettings,
+    DutWanConnectionInfo,
+    DutWanSettings,
+)
 
 from .ubus_http_client import UBUS_SERVICE_BBFDM, UbusError, UbusHttpClient
 
@@ -19,6 +24,17 @@ from .ubus_http_client import UBUS_SERVICE_BBFDM, UbusError, UbusHttpClient
 VENDOR_PREFIX = "X_SDMC_"
 WAN_COMMAND = f"Device.{VENDOR_PREFIX}CreateWAN()"
 WAN_INTERFACE_PATH = "Device.IP.Interface."
+WAN_QUERY_PATHS = (
+    "Device.WiFi.SSID.",
+    "Device.Ethernet.",
+    WAN_INTERFACE_PATH,
+    "Device.PPP.",
+    "Device.Bridging.Bridge.",
+    "Device.DHCPv4.",
+    "Device.DHCPv6.",
+    "Device.DNS.Client.Server.",
+    "Device.NAT.",
+)
 MANAGEMENT_SERVER_PATH = "Device.ManagementServer."
 MANUAL_INFORM_STAGE_PATH = f"Device.ManagementServer.{VENDOR_PREFIX}ManualInformStage"
 INFORM_RESULT_PATH = f"Device.ManagementServer.{VENDOR_PREFIX}InformResult"
@@ -142,6 +158,340 @@ def parse_wan_connection_names(response: Any) -> tuple[str, ...]:
         if name and name not in skip_names and re.match(r"^\d+(?:_|$)", name)
     ]
     return tuple(sorted(filtered, key=lambda name: (int(name.split("_", 1)[0]), name)))
+
+
+def _as_text(value: Any) -> str:
+    return "" if value is None else str(value).strip()
+
+
+def _as_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    normalized = _as_text(value).lower()
+    if normalized in {"1", "true", "yes", "on", "enabled"}:
+        return True
+    if normalized in {"0", "false", "no", "off", "disabled"}:
+        return False
+    return None
+
+
+def _first(mapping: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in mapping and mapping[key] not in (None, ""):
+            return mapping[key]
+    return None
+
+
+def _payload_from_response(response: Any) -> dict[str, Any]:
+    _require_rpc_ok(response, "WAN connection query")
+    payload = response[1] if len(response) > 1 and isinstance(response[1], dict) else {}
+    return payload
+
+
+def _interface_list(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    interfaces = payload.get("Interface")
+    if not isinstance(interfaces, list):
+        ip_payload = payload.get("IP")
+        interfaces = ip_payload.get("Interface") if isinstance(ip_payload, dict) else None
+    if not isinstance(interfaces, list):
+        raise UbusError(f"WAN connection query 返回格式异常：{payload}")
+    return [item for item in interfaces if isinstance(item, dict)]
+
+
+def _nested_list(payload: dict[str, Any], parent: str, child: str) -> list[dict[str, Any]]:
+    container = payload.get(parent)
+    values = container.get(child) if isinstance(container, dict) else None
+    return [item for item in values if isinstance(item, dict)] if isinstance(values, list) else []
+
+
+def _named_wan_interfaces(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    skip_names = {"LAN", "2_OTHER_B_VID_TRANSP"}
+    return [
+        interface
+        for interface in _interface_list(payload)
+        if (_as_text(interface.get("Name")) not in skip_names)
+        and re.match(r"^\d+(?:_|$)", _as_text(interface.get("Name")))
+    ]
+
+
+def _name_parts(name: str) -> tuple[str, str, str, str]:
+    match = re.match(r"^(\d+)_(.+)_([RB])_VID_([^_]+)$", name, re.IGNORECASE)
+    if match is None:
+        index = re.match(r"^(\d+)", name)
+        return (index.group(1) if index else "", "", "", "")
+    return match.group(1), match.group(2).upper(), match.group(3).upper(), match.group(4)
+
+
+def _instance_matches(item: dict[str, Any], instance: str) -> bool:
+    return _as_text(_first(item, f"{VENDOR_PREFIX}Instance", "Instance")) == instance
+
+
+def _find_vlan_termination(
+    payload: dict[str, Any], lower_layers: str
+) -> dict[str, Any] | None:
+    vlan_path = lower_layers
+    if lower_layers.startswith("Device.PPP.Interface."):
+        ppp_instance = lower_layers.rsplit(".", 1)[-1]
+        ppp = next(
+            (item for item in _nested_list(payload, "PPP", "Interface") if _instance_matches(item, ppp_instance)),
+            None,
+        )
+        vlan_path = _as_text(ppp.get("LowerLayers")) if ppp else ""
+    match = re.search(r"Device\.Ethernet\.VLANTermination\.(\d+)", vlan_path)
+    if match is None:
+        return None
+    instance = match.group(1)
+    return next(
+        (
+            item
+            for item in _nested_list(payload, "Ethernet", "VLANTermination")
+            if _instance_matches(item, instance)
+        ),
+        None,
+    )
+
+
+def _find_bridge_vlan(payload: dict[str, Any], lower_layers: str) -> dict[str, Any] | None:
+    match = re.match(r"Device\.Ethernet\.Link\.(\d+)", lower_layers)
+    if match is None:
+        return None
+    link = next(
+        (
+            item
+            for item in _nested_list(payload, "Ethernet", "Link")
+            if _instance_matches(item, match.group(1))
+        ),
+        None,
+    )
+    bridge_path = _as_text(link.get("LowerLayers")) if link else ""
+    bridge_match = re.match(r"Device\.Bridging\.Bridge\.(\d+)", bridge_path)
+    if bridge_match is None:
+        return None
+    bridges = payload.get("Bridge")
+    if not isinstance(bridges, list):
+        bridging = payload.get("Bridging")
+        bridges = bridging.get("Bridge") if isinstance(bridging, dict) else None
+    bridge = next(
+        (
+            item
+            for item in bridges or []
+            if isinstance(item, dict) and _instance_matches(item, bridge_match.group(1))
+        ),
+        None,
+    )
+    vlans = bridge.get("VLAN") if bridge else None
+    return next((item for item in vlans or [] if isinstance(item, dict)), None)
+
+
+def _port_bind_mask(value: Any) -> str:
+    text = _as_text(value)
+    if not text:
+        return "0"
+    if text.isdigit():
+        return text
+    mask = 0
+    matched = False
+    for path in (part.strip() for part in text.split(",")):
+        lan_match = re.fullmatch(r"Device\.Ethernet\.Interface\.(\d+)", path)
+        if lan_match:
+            port = int(lan_match.group(1))
+            if 1 <= port <= 8:
+                mask |= 1 << (port - 1)
+                matched = True
+            continue
+        wifi_match = re.fullmatch(r"Device\.WiFi\.SSID\.(\d+)", path)
+        if wifi_match:
+            wifi_flags = {1: 256, 2: 512, 5: 2048, 6: 4096}
+            flag = wifi_flags.get(int(wifi_match.group(1)))
+            if flag is not None:
+                mask |= flag
+                matched = True
+    return str(mask) if matched else "0"
+
+
+def _dns_for_interface(payload: dict[str, Any], interface_path: str) -> tuple[list[str], list[str]]:
+    ipv4: list[str] = []
+    ipv6: list[str] = []
+    servers = _nested_list(payload, "DNS", "Client")
+    if servers:
+        nested = servers[0].get("Server")
+        servers = [item for item in nested if isinstance(item, dict)] if isinstance(nested, list) else []
+    if not servers:
+        direct = payload.get("Server")
+        servers = [item for item in direct if isinstance(item, dict)] if isinstance(direct, list) else []
+    for item in servers:
+        if _as_text(item.get("Interface")) != interface_path:
+            continue
+        address = _as_text(_first(item, "DNSServer", "IPAddress"))
+        if address:
+            (ipv6 if ":" in address else ipv4).append(address)
+    return ipv4, ipv6
+
+
+def _address_details(
+    interface: dict[str, Any], payload: dict[str, Any], interface_path: str
+) -> dict[str, str]:
+    ipv4_enabled = _as_bool(_first(interface, "IPv4Enable")) is True
+    ipv6_enabled = _as_bool(_first(interface, "IPv6Enable")) is True
+    protocol = "IPv4IPv6" if ipv4_enabled and ipv6_enabled else "IPv4" if ipv4_enabled else "IPv6" if ipv6_enabled else ""
+    direct_protocol = _as_text(_first(interface, "IPProtocol"))
+    if direct_protocol:
+        protocol = "IPv4IPv6" if direct_protocol in {"IPv4AndIPv6", "IPv4/IPv6"} else direct_protocol
+
+    ipv4_dns, ipv6_dns = _dns_for_interface(payload, interface_path)
+    ipv4_addresses = interface.get("IPv4Address")
+    ipv4_list = [item for item in ipv4_addresses if isinstance(item, dict)] if isinstance(ipv4_addresses, list) else []
+    static_v4 = next(
+        (
+            item
+            for item in ipv4_list
+            if _as_text(_first(item, "AddressingType", "Origin")).lower() == "static"
+        ),
+        None,
+    )
+    direct_v4_type = _as_text(_first(interface, "IPv4Type"))
+    ipv4_type = direct_v4_type or ("Static" if static_v4 else "Dynamic" if ipv4_enabled else "")
+    ipv4_item = static_v4 or (ipv4_list[0] if ipv4_list else {})
+
+    ipv6_addresses = interface.get("IPv6Address")
+    ipv6_list = [item for item in ipv6_addresses if isinstance(item, dict)] if isinstance(ipv6_addresses, list) else []
+    static_v6 = next(
+        (item for item in ipv6_list if _as_text(_first(item, "AddressingType", "Origin")).lower() == "static"),
+        None,
+    )
+    direct_v6_type = _as_text(_first(interface, "IPv6Type"))
+    ipv6_type = direct_v6_type or ("Static" if static_v6 else "Dynamic" if ipv6_enabled else "")
+    if ipv6_type == "Dynamic":
+        dhcpv6 = next(
+            (
+                item
+                for item in _nested_list(payload, "DHCPv6", "Client")
+                if _as_text(item.get("Interface")) == interface_path
+            ),
+            None,
+        )
+        if dhcpv6:
+            request_address = _as_bool(dhcpv6.get("RequestAddresses")) is True
+            accept_ra = _as_bool(dhcpv6.get(f"{VENDOR_PREFIX}AcceptRAPrefixes")) is True
+            ipv6_type = "DHCPv6" if request_address and not accept_ra else "SLAAC" if accept_ra else "DHCPv6"
+        else:
+            ipv6_type = "SLAAC"
+    ipv6_item = static_v6 or (ipv6_list[0] if ipv6_list else {})
+    prefixes = interface.get("IPv6Prefix")
+    prefix_list = [item for item in prefixes if isinstance(item, dict)] if isinstance(prefixes, list) else []
+    static_prefix = next(
+        (item for item in prefix_list if _as_text(_first(item, "Origin", "AddressingType")).lower() == "static"),
+        prefix_list[0] if prefix_list else {},
+    )
+    return {
+        "ip_protocol": protocol,
+        "ipv4_type": ipv4_type,
+        "ipv4_address": _as_text(_first(ipv4_item, "IPAddress", "Address")),
+        "ipv4_netmask": _as_text(_first(ipv4_item, "SubnetMask", "Netmask")),
+        "ipv4_gateway": _as_text(_first(ipv4_item, f"{VENDOR_PREFIX}DefaultGateway", "Gateway")),
+        "ipv4_primary_dns": ipv4_dns[0] if ipv4_dns else _as_text(_first(interface, "IPv4PrimaryDNS")),
+        "ipv4_secondary_dns": ipv4_dns[1] if len(ipv4_dns) > 1 else _as_text(_first(interface, "IPv4SecondDNS")),
+        "ipv6_type": ipv6_type,
+        "ipv6_address": _as_text(_first(ipv6_item, "IPAddress", "Address")),
+        "ipv6_prefix": _as_text(_first(static_prefix, "Prefix")),
+        "ipv6_gateway": _as_text(_first(ipv6_item, f"{VENDOR_PREFIX}DefaultGateway", "Gateway")),
+        "ipv6_primary_dns": ipv6_dns[0] if ipv6_dns else _as_text(_first(interface, "IPv6PrimaryDNS")),
+        "ipv6_secondary_dns": ipv6_dns[1] if len(ipv6_dns) > 1 else _as_text(_first(interface, "IPv6SecondDNS")),
+    }
+
+
+def parse_wan_connections(response: Any) -> tuple[DutWanConnectionInfo, ...]:
+    """把 WAN 多路径只读响应解析为可直接回填界面的配置快照。"""
+    payload = _payload_from_response(response)
+    connections: list[DutWanConnectionInfo] = []
+    for interface in _named_wan_interfaces(payload):
+        name = _as_text(interface.get("Name"))
+        name_index, name_service, name_mode, name_vlan = _name_parts(name)
+        index = _as_text(_first(interface, f"{VENDOR_PREFIX}Instance", "Instance")) or name_index
+        interface_path = f"Device.IP.Interface.{index}"
+        lower_layers = _as_text(interface.get("LowerLayers"))
+        mode = "bridge" if lower_layers.startswith("Device.Ethernet.Link.") or name_mode == "B" else "router"
+        access_type = "" if mode == "bridge" else "PPPoE" if lower_layers.startswith("Device.PPP.Interface.") else "IPoE"
+        vlan_term = _find_vlan_termination(payload, lower_layers)
+        bridge_vlan = _find_bridge_vlan(payload, lower_layers) if mode == "bridge" else None
+        vlan_id = _as_text(_first(interface, "VLAN", "VLANID", f"{VENDOR_PREFIX}VLANID"))
+        vlan_priority = _as_text(_first(interface, "VLANPriority", f"{VENDOR_PREFIX}VLANPriority"))
+        if vlan_term:
+            vlan_id = _as_text(_first(vlan_term, "VLANID", "VLAN")) or vlan_id
+            vlan_priority = _as_text(_first(vlan_term, "VLANPriority", f"{VENDOR_PREFIX}VLANPriority")) or vlan_priority
+        elif bridge_vlan:
+            vlan_id = _as_text(_first(bridge_vlan, "VLANID", "VLAN")) or vlan_id
+            vlan_priority = _as_text(_first(bridge_vlan, f"{VENDOR_PREFIX}VLANPriority", "VLANPriority")) or vlan_priority
+        if not vlan_id and name_vlan.upper() != "TRANSP":
+            vlan_id = name_vlan
+
+        ppp: dict[str, Any] = {}
+        if lower_layers.startswith("Device.PPP.Interface."):
+            ppp_instance = lower_layers.rsplit(".", 1)[-1]
+            ppp = next(
+                (item for item in _nested_list(payload, "PPP", "Interface") if _instance_matches(item, ppp_instance)),
+                {},
+            )
+        nat_settings = _nested_list(payload, "NAT", "InterfaceSetting")
+        nat_item = next(
+            (
+                item
+                for item in nat_settings
+                if _instance_matches(item, index)
+                or _as_text(item.get("Interface")) in {interface_path, name}
+            ),
+            None,
+        )
+        nat_enabled = _as_bool(nat_item.get("Enable")) if nat_item else _as_bool(_first(interface, "Nat", f"{VENDOR_PREFIX}Nat"))
+        address = _address_details(interface, payload, interface_path)
+        mtu = _as_text(_first(interface, "MaxMTUSize", "MTU"))
+        if not mtu and mode == "router":
+            mtu = "1492" if access_type == "PPPoE" else "1500"
+        connections.append(
+            DutWanConnectionInfo(
+                name=name,
+                index=index,
+                mode=mode,
+                service_type=_as_text(_first(interface, f"{VENDOR_PREFIX}ServiceType", "ServiceType")).upper() or name_service,
+                vlan_id=vlan_id,
+                vlan_priority=vlan_priority or "0",
+                port_bind=_port_bind_mask(_first(interface, f"{VENDOR_PREFIX}PortBind", "PortBind")),
+                mtu=mtu,
+                nat_enabled=nat_enabled,
+                access_type=access_type,
+                pppoe_username=_as_text(ppp.get("Username")),
+                pppoe_password=_as_text(_first(ppp, f"{VENDOR_PREFIX}Password", "Password")),
+                **address,
+            )
+        )
+    unique = {item.name: item for item in connections}
+    return tuple(sorted(unique.values(), key=lambda item: (int(item.index or "0"), item.name)))
+
+
+def query_wan_connections(
+    client: UbusHttpClient,
+    session_id: str,
+    *,
+    on_log: LogCallback | None = None,
+) -> tuple[DutWanConnectionInfo, ...]:
+    """一次只读多路径查询获得现有 WAN 名称及完整配置。"""
+    _emit(on_log, f"TX UBUS bbfdm.get paths={list(WAN_QUERY_PATHS)}")
+    response = client.call(
+        session_id,
+        UBUS_SERVICE_BBFDM,
+        "get",
+        {"paths": list(WAN_QUERY_PATHS), "optional": WEB_OPTIONAL},
+    )
+    connections = parse_wan_connections(response)
+    summaries = [
+        f"{item.name}(业务={item.service_type or '-'}, VLAN={item.vlan_id or '-'}, "
+        f"模式={item.mode or '-'}, 接入={item.access_type or '-'})"
+        for item in connections
+    ]
+    _emit(on_log, f"RX UBUS WAN 完整信息：{summaries}")
+    return connections
 
 
 def query_wan_connection_names(
@@ -423,4 +773,6 @@ __all__ = [
     "parse_wan_connection_names",
     "parse_port_bind",
     "query_wan_connection_names",
+    "query_wan_connections",
+    "parse_wan_connections",
 ]

@@ -11,6 +11,7 @@ from src.models import (
     DutTelnetEnableResult,
     DutTr069Settings,
     DutVoiceSettings,
+    DutWanConnectionInfo,
     DutWanQueryResult,
     DutWanSettings,
 )
@@ -98,6 +99,40 @@ def resolve_wan_form_rules(
         show_ipv6_static=show_ipv6 and ipv6_type == "静态",
         mtu_default="1492" if access_type == "PPPoE" else "1500",
     )
+
+
+def wan_connection_form_values(info: DutWanConnectionInfo) -> dict[str, str | bool | None]:
+    """把业务模型值转换为 WAN 表单使用的中文枚举和值。"""
+    protocol = {
+        "IPv4AndIPv6": "IPv4+IPv6（双栈）",
+        "IPv4/IPv6": "IPv4+IPv6（双栈）",
+        "IPv4IPv6": "IPv4+IPv6（双栈）",
+    }.get(info.ip_protocol, info.ip_protocol)
+    return {
+        "mode": "桥接" if info.mode.lower() == "bridge" else "路由" if info.mode else "",
+        "service_type": info.service_type.replace("-", "_").upper(),
+        "vlan_id": info.vlan_id,
+        "vlan_priority": info.vlan_priority,
+        "port_bind": info.port_bind,
+        "mtu": info.mtu,
+        "nat_enabled": info.nat_enabled,
+        "access_type": info.access_type,
+        "ip_protocol": protocol,
+        "ipv4_type": "静态" if info.ipv4_type.lower() == "static" else "DHCP" if info.ipv4_type else "",
+        "ipv4_address": info.ipv4_address,
+        "ipv4_netmask": info.ipv4_netmask,
+        "ipv4_gateway": info.ipv4_gateway,
+        "ipv4_primary_dns": info.ipv4_primary_dns,
+        "ipv4_secondary_dns": info.ipv4_secondary_dns,
+        "ipv6_type": "静态" if info.ipv6_type.lower() == "static" else info.ipv6_type,
+        "ipv6_address": info.ipv6_address,
+        "ipv6_prefix": info.ipv6_prefix,
+        "ipv6_gateway": info.ipv6_gateway,
+        "ipv6_primary_dns": info.ipv6_primary_dns,
+        "ipv6_secondary_dns": info.ipv6_secondary_dns,
+        "pppoe_username": info.pppoe_username,
+        "pppoe_password": info.pppoe_password,
+    }
 
 
 class DutConfigWindow:
@@ -271,8 +306,8 @@ class DutConfigWindow:
         field_key: str | None = None,
     ):
         column = pair * 2
-        label_widget = ttk.Label(parent, text=label)
-        label_widget.grid(row=row, column=column, sticky="e", padx=(4, 4), pady=3)
+        label_widget = ttk.Label(parent, text=label, anchor="w")
+        label_widget.grid(row=row, column=column, sticky="w", padx=(4, 4), pady=3)
         if values is None:
             widget = ttk.Entry(parent, textvariable=variable, width=width)
         else:
@@ -392,8 +427,8 @@ class DutConfigWindow:
         self.wan_pppoe_username_var = StringVar(value="")
         self.wan_pppoe_password_var = StringVar(value="")
         self._field(form, 0, 0, "操作：", self.wan_operation_var, values=("新增", "修改", "删除"))
-        index_label = ttk.Label(form, text="现有连接名/索引：")
-        index_label.grid(row=0, column=2, sticky="e", padx=(4, 4), pady=3)
+        index_label = ttk.Label(form, text="现有连接名/索引：", anchor="w")
+        index_label.grid(row=0, column=2, sticky="w", padx=(4, 4), pady=3)
         index_holder = ttk.Frame(form)
         index_holder.grid(row=0, column=3, sticky="ew", padx=(0, 8), pady=3)
         form.columnconfigure(3, weight=1)
@@ -405,6 +440,7 @@ class DutConfigWindow:
             width=25,
         )
         self.wan_index_combo.pack(side="left", fill="x", expand=True)
+        self.wan_index_combo.bind("<<ComboboxSelected>>", self._apply_selected_wan_connection)
         self.wan_query_button = ttk.Button(
             index_holder,
             text="查询现有 WAN",
@@ -464,6 +500,7 @@ class DutConfigWindow:
             wraplength=1050,
         ).grid(row=8, column=0, columnspan=8, sticky="w", padx=4, pady=(2, 0))
         self._wan_target_signature: tuple[tuple[str, ...], ...] = ()
+        self._wan_connection_details: dict[str, DutWanConnectionInfo] = {}
         self._updating_wan_form = False
         self._last_wan_access_type = ""
         for variable, changed in (
@@ -483,6 +520,7 @@ class DutConfigWindow:
 
     def clear_wan_connections(self, message: str | None = None) -> None:
         """清除可能已过期的 WAN 下拉缓存。"""
+        self._wan_connection_details = {}
         self.wan_index_combo.configure(values=())
         self.wan_index_var.set("")
         self.wan_query_status_var.set(
@@ -494,21 +532,81 @@ class DutConfigWindow:
         connection_names: Iterable[str],
         *,
         target_count: int,
+        connection_details: Mapping[str, DutWanConnectionInfo] | None = None,
     ) -> None:
-        """显示所有目标名称完全一致的共同 WAN，并默认选中第一项。"""
+        """显示共同 WAN；详情一致时默认选中并同步回填当前 WAN 信息。"""
         names = tuple(connection_names)
+        self._wan_connection_details = dict(connection_details or {})
         self.wan_index_combo.configure(values=names)
         if self.wan_index_var.get() not in names:
             self.wan_index_var.set(names[0] if names else "")
         if names:
+            detail_count = len(self._wan_connection_details)
             self.wan_query_status_var.set(
                 f"已查询 {target_count} 台 DUT，共同存在 {len(names)} 个 WAN；"
-                "修改/删除仅会使用当前下拉选择。"
+                f"其中 {detail_count} 个完整配置在所有目标上一致。"
             )
+            self._apply_selected_wan_connection()
         else:
             self.wan_query_status_var.set(
                 f"已查询 {target_count} 台 DUT，未发现名称完全一致的共同 WAN。"
             )
+
+    def _apply_selected_wan_connection(self, _event=None) -> None:
+        """把下拉框当前 WAN 的只读快照同步到修改表单。"""
+        name = self.wan_index_var.get().strip()
+        info = self._wan_connection_details.get(name)
+        if info is None:
+            if name:
+                self.wan_query_status_var.set(
+                    "当前 WAN 在目标间的完整参数不一致或详情不可用；"
+                    "下拉名称仍可用于删除，修改前请人工核对参数。"
+                )
+            return
+        values = wan_connection_form_values(info)
+        variables = {
+            "mode": self.wan_mode_var,
+            "service_type": self.wan_service_type_var,
+            "vlan_id": self.wan_vlan_id_var,
+            "vlan_priority": self.wan_vlan_priority_var,
+            "port_bind": self.wan_port_bind_var,
+            "mtu": self.wan_mtu_var,
+            "access_type": self.wan_access_type_var,
+            "ip_protocol": self.wan_ip_protocol_var,
+            "ipv4_type": self.wan_ipv4_type_var,
+            "ipv4_address": self.wan_ipv4_address_var,
+            "ipv4_netmask": self.wan_ipv4_netmask_var,
+            "ipv4_gateway": self.wan_ipv4_gateway_var,
+            "ipv4_primary_dns": self.wan_ipv4_primary_dns_var,
+            "ipv4_secondary_dns": self.wan_ipv4_secondary_dns_var,
+            "ipv6_type": self.wan_ipv6_type_var,
+            "ipv6_address": self.wan_ipv6_address_var,
+            "ipv6_prefix": self.wan_ipv6_prefix_var,
+            "ipv6_gateway": self.wan_ipv6_gateway_var,
+            "ipv6_primary_dns": self.wan_ipv6_primary_dns_var,
+            "ipv6_secondary_dns": self.wan_ipv6_secondary_dns_var,
+            "pppoe_username": self.wan_pppoe_username_var,
+            "pppoe_password": self.wan_pppoe_password_var,
+        }
+        self._updating_wan_form = True
+        try:
+            enum_fields = {
+                "mode", "service_type", "access_type", "ip_protocol",
+                "ipv4_type", "ipv6_type",
+            }
+            for key, variable in variables.items():
+                value = values[key]
+                if key not in enum_fields or value not in (None, ""):
+                    variable.set(value)
+            if values["nat_enabled"] is not None:
+                self.wan_nat_var.set(bool(values["nat_enabled"]))
+            self._last_wan_access_type = self.wan_access_type_var.get()
+        finally:
+            self._updating_wan_form = False
+        self._update_wan_form_visibility("snapshot")
+        self.wan_query_status_var.set(
+            f"已同步当前 WAN 完整信息：{name}；修改前可直接核对并调整。"
+        )
 
     def _set_wan_field_visible(self, field_key: str, visible: bool) -> None:
         for widget in self._field_groups[field_key]:

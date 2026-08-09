@@ -32,17 +32,6 @@ class DutTelnetEnableResult:
 
 
 @dataclass(frozen=True)
-class DutWanQueryResult:
-    """单台 DUT 的现有 WAN 连接名查询结果。"""
-
-    request: DutTelnetEnableRequest
-    ok: bool
-    stage: str
-    message: str
-    connection_names: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
 class DutWanSettings:
     """一批 DUT 共用的 WAN 操作参数。"""
 
@@ -71,6 +60,49 @@ class DutWanSettings:
     ipv6_secondary_dns: str = ""
     pppoe_username: str = ""
     pppoe_password: str = ""
+
+
+@dataclass(frozen=True)
+class DutWanConnectionInfo:
+    """从 DUT 只读查询得到、可回填 WAN 表单的现有连接快照。"""
+
+    name: str
+    index: str = ""
+    mode: str = ""
+    service_type: str = ""
+    vlan_id: str = ""
+    vlan_priority: str = ""
+    port_bind: str = ""
+    mtu: str = ""
+    nat_enabled: bool | None = None
+    access_type: str = ""
+    ip_protocol: str = ""
+    ipv4_type: str = ""
+    ipv4_address: str = ""
+    ipv4_netmask: str = ""
+    ipv4_gateway: str = ""
+    ipv4_primary_dns: str = ""
+    ipv4_secondary_dns: str = ""
+    ipv6_type: str = ""
+    ipv6_address: str = ""
+    ipv6_prefix: str = ""
+    ipv6_gateway: str = ""
+    ipv6_primary_dns: str = ""
+    ipv6_secondary_dns: str = ""
+    pppoe_username: str = ""
+    pppoe_password: str = ""
+
+
+@dataclass(frozen=True)
+class DutWanQueryResult:
+    """单台 DUT 的现有 WAN 名称与配置快照查询结果。"""
+
+    request: DutTelnetEnableRequest
+    ok: bool
+    stage: str
+    message: str
+    connection_names: tuple[str, ...] = ()
+    connections: tuple[DutWanConnectionInfo, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -152,6 +184,7 @@ __all__ = [
     "DutTelnetEnableResult",
     "DutTr069Settings",
     "DutVoiceSettings",
+    "DutWanConnectionInfo",
     "DutWanQueryResult",
     "DutWanSettings",
 ]

@@ -106,6 +106,39 @@ class UbusHttpClientTests(unittest.TestCase):
         self.assertEqual(sent[3]["command"], "Device.X_SDMC_CreateWAN()")
         self.assertEqual(sent[3]["input"]["VLAN"], "200")
 
+    def test_logout_releases_device_session_and_clears_local_reference(self):
+        with self._patch_ip():
+            client = UbusHttpClient("127.0.0.1", "127.0.0.1")
+        client._session_id = "session-to-release"
+        captured: list[list] = []
+        with patch.object(
+            client,
+            "_post",
+            side_effect=lambda params: captured.append(params) or [0, {"Result": "OK"}],
+        ):
+            client.logout()
+
+        sent = captured[0]
+        self.assertEqual(sent[0], "session-to-release")
+        self.assertEqual(sent[1], "bbf.shell")
+        self.assertEqual(sent[2], "unauthenticated_operate")
+        self.assertEqual(sent[3]["command"], "Device.X_SDMC_Login.logout()")
+        self.assertEqual(sent[3]["input"], {"SessionId": "session-to-release"})
+        self.assertEqual(client._session_id, "")
+
+    def test_close_best_effort_logs_out_active_session_once(self):
+        with self._patch_ip():
+            client = UbusHttpClient("127.0.0.1", "127.0.0.1")
+        client._session_id = "active-session"
+        with patch.object(client, "logout", wraps=client.logout) as logout, patch.object(
+            client, "_post", return_value=[0, {"Result": "OK"}]
+        ):
+            client.close()
+            client.close()
+
+        logout.assert_called_once_with()
+        self.assertEqual(client._session_id, "")
+
     def test_bbfdm_add_supports_optional(self):
         with self._patch_ip():
             client = UbusHttpClient("127.0.0.1", "127.0.0.1")

@@ -28,6 +28,7 @@ from .dut_advanced_config_service import (
     validate_wan_settings,
 )
 from .dut_wan_query_service import (
+    common_wan_connection_details,
     common_wan_connection_names,
     run_dut_wan_query_batch,
     run_single_dut_wan_query,
@@ -105,6 +106,7 @@ __all__ = [
     "VOICE_CODEC_OPTIONS",
     "build_log_path",
     "clamp_dut_parallel_count",
+    "common_wan_connection_details",
     "common_wan_connection_names",
     "compute_all_subtask_statuses",
     "power_on_selected_channels",
