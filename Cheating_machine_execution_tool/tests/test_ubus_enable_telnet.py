@@ -11,6 +11,7 @@ from src.core.ubus_enable_telnet import (
     ACCESS_CTRL_RULE_BASE_PATH,
     _bbfdm_all_results_one,
     enable_telnet_via_ubus,
+    query_telnet_status,
 )
 from src.core.ubus_http_client import UbusError, UbusHttpClient
 
@@ -107,6 +108,40 @@ class BbfdmResponseValidationTests(unittest.TestCase):
 
 
 class EnableTelnetViaUbusTests(unittest.TestCase):
+    def test_status_query_only_gets_rules_and_probes_without_set_or_add(self):
+        client = FakeClient(
+            enable_state="1",
+            rules=[{
+                "Application": "telnet",
+                "SourceInterface": "lan",
+                "Enable": "True",
+                "X_SDMC_Instance": "3",
+            }],
+        )
+        logs: list[str] = []
+        probe_calls: list[tuple] = []
+
+        status = query_telnet_status(
+            client,
+            "fake-session",
+            "192.168.1.112",
+            "192.168.1.1",
+            on_log=logs.append,
+            probe_fn=lambda *args, **kwargs: probe_calls.append((args, kwargs)),
+        )
+
+        self.assertTrue(status.access_control_enabled)
+        self.assertTrue(status.rule_present)
+        self.assertTrue(status.rule_enabled)
+        self.assertEqual(status.source_interfaces, ("lan",))
+        self.assertTrue(status.tcp_port_open)
+        self.assertEqual([call[0] for call in client.calls], ["get", "get"])
+        self.assertEqual(
+            probe_calls,
+            [(("192.168.1.112", "192.168.1.1"), {"device_port": 23, "timeout": 5.0})],
+        )
+        self.assertTrue(any("Telnet当前状态" in item for item in logs))
+
     def test_operation_logs_include_real_paths_and_plaintext_password(self):
         events: list[ubus_enable_telnet.EnableTelnetResult] = []
         client = FakeClient(enable_state="0", rules=[])

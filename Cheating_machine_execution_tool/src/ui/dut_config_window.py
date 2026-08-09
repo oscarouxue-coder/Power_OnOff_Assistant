@@ -10,6 +10,7 @@ from src.models import (
     DutAdvancedQueryResult,
     DutTelnetEnableRequest,
     DutTelnetEnableResult,
+    DutTelnetStatus,
     DutTr069Settings,
     DutVoiceSettings,
     DutWanConnectionInfo,
@@ -219,6 +220,7 @@ class DutConfigWindow:
         password_var: StringVar,
         on_refresh: Callable[[], None],
         on_start: Callable[[], None],
+        on_query_telnet: Callable[[], None],
         on_start_wan: Callable[[], None],
         on_query_wan: Callable[[], None],
         on_query_voice: Callable[[], None],
@@ -303,6 +305,10 @@ class DutConfigWindow:
             justify="left",
         ).pack(fill="x", anchor="w", pady=(0, 10))
 
+        self._build_current_status_area(
+            telnet_tab, "telnet", "尚未查询当前Telnet状态。"
+        )
+
         table_frame = ttk.Frame(telnet_tab)
         table_frame.pack(fill="both", expand=True)
         columns = ("channel", "vlan", "adapter", "bind_ip", "device_host", "status")
@@ -342,6 +348,13 @@ class DutConfigWindow:
             actions, text="刷新目标", command=on_refresh, style="Secondary.TButton"
         )
         self.refresh_button.pack(side="left")
+        self.telnet_query_button = ttk.Button(
+            actions,
+            text="查询当前Telnet",
+            command=on_query_telnet,
+            style="Secondary.TButton",
+        )
+        self.telnet_query_button.pack(side="left", padx=(8, 0))
         self.close_button = ttk.Button(
             actions, text="关闭", command=on_close, style="Secondary.TButton"
         )
@@ -358,7 +371,13 @@ class DutConfigWindow:
         self._trees["telnet"] = self.target_tree
         self._rows_by_feature["telnet"] = self._row_by_channel
         self._input_widgets.extend(
-            [self.username_entry, self.password_entry, self.parallel_spinbox, self.refresh_button]
+            [
+                self.username_entry,
+                self.password_entry,
+                self.parallel_spinbox,
+                self.refresh_button,
+                self.telnet_query_button,
+            ]
         )
         self._start_buttons["telnet"] = self.start_button
         self._stop_buttons.append(self.stop_button)
@@ -655,6 +674,9 @@ class DutConfigWindow:
         ):
             variable.trace_add("write", lambda *_args, source=changed: self._update_wan_form_visibility(source))
         self._update_wan_form_visibility("initial")
+        self._build_current_status_area(
+            tab, "wan", "尚未查询；点击“查询现有 WAN”获取每台当前连接状态。"
+        )
         self._advanced_target_area(
             tab, "wan", start_text="执行 WAN 配置", on_refresh=on_refresh,
             on_start=on_start, on_stop=on_stop, on_close=on_close,
@@ -693,6 +715,31 @@ class DutConfigWindow:
             self.wan_query_status_var.set(
                 f"已查询 {target_count} 台 DUT，未发现名称完全一致的共同 WAN。"
             )
+
+    def set_wan_current_status_results(
+        self, results: Iterable[DutWanQueryResult]
+    ) -> None:
+        """展示现有WAN查询已经返回的逐台连接摘要，不重复查询设备。"""
+        lines: list[str] = []
+        for result in results:
+            label = result.request.channel or result.request.device_host or "DUT"
+            if not result.ok:
+                lines.append(f"{label}：查询失败/停止：{result.message}")
+                continue
+            details = []
+            for info in result.connections:
+                mode = "路由" if info.mode == "router" else "桥接" if info.mode == "bridge" else info.mode
+                details.append(
+                    f"{info.name}[{mode or '未知模式'}/{info.service_type or '未知业务'}/"
+                    f"VLAN {info.vlan_id or '未知'}]"
+                )
+            if not details:
+                details = list(result.connection_names)
+            lines.append(
+                f"{label}：发现 {len(result.connection_names)} 个WAN："
+                + ("；".join(details) if details else "无")
+            )
+        self.clear_current_status("wan", "\n".join(lines) or "未返回WAN查询结果。")
 
     def _apply_selected_wan_connection(self, _event=None) -> None:
         """把下拉框当前 WAN 的只读快照同步到修改表单。"""
@@ -1032,6 +1079,19 @@ class DutConfigWindow:
         )
 
     @staticmethod
+    def _telnet_status_text(settings: DutTelnetStatus) -> str:
+        rule_state = (
+            "启用" if settings.rule_enabled else "禁用" if settings.rule_present else "不存在"
+        )
+        return (
+            f"AccessCtrl总开关={'启用' if settings.access_control_enabled else '禁用'}，"
+            f"LAN Telnet规则={rule_state}，"
+            f"SourceInterface={list(settings.source_interfaces) or ['无']}，"
+            f"TCP 23={'可连接' if settings.tcp_port_open else '不可连接'}，"
+            f"探测结果={settings.probe_message}"
+        )
+
+    @staticmethod
     def _tr069_status_text(settings: DutTr069Settings) -> str:
         return (
             f"ACS={settings.acs_url}，账号={settings.acs_username}/{settings.acs_password}，"
@@ -1047,21 +1107,23 @@ class DutConfigWindow:
         self,
         feature: str,
         results: Iterable[DutAdvancedQueryResult],
-        common_settings: DutVoiceSettings | DutTr069Settings | None,
+        common_settings: DutTelnetStatus | DutVoiceSettings | DutTr069Settings | None,
     ) -> None:
         lines: list[str] = []
         for result in results:
             label = result.request.channel or result.request.device_host or "DUT"
-            if result.ok and isinstance(result.settings, DutVoiceSettings):
+            if result.ok and isinstance(result.settings, DutTelnetStatus):
+                lines.append(f"{label}：{self._telnet_status_text(result.settings)}")
+            elif result.ok and isinstance(result.settings, DutVoiceSettings):
                 lines.append(f"{label}：{self._voice_status_text(result.settings)}")
             elif result.ok and isinstance(result.settings, DutTr069Settings):
                 lines.append(f"{label}：{self._tr069_status_text(result.settings)}")
             else:
                 lines.append(f"{label}：查询失败/停止：{result.message}")
-        if common_settings is not None:
+        if feature in {"voice", "tr069"} and common_settings is not None:
             self.apply_current_status(feature, common_settings)
             lines.append("已确认全部成功目标参数一致，并同步到当前配置表单。")
-        elif any(result.ok for result in results):
+        elif feature in {"voice", "tr069"} and any(result.ok for result in results):
             lines.append("目标状态不完全一致或存在失败，未使用任意一台覆盖当前配置表单。")
         self.clear_current_status(feature, "\n".join(lines) or "未返回查询结果。")
 
@@ -1197,6 +1259,8 @@ class DutConfigWindow:
         )
         if target_signature != self._wan_target_signature:
             self.clear_wan_connections("目标 DUT 已变化，请重新查询现有 WAN。")
+            self.clear_current_status("telnet", "目标 DUT 已变化，请重新查询当前Telnet状态。")
+            self.clear_current_status("wan", "目标 DUT 已变化，请重新查询当前WAN状态。")
             self.clear_current_status("voice", "目标 DUT 已变化，请重新查询当前语音状态。")
             self.clear_current_status("tr069", "目标 DUT 已变化，请重新查询当前TR069状态。")
             self._wan_target_signature = target_signature
@@ -1233,7 +1297,8 @@ class DutConfigWindow:
     ) -> None:
         resolved_feature = feature or getattr(result.request, "feature", "telnet")
         tree_feature = {
-            "wan_query": "wan", "voice_query": "voice", "tr069_query": "tr069",
+            "telnet_query": "telnet", "wan_query": "wan",
+            "voice_query": "voice", "tr069_query": "tr069",
         }.get(resolved_feature, resolved_feature)
         tree = getattr(self, "_trees", {}).get(tree_feature, self.target_tree)
         rows = getattr(self, "_rows_by_feature", {}).get(tree_feature, self._row_by_channel)
@@ -1246,7 +1311,7 @@ class DutConfigWindow:
                 values[-1] = f"成功：发现 {len(result.connection_names)} 个现有 WAN"
                 tree.item(row_id, values=values)
                 return
-            if resolved_feature in {"voice_query", "tr069_query"}:
+            if resolved_feature in {"telnet_query", "voice_query", "tr069_query"}:
                 values[-1] = "成功：已查询当前状态"
                 tree.item(row_id, values=values)
                 return

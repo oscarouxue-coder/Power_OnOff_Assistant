@@ -2,6 +2,16 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-09 - 补齐Telnet与WAN状态展示
+
+- 类型：功能
+- 背景：语音和TR069页已有只读查询及当前状态区，Telnet和WAN页尚未统一。项目负责人要求Telnet配置和WAN配置Tab也增加当前状态展示。
+- 完成内容：① 增加Telnet只读状态模型和core查询，读取AccessCtrl总开关、LAN Telnet规则并锁源探测TCP 23，端口关闭作为状态展示而非查询异常，全流程不执行set/add；② 扩展统一状态查询service支持Telnet的网卡预检、锁源登录、重试、session注销、并行、停止和失败隔离；③ Telnet页增加“查询当前Telnet”和逐台当前状态区；④ WAN页增加当前状态区，直接展示现有WAN查询同批结果中的连接名、模式、业务类型和VLAN，不重复查询；⑤ 四页状态在目标变化或对应配置后失效；⑥ 增加Telnet只读边界、service注销和Telnet/WAN UI展示回归并纳入强制基线。
+- 修改文件：`.claude/plans/dut_telnet_wan_current_status.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/models/dut_config_models.py`、`Cheating_machine_execution_tool/src/models/__init__.py`、`Cheating_machine_execution_tool/src/core/ubus_enable_telnet.py`、`Cheating_machine_execution_tool/src/services/dut_status_query_service.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_ubus_enable_telnet.py`、`Cheating_machine_execution_tool/tests/test_dut_status_query_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行Telnet UBUS、状态查询service和主界面专项测试，再执行 `python -m unittest discover -s tests`、`python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：Telnet UBUS 19项、状态查询service 6项、主界面112项专项测试通过；全量568项单测通过；`python scripts/verify_baseline.py` 全绿（50个当前主程序`.py`编译、编译清单完整、568项单测、85个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows桌面确认Telnet/WAN当前状态区布局；真实ONT验证Telnet总开关/规则/TCP23组合、WAN连接摘要、连续查询、1/8台并行、Access denied、停止和单台失败隔离。现场结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-09 - 增加语音TR069状态查询
 
 - 类型：功能

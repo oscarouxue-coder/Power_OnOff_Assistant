@@ -475,7 +475,7 @@ class LineCheckAssistant(Tk):
                     self._finish_dut_telnet_enable(results)
                 elif feature == "wan_query":
                     self._finish_dut_wan_query(results)
-                elif feature in {"voice_query", "tr069_query"}:
+                elif feature in {"telnet_query", "voice_query", "tr069_query"}:
                     self._finish_dut_current_status_query(
                         feature.removesuffix("_query"), results
                     )
@@ -3756,6 +3756,7 @@ class LineCheckAssistant(Tk):
             password_var=self.parameter_initial_password_var,
             on_refresh=self._refresh_dut_config_targets,
             on_start=self._start_dut_telnet_enable,
+            on_query_telnet=self._query_dut_telnet_status,
             on_start_wan=self._start_dut_wan_config,
             on_query_wan=self._query_dut_wan_connections,
             on_query_voice=self._query_dut_voice_status,
@@ -3956,6 +3957,9 @@ class LineCheckAssistant(Tk):
         if window is not None and window.exists():
             window.set_running(False)
             window.set_summary(summary)
+            window.clear_current_status(
+                "telnet", "Telnet配置已执行，请重新查询当前状态。"
+            )
             if failure_count or stopped_count:
                 messagebox.showwarning("DUT 配置结束", summary, parent=window.window)
             else:
@@ -4025,6 +4029,7 @@ class LineCheckAssistant(Tk):
         self.dut_config_active_feature = "wan_query"
         self.dut_config_cancel_event = threading.Event()
         window.clear_wan_connections("正在查询当前目标 DUT 的现有 WAN……")
+        window.clear_current_status("wan", "正在查询当前目标 DUT 的WAN状态……")
         window.mark_all_pending("wan")
         window.set_running(True)
         window.set_summary(
@@ -4089,6 +4094,7 @@ class LineCheckAssistant(Tk):
             return
         window.set_running(False)
         window.set_summary(summary, "wan")
+        window.set_wan_current_status_results(results)
         if failure_count or stopped_count:
             window.clear_wan_connections(
                 "部分 DUT 查询失败或停止，未生成批量修改/删除下拉列表。"
@@ -4108,6 +4114,9 @@ class LineCheckAssistant(Tk):
             return
         self._start_dut_advanced_config("voice", window.voice_settings())
 
+    def _query_dut_telnet_status(self) -> None:
+        self._query_dut_current_status("telnet")
+
     def _query_dut_voice_status(self) -> None:
         window = self.dut_config_window
         if window is None or not window.exists():
@@ -4126,7 +4135,7 @@ class LineCheckAssistant(Tk):
         if window is None or not window.exists():
             return
         requests = list(self.dut_config_requests)
-        feature_label = {"voice": "语音", "tr069": "TR069"}[feature]
+        feature_label = {"telnet": "Telnet", "voice": "语音", "tr069": "TR069"}[feature]
         if not requests:
             messagebox.showwarning(
                 "没有目标 DUT",
@@ -4192,7 +4201,7 @@ class LineCheckAssistant(Tk):
         cancel_event: threading.Event,
     ) -> None:
         query_feature = f"{feature}_query"
-        feature_label = {"voice": "语音", "tr069": "TR069"}[feature]
+        feature_label = {"telnet": "Telnet", "voice": "语音", "tr069": "TR069"}[feature]
         try:
             results = run_dut_status_query_batch(
                 requests,
@@ -4226,12 +4235,15 @@ class LineCheckAssistant(Tk):
         feature: str,
         results: list[DutAdvancedQueryResult],
     ) -> None:
-        feature_label = {"voice": "语音", "tr069": "TR069"}[feature]
+        feature_label = {"telnet": "Telnet", "voice": "语音", "tr069": "TR069"}[feature]
         success_count = sum(1 for result in results if result.ok)
         stopped_count = sum(1 for result in results if result.stage == "stopped")
         failure_count = len(results) - success_count - stopped_count
         common_settings = common_dut_status_settings(results)
-        consistency = "参数一致，已同步表单" if common_settings is not None else "未自动覆盖表单"
+        if feature == "telnet":
+            consistency = "已展示当前状态"
+        else:
+            consistency = "参数一致，已同步表单" if common_settings is not None else "未自动覆盖表单"
         self.dut_config_running = False
         self.dut_config_active_feature = None
         self.dut_config_cancel_event = None
@@ -4416,6 +4428,7 @@ class LineCheckAssistant(Tk):
         if window is not None and window.exists():
             if feature == "wan":
                 window.clear_wan_connections("WAN 配置已执行，请重新查询最新连接列表。")
+                window.clear_current_status("wan", "WAN配置已执行，请重新查询当前状态。")
             elif feature in {"voice", "tr069"}:
                 feature_label = "语音" if feature == "voice" else "TR069"
                 window.clear_current_status(
@@ -4439,7 +4452,8 @@ class LineCheckAssistant(Tk):
         feature_label = {
             "telnet": "Telnet配置", "wan": "WAN配置", "wan_query": "WAN查询",
             "voice": "语音配置", "tr069": "TR069配置",
-            "voice_query": "语音查询", "tr069_query": "TR069查询",
+            "telnet_query": "Telnet查询", "voice_query": "语音查询",
+            "tr069_query": "TR069查询",
         }.get(getattr(self, "dut_config_active_feature", None), "DUT配置")
         self._log(
             f"[DUT配置][{feature_label}] 操作员请求停止：尚未开始的 DUT 将跳过，"

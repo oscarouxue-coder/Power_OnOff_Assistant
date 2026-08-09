@@ -20,6 +20,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from src.models.dut_config_models import DutTelnetStatus
+
+from .telnet_transport import probe_telnet_port
 from .ubus_http_client import UbusError, UbusHttpClient
 
 
@@ -43,6 +46,7 @@ class EnableTelnetResult:
 
 
 EnableTelnetCallback = Callable[[EnableTelnetResult], None]
+TelnetStatusLogCallback = Callable[[str], None]
 
 
 def _bbfdm_all_results_one(response: Any) -> bool:
@@ -63,6 +67,87 @@ def _bbfdm_all_results_one(response: Any) -> bool:
     return all(
         isinstance(item, dict) and item.get("data") == "1" for item in results
     )
+
+
+def query_telnet_status(
+    client: UbusHttpClient,
+    session_id: str,
+    bind_ip: str,
+    device_host: str,
+    *,
+    on_log: TelnetStatusLogCallback | None = None,
+    probe_fn: Callable[..., None] = probe_telnet_port,
+    probe_timeout: float = 5.0,
+) -> DutTelnetStatus:
+    """只读查询AccessCtrl和TCP 23；不会开启或新增任何规则。"""
+    if on_log is not None:
+        on_log(f"TX UBUS bbfdm.get path={ACCESS_CTRL_ENABLE_PATH}")
+    enable_response = client.bbfdm_get(session_id, ACCESS_CTRL_ENABLE_PATH)
+    if not isinstance(enable_response, list) or not enable_response or enable_response[0] != 0:
+        raise UbusError(f"查询AccessCtrl总开关失败：{enable_response}")
+    enable_payload = (
+        enable_response[1]
+        if len(enable_response) > 1 and isinstance(enable_response[1], dict)
+        else {}
+    )
+    access_control_enabled = str(enable_payload.get("Enable", "")).strip().casefold() in {
+        "1", "true", "enable", "enabled",
+    }
+
+    if on_log is not None:
+        on_log(f"TX UBUS bbfdm.get path={ACCESS_CTRL_RULE_BASE_PATH}")
+    rules_response = client.bbfdm_get(session_id, ACCESS_CTRL_RULE_BASE_PATH)
+    if not isinstance(rules_response, list) or not rules_response or rules_response[0] != 0:
+        raise UbusError(f"查询AccessCtrl规则失败：{rules_response}")
+    rules_payload = (
+        rules_response[1]
+        if len(rules_response) > 1 and isinstance(rules_response[1], dict)
+        else {}
+    )
+    rules = rules_payload.get("Rule", [])
+    matching_rules = [
+        rule
+        for rule in rules
+        if isinstance(rule, dict)
+        and "telnet" in str(rule.get("Application", "")).casefold()
+        and str(rule.get("SourceInterface", "")) in LAN_SOURCE_INTERFACES
+    ] if isinstance(rules, list) else []
+    source_interfaces = tuple(
+        dict.fromkeys(str(rule.get("SourceInterface", "")) for rule in matching_rules)
+    )
+    rule_enabled = any(
+        str(rule.get("Enable", "True")).strip().casefold()
+        in {"1", "true", "enable", "enabled"}
+        for rule in matching_rules
+    )
+
+    if on_log is not None:
+        on_log(f"TX TCP Telnet状态探测：{bind_ip} -> {device_host}:23")
+    try:
+        probe_fn(bind_ip, device_host, device_port=23, timeout=probe_timeout)
+        tcp_port_open = True
+        probe_message = "TCP 23可连接"
+    except Exception as exc:  # noqa: BLE001 - 端口关闭属于可展示状态
+        tcp_port_open = False
+        probe_message = str(exc)
+    status = DutTelnetStatus(
+        access_control_enabled=access_control_enabled,
+        rule_present=bool(matching_rules),
+        rule_enabled=rule_enabled,
+        source_interfaces=source_interfaces,
+        tcp_port_open=tcp_port_open,
+        probe_message=probe_message,
+    )
+    if on_log is not None:
+        on_log(
+            "RX UBUS Telnet当前状态："
+            f"AccessCtrl={'启用' if status.access_control_enabled else '禁用'}，"
+            f"LAN规则={'启用' if status.rule_enabled else ('禁用' if status.rule_present else '不存在')}，"
+            f"SourceInterface={list(status.source_interfaces)}，"
+            f"TCP23={'可连接' if status.tcp_port_open else '不可连接'}，"
+            f"探测结果={status.probe_message}"
+        )
+    return status
 
 
 def enable_telnet_via_ubus(

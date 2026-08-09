@@ -10,10 +10,12 @@ from typing import Union
 from line_check_assistant.network_ops import prepare_network_for_sample
 from src.core.bind_socket import wait_for_bindable_ip
 from src.core.dut_ubus_config import query_tr069_status, query_voice_status
+from src.core.ubus_enable_telnet import query_telnet_status
 from src.core.ubus_http_client import UbusHttpClient
 from src.models.dut_config_models import (
     DutAdvancedQueryResult,
     DutTelnetEnableRequest,
+    DutTelnetStatus,
     DutTr069Settings,
     DutVoiceSettings,
 )
@@ -31,7 +33,7 @@ STATUS_QUERY_LOGIN_RETRY_DELAY_SECONDS = 2.0
 
 OutputCallback = Callable[[str], None]
 ItemCompleteCallback = Callable[[DutAdvancedQueryResult], None]
-StatusSettings = Union[DutVoiceSettings, DutTr069Settings]
+StatusSettings = Union[DutTelnetStatus, DutVoiceSettings, DutTr069Settings]
 
 
 class _DutStatusQueryCancelled(RuntimeError):
@@ -39,7 +41,7 @@ class _DutStatusQueryCancelled(RuntimeError):
 
 
 def _validate_query(feature: str, line_index: str) -> tuple[str, ...]:
-    if feature not in {"voice", "tr069"}:
+    if feature not in {"telnet", "voice", "tr069"}:
         return (f"不支持的DUT状态查询类型：{feature}",)
     if feature == "voice":
         try:
@@ -66,7 +68,9 @@ def run_single_dut_status_query(
 ) -> DutAdvancedQueryResult:
     """查询单台DUT状态；异常收敛为结果，每次登录都释放设备session。"""
     label = request.channel or request.vlan or request.device_host or "DUT"
-    feature_label = {"voice": "语音查询", "tr069": "TR069查询"}.get(feature, feature)
+    feature_label = {
+        "telnet": "Telnet查询", "voice": "语音查询", "tr069": "TR069查询",
+    }.get(feature, feature)
 
     def emit(message: str) -> None:
         if on_output is not None:
@@ -145,13 +149,25 @@ def run_single_dut_status_query(
                         if feature == "voice"
                         else query_fn(client, session_id, on_log=emit)
                     )
+                elif feature == "telnet":
+                    settings = query_telnet_status(
+                        client,
+                        session_id,
+                        request.bind_ip,
+                        request.device_host,
+                        on_log=emit,
+                    )
                 elif feature == "voice":
                     settings = query_voice_status(
                         client, session_id, line_index, on_log=emit
                     )
                 else:
                     settings = query_tr069_status(client, session_id, on_log=emit)
-                expected_type = DutVoiceSettings if feature == "voice" else DutTr069Settings
+                expected_type = {
+                    "telnet": DutTelnetStatus,
+                    "voice": DutVoiceSettings,
+                    "tr069": DutTr069Settings,
+                }[feature]
                 if not isinstance(settings, expected_type):
                     raise TypeError(f"{feature_label}返回了不匹配的状态类型")
                 message = f"{feature_label}成功"

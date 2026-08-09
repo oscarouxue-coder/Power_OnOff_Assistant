@@ -34,6 +34,7 @@ from src.models import (
     DutVoiceSettings,
     DutTelnetEnableRequest,
     DutTelnetEnableResult,
+    DutTelnetStatus,
     DutWanConnectionInfo,
     DutWanQueryResult,
 )
@@ -328,6 +329,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("username_var=self.parameter_initial_username_var", open_source)
         self.assertIn("password_var=self.parameter_initial_password_var", open_source)
         self.assertIn("on_query_wan=self._query_dut_wan_connections", open_source)
+        self.assertIn("on_query_telnet=self._query_dut_telnet_status", open_source)
         self.assertIn("on_query_voice=self._query_dut_voice_status", open_source)
         self.assertIn("on_query_tr069=self._query_dut_tr069_status", open_source)
         self.assertIn('self.notebook.add(telnet_tab, text="Telnet配置")', window_source)
@@ -377,6 +379,66 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(tr069_values["acs_url"], "https://acs.example.com/acs")
         self.assertFalse(tr069_values["periodic_inform_enabled"])
         self.assertNotIn("manual_inform", tr069_values)
+
+    def test_telnet_and_wan_tabs_also_show_current_status_without_duplicate_wan_query(self):
+        import inspect
+
+        window_source = inspect.getsource(DutConfigWindow.__init__)
+        wan_source = inspect.getsource(DutConfigWindow._build_wan_tab)
+        telnet_query_source = inspect.getsource(LineCheckAssistant._query_dut_telnet_status)
+        wan_finish_source = inspect.getsource(LineCheckAssistant._finish_dut_wan_query)
+
+        self.assertIn('text="查询当前Telnet"', window_source)
+        self.assertIn('telnet_tab, "telnet"', window_source)
+        self.assertIn('tab, "wan"', wan_source)
+        self.assertIn('self._query_dut_current_status("telnet")', telnet_query_source)
+        self.assertIn("set_wan_current_status_results(results)", wan_finish_source)
+        self.assertNotIn(
+            "run_dut_wan_query_batch",
+            inspect.getsource(DutConfigWindow.set_wan_current_status_results),
+        )
+
+        telnet_text = DutConfigWindow._telnet_status_text(
+            DutTelnetStatus(
+                access_control_enabled=True,
+                rule_present=True,
+                rule_enabled=True,
+                source_interfaces=("lan",),
+                tcp_port_open=True,
+                probe_message="TCP 23可连接",
+            )
+        )
+        self.assertIn("AccessCtrl总开关=启用", telnet_text)
+        self.assertIn("TCP 23=可连接", telnet_text)
+
+        request = DutTelnetEnableRequest(
+            channel="通道 8",
+            vlan="vlan113",
+            adapter_alias="VLAN113",
+            bind_ip="192.168.1.113",
+            device_host="192.168.1.1",
+            subnet_mask="255.255.255.0",
+            username="user",
+            password="password",
+        )
+        info = DutWanConnectionInfo(
+            name="3_INTERNET_R_VID_172",
+            mode="router",
+            service_type="INTERNET",
+            vlan_id="172",
+        )
+        result = DutWanQueryResult(
+            request, True, "completed", "ok", (info.name,), (info,)
+        )
+        window = object.__new__(DutConfigWindow)
+        window.clear_current_status = Mock()
+
+        window.set_wan_current_status_results((result,))
+
+        status_text = window.clear_current_status.call_args.args[1]
+        self.assertIn("通道 8", status_text)
+        self.assertIn("3_INTERNET_R_VID_172", status_text)
+        self.assertIn("VLAN 172", status_text)
 
     def test_status_display_only_applies_settings_when_batch_has_safe_common_value(self):
         request = DutTelnetEnableRequest(

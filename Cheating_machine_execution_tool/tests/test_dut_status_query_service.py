@@ -7,6 +7,7 @@ from line_check_assistant.network_ops import CommandResult
 from src.models import (
     DutAdvancedQueryResult,
     DutTelnetEnableRequest,
+    DutTelnetStatus,
     DutTr069Settings,
     DutVoiceSettings,
 )
@@ -48,6 +49,31 @@ class _FakeClient:
 
 
 class DutStatusQueryServiceTests(unittest.TestCase):
+    def test_single_telnet_query_uses_readonly_status_result_and_logs_out(self) -> None:
+        client = _FakeClient()
+        expected = DutTelnetStatus(
+            access_control_enabled=True,
+            rule_present=True,
+            rule_enabled=True,
+            source_interfaces=("lan",),
+            tcp_port_open=True,
+            probe_message="TCP 23可连接",
+        )
+        result = run_single_dut_status_query(
+            _request(),
+            "telnet",
+            network_prepare_fn=lambda *_args, **_kwargs: CommandResult(True, "ok"),
+            bind_waiter=lambda _ip, _timeout: True,
+            client_factory=lambda *_args, **_kwargs: client,
+            query_fn=lambda _client, _session, on_log=None: expected,
+            sleep_fn=lambda _seconds: None,
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.settings, expected)
+        self.assertEqual(client.logged_out_sessions, ["session-id"])
+        self.assertTrue(client.closed)
+
     def test_single_voice_query_reuses_network_logs_out_and_returns_settings(self) -> None:
         client = _FakeClient()
         logs: list[str] = []

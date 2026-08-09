@@ -32,6 +32,18 @@ class DutTelnetEnableResult:
 
 
 @dataclass(frozen=True)
+class DutTelnetStatus:
+    """DUT当前Telnet访问控制规则与TCP 23状态。"""
+
+    access_control_enabled: bool = False
+    rule_present: bool = False
+    rule_enabled: bool = False
+    source_interfaces: tuple[str, ...] = ()
+    tcp_port_open: bool = False
+    probe_message: str = ""
+
+
+@dataclass(frozen=True)
 class DutWanSettings:
     """一批 DUT 共用的 WAN 操作参数。"""
 
@@ -188,7 +200,7 @@ class DutAdvancedQueryResult:
     ok: bool
     stage: str
     message: str
-    settings: DutVoiceSettings | DutTr069Settings | None = None
+    settings: DutTelnetStatus | DutVoiceSettings | DutTr069Settings | None = None
 
 
 __all__ = [
@@ -197,6 +209,7 @@ __all__ = [
     "DutAdvancedQueryResult",
     "DutTelnetEnableRequest",
     "DutTelnetEnableResult",
+    "DutTelnetStatus",
     "DutTr069Settings",
     "DutVoiceSettings",
     "DutWanConnectionInfo",
