@@ -156,8 +156,8 @@ class DutConfigWindow:
         self.window = Toplevel(master)
         self.window.withdraw()
         self.window.title("DUT配置")
-        self.window.geometry("1180x780")
-        self.window.minsize(980, 680)
+        self.window.geometry("1480x780")
+        self.window.minsize(1480, 780)
         self.window.transient(master)
         self.window.protocol("WM_DELETE_WINDOW", on_close)
 
