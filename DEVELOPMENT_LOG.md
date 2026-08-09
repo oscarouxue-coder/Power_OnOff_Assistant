@@ -2,15 +2,15 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
-## 2026-08-09 - DUT 网卡准备按需复用
+## 2026-08-09 - 公共网卡准备按需复用
 
-- 类型：性能优化 / DUT 配置
-- 背景：DUT WAN 等配置每次执行都会重复启用目标 VLAN 网卡、重设相同静态 IP 并等待稳定，即使网卡已经满足要求也不例外。项目负责人要求先查询当前配置，满足时直接使用。
-- 完成内容：① 公共网络准备能力新增可选只读预检，通过 `Get-NetAdapter` 与 `Get-NetIPAddress` 一次获取目标网卡启用状态、IPv4 和前缀；② 已启用且目标地址/前缀完全匹配时跳过启用、静态 IP 设置和两次稳定等待；③ 已启用但地址不符时只设置 IP，禁用但地址已正确时只启用，其余不满足项按需修复；④ 查询失败、无结果或解析失败时回退原完整启用和静态 IP 设置流程；⑤ 仅 DUT Telnet、WAN/语音/TR069 配置与“查询现有 WAN”开启复用，线路检查、升级、写参等共享调用默认行为不变；⑥ 所有 DUT 路径在复用后仍执行最多15秒的源 IP 可绑定确认；⑦ 主执行日志明确输出检查、复用、跳过、修复或回退结果，并将状态读取与完全复用测试纳入强制基线。
-- 修改文件：`.claude/plans/dut_network_prepare_reuse.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/line_check_assistant/network_ops.py`、`Cheating_machine_execution_tool/src/services/dut_config_service.py`、`Cheating_machine_execution_tool/src/services/dut_advanced_config_service.py`、`Cheating_machine_execution_tool/src/services/dut_wan_query_service.py`、`Cheating_machine_execution_tool/tests/test_network_ops.py`、`Cheating_machine_execution_tool/tests/test_dut_config_service.py`、`Cheating_machine_execution_tool/tests/test_dut_advanced_config_service.py`、`Cheating_machine_execution_tool/tests/test_dut_wan_query_service.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
-- 验证方法：在主源码目录执行网络准备及 DUT 三个 service 专项测试，再执行 `python scripts\verify_baseline.py` 与 `git diff --check`。
-- 验证结果：网络能力专项42项、DUT service专项22项通过；`python scripts\verify_baseline.py` 全绿（49个当前主程序`.py`编译、编译清单完整、540项单测、53个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
-- 后续待办：Windows 管理员环境分别验证网卡已完全满足、已启用但地址不符、禁用但地址正确、状态读取失败四类日志与实际耗时；真实样机确认复用后 UBUS/WAN 查询及配置仍稳定。真实样机结论由项目负责人提供后再更新验收状态。
+- 类型：性能优化 / 公共网络准备
+- 背景：DUT WAN 等配置以及线路检查、升级、写参等多个流程都会重复启用目标 VLAN 网卡、重设相同静态 IP 并等待稳定，即使网卡已经满足要求也不例外。项目负责人要求统一先查询当前配置，满足时直接使用。
+- 完成内容：① 公共网络准备能力新增可选只读预检，通过 `Get-NetAdapter` 与 `Get-NetIPAddress` 一次获取目标网卡启用状态、IPv4 和前缀；② 已启用且目标地址/前缀完全匹配时跳过启用、静态 IP 设置和两次稳定等待；③ 已启用但地址不符时只设置 IP，禁用但地址已正确时只启用，其余不满足项按需修复；④ 查询失败、无结果或解析失败时回退原完整启用和静态 IP 设置流程；⑤ 线路检查、页面升级、全包升级 TFTP 网卡、写参用户/工厂模式切网、测试项执行、DUT Telnet/WAN/语音/TR069 配置与“查询现有 WAN”全部开启复用；⑥ TFTP、写参和 DUT 等原有源 IP 可绑定确认保持不变，Ping、HTTP/UBUS、Telnet、TFTP 后续成功判据不变；⑦ TFTP 独立准备改为复用公共能力，但 `Tftp指令` 与 `Tftp Put` 两条传输链路不合并；⑧ 主执行日志明确输出检查、复用、跳过、修复或回退结果，并将各生产调用路径纳入强制基线。
+- 修改文件：`.claude/plans/dut_network_prepare_reuse.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/line_check_assistant/network_ops.py`、`Cheating_machine_execution_tool/line_check_assistant/page_upgrade.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/src/services/test_item_execution_service.py`、`Cheating_machine_execution_tool/src/services/dut_config_service.py`、`Cheating_machine_execution_tool/src/services/dut_advanced_config_service.py`、`Cheating_machine_execution_tool/src/services/dut_wan_query_service.py`、`Cheating_machine_execution_tool/tests/test_network_ops.py`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`Cheating_machine_execution_tool/tests/test_page_upgrade.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_app.py`、`Cheating_machine_execution_tool/tests/test_test_item_execution_service.py`、`Cheating_machine_execution_tool/tests/test_dut_config_service.py`、`Cheating_machine_execution_tool/tests/test_dut_advanced_config_service.py`、`Cheating_machine_execution_tool/tests/test_dut_wan_query_service.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行网络准备、全包升级、页面升级、写参、测试项执行及 DUT service 专项测试，再执行 `python scripts\verify_baseline.py` 与 `git diff --check`。
+- 验证结果：上述专项共125项通过；`python scripts\verify_baseline.py` 全绿（49个当前主程序`.py`编译、编译清单完整、540项单测、58个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows 管理员环境分别验证网卡已完全满足、已启用但地址不符、禁用但地址正确、状态读取失败四类日志与实际耗时；真实样机依次回归线路 Ping、页面升级、`Tftp指令`、`Tftp Put`、写参用户/工厂模式切网、测试项执行及 DUT UBUS/WAN 查询与配置。真实样机结论由项目负责人提供后再更新验收状态。
 
 ## 2026-08-09 - 增加现有WAN查询下拉
 

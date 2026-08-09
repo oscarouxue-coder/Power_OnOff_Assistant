@@ -228,6 +228,7 @@ class SampleParameterAppNetworkPreflightTests(unittest.TestCase):
         self.assertEqual(prepare_args[2], "255.255.255.0")
         self.assertIn("on_output", prepare_kwargs)
         self.assertIn("sleep_fn", prepare_kwargs)
+        self.assertTrue(prepare_kwargs["reuse_if_ready"])
 
         # wait_for_bindable_ip 必须以 bind_ip + 15s 超时调用
         wait_args, wait_kwargs = mock_wait_bindable.call_args

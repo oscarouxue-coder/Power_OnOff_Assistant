@@ -1,6 +1,6 @@
 # Acceptance Baseline
 
-更新：2026-08-09（DUT 配置复选框统一显示勾号）
+更新：2026-08-09（公共网卡准备按需复用）
 
 > 与 `PROJECT_STATUS.md` 的关系：本文按"实现 → 单测 → 真实样机验收"三态罗列验收证据与不变量，作为独立验收基线。`PROJECT_STATUS.md` 保留面向项目的进度叙述；两者冲突时以本文为准。
 >
@@ -54,6 +54,7 @@ python scripts\verify_baseline.py
 - 不依赖 SecureCRT、Tftpd64、旧 `Auto_Power_On_Off_Tool.exe` 或 UI Automation
 - TFTP socket 严禁回退 `0.0.0.0`；客户端必须绑当前通道 VLAN IP
 - 升级 / 重启 / 恢复出厂 / 批量写参必须保留确认弹窗 + 主执行日志；新增功能必须输出"关键阶段 / 实际命令 / 成功 / 跳过 / 失败"
+- 线路检查、页面升级、全包升级 TFTP 网卡、写参用户/工厂模式切网、测试项执行及 DUT 配置共用的网卡准备必须先查询启用状态和 IPv4/前缀：完全匹配才可跳过，部分不满足只修复对应项，状态读取失败必须回退完整启用和静态 IP 设置；原有 `wait_for_bindable_ip`、Ping、登录、传输和结果校验不得因复用而跳过
 - 仅 Windows 10/11；写网卡静态 IP 与执行 EXE 均需管理员权限
 
 ### 1.5 主程序入口自检
@@ -66,14 +67,14 @@ python scripts\verify_baseline.py
 
 ### 2.1 通道 / 网卡 / Ping
 
-- **状态**：已确认验收（通道 / 网卡配置、线路 Ping、程控电源 COM 与 VLAN 下拉分组筛选、空 COM 全网卡展示与配置保存，2026-07-24）
+- **状态**：已确认验收（通道 / 网卡配置、线路 Ping、程控电源 COM 与 VLAN 下拉分组筛选、空 COM 全网卡展示与配置保存，2026-07-24）/ 已实现未验收（本次线路 Ping 网卡准备按需复用）
 - **核心行为**：按 VLAN 标识已勾选通道；支持网卡刷新 / 子网配置 / Ping 样机管理 IP；现场配置写 `Auto_power_on_off_tool/config/network_card_ip.ini`
 - **已确认验收行为（2026-07-23）**：切换程控电源 `COM101` 时 VLAN 下拉候选仅显示 `VLAN101`–`VLAN108`；切换 `COM102` 时仅显示 `VLAN109`–`VLAN116`；切换不会自动改写已保存通道配置。
 - **已确认验收行为（2026-07-24）**：程控电源 COM 为空时，VLAN 下拉候选展示所有已识别网卡；空值可保存到 `network_card_ip.ini`，不会被读取逻辑回填为 `COM101`。
 - **边界与异常**：写网卡静态 IP 需管理员权限；源 IP 不可绑时**强提示人工检查 ini**，不回退 `0.0.0.0`
 - **禁止破坏**：配置写入位置唯一（不可再新建 `Cheating_machine_execution_tool/config/`）
-- **待确认**：无。
-- **对应测试**：`tests/test_app.py`、`tests/test_paths.py`
+- **待确认**：真实 Windows 网卡已满足时线路 Ping 跳过重复启用和静态 IP 设置，网卡/IP 不满足时仍按需修复并正确 Ping。
+- **对应测试**：`tests/test_app.py`、`tests/test_paths.py`、`tests/test_network_ops.py`
 
 ### 2.2 程控电源（COM101-COM116 直连）
 
@@ -109,7 +110,7 @@ python scripts\verify_baseline.py
 
 ### 2.4 全包升级 - `Tftp指令`（设备拉取固件）
 
-- **状态**：已确认验收
+- **状态**：已确认验收（既有 Tftp指令链路）/ 已实现未验收（本次 TFTP 网卡准备按需复用）
 - **核心验收行为**：
   - 多台样机串行真实样机（2026-07-11）
   - 两台受控并行真实样机（2026-07-12）
@@ -120,12 +121,12 @@ python scripts\verify_baseline.py
   - 监听 socket 与 RRQ 数据 socket 严格绑当前 VLAN IP，禁止回退 `0.0.0.0`
   - 固件名固定 `tclinux_allinone`
   - 不开外部 CRT / Tftpd 进程
-- **待确认**：4 台、8 台独立 VLAN / COM 真实样机端到端（含程控电源长连接复用、日志仅有一次"已打开 / 已关闭程控电源串口"）
+- **待确认**：网卡配置已满足时直接复用后仍能严格绑定对应 VLAN IP 并完成设备拉取；4 台、8 台独立 VLAN / COM 真实样机端到端（含程控电源长连接复用、日志仅有一次"已打开 / 已关闭程控电源串口"）
 - **对应测试**：`tests/test_serial_upgrade_service.py`、`tests/test_tftp_transport.py`、`tests/test_serial_transport.py`
 
 ### 2.5 全包升级 - `Tftp Put`（主机推固件）
 
-- **状态**：已确认验收
+- **状态**：已确认验收（既有 Tftp Put 链路）/ 已实现未验收（本次 TFTP 网卡准备按需复用）
 - **核心验收行为**：
   - 多台样机串行真实样机（2026-07-12）
   - 两台受控并行真实样机（2026-07-12）
@@ -134,7 +135,7 @@ python scripts\verify_baseline.py
   - 客户端必须绑当前通道 VLAN IP
   - 远端固定 `192.168.1.1:69`
   - **不与 `Tftp指令` 合并**
-- **待确认**：4 台、8 台并行真实样机；现场回显差异（如 `ECNT>` 大小写）下的最终登录时序
+- **待确认**：网卡配置已满足时直接复用后仍能锁定对应源 IP 上传；4 台、8 台并行真实样机；现场回显差异（如 `ECNT>` 大小写）下的最终登录时序
 - **对应测试**：`tests/test_serial_upgrade_service.py`（含 `Tftp Put` salvage / 同批 `ECNT>` / `Password:` 测试）
 
 ### 2.6 全包升级 - 通用时序与收尾
@@ -148,10 +149,10 @@ python scripts\verify_baseline.py
 
 ### 2.7 批量写样机参数（默认走 telnet 路径）
 
-- **状态**：已确认验收（1 台单台 telnet 路径，2026-07-17；6 台独立 VLAN 并行 telnet 路径，2026-07-19；流水线下发命令由可选 Checkbutton 控制：`ppctl clear` 与 `AGING_STATE=1` 默认关闭、勾选才下发、关闭时主日志输出"关闭，跳过"，2026-07-19 6 台真实样机验收通过；默认并行数 1 / 确认框 9 步自然顺序 / 清理失败步骤名标识 同步验收通过）/ 已实现未验收（2 / 8 台端点并行；2026-07-19 用 6 台覆盖了原计划 2 / 4 / 8 区间中段代表性场景）
+- **状态**：已确认验收（1 台单台 telnet 路径，2026-07-17；6 台独立 VLAN 并行 telnet 路径，2026-07-19；流水线下发命令由可选 Checkbutton 控制：`ppctl clear` 与 `AGING_STATE=1` 默认关闭、勾选才下发、关闭时主日志输出"关闭，跳过"，2026-07-19 6 台真实样机验收通过；默认并行数 1 / 确认框 9 步自然顺序 / 清理失败步骤名标识 同步验收通过）/ 已实现未验收（2 / 8 台端点并行；本次用户模式和工厂模式网卡准备按需复用；2026-07-19 用 6 台覆盖了原计划 2 / 4 / 8 区间中段代表性场景）
 - **业务时序**：UBUS 启用 telnet → `TelnetSession`（未登录） → 首次登录 → 1. 进入工厂模式（`ppctl set FACTORY_MODE=1`）→ 2. `firstboot -yr` → 3. 等待 100 秒 → 4. 工厂模式二次登录 → 5.（可选 `ppctl set AGING_STATE=1`）→ 6.（可选 `ppctl clear`）→ 7. 15 项 `ppctl set/get` 读回校验 → 8. 退出工厂模式（`ppctl set FACTORY_MODE=0`）→ 9. `firstboot -yr`（`finally` 中执行第 8/9 步）
 
-  写参前置新增「启用对应通道网卡 + 按 `channel.network_card_ip` 设置静态 IP + `wait_for_bindable_ip` 等 15 秒」三步（任何一步失败抛 `RuntimeError` → worker 标记 `telnet 写参启动失败`，单台放弃不影响其它通道），位于 `make_telnet_factory` 内 UBUS 启用 telnet 之前；100 秒工厂模式网段切换继续由 `make_factory_session_swap` 处理，PC 端从 `192.168.1.x` 切到 `192.168.29.x`、主机位保持不变。`factory_bind_ip` / `factory_device_host` 未配置时按 `factory_bind_ip_for(network_card_ip)` / `factory_device_host_for(device_manage_ip)` 自动派生（第 3 段 → 29，主机位不变）；手动填值优先级最高。
+  写参前置采用「查询并按需准备对应通道网卡 + `wait_for_bindable_ip` 等 15 秒」：已启用且 `channel.network_card_ip`/前缀完全匹配时跳过重复设置，部分不满足只修复对应项，状态读取失败回退完整启用和静态 IP 设置；任何一步失败抛 `RuntimeError` → worker 标记 `telnet 写参启动失败`，单台放弃不影响其它通道。该步骤位于 `make_telnet_factory` 内 UBUS 启用 telnet 之前；100 秒工厂模式网段切换继续由 `make_factory_session_swap` 处理并使用相同预检规则，PC 端从 `192.168.1.x` 切到 `192.168.29.x`、主机位保持不变。`factory_bind_ip` / `factory_device_host` 未配置时按 `factory_bind_ip_for(network_card_ip)` / `factory_device_host_for(device_manage_ip)` 自动派生（第 3 段 → 29，主机位不变）；手动填值优先级最高。
 - **并行与取消**：并行 1-8 台（默认 1；2026-07-19 用户要求默认串行更稳，多台并发易撞 UBUS HTTP / telnet login / NIC；Spinbox 仍允许 1–8 现场上调；升级窗口的 `parallel_count` 默认仍为 2，互不影响）；取消时停止后续命令并尝试退出工厂模式
 - **节奏常量（2026-07-18 P2 缓解）**：默认 `src/services/sample_parameter_service.py` 顶部 7 个常量，按现场经验统一调整；`_login` prompt/password_prompt 用 `PARAMETER_LOGIN_PROMPT_TIMEOUT_SECONDS=10.0`、password_result 用 `PARAMETER_LOGIN_PASSWORD_TIMEOUT_SECONDS=20.0`；`_write_and_verify` set 后 sleep `PARAMETER_SETTLE_AFTER_SET_SECONDS=1.5`、get 等 marker 用 `PARAMETER_GET_RESPONSE_TIMEOUT_SECONDS=10.0`、mismatch/marker=None 后退避 `PARAMETER_RETRY_BACKOFF_SECONDS=1.5`、成功/失败末尾 BETWEEN_PARAMS=`0.5`；并行 worker 错峰 `PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS=0.6`。若 8 台并行仍偶发失败，优先上调 `PARAMETER_GET_RESPONSE_TIMEOUT_SECONDS=15.0` 与 `PARAMETER_RETRY_BACKOFF_SECONDS=2.5`。
 - **前置 UBUS 协议**：经自写 `UbusHttpClient` 按 `SdmcUbusLibEnableTelnet.Enable_telnet` 协议开 LAN-telnet 规则 — ① 总开关 `Device.Firewall.<X_SDMC_>Security.AccessCtrl.Enable` 若非 `"1"` 则 `set Enable=1`（用对象路径 `...AccessCtrl.`，非参数路径，避免 fault 9005 `EnableEnable`）；② 查 `AccessCtrl.Rule.{}.` 既有 telnet 规则（`SourceInterface ∈ {lan, both, Device.IP.Interface.1}`）— 已启用返回 `already_present`，否则 `set Enable=1` 返回 `reused`；③ 若无合适规则则 `add {SourceInterface: Device.IP.Interface.1, IPVersion:4, SourceIP:0.0.0.0, Application:telnet}` 返回 `added_iface`；失败回退 `add SourceInterface=lan` 返回 `added_lan_fallback`。每步校验 `results[*].data == "1"`，末尾固定 `sleep_fn(ENABLE_TELNET_FINAL_SLEEP_SECONDS=1.0)` 给防火墙 reload 留缓冲。
@@ -178,7 +179,7 @@ python scripts\verify_baseline.py
   - 串口路径保留作 transport 配置回退入口；其他功能（页面升级 / 全包升级 / 串口终端）不受影响
   - UBUS HTTP 客户端不复用 `SdmcUbusLib`（其会话静态、不允许多并发）— 如要替换须保证同等并发与源 IP 锁源语义
   - 工厂模式网段约定 29（第 3 段替换）必须保持稳定；变更前需通知所有现场并同步升级 `network_ops.py` 常量
-- **待确认**：2 / 8 台端点独立 VLAN 真实样机并行验收（VLAN/MAC 对应、`set/get` 读回校验、取消清理、退出工厂模式后的重启、明文凭据核对、UBUS 启用 telnet 与 telnet 登录衔接时序；2026-07-19 已用 6 台覆盖了 2 / 4 / 8 区间中段代表性场景）
+- **待确认**：网卡配置完全匹配时用户模式与工厂模式切网分别跳过重复操作且仍完成可绑定确认；2 / 8 台端点独立 VLAN 真实样机并行验收（VLAN/MAC 对应、`set/get` 读回校验、取消清理、退出工厂模式后的重启、明文凭据核对、UBUS 启用 telnet 与 telnet 登录衔接时序；2026-07-19 已用 6 台覆盖了 2 / 4 / 8 区间中段代表性场景）
 - **对应测试**：`tests/test_sample_parameter_service.py`、`tests/test_telnet_transport.py`、`tests/test_ubus_http_client.py`、`tests/test_ubus_enable_telnet.py`、`tests/test_sample_parameter_table.py`、`tests/test_sample_parameter_app.py`、`tests/test_channel_config.py`、`tests/test_regression_sleep_fn.py`、`tests/test_network_ops.py`
 
 ### 2.8 随机参数表生成（`.xlsx`）
@@ -195,14 +196,14 @@ python scripts\verify_baseline.py
 
 - **状态**：已实现未验收
 - **核心行为**：
-  - 启用目标 VLAN 网卡 + 切换 PC 到样机管理 IP 网段（`prepare_network_for_sample`）
+  - 查询目标 VLAN 网卡启用状态和 IPv4/前缀，完全匹配时直接复用，否则按需启用或切换 PC 到样机管理 IP 网段（`prepare_network_for_sample(reuse_if_ready=True)`）
   - HTTP/HTTPS `ubus` 登录、上传固件、调用 `Device.DeviceInfo.X_SDMC_Upgrade()`
   - 升级后 UBUS `Device.FactoryReset()`（`proto=web`）；关闭时输出"恢复出厂：关闭，跳过"
 - **禁止破坏**：
   - `Access denied` 兼容三种 RPC：`bbfdm.operate` / `bbfdm.operate(proto=web)` / `bbfdm.unauthenticated_operate`
   - `PageUpgradeRequest.restore_factory` 已落地；只可在**升级成功 + 重启 + 重新登录成功**之后调用
   - 不提前 `logout` 复用已验证会话
-- **待确认**：真实样机勾选"恢复出厂"时日志依次出现「升级成功 → 重新登录成功 → `TX UBUS Device.FactoryReset()` → 已下发」；未勾选时只出现"恢复出厂：关闭，跳过"；`vlan137/138/139` 升级前网卡切换后 HTTP/HTTPS 一次登录成功
+- **待确认**：真实样机勾选"恢复出厂"时日志依次出现「升级成功 → 重新登录成功 → `TX UBUS Device.FactoryReset()` → 已下发」；未勾选时只出现"恢复出厂：关闭，跳过"；`vlan137/138/139` 分别覆盖网卡复用与按需切换后 HTTP/HTTPS 一次登录成功
 - **对应测试**：`tests/test_page_upgrade.py`（含 `restore_factory`、`exit` 回退策略）、`tests/test_app.py`、`tests/test_network_ops.py`
 
 ### 2.10 ZTE OLT ONU 注册
@@ -253,7 +254,7 @@ python scripts\verify_baseline.py
   - 主界面「检查并执行测试」按钮按下后弹出「全流程执行」窗口（替代旧实现的「直接跑 ping 检查」）
   - **7 个子任务（界面保留 1→7 行布局；勾选串口日志时在全流程开始预启动，其余任务保持 1→7 相对顺序）**：
     1. **自动上/下电**（默认不勾）—— 调 `power_on_service.power_on_selected_channels` / `turn_off_selected_channels` 同步执行；必填项：程控电源 COM + 上/下电（`sample_upgrade_settings.ini` 新增 `power_operation`）+ ≥1 已勾选通道
-    2. **环境线路检查**（默认不勾）—— 复用 `network_ops.run_line_check()` 对每个已勾选通道做「VLAN 网卡启用 + 设 PC 静态 IP + ping 样机管理 IP」；**致命失败**（任一通道 ping 不通 → 整个全流程停止）；必填项：≥1 已勾选通道 + 每通道 `vlan_name / adapter_alias / network_card_ip / device_manage_ip` 全部非空
+    2. **环境线路检查**（默认不勾）—— 复用 `network_ops.run_line_check()` 对每个已勾选通道做「查询 VLAN 网卡状态 → 完全匹配则复用/否则按需启用或设 PC 静态 IP → ping 样机管理 IP」；**致命失败**（任一通道 ping 不通 → 整个全流程停止）；必填项：≥1 已勾选通道 + 每通道 `vlan_name / adapter_alias / network_card_ip / device_manage_ip` 全部非空
     3. **样机升级**（默认不勾）—— 调主程序既有 `_start_page_upgrade` / `_start_serial_tftp_copy_upgrade`（异步起线程 + 弹确认框）；后者按当前设置继续分流 `Tftp指令` 与 `Tftp Put` 两条独立链路；必填项：升级方式 / 固件 / 超级用户凭据 / Tftp 指令或 Put
     4. **写样机参数**（默认不勾）—— 调主程序既有 `_start_sample_parameter_write`（异步起线程 + 弹确认框）；必填项：参数表路径（`sample_upgrade_settings.ini` 新增 `parameter_table_path`）+ 写参首次登录账号 / 密码
     5. **ONU 注册**（默认不勾）—— 调主程序既有 `_on_onu_query_clicked` + `_on_onu_register_clicked`（异步起线程 + 弹确认框）；必填项：OLT IP / 用户名 / 密码

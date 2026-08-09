@@ -863,7 +863,7 @@ def prepare_network_for_sample(
     reuse_if_ready: bool = False,
     state_reader: Optional[Callable[[str], AdapterIpv4State | None]] = None,
 ) -> CommandResult:
-    """为单台样机准备网络；DUT 流程可先检查状态并仅修复不满足项。"""
+    """为单台样机准备网络；调用方可先检查状态并仅修复不满足项。"""
 
     def emit(message: str) -> None:
         if on_output:
