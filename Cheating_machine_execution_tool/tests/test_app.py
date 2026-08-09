@@ -1,6 +1,7 @@
 import os
 import queue
 import sys
+import tempfile
 import threading
 import unittest
 from pathlib import Path
@@ -46,7 +47,15 @@ from src.services.dut_advanced_config_service import (
     WIFI_SECURITY_MODE_OPTIONS,
 )
 from src.ui.dut_config_window import (
+    DUT_CONFIG_DEFAULT_HEIGHT,
+    DUT_CONFIG_DEFAULT_WIDTH,
+    DUT_CURRENT_STATUS_MAX_HEIGHT,
+    DUT_CURRENT_STATUS_MIN_HEIGHT,
     DutConfigWindow,
+    clamp_dut_window_size,
+    clamp_dut_current_status_height,
+    load_dut_current_status_heights,
+    load_dut_window_size,
     normalize_wan_address_modes,
     resolve_wan_form_rules,
     wan_connection_form_values,
@@ -55,6 +64,8 @@ from src.ui.dut_config_window import (
     tr069_status_form_values,
     voice_status_form_values,
     wifi_status_form_values,
+    save_dut_current_status_heights,
+    save_dut_window_size,
 )
 
 
@@ -502,6 +513,258 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("通道 8", status_text)
         self.assertIn("3_INTERNET_R_VID_172", status_text)
         self.assertIn("VLAN 172", status_text)
+
+    def test_dut_current_status_heights_round_trip_and_clamp_invalid_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "dut-ui-state.json"
+
+            self.assertTrue(
+                save_dut_current_status_heights(
+                    path,
+                    {"telnet": 9, "wan": 99, "wifi_2g": 1, "unknown": 7},
+                )
+            )
+            self.assertEqual(
+                load_dut_current_status_heights(path),
+                {
+                    "telnet": 9,
+                    "wan": DUT_CURRENT_STATUS_MAX_HEIGHT,
+                    "wifi_2g": DUT_CURRENT_STATUS_MIN_HEIGHT,
+                },
+            )
+            self.assertEqual(clamp_dut_current_status_height("bad"), 4)
+            path.write_text("not-json", encoding="utf-8")
+            self.assertEqual(load_dut_current_status_heights(path), {})
+
+    def test_dut_current_status_drag_resizes_and_persists_each_tab(self):
+        class FakeText:
+            def __init__(self, height):
+                self.height = height
+
+            def cget(self, name):
+                self.assert_height_name(name)
+                return self.height
+
+            def configure(self, **kwargs):
+                self.height = kwargs["height"]
+
+            @staticmethod
+            def assert_height_name(name):
+                if name != "height":
+                    raise AssertionError(name)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "dut-ui-state.json"
+            window = object.__new__(DutConfigWindow)
+            window._current_status_texts = {
+                "telnet": FakeText(4),
+                "wan": FakeText(7),
+            }
+            window._current_status_heights = {}
+            window._current_status_drag = {}
+            window._state_path = path
+
+            self.assertEqual(window._begin_current_status_resize("telnet", 100), "break")
+            self.assertEqual(window._drag_current_status_resize("telnet", 172), "break")
+            self.assertEqual(window._finish_current_status_resize("telnet"), "break")
+
+            self.assertEqual(window._current_status_texts["telnet"].height, 8)
+            self.assertEqual(
+                load_dut_current_status_heights(path), {"telnet": 8, "wan": 7}
+            )
+            builder_source = __import__("inspect").getsource(
+                DutConfigWindow._build_current_status_area
+            )
+            self.assertIn("拖动调整当前状态高度", builder_source)
+            self.assertIn('"<B1-Motion>"', builder_source)
+
+    def test_dut_window_size_round_trip_preserves_status_and_fits_screen(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "dut-ui-state.json"
+
+            self.assertTrue(
+                save_dut_current_status_heights(path, {"telnet": 8, "wan": 6})
+            )
+            self.assertTrue(save_dut_window_size(path, 1800, 1000))
+            self.assertEqual(
+                load_dut_window_size(
+                    path, screen_width=1920, screen_height=1080
+                ),
+                (1800, 1000),
+            )
+            self.assertEqual(
+                load_dut_current_status_heights(path),
+                {"telnet": 8, "wan": 6},
+            )
+
+            self.assertTrue(
+                save_dut_current_status_heights(path, {"telnet": 9})
+            )
+            self.assertEqual(
+                load_dut_window_size(
+                    path, screen_width=1600, screen_height=900
+                ),
+                (1600, 900),
+            )
+            self.assertEqual(
+                clamp_dut_window_size("bad", None),
+                (DUT_CONFIG_DEFAULT_WIDTH, DUT_CONFIG_DEFAULT_HEIGHT),
+            )
+
+            constructor_source = __import__("inspect").getsource(
+                DutConfigWindow.__init__
+            )
+            destroy_source = __import__("inspect").getsource(
+                DutConfigWindow.destroy
+            )
+            self.assertIn("load_dut_window_size(", constructor_source)
+            self.assertIn("self.window.geometry", constructor_source)
+            self.assertIn("save_dut_window_size", destroy_source)
+
+    def test_dut_current_status_resize_stops_before_bottom_actions_are_clipped(self):
+        class FakeText:
+            def __init__(self, height):
+                self.height = height
+
+            def cget(self, name):
+                if name != "height":
+                    raise AssertionError(name)
+                return self.height
+
+            def configure(self, **kwargs):
+                self.height = kwargs["height"]
+
+        class FakeTab:
+            @staticmethod
+            def winfo_ismapped():
+                return True
+
+            @staticmethod
+            def winfo_rooty():
+                return 100
+
+            @staticmethod
+            def winfo_height():
+                return 400
+
+        class FakeActions:
+            def __init__(self, text):
+                self.text = text
+
+            @staticmethod
+            def winfo_ismapped():
+                return True
+
+            def winfo_rooty(self):
+                return 270 + self.text.height * 18
+
+            @staticmethod
+            def winfo_height():
+                return 40
+
+            @staticmethod
+            def winfo_reqheight():
+                return 40
+
+        class FakeWindow:
+            @staticmethod
+            def update_idletasks():
+                return None
+
+            @staticmethod
+            def winfo_rooty():
+                return 50
+
+            @staticmethod
+            def winfo_height():
+                return 600
+
+        class FakeBottomArea:
+            @staticmethod
+            def winfo_ismapped():
+                return True
+
+            @staticmethod
+            def winfo_rooty():
+                return 400
+
+            @staticmethod
+            def winfo_height():
+                return 90
+
+            @staticmethod
+            def winfo_reqheight():
+                return 90
+
+        class FakePackTab:
+            def __init__(self):
+                self.first_slave = object()
+
+            def pack_slaves(self):
+                return [self.first_slave]
+
+        class FakePackedActions:
+            def __init__(self):
+                self.pack_options = None
+
+            def pack(self, **kwargs):
+                self.pack_options = kwargs
+
+        text = FakeText(4)
+        window = object.__new__(DutConfigWindow)
+        window.window = FakeWindow()
+        window._current_status_texts = {"telnet": text}
+        window._current_status_tabs = {"telnet": FakeTab()}
+        window._current_status_action_frames = {"telnet": FakeActions(text)}
+        window._current_status_bottom_areas = {"telnet": FakeBottomArea()}
+
+        effective = window._fit_current_status_height("telnet", 16)
+
+        self.assertEqual(effective, 10)
+        self.assertEqual(text.height, 10)
+        self.assertTrue(window._bottom_actions_fully_visible("telnet"))
+
+        class FakeCompressedActions(FakeActions):
+            @staticmethod
+            def winfo_height():
+                return 20
+
+        window._current_status_action_frames["telnet"] = FakeCompressedActions(text)
+        self.assertFalse(window._bottom_actions_fully_visible("telnet"))
+
+        class FakeCompressedBottomArea(FakeBottomArea):
+            @staticmethod
+            def winfo_height():
+                return 50
+
+        window._current_status_action_frames["telnet"] = FakeActions(text)
+        window._current_status_bottom_areas["telnet"] = FakeCompressedBottomArea()
+        self.assertFalse(window._bottom_actions_fully_visible("telnet"))
+
+        constructor_source = __import__("inspect").getsource(DutConfigWindow.__init__)
+        target_source = __import__("inspect").getsource(
+            DutConfigWindow._advanced_target_area
+        )
+        self.assertIn('_current_status_action_frames["telnet"]', constructor_source)
+        self.assertIn('"<<NotebookTabChanged>>"', constructor_source)
+        self.assertIn("_current_status_action_frames[feature]", target_source)
+        self.assertIn("_pack_protected_bottom_area(telnet_tab, footer)", constructor_source)
+        self.assertIn('_current_status_bottom_areas["telnet"] = footer', constructor_source)
+        self.assertIn("ttk.Label(footer, textvariable=self.summary_var", constructor_source)
+        self.assertIn("actions = ttk.Frame(footer)", constructor_source)
+        self.assertIn("_pack_protected_bottom_area(tab, footer)", target_source)
+        self.assertIn("_current_status_bottom_areas[feature] = footer", target_source)
+        self.assertIn("ttk.Label(footer, textvariable=summary_var", target_source)
+        self.assertIn("actions = ttk.Frame(footer)", target_source)
+
+        pack_tab = FakePackTab()
+        packed_actions = FakePackedActions()
+        DutConfigWindow._pack_protected_bottom_area(pack_tab, packed_actions)
+        self.assertEqual(packed_actions.pack_options["side"], "bottom")
+        self.assertEqual(packed_actions.pack_options["fill"], "x")
+        self.assertIs(
+            packed_actions.pack_options["before"], pack_tab.first_slave
+        )
 
     def test_status_display_only_applies_settings_when_batch_has_safe_common_value(self):
         request = DutTelnetEnableRequest(

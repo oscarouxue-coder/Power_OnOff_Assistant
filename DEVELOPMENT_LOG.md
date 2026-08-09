@@ -2,6 +2,36 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-09 - 增加DUT窗口宽高记忆
+
+- 类型：功能 / DUT配置 / UI状态 / 回归测试 / 文档
+- 背景：DUT配置已经可以记忆六个Tab的当前状态高度，但窗口本身每次打开仍使用固定宽高；项目负责人要求同时保持上次关闭时的窗口宽度和高度。
+- 完成内容：① 在现有`~/.aouxue_dut_config.json`增加`window_size.width/height`，窗口构建时先读取并恢复宽高，关闭前读取实际尺寸并原子保存；② 保持最小尺寸1530×880，历史值超过当前屏幕时按当前屏幕收敛，缺失、损坏或非法值回退默认1530×880；③ 重构本机UI状态写入为“读取现有JSON后合并字段”，拖动状态区或保存窗口尺寸均不会覆盖另一类状态；④ 增加尺寸往返、跨屏幕收敛、非法回退、状态高度兼容及构建/销毁调用回归，并纳入强制基线。
+- 修改文件：`.claude/plans/dut_window_size_persistence.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p "test_app.py" -v`、`python scripts\verify_baseline.py`与`git diff --check`。
+- 验证结果：主界面117项专项测试通过；`python scripts\verify_baseline.py`全绿（51个当前主程序`.py`编译、编译清单完整、579项单测、94个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows桌面调整DUT配置窗口宽高并关闭，重新打开确认恢复上次尺寸；更换分辨率或显示器后确认窗口自动收敛且底部提示和按钮仍完整显示。现场结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-09 - 保护DUT底部操作按钮
+
+- 类型：BUG修复 / DUT配置 / UI布局 / 回归测试 / 文档
+- 背景：DUT配置六个Tab的“当前状态”虽然已有2–16行固定范围，但不同Tab的表单高度不同，向下拖动过多仍可能把底部“刷新/查询/停止/执行/关闭”按钮裁切或完全遮挡。
+- 完成内容：① 首版事后测量在真实Tk布局中仍可能先压缩后创建的按钮栏；现将Telnet及其余五个Tab的“已加载 N 台目标 DUT”提示和操作栏组成统一底部区域，按`side=bottom`放到Tab布局队列首位，先预留提示行与按钮的完整请求高度，再让状态区和目标表格使用剩余空间；② 拖动时仍在2–16行范围内逐级检查当前Tab、窗口、底部区域及按钮栏边界，并要求两层实际高度均不小于请求高度，继续增高会遮挡或压缩提示/按钮时自动停在最后一个安全高度；③ 窗口首次显示、再次显示和Tab切换后重新校正当前页，自动保存有效高度；④ 回归锁定Telnet独立底部区、其余五页共用底部区均使用底部优先布局，并覆盖请求16行但只能安全容纳10行、按钮栏被压缩和底部提示区被压缩三类边界。
+- 修改文件：`.claude/plans/dut_current_status_height.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p "test_app.py" -v`、`python scripts\verify_baseline.py`与`git diff --check`。
+- 验证结果：主界面116项专项测试通过；`python scripts\verify_baseline.py`全绿（51个当前主程序`.py`编译、编译清单完整、578项单测、93个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows桌面逐页向下拖动Telnet、WAN、2.4G WiFi、5G WiFi、语音和TR069当前状态区，确认达到安全上限后停止且“已加载 N 台目标 DUT”提示与整排底部按钮均完整可见；关闭重开并逐页切换，确认历史高度恢复后仍不会遮挡底部区域。现场结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-09 - 增加DUT状态区高度记忆
+
+- 类型：功能 / DUT配置 / UI状态 / 回归测试 / 文档
+- 背景：DUT配置六个Tab的“当前状态”文本区固定为4行，内容较多时只能依赖滚动条，操作员无法按现场需要扩大显示区；项目负责人要求开放高度调整，并在再次打开DUT配置窗口时恢复上次关闭的高度。
+- 完成内容：① 统一`_build_current_status_area()`在六页当前状态区底部增加“↕ 拖动调整当前状态高度”调节条，按住上下拖动即可改变文本显示行数；② 每个Tab独立记忆高度，范围收敛为2–16行，避免缩到不可用或挤占整页；③ 新增本机状态文件`~/.aouxue_dut_config.json`，窗口构建时加载，拖动结束和窗口销毁时原子保存；④ 文件不存在、JSON损坏、未知字段、非法值和越界值均安全忽略或收敛，不影响窗口打开/关闭和DUT业务；⑤ 增加状态往返、异常回退、范围限制、逐Tab独立记忆和拖动持久化回归，并加入强制基线。
+- 修改文件：`.claude/plans/dut_current_status_height.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p "test_app.py" -v`、`python scripts\verify_baseline.py`与`git diff --check`。
+- 验证结果：主界面115项专项测试通过；`python scripts\verify_baseline.py`全绿（51个当前主程序`.py`编译、编译清单完整、577项单测、92个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows桌面分别拖动Telnet、WAN、2.4G WiFi、5G WiFi、语音、TR069当前状态区，确认上下拖动手感、2–16行边界和目标表格让位；关闭并重开DUT配置窗口，确认六页分别恢复各自高度。现场结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-09 - 增加DUT 2.4G与5G WiFi配置
 
 - 类型：功能 / DUT配置 / WiFi / UBUS / 查询回填 / 回归测试 / 文档

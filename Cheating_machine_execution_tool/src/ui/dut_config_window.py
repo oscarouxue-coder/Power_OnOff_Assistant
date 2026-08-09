@@ -1,9 +1,11 @@
 """DUT 配置窗口；仅负责界面展示和回调，不承载 UBUS 业务逻辑。"""
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from tkinter import BooleanVar, Checkbutton, END, StringVar, Text, Toplevel, ttk
+from pathlib import Path
+from tkinter import BooleanVar, Checkbutton, END, StringVar, TclError, Text, Toplevel, ttk
 
 from src.models import (
     DutAdvancedConfigResult,
@@ -57,6 +59,132 @@ WIFI_CHANNEL_OPTIONS = {
     ),
 }
 WIFI_TRANSMIT_POWER_OPTIONS = ("20", "40", "60", "80", "100")
+DUT_CONFIG_UI_STATE_PATH = Path.home() / ".aouxue_dut_config.json"
+DUT_CONFIG_DEFAULT_WIDTH = 1530
+DUT_CONFIG_DEFAULT_HEIGHT = 880
+DUT_CONFIG_MIN_WIDTH = 1530
+DUT_CONFIG_MIN_HEIGHT = 880
+DUT_CURRENT_STATUS_FEATURES = (
+    "telnet", "wan", "wifi_2g", "wifi_5g", "voice", "tr069",
+)
+DUT_CURRENT_STATUS_DEFAULT_HEIGHT = 4
+DUT_CURRENT_STATUS_MIN_HEIGHT = 2
+DUT_CURRENT_STATUS_MAX_HEIGHT = 16
+DUT_CURRENT_STATUS_DRAG_PIXELS_PER_ROW = 18
+DUT_CURRENT_STATUS_BOTTOM_GUARD_PIXELS = 0
+
+
+def _load_dut_config_ui_state(path: Path) -> dict[str, object]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _save_dut_config_ui_state(path: Path, payload: Mapping[str, object]) -> bool:
+    temporary = path.with_suffix(f"{path.suffix}.tmp")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary.write_text(
+            json.dumps(dict(payload), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        temporary.replace(path)
+    except OSError:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+    return True
+
+
+def clamp_dut_current_status_height(value: object) -> int:
+    """把持久化或拖动产生的高度收敛到可用文本行范围。"""
+    try:
+        height = int(value)
+    except (TypeError, ValueError):
+        return DUT_CURRENT_STATUS_DEFAULT_HEIGHT
+    return max(DUT_CURRENT_STATUS_MIN_HEIGHT, min(DUT_CURRENT_STATUS_MAX_HEIGHT, height))
+
+
+def load_dut_current_status_heights(path: Path) -> dict[str, int]:
+    """读取每个 DUT Tab 的当前状态高度；损坏状态安全回退默认值。"""
+    payload = _load_dut_config_ui_state(path)
+    values = payload.get("current_status_heights") if isinstance(payload, dict) else None
+    if not isinstance(values, dict):
+        return {}
+    return {
+        feature: clamp_dut_current_status_height(values[feature])
+        for feature in DUT_CURRENT_STATUS_FEATURES
+        if feature in values
+    }
+
+
+def save_dut_current_status_heights(
+    path: Path, heights: Mapping[str, object]
+) -> bool:
+    """原子保存当前状态高度；UI 状态写失败不阻止窗口关闭。"""
+    payload = _load_dut_config_ui_state(path)
+    payload["current_status_heights"] = {
+        feature: clamp_dut_current_status_height(heights[feature])
+        for feature in DUT_CURRENT_STATUS_FEATURES
+        if feature in heights
+    }
+    return _save_dut_config_ui_state(path, payload)
+
+
+def clamp_dut_window_size(
+    width: object,
+    height: object,
+    *,
+    screen_width: object | None = None,
+    screen_height: object | None = None,
+) -> tuple[int, int]:
+    """收敛DUT窗口宽高，避免损坏或跨屏幕状态造成不可用窗口。"""
+    try:
+        safe_width = int(width)
+    except (TypeError, ValueError):
+        safe_width = DUT_CONFIG_DEFAULT_WIDTH
+    try:
+        safe_height = int(height)
+    except (TypeError, ValueError):
+        safe_height = DUT_CONFIG_DEFAULT_HEIGHT
+    safe_width = max(DUT_CONFIG_MIN_WIDTH, safe_width)
+    safe_height = max(DUT_CONFIG_MIN_HEIGHT, safe_height)
+    try:
+        maximum_width = max(DUT_CONFIG_MIN_WIDTH, int(screen_width))
+    except (TypeError, ValueError):
+        maximum_width = safe_width
+    try:
+        maximum_height = max(DUT_CONFIG_MIN_HEIGHT, int(screen_height))
+    except (TypeError, ValueError):
+        maximum_height = safe_height
+    return min(safe_width, maximum_width), min(safe_height, maximum_height)
+
+
+def load_dut_window_size(
+    path: Path, *, screen_width: object, screen_height: object
+) -> tuple[int, int]:
+    """读取上次关闭时的DUT窗口宽高，并适配当前屏幕。"""
+    payload = _load_dut_config_ui_state(path)
+    value = payload.get("window_size")
+    if not isinstance(value, dict):
+        value = {}
+    return clamp_dut_window_size(
+        value.get("width", DUT_CONFIG_DEFAULT_WIDTH),
+        value.get("height", DUT_CONFIG_DEFAULT_HEIGHT),
+        screen_width=screen_width,
+        screen_height=screen_height,
+    )
+
+
+def save_dut_window_size(path: Path, width: object, height: object) -> bool:
+    """保存DUT窗口宽高，同时保留同一文件中的状态区高度。"""
+    safe_width, safe_height = clamp_dut_window_size(width, height)
+    payload = _load_dut_config_ui_state(path)
+    payload["window_size"] = {"width": safe_width, "height": safe_height}
+    return _save_dut_config_ui_state(path, payload)
 
 
 def _port_bind_mask_value(value: str) -> int:
@@ -269,12 +397,19 @@ class DutConfigWindow:
         on_query_wifi_5g: Callable[[], None],
         on_stop: Callable[[], None],
         on_close: Callable[[], None],
+        state_path: Path | None = None,
     ) -> None:
+        self._state_path = state_path or DUT_CONFIG_UI_STATE_PATH
         self.window = Toplevel(master)
         self.window.withdraw()
         self.window.title("DUT配置")
-        self.window.geometry("1530x880")
-        self.window.minsize(1530, 880)
+        window_width, window_height = load_dut_window_size(
+            self._state_path,
+            screen_width=self.window.winfo_screenwidth(),
+            screen_height=self.window.winfo_screenheight(),
+        )
+        self.window.geometry(f"{window_width}x{window_height}")
+        self.window.minsize(DUT_CONFIG_MIN_WIDTH, DUT_CONFIG_MIN_HEIGHT)
         self.window.transient(master)
         self.window.protocol("WM_DELETE_WINDOW", on_close)
 
@@ -291,6 +426,14 @@ class DutConfigWindow:
         self._start_buttons: dict[str, ttk.Button] = {}
         self._stop_buttons: list[ttk.Button] = []
         self._current_status_texts: dict[str, Text] = {}
+        self._current_status_resize_bars: dict[str, ttk.Label] = {}
+        self._current_status_drag: dict[str, tuple[int, int]] = {}
+        self._current_status_tabs: dict[str, object] = {}
+        self._current_status_action_frames: dict[str, ttk.Frame] = {}
+        self._current_status_bottom_areas: dict[str, ttk.Frame] = {}
+        self._current_status_heights = load_dut_current_status_heights(
+            self._state_path
+        )
         self._wifi_vars: dict[str, dict[str, StringVar | BooleanVar]] = {}
         self._wifi_password_groups: dict[str, tuple[object, object]] = {}
         self._wifi_choice_widgets: dict[str, dict[str, ttk.Combobox]] = {}
@@ -383,11 +526,15 @@ class DutConfigWindow:
         self.target_tree.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-        ttk.Label(telnet_tab, textvariable=self.summary_var, style="Muted.TLabel").pack(
+        footer = ttk.Frame(telnet_tab)
+        self._pack_protected_bottom_area(telnet_tab, footer)
+        self._current_status_bottom_areas["telnet"] = footer
+        ttk.Label(footer, textvariable=self.summary_var, style="Muted.TLabel").pack(
             fill="x", anchor="w", pady=(8, 8)
         )
-        actions = ttk.Frame(telnet_tab)
+        actions = ttk.Frame(footer)
         actions.pack(fill="x")
+        self._current_status_action_frames["telnet"] = actions
         self.refresh_button = ttk.Button(
             actions, text="刷新目标", command=on_refresh, style="Secondary.TButton"
         )
@@ -442,6 +589,9 @@ class DutConfigWindow:
             on_refresh, on_start_tr069, on_query_tr069, on_stop, on_close
         )
 
+        self.notebook.bind(
+            "<<NotebookTabChanged>>", self._on_dut_tab_changed, add="+"
+        )
         self.window.after(0, self._reveal)
 
     def _field(
@@ -495,6 +645,17 @@ class DutConfigWindow:
         self._input_widgets.append(widget)
         return widget
 
+    @staticmethod
+    def _pack_protected_bottom_area(tab, bottom_area) -> None:
+        """优先为底部提示和按钮预留空间，避免可变高度组件将其裁切。"""
+        existing_slaves = tab.pack_slaves()
+        if existing_slaves:
+            bottom_area.pack(
+                side="bottom", fill="x", before=existing_slaves[0]
+            )
+            return
+        bottom_area.pack(side="bottom", fill="x")
+
     def _advanced_target_area(
         self,
         tab,
@@ -528,11 +689,15 @@ class DutConfigWindow:
         tree.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         summary_var = StringVar(value="尚未加载目标 DUT")
-        ttk.Label(tab, textvariable=summary_var, style="Muted.TLabel").pack(
+        footer = ttk.Frame(tab)
+        self._pack_protected_bottom_area(tab, footer)
+        self._current_status_bottom_areas[feature] = footer
+        ttk.Label(footer, textvariable=summary_var, style="Muted.TLabel").pack(
             fill="x", anchor="w", pady=(6, 6)
         )
-        actions = ttk.Frame(tab)
+        actions = ttk.Frame(footer)
         actions.pack(fill="x")
+        self._current_status_action_frames[feature] = actions
         refresh = ttk.Button(actions, text="刷新目标", command=on_refresh, style="Secondary.TButton")
         refresh.pack(side="left")
         if query_text and on_query is not None:
@@ -554,23 +719,194 @@ class DutConfigWindow:
         self._stop_buttons.append(stop)
 
     def _build_current_status_area(self, tab, feature: str, initial_text: str) -> None:
+        self._current_status_tabs[feature] = tab
         frame = ttk.LabelFrame(tab, text="当前状态", padding=6)
         frame.pack(fill="x", pady=(8, 0))
+        content = ttk.Frame(frame)
+        content.pack(fill="x")
+        height = self._current_status_heights.get(
+            feature, DUT_CURRENT_STATUS_DEFAULT_HEIGHT
+        )
         text = Text(
-            frame,
-            height=4,
+            content,
+            height=height,
             wrap="word",
             relief="flat",
             borderwidth=0,
             background=DUT_CHECK_BACKGROUND,
             foreground=DUT_CHECK_FOREGROUND,
         )
-        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
+        scrollbar = ttk.Scrollbar(content, orient="vertical", command=text.yview)
         text.configure(yscrollcommand=scrollbar.set)
         text.pack(side="left", fill="x", expand=True)
         scrollbar.pack(side="right", fill="y")
+        resize_bar = ttk.Label(
+            frame,
+            text="↕ 拖动调整当前状态高度",
+            anchor="center",
+            cursor="sb_v_double_arrow",
+            style="Muted.TLabel",
+        )
+        resize_bar.pack(fill="x", pady=(3, 0))
+        resize_bar.bind(
+            "<ButtonPress-1>",
+            lambda event, selected=feature: self._begin_current_status_resize(
+                selected, event.y_root
+            ),
+        )
+        resize_bar.bind(
+            "<B1-Motion>",
+            lambda event, selected=feature: self._drag_current_status_resize(
+                selected, event.y_root
+            ),
+        )
+        resize_bar.bind(
+            "<ButtonRelease-1>",
+            lambda _event, selected=feature: self._finish_current_status_resize(
+                selected
+            ),
+        )
         self._current_status_texts[feature] = text
+        self._current_status_resize_bars[feature] = resize_bar
         self.clear_current_status(feature, initial_text)
+
+    def _begin_current_status_resize(self, feature: str, y_root: int) -> str:
+        text = self._current_status_texts.get(feature)
+        if text is not None:
+            height = clamp_dut_current_status_height(text.cget("height"))
+            self._current_status_drag[feature] = (int(y_root), height)
+        return "break"
+
+    def _drag_current_status_resize(self, feature: str, y_root: int) -> str:
+        text = self._current_status_texts.get(feature)
+        origin = self._current_status_drag.get(feature)
+        if text is None or origin is None:
+            return "break"
+        start_y, start_height = origin
+        row_delta = round(
+            (int(y_root) - start_y) / DUT_CURRENT_STATUS_DRAG_PIXELS_PER_ROW
+        )
+        height = clamp_dut_current_status_height(start_height + row_delta)
+        effective_height = self._fit_current_status_height(feature, height)
+        self._current_status_heights[feature] = effective_height
+        return "break"
+
+    def _fit_current_status_height(self, feature: str, requested_height: object) -> int:
+        """限制状态区高度，确保当前 Tab 的底部操作按钮仍完整可见。"""
+        requested = clamp_dut_current_status_height(requested_height)
+        text = self._current_status_texts.get(feature)
+        if text is None:
+            return requested
+
+        # 窗口尚未完成构建时没有可用的几何信息，先保留行数钳制。
+        tabs = getattr(self, "_current_status_tabs", {})
+        action_frames = getattr(self, "_current_status_action_frames", {})
+        if feature not in tabs or feature not in action_frames:
+            text.configure(height=requested)
+            return requested
+
+        for candidate in range(requested, DUT_CURRENT_STATUS_MIN_HEIGHT - 1, -1):
+            text.configure(height=candidate)
+            try:
+                self.window.update_idletasks()
+            except (AttributeError, TclError):
+                return candidate
+            visibility = self._bottom_actions_fully_visible(feature)
+            if visibility is None or visibility:
+                return candidate
+
+        text.configure(height=DUT_CURRENT_STATUS_MIN_HEIGHT)
+        return DUT_CURRENT_STATUS_MIN_HEIGHT
+
+    def _bottom_actions_fully_visible(self, feature: str) -> bool | None:
+        """返回按钮栏是否完整位于 Tab 和窗口内；几何信息无效时返回 None。"""
+        tab = getattr(self, "_current_status_tabs", {}).get(feature)
+        actions = getattr(self, "_current_status_action_frames", {}).get(feature)
+        bottom_area = getattr(self, "_current_status_bottom_areas", {}).get(
+            feature, actions
+        )
+        if tab is None or actions is None or bottom_area is None:
+            return None
+        try:
+            if (
+                not tab.winfo_ismapped()
+                or not bottom_area.winfo_ismapped()
+                or not actions.winfo_ismapped()
+            ):
+                return None
+            tab_top = int(tab.winfo_rooty())
+            tab_bottom = tab_top + int(tab.winfo_height())
+            window_bottom = int(self.window.winfo_rooty()) + int(
+                self.window.winfo_height()
+            )
+            actions_top = int(actions.winfo_rooty())
+            actions_height = int(actions.winfo_height())
+            actions_requested_height = int(actions.winfo_reqheight())
+            actions_bottom = actions_top + actions_height
+            bottom_area_top = int(bottom_area.winfo_rooty())
+            bottom_area_height = int(bottom_area.winfo_height())
+            bottom_area_requested_height = int(bottom_area.winfo_reqheight())
+            bottom_area_bottom = bottom_area_top + bottom_area_height
+        except (AttributeError, TclError, TypeError, ValueError):
+            return None
+        if tab_bottom <= tab_top or actions_bottom <= actions_top:
+            return None
+        if (
+            actions_height < actions_requested_height
+            or bottom_area_height < bottom_area_requested_height
+        ):
+            return False
+        visible_bottom = min(tab_bottom, window_bottom)
+        guard = DUT_CURRENT_STATUS_BOTTOM_GUARD_PIXELS
+        return (
+            bottom_area_top >= tab_top
+            and bottom_area_bottom <= visible_bottom - guard
+            and actions_top >= bottom_area_top
+            and actions_bottom <= bottom_area_bottom
+        )
+
+    def _on_dut_tab_changed(self, _event=None) -> None:
+        try:
+            self.window.after_idle(self._constrain_selected_current_status_height)
+        except TclError:
+            return
+
+    def _constrain_selected_current_status_height(self) -> None:
+        try:
+            selected_tab = str(self.notebook.select())
+        except (AttributeError, TclError):
+            return
+        for feature, tab in self._current_status_tabs.items():
+            if str(tab) != selected_tab:
+                continue
+            text = self._current_status_texts.get(feature)
+            if text is None:
+                return
+            before = clamp_dut_current_status_height(text.cget("height"))
+            effective = self._fit_current_status_height(feature, before)
+            self._current_status_heights[feature] = effective
+            if effective != before:
+                save_dut_current_status_heights(
+                    self._state_path, self._current_status_heights
+                )
+            return
+
+    def _finish_current_status_resize(self, feature: str) -> str:
+        self._current_status_drag.pop(feature, None)
+        self._remember_current_status_heights()
+        save_dut_current_status_heights(
+            self._state_path, self._current_status_heights
+        )
+        return "break"
+
+    def _remember_current_status_heights(self) -> None:
+        for feature, text in self._current_status_texts.items():
+            try:
+                self._current_status_heights[feature] = (
+                    clamp_dut_current_status_height(text.cget("height"))
+                )
+            except (TclError, TypeError, ValueError):
+                continue
 
     def _build_wan_tab(self, on_refresh, on_start, on_query, on_stop, on_close) -> None:
         tab = ttk.Frame(self.notebook, padding=12)
@@ -1505,6 +1841,7 @@ class DutConfigWindow:
         self.window.deiconify()
         self.window.lift()
         self.window.update_idletasks()
+        self._constrain_selected_current_status_height()
         self.window.update()
         self.window.focus_force()
 
@@ -1514,10 +1851,29 @@ class DutConfigWindow:
     def show(self) -> None:
         self.window.deiconify()
         self.window.lift()
+        self.window.after_idle(self._constrain_selected_current_status_height)
         self.window.focus_force()
 
     def destroy(self) -> None:
+        self._remember_current_status_heights()
+        save_dut_current_status_heights(
+            self._state_path, self._current_status_heights
+        )
+        width, height = self._current_window_size()
+        save_dut_window_size(self._state_path, width, height)
         self.window.destroy()
+
+    def _current_window_size(self) -> tuple[int, int]:
+        try:
+            self.window.update_idletasks()
+            return clamp_dut_window_size(
+                self.window.winfo_width(),
+                self.window.winfo_height(),
+                screen_width=self.window.winfo_screenwidth(),
+                screen_height=self.window.winfo_screenheight(),
+            )
+        except (AttributeError, TclError, TypeError, ValueError):
+            return DUT_CONFIG_DEFAULT_WIDTH, DUT_CONFIG_DEFAULT_HEIGHT
 
     def parallel_count(self) -> str:
         return self.parallel_count_var.get()
@@ -1645,13 +2001,27 @@ class DutConfigWindow:
 
 
 __all__ = [
+    "DUT_CONFIG_DEFAULT_HEIGHT",
+    "DUT_CONFIG_DEFAULT_WIDTH",
+    "DUT_CONFIG_MIN_HEIGHT",
+    "DUT_CONFIG_MIN_WIDTH",
+    "DUT_CONFIG_UI_STATE_PATH",
+    "DUT_CURRENT_STATUS_DEFAULT_HEIGHT",
+    "DUT_CURRENT_STATUS_MAX_HEIGHT",
+    "DUT_CURRENT_STATUS_MIN_HEIGHT",
     "DutConfigWindow",
     "WanFormRules",
+    "clamp_dut_window_size",
     "normalize_wan_address_modes",
+    "clamp_dut_current_status_height",
+    "load_dut_current_status_heights",
+    "load_dut_window_size",
     "resolve_wan_form_rules",
     "wan_lan_ports_from_port_bind",
     "wan_port_bind_from_lan_ports",
     "tr069_status_form_values",
     "voice_status_form_values",
     "wifi_status_form_values",
+    "save_dut_current_status_heights",
+    "save_dut_window_size",
 ]
