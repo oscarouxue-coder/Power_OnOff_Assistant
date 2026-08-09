@@ -10,6 +10,7 @@ from src.models import (
     DutTr069Settings,
     DutVoiceSettings,
     DutWanSettings,
+    DutWifiSettings,
 )
 from src.services.dut_advanced_config_service import (
     VOICE_SIP_MODE_OPTIONS,
@@ -18,6 +19,7 @@ from src.services.dut_advanced_config_service import (
     validate_tr069_settings,
     validate_voice_settings,
     validate_wan_settings,
+    validate_wifi_settings,
 )
 
 
@@ -50,6 +52,54 @@ class _FakeClient:
 
 
 class DutAdvancedConfigServiceTests(unittest.TestCase):
+    def test_wifi_validation_covers_band_rules_security_and_extra_fields(self) -> None:
+        valid = DutWifiSettings(
+            band="2.4G",
+            ssid="Lab_WiFi",
+            password="password123",
+            channel="13",
+            channel_bandwidth="20/40MHz",
+            security_mode="WPA3-Personal-Transition",
+            operating_mode="b,g,n,ax",
+            transmit_power="80",
+            max_associations="32",
+        )
+        self.assertEqual(validate_wifi_settings(valid), ())
+        self.assertEqual(
+            validate_wifi_settings(
+                DutWifiSettings(
+                    band="5G",
+                    ssid="Open_WiFi",
+                    password="",
+                    channel="36",
+                    channel_bandwidth="80MHz",
+                    security_mode="None",
+                    operating_mode="a,n,ac,ax",
+                )
+            ),
+            (),
+        )
+
+        errors = validate_wifi_settings(
+            DutWifiSettings(
+                band="5G",
+                ssid="X" * 33,
+                password="short",
+                channel="6",
+                channel_bandwidth="20/40MHz",
+                operating_mode="b,g,n,ax",
+                transmit_power="101",
+                max_associations="65",
+            )
+        )
+        self.assertTrue(any("32 字节" in error for error in errors))
+        self.assertTrue(any("密码" in error for error in errors))
+        self.assertTrue(any("5G WiFi 信道" in error for error in errors))
+        self.assertTrue(any("信道带宽" in error for error in errors))
+        self.assertTrue(any("协议类型" in error for error in errors))
+        self.assertTrue(any("发射功率" in error for error in errors))
+        self.assertTrue(any("最大接入数" in error for error in errors))
+
     def test_dual_stack_static_validation_accepts_complete_ipoe_settings(self) -> None:
         settings = DutWanSettings(
             vlan_id="200",
@@ -215,6 +265,34 @@ class DutAdvancedConfigServiceTests(unittest.TestCase):
         self.assertEqual(calls[0][0][1], "session-id")
         self.assertTrue(any("password=plain-password" in line for line in logs))
         self.assertTrue(any("成功：WAN 操作成功" in line for line in logs))
+
+    def test_single_wifi_success_routes_to_wifi_protocol_and_logs_band(self) -> None:
+        client = _FakeClient()
+        logs: list[str] = []
+        calls: list[tuple] = []
+        settings = DutWifiSettings(
+            band="5G",
+            ssid="Lab_5G",
+            password="password123",
+            channel_bandwidth="160MHz",
+            operating_mode="a,n,ac,ax",
+        )
+
+        result = run_single_dut_advanced_config(
+            _request("wifi_5g", settings),
+            on_output=logs.append,
+            network_prepare_fn=lambda *_args, **_kwargs: CommandResult(True, "ok"),
+            bind_waiter=lambda _ip, _timeout: True,
+            client_factory=lambda *_args, **_kwargs: client,
+            wifi_fn=lambda *args, **kwargs: calls.append((args, kwargs)) or settings,
+            sleep_fn=lambda _seconds: None,
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(calls[0][0][2], settings)
+        self.assertTrue(client.closed)
+        self.assertTrue(any("[5G WiFi配置]" in line for line in logs))
+        self.assertTrue(any("成功：5G WiFi 配置成功" in line for line in logs))
 
     def test_batch_stop_skips_not_started_devices(self) -> None:
         stop_event = threading.Event()

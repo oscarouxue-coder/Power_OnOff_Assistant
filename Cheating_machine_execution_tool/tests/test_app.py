@@ -37,8 +37,14 @@ from src.models import (
     DutTelnetStatus,
     DutWanConnectionInfo,
     DutWanQueryResult,
+    DutWifiSettings,
 )
-from src.services.dut_advanced_config_service import VOICE_SIP_MODE_OPTIONS
+from src.services.dut_advanced_config_service import (
+    VOICE_SIP_MODE_OPTIONS,
+    WIFI_BANDWIDTH_OPTIONS,
+    WIFI_MODE_OPTIONS,
+    WIFI_SECURITY_MODE_OPTIONS,
+)
 from src.ui.dut_config_window import (
     DutConfigWindow,
     normalize_wan_address_modes,
@@ -48,6 +54,7 @@ from src.ui.dut_config_window import (
     wan_port_bind_from_lan_ports,
     tr069_status_form_values,
     voice_status_form_values,
+    wifi_status_form_values,
 )
 
 
@@ -325,6 +332,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         wan_source = inspect.getsource(DutConfigWindow._build_wan_tab)
         voice_source = inspect.getsource(DutConfigWindow._build_voice_tab)
         tr069_source = inspect.getsource(DutConfigWindow._build_tr069_tab)
+        wifi_source = inspect.getsource(DutConfigWindow._build_wifi_tab)
         self.assertIn("DutConfigWindow(", open_source)
         self.assertIn("username_var=self.parameter_initial_username_var", open_source)
         self.assertIn("password_var=self.parameter_initial_password_var", open_source)
@@ -332,10 +340,13 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("on_query_telnet=self._query_dut_telnet_status", open_source)
         self.assertIn("on_query_voice=self._query_dut_voice_status", open_source)
         self.assertIn("on_query_tr069=self._query_dut_tr069_status", open_source)
+        self.assertIn("on_query_wifi_2g=self._query_dut_wifi_2g_status", open_source)
+        self.assertIn("on_query_wifi_5g=self._query_dut_wifi_5g_status", open_source)
         self.assertIn('self.notebook.add(telnet_tab, text="Telnet配置")', window_source)
         self.assertIn('self.notebook.add(tab, text="WAN配置")', wan_source)
         self.assertIn('self.notebook.add(tab, text="语音配置")', voice_source)
         self.assertIn('self.notebook.add(tab, text="TR069配置")', tr069_source)
+        self.assertIn('text=f"{band} WiFi配置"', wifi_source)
         self.assertIn('values=("IPv4", "IPv6", "IPv4+IPv6（双栈）")', wan_source)
         self.assertIn('text="开启 Telnet"', window_source)
         self.assertNotIn('show="*"', window_source)
@@ -379,6 +390,58 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(tr069_values["acs_url"], "https://acs.example.com/acs")
         self.assertFalse(tr069_values["periodic_inform_enabled"])
         self.assertNotIn("manual_inform", tr069_values)
+
+    def test_wifi_tabs_cover_required_fields_query_and_form_mapping(self):
+        import inspect
+
+        builder_source = inspect.getsource(DutConfigWindow._build_wifi_tab)
+        open_source = inspect.getsource(LineCheckAssistant._open_dut_config_module)
+        query_source = inspect.getsource(LineCheckAssistant._query_dut_current_status)
+        query_worker_source = inspect.getsource(
+            LineCheckAssistant._dut_current_status_query_worker
+        )
+        configure_source = inspect.getsource(LineCheckAssistant._start_dut_advanced_config)
+        for label in (
+            "WiFi 名称：",
+            "WiFi 密码：",
+            "信道：",
+            "信道带宽：",
+            "认证/加密模式：",
+            "WiFi 协议类型：",
+            "发射功率(%)：",
+            "最大接入数：",
+            "启用 WiFi",
+            "隐藏 WiFi",
+            "启用双频合一",
+            "启用 WMM",
+        ):
+            self.assertIn(label, builder_source)
+        self.assertIn('"2.4G", "wifi_2g"', inspect.getsource(DutConfigWindow.__init__))
+        self.assertIn('"5G", "wifi_5g"', inspect.getsource(DutConfigWindow.__init__))
+        self.assertIn("on_start_wifi_2g", open_source)
+        self.assertIn("on_start_wifi_5g", open_source)
+        self.assertIn("ssid_index=ssid_index", query_worker_source)
+        self.assertIn("settings.dual_band_enabled", configure_source)
+        self.assertEqual(WIFI_BANDWIDTH_OPTIONS["5G"][-1], "160MHz")
+        self.assertIn("WPA3-Personal-Transition", WIFI_SECURITY_MODE_OPTIONS)
+        self.assertIn("b,g,n,ax", WIFI_MODE_OPTIONS["2.4G"])
+
+        values = wifi_status_form_values(
+            DutWifiSettings(
+                band="5G",
+                ssid_index="2",
+                ssid="Lab_5G",
+                password="password123",
+                hidden=True,
+                dual_band_enabled=True,
+                channel_bandwidth="160MHz",
+                operating_mode="a,n,ac,ax",
+            )
+        )
+        self.assertEqual(values["ssid_index"], "2")
+        self.assertEqual(values["ssid"], "Lab_5G")
+        self.assertTrue(values["hidden"])
+        self.assertTrue(values["dual_band_enabled"])
 
     def test_telnet_and_wan_tabs_also_show_current_status_without_duplicate_wan_query(self):
         import inspect
@@ -527,6 +590,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
                 inspect.getsource(DutConfigWindow._build_wan_tab),
                 inspect.getsource(DutConfigWindow._build_voice_tab),
                 inspect.getsource(DutConfigWindow._build_tr069_tab),
+                inspect.getsource(DutConfigWindow._build_wifi_tab),
             )
         )
 
@@ -534,7 +598,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("selectcolor=DUT_CHECK_BACKGROUND", helper_source)
         self.assertIn("background=DUT_CHECK_BACKGROUND", helper_source)
         self.assertNotIn("ttk.Checkbutton(", builder_source)
-        self.assertEqual(builder_source.count("self._native_checkbutton("), 7)
+        self.assertEqual(builder_source.count("self._native_checkbutton("), 8)
         for label in (
             "启用 NAT",
             "启用 SIP 账号",
@@ -542,6 +606,10 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             "启用 HTTP 连接请求",
             "启用证书",
             "配置后手动 Inform",
+            "启用 WiFi",
+            "隐藏 WiFi",
+            "启用双频合一",
+            "启用 WMM",
         ):
             self.assertIn(label, builder_source)
         self.assertIn('text=f"LAN{port}"', builder_source)
@@ -566,6 +634,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         wan_source = inspect.getsource(DutConfigWindow._build_wan_tab)
         voice_source = inspect.getsource(DutConfigWindow._build_voice_tab)
         tr069_source = inspect.getsource(DutConfigWindow._build_tr069_tab)
+        wifi_source = inspect.getsource(DutConfigWindow._build_wifi_tab)
         window_source = inspect.getsource(DutConfigWindow)
 
         self.assertIn('anchor="w"', field_source)
@@ -575,6 +644,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("self._field(", wan_source)
         self.assertIn("self._field(", voice_source)
         self.assertIn("self._field(", tr069_source)
+        self.assertIn("self._field(", wifi_source)
         self.assertNotIn('sticky="e"', window_source)
         self.assertNotIn('anchor="e"', window_source)
 

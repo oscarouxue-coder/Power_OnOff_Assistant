@@ -13,6 +13,7 @@ from src.models import (
     DutTelnetStatus,
     DutTr069Settings,
     DutVoiceSettings,
+    DutWifiSettings,
     DutWanConnectionInfo,
     DutWanQueryResult,
     DutWanSettings,
@@ -21,7 +22,13 @@ from src.services.dut_config_service import (
     DEFAULT_DUT_PARALLEL_COUNT,
     MAX_DUT_PARALLEL_COUNT,
 )
-from src.services.dut_advanced_config_service import VOICE_CODEC_OPTIONS, VOICE_SIP_MODE_OPTIONS
+from src.services.dut_advanced_config_service import (
+    VOICE_CODEC_OPTIONS,
+    VOICE_SIP_MODE_OPTIONS,
+    WIFI_BANDWIDTH_OPTIONS,
+    WIFI_MODE_OPTIONS,
+    WIFI_SECURITY_MODE_OPTIONS,
+)
 
 
 DUT_CHECK_BACKGROUND = "#ffffff"
@@ -40,6 +47,16 @@ WAN_ROUTER_SERVICE_TYPES = (
 WAN_BRIDGE_SERVICE_TYPES = ("IPTV", "INTERNET", "OTHER")
 WAN_LAN_PORTS = tuple(range(1, 9))
 WAN_LAN_PORT_MASK = sum(1 << (port - 1) for port in WAN_LAN_PORTS)
+WIFI_SSID_INDEX_OPTIONS = tuple(str(index) for index in range(1, 9))
+WIFI_CHANNEL_OPTIONS = {
+    "2.4G": ("auto", *(str(channel) for channel in range(1, 14))),
+    "5G": (
+        "auto", "36", "40", "44", "48", "52", "56", "60", "64",
+        "100", "104", "108", "112", "116", "120", "124", "128",
+        "132", "136", "140", "144", "149", "153", "157", "161", "165",
+    ),
+}
+WIFI_TRANSMIT_POWER_OPTIONS = ("20", "40", "60", "80", "100")
 
 
 def _port_bind_mask_value(value: str) -> int:
@@ -105,6 +122,25 @@ def tr069_status_form_values(settings: DutTr069Settings) -> dict[str, object]:
         "connection_request_username": settings.connection_request_username,
         "connection_request_password": settings.connection_request_password,
         "certificate_enabled": settings.certificate_enabled,
+    }
+
+
+def wifi_status_form_values(settings: DutWifiSettings) -> dict[str, object]:
+    """把只读 WiFi 状态映射为当前频段表单值。"""
+    return {
+        "ssid_index": settings.ssid_index,
+        "ssid": settings.ssid,
+        "password": settings.password,
+        "channel": settings.channel,
+        "channel_bandwidth": settings.channel_bandwidth,
+        "dual_band_enabled": settings.dual_band_enabled,
+        "enabled": settings.enabled,
+        "hidden": settings.hidden,
+        "security_mode": settings.security_mode,
+        "operating_mode": settings.operating_mode,
+        "transmit_power": settings.transmit_power,
+        "max_associations": settings.max_associations,
+        "wmm_enabled": settings.wmm_enabled,
     }
 
 
@@ -227,6 +263,10 @@ class DutConfigWindow:
         on_query_tr069: Callable[[], None],
         on_start_voice: Callable[[], None],
         on_start_tr069: Callable[[], None],
+        on_start_wifi_2g: Callable[[], None],
+        on_query_wifi_2g: Callable[[], None],
+        on_start_wifi_5g: Callable[[], None],
+        on_query_wifi_5g: Callable[[], None],
         on_stop: Callable[[], None],
         on_close: Callable[[], None],
     ) -> None:
@@ -251,6 +291,10 @@ class DutConfigWindow:
         self._start_buttons: dict[str, ttk.Button] = {}
         self._stop_buttons: list[ttk.Button] = []
         self._current_status_texts: dict[str, Text] = {}
+        self._wifi_vars: dict[str, dict[str, StringVar | BooleanVar]] = {}
+        self._wifi_password_groups: dict[str, tuple[object, object]] = {}
+        self._wifi_choice_widgets: dict[str, dict[str, ttk.Combobox]] = {}
+        self.wifi_dual_band_var = BooleanVar(value=False)
 
         outer = ttk.Frame(self.window, padding=18)
         outer.pack(fill="both", expand=True)
@@ -383,6 +427,14 @@ class DutConfigWindow:
         self._stop_buttons.append(self.stop_button)
 
         self._build_wan_tab(on_refresh, on_start_wan, on_query_wan, on_stop, on_close)
+        self._build_wifi_tab(
+            "2.4G", "wifi_2g", on_refresh, on_start_wifi_2g,
+            on_query_wifi_2g, on_stop, on_close,
+        )
+        self._build_wifi_tab(
+            "5G", "wifi_5g", on_refresh, on_start_wifi_5g,
+            on_query_wifi_5g, on_stop, on_close,
+        )
         self._build_voice_tab(
             on_refresh, on_start_voice, on_query_voice, on_stop, on_close
         )
@@ -933,6 +985,160 @@ class DutConfigWindow:
         finally:
             self._updating_wan_form = False
 
+    def _build_wifi_tab(
+        self,
+        band: str,
+        feature: str,
+        on_refresh,
+        on_start,
+        on_query,
+        on_stop,
+        on_close,
+    ) -> None:
+        tab = ttk.Frame(self.notebook, padding=12)
+        self.notebook.add(tab, text=f"{band} WiFi配置")
+        ttk.Label(
+            tab,
+            text=(
+                f"批量配置主 {band} SSID；查询会按厂商 Mapping 解析真实 Radio/AP/SSID 路径。"
+                "开启双频合一时，当前名称、启用/隐藏、认证密码、最大接入数和WMM会同步到两个频段，"
+                "信道、带宽、协议及功率仍只修改当前频段。UBUS凭据和并行数与Telnet页共享。"
+            ),
+            style="Muted.TLabel",
+            wraplength=1180,
+            justify="left",
+        ).pack(fill="x", anchor="w", pady=(0, 6))
+        form = ttk.LabelFrame(tab, text=f"{band} WiFi 参数", padding=8)
+        form.pack(fill="x")
+        defaults = {
+            "ssid_index": "1",
+            "ssid": "Test_2G_01" if band == "2.4G" else "Test_5G_01",
+            "password": "Sdmc@1234_2G" if band == "2.4G" else "Sdmc@1234_5G",
+            "channel": "auto",
+            "channel_bandwidth": "20/40MHz" if band == "2.4G" else "160MHz",
+            "security_mode": "WPA2-Personal",
+            "operating_mode": "b,g,n,ax" if band == "2.4G" else "a,n,ac,ax",
+            "transmit_power": "100",
+            "max_associations": "32",
+        }
+        variables: dict[str, StringVar | BooleanVar] = {
+            key: StringVar(value=value) for key, value in defaults.items()
+        }
+        variables.update(
+            {
+                "dual_band_enabled": self.wifi_dual_band_var,
+                "enabled": BooleanVar(value=True),
+                "hidden": BooleanVar(value=False),
+                "wmm_enabled": BooleanVar(value=True),
+            }
+        )
+        self._wifi_vars[feature] = variables
+
+        index_combo = self._field(
+            form, 0, 0, "SSID 索引：", variables["ssid_index"],
+            values=WIFI_SSID_INDEX_OPTIONS,
+        )
+        self._field(form, 0, 1, "WiFi 名称：", variables["ssid"], width=24)
+        password_entry = self._field(
+            form, 0, 2, "WiFi 密码：", variables["password"], width=24
+        )
+        password_label = form.grid_slaves(row=0, column=4)[0]
+        security_combo = self._field(
+            form, 0, 3, "认证/加密模式：", variables["security_mode"],
+            values=WIFI_SECURITY_MODE_OPTIONS, width=24,
+        )
+        channel_combo = self._field(
+            form, 1, 0, "信道：", variables["channel"],
+            values=WIFI_CHANNEL_OPTIONS[band],
+        )
+        bandwidth_combo = self._field(
+            form, 1, 1, "信道带宽：", variables["channel_bandwidth"],
+            values=WIFI_BANDWIDTH_OPTIONS[band],
+        )
+        mode_combo = self._field(
+            form, 1, 2, "WiFi 协议类型：", variables["operating_mode"],
+            values=WIFI_MODE_OPTIONS[band], width=20,
+        )
+        power_combo = self._field(
+            form, 1, 3, "发射功率(%)：", variables["transmit_power"],
+            values=WIFI_TRANSMIT_POWER_OPTIONS,
+        )
+        self._field(form, 2, 0, "最大接入数：", variables["max_associations"])
+        options = ttk.Frame(form)
+        options.grid(row=2, column=2, columnspan=6, sticky="w", padx=(4, 0), pady=3)
+        for column, (text, variable) in enumerate(
+            (
+                ("启用 WiFi", variables["enabled"]),
+                ("隐藏 WiFi", variables["hidden"]),
+                ("启用双频合一", variables["dual_band_enabled"]),
+                ("启用 WMM", variables["wmm_enabled"]),
+            )
+        ):
+            option = self._native_checkbutton(options, text=text, variable=variable)
+            option.grid(row=0, column=column, sticky="w", padx=(0, 18))
+
+        hint_var = StringVar(value="")
+        variables["hint"] = hint_var
+        ttk.Label(
+            form,
+            textvariable=hint_var,
+            style="Muted.TLabel",
+            justify="left",
+            wraplength=1120,
+        ).grid(row=3, column=0, columnspan=8, sticky="w", padx=4, pady=(5, 0))
+        self._wifi_password_groups[feature] = (password_label, password_entry)
+        self._wifi_choice_widgets[feature] = {
+            "ssid_index": index_combo,
+            "security_mode": security_combo,
+            "channel": channel_combo,
+            "channel_bandwidth": bandwidth_combo,
+            "operating_mode": mode_combo,
+            "transmit_power": power_combo,
+        }
+        variables["security_mode"].trace_add(
+            "write", lambda *_args, selected=feature: self._update_wifi_form(selected)
+        )
+        variables["dual_band_enabled"].trace_add(
+            "write", lambda *_args, selected=feature: self._update_wifi_form(selected)
+        )
+        self._update_wifi_form(feature)
+        self._build_current_status_area(
+            tab, feature, f"尚未查询当前 {band} WiFi 状态。"
+        )
+        self._advanced_target_area(
+            tab,
+            feature,
+            start_text=f"执行 {band} WiFi 配置",
+            on_refresh=on_refresh,
+            on_start=on_start,
+            on_stop=on_stop,
+            on_close=on_close,
+            query_text=f"查询当前{band} WiFi",
+            on_query=on_query,
+        )
+
+    def _update_wifi_form(self, feature: str) -> None:
+        variables = self._wifi_vars.get(feature)
+        group = self._wifi_password_groups.get(feature)
+        if not variables or group is None:
+            return
+        security_mode = str(variables["security_mode"].get())
+        password_label, password_entry = group
+        if security_mode == "None":
+            password_label.grid_remove()
+            password_entry.grid_remove()
+            security_hint = "开放网络不下发 WiFi 密码。"
+        else:
+            password_label.grid()
+            password_entry.grid()
+            security_hint = "加密网络密码须为8–63个字符，或64位十六进制密钥。"
+        dual_hint = (
+            "已开启双频合一：名称和安全/AP参数会同步到2.4G与5G。"
+            if bool(variables["dual_band_enabled"].get())
+            else "双频独立：只修改当前频段。"
+        )
+        variables["hint"].set(f"{security_hint} {dual_hint}")
+
     def _build_voice_tab(self, on_refresh, on_start, on_query, on_stop, on_close) -> None:
         tab = ttk.Frame(self.notebook, padding=12)
         self.notebook.add(tab, text="语音配置")
@@ -1103,11 +1309,24 @@ class DutConfigWindow:
             f"证书={'启用' if settings.certificate_enabled else '禁用'}"
         )
 
+    @staticmethod
+    def _wifi_status_text(settings: DutWifiSettings) -> str:
+        return (
+            f"频段={settings.band}，SSID索引={settings.ssid_index}，"
+            f"WiFi={'启用' if settings.enabled else '禁用'}，名称={settings.ssid}，"
+            f"密码={settings.password if settings.security_mode != 'None' else '开放网络'}，"
+            f"信道={settings.channel}，带宽={settings.channel_bandwidth}，"
+            f"双频合一={'启用' if settings.dual_band_enabled else '禁用'}，"
+            f"隐藏={'是' if settings.hidden else '否'}，认证/加密={settings.security_mode}，"
+            f"协议={settings.operating_mode}，功率={settings.transmit_power}%，"
+            f"最大接入={settings.max_associations}，WMM={'启用' if settings.wmm_enabled else '禁用'}"
+        )
+
     def set_current_status_results(
         self,
         feature: str,
         results: Iterable[DutAdvancedQueryResult],
-        common_settings: DutTelnetStatus | DutVoiceSettings | DutTr069Settings | None,
+        common_settings: DutTelnetStatus | DutVoiceSettings | DutTr069Settings | DutWifiSettings | None,
     ) -> None:
         lines: list[str] = []
         for result in results:
@@ -1118,17 +1337,22 @@ class DutConfigWindow:
                 lines.append(f"{label}：{self._voice_status_text(result.settings)}")
             elif result.ok and isinstance(result.settings, DutTr069Settings):
                 lines.append(f"{label}：{self._tr069_status_text(result.settings)}")
+            elif result.ok and isinstance(result.settings, DutWifiSettings):
+                lines.append(f"{label}：{self._wifi_status_text(result.settings)}")
             else:
                 lines.append(f"{label}：查询失败/停止：{result.message}")
-        if feature in {"voice", "tr069"} and common_settings is not None:
+        sync_features = {"voice", "tr069", "wifi_2g", "wifi_5g"}
+        if feature in sync_features and common_settings is not None:
             self.apply_current_status(feature, common_settings)
             lines.append("已确认全部成功目标参数一致，并同步到当前配置表单。")
-        elif feature in {"voice", "tr069"} and any(result.ok for result in results):
+        elif feature in sync_features and any(result.ok for result in results):
             lines.append("目标状态不完全一致或存在失败，未使用任意一台覆盖当前配置表单。")
         self.clear_current_status(feature, "\n".join(lines) or "未返回查询结果。")
 
     def apply_current_status(
-        self, feature: str, settings: DutVoiceSettings | DutTr069Settings
+        self,
+        feature: str,
+        settings: DutVoiceSettings | DutTr069Settings | DutWifiSettings,
     ) -> None:
         if feature == "voice" and isinstance(settings, DutVoiceSettings):
             values = voice_status_form_values(settings)
@@ -1172,6 +1396,38 @@ class DutConfigWindow:
                 bool(values["connection_request_enabled"])
             )
             self.tr069_certificate_enabled_var.set(bool(values["certificate_enabled"]))
+        elif feature in {"wifi_2g", "wifi_5g"} and isinstance(
+            settings, DutWifiSettings
+        ):
+            values = wifi_status_form_values(settings)
+            variables = self._wifi_vars[feature]
+            for key in (
+                "ssid_index",
+                "ssid",
+                "password",
+                "channel",
+                "channel_bandwidth",
+                "security_mode",
+                "operating_mode",
+                "transmit_power",
+                "max_associations",
+            ):
+                variables[key].set(values[key])
+            for key in ("dual_band_enabled", "enabled", "hidden", "wmm_enabled"):
+                variables[key].set(bool(values[key]))
+            widgets = self._wifi_choice_widgets.get(feature, {})
+            dynamic_options = {
+                "channel": settings.supported_channels,
+                "channel_bandwidth": settings.supported_bandwidths,
+                "operating_mode": settings.supported_modes,
+            }
+            for key, supported in dynamic_options.items():
+                if supported and key in widgets:
+                    current = str(values[key])
+                    widgets[key].configure(
+                        values=tuple(dict.fromkeys((current, *supported)))
+                    )
+            self._update_wifi_form(feature)
 
     def wan_settings(self) -> DutWanSettings:
         self._sync_wan_port_bind_from_checks()
@@ -1223,6 +1479,28 @@ class DutConfigWindow:
             manual_inform=bool(self.tr069_manual_inform_var.get()),
         )
 
+    def wifi_settings(self, feature: str) -> DutWifiSettings:
+        variables = self._wifi_vars[feature]
+        return DutWifiSettings(
+            band="2.4G" if feature == "wifi_2g" else "5G",
+            ssid_index=str(variables["ssid_index"].get()).strip(),
+            ssid=str(variables["ssid"].get()),
+            password=str(variables["password"].get()),
+            channel=str(variables["channel"].get()).strip(),
+            channel_bandwidth=str(variables["channel_bandwidth"].get()).strip(),
+            dual_band_enabled=bool(variables["dual_band_enabled"].get()),
+            enabled=bool(variables["enabled"].get()),
+            hidden=bool(variables["hidden"].get()),
+            security_mode=str(variables["security_mode"].get()).strip(),
+            operating_mode=str(variables["operating_mode"].get()).strip(),
+            transmit_power=str(variables["transmit_power"].get()).strip(),
+            max_associations=str(variables["max_associations"].get()).strip(),
+            wmm_enabled=bool(variables["wmm_enabled"].get()),
+        )
+
+    def wifi_ssid_index(self, feature: str) -> str:
+        return str(self._wifi_vars[feature]["ssid_index"].get()).strip()
+
     def _reveal(self) -> None:
         self.window.deiconify()
         self.window.lift()
@@ -1263,6 +1541,8 @@ class DutConfigWindow:
             self.clear_current_status("wan", "目标 DUT 已变化，请重新查询当前WAN状态。")
             self.clear_current_status("voice", "目标 DUT 已变化，请重新查询当前语音状态。")
             self.clear_current_status("tr069", "目标 DUT 已变化，请重新查询当前TR069状态。")
+            self.clear_current_status("wifi_2g", "目标 DUT 已变化，请重新查询当前2.4G WiFi状态。")
+            self.clear_current_status("wifi_5g", "目标 DUT 已变化，请重新查询当前5G WiFi状态。")
             self._wan_target_signature = target_signature
         for feature, tree in self._trees.items():
             for item in tree.get_children():
@@ -1299,6 +1579,7 @@ class DutConfigWindow:
         tree_feature = {
             "telnet_query": "telnet", "wan_query": "wan",
             "voice_query": "voice", "tr069_query": "tr069",
+            "wifi_2g_query": "wifi_2g", "wifi_5g_query": "wifi_5g",
         }.get(resolved_feature, resolved_feature)
         tree = getattr(self, "_trees", {}).get(tree_feature, self.target_tree)
         rows = getattr(self, "_rows_by_feature", {}).get(tree_feature, self._row_by_channel)
@@ -1311,7 +1592,10 @@ class DutConfigWindow:
                 values[-1] = f"成功：发现 {len(result.connection_names)} 个现有 WAN"
                 tree.item(row_id, values=values)
                 return
-            if resolved_feature in {"telnet_query", "voice_query", "tr069_query"}:
+            if resolved_feature in {
+                "telnet_query", "voice_query", "tr069_query",
+                "wifi_2g_query", "wifi_5g_query",
+            }:
                 values[-1] = "成功：已查询当前状态"
                 tree.item(row_id, values=values)
                 return
@@ -1320,6 +1604,8 @@ class DutConfigWindow:
                 "wan": "成功：WAN 操作完成",
                 "voice": "成功：语音配置完成",
                 "tr069": "成功：TR069 配置完成",
+                "wifi_2g": "成功：2.4G WiFi 配置完成",
+                "wifi_5g": "成功：5G WiFi 配置完成",
             }.get(resolved_feature, f"成功：{result.message}")
             values[-1] = success_text
         elif result.stage == "stopped":
@@ -1350,6 +1636,9 @@ class DutConfigWindow:
             button.configure(state="disabled" if not running or stopping else "normal")
         if not running and hasattr(self, "wan_operation_var"):
             self._update_wan_form_visibility()
+        if not running:
+            for feature in self._wifi_vars:
+                self._update_wifi_form(feature)
         if stopping:
             for summary_var in self._summary_vars.values():
                 summary_var.set("正在停止：已运行任务将在安全点结束，尚未开始的 DUT 将跳过")
@@ -1364,4 +1653,5 @@ __all__ = [
     "wan_port_bind_from_lan_ports",
     "tr069_status_form_values",
     "voice_status_form_values",
+    "wifi_status_form_values",
 ]

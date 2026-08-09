@@ -164,8 +164,31 @@ class DutTr069Settings:
 
 
 @dataclass(frozen=True)
+class DutWifiSettings:
+    """一批 DUT 共用的单个频段、单个 SSID 配置与查询快照。"""
+
+    band: str = "2.4G"  # 2.4G / 5G
+    ssid_index: str = "1"
+    ssid: str = ""
+    password: str = ""
+    channel: str = "auto"
+    channel_bandwidth: str = "20/40MHz"
+    dual_band_enabled: bool = False
+    enabled: bool = True
+    hidden: bool = False
+    security_mode: str = "WPA2-Personal"
+    operating_mode: str = "b,g,n,ax"
+    transmit_power: str = "100"
+    max_associations: str = "32"
+    wmm_enabled: bool = True
+    supported_channels: tuple[str, ...] = ()
+    supported_bandwidths: tuple[str, ...] = ()
+    supported_modes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class DutAdvancedConfigRequest:
-    """WAN/语音/TR069 共用的单台连接信息和功能参数。"""
+    """WAN/语音/TR069/WiFi 共用的单台连接信息和功能参数。"""
 
     channel: str
     vlan: str
@@ -176,13 +199,13 @@ class DutAdvancedConfigRequest:
     username: str
     password: str
     feature: str
-    settings: DutWanSettings | DutVoiceSettings | DutTr069Settings
+    settings: DutWanSettings | DutVoiceSettings | DutTr069Settings | DutWifiSettings
     ubus_port: int = 80
 
 
 @dataclass(frozen=True)
 class DutAdvancedConfigResult:
-    """WAN/语音/TR069 单台最终执行结果。"""
+    """WAN/语音/TR069/WiFi 单台最终执行结果。"""
 
     request: DutAdvancedConfigRequest
     ok: bool
@@ -193,14 +216,14 @@ class DutAdvancedConfigResult:
 
 @dataclass(frozen=True)
 class DutAdvancedQueryResult:
-    """语音/TR069单台只读状态查询结果。"""
+    """Telnet/语音/TR069/WiFi 单台只读状态查询结果。"""
 
     request: DutTelnetEnableRequest
     feature: str
     ok: bool
     stage: str
     message: str
-    settings: DutTelnetStatus | DutVoiceSettings | DutTr069Settings | None = None
+    settings: DutTelnetStatus | DutVoiceSettings | DutTr069Settings | DutWifiSettings | None = None
 
 
 __all__ = [
@@ -212,6 +235,7 @@ __all__ = [
     "DutTelnetStatus",
     "DutTr069Settings",
     "DutVoiceSettings",
+    "DutWifiSettings",
     "DutWanConnectionInfo",
     "DutWanQueryResult",
     "DutWanSettings",

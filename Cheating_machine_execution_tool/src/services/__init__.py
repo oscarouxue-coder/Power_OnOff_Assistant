@@ -20,12 +20,16 @@ from .dut_config_service import (
 )
 from .dut_advanced_config_service import (
     VOICE_CODEC_OPTIONS,
+    WIFI_BANDWIDTH_OPTIONS,
+    WIFI_MODE_OPTIONS,
+    WIFI_SECURITY_MODE_OPTIONS,
     run_dut_advanced_config_batch,
     run_single_dut_advanced_config,
     validate_dut_advanced_request,
     validate_tr069_settings,
     validate_voice_settings,
     validate_wan_settings,
+    validate_wifi_settings,
 )
 from .dut_wan_query_service import (
     common_wan_connection_details,
@@ -109,6 +113,9 @@ __all__ = [
     "SubTaskStatus",
     "UpgradePowerCycleCoordinator",
     "VOICE_CODEC_OPTIONS",
+    "WIFI_BANDWIDTH_OPTIONS",
+    "WIFI_MODE_OPTIONS",
+    "WIFI_SECURITY_MODE_OPTIONS",
     "build_log_path",
     "clamp_dut_parallel_count",
     "common_wan_connection_details",
@@ -140,4 +147,5 @@ __all__ = [
     "validate_tr069_settings",
     "validate_voice_settings",
     "validate_wan_settings",
+    "validate_wifi_settings",
 ]

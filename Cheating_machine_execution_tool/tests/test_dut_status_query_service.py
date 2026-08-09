@@ -10,6 +10,7 @@ from src.models import (
     DutTelnetStatus,
     DutTr069Settings,
     DutVoiceSettings,
+    DutWifiSettings,
 )
 from src.services.dut_status_query_service import (
     common_dut_status_settings,
@@ -118,6 +119,35 @@ class DutStatusQueryServiceTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(result.settings, expected)
+
+    def test_single_wifi_query_passes_band_and_ssid_index_without_setting(self) -> None:
+        client = _FakeClient()
+        calls: list[tuple] = []
+        expected = DutWifiSettings(
+            band="5G",
+            ssid_index="2",
+            ssid="Lab_5G",
+            channel_bandwidth="160MHz",
+            operating_mode="a,n,ac,ax",
+        )
+
+        result = run_single_dut_status_query(
+            _request(),
+            "wifi_5g",
+            ssid_index="2",
+            network_prepare_fn=lambda *_args, **_kwargs: CommandResult(True, "ok"),
+            bind_waiter=lambda _ip, _timeout: True,
+            client_factory=lambda *_args, **_kwargs: client,
+            query_fn=lambda _client, session, band, index, on_log=None: (
+                calls.append((session, band, index)), expected
+            )[1],
+            sleep_fn=lambda _seconds: None,
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.settings, expected)
+        self.assertEqual(calls, [("session-id", "5G", "2")])
+        self.assertEqual(client.logged_out_sessions, ["session-id"])
 
     def test_consecutive_status_queries_release_previous_device_session(self) -> None:
         device_state = {"active_session": "", "counter": 0}

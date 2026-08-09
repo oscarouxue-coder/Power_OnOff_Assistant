@@ -1,4 +1,4 @@
-"""DUT语音与TR069当前状态的只读批量查询流程。"""
+"""DUT Telnet、语音、TR069与WiFi当前状态的只读批量查询流程。"""
 from __future__ import annotations
 
 import threading
@@ -10,6 +10,7 @@ from typing import Union
 from line_check_assistant.network_ops import prepare_network_for_sample
 from src.core.bind_socket import wait_for_bindable_ip
 from src.core.dut_ubus_config import query_tr069_status, query_voice_status
+from src.core.dut_wifi_config import query_wifi_status
 from src.core.ubus_enable_telnet import query_telnet_status
 from src.core.ubus_http_client import UbusHttpClient
 from src.models.dut_config_models import (
@@ -18,6 +19,7 @@ from src.models.dut_config_models import (
     DutTelnetStatus,
     DutTr069Settings,
     DutVoiceSettings,
+    DutWifiSettings,
 )
 
 from .dut_config_service import (
@@ -33,15 +35,15 @@ STATUS_QUERY_LOGIN_RETRY_DELAY_SECONDS = 2.0
 
 OutputCallback = Callable[[str], None]
 ItemCompleteCallback = Callable[[DutAdvancedQueryResult], None]
-StatusSettings = Union[DutTelnetStatus, DutVoiceSettings, DutTr069Settings]
+StatusSettings = Union[DutTelnetStatus, DutVoiceSettings, DutTr069Settings, DutWifiSettings]
 
 
 class _DutStatusQueryCancelled(RuntimeError):
     pass
 
 
-def _validate_query(feature: str, line_index: str) -> tuple[str, ...]:
-    if feature not in {"telnet", "voice", "tr069"}:
+def _validate_query(feature: str, line_index: str, ssid_index: str) -> tuple[str, ...]:
+    if feature not in {"telnet", "voice", "tr069", "wifi_2g", "wifi_5g"}:
         return (f"不支持的DUT状态查询类型：{feature}",)
     if feature == "voice":
         try:
@@ -50,6 +52,13 @@ def _validate_query(feature: str, line_index: str) -> tuple[str, ...]:
                 raise ValueError
         except (TypeError, ValueError):
             return (f"语音线路索引必须为 1–8：{line_index}",)
+    if feature in {"wifi_2g", "wifi_5g"}:
+        try:
+            value = int(ssid_index)
+            if not 1 <= value <= 8:
+                raise ValueError
+        except (TypeError, ValueError):
+            return (f"WiFi SSID 索引必须为 1–8：{ssid_index}",)
     return ()
 
 
@@ -58,6 +67,7 @@ def run_single_dut_status_query(
     feature: str,
     *,
     line_index: str = "1",
+    ssid_index: str = "1",
     stop_event: threading.Event | None = None,
     on_output: OutputCallback | None = None,
     network_prepare_fn: Callable = prepare_network_for_sample,
@@ -70,6 +80,7 @@ def run_single_dut_status_query(
     label = request.channel or request.vlan or request.device_host or "DUT"
     feature_label = {
         "telnet": "Telnet查询", "voice": "语音查询", "tr069": "TR069查询",
+        "wifi_2g": "2.4G WiFi查询", "wifi_5g": "5G WiFi查询",
     }.get(feature, feature)
 
     def emit(message: str) -> None:
@@ -89,7 +100,10 @@ def run_single_dut_status_query(
             sleep_fn(seconds)
         ensure_not_stopped()
 
-    errors = (*validate_dut_telnet_request(request), *_validate_query(feature, line_index))
+    errors = (
+        *validate_dut_telnet_request(request),
+        *_validate_query(feature, line_index, ssid_index),
+    )
     if errors:
         message = "；".join(errors)
         emit(f"预检失败：{message}")
@@ -144,11 +158,15 @@ def run_single_dut_status_query(
                 session_id = client.login(request.username, request.password)
                 emit("UBUS 登录成功")
                 if query_fn is not None:
-                    settings = (
-                        query_fn(client, session_id, line_index, on_log=emit)
-                        if feature == "voice"
-                        else query_fn(client, session_id, on_log=emit)
-                    )
+                    if feature == "voice":
+                        settings = query_fn(client, session_id, line_index, on_log=emit)
+                    elif feature in {"wifi_2g", "wifi_5g"}:
+                        band = "2.4G" if feature == "wifi_2g" else "5G"
+                        settings = query_fn(
+                            client, session_id, band, ssid_index, on_log=emit
+                        )
+                    else:
+                        settings = query_fn(client, session_id, on_log=emit)
                 elif feature == "telnet":
                     settings = query_telnet_status(
                         client,
@@ -161,12 +179,19 @@ def run_single_dut_status_query(
                     settings = query_voice_status(
                         client, session_id, line_index, on_log=emit
                     )
-                else:
+                elif feature == "tr069":
                     settings = query_tr069_status(client, session_id, on_log=emit)
+                else:
+                    band = "2.4G" if feature == "wifi_2g" else "5G"
+                    settings = query_wifi_status(
+                        client, session_id, band, ssid_index, on_log=emit
+                    )
                 expected_type = {
                     "telnet": DutTelnetStatus,
                     "voice": DutVoiceSettings,
                     "tr069": DutTr069Settings,
+                    "wifi_2g": DutWifiSettings,
+                    "wifi_5g": DutWifiSettings,
                 }[feature]
                 if not isinstance(settings, expected_type):
                     raise TypeError(f"{feature_label}返回了不匹配的状态类型")
@@ -228,6 +253,7 @@ def run_dut_status_query_batch(
     feature: str,
     *,
     line_index: str = "1",
+    ssid_index: str = "1",
     max_workers: int = DEFAULT_DUT_PARALLEL_COUNT,
     stop_event: threading.Event | None = None,
     on_output: OutputCallback | None = None,
@@ -263,6 +289,7 @@ def run_dut_status_query_batch(
                     items[next_index],
                     feature,
                     line_index=line_index,
+                    ssid_index=ssid_index,
                     stop_event=cancel,
                     on_output=on_output,
                 )
@@ -287,6 +314,7 @@ def run_dut_status_query_batch(
                             items[next_index],
                             feature,
                             line_index=line_index,
+                            ssid_index=ssid_index,
                             stop_event=cancel,
                             on_output=on_output,
                         )

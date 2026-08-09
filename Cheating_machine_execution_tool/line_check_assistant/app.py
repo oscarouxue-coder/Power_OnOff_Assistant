@@ -70,6 +70,7 @@ from src.models import (
     DutTelnetEnableResult,
     DutTr069Settings,
     DutVoiceSettings,
+    DutWifiSettings,
     DutWanQueryResult,
     DutWanSettings,
     FullPackageUpgradeRequest,
@@ -475,7 +476,10 @@ class LineCheckAssistant(Tk):
                     self._finish_dut_telnet_enable(results)
                 elif feature == "wan_query":
                     self._finish_dut_wan_query(results)
-                elif feature in {"telnet_query", "voice_query", "tr069_query"}:
+                elif feature in {
+                    "telnet_query", "voice_query", "tr069_query",
+                    "wifi_2g_query", "wifi_5g_query",
+                }:
                     self._finish_dut_current_status_query(
                         feature.removesuffix("_query"), results
                     )
@@ -3763,12 +3767,16 @@ class LineCheckAssistant(Tk):
             on_query_tr069=self._query_dut_tr069_status,
             on_start_voice=self._start_dut_voice_config,
             on_start_tr069=self._start_dut_tr069_config,
+            on_start_wifi_2g=self._start_dut_wifi_2g_config,
+            on_query_wifi_2g=self._query_dut_wifi_2g_status,
+            on_start_wifi_5g=self._start_dut_wifi_5g_config,
+            on_query_wifi_5g=self._query_dut_wifi_5g_status,
             on_stop=self._stop_dut_telnet_enable,
             on_close=self._close_dut_config_module,
         )
         self._refresh_dut_config_targets()
         self._log(
-            "[DUT配置] 已打开 Telnet、WAN、语音和 TR069 配置页；"
+            "[DUT配置] 已打开 Telnet、WAN、2.4G WiFi、5G WiFi、语音和 TR069 配置页；"
             "目标来自主界面已勾选通道。"
         )
 
@@ -3968,7 +3976,7 @@ class LineCheckAssistant(Tk):
     def _collect_dut_advanced_requests(
         self,
         feature: str,
-        settings: DutWanSettings | DutVoiceSettings | DutTr069Settings,
+        settings: DutWanSettings | DutVoiceSettings | DutTr069Settings | DutWifiSettings,
     ) -> list[DutAdvancedConfigRequest]:
         """复用当前通道快照，为高级 DUT Tab 附加本批次功能参数。"""
         return [
@@ -4126,8 +4134,42 @@ class LineCheckAssistant(Tk):
     def _query_dut_tr069_status(self) -> None:
         self._query_dut_current_status("tr069")
 
-    def _query_dut_current_status(self, feature: str, *, line_index: str = "1") -> None:
-        """启动语音/TR069只读状态查询，查询参数不依赖当前配置表单完整性。"""
+    def _start_dut_wifi_2g_config(self) -> None:
+        window = self.dut_config_window
+        if window is None or not window.exists():
+            return
+        self._start_dut_advanced_config("wifi_2g", window.wifi_settings("wifi_2g"))
+
+    def _start_dut_wifi_5g_config(self) -> None:
+        window = self.dut_config_window
+        if window is None or not window.exists():
+            return
+        self._start_dut_advanced_config("wifi_5g", window.wifi_settings("wifi_5g"))
+
+    def _query_dut_wifi_2g_status(self) -> None:
+        window = self.dut_config_window
+        if window is None or not window.exists():
+            return
+        self._query_dut_current_status(
+            "wifi_2g", ssid_index=window.wifi_ssid_index("wifi_2g")
+        )
+
+    def _query_dut_wifi_5g_status(self) -> None:
+        window = self.dut_config_window
+        if window is None or not window.exists():
+            return
+        self._query_dut_current_status(
+            "wifi_5g", ssid_index=window.wifi_ssid_index("wifi_5g")
+        )
+
+    def _query_dut_current_status(
+        self,
+        feature: str,
+        *,
+        line_index: str = "1",
+        ssid_index: str = "1",
+    ) -> None:
+        """启动DUT只读状态查询，查询参数不依赖当前配置表单完整性。"""
         if self.dut_config_running:
             return
         self._refresh_dut_config_targets()
@@ -4135,7 +4177,10 @@ class LineCheckAssistant(Tk):
         if window is None or not window.exists():
             return
         requests = list(self.dut_config_requests)
-        feature_label = {"telnet": "Telnet", "voice": "语音", "tr069": "TR069"}[feature]
+        feature_label = {
+            "telnet": "Telnet", "voice": "语音", "tr069": "TR069",
+            "wifi_2g": "2.4G WiFi", "wifi_5g": "5G WiFi",
+        }[feature]
         if not requests:
             messagebox.showwarning(
                 "没有目标 DUT",
@@ -4165,6 +4210,17 @@ class LineCheckAssistant(Tk):
                     parent=window.window,
                 )
                 return
+        if feature in {"wifi_2g", "wifi_5g"}:
+            try:
+                if not 1 <= int(ssid_index) <= 8:
+                    raise ValueError
+            except (TypeError, ValueError):
+                messagebox.showerror(
+                    f"{feature_label}查询条件不完整",
+                    f"SSID 索引必须为 1–8：{ssid_index}",
+                    parent=window.window,
+                )
+                return
 
         parallel_count = clamp_dut_parallel_count(
             window.parallel_count() or DEFAULT_DUT_PARALLEL_COUNT
@@ -4181,13 +4237,18 @@ class LineCheckAssistant(Tk):
             feature,
         )
         line_text = f"，线路 {line_index}" if feature == "voice" else ""
+        if feature in {"wifi_2g", "wifi_5g"}:
+            line_text = f"，SSID索引 {ssid_index}"
         self._log(
             f"[DUT配置][{feature_label}查询] 开始只读查询：{len(requests)} 台，"
             f"并行数 {parallel_count}{line_text}；不会下发配置命令。"
         )
         threading.Thread(
             target=self._dut_current_status_query_worker,
-            args=(feature, requests, line_index, parallel_count, self.dut_config_cancel_event),
+            args=(
+                feature, requests, line_index, ssid_index,
+                parallel_count, self.dut_config_cancel_event,
+            ),
             name=f"dut-{feature}-status-query-batch",
             daemon=True,
         ).start()
@@ -4197,16 +4258,21 @@ class LineCheckAssistant(Tk):
         feature: str,
         requests: list[DutTelnetEnableRequest],
         line_index: str,
+        ssid_index: str,
         parallel_count: int,
         cancel_event: threading.Event,
     ) -> None:
         query_feature = f"{feature}_query"
-        feature_label = {"telnet": "Telnet", "voice": "语音", "tr069": "TR069"}[feature]
+        feature_label = {
+            "telnet": "Telnet", "voice": "语音", "tr069": "TR069",
+            "wifi_2g": "2.4G WiFi", "wifi_5g": "5G WiFi",
+        }[feature]
         try:
             results = run_dut_status_query_batch(
                 requests,
                 feature,
                 line_index=line_index,
+                ssid_index=ssid_index,
                 max_workers=parallel_count,
                 stop_event=cancel_event,
                 on_output=self.log_queue.put,
@@ -4235,7 +4301,10 @@ class LineCheckAssistant(Tk):
         feature: str,
         results: list[DutAdvancedQueryResult],
     ) -> None:
-        feature_label = {"telnet": "Telnet", "voice": "语音", "tr069": "TR069"}[feature]
+        feature_label = {
+            "telnet": "Telnet", "voice": "语音", "tr069": "TR069",
+            "wifi_2g": "2.4G WiFi", "wifi_5g": "5G WiFi",
+        }[feature]
         success_count = sum(1 for result in results if result.ok)
         stopped_count = sum(1 for result in results if result.stage == "stopped")
         failure_count = len(results) - success_count - stopped_count
@@ -4276,7 +4345,7 @@ class LineCheckAssistant(Tk):
     def _start_dut_advanced_config(
         self,
         feature: str,
-        settings: DutWanSettings | DutVoiceSettings | DutTr069Settings,
+        settings: DutWanSettings | DutVoiceSettings | DutTr069Settings | DutWifiSettings,
     ) -> None:
         if self.dut_config_running:
             return
@@ -4285,7 +4354,10 @@ class LineCheckAssistant(Tk):
         if window is None or not window.exists():
             return
         requests = self._collect_dut_advanced_requests(feature, settings)
-        feature_label = {"wan": "WAN", "voice": "语音", "tr069": "TR069"}[feature]
+        feature_label = {
+            "wan": "WAN", "voice": "语音", "tr069": "TR069",
+            "wifi_2g": "2.4G WiFi", "wifi_5g": "5G WiFi",
+        }[feature]
         if not requests:
             messagebox.showwarning(
                 "没有目标 DUT",
@@ -4348,6 +4420,20 @@ class LineCheckAssistant(Tk):
                 f"\nACS：{settings.acs_url}；"
                 f"手动 Inform：{'是' if settings.manual_inform else '否'}。"
             )
+        elif feature in {"wifi_2g", "wifi_5g"} and isinstance(
+            settings, DutWifiSettings
+        ):
+            operation_summary = (
+                f"\n频段：{settings.band}；SSID索引：{settings.ssid_index}；"
+                f"名称：{settings.ssid}；信道/带宽："
+                f"{settings.channel}/{settings.channel_bandwidth}；"
+                f"双频合一：{'是' if settings.dual_band_enabled else '否'}。"
+            )
+            if settings.dual_band_enabled:
+                warning = (
+                    "这会修改当前频段Radio配置，并把SSID、启用/隐藏、认证密码及AP参数"
+                    "同步到2.4G和5G对应SSID。"
+                )
         if not messagebox.askyesno(
             f"确认批量执行 {feature_label} 配置",
             f"将处理 {len(requests)} 台 DUT，并行数 {parallel_count}：\n"
@@ -4412,7 +4498,10 @@ class LineCheckAssistant(Tk):
         feature: str,
         results: list[DutAdvancedConfigResult],
     ) -> None:
-        feature_label = {"wan": "WAN", "voice": "语音", "tr069": "TR069"}.get(feature, feature)
+        feature_label = {
+            "wan": "WAN", "voice": "语音", "tr069": "TR069",
+            "wifi_2g": "2.4G WiFi", "wifi_5g": "5G WiFi",
+        }.get(feature, feature)
         success_count = sum(1 for result in results if result.ok)
         stopped_count = sum(1 for result in results if result.stage == "stopped")
         failure_count = len(results) - success_count - stopped_count
@@ -4434,6 +4523,20 @@ class LineCheckAssistant(Tk):
                 window.clear_current_status(
                     feature, f"{feature_label}配置已执行，请重新查询当前状态。"
                 )
+            elif feature in {"wifi_2g", "wifi_5g"}:
+                band_label = "2.4G WiFi" if feature == "wifi_2g" else "5G WiFi"
+                window.clear_current_status(
+                    feature, f"{band_label}配置已执行，请重新查询当前状态。"
+                )
+                if any(
+                    isinstance(result.request.settings, DutWifiSettings)
+                    and result.request.settings.dual_band_enabled
+                    for result in results
+                ):
+                    peer_feature = "wifi_5g" if feature == "wifi_2g" else "wifi_2g"
+                    window.clear_current_status(
+                        peer_feature, "双频合一配置已执行，请重新查询当前状态。"
+                    )
             window.set_running(False)
             window.set_summary(summary, feature)
             if failure_count or stopped_count:
@@ -4454,6 +4557,8 @@ class LineCheckAssistant(Tk):
             "voice": "语音配置", "tr069": "TR069配置",
             "telnet_query": "Telnet查询", "voice_query": "语音查询",
             "tr069_query": "TR069查询",
+            "wifi_2g": "2.4G WiFi配置", "wifi_5g": "5G WiFi配置",
+            "wifi_2g_query": "2.4G WiFi查询", "wifi_5g_query": "5G WiFi查询",
         }.get(getattr(self, "dut_config_active_feature", None), "DUT配置")
         self._log(
             f"[DUT配置][{feature_label}] 操作员请求停止：尚未开始的 DUT 将跳过，"

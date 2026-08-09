@@ -1,4 +1,4 @@
-"""DUT WAN、语音和 TR069 的单台与批量业务编排。"""
+"""DUT WAN、语音、TR069 和 WiFi 的单台与批量业务编排。"""
 from __future__ import annotations
 
 import ipaddress
@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 from line_check_assistant.network_ops import prepare_network_for_sample
 from src.core.bind_socket import wait_for_bindable_ip
 from src.core.dut_ubus_config import configure_tr069, configure_voice, configure_wan, parse_port_bind
+from src.core.dut_wifi_config import configure_wifi
 from src.core.ubus_http_client import UbusHttpClient
 from src.models.dut_config_models import (
     DutAdvancedConfigRequest,
@@ -18,6 +19,7 @@ from src.models.dut_config_models import (
     DutTr069Settings,
     DutVoiceSettings,
     DutWanSettings,
+    DutWifiSettings,
 )
 
 from .dut_config_service import BIND_READY_TIMEOUT_SECONDS, clamp_dut_parallel_count
@@ -37,6 +39,21 @@ VOICE_CODEC_OPTIONS = {
     "G.726 - 40",
 }
 VOICE_SIP_MODE_OPTIONS = ("SIP", "IMSSIP", "UDP", "TCP", "TLS")
+WIFI_SECURITY_MODE_OPTIONS = (
+    "None",
+    "WPA2-Personal",
+    "WPA3-Personal",
+    "WPA3-Personal-Transition",
+    "WPA-WPA2-Personal",
+)
+WIFI_BANDWIDTH_OPTIONS = {
+    "2.4G": ("20MHz", "40MHz", "20/40MHz"),
+    "5G": ("20MHz", "40MHz", "80MHz", "160MHz"),
+}
+WIFI_MODE_OPTIONS = {
+    "2.4G": ("b", "b,g", "b,g,n", "b,g,n,ax"),
+    "5G": ("a", "a,n", "a,n,ac", "a,n,ac,ax"),
+}
 
 OutputCallback = Callable[[str], None]
 ItemCompleteCallback = Callable[[DutAdvancedConfigResult], None]
@@ -252,6 +269,65 @@ def validate_tr069_settings(settings: DutTr069Settings) -> tuple[str, ...]:
     return tuple(errors)
 
 
+def validate_wifi_settings(settings: DutWifiSettings) -> tuple[str, ...]:
+    """校验首版 WiFi 页面支持且能由参考 UBUS 模型稳定表达的组合。"""
+    errors: list[str] = []
+    if settings.band not in {"2.4G", "5G"}:
+        return (f"WiFi 频段无效：{settings.band}",)
+    try:
+        ssid_index = int(settings.ssid_index)
+        if not 1 <= ssid_index <= 8:
+            raise ValueError
+    except (TypeError, ValueError):
+        errors.append(f"SSID 索引必须为 1–8：{settings.ssid_index}")
+    if not settings.ssid:
+        errors.append("WiFi 名称为空")
+    elif len(settings.ssid.encode("utf-8")) > 32:
+        errors.append("WiFi 名称按 UTF-8 编码后不能超过 32 字节")
+    if settings.security_mode not in WIFI_SECURITY_MODE_OPTIONS:
+        errors.append(f"WiFi 认证/加密模式无效：{settings.security_mode}")
+    elif settings.security_mode != "None":
+        password = settings.password
+        is_hex_key = len(password) == 64 and all(char in "0123456789abcdefABCDEF" for char in password)
+        if not (8 <= len(password) <= 63 or is_hex_key):
+            errors.append("WiFi 密码必须为 8–63 个字符，或 64 位十六进制密钥")
+
+    channel = settings.channel.strip().lower()
+    if channel != "auto":
+        try:
+            channel_number = int(channel)
+        except ValueError:
+            errors.append(f"WiFi 信道无效：{settings.channel}")
+        else:
+            if settings.band == "2.4G" and not 1 <= channel_number <= 14:
+                errors.append(f"2.4G WiFi 信道必须为 auto 或 1–14：{settings.channel}")
+            if settings.band == "5G" and channel_number not in {
+                36, 40, 44, 48, 52, 56, 60, 64,
+                100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140,
+                144, 149, 153, 157, 161, 165,
+            }:
+                errors.append(f"5G WiFi 信道不受支持：{settings.channel}")
+    if settings.channel_bandwidth not in WIFI_BANDWIDTH_OPTIONS[settings.band]:
+        errors.append(
+            f"{settings.band} WiFi 信道带宽无效：{settings.channel_bandwidth}"
+        )
+    if settings.operating_mode not in WIFI_MODE_OPTIONS[settings.band]:
+        errors.append(f"{settings.band} WiFi 协议类型无效：{settings.operating_mode}")
+    try:
+        transmit_power = int(settings.transmit_power)
+        if not 1 <= transmit_power <= 100:
+            raise ValueError
+    except ValueError:
+        errors.append(f"WiFi 发射功率必须为 1–100：{settings.transmit_power}")
+    try:
+        max_associations = int(settings.max_associations)
+        if not 0 <= max_associations <= 32:
+            raise ValueError
+    except ValueError:
+        errors.append(f"WiFi 最大接入数必须为 0–32：{settings.max_associations}")
+    return tuple(errors)
+
+
 def validate_dut_advanced_request(request: DutAdvancedConfigRequest) -> tuple[str, ...]:
     errors = _validate_common(request)
     if request.feature == "wan" and isinstance(request.settings, DutWanSettings):
@@ -260,6 +336,15 @@ def validate_dut_advanced_request(request: DutAdvancedConfigRequest) -> tuple[st
         errors.extend(validate_voice_settings(request.settings))
     elif request.feature == "tr069" and isinstance(request.settings, DutTr069Settings):
         errors.extend(validate_tr069_settings(request.settings))
+    elif request.feature in {"wifi_2g", "wifi_5g"} and isinstance(
+        request.settings, DutWifiSettings
+    ):
+        expected_band = "2.4G" if request.feature == "wifi_2g" else "5G"
+        if request.settings.band != expected_band:
+            errors.append(
+                f"{request.feature} 与 WiFi 频段 {request.settings.band} 不匹配"
+            )
+        errors.extend(validate_wifi_settings(request.settings))
     else:
         errors.append(f"DUT 配置功能与参数类型不匹配：{request.feature}")
     return tuple(errors)
@@ -276,10 +361,14 @@ def run_single_dut_advanced_config(
     wan_fn: Callable = configure_wan,
     voice_fn: Callable = configure_voice,
     tr069_fn: Callable = configure_tr069,
+    wifi_fn: Callable = configure_wifi,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> DutAdvancedConfigResult:
     label = request.channel or request.vlan or request.device_host or "DUT"
-    feature_label = {"wan": "WAN配置", "voice": "语音配置", "tr069": "TR069配置"}.get(
+    feature_label = {
+        "wan": "WAN配置", "voice": "语音配置", "tr069": "TR069配置",
+        "wifi_2g": "2.4G WiFi配置", "wifi_5g": "5G WiFi配置",
+    }.get(
         request.feature, request.feature
     )
 
@@ -370,7 +459,7 @@ def run_single_dut_advanced_config(
         elif request.feature == "voice":
             details = voice_fn(client, session_id, request.settings, on_log=emit)
             success_message = "语音配置成功"
-        else:
+        elif request.feature == "tr069":
             details = tr069_fn(
                 client,
                 session_id,
@@ -380,6 +469,9 @@ def run_single_dut_advanced_config(
                 sleep_fn=pause,
             )
             success_message = "TR069 配置成功"
+        else:
+            details = wifi_fn(client, session_id, request.settings, on_log=emit)
+            success_message = f"{request.settings.band} WiFi 配置成功"
         ensure_not_stopped()
         emit(f"成功：{success_message}")
         return DutAdvancedConfigResult(request, True, "completed", success_message, details)
@@ -449,10 +541,14 @@ def run_dut_advanced_config_batch(
 __all__ = [
     "UBUS_LOGIN_MAX_RETRIES",
     "VOICE_CODEC_OPTIONS",
+    "WIFI_BANDWIDTH_OPTIONS",
+    "WIFI_MODE_OPTIONS",
+    "WIFI_SECURITY_MODE_OPTIONS",
     "run_dut_advanced_config_batch",
     "run_single_dut_advanced_config",
     "validate_dut_advanced_request",
     "validate_tr069_settings",
     "validate_voice_settings",
     "validate_wan_settings",
+    "validate_wifi_settings",
 ]

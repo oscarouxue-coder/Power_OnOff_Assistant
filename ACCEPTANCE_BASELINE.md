@@ -304,8 +304,8 @@ python scripts\verify_baseline.py
 
 - **状态**：已实现未验收
 - **核心行为**：
-  - 主界面“串口日志”右侧固定显示“DUT配置”按钮；窗口采用 Notebook，包含“Telnet配置”“WAN配置”“语音配置”“TR069配置”四个独立 Tab；协议在 core、批量流程在 service，UI 只收集输入和显示结果
-  - 四个 Tab 的字段名称必须在各自标签单元格内统一左对齐；公共 `_field()` 创建的 WAN、语音、TR069 标签及单独创建的“现有连接名/索引”不得恢复为右对齐，Telnet 页标签继续从左侧排列
+  - 主界面“串口日志”右侧固定显示“DUT配置”按钮；窗口采用 Notebook，包含“Telnet配置”“WAN配置”“2.4G WiFi配置”“5G WiFi配置”“语音配置”“TR069配置”六个独立 Tab；协议在 core、批量流程在 service，UI 只收集输入和显示结果
+  - 六个 Tab 的字段名称必须在各自标签单元格内统一左对齐；公共 `_field()` 创建的 WAN、WiFi、语音、TR069 标签及单独创建的“现有连接名/索引”不得恢复为右对齐，Telnet 页标签继续从左侧排列
   - 目标来自主界面已勾选通道；表格显示通道、VLAN、网卡、PC 静态 IP、样机管理 IP 和逐台状态；账号密码与写样机参数 `parameter_initial_*` 共享并明文显示、明文记录
   - 启动前拒绝无目标、缺 VLAN/网卡/IP/凭据、IP 格式错误、源 IP 与样机 IP 相同以及重复 VLAN；确认框明确提示会修改本机网卡与 DUT AccessCtrl 规则
   - 单台固定时序：`prepare_network_for_sample(reuse_if_ready=True)` 先只读查询目标网卡启用状态及 IPv4/前缀；已启用且目标地址/前缀完全匹配时跳过重复启用和静态 IP 设置，部分不匹配时只修复对应项，状态读取失败时回退原完整准备流程 → `wait_for_bindable_ip` 最多 15 秒（复用时也不得跳过）→ 每台独立 `UbusHttpClient(bind_ip, device_host, 80)` → `enable_telnet_via_ubus` → 严格 `source_address=(bind_ip, 0)` 探测 TCP 23 端口；只有 UBUS 与端口探测均成功才标记成功
@@ -318,15 +318,17 @@ python scripts\verify_baseline.py
   - 每次成功登录产生的设备端 UBUS session 必须在查询/配置/异常重试结束时调用 `bbfdm.unauthenticated_operate Device.X_SDMC_Login.logout()` 释放；关闭本机HTTP连接不能代替设备注销。WAN查询主日志必须记录注销TX和结果，连续点击两次“查询现有 WAN”不得因上一轮残留session触发 `Access denied`
   - Telnet：“查询当前Telnet”必须只读获取AccessCtrl总开关和LAN Telnet规则，并严格绑定当前VLAN源IP探测TCP 23；当前状态区逐台显示总开关、规则存在/启用、SourceInterface和端口可连接状态。查询路径严禁执行set/add或隐式复用开启Telnet流程
   - WAN：“查询现有 WAN”的同一批逐台结果必须同时展示在WAN当前状态区，至少包含连接名、路由/桥接模式、业务类型和VLAN；不得仅为状态展示重复发起第二轮WAN查询。目标变化或WAN配置执行后必须清除旧状态
+  - WiFi：2.4G与5G必须使用独立Tab，至少包含SSID索引、WiFi名称/密码、信道、信道带宽、启用/隐藏、认证/加密模式、协议类型、发射功率、最大接入数、WMM和双频合一。开放模式必须隐藏并忽略密码；加密模式必须校验WPA密码。2.4G与5G的信道、带宽和协议候选值必须分频段限制，不能把一个频段的Radio规则套到另一个频段
+  - WiFi查询必须先只读获取`Device.WiFi.X_SDMC_Mapping_2G/5G`，结合Radio、AccessPoint、SSID节点的`X_SDMC_Instance`把界面SSID索引解析为真实对象路径，再读取SSID/AP/Security/Radio及`X_SDMC_DualBandEnable`；严禁查询路径执行set。配置必须使用解析后的真实路径并回读校验。开启双频合一时，同一SSID索引的名称、启用/隐藏、认证密码、最大接入数和WMM同步到两个频段，Radio信道/带宽/协议/功率仍只修改当前Tab频段；关闭时只修改当前频段
   - 语音：按 `Device.Services.VoiceService.1` 路径设置 DTMF、SIP 模式、代理/出站代理/注册服务器、账号、5 项编码和 DigitMap，最后回读 SIP 路径；SIP模式必须保留 `SIP/UDP/TCP/TLS` 并增加ONT支持的 `IMSSIP`，UI与service允许值统一为 `SIP/IMSSIP/UDP/TCP/TLS`，所选值原样写入 `X_SDMC_SIPMode`，未知模式必须在下发前拒绝；账号启用时必须预检显示名、认证账号和密码；“查询当前语音”必须按当前线路索引只读获取并展示上述完整状态
   - TR069：设置并回读 `Device.ManagementServer.` 的 ACS URL/账号/密码、周期 Inform、连接请求和证书参数；可选触发 `X_SDMC_ManualInformStage=1_wait_inform` 并轮询最终 `X_SDMC_InformResult`，停止事件可中断 Inform 等待；“查询当前TR069”必须只读获取并展示ManagementServer当前状态，“配置后手动 Inform”是动作选项，不得由查询自动勾选
-  - 四个Tab均必须有“当前状态”区域。Telnet/语音/TR069查询及WAN现有连接查询均复用网卡状态预检、源IP可绑等待、锁源client、1–8并行、停止和失败隔离；语音/TR069仅在全部目标成功且参数一致时回填表单，不一致/失败不得拿任意一台覆盖整批。目标集合变化或执行对应配置后必须使旧状态失效，主日志必须记录实际get路径、完整状态、成功/失败及注销结果
-  - WAN/语音/TR069 复用主界面通道和 Telnet 页 UBUS 凭据/并行数；同一时间只允许一个 DUT 配置批次。每台均执行“准备网络 → 等源 IP 可绑 → 每台独立 UBUS 登录 → 功能配置 → 回读/结果校验 → 关闭 client”，登录失败最多重试3次，功能下发不自动重试，避免 WAN 重复创建
-  - 三个新增 Tab 的主执行日志必须包含功能阶段、明文登录、实际 UBUS method/path/input、成功/跳过/失败和批次汇总；表格只显示简短逐台结果
-  - WAN的LAN1–LAN8端口绑定和“启用 NAT”、语音“启用 SIP 账号”、TR069“启用周期 Inform / 启用 HTTP 连接请求 / 启用证书 / 配置后手动 Inform”必须使用 Windows 原生 `Checkbutton`：选中显示标准“✓”，未选为空框，不得继续使用 Clam 主题下显示叉号的 `ttk.Checkbutton`；各 BooleanVar 默认值和配置语义保持不变
-- **禁止破坏**：不得复制第二份 AccessCtrl 协议；Telnet 必须继续复用 `enable_telnet_via_ubus`；每台功能必须使用独立 UBUS client 并绑定对应 VLAN 源 IP，结束时必须释放设备端session；网卡状态、目标 IPv4 或前缀任一不满足时不得错误复用，状态读取失败不得绕过原准备流程，任何复用路径不得跳过 `wait_for_bindable_ip`；不得直接导入使用共享静态 Session 的 `SdmcUbusLib`；WAN 删除不得自动扩大为删除全部或模糊匹配其它连接；不得重新向IPoE展示PPPoE凭据、向PPPoE提供静态地址或允许不受协议封装支持的双栈混合静态组合；不得把查询失败、仅部分DUT存在或同索引不同名称的WAN放入批量修改/删除下拉列表
-- **待确认**：Windows 桌面四个 Tab 的完整绘制、当前状态区和所有字段名称左对齐；同一DUT连续两次Telnet/WAN/语音/TR069查询均成功且每轮日志出现设备session注销；Telnet查询准确显示AccessCtrl/规则/TCP23且不修改设备；WAN状态区使用同批结果展示连接摘要；网卡已满足/仅地址不符/禁用/状态读取失败四类准备日志及真实耗时；WAN查询按钮和只读下拉、完整回填、端口绑定、IPTV组播VLAN、WAN新增/修改/删除及协议联动；语音SIP模式、语音/TR069查询与一致参数回填、多台状态不一致不覆盖表单、TR069查询不勾选手动Inform、按钮状态和14个选择框勾号外观；真实样机覆盖禁用网卡自动启用、Access denied、1/8台并行、停止和单台失败隔离
-- **对应测试**：`tests/test_network_ops.py`、`tests/test_dut_config_service.py`、`tests/test_dut_advanced_config_service.py`、`tests/test_dut_wan_query_service.py`、`tests/test_dut_status_query_service.py`、`tests/test_dut_ubus_config.py`、`tests/test_ubus_http_client.py`、`tests/test_telnet_transport.py`、`tests/test_ubus_enable_telnet.py`、`tests/test_app.py`
+  - 六个Tab均必须有“当前状态”区域。Telnet/语音/TR069/WiFi查询及WAN现有连接查询均复用网卡状态预检、源IP可绑等待、锁源client、1–8并行、停止和失败隔离；语音/TR069/WiFi仅在全部目标成功且参数一致时回填表单，不一致/失败不得拿任意一台覆盖整批。目标集合变化或执行对应配置后必须使旧状态失效，主日志必须记录实际get路径、完整状态、成功/失败及注销结果
+  - WAN/WiFi/语音/TR069 复用主界面通道和 Telnet 页 UBUS 凭据/并行数；同一时间只允许一个 DUT 配置批次。每台均执行“准备网络 → 等源 IP 可绑 → 每台独立 UBUS 登录 → 功能配置 → 回读/结果校验 → 关闭 client”，登录失败最多重试3次，功能下发不自动重试，避免 WAN 重复创建
+  - 五个新增 Tab 的主执行日志必须包含功能阶段、明文登录、实际 UBUS method/path/input、成功/跳过/失败和批次汇总；表格只显示简短逐台结果
+  - WAN的LAN1–LAN8端口绑定和“启用 NAT”、两个WiFi页的“启用WiFi/隐藏WiFi/启用双频合一/启用WMM”、语音“启用 SIP 账号”、TR069“启用周期 Inform / 启用 HTTP 连接请求 / 启用证书 / 配置后手动 Inform”必须使用 Windows 原生 `Checkbutton`：选中显示标准“✓”，未选为空框，不得继续使用 Clam 主题下显示叉号的 `ttk.Checkbutton`；各 BooleanVar 默认值和配置语义保持不变
+- **禁止破坏**：不得复制第二份 AccessCtrl 协议；Telnet 必须继续复用 `enable_telnet_via_ubus`；每台功能必须使用独立 UBUS client 并绑定对应 VLAN 源 IP，结束时必须释放设备端session；网卡状态、目标 IPv4 或前缀任一不满足时不得错误复用，状态读取失败不得绕过原准备流程，任何复用路径不得跳过 `wait_for_bindable_ip`；不得直接导入使用共享静态 Session 的 `SdmcUbusLib`；WAN 删除不得自动扩大为删除全部或模糊匹配其它连接；不得重新向IPoE展示PPPoE凭据、向PPPoE提供静态地址或允许不受协议封装支持的双栈混合静态组合；不得把查询失败、仅部分DUT存在或同索引不同名称的WAN放入批量修改/删除下拉列表；WiFi不得绕过Mapping直接假定Radio/AP/SSID实例相同，双频合一不得覆盖另一频段Radio参数
+- **待确认**：Windows 桌面六个 Tab 的完整绘制、当前状态区和所有字段名称左对齐；同一DUT连续两次Telnet/WAN/WiFi/语音/TR069查询均成功且每轮日志出现设备session注销；Telnet查询准确显示AccessCtrl/规则/TCP23且不修改设备；WAN状态区使用同批结果展示连接摘要；网卡已满足/仅地址不符/禁用/状态读取失败四类准备日志及真实耗时；WAN查询按钮和只读下拉、完整回填、端口绑定、IPTV组播VLAN、WAN新增/修改/删除及协议联动；2.4G/5G真实Mapping解析、各字段查询回填/下发/回读、开放网络、隐藏SSID和双频合一同步但Radio独立；语音SIP模式、语音/TR069查询与一致参数回填、多台状态不一致不覆盖表单、TR069查询不勾选手动Inform、按钮状态和22个选择框勾号外观；真实样机覆盖禁用网卡自动启用、Access denied、1/8台并行、停止和单台失败隔离
+- **对应测试**：`tests/test_network_ops.py`、`tests/test_dut_config_service.py`、`tests/test_dut_advanced_config_service.py`、`tests/test_dut_wan_query_service.py`、`tests/test_dut_status_query_service.py`、`tests/test_dut_ubus_config.py`、`tests/test_dut_wifi_config.py`、`tests/test_ubus_http_client.py`、`tests/test_telnet_transport.py`、`tests/test_ubus_enable_telnet.py`、`tests/test_app.py`
 
 ---
 

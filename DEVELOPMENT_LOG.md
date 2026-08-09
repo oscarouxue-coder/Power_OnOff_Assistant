@@ -2,6 +2,16 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-09 - 增加DUT 2.4G与5G WiFi配置
+
+- 类型：功能 / DUT配置 / WiFi / UBUS / 查询回填 / 回归测试 / 文档
+- 背景：DUT配置已有Telnet、WAN、语音和TR069，但无法直接查询或批量修改ONT的2.4G/5G无线参数。项目负责人要求增加两个独立WiFi Tab，并覆盖名称、密码、信道、带宽、双频合一、启用/隐藏、加密、协议、功率及实际常用扩展项。
+- 完成内容：① Notebook增加“2.4G WiFi配置”“5G WiFi配置”，表单覆盖SSID索引、名称、密码、信道、带宽、启用、隐藏、认证/加密模式、协议类型、发射功率、最大接入数、WMM和双频合一；② 2.4G/5G分别使用自己的信道、带宽和协议候选值，开放模式隐藏且不下发密码，加密模式校验8–63字符或64位十六进制密钥，所有开关继续使用原生勾号；③ 新增独立WiFi core，先读取`X_SDMC_Mapping_2G/5G`和Radio/AP/SSID节点，将Mapping列表位置转换为真实`X_SDMC_Instance`路径，再查询SSID/AP/Security/Radio与双频状态；④ 配置按真实路径一次多路径set并回读校验，双频合一同步两个频段对应SSID的名称、启用/隐藏、认证密码、最大接入数和WMM，Radio信道/带宽/协议/功率只修改当前Tab；⑤ 两页接入现有网卡按需准备、锁源UBUS、1–8并行、停止、失败隔离与session注销，查询逐台展示，只有全部目标成功且状态完全一致才同步表单；⑥ 主执行日志输出Mapping与节点实际get、解析路径、完整set paths、回读、成功/跳过/失败和批次汇总；⑦ 增加Mapping解析、只读查询、双频合一、开放密码隔离、字段校验、service分发、状态查询和UI映射回归并纳入强制基线。
+- 修改文件：`.claude/plans/dut_wifi_tabs.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/models/dut_config_models.py`、`Cheating_machine_execution_tool/src/models/__init__.py`、`Cheating_machine_execution_tool/src/core/dut_wifi_config.py`、`Cheating_machine_execution_tool/src/services/dut_advanced_config_service.py`、`Cheating_machine_execution_tool/src/services/dut_status_query_service.py`、`Cheating_machine_execution_tool/src/services/__init__.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_dut_wifi_config.py`、`Cheating_machine_execution_tool/tests/test_dut_advanced_config_service.py`、`Cheating_machine_execution_tool/tests/test_dut_status_query_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行DUT WiFi core、DUT配置/查询service和主界面专项测试，再执行`python scripts\verify_baseline.py`与`git diff --check`。
+- 验证结果：DUT相关专项51项、主界面113项通过；`python scripts\verify_baseline.py`全绿（51个当前主程序`.py`编译、编译清单完整、575项单测、90个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows桌面目视两个WiFi页完整布局、下拉框和8个新增勾选框；真实ONT分别查询2.4G/5G主SSID，核对Mapping实际实例、所有字段回填、开放/加密、隐藏、信道/带宽/协议/功率下发回读；再开启双频合一，确认SSID/AP安全参数同步且两个Radio配置不互相覆盖，并覆盖连续查询、1/8台并行、停止和单台失败隔离。现场结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-09 - 补齐Telnet与WAN状态展示
 
 - 类型：功能
