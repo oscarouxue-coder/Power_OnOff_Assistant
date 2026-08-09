@@ -9,6 +9,7 @@ import json
 import re
 import time
 from collections.abc import Callable
+from dataclasses import asdict
 from typing import Any
 
 from src.models.dut_config_models import (
@@ -36,6 +37,10 @@ WAN_QUERY_PATHS = (
     "Device.NAT.",
 )
 MANAGEMENT_SERVER_PATH = "Device.ManagementServer."
+VOICE_PROFILE_PATH = "Device.Services.VoiceService.1.VoIPProfile.1."
+VOICE_NETWORK_PATH = "Device.Services.VoiceService.1.SIP.Network.1."
+VOICE_SIP_PATH = "Device.Services.VoiceService.1.SIP."
+VOICE_DIGIT_MAP_PATH = "Device.Services.VoiceService.1.Interwork.1.Map.1."
 MANUAL_INFORM_STAGE_PATH = f"Device.ManagementServer.{VENDOR_PREFIX}ManualInformStage"
 INFORM_RESULT_PATH = f"Device.ManagementServer.{VENDOR_PREFIX}InformResult"
 WEB_OPTIONAL = {"proto": "web"}
@@ -456,6 +461,15 @@ def parse_wan_connections(response: Any) -> tuple[DutWanConnectionInfo, ...]:
                 mode=mode,
                 service_type=_as_text(_first(interface, f"{VENDOR_PREFIX}ServiceType", "ServiceType")).upper() or name_service,
                 vlan_id=vlan_id,
+                multicast_vlan_id=_as_text(
+                    _first(
+                        interface,
+                        f"{VENDOR_PREFIX}Multicast_VLANID",
+                        f"{VENDOR_PREFIX}MulticastVLANID",
+                        "MulticastVLANID",
+                        "Multicast_VLAN_ID",
+                    )
+                ),
                 vlan_priority=vlan_priority or "0",
                 port_bind=_port_bind_mask(_first(interface, f"{VENDOR_PREFIX}PortBind", "PortBind")),
                 mtu=mtu,
@@ -487,7 +501,8 @@ def query_wan_connections(
     connections = parse_wan_connections(response)
     summaries = [
         f"{item.name}(业务={item.service_type or '-'}, VLAN={item.vlan_id or '-'}, "
-        f"模式={item.mode or '-'}, 接入={item.access_type or '-'})"
+        f"组播VLAN={item.multicast_vlan_id or '-'}, 模式={item.mode or '-'}, "
+        f"接入={item.access_type or '-'})"
         for item in connections
     ]
     _emit(on_log, f"RX UBUS WAN 完整信息：{summaries}")
@@ -530,6 +545,8 @@ def build_wan_input(settings: DutWanSettings) -> dict[str, Any]:
     )
     if operation == "modify":
         payload["Index"] = _connection_index(settings.connection_index)
+    if payload["ServiceType"] == "IPTV" and settings.multicast_vlan_id.strip():
+        payload["MulticastVLANID"] = int(settings.multicast_vlan_id)
 
     if payload["Mode"] == "bridge":
         return payload
@@ -611,11 +628,11 @@ def configure_voice(
     *,
     on_log: LogCallback | None = None,
 ) -> dict[str, Any]:
-    profile_path = "Device.Services.VoiceService.1.VoIPProfile.1."
-    network_path = "Device.Services.VoiceService.1.SIP.Network.1."
-    sip_path = "Device.Services.VoiceService.1.SIP."
+    profile_path = VOICE_PROFILE_PATH
+    network_path = VOICE_NETWORK_PATH
+    sip_path = VOICE_SIP_PATH
     client_path = f"Device.Services.VoiceService.1.SIP.Client.{int(settings.line_index)}."
-    digit_map_path = "Device.Services.VoiceService.1.Interwork.1.Map.1."
+    digit_map_path = VOICE_DIGIT_MAP_PATH
 
     responses = {
         "profile": _set_and_log(
@@ -684,6 +701,136 @@ def configure_voice(
     return responses
 
 
+_MISSING = object()
+
+
+def _find_parameter(payload: Any, *names: str) -> Any:
+    """兼容直接字段、对象嵌套和实例列表形式查找UBUS参数。"""
+    if isinstance(payload, dict):
+        for name in names:
+            if name in payload:
+                return payload[name]
+        for value in payload.values():
+            found = _find_parameter(value, *names)
+            if found is not _MISSING:
+                return found
+    elif isinstance(payload, list):
+        for value in payload:
+            found = _find_parameter(value, *names)
+            if found is not _MISSING:
+                return found
+    return _MISSING
+
+
+def _query_payload(
+    client: UbusHttpClient,
+    session_id: str,
+    path: str,
+    *,
+    on_log: LogCallback | None,
+    action: str,
+) -> dict[str, Any]:
+    _emit(on_log, f"TX UBUS bbfdm.get path={path}")
+    response = _require_rpc_ok(
+        client.bbfdm_get(session_id, path, WEB_OPTIONAL), action
+    )
+    if len(response) < 2 or not isinstance(response[1], dict):
+        raise UbusError(f"{action} 返回格式异常：{response}")
+    return response[1]
+
+
+def _text_parameter(payload: Any, *names: str) -> str:
+    value = _find_parameter(payload, *names)
+    return "" if value is _MISSING or value is None else str(value)
+
+
+def _bool_parameter(payload: Any, *names: str) -> bool:
+    value = _find_parameter(payload, *names)
+    if value is _MISSING or value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().casefold() in {
+        "1", "true", "yes", "on", "enable", "enabled",
+    }
+
+
+def query_voice_status(
+    client: UbusHttpClient,
+    session_id: str,
+    line_index: str = "1",
+    *,
+    on_log: LogCallback | None = None,
+) -> DutVoiceSettings:
+    """只读查询指定SIP线路的当前完整配置。"""
+    try:
+        normalized_line = str(int(line_index))
+    except (TypeError, ValueError) as exc:
+        raise UbusError(f"语音线路索引无效：{line_index}") from exc
+    client_path = f"Device.Services.VoiceService.1.SIP.Client.{normalized_line}."
+    payloads = {
+        "profile": _query_payload(
+            client, session_id, VOICE_PROFILE_PATH,
+            on_log=on_log, action="VoIP profile query",
+        ),
+        "network": _query_payload(
+            client, session_id, VOICE_NETWORK_PATH,
+            on_log=on_log, action="VoIP network query",
+        ),
+        "sip": _query_payload(
+            client, session_id, VOICE_SIP_PATH,
+            on_log=on_log, action="VoIP SIP query",
+        ),
+        "account": _query_payload(
+            client, session_id, client_path,
+            on_log=on_log, action=f"VoIP line {normalized_line} query",
+        ),
+        "digit_map": _query_payload(
+            client, session_id, VOICE_DIGIT_MAP_PATH,
+            on_log=on_log, action="VoIP DigitMap query",
+        ),
+    }
+    codecs: list[str] = []
+    for index in range(1, 6):
+        codec_path = f"{client_path}{VENDOR_PREFIX}Codec.{index}.Codec"
+        codec_payload = _query_payload(
+            client, session_id, codec_path,
+            on_log=on_log, action=f"VoIP codec {index} query",
+        )
+        codecs.append(_text_parameter(codec_payload, "Codec"))
+
+    network = payloads["network"]
+    account = payloads["account"]
+    settings = DutVoiceSettings(
+        line_index=normalized_line,
+        account_enabled=_bool_parameter(account, "Enable"),
+        display_name=_text_parameter(account, "RegisterURI", "DisplayName"),
+        auth_username=_text_parameter(account, "AuthUserName", "AuthUsername"),
+        auth_password=_text_parameter(
+            account, f"{VENDOR_PREFIX}AuthPassword", "AuthPassword"
+        ),
+        proxy_server=_text_parameter(network, "ProxyServer"),
+        proxy_port=_text_parameter(network, "ProxyServerPort"),
+        outbound_proxy=_text_parameter(network, "OutboundProxy"),
+        outbound_proxy_port=_text_parameter(network, "OutboundProxyPort"),
+        registrar_server=_text_parameter(network, "RegistrarServer"),
+        registrar_server_port=_text_parameter(network, "RegistrarServerPort"),
+        dtmf_method=_text_parameter(payloads["profile"], "DTMFMethod"),
+        register_expires=_text_parameter(network, "RegisterExpires"),
+        sip_mode=_text_parameter(
+            payloads["sip"], f"{VENDOR_PREFIX}SIPMode", "SIPMode"
+        ),
+        digit_map=_text_parameter(payloads["digit_map"], "DigitMap"),
+        codecs=tuple(codecs),
+    )
+    _emit(
+        on_log,
+        "RX UBUS 语音当前状态："
+        + json.dumps(asdict(settings), ensure_ascii=False, sort_keys=True),
+    )
+    return settings
+
+
 def _management_server_payload(settings: DutTr069Settings) -> dict[str, Any]:
     return {
         "PeriodicInformEnable": bool(settings.periodic_inform_enabled),
@@ -705,6 +852,48 @@ def _extract_management_server(response: Any) -> dict[str, Any]:
     payload = response[1]
     nested = payload.get("ManagementServer")
     return nested if isinstance(nested, dict) else payload
+
+
+def query_tr069_status(
+    client: UbusHttpClient,
+    session_id: str,
+    *,
+    on_log: LogCallback | None = None,
+) -> DutTr069Settings:
+    """只读查询ManagementServer当前配置；手动Inform保持为未选择动作。"""
+    payload = _query_payload(
+        client,
+        session_id,
+        MANAGEMENT_SERVER_PATH,
+        on_log=on_log,
+        action="TR069 status query",
+    )
+    settings = DutTr069Settings(
+        acs_url=_text_parameter(payload, "URL"),
+        acs_username=_text_parameter(payload, "Username"),
+        acs_password=_text_parameter(payload, "Password"),
+        periodic_inform_enabled=_bool_parameter(payload, "PeriodicInformEnable"),
+        periodic_inform_interval=_text_parameter(payload, "PeriodicInformInterval"),
+        connection_request_enabled=_bool_parameter(
+            payload, "HTTPConnectionRequestEnable"
+        ),
+        connection_request_username=_text_parameter(
+            payload, "ConnectionRequestUsername"
+        ),
+        connection_request_password=_text_parameter(
+            payload, "ConnectionRequestPassword"
+        ),
+        certificate_enabled=_bool_parameter(
+            payload, f"{VENDOR_PREFIX}CertificateEnable", "CertificateEnable"
+        ),
+        manual_inform=False,
+    )
+    _emit(
+        on_log,
+        "RX UBUS TR069当前状态："
+        + json.dumps(asdict(settings), ensure_ascii=False, sort_keys=True),
+    )
+    return settings
 
 
 def configure_tr069(
@@ -774,5 +963,7 @@ __all__ = [
     "parse_port_bind",
     "query_wan_connection_names",
     "query_wan_connections",
+    "query_tr069_status",
+    "query_voice_status",
     "parse_wan_connections",
 ]

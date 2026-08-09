@@ -2,6 +2,7 @@ from .serial_models import FullPackageUpgradeRequest, SerialEvent, SerialSetting
 from .dut_config_models import (
     DutAdvancedConfigRequest,
     DutAdvancedConfigResult,
+    DutAdvancedQueryResult,
     DutTelnetEnableRequest,
     DutTelnetEnableResult,
     DutTr069Settings,
@@ -26,6 +27,7 @@ __all__ = [
     "FullPackageUpgradeRequest",
     "DutAdvancedConfigRequest",
     "DutAdvancedConfigResult",
+    "DutAdvancedQueryResult",
     "DutTelnetEnableRequest",
     "DutTelnetEnableResult",
     "DutTr069Settings",

@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from tkinter import BooleanVar, Checkbutton, END, StringVar, Toplevel, ttk
+from tkinter import BooleanVar, Checkbutton, END, StringVar, Text, Toplevel, ttk
 
 from src.models import (
     DutAdvancedConfigResult,
+    DutAdvancedQueryResult,
     DutTelnetEnableRequest,
     DutTelnetEnableResult,
     DutTr069Settings,
@@ -19,7 +20,7 @@ from src.services.dut_config_service import (
     DEFAULT_DUT_PARALLEL_COUNT,
     MAX_DUT_PARALLEL_COUNT,
 )
-from src.services.dut_advanced_config_service import VOICE_CODEC_OPTIONS
+from src.services.dut_advanced_config_service import VOICE_CODEC_OPTIONS, VOICE_SIP_MODE_OPTIONS
 
 
 DUT_CHECK_BACKGROUND = "#ffffff"
@@ -36,6 +37,74 @@ WAN_ROUTER_SERVICE_TYPES = (
     "OTHER",
 )
 WAN_BRIDGE_SERVICE_TYPES = ("IPTV", "INTERNET", "OTHER")
+WAN_LAN_PORTS = tuple(range(1, 9))
+WAN_LAN_PORT_MASK = sum(1 << (port - 1) for port in WAN_LAN_PORTS)
+
+
+def _port_bind_mask_value(value: str) -> int:
+    """把查询值或旧组合文本转换为非负位掩码；无效值按 0 处理。"""
+    try:
+        parts = [part.strip() for part in str(value).split("&&")]
+        if not parts or any(not part for part in parts):
+            return 0
+        mask = sum(int(part) for part in parts)
+        return mask if mask >= 0 else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+def wan_lan_ports_from_port_bind(value: str) -> tuple[int, ...]:
+    """把 ``PortBind`` 位掩码转换为界面应勾选的 LAN1–LAN8。"""
+    mask = _port_bind_mask_value(value)
+    return tuple(port for port in WAN_LAN_PORTS if mask & (1 << (port - 1)))
+
+
+def wan_port_bind_from_lan_ports(
+    ports: Iterable[int], *, preserved_mask: int = 0
+) -> str:
+    """把已勾选 LAN 口转换为 UBUS 位掩码，并保留不在界面展示的旧绑定。"""
+    mask = max(0, int(preserved_mask))
+    for port in ports:
+        if port in WAN_LAN_PORTS:
+            mask |= 1 << (port - 1)
+    return str(mask)
+
+
+def voice_status_form_values(settings: DutVoiceSettings) -> dict[str, object]:
+    """把只读语音状态映射为当前表单值。"""
+    return {
+        "line_index": settings.line_index,
+        "account_enabled": settings.account_enabled,
+        "display_name": settings.display_name,
+        "auth_username": settings.auth_username,
+        "auth_password": settings.auth_password,
+        "proxy_server": settings.proxy_server,
+        "proxy_port": settings.proxy_port,
+        "outbound_proxy": settings.outbound_proxy,
+        "outbound_proxy_port": settings.outbound_proxy_port,
+        "registrar_server": settings.registrar_server,
+        "registrar_server_port": settings.registrar_server_port,
+        "dtmf_method": settings.dtmf_method,
+        "register_expires": settings.register_expires,
+        "sip_mode": settings.sip_mode,
+        "digit_map": settings.digit_map,
+        "codecs": settings.codecs,
+    }
+
+
+def tr069_status_form_values(settings: DutTr069Settings) -> dict[str, object]:
+    """把只读TR069状态映射为当前表单值，不改动手动Inform动作选项。"""
+    return {
+        "acs_url": settings.acs_url,
+        "acs_username": settings.acs_username,
+        "acs_password": settings.acs_password,
+        "periodic_inform_enabled": settings.periodic_inform_enabled,
+        "periodic_inform_interval": settings.periodic_inform_interval,
+        "connection_request_enabled": settings.connection_request_enabled,
+        "connection_request_username": settings.connection_request_username,
+        "connection_request_password": settings.connection_request_password,
+        "certificate_enabled": settings.certificate_enabled,
+    }
 
 
 @dataclass(frozen=True)
@@ -46,6 +115,7 @@ class WanFormRules:
     show_config: bool
     show_router: bool
     show_pppoe_credentials: bool
+    show_multicast_vlan: bool
     show_ipv4_selector: bool
     show_ipv4_static: bool
     show_ipv6_selector: bool
@@ -82,6 +152,7 @@ def resolve_wan_form_rules(
     ip_protocol: str,
     ipv4_type: str,
     ipv6_type: str,
+    service_type: str = "",
 ) -> WanFormRules:
     """返回 WAN 表单显隐规则，供 Tk 界面和无界面测试共同使用。"""
     show_config = operation != "删除"
@@ -93,6 +164,7 @@ def resolve_wan_form_rules(
         show_config=show_config,
         show_router=show_router,
         show_pppoe_credentials=show_router and access_type == "PPPoE",
+        show_multicast_vlan=show_config and service_type.strip().upper() == "IPTV",
         show_ipv4_selector=show_ipv4,
         show_ipv4_static=show_ipv4 and ipv4_type == "静态",
         show_ipv6_selector=show_ipv6,
@@ -112,6 +184,7 @@ def wan_connection_form_values(info: DutWanConnectionInfo) -> dict[str, str | bo
         "mode": "桥接" if info.mode.lower() == "bridge" else "路由" if info.mode else "",
         "service_type": info.service_type.replace("-", "_").upper(),
         "vlan_id": info.vlan_id,
+        "multicast_vlan_id": info.multicast_vlan_id,
         "vlan_priority": info.vlan_priority,
         "port_bind": info.port_bind,
         "mtu": info.mtu,
@@ -148,6 +221,8 @@ class DutConfigWindow:
         on_start: Callable[[], None],
         on_start_wan: Callable[[], None],
         on_query_wan: Callable[[], None],
+        on_query_voice: Callable[[], None],
+        on_query_tr069: Callable[[], None],
         on_start_voice: Callable[[], None],
         on_start_tr069: Callable[[], None],
         on_stop: Callable[[], None],
@@ -156,8 +231,8 @@ class DutConfigWindow:
         self.window = Toplevel(master)
         self.window.withdraw()
         self.window.title("DUT配置")
-        self.window.geometry("1480x780")
-        self.window.minsize(1480, 780)
+        self.window.geometry("1530x880")
+        self.window.minsize(1530, 880)
         self.window.transient(master)
         self.window.protocol("WM_DELETE_WINDOW", on_close)
 
@@ -173,6 +248,7 @@ class DutConfigWindow:
         self._field_groups: dict[str, tuple[object, object]] = {}
         self._start_buttons: dict[str, ttk.Button] = {}
         self._stop_buttons: list[ttk.Button] = []
+        self._current_status_texts: dict[str, Text] = {}
 
         outer = ttk.Frame(self.window, padding=18)
         outer.pack(fill="both", expand=True)
@@ -288,8 +364,12 @@ class DutConfigWindow:
         self._stop_buttons.append(self.stop_button)
 
         self._build_wan_tab(on_refresh, on_start_wan, on_query_wan, on_stop, on_close)
-        self._build_voice_tab(on_refresh, on_start_voice, on_stop, on_close)
-        self._build_tr069_tab(on_refresh, on_start_tr069, on_stop, on_close)
+        self._build_voice_tab(
+            on_refresh, on_start_voice, on_query_voice, on_stop, on_close
+        )
+        self._build_tr069_tab(
+            on_refresh, on_start_tr069, on_query_tr069, on_stop, on_close
+        )
 
         self.window.after(0, self._reveal)
 
@@ -319,7 +399,14 @@ class DutConfigWindow:
             self._field_groups[field_key] = (label_widget, widget)
         return widget
 
-    def _native_checkbutton(self, parent, *, text: str, variable: BooleanVar) -> Checkbutton:
+    def _native_checkbutton(
+        self,
+        parent,
+        *,
+        text: str,
+        variable: BooleanVar,
+        command: Callable[[], None] | None = None,
+    ) -> Checkbutton:
         """创建选中态为标准勾号的原生复选框，避开 Clam 主题叉号。"""
         widget = Checkbutton(
             parent,
@@ -332,6 +419,7 @@ class DutConfigWindow:
             activeforeground=DUT_CHECK_FOREGROUND,
             highlightthickness=0,
             borderwidth=0,
+            command=command,
         )
         self._input_widgets.append(widget)
         return widget
@@ -346,6 +434,8 @@ class DutConfigWindow:
         on_start: Callable[[], None],
         on_stop: Callable[[], None],
         on_close: Callable[[], None],
+        query_text: str | None = None,
+        on_query: Callable[[], None] | None = None,
     ) -> None:
         table_frame = ttk.Frame(tab)
         table_frame.pack(fill="both", expand=True, pady=(8, 0))
@@ -374,6 +464,12 @@ class DutConfigWindow:
         actions.pack(fill="x")
         refresh = ttk.Button(actions, text="刷新目标", command=on_refresh, style="Secondary.TButton")
         refresh.pack(side="left")
+        if query_text and on_query is not None:
+            query = ttk.Button(
+                actions, text=query_text, command=on_query, style="Secondary.TButton"
+            )
+            query.pack(side="left", padx=(8, 0))
+            self._input_widgets.append(query)
         ttk.Button(actions, text="关闭", command=on_close, style="Secondary.TButton").pack(side="right")
         start = ttk.Button(actions, text=start_text, command=on_start, style="Primary.TButton")
         start.pack(side="right", padx=(0, 8))
@@ -385,6 +481,25 @@ class DutConfigWindow:
         self._input_widgets.append(refresh)
         self._start_buttons[feature] = start
         self._stop_buttons.append(stop)
+
+    def _build_current_status_area(self, tab, feature: str, initial_text: str) -> None:
+        frame = ttk.LabelFrame(tab, text="当前状态", padding=6)
+        frame.pack(fill="x", pady=(8, 0))
+        text = Text(
+            frame,
+            height=4,
+            wrap="word",
+            relief="flat",
+            borderwidth=0,
+            background=DUT_CHECK_BACKGROUND,
+            foreground=DUT_CHECK_FOREGROUND,
+        )
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=scrollbar.set)
+        text.pack(side="left", fill="x", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        self._current_status_texts[feature] = text
+        self.clear_current_status(feature, initial_text)
 
     def _build_wan_tab(self, on_refresh, on_start, on_query, on_stop, on_close) -> None:
         tab = ttk.Frame(self.notebook, padding=12)
@@ -406,8 +521,11 @@ class DutConfigWindow:
         self.wan_mode_var = StringVar(value="路由")
         self.wan_service_type_var = StringVar(value="INTERNET")
         self.wan_vlan_id_var = StringVar(value="200")
+        self.wan_multicast_vlan_id_var = StringVar(value="")
         self.wan_vlan_priority_var = StringVar(value="0")
         self.wan_port_bind_var = StringVar(value="0")
+        self.wan_lan_port_vars = tuple(BooleanVar(value=False) for _port in WAN_LAN_PORTS)
+        self._wan_non_lan_port_bind_mask = 0
         self.wan_mtu_var = StringVar(value="1500")
         self.wan_nat_var = BooleanVar(value=True)
         self.wan_access_type_var = StringVar(value="IPoE")
@@ -457,7 +575,26 @@ class DutConfigWindow:
         )
         self._field(form, 1, 0, "业务 VLAN ID：", self.wan_vlan_id_var, field_key="wan_vlan_id")
         self._field(form, 1, 1, "VLAN 优先级：", self.wan_vlan_priority_var, field_key="wan_vlan_priority")
-        self._field(form, 1, 2, "端口绑定位掩码：", self.wan_port_bind_var, field_key="wan_port_bind")
+        port_bind_label = ttk.Label(form, text="端口绑定：", anchor="w")
+        port_bind_label.grid(row=1, column=4, sticky="w", padx=(4, 4), pady=3)
+        port_bind_holder = ttk.Frame(form)
+        port_bind_holder.grid(row=1, column=5, sticky="ew", padx=(0, 8), pady=3)
+        for index, (port, variable) in enumerate(zip(WAN_LAN_PORTS, self.wan_lan_port_vars)):
+            option = self._native_checkbutton(
+                port_bind_holder,
+                text=f"LAN{port}",
+                variable=variable,
+                command=self._sync_wan_port_bind_from_checks,
+            )
+            option.grid(
+                row=index // 4,
+                column=index % 4,
+                sticky="w",
+                padx=(0, 5),
+                pady=0,
+            )
+        form.columnconfigure(5, weight=1)
+        self._field_groups["wan_port_bind"] = (port_bind_label, port_bind_holder)
         self._field(form, 1, 3, "MTU：", self.wan_mtu_var, field_key="wan_mtu")
         self._field(form, 2, 0, "接入方式：", self.wan_access_type_var, values=("IPoE", "PPPoE"), field_key="wan_access_type")
         self._field(form, 2, 1, "IP 协议：", self.wan_ip_protocol_var, values=("IPv4", "IPv6", "IPv4+IPv6（双栈）"), width=20, field_key="wan_ip_protocol")
@@ -484,11 +621,15 @@ class DutConfigWindow:
         self._field(form, 5, 2, "IPv6 网关：", self.wan_ipv6_gateway_var, field_key="wan_ipv6_gateway")
         self._field(form, 5, 3, "IPv6 主 DNS：", self.wan_ipv6_primary_dns_var, field_key="wan_ipv6_primary_dns")
         self._field(form, 6, 0, "IPv6 备 DNS：", self.wan_ipv6_secondary_dns_var, field_key="wan_ipv6_secondary_dns")
+        self._field(
+            form, 7, 0, "组播 VLAN ID：", self.wan_multicast_vlan_id_var,
+            field_key="wan_multicast_vlan_id",
+        )
         self.wan_rule_hint_var = StringVar(value="")
         ttk.Label(
             form, textvariable=self.wan_rule_hint_var, style="Muted.TLabel",
             justify="left", wraplength=1050,
-        ).grid(row=7, column=0, columnspan=8, sticky="w", padx=4, pady=(5, 0))
+        ).grid(row=8, column=0, columnspan=8, sticky="w", padx=4, pady=(5, 0))
         self.wan_query_status_var = StringVar(
             value="修改/删除时请先点击“查询现有 WAN”，再从下拉列表选择。"
         )
@@ -498,7 +639,7 @@ class DutConfigWindow:
             style="Muted.TLabel",
             justify="left",
             wraplength=1050,
-        ).grid(row=8, column=0, columnspan=8, sticky="w", padx=4, pady=(2, 0))
+        ).grid(row=9, column=0, columnspan=8, sticky="w", padx=4, pady=(2, 0))
         self._wan_target_signature: tuple[tuple[str, ...], ...] = ()
         self._wan_connection_details: dict[str, DutWanConnectionInfo] = {}
         self._updating_wan_form = False
@@ -506,6 +647,7 @@ class DutConfigWindow:
         for variable, changed in (
             (self.wan_operation_var, "operation"),
             (self.wan_mode_var, "mode"),
+            (self.wan_service_type_var, "service_type"),
             (self.wan_access_type_var, "access_type"),
             (self.wan_ip_protocol_var, "ip_protocol"),
             (self.wan_ipv4_type_var, "ipv4_type"),
@@ -568,6 +710,7 @@ class DutConfigWindow:
             "mode": self.wan_mode_var,
             "service_type": self.wan_service_type_var,
             "vlan_id": self.wan_vlan_id_var,
+            "multicast_vlan_id": self.wan_multicast_vlan_id_var,
             "vlan_priority": self.wan_vlan_priority_var,
             "port_bind": self.wan_port_bind_var,
             "mtu": self.wan_mtu_var,
@@ -600,6 +743,7 @@ class DutConfigWindow:
                     variable.set(value)
             if values["nat_enabled"] is not None:
                 self.wan_nat_var.set(bool(values["nat_enabled"]))
+            self._set_wan_port_bind_selection(str(values["port_bind"] or "0"))
             self._last_wan_access_type = self.wan_access_type_var.get()
         finally:
             self._updating_wan_form = False
@@ -612,12 +756,38 @@ class DutConfigWindow:
         for widget in self._field_groups[field_key]:
             widget.grid() if visible else widget.grid_remove()
 
+    def _set_wan_port_bind_selection(self, value: str) -> None:
+        """把查询到的位掩码同步成 LAN 勾选状态，并保留其它绑定类型。"""
+        mask = _port_bind_mask_value(value)
+        self._wan_non_lan_port_bind_mask = mask & ~WAN_LAN_PORT_MASK
+        selected = set(wan_lan_ports_from_port_bind(str(mask)))
+        for port, variable in zip(WAN_LAN_PORTS, self.wan_lan_port_vars):
+            variable.set(port in selected)
+        self.wan_port_bind_var.set(str(mask))
+
+    def _sync_wan_port_bind_from_checks(self) -> None:
+        """把 LAN 勾选状态实时转换为底层 ``PortBind`` 位掩码。"""
+        selected = (
+            port
+            for port, variable in zip(WAN_LAN_PORTS, self.wan_lan_port_vars)
+            if bool(variable.get())
+        )
+        self.wan_port_bind_var.set(
+            wan_port_bind_from_lan_ports(
+                selected,
+                preserved_mask=self._wan_non_lan_port_bind_mask,
+            )
+        )
+
     def _update_wan_form_visibility(self, changed: str = "") -> None:
         """按操作、模式、接入方式、协议和地址方式实时收敛 WAN 表单。"""
         if self._updating_wan_form:
             return
         self._updating_wan_form = True
         try:
+            if changed == "operation" and self.wan_operation_var.get() == "新增":
+                self._wan_non_lan_port_bind_mask = 0
+                self._sync_wan_port_bind_from_checks()
             access_type = self.wan_access_type_var.get()
             if access_type != self._last_wan_access_type:
                 self.wan_mtu_var.set("1492" if access_type == "PPPoE" else "1500")
@@ -642,7 +812,7 @@ class DutConfigWindow:
             if self.wan_service_type_var.get() not in service_options:
                 self.wan_service_type_var.set("IPTV" if is_bridge else "INTERNET")
             if is_bridge and self.wan_port_bind_var.get().strip() == "0":
-                self.wan_port_bind_var.set("1")
+                self._set_wan_port_bind_selection("1")
 
             if access_type == "PPPoE":
                 self.wan_ipv4_type_combo.configure(values=("DHCP",))
@@ -654,12 +824,14 @@ class DutConfigWindow:
             rules = resolve_wan_form_rules(
                 self.wan_operation_var.get(), self.wan_mode_var.get(), access_type,
                 self.wan_ip_protocol_var.get(), ipv4_type, ipv6_type,
+                service_type=self.wan_service_type_var.get(),
             )
             visibility = {
                 "wan_index": rules.show_index,
                 "wan_mode": rules.show_config,
                 "wan_service_type": rules.show_config,
                 "wan_vlan_id": rules.show_config,
+                "wan_multicast_vlan_id": rules.show_multicast_vlan,
                 "wan_vlan_priority": rules.show_config,
                 "wan_port_bind": rules.show_config,
                 "wan_mtu": rules.show_router,
@@ -687,7 +859,12 @@ class DutConfigWindow:
             if not rules.show_config:
                 hint = "删除仅按现有连接名/索引执行，不展示或使用其它 WAN 参数。"
             elif not rules.show_router:
-                hint = "桥接 WAN 仅使用业务类型、VLAN、优先级和端口绑定；默认绑定 LAN1（位掩码 1）。"
+                hint = (
+                    "桥接 IPTV 使用业务类型、业务 VLAN、可选组播 VLAN、优先级和端口绑定；"
+                    "默认绑定 LAN1（位掩码 1）。"
+                    if rules.show_multicast_vlan
+                    else "桥接 WAN 仅使用业务类型、VLAN、优先级和端口绑定；默认绑定 LAN1（位掩码 1）。"
+                )
             else:
                 protocol = self.wan_ip_protocol_var.get()
                 address_hint = []
@@ -703,11 +880,13 @@ class DutConfigWindow:
                     hint += " PPPoE 仅支持动态地址组合，需填写账号和密码。"
                 elif protocol == "IPv4+IPv6（双栈）":
                     hint += " IPoE 双栈静态时 IPv4 与 IPv6 必须同时静态。"
+            if rules.show_multicast_vlan and rules.show_router:
+                hint += " IPTV 可选填写组播 VLAN ID；留空表示不单独配置组播 VLAN。"
             self.wan_rule_hint_var.set(hint)
         finally:
             self._updating_wan_form = False
 
-    def _build_voice_tab(self, on_refresh, on_start, on_stop, on_close) -> None:
+    def _build_voice_tab(self, on_refresh, on_start, on_query, on_stop, on_close) -> None:
         tab = ttk.Frame(self.notebook, padding=12)
         self.notebook.add(tab, text="语音配置")
         ttk.Label(
@@ -753,17 +932,28 @@ class DutConfigWindow:
         self._field(form, 2, 2, "注册服务器端口：", self.voice_registrar_server_port_var)
         self._field(form, 2, 3, "DTMF：", self.voice_dtmf_method_var, values=("RFC2833", "InBand", "SIPINFO"))
         self._field(form, 3, 0, "注册有效期：", self.voice_register_expires_var)
-        self._field(form, 3, 1, "SIP 模式：", self.voice_sip_mode_var, values=("SIP", "UDP", "TCP", "TLS"))
+        self._field(
+            form,
+            3,
+            1,
+            "SIP 模式：",
+            self.voice_sip_mode_var,
+            values=VOICE_SIP_MODE_OPTIONS,
+        )
         self._field(form, 3, 2, "DigitMap：", self.voice_digit_map_var, width=24)
         codec_values = tuple(sorted(VOICE_CODEC_OPTIONS))
         for index, variable in enumerate(self.voice_codec_vars):
             self._field(form, 4 + index // 4, index % 4, f"编码 {index + 1}：", variable, values=codec_values)
+        self._build_current_status_area(
+            tab, "voice", "尚未查询；查询时使用当前选择的语音线路索引。"
+        )
         self._advanced_target_area(
             tab, "voice", start_text="执行语音配置", on_refresh=on_refresh,
             on_start=on_start, on_stop=on_stop, on_close=on_close,
+            query_text="查询当前语音", on_query=on_query,
         )
 
-    def _build_tr069_tab(self, on_refresh, on_start, on_stop, on_close) -> None:
+    def _build_tr069_tab(self, on_refresh, on_start, on_query, on_stop, on_close) -> None:
         tab = ttk.Frame(self.notebook, padding=12)
         self.notebook.add(tab, text="TR069配置")
         ttk.Label(
@@ -810,17 +1000,125 @@ class DutConfigWindow:
             form, text="配置后手动 Inform", variable=self.tr069_manual_inform_var
         )
         manual.grid(row=2, column=2, columnspan=2, sticky="w", padx=4, pady=3)
+        self._build_current_status_area(
+            tab, "tr069", "尚未查询；“配置后手动 Inform”是动作选项，不属于设备持久状态。"
+        )
         self._advanced_target_area(
             tab, "tr069", start_text="执行 TR069 配置", on_refresh=on_refresh,
             on_start=on_start, on_stop=on_stop, on_close=on_close,
+            query_text="查询当前TR069", on_query=on_query,
         )
 
+    def clear_current_status(self, feature: str, message: str) -> None:
+        text = self._current_status_texts.get(feature)
+        if text is None:
+            return
+        text.configure(state="normal")
+        text.delete("1.0", END)
+        text.insert("1.0", message)
+        text.configure(state="disabled")
+
+    @staticmethod
+    def _voice_status_text(settings: DutVoiceSettings) -> str:
+        return (
+            f"线路={settings.line_index}，账号={'启用' if settings.account_enabled else '禁用'}，"
+            f"显示名称={settings.display_name}，认证={settings.auth_username}/{settings.auth_password}，"
+            f"代理={settings.proxy_server}:{settings.proxy_port}，"
+            f"出站代理={settings.outbound_proxy}:{settings.outbound_proxy_port}，"
+            f"注册服务器={settings.registrar_server}:{settings.registrar_server_port}，"
+            f"DTMF={settings.dtmf_method}，有效期={settings.register_expires}，"
+            f"SIP模式={settings.sip_mode}，DigitMap={settings.digit_map}，"
+            f"编码={' / '.join(settings.codecs)}"
+        )
+
+    @staticmethod
+    def _tr069_status_text(settings: DutTr069Settings) -> str:
+        return (
+            f"ACS={settings.acs_url}，账号={settings.acs_username}/{settings.acs_password}，"
+            f"周期Inform={'启用' if settings.periodic_inform_enabled else '禁用'}"
+            f"({settings.periodic_inform_interval}秒)，"
+            f"HTTP连接请求={'启用' if settings.connection_request_enabled else '禁用'}，"
+            f"连接请求账号={settings.connection_request_username}/"
+            f"{settings.connection_request_password}，"
+            f"证书={'启用' if settings.certificate_enabled else '禁用'}"
+        )
+
+    def set_current_status_results(
+        self,
+        feature: str,
+        results: Iterable[DutAdvancedQueryResult],
+        common_settings: DutVoiceSettings | DutTr069Settings | None,
+    ) -> None:
+        lines: list[str] = []
+        for result in results:
+            label = result.request.channel or result.request.device_host or "DUT"
+            if result.ok and isinstance(result.settings, DutVoiceSettings):
+                lines.append(f"{label}：{self._voice_status_text(result.settings)}")
+            elif result.ok and isinstance(result.settings, DutTr069Settings):
+                lines.append(f"{label}：{self._tr069_status_text(result.settings)}")
+            else:
+                lines.append(f"{label}：查询失败/停止：{result.message}")
+        if common_settings is not None:
+            self.apply_current_status(feature, common_settings)
+            lines.append("已确认全部成功目标参数一致，并同步到当前配置表单。")
+        elif any(result.ok for result in results):
+            lines.append("目标状态不完全一致或存在失败，未使用任意一台覆盖当前配置表单。")
+        self.clear_current_status(feature, "\n".join(lines) or "未返回查询结果。")
+
+    def apply_current_status(
+        self, feature: str, settings: DutVoiceSettings | DutTr069Settings
+    ) -> None:
+        if feature == "voice" and isinstance(settings, DutVoiceSettings):
+            values = voice_status_form_values(settings)
+            variables = {
+                "line_index": self.voice_line_index_var,
+                "display_name": self.voice_display_name_var,
+                "auth_username": self.voice_auth_username_var,
+                "auth_password": self.voice_auth_password_var,
+                "proxy_server": self.voice_proxy_server_var,
+                "proxy_port": self.voice_proxy_port_var,
+                "outbound_proxy": self.voice_outbound_proxy_var,
+                "outbound_proxy_port": self.voice_outbound_proxy_port_var,
+                "registrar_server": self.voice_registrar_server_var,
+                "registrar_server_port": self.voice_registrar_server_port_var,
+                "dtmf_method": self.voice_dtmf_method_var,
+                "register_expires": self.voice_register_expires_var,
+                "sip_mode": self.voice_sip_mode_var,
+                "digit_map": self.voice_digit_map_var,
+            }
+            for key, variable in variables.items():
+                variable.set(values[key])
+            self.voice_account_enabled_var.set(bool(values["account_enabled"]))
+            for variable, value in zip(self.voice_codec_vars, values["codecs"]):
+                variable.set(value)
+        elif feature == "tr069" and isinstance(settings, DutTr069Settings):
+            values = tr069_status_form_values(settings)
+            variables = {
+                "acs_url": self.tr069_acs_url_var,
+                "acs_username": self.tr069_acs_username_var,
+                "acs_password": self.tr069_acs_password_var,
+                "periodic_inform_interval": self.tr069_interval_var,
+                "connection_request_username": self.tr069_connection_username_var,
+                "connection_request_password": self.tr069_connection_password_var,
+            }
+            for key, variable in variables.items():
+                variable.set(values[key])
+            self.tr069_periodic_enabled_var.set(
+                bool(values["periodic_inform_enabled"])
+            )
+            self.tr069_connection_request_enabled_var.set(
+                bool(values["connection_request_enabled"])
+            )
+            self.tr069_certificate_enabled_var.set(bool(values["certificate_enabled"]))
+
     def wan_settings(self) -> DutWanSettings:
+        self._sync_wan_port_bind_from_checks()
         return DutWanSettings(
             operation={"新增": "add", "修改": "modify", "删除": "delete"}.get(self.wan_operation_var.get(), ""),
             connection_index=self.wan_index_var.get().strip(),
             mode={"路由": "router", "桥接": "bridge"}.get(self.wan_mode_var.get(), ""),
             service_type=self.wan_service_type_var.get().strip(), vlan_id=self.wan_vlan_id_var.get().strip(),
+            multicast_vlan_id=self.wan_multicast_vlan_id_var.get().strip(),
             vlan_priority=self.wan_vlan_priority_var.get().strip(), port_bind=self.wan_port_bind_var.get().strip(),
             mtu=self.wan_mtu_var.get().strip(), nat_enabled=bool(self.wan_nat_var.get()),
             access_type=self.wan_access_type_var.get().strip(),
@@ -884,6 +1182,9 @@ class DutConfigWindow:
     def parallel_count(self) -> str:
         return self.parallel_count_var.get()
 
+    def voice_line_index(self) -> str:
+        return self.voice_line_index_var.get().strip()
+
     def set_targets(
         self,
         requests: Iterable[DutTelnetEnableRequest],
@@ -896,6 +1197,8 @@ class DutConfigWindow:
         )
         if target_signature != self._wan_target_signature:
             self.clear_wan_connections("目标 DUT 已变化，请重新查询现有 WAN。")
+            self.clear_current_status("voice", "目标 DUT 已变化，请重新查询当前语音状态。")
+            self.clear_current_status("tr069", "目标 DUT 已变化，请重新查询当前TR069状态。")
             self._wan_target_signature = target_signature
         for feature, tree in self._trees.items():
             for item in tree.get_children():
@@ -925,11 +1228,13 @@ class DutConfigWindow:
 
     def update_result(
         self,
-        result: DutTelnetEnableResult | DutAdvancedConfigResult | DutWanQueryResult,
+        result: DutTelnetEnableResult | DutAdvancedConfigResult | DutAdvancedQueryResult | DutWanQueryResult,
         feature: str | None = None,
     ) -> None:
         resolved_feature = feature or getattr(result.request, "feature", "telnet")
-        tree_feature = "wan" if resolved_feature == "wan_query" else resolved_feature
+        tree_feature = {
+            "wan_query": "wan", "voice_query": "voice", "tr069_query": "tr069",
+        }.get(resolved_feature, resolved_feature)
         tree = getattr(self, "_trees", {}).get(tree_feature, self.target_tree)
         rows = getattr(self, "_rows_by_feature", {}).get(tree_feature, self._row_by_channel)
         row_id = rows.get(result.request.channel)
@@ -939,6 +1244,10 @@ class DutConfigWindow:
         if result.ok:
             if resolved_feature == "wan_query":
                 values[-1] = f"成功：发现 {len(result.connection_names)} 个现有 WAN"
+                tree.item(row_id, values=values)
+                return
+            if resolved_feature in {"voice_query", "tr069_query"}:
+                values[-1] = "成功：已查询当前状态"
                 tree.item(row_id, values=values)
                 return
             success_text = {
@@ -986,4 +1295,8 @@ __all__ = [
     "WanFormRules",
     "normalize_wan_address_modes",
     "resolve_wan_form_rules",
+    "wan_lan_ports_from_port_bind",
+    "wan_port_bind_from_lan_ports",
+    "tr069_status_form_values",
+    "voice_status_form_values",
 ]

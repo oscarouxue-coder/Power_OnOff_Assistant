@@ -33,6 +33,11 @@ from .dut_wan_query_service import (
     run_dut_wan_query_batch,
     run_single_dut_wan_query,
 )
+from .dut_status_query_service import (
+    common_dut_status_settings,
+    run_dut_status_query_batch,
+    run_single_dut_status_query,
+)
 from .legacy_power_test_service import (
     LegacyPowerChannel,
     LegacyPowerTestRequest,
@@ -108,6 +113,7 @@ __all__ = [
     "clamp_dut_parallel_count",
     "common_wan_connection_details",
     "common_wan_connection_names",
+    "common_dut_status_settings",
     "compute_all_subtask_statuses",
     "power_on_selected_channels",
     "prepare_legacy_power_test_request",
@@ -119,8 +125,10 @@ __all__ = [
     "run_dut_telnet_enable_batch",
     "run_dut_advanced_config_batch",
     "run_dut_wan_query_batch",
+    "run_dut_status_query_batch",
     "run_single_dut_advanced_config",
     "run_single_dut_wan_query",
+    "run_single_dut_status_query",
     "run_single_dut_telnet_enable",
     "run_single_sample_parameter_write",
     "run_legacy_power_test",

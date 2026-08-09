@@ -2,6 +2,46 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-09 - 增加语音TR069状态查询
+
+- 类型：功能
+- 背景：DUT配置的语音和TR069页只有配置下发及配置后回读，操作员无法在执行前独立查询ONT当前参数。项目负责人要求两个Tab都增加查询当前状态并展示当前状态的能力。
+- 完成内容：① core增加指定SIP线路的账号、服务器、DTMF、SIP模式、DigitMap、5项编码及ManagementServer完整只读解析，兼容直接字段、对象嵌套和实例列表返回；② 新增统一状态查询service，复用网卡状态预检、源IP可绑等待、锁源UBUS、1–8并行、登录/查询整体重试、停止/失败隔离和设备session注销；③ 语音、TR069页分别增加“查询当前语音”“查询当前TR069”按钮和“当前状态”逐台展示区；④ 单台或全部目标参数一致时同步当前表单，多台不一致或失败时不使用任意一台覆盖；TR069手动Inform动作不参与查询回填；⑤ 目标变化和对应配置执行后使旧状态失效，主日志记录实际get路径、完整状态、成功/失败、注销和批次汇总；⑥ 增加只读命令、字段映射、连续查询注销、多台一致性、停止和UI安全回填回归并纳入强制基线。
+- 修改文件：`.claude/plans/dut_voice_tr069_status_query.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/models/dut_config_models.py`、`Cheating_machine_execution_tool/src/models/__init__.py`、`Cheating_machine_execution_tool/src/core/dut_ubus_config.py`、`Cheating_machine_execution_tool/src/services/dut_status_query_service.py`、`Cheating_machine_execution_tool/src/services/__init__.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_dut_ubus_config.py`、`Cheating_machine_execution_tool/tests/test_dut_status_query_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行语音/TR069 UBUS、状态查询service、DUT高级配置、WAN查询和主界面专项测试，再执行 `python -m unittest discover -s tests`、`python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：UBUS配置13项、状态查询service 5项、DUT高级配置11项、WAN查询5项、主界面111项专项测试通过；全量565项单测通过；`python scripts/verify_baseline.py` 全绿（50个当前主程序`.py`编译、编译清单完整、565项单测、82个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows桌面确认两个查询按钮、当前状态区滚动展示和表单回填布局；真实ONT分别验证SIP/IMSSIP线路字段、ManagementServer返回字段、密码是否明文可读、连续两次查询、1/8台并行、多台参数不一致、Access denied、停止及查询后再配置。现场结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-09 - 增加IMSSIP模式
+
+- 类型：修改
+- 背景：ONT Web的SIP模式支持 `IMSSIP`，工具原下拉只有 `SIP/UDP/TCP/TLS`。项目负责人明确要求保留现有模式并在此基础上增加ONT支持的IMSSIP。
+- 完成内容：① 语音service增加统一 `VOICE_SIP_MODE_OPTIONS`，顺序为 `SIP/IMSSIP/UDP/TCP/TLS`；② 语音Tab的“SIP 模式”下拉改为复用该唯一选项源，默认值仍为SIP；③ service增加二次校验，5个已知模式均允许，未知值在设备操作前拒绝；④ 底层继续把选择值原样写入 `Device.Services.VoiceService.1.SIP.X_SDMC_SIPMode`，未改变服务器、账号、编码、DigitMap和回读流程；⑤ 增加IMSSIP实际set参数、现有模式保留、未知值拒绝和UI选项回归并纳入强制基线。
+- 修改文件：`.claude/plans/dut_voice_sip_mode_options.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/src/services/dut_advanced_config_service.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_dut_advanced_config_service.py`、`Cheating_machine_execution_tool/tests/test_dut_ubus_config.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录分别执行主界面、DUT高级配置service和UBUS配置专项测试，再执行 `python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：主界面109项、DUT高级配置service 11项、UBUS配置11项专项测试通过；`python scripts/verify_baseline.py` 全绿（49个当前主程序`.py`编译、编译清单完整、556项单测、75个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows桌面确认SIP模式下拉依次显示SIP、IMSSIP、UDP、TCP、TLS；真实样机选择IMSSIP执行，确认主日志实际set参数及SIP路径回读均符合ONT。现场结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-09 - 改用LAN端口多选
+
+- 类型：优化
+- 背景：WAN查询到ONT Web绑定LAN4时，工具显示原始位掩码8，协议值正确但操作员不易直观看出实际端口。项目负责人要求改为LAN端口多选，并提出兼容不止4个LAN口的设备。
+- 完成内容：① WAN页“端口绑定位掩码”文本框替换为两行LAN1–LAN8原生勾选框；② LAN1–LAN8分别映射1、2、4、8、16、32、64、128，多选自动按位合并，底层 `DutWanSettings.port_bind` 与UBUS `PortBind` 协议保持不变；③ 查询现有WAN时把位掩码反向勾选，例如8只勾LAN4、129勾LAN1和LAN8；④ bridge未选择时继续默认LAN1；⑤ 修改现有WAN时保留WiFi等界面未展示的非LAN旧位，切换新增时清除这些不可见旧位，避免误带入新连接；⑥ LAN端口和既有DUT选择项全部继续使用原生勾选框，选中显示“✓”；⑦ 增加位掩码双向映射、1–8口、多选及非LAN位保留回归并纳入强制基线。
+- 修改文件：`.claude/plans/dut_wan_lan_port_multiselect.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行 `python -m unittest discover -s tests -p test_app.py`、`python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：主界面108项专项测试通过；`python scripts/verify_baseline.py` 全绿（49个当前主程序`.py`编译、编译清单完整、554项单测、72个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows桌面确认LAN1–LAN8两行布局和勾号外观；真实样机查询LAN4绑定确认仅LAN4勾选，分别验证LAN1+LAN4下发9、LAN5–LAN8位掩码、bridge默认LAN1及修改现有含非LAN绑定的WAN。现场结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-09 - 增加IPTV组播VLAN
+
+- 类型：功能
+- 背景：DUT配置的WAN页已经支持IPTV业务，但新增/修改时缺少IPTV涉及的组播VLAN参数，也无法从现有IPTV WAN快照回填该字段。项目负责人要求补齐该业务规则。
+- 完成内容：① WAN设置模型和现有连接快照增加 `multicast_vlan_id`；② 业务类型为IPTV时，路由和桥接表单均显示可选“组播 VLAN ID”，留空表示不单独配置，填写时service二次校验1–4094；③ 新增/修改IPTV时以整数 `MulticastVLANID` 写入完整UBUS payload，非IPTV即使残留旧值也保持空值、不误下发；④ 现有WAN查询兼容解析 `X_SDMC_Multicast_VLANID`、`X_SDMC_MulticastVLANID` 等设备字段并同步回填，查询摘要日志增加组播VLAN；⑤ 增加路由/桥接下发、可选值与非法值校验、非IPTV隔离、查询解析、UI显隐和表单映射回归，纳入强制基线。
+- 修改文件：`.claude/plans/dut_wan_iptv_multicast_vlan.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/src/models/dut_config_models.py`、`Cheating_machine_execution_tool/src/core/dut_ubus_config.py`、`Cheating_machine_execution_tool/src/services/dut_advanced_config_service.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_dut_ubus_config.py`、`Cheating_machine_execution_tool/tests/test_dut_advanced_config_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录分别执行WAN core、DUT高级配置service、主界面专项测试，再执行 `python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：WAN core 11项、DUT高级配置service 10项、主界面107项专项测试通过；`python scripts/verify_baseline.py` 全绿（49个当前主程序`.py`编译、编译清单完整、553项单测、71个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows桌面选择IPTV，确认路由/桥接均显示组播VLAN且非IPTV立即隐藏；真实样机分别验证留空、填写有效值、查询现有IPTV回填，以及主日志实际 `MulticastVLANID` payload。现场结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-09 - 统一DUT字段名称左对齐
 
 - 类型：修改

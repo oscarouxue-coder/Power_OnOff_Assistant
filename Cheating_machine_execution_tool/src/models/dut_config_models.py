@@ -40,6 +40,7 @@ class DutWanSettings:
     mode: str = "router"  # router / bridge
     service_type: str = "INTERNET"
     vlan_id: str = ""
+    multicast_vlan_id: str = ""
     vlan_priority: str = "0"
     port_bind: str = "0"
     mtu: str = "1500"
@@ -71,6 +72,7 @@ class DutWanConnectionInfo:
     mode: str = ""
     service_type: str = ""
     vlan_id: str = ""
+    multicast_vlan_id: str = ""
     vlan_priority: str = ""
     port_bind: str = ""
     mtu: str = ""
@@ -177,9 +179,22 @@ class DutAdvancedConfigResult:
     details: Any = None
 
 
+@dataclass(frozen=True)
+class DutAdvancedQueryResult:
+    """语音/TR069单台只读状态查询结果。"""
+
+    request: DutTelnetEnableRequest
+    feature: str
+    ok: bool
+    stage: str
+    message: str
+    settings: DutVoiceSettings | DutTr069Settings | None = None
+
+
 __all__ = [
     "DutAdvancedConfigRequest",
     "DutAdvancedConfigResult",
+    "DutAdvancedQueryResult",
     "DutTelnetEnableRequest",
     "DutTelnetEnableResult",
     "DutTr069Settings",

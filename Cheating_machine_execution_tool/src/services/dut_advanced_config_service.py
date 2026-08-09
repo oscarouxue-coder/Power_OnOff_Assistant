@@ -36,6 +36,7 @@ VOICE_CODEC_OPTIONS = {
     "G.726 - 32",
     "G.726 - 40",
 }
+VOICE_SIP_MODE_OPTIONS = ("SIP", "IMSSIP", "UDP", "TCP", "TLS")
 
 OutputCallback = Callable[[str], None]
 ItemCompleteCallback = Callable[[DutAdvancedConfigResult], None]
@@ -116,6 +117,14 @@ def validate_wan_settings(settings: DutWanSettings) -> tuple[str, ...]:
             raise ValueError
     except ValueError:
         errors.append(f"业务 VLAN ID 必须为 1–4094：{settings.vlan_id}")
+    multicast_vlan_id = settings.multicast_vlan_id.strip()
+    if settings.service_type == "IPTV" and multicast_vlan_id:
+        try:
+            multicast_vlan = int(multicast_vlan_id)
+            if not 1 <= multicast_vlan <= 4094:
+                raise ValueError
+        except ValueError:
+            errors.append(f"组播 VLAN ID 必须为 1–4094：{settings.multicast_vlan_id}")
     try:
         priority = int(settings.vlan_priority)
         if not 0 <= priority <= 7:
@@ -188,6 +197,10 @@ def validate_wan_settings(settings: DutWanSettings) -> tuple[str, ...]:
 
 def validate_voice_settings(settings: DutVoiceSettings) -> tuple[str, ...]:
     errors: list[str] = []
+    if settings.sip_mode not in VOICE_SIP_MODE_OPTIONS:
+        errors.append(
+            f"SIP 模式无效：{settings.sip_mode}；仅支持 {'、'.join(VOICE_SIP_MODE_OPTIONS)}"
+        )
     try:
         line_index = int(settings.line_index)
         if not 1 <= line_index <= 8:

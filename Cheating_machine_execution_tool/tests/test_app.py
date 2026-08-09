@@ -29,16 +29,24 @@ from line_check_assistant.page_upgrade import PageUpgradeItemResult, PageUpgrade
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
 from line_check_assistant.test_item_config_store import TestItemConfigStore
 from src.models import (
+    DutAdvancedQueryResult,
+    DutTr069Settings,
+    DutVoiceSettings,
     DutTelnetEnableRequest,
     DutTelnetEnableResult,
     DutWanConnectionInfo,
     DutWanQueryResult,
 )
+from src.services.dut_advanced_config_service import VOICE_SIP_MODE_OPTIONS
 from src.ui.dut_config_window import (
     DutConfigWindow,
     normalize_wan_address_modes,
     resolve_wan_form_rules,
     wan_connection_form_values,
+    wan_lan_ports_from_port_bind,
+    wan_port_bind_from_lan_ports,
+    tr069_status_form_values,
+    voice_status_form_values,
 )
 
 
@@ -320,6 +328,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("username_var=self.parameter_initial_username_var", open_source)
         self.assertIn("password_var=self.parameter_initial_password_var", open_source)
         self.assertIn("on_query_wan=self._query_dut_wan_connections", open_source)
+        self.assertIn("on_query_voice=self._query_dut_voice_status", open_source)
+        self.assertIn("on_query_tr069=self._query_dut_tr069_status", open_source)
         self.assertIn('self.notebook.add(telnet_tab, text="Telnet配置")', window_source)
         self.assertIn('self.notebook.add(tab, text="WAN配置")', wan_source)
         self.assertIn('self.notebook.add(tab, text="语音配置")', voice_source)
@@ -331,6 +341,77 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("run_dut_advanced_config_batch(", advanced_worker_source)
         self.assertNotIn("UbusHttpClient(", open_source + worker_source)
         self.assertNotIn("bbfdm.", open_source + worker_source + advanced_worker_source)
+
+    def test_voice_and_tr069_tabs_query_current_status_and_map_common_values(self):
+        import inspect
+
+        voice_source = inspect.getsource(DutConfigWindow._build_voice_tab)
+        tr069_source = inspect.getsource(DutConfigWindow._build_tr069_tab)
+        query_source = inspect.getsource(LineCheckAssistant._query_dut_current_status)
+        worker_source = inspect.getsource(LineCheckAssistant._dut_current_status_query_worker)
+
+        self.assertIn('query_text="查询当前语音"', voice_source)
+        self.assertIn('query_text="查询当前TR069"', tr069_source)
+        self.assertIn('"当前状态"', inspect.getsource(DutConfigWindow._build_current_status_area))
+        self.assertIn("不会下发配置命令", query_source)
+        self.assertIn("run_dut_status_query_batch(", worker_source)
+        self.assertNotIn("UbusHttpClient(", query_source + worker_source)
+
+        voice = DutVoiceSettings(
+            line_index="2",
+            account_enabled=False,
+            display_name="1002",
+            sip_mode="IMSSIP",
+        )
+        voice_values = voice_status_form_values(voice)
+        self.assertEqual(voice_values["line_index"], "2")
+        self.assertFalse(voice_values["account_enabled"])
+        self.assertEqual(voice_values["sip_mode"], "IMSSIP")
+
+        tr069 = DutTr069Settings(
+            acs_url="https://acs.example.com/acs",
+            periodic_inform_enabled=False,
+            manual_inform=True,
+        )
+        tr069_values = tr069_status_form_values(tr069)
+        self.assertEqual(tr069_values["acs_url"], "https://acs.example.com/acs")
+        self.assertFalse(tr069_values["periodic_inform_enabled"])
+        self.assertNotIn("manual_inform", tr069_values)
+
+    def test_status_display_only_applies_settings_when_batch_has_safe_common_value(self):
+        request = DutTelnetEnableRequest(
+            channel="通道 12",
+            vlan="vlan112",
+            adapter_alias="VLAN112",
+            bind_ip="192.168.1.112",
+            device_host="192.168.1.1",
+            subnet_mask="255.255.255.0",
+            username="user",
+            password="password",
+        )
+        settings = DutVoiceSettings(line_index="1", sip_mode="IMSSIP")
+        result = DutAdvancedQueryResult(
+            request, "voice", True, "completed", "ok", settings
+        )
+        window = object.__new__(DutConfigWindow)
+        window.apply_current_status = Mock()
+        window.clear_current_status = Mock()
+
+        window.set_current_status_results("voice", (result,), None)
+
+        window.apply_current_status.assert_not_called()
+        self.assertIn(
+            "未使用任意一台覆盖当前配置表单",
+            window.clear_current_status.call_args.args[1],
+        )
+
+        window.set_current_status_results("voice", (result,), settings)
+
+        window.apply_current_status.assert_called_once_with("voice", settings)
+        self.assertIn(
+            "同步到当前配置表单",
+            window.clear_current_status.call_args.args[1],
+        )
 
     def test_dut_success_row_uses_concise_operator_message(self):
         request = DutTelnetEnableRequest(
@@ -391,7 +472,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("selectcolor=DUT_CHECK_BACKGROUND", helper_source)
         self.assertIn("background=DUT_CHECK_BACKGROUND", helper_source)
         self.assertNotIn("ttk.Checkbutton(", builder_source)
-        self.assertEqual(builder_source.count("self._native_checkbutton("), 6)
+        self.assertEqual(builder_source.count("self._native_checkbutton("), 7)
         for label in (
             "启用 NAT",
             "启用 SIP 账号",
@@ -401,6 +482,20 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             "配置后手动 Inform",
         ):
             self.assertIn(label, builder_source)
+        self.assertIn('text=f"LAN{port}"', builder_source)
+        self.assertIn("command=self._sync_wan_port_bind_from_checks", builder_source)
+
+    def test_voice_sip_mode_options_include_ont_imssip_without_removing_existing_modes(self):
+        import inspect
+
+        voice_source = inspect.getsource(DutConfigWindow._build_voice_tab)
+
+        self.assertEqual(
+            VOICE_SIP_MODE_OPTIONS,
+            ("SIP", "IMSSIP", "UDP", "TCP", "TLS"),
+        )
+        self.assertIn('"SIP 模式："', voice_source)
+        self.assertIn("values=VOICE_SIP_MODE_OPTIONS", voice_source)
 
     def test_dut_form_field_names_are_left_aligned_in_every_tab(self):
         import inspect
@@ -464,6 +559,72 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             ),
             ("静态", "静态"),
         )
+
+    def test_wan_lan_port_multiselect_maps_masks_and_preserves_non_lan_bits(self):
+        class Var:
+            def __init__(self, value=False):
+                self.value = value
+
+            def get(self):
+                return self.value
+
+            def set(self, value):
+                self.value = value
+
+        self.assertEqual(wan_lan_ports_from_port_bind("8"), (4,))
+        self.assertEqual(wan_lan_ports_from_port_bind("1&&8"), (1, 4))
+        self.assertEqual(wan_lan_ports_from_port_bind("129"), (1, 8))
+        self.assertEqual(wan_port_bind_from_lan_ports((1, 4)), "9")
+        self.assertEqual(wan_port_bind_from_lan_ports((8,), preserved_mask=256), "384")
+
+        context = SimpleNamespace(
+            wan_lan_port_vars=tuple(Var() for _port in range(8)),
+            wan_port_bind_var=Var("0"),
+            _wan_non_lan_port_bind_mask=0,
+        )
+        DutConfigWindow._set_wan_port_bind_selection(context, "264")
+        self.assertFalse(context.wan_lan_port_vars[0].get())
+        self.assertTrue(context.wan_lan_port_vars[3].get())
+        self.assertEqual(context._wan_non_lan_port_bind_mask, 256)
+        DutConfigWindow._sync_wan_port_bind_from_checks(context)
+        self.assertEqual(context.wan_port_bind_var.get(), "264")
+
+    def test_iptv_multicast_vlan_field_is_conditional_and_mapped(self):
+        import inspect
+
+        iptv = resolve_wan_form_rules(
+            "新增", "路由", "IPoE", "IPv4", "DHCP", "SLAAC", service_type="IPTV"
+        )
+        bridge_iptv = resolve_wan_form_rules(
+            "修改", "桥接", "IPoE", "IPv4", "DHCP", "SLAAC", service_type="IPTV"
+        )
+        internet = resolve_wan_form_rules(
+            "新增", "路由", "IPoE", "IPv4", "DHCP", "SLAAC", service_type="INTERNET"
+        )
+        delete = resolve_wan_form_rules(
+            "删除", "路由", "IPoE", "IPv4", "DHCP", "SLAAC", service_type="IPTV"
+        )
+        values = wan_connection_form_values(
+            DutWanConnectionInfo(
+                name="5_IPTV_R_VID_600",
+                service_type="IPTV",
+                vlan_id="600",
+                multicast_vlan_id="222",
+            )
+        )
+
+        self.assertTrue(iptv.show_multicast_vlan)
+        self.assertTrue(bridge_iptv.show_multicast_vlan)
+        self.assertFalse(internet.show_multicast_vlan)
+        self.assertFalse(delete.show_multicast_vlan)
+        self.assertEqual(values["multicast_vlan_id"], "222")
+        builder_source = inspect.getsource(DutConfigWindow._build_wan_tab)
+        updater_source = inspect.getsource(DutConfigWindow._update_wan_form_visibility)
+        settings_source = inspect.getsource(DutConfigWindow.wan_settings)
+        self.assertIn('"组播 VLAN ID："', builder_source)
+        self.assertIn('(self.wan_service_type_var, "service_type")', builder_source)
+        self.assertIn('"wan_multicast_vlan_id": rules.show_multicast_vlan', updater_source)
+        self.assertIn("multicast_vlan_id=self.wan_multicast_vlan_id_var.get().strip()", settings_source)
 
     def test_wan_existing_connections_use_readonly_query_dropdown(self):
         import inspect
@@ -581,9 +742,10 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             _update_wan_form_visibility=Mock(),
             wan_query_status_var=Var(),
             wan_nat_var=Var(False),
+            _set_wan_port_bind_selection=Mock(),
         )
         field_keys = (
-            "mode", "service_type", "vlan_id", "vlan_priority", "port_bind", "mtu",
+            "mode", "service_type", "vlan_id", "multicast_vlan_id", "vlan_priority", "port_bind", "mtu",
             "access_type", "ip_protocol", "ipv4_type", "ipv4_address", "ipv4_netmask",
             "ipv4_gateway", "ipv4_primary_dns", "ipv4_secondary_dns", "ipv6_type",
             "ipv6_address", "ipv6_prefix", "ipv6_gateway", "ipv6_primary_dns",
@@ -596,11 +758,13 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         self.assertEqual(context.wan_service_type_var.get(), "INTERNET")
         self.assertEqual(context.wan_vlan_id_var.get(), "172")
+        self.assertEqual(context.wan_multicast_vlan_id_var.get(), "")
         self.assertEqual(context.wan_access_type_var.get(), "IPoE")
         self.assertEqual(context.wan_ip_protocol_var.get(), "IPv4")
         self.assertEqual(context.wan_pppoe_username_var.get(), "")
         self.assertEqual(context.wan_pppoe_password_var.get(), "")
         self.assertTrue(context.wan_nat_var.get())
+        context._set_wan_port_bind_selection.assert_called_once_with("0")
         context._update_wan_form_visibility.assert_called_once_with("snapshot")
         self.assertIn("已同步当前 WAN 完整信息", context.wan_query_status_var.get())
 

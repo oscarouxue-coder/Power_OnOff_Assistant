@@ -65,6 +65,7 @@ from src.config import DEFAULT_LOG_DIR
 from src.models import (
     DutAdvancedConfigRequest,
     DutAdvancedConfigResult,
+    DutAdvancedQueryResult,
     DutTelnetEnableRequest,
     DutTelnetEnableResult,
     DutTr069Settings,
@@ -84,9 +85,11 @@ from src.services import (
     clamp_dut_parallel_count,
     common_wan_connection_details,
     common_wan_connection_names,
+    common_dut_status_settings,
     preflight_parameter_targets,
     run_dut_telnet_enable_batch,
     run_dut_advanced_config_batch,
+    run_dut_status_query_batch,
     run_dut_wan_query_batch,
     run_parallel_tftp_command_upgrades,
     run_parallel_tftp_put_upgrades,
@@ -472,6 +475,10 @@ class LineCheckAssistant(Tk):
                     self._finish_dut_telnet_enable(results)
                 elif feature == "wan_query":
                     self._finish_dut_wan_query(results)
+                elif feature in {"voice_query", "tr069_query"}:
+                    self._finish_dut_current_status_query(
+                        feature.removesuffix("_query"), results
+                    )
                 else:
                     self._finish_dut_advanced_config(feature, results)
         try:
@@ -3751,6 +3758,8 @@ class LineCheckAssistant(Tk):
             on_start=self._start_dut_telnet_enable,
             on_start_wan=self._start_dut_wan_config,
             on_query_wan=self._query_dut_wan_connections,
+            on_query_voice=self._query_dut_voice_status,
+            on_query_tr069=self._query_dut_tr069_status,
             on_start_voice=self._start_dut_voice_config,
             on_start_tr069=self._start_dut_tr069_config,
             on_stop=self._stop_dut_telnet_enable,
@@ -4099,6 +4108,153 @@ class LineCheckAssistant(Tk):
             return
         self._start_dut_advanced_config("voice", window.voice_settings())
 
+    def _query_dut_voice_status(self) -> None:
+        window = self.dut_config_window
+        if window is None or not window.exists():
+            return
+        self._query_dut_current_status("voice", line_index=window.voice_line_index())
+
+    def _query_dut_tr069_status(self) -> None:
+        self._query_dut_current_status("tr069")
+
+    def _query_dut_current_status(self, feature: str, *, line_index: str = "1") -> None:
+        """启动语音/TR069只读状态查询，查询参数不依赖当前配置表单完整性。"""
+        if self.dut_config_running:
+            return
+        self._refresh_dut_config_targets()
+        window = self.dut_config_window
+        if window is None or not window.exists():
+            return
+        requests = list(self.dut_config_requests)
+        feature_label = {"voice": "语音", "tr069": "TR069"}[feature]
+        if not requests:
+            messagebox.showwarning(
+                "没有目标 DUT",
+                "请先在主界面勾选至少一个通道并完成 VLAN 配置。",
+                parent=window.window,
+            )
+            return
+        if self.dut_config_validation_errors:
+            details = "\n".join(
+                f"- {channel}：{message.removeprefix('配置错误：')}"
+                for channel, message in self.dut_config_validation_errors.items()
+            )
+            messagebox.showerror(
+                f"{feature_label}查询条件不完整",
+                f"请先修正以下配置：\n{details}",
+                parent=window.window,
+            )
+            return
+        if feature == "voice":
+            try:
+                if not 1 <= int(line_index) <= 8:
+                    raise ValueError
+            except (TypeError, ValueError):
+                messagebox.showerror(
+                    "语音查询条件不完整",
+                    f"语音线路索引必须为 1–8：{line_index}",
+                    parent=window.window,
+                )
+                return
+
+        parallel_count = clamp_dut_parallel_count(
+            window.parallel_count() or DEFAULT_DUT_PARALLEL_COUNT
+        )
+        query_feature = f"{feature}_query"
+        self.dut_config_running = True
+        self.dut_config_active_feature = query_feature
+        self.dut_config_cancel_event = threading.Event()
+        window.clear_current_status(feature, f"正在查询当前{feature_label}状态……")
+        window.mark_all_pending(feature)
+        window.set_running(True)
+        window.set_summary(
+            f"正在查询当前{feature_label}状态：共 {len(requests)} 台，并行数 {parallel_count}",
+            feature,
+        )
+        line_text = f"，线路 {line_index}" if feature == "voice" else ""
+        self._log(
+            f"[DUT配置][{feature_label}查询] 开始只读查询：{len(requests)} 台，"
+            f"并行数 {parallel_count}{line_text}；不会下发配置命令。"
+        )
+        threading.Thread(
+            target=self._dut_current_status_query_worker,
+            args=(feature, requests, line_index, parallel_count, self.dut_config_cancel_event),
+            name=f"dut-{feature}-status-query-batch",
+            daemon=True,
+        ).start()
+
+    def _dut_current_status_query_worker(
+        self,
+        feature: str,
+        requests: list[DutTelnetEnableRequest],
+        line_index: str,
+        parallel_count: int,
+        cancel_event: threading.Event,
+    ) -> None:
+        query_feature = f"{feature}_query"
+        feature_label = {"voice": "语音", "tr069": "TR069"}[feature]
+        try:
+            results = run_dut_status_query_batch(
+                requests,
+                feature,
+                line_index=line_index,
+                max_workers=parallel_count,
+                stop_event=cancel_event,
+                on_output=self.log_queue.put,
+                on_item_complete=lambda result: self.dut_config_ui_queue.put(
+                    ("item", query_feature, result)
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001 - 批次边界必须回收UI状态
+            self.log_queue.put(f"[DUT配置][{feature_label}查询] 批次异常：{exc}")
+            results = [
+                DutAdvancedQueryResult(
+                    request,
+                    feature,
+                    False,
+                    "exception",
+                    f"{feature_label}查询批次异常：{exc}",
+                )
+                for request in requests
+            ]
+            for result in results:
+                self.dut_config_ui_queue.put(("item", query_feature, result))
+        self.dut_config_ui_queue.put(("finished", query_feature, results))
+
+    def _finish_dut_current_status_query(
+        self,
+        feature: str,
+        results: list[DutAdvancedQueryResult],
+    ) -> None:
+        feature_label = {"voice": "语音", "tr069": "TR069"}[feature]
+        success_count = sum(1 for result in results if result.ok)
+        stopped_count = sum(1 for result in results if result.stage == "stopped")
+        failure_count = len(results) - success_count - stopped_count
+        common_settings = common_dut_status_settings(results)
+        consistency = "参数一致，已同步表单" if common_settings is not None else "未自动覆盖表单"
+        self.dut_config_running = False
+        self.dut_config_active_feature = None
+        self.dut_config_cancel_event = None
+        summary = (
+            f"{feature_label}查询结束：成功 {success_count}，失败 {failure_count}，"
+            f"停止/跳过 {stopped_count}，共 {len(results)} 台；{consistency}"
+        )
+        self._log(f"[DUT配置][{feature_label}查询] {summary}")
+        window = self.dut_config_window
+        if window is None or not window.exists():
+            return
+        window.set_running(False)
+        window.set_summary(summary, feature)
+        window.set_current_status_results(feature, results, common_settings)
+        if failure_count or stopped_count:
+            messagebox.showwarning(
+                f"{feature_label}查询未完成", summary, parent=window.window
+            )
+        else:
+            messagebox.showinfo(
+                f"{feature_label}查询完成", summary, parent=window.window
+            )
+
     def _start_dut_tr069_config(self) -> None:
         window = self.dut_config_window
         if window is None or not window.exists():
@@ -4260,6 +4416,11 @@ class LineCheckAssistant(Tk):
         if window is not None and window.exists():
             if feature == "wan":
                 window.clear_wan_connections("WAN 配置已执行，请重新查询最新连接列表。")
+            elif feature in {"voice", "tr069"}:
+                feature_label = "语音" if feature == "voice" else "TR069"
+                window.clear_current_status(
+                    feature, f"{feature_label}配置已执行，请重新查询当前状态。"
+                )
             window.set_running(False)
             window.set_summary(summary, feature)
             if failure_count or stopped_count:
@@ -4276,11 +4437,12 @@ class LineCheckAssistant(Tk):
         if window is not None and window.exists():
             window.set_running(True, stopping=True)
         feature_label = {
-            "telnet": "Telnet", "wan": "WAN", "wan_query": "WAN查询",
-            "voice": "语音", "tr069": "TR069"
-        }.get(getattr(self, "dut_config_active_feature", None), "DUT")
+            "telnet": "Telnet配置", "wan": "WAN配置", "wan_query": "WAN查询",
+            "voice": "语音配置", "tr069": "TR069配置",
+            "voice_query": "语音查询", "tr069_query": "TR069查询",
+        }.get(getattr(self, "dut_config_active_feature", None), "DUT配置")
         self._log(
-            f"[DUT配置][{feature_label}配置] 操作员请求停止：尚未开始的 DUT 将跳过，"
+            f"[DUT配置][{feature_label}] 操作员请求停止：尚未开始的 DUT 将跳过，"
             "正在执行的网络或 UBUS 调用将在安全点结束。"
         )
 

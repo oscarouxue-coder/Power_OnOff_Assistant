@@ -12,6 +12,7 @@ from src.models import (
     DutWanSettings,
 )
 from src.services.dut_advanced_config_service import (
+    VOICE_SIP_MODE_OPTIONS,
     run_dut_advanced_config_batch,
     run_single_dut_advanced_config,
     validate_tr069_settings,
@@ -130,11 +131,64 @@ class DutAdvancedConfigServiceTests(unittest.TestCase):
 
         self.assertTrue(any("桥接 WAN 的业务类型仅支持" in error for error in errors))
 
+    def test_iptv_multicast_vlan_is_optional_but_validated_when_present(self) -> None:
+        self.assertEqual(
+            validate_wan_settings(
+                DutWanSettings(service_type="IPTV", vlan_id="600", multicast_vlan_id="")
+            ),
+            (),
+        )
+        self.assertEqual(
+            validate_wan_settings(
+                DutWanSettings(service_type="IPTV", vlan_id="600", multicast_vlan_id="222")
+            ),
+            (),
+        )
+        for invalid_value in ("0", "4095", "not-a-vlan"):
+            errors = validate_wan_settings(
+                DutWanSettings(
+                    service_type="IPTV",
+                    vlan_id="600",
+                    multicast_vlan_id=invalid_value,
+                )
+            )
+            self.assertTrue(any("组播 VLAN ID 必须为 1–4094" in error for error in errors))
+
+        non_iptv_errors = validate_wan_settings(
+            DutWanSettings(
+                service_type="INTERNET",
+                vlan_id="172",
+                multicast_vlan_id="stale-hidden-value",
+            )
+        )
+        self.assertFalse(any("组播 VLAN" in error for error in non_iptv_errors))
+
     def test_voice_and_tr069_validation_report_missing_required_fields(self) -> None:
         voice_errors = validate_voice_settings(DutVoiceSettings())
         tr069_errors = validate_tr069_settings(DutTr069Settings())
         self.assertTrue(any("SIP 显示名称" in error for error in voice_errors))
         self.assertTrue(any("ACS URL" in error for error in tr069_errors))
+
+    def test_voice_sip_mode_accepts_imssip_and_rejects_unknown_values(self) -> None:
+        common = {
+            "account_enabled": False,
+            "proxy_server": "172.33.5.251",
+            "registrar_server": "172.33.5.251",
+        }
+
+        self.assertEqual(
+            VOICE_SIP_MODE_OPTIONS,
+            ("SIP", "IMSSIP", "UDP", "TCP", "TLS"),
+        )
+        for sip_mode in VOICE_SIP_MODE_OPTIONS:
+            self.assertEqual(
+                validate_voice_settings(DutVoiceSettings(sip_mode=sip_mode, **common)),
+                (),
+            )
+        errors = validate_voice_settings(
+            DutVoiceSettings(sip_mode="UNKNOWN", **common)
+        )
+        self.assertTrue(any("SIP 模式无效" in error for error in errors))
 
     def test_single_wan_success_prepares_network_logs_in_and_closes_client(self) -> None:
         client = _FakeClient()
