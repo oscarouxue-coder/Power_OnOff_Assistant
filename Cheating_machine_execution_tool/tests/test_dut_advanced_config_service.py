@@ -87,6 +87,49 @@ class DutAdvancedConfigServiceTests(unittest.TestCase):
         )
         self.assertTrue(any("PPPoE 不支持静态 IPv4" in error for error in errors))
 
+    def test_pppoe_static_ipv6_and_invalid_dual_stack_pair_are_rejected(self) -> None:
+        errors = validate_wan_settings(
+            DutWanSettings(
+                vlan_id="200",
+                access_type="PPPoE",
+                pppoe_username="user",
+                pppoe_password="pass",
+                ip_protocol="IPv4IPv6",
+                ipv4_type="Dynamic",
+                ipv6_type="Static",
+                ipv6_address="2001:db8::2",
+                ipv6_prefix="2001:db8::/64",
+                ipv6_gateway="2001:db8::1",
+                ipv6_primary_dns="2001:4860:4860::8888",
+            )
+        )
+
+        self.assertTrue(any("PPPoE 不支持静态 IPv6" in error for error in errors))
+        self.assertTrue(any("PPPoE 双栈地址方式组合不受支持" in error for error in errors))
+
+    def test_ipoe_dual_stack_rejects_mixed_static_and_dynamic_modes(self) -> None:
+        errors = validate_wan_settings(
+            DutWanSettings(
+                vlan_id="200",
+                ip_protocol="IPv4IPv6",
+                ipv4_type="Static",
+                ipv4_address="172.18.18.2",
+                ipv4_netmask="255.255.255.0",
+                ipv4_gateway="172.18.18.1",
+                ipv4_primary_dns="8.8.8.8",
+                ipv6_type="SLAAC",
+            )
+        )
+
+        self.assertTrue(any("IPoE 双栈地址方式组合不受支持" in error for error in errors))
+
+    def test_bridge_service_type_is_limited_to_reference_supported_values(self) -> None:
+        errors = validate_wan_settings(
+            DutWanSettings(mode="bridge", service_type="TR069", vlan_id="200")
+        )
+
+        self.assertTrue(any("桥接 WAN 的业务类型仅支持" in error for error in errors))
+
     def test_voice_and_tr069_validation_report_missing_required_fields(self) -> None:
         voice_errors = validate_voice_settings(DutVoiceSettings())
         tr069_errors = validate_tr069_settings(DutTr069Settings())
@@ -97,12 +140,14 @@ class DutAdvancedConfigServiceTests(unittest.TestCase):
         client = _FakeClient()
         logs: list[str] = []
         calls: list[tuple] = []
+        network_calls: list[tuple] = []
         request = _request("wan", DutWanSettings(vlan_id="200"))
 
         result = run_single_dut_advanced_config(
             request,
             on_output=logs.append,
-            network_prepare_fn=lambda *_args, **_kwargs: CommandResult(True, "ok"),
+            network_prepare_fn=lambda *args, **kwargs: network_calls.append((args, kwargs))
+            or CommandResult(True, "ok"),
             bind_waiter=lambda ip, timeout: ip == "192.168.1.112" and timeout == 15,
             client_factory=lambda *_args, **_kwargs: client,
             wan_fn=lambda *args, **kwargs: calls.append((args, kwargs)) or {"ok": True},
@@ -112,6 +157,7 @@ class DutAdvancedConfigServiceTests(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(result.stage, "completed")
         self.assertTrue(client.closed)
+        self.assertTrue(network_calls[0][1]["reuse_if_ready"])
         self.assertEqual(calls[0][0][1], "session-id")
         self.assertTrue(any("password=plain-password" in line for line in logs))
         self.assertTrue(any("成功：WAN 操作成功" in line for line in logs))

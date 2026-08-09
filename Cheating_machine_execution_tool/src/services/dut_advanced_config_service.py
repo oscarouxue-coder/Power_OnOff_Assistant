@@ -108,6 +108,8 @@ def validate_wan_settings(settings: DutWanSettings) -> tuple[str, ...]:
     }
     if settings.service_type not in allowed_services:
         errors.append(f"WAN 业务类型无效：{settings.service_type}")
+    if settings.mode == "bridge" and settings.service_type not in {"IPTV", "INTERNET", "OTHER"}:
+        errors.append("桥接 WAN 的业务类型仅支持 IPTV、INTERNET 或 OTHER")
     try:
         vlan_id = int(settings.vlan_id)
         if not 1 <= vlan_id <= 4094:
@@ -141,6 +143,20 @@ def validate_wan_settings(settings: DutWanSettings) -> tuple[str, ...]:
             errors.append("PPPoE 账号为空")
         if not settings.pppoe_password:
             errors.append("PPPoE 密码为空")
+        if settings.ip_protocol in {"IPv6", "IPv4IPv6"} and settings.ipv6_type == "Static":
+            errors.append("PPPoE 不支持静态 IPv6；请改用 SLAAC、DHCPv6 或 IPoE")
+    if settings.ip_protocol == "IPv4IPv6":
+        address_pair = (settings.ipv4_type, settings.ipv6_type)
+        allowed_pairs = (
+            {("Dynamic", "SLAAC"), ("Dynamic", "DHCPv6")}
+            if settings.access_type == "PPPoE"
+            else {("Dynamic", "SLAAC"), ("Dynamic", "DHCPv6"), ("Static", "Static")}
+        )
+        if address_pair not in allowed_pairs:
+            errors.append(
+                f"{settings.access_type} 双栈地址方式组合不受支持："
+                f"IPv4={settings.ipv4_type}，IPv6={settings.ipv6_type}"
+            )
     if settings.ip_protocol in {"IPv4", "IPv4IPv6"}:
         if settings.ipv4_type not in {"Dynamic", "Static"}:
             errors.append(f"IPv4 地址方式无效：{settings.ipv4_type}")
@@ -290,6 +306,7 @@ def run_single_dut_advanced_config(
             request.subnet_mask or "255.255.255.0",
             on_output=emit,
             sleep_fn=pause,
+            reuse_if_ready=True,
         )
         if not network_result.ok:
             emit(f"网络准备失败：{network_result.message}")

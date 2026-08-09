@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import ctypes
 import ipaddress
+import json
 import locale
+import os
 import platform
 import re
 import socket
@@ -30,6 +32,14 @@ class AdapterInfo:
     @property
     def display_name(self) -> str:
         return f"{self.alias} [{self.status}]" if self.status else self.alias
+
+
+@dataclass(frozen=True)
+class AdapterIpv4State:
+    alias: str
+    enabled: bool
+    status: str = ""
+    addresses: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -733,6 +743,71 @@ def enable_adapter(adapter_alias: str) -> CommandResult:
     return CommandResult(False, f"启用网卡失败：{output.strip() or result.returncode}", output)
 
 
+def read_adapter_ipv4_state(adapter_alias: str) -> AdapterIpv4State | None:
+    """只读查询网卡启用状态及现有 IPv4 地址；无法确认时返回 None。"""
+
+    adapter_alias = adapter_alias_from_display(adapter_alias)
+    if not adapter_alias:
+        return None
+
+    command = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; "
+        "$adapter = @(Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue) | "
+        "Where-Object { $_.Name -eq $env:LINE_CHECK_ADAPTER_ALIAS } | Select-Object -First 1; "
+        "if ($null -eq $adapter) { exit 3 }; "
+        "$addresses = @(Get-NetIPAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 "
+        "-ErrorAction SilentlyContinue | Select-Object -Property IPAddress,PrefixLength); "
+        "[PSCustomObject]@{ Name=[string]$adapter.Name; Status=[string]$adapter.Status; "
+        "Enabled=[bool]($adapter.AdminStatus -eq 'Up'); IPv4=$addresses } | "
+        "ConvertTo-Json -Compress -Depth 4",
+    ]
+    process_environment = os.environ.copy()
+    process_environment["LINE_CHECK_ADAPTER_ALIAS"] = adapter_alias
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            shell=False,
+            env=process_environment,
+            **hidden_window_kwargs(),
+        )
+        if result.returncode != 0 or not (result.stdout or "").strip():
+            return None
+        payload = json.loads(result.stdout)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+    raw_addresses = payload.get("IPv4") or []
+    if isinstance(raw_addresses, dict):
+        raw_addresses = [raw_addresses]
+    addresses: list[tuple[str, int]] = []
+    for item in raw_addresses:
+        if not isinstance(item, dict):
+            continue
+        address = str(item.get("IPAddress") or "").strip()
+        try:
+            prefix_length = int(item.get("PrefixLength"))
+            ipaddress.IPv4Address(address)
+        except (TypeError, ValueError, ipaddress.AddressValueError):
+            continue
+        addresses.append((address, prefix_length))
+
+    return AdapterIpv4State(
+        alias=str(payload.get("Name") or adapter_alias).strip(),
+        enabled=bool(payload.get("Enabled")),
+        status=str(payload.get("Status") or "").strip(),
+        addresses=tuple(addresses),
+    )
+
+
 def ping_host(
     host: str,
     source_address: str,
@@ -785,8 +860,10 @@ def prepare_network_for_sample(
     on_output: Optional[Callable[[str], None]] = None,
     sleep_fn: Callable[[float], None] = time.sleep,
     settle_seconds: float = 2.0,
+    reuse_if_ready: bool = False,
+    state_reader: Optional[Callable[[str], AdapterIpv4State | None]] = None,
 ) -> CommandResult:
-    """为单台样机准备网络：先启用网卡，再把 PC 静态 IP 设置到与样机同网段。"""
+    """为单台样机准备网络；DUT 流程可先检查状态并仅修复不满足项。"""
 
     def emit(message: str) -> None:
         if on_output:
@@ -798,24 +875,60 @@ def prepare_network_for_sample(
     if not network_card_ip:
         return CommandResult(False, "未配置用于访问样机的 PC 静态 IP")
 
-    emit(f"检查并启用网卡：{adapter_alias}")
-    enable_result = enable_adapter(adapter_alias)
-    emit(enable_result.message)
-    if not enable_result.ok:
-        return enable_result
-    sleep_fn(settle_seconds)
+    effective_subnet_mask = subnet_mask or "255.255.255.0"
+    prefix_length: int | None = None
+    try:
+        prefix_length = ipaddress.IPv4Network(f"0.0.0.0/{effective_subnet_mask}").prefixlen
+    except (ValueError, ipaddress.NetmaskValueError):
+        pass
 
-    emit(f"设置 {adapter_alias} 静态 IP：{network_card_ip}（{subnet_mask or '255.255.255.0'}）")
-    set_result = set_static_ip(adapter_alias, network_card_ip, subnet_mask)
-    emit(set_result.message)
-    if not set_result.ok:
-        return set_result
-    sleep_fn(settle_seconds)
+    current_state: AdapterIpv4State | None = None
+    adapter_enabled = False
+    address_matches = False
+    if reuse_if_ready:
+        emit(f"检查网卡当前配置：{adapter_alias}")
+        current_state = (state_reader or read_adapter_ipv4_state)(adapter_alias)
+        if current_state is None:
+            emit("未能确认当前网卡配置，按原流程启用并设置静态 IP")
+        else:
+            adapter_enabled = current_state.enabled
+            address_matches = prefix_length is not None and (
+                network_card_ip,
+                prefix_length,
+            ) in current_state.addresses
+            if adapter_enabled and address_matches:
+                emit(
+                    f"网卡 {adapter_alias} 已满足要求：已启用，"
+                    f"IPv4={network_card_ip}/{prefix_length}；跳过启用和静态 IP 设置"
+                )
+                return CommandResult(True, f"已复用 {adapter_alias} 当前网络配置")
+
+    enable_result = CommandResult(True, "", "")
+    if not current_state or not adapter_enabled:
+        emit(f"检查并启用网卡：{adapter_alias}")
+        enable_result = enable_adapter(adapter_alias)
+        emit(enable_result.message)
+        if not enable_result.ok:
+            return enable_result
+        sleep_fn(settle_seconds)
+    else:
+        emit(f"网卡 {adapter_alias} 已启用，跳过重复启用")
+
+    set_result = CommandResult(True, "", "")
+    if not current_state or not address_matches:
+        emit(f"设置 {adapter_alias} 静态 IP：{network_card_ip}（{effective_subnet_mask}）")
+        set_result = set_static_ip(adapter_alias, network_card_ip, effective_subnet_mask)
+        emit(set_result.message)
+        if not set_result.ok:
+            return set_result
+        sleep_fn(settle_seconds)
+    else:
+        emit(f"网卡 {adapter_alias} IPv4 已是 {network_card_ip}/{prefix_length}，跳过静态 IP 设置")
 
     return CommandResult(
         True,
         f"已准备 {adapter_alias} 静态 IP：{network_card_ip}",
-        enable_result.output + "\n" + set_result.output,
+        "\n".join(output for output in (enable_result.output, set_result.output) if output),
     )
 
 
@@ -834,6 +947,7 @@ def run_line_check(
         subnet_mask,
         sleep_fn=time.sleep,
         settle_seconds=settle_seconds,
+        reuse_if_ready=True,
     )
     if not network_result.ok:
         return network_result

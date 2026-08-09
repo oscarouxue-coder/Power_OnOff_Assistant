@@ -125,6 +125,7 @@ def run_single_dut_telnet_enable(
             request.subnet_mask or "255.255.255.0",
             on_output=emit,
             sleep_fn=pause,
+            reuse_if_ready=True,
         )
         if not network_result.ok:
             emit(f"网络准备失败：{network_result.message}")

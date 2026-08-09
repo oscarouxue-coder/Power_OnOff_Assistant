@@ -27,6 +27,11 @@ from .dut_advanced_config_service import (
     validate_voice_settings,
     validate_wan_settings,
 )
+from .dut_wan_query_service import (
+    common_wan_connection_names,
+    run_dut_wan_query_batch,
+    run_single_dut_wan_query,
+)
 from .legacy_power_test_service import (
     LegacyPowerChannel,
     LegacyPowerTestRequest,
@@ -100,6 +105,7 @@ __all__ = [
     "VOICE_CODEC_OPTIONS",
     "build_log_path",
     "clamp_dut_parallel_count",
+    "common_wan_connection_names",
     "compute_all_subtask_statuses",
     "power_on_selected_channels",
     "prepare_legacy_power_test_request",
@@ -110,7 +116,9 @@ __all__ = [
     "run_single_full_package_upgrade",
     "run_dut_telnet_enable_batch",
     "run_dut_advanced_config_batch",
+    "run_dut_wan_query_batch",
     "run_single_dut_advanced_config",
+    "run_single_dut_wan_query",
     "run_single_dut_telnet_enable",
     "run_single_sample_parameter_write",
     "run_legacy_power_test",

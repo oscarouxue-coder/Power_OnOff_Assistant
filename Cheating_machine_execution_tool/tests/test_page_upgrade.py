@@ -100,6 +100,7 @@ class PageUpgradeTests(unittest.TestCase):
         self.assertEqual(call_args[2], "255.255.255.0")
         # sleep_fn 必须透传给 prepare_network,避免升级流程中使用 Mock sleep 时网卡准备也跳过等待
         self.assertIsNotNone(prepare_network.call_args.kwargs.get("sleep_fn"))
+        self.assertTrue(prepare_network.call_args.kwargs["reuse_if_ready"])
         self.assertEqual(
             fake_client.urls,
             [

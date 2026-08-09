@@ -2,6 +2,36 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-09 - DUT 网卡准备按需复用
+
+- 类型：性能优化 / DUT 配置
+- 背景：DUT WAN 等配置每次执行都会重复启用目标 VLAN 网卡、重设相同静态 IP 并等待稳定，即使网卡已经满足要求也不例外。项目负责人要求先查询当前配置，满足时直接使用。
+- 完成内容：① 公共网络准备能力新增可选只读预检，通过 `Get-NetAdapter` 与 `Get-NetIPAddress` 一次获取目标网卡启用状态、IPv4 和前缀；② 已启用且目标地址/前缀完全匹配时跳过启用、静态 IP 设置和两次稳定等待；③ 已启用但地址不符时只设置 IP，禁用但地址已正确时只启用，其余不满足项按需修复；④ 查询失败、无结果或解析失败时回退原完整启用和静态 IP 设置流程；⑤ 仅 DUT Telnet、WAN/语音/TR069 配置与“查询现有 WAN”开启复用，线路检查、升级、写参等共享调用默认行为不变；⑥ 所有 DUT 路径在复用后仍执行最多15秒的源 IP 可绑定确认；⑦ 主执行日志明确输出检查、复用、跳过、修复或回退结果，并将状态读取与完全复用测试纳入强制基线。
+- 修改文件：`.claude/plans/dut_network_prepare_reuse.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/line_check_assistant/network_ops.py`、`Cheating_machine_execution_tool/src/services/dut_config_service.py`、`Cheating_machine_execution_tool/src/services/dut_advanced_config_service.py`、`Cheating_machine_execution_tool/src/services/dut_wan_query_service.py`、`Cheating_machine_execution_tool/tests/test_network_ops.py`、`Cheating_machine_execution_tool/tests/test_dut_config_service.py`、`Cheating_machine_execution_tool/tests/test_dut_advanced_config_service.py`、`Cheating_machine_execution_tool/tests/test_dut_wan_query_service.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行网络准备及 DUT 三个 service 专项测试，再执行 `python scripts\verify_baseline.py` 与 `git diff --check`。
+- 验证结果：网络能力专项42项、DUT service专项22项通过；`python scripts\verify_baseline.py` 全绿（49个当前主程序`.py`编译、编译清单完整、540项单测、53个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows 管理员环境分别验证网卡已完全满足、已启用但地址不符、禁用但地址正确、状态读取失败四类日志与实际耗时；真实样机确认复用后 UBUS/WAN 查询及配置仍稳定。真实样机结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-09 - 增加现有WAN查询下拉
+
+- 类型：功能
+- 背景：WAN修改/删除原来要求操作员手工填写现有连接名或索引。项目负责人要求查询到现有WAN后以下拉列表展示，降低索引输入和误操作风险。
+- 完成内容：① “现有连接名/索引”改为只读Combobox，并在旁边增加“查询现有 WAN”按钮；② 新增只读 `bbfdm.get Device.IP.Interface.` 协议解析，过滤LAN、透传和非数字前缀接口，按WAN数字索引排序；③ 新增独立查询service，每台仍执行网络准备、等待源IP可绑、独立锁源UBUS登录重试、查询、关闭client，支持1–8并行、停止和失败隔离；④ 单台显示本机连接，多台只展示所有目标名称完全一致的共同WAN，不按相同数字索引合并不同业务；⑤ 任一目标失败/停止不生成下拉列表，目标集合变化或执行WAN配置后清空旧列表；⑥ 主执行日志记录明文login、实际get路径、每台连接列表和共同连接汇总；⑦ 新增core、service、UI主线程回收和批量安全边界回归并纳入强制基线。
+- 修改文件：`.claude/plans/dut_wan_connection_query.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/core/dut_ubus_config.py`、`Cheating_machine_execution_tool/src/models/dut_config_models.py`、`Cheating_machine_execution_tool/src/models/__init__.py`、`Cheating_machine_execution_tool/src/services/dut_wan_query_service.py`、`Cheating_machine_execution_tool/src/services/__init__.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_dut_ubus_config.py`、`Cheating_machine_execution_tool/tests/test_dut_wan_query_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行WAN core、查询service和主界面专项测试，再执行`python scripts/verify_baseline.py`与`git diff --check`。
+- 验证结果：WAN core专项7项、查询service专项3项、主界面专项103项通过；`python scripts/verify_baseline.py`全绿（49个当前主程序`.py`编译、编译清单完整、536项单测、51个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows桌面和真实样机确认单台/多台查询响应结构、只读下拉宽度、共同连接展示、查询失败与目标变化清空，以及选择后修改/删除正确连接。真实样机结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-09 - WAN配置按真实新建规则联动展示
+
+- 类型：功能完善 / WAN配置 / 界面联动 / 预检
+- 背景：WAN配置原先固定展示所有字段，选择IPoE仍显示PPPoE账号密码，动态地址仍显示静态地址项，MTU和双栈组合也未随接入协议收敛。项目负责人要求严格按实际新建WAN规则展示和约束。
+- 完成内容：① 新增纯表单规则和地址组合收敛函数，操作、路由/桥接、IPoE/PPPoE、IPv4/IPv6/双栈及动态/静态选择均实时联动字段显隐；② 新增隐藏索引、修改显示索引、删除仅保留索引；③ 桥接隐藏路由/IP字段，业务类型限定IPTV/INTERNET/OTHER，端口绑定为0时回填LAN1位掩码1；④ IPoE隐藏PPPoE凭据并回填MTU 1500，PPPoE显示凭据并回填MTU 1492，MTU仍允许按设备需要在有效范围调整；⑤ DHCP/SLAAC/DHCPv6隐藏静态地址项，静态才展示完整地址；⑥ IPoE双栈只允许DHCP+SLAAC、DHCP+DHCPv6、静态+静态，PPPoE只允许动态地址组合；⑦ service新增桥接业务类型、PPPoE静态IPv6和非法双栈组合二次预检；⑧ 表单下方显示当前组合说明并补充强制基线回归。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/src/services/dut_advanced_config_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_dut_advanced_config_service.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行主界面和DUT高级配置service专项测试、`python scripts/verify_baseline.py`、`git diff --check`。
+- 验证结果：主界面专项101项、DUT高级配置service专项9项通过；`python scripts/verify_baseline.py`全绿（48个当前主程序`.py`编译、编译清单完整、530项单测、47个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows桌面逐项切换WAN操作、模式、接入方式、IP协议和地址方式，核对字段显隐、MTU及提示文案；真实样机覆盖允许组合的新增/修改/删除。真实样机结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-09 - 统一 DUT 选择框勾号显示
 
 - 类型：BUG 修复

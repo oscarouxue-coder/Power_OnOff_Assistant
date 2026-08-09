@@ -4,6 +4,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from line_check_assistant.network_ops import (
+    AdapterIpv4State,
     CommandResult,
     RegisteredOnuState,
     UnregisteredOnu,
@@ -17,6 +18,7 @@ from line_check_assistant.network_ops import (
     ping_host,
     prepare_network_for_sample,
     query_unregistered_onus,
+    read_adapter_ipv4_state,
     register_unregistered_onus,
     run_line_check,
     save_olt_configuration,
@@ -431,7 +433,8 @@ class EnableAdapterTests(unittest.TestCase):
     @patch("line_check_assistant.network_ops.ping_host")
     @patch("line_check_assistant.network_ops.set_static_ip")
     @patch("line_check_assistant.network_ops.enable_adapter")
-    def test_line_check_enables_adapter_before_setting_ip_and_ping(self, enable, set_ip, ping):
+    @patch("line_check_assistant.network_ops.read_adapter_ipv4_state", return_value=None)
+    def test_line_check_enables_adapter_before_setting_ip_and_ping(self, read_state, enable, set_ip, ping):
         calls = []
         enable.side_effect = lambda _alias: calls.append("enable") or CommandResult(True, "enabled")
         set_ip.side_effect = lambda *_args: calls.append("set_ip") or CommandResult(True, "set")
@@ -447,9 +450,26 @@ class EnableAdapterTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(calls, ["enable", "set_ip", "ping"])
+        read_state.assert_called_once_with("VLAN107")
 
 
 class PrepareNetworkForSampleTests(unittest.TestCase):
+    @patch("line_check_assistant.network_ops.subprocess.run")
+    def test_reads_adapter_enabled_state_and_ipv4_prefix(self, run):
+        run.return_value.returncode = 0
+        run.return_value.stdout = (
+            '{"Name":"VLAN107","Status":"Up","Enabled":true,'
+            '"IPv4":{"IPAddress":"192.168.29.107","PrefixLength":24}}'
+        )
+
+        state = read_adapter_ipv4_state("VLAN107 [Up]")
+
+        self.assertEqual(
+            state,
+            AdapterIpv4State("VLAN107", True, "Up", (("192.168.29.107", 24),)),
+        )
+        self.assertEqual(run.call_args.kwargs["env"]["LINE_CHECK_ADAPTER_ALIAS"], "VLAN107")
+
     @patch("line_check_assistant.network_ops.set_static_ip")
     @patch("line_check_assistant.network_ops.enable_adapter")
     def test_enables_adapter_then_sets_static_ip(self, enable, set_ip):
@@ -474,6 +494,82 @@ class PrepareNetworkForSampleTests(unittest.TestCase):
         self.assertTrue(any("VLAN107" in line for line in output), output)
         self.assertTrue(any("192.168.29.107" in line for line in output), output)
         self.assertTrue(any("255.255.255.0" in line for line in output), output)
+
+    @patch("line_check_assistant.network_ops.set_static_ip")
+    @patch("line_check_assistant.network_ops.enable_adapter")
+    def test_reuses_ready_adapter_without_enable_or_set(self, enable, set_ip):
+        sleeps: list[float] = []
+        output: list[str] = []
+
+        result = prepare_network_for_sample(
+            "VLAN107",
+            "192.168.29.107",
+            "255.255.255.0",
+            on_output=output.append,
+            sleep_fn=sleeps.append,
+            reuse_if_ready=True,
+            state_reader=lambda _alias: AdapterIpv4State(
+                "VLAN107", True, "Up", (("192.168.29.107", 24),)
+            ),
+        )
+
+        self.assertTrue(result.ok)
+        self.assertIn("已复用", result.message)
+        enable.assert_not_called()
+        set_ip.assert_not_called()
+        self.assertEqual(sleeps, [])
+        self.assertTrue(any("跳过启用和静态 IP 设置" in line for line in output), output)
+
+    @patch("line_check_assistant.network_ops.set_static_ip")
+    @patch("line_check_assistant.network_ops.enable_adapter")
+    def test_ready_check_only_sets_ip_when_enabled_address_mismatches(self, enable, set_ip):
+        set_ip.return_value = CommandResult(True, "static ip set")
+        sleeps: list[float] = []
+        output: list[str] = []
+
+        result = prepare_network_for_sample(
+            "VLAN107",
+            "192.168.29.107",
+            "255.255.255.0",
+            on_output=output.append,
+            sleep_fn=sleeps.append,
+            settle_seconds=0.5,
+            reuse_if_ready=True,
+            state_reader=lambda _alias: AdapterIpv4State(
+                "VLAN107", True, "Up", (("192.168.1.107", 24),)
+            ),
+        )
+
+        self.assertTrue(result.ok)
+        enable.assert_not_called()
+        set_ip.assert_called_once_with("VLAN107", "192.168.29.107", "255.255.255.0")
+        self.assertEqual(sleeps, [0.5])
+        self.assertTrue(any("跳过重复启用" in line for line in output), output)
+
+    @patch("line_check_assistant.network_ops.set_static_ip")
+    @patch("line_check_assistant.network_ops.enable_adapter")
+    def test_ready_check_falls_back_to_full_prepare_when_state_unavailable(self, enable, set_ip):
+        enable.return_value = CommandResult(True, "enabled")
+        set_ip.return_value = CommandResult(True, "static ip set")
+        sleeps: list[float] = []
+        output: list[str] = []
+
+        result = prepare_network_for_sample(
+            "VLAN107",
+            "192.168.29.107",
+            "255.255.255.0",
+            on_output=output.append,
+            sleep_fn=sleeps.append,
+            settle_seconds=0.5,
+            reuse_if_ready=True,
+            state_reader=lambda _alias: None,
+        )
+
+        self.assertTrue(result.ok)
+        enable.assert_called_once_with("VLAN107")
+        set_ip.assert_called_once_with("VLAN107", "192.168.29.107", "255.255.255.0")
+        self.assertEqual(sleeps, [0.5, 0.5])
+        self.assertTrue(any("按原流程" in line for line in output), output)
 
     @patch("line_check_assistant.network_ops.set_static_ip")
     @patch("line_check_assistant.network_ops.enable_adapter")

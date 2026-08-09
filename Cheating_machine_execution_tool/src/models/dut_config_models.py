@@ -32,6 +32,17 @@ class DutTelnetEnableResult:
 
 
 @dataclass(frozen=True)
+class DutWanQueryResult:
+    """单台 DUT 的现有 WAN 连接名查询结果。"""
+
+    request: DutTelnetEnableRequest
+    ok: bool
+    stage: str
+    message: str
+    connection_names: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class DutWanSettings:
     """一批 DUT 共用的 WAN 操作参数。"""
 
@@ -141,5 +152,6 @@ __all__ = [
     "DutTelnetEnableResult",
     "DutTr069Settings",
     "DutVoiceSettings",
+    "DutWanQueryResult",
     "DutWanSettings",
 ]

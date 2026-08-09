@@ -91,9 +91,11 @@ class FakeSessionManager:
 
 
 class SerialUpgradeControllerTests(unittest.TestCase):
-    @patch("src.services.serial_upgrade_service.set_static_ip", return_value=CommandResult(True, "ip set"))
-    @patch("src.services.serial_upgrade_service.enable_adapter", return_value=CommandResult(True, "adapter enabled"))
-    def test_prepare_tftp_network_waits_for_bindable_ip_before_strict_server(self, _enable_adapter, _set_static_ip):
+    @patch(
+        "src.services.serial_upgrade_service.prepare_network_for_sample",
+        return_value=CommandResult(True, "network ready"),
+    )
+    def test_prepare_tftp_network_waits_for_bindable_ip_before_strict_server(self, prepare_network):
         messages = []
 
         result = prepare_tftp_network(
@@ -106,10 +108,13 @@ class SerialUpgradeControllerTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertIn("等待 TFTP 网卡 IP 192.168.1.139 完成绑定（最长 15 秒）。", messages)
+        self.assertTrue(prepare_network.call_args.kwargs["reuse_if_ready"])
 
-    @patch("src.services.serial_upgrade_service.set_static_ip", return_value=CommandResult(True, "ip set"))
-    @patch("src.services.serial_upgrade_service.enable_adapter", return_value=CommandResult(True, "adapter enabled"))
-    def test_prepare_tftp_network_reports_timeout_when_ip_never_becomes_bindable(self, _enable_adapter, _set_static_ip):
+    @patch(
+        "src.services.serial_upgrade_service.prepare_network_for_sample",
+        return_value=CommandResult(True, "network ready"),
+    )
+    def test_prepare_tftp_network_reports_timeout_when_ip_never_becomes_bindable(self, prepare_network):
         result = prepare_tftp_network(
             "VLAN139",
             "192.168.1.139",
@@ -119,6 +124,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
 
         self.assertFalse(result.ok)
         self.assertIn("15 秒内仍不可绑定", result.message)
+        self.assertTrue(prepare_network.call_args.kwargs["reuse_if_ready"])
 
     def test_parallel_power_cycle_coordinator_serializes_shared_power_port(self):
         """两个并发 power_on_channel 仍被串行化（同 COM 共享一个 lock）。"""

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
-from line_check_assistant.network_ops import CommandResult, enable_adapter, set_static_ip
+from line_check_assistant.network_ops import CommandResult, prepare_network_for_sample
 from src.config import DEFAULT_LOG_DIR
 from src.core import SerialSessionManager, TftpServerHandle, upload_firmware, vlan_to_serial_port, wait_for_bindable_ip
 from src.core.power_supply import ProgrammablePowerSupply
@@ -498,15 +498,17 @@ def prepare_tftp_network(
             on_output(message)
 
     emit(f"准备 TFTP 网卡：{server_interface} -> {server_ip}")
-    enabled = enable_adapter(server_interface)
-    if not enabled.ok:
-        return enabled
-    emit(enabled.message)
-    sleep_fn(1)
-    configured = set_static_ip(server_interface, server_ip, TFTP_SUBNET_MASK)
-    if not configured.ok:
-        return configured
-    emit(configured.message)
+    prepared = prepare_network_for_sample(
+        server_interface,
+        server_ip,
+        TFTP_SUBNET_MASK,
+        on_output=emit,
+        sleep_fn=sleep_fn,
+        settle_seconds=1.0,
+        reuse_if_ready=True,
+    )
+    if not prepared.ok:
+        return prepared
     emit(f"等待 TFTP 网卡 IP {server_ip} 完成绑定（最长 {TFTP_BIND_READY_TIMEOUT_SECONDS:.0f} 秒）。")
     ready = (bind_ready_fn or wait_for_bindable_ip)(server_ip, TFTP_BIND_READY_TIMEOUT_SECONDS)
     if not ready:

@@ -305,6 +305,7 @@ def run_test_item_execution(
         on_output=lambda line: emit(f"  {line}"),
         sleep_fn=req.sleep_fn,
         settle_seconds=2.0,
+        reuse_if_ready=True,
     )
     if not net_result.ok:
         raise RuntimeError(f"网络准备失败: {net_result.message}")

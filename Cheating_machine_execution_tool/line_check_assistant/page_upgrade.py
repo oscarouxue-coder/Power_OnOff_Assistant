@@ -275,6 +275,7 @@ def run_single_page_upgrade(
             request.subnet_mask,
             on_output=emit,
             sleep_fn=sleep_fn,
+            reuse_if_ready=True,
         )
         if not network_result.ok:
             return CommandResult(False, f"{label} 页面升级失败：{network_result.message}")

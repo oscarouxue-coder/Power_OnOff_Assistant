@@ -5,10 +5,12 @@ import unittest
 from src.core.dut_ubus_config import (
     MANAGEMENT_SERVER_PATH,
     WAN_COMMAND,
+    WAN_INTERFACE_PATH,
     build_wan_input,
     configure_tr069,
     configure_voice,
     configure_wan,
+    query_wan_connection_names,
 )
 from src.models import DutTr069Settings, DutVoiceSettings, DutWanSettings
 
@@ -98,6 +100,37 @@ class DutUbusConfigTests(unittest.TestCase):
         operate = client.calls[0]
         self.assertEqual(operate[0:3], ("operate", "session", WAN_COMMAND))
         self.assertTrue(any("bbfdm.operate" in item and '"VLAN": "200"' in item for item in logs))
+
+    def test_query_wan_connection_names_filters_non_wan_and_sorts_by_index(self) -> None:
+        client = _FakeClient()
+        logs: list[str] = []
+
+        def get_interfaces(session, path, optional=None):
+            client.calls.append(("get", session, path, optional))
+            return [
+                0,
+                {
+                    "Interface": [
+                        {"Name": "12_VOICE_R_VID_335"},
+                        {"Name": "LAN"},
+                        {"Name": "3_INTERNET_R_VID_200"},
+                        {"Name": "2_OTHER_B_VID_TRANSP"},
+                        {"Name": "not-a-wan"},
+                        {"Name": "3_INTERNET_R_VID_200"},
+                    ]
+                },
+            ]
+
+        client.bbfdm_get = get_interfaces  # type: ignore[method-assign]
+
+        names = query_wan_connection_names(client, "session", on_log=logs.append)
+
+        self.assertEqual(
+            names,
+            ("3_INTERNET_R_VID_200", "12_VOICE_R_VID_335"),
+        )
+        self.assertEqual(client.calls[0][2], WAN_INTERFACE_PATH)
+        self.assertTrue(any("bbfdm.get" in line and WAN_INTERFACE_PATH in line for line in logs))
 
     def test_voice_config_sets_server_account_codecs_and_reads_back(self) -> None:
         client = _FakeClient()

@@ -6,6 +6,7 @@ from .dut_config_models import (
     DutTelnetEnableResult,
     DutTr069Settings,
     DutVoiceSettings,
+    DutWanQueryResult,
     DutWanSettings,
 )
 from .sample_parameter_models import (
@@ -28,6 +29,7 @@ __all__ = [
     "DutTelnetEnableResult",
     "DutTr069Settings",
     "DutVoiceSettings",
+    "DutWanQueryResult",
     "DutWanSettings",
     "SerialEvent",
     "SerialSettings",

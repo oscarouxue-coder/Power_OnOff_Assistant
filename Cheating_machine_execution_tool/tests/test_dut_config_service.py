@@ -83,6 +83,7 @@ class DutConfigServiceTests(unittest.TestCase):
         self.assertEqual(result.action, "already_present")
         self.assertEqual(result.stage, "completed")
         self.assertEqual(len(network_calls), 1)
+        self.assertTrue(network_calls[0][1]["reuse_if_ready"])
         self.assertEqual(probe_calls[0][0], ("192.168.1.112", "192.168.1.1"))
         self.assertEqual(probe_calls[0][1], {"device_port": 23, "timeout": 5.0})
         self.assertTrue(clients[0].closed)

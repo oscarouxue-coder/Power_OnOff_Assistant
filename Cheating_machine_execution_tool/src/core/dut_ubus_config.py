@@ -18,6 +18,7 @@ from .ubus_http_client import UBUS_SERVICE_BBFDM, UbusError, UbusHttpClient
 
 VENDOR_PREFIX = "X_SDMC_"
 WAN_COMMAND = f"Device.{VENDOR_PREFIX}CreateWAN()"
+WAN_INTERFACE_PATH = "Device.IP.Interface."
 MANAGEMENT_SERVER_PATH = "Device.ManagementServer."
 MANUAL_INFORM_STAGE_PATH = f"Device.ManagementServer.{VENDOR_PREFIX}ManualInformStage"
 INFORM_RESULT_PATH = f"Device.ManagementServer.{VENDOR_PREFIX}InformResult"
@@ -116,6 +117,45 @@ def parse_port_bind(value: str) -> int:
     if any(number < 0 for number in numbers):
         raise ValueError("端口绑定不能为负数")
     return sum(numbers)
+
+
+def parse_wan_connection_names(response: Any) -> tuple[str, ...]:
+    """从 ``Device.IP.Interface.`` 响应提取可操作的 WAN 连接名。"""
+    _require_rpc_ok(response, "WAN connection query")
+    payload = response[1] if len(response) > 1 and isinstance(response[1], dict) else {}
+    interfaces = payload.get("Interface")
+    if not isinstance(interfaces, list):
+        ip_payload = payload.get("IP")
+        interfaces = ip_payload.get("Interface") if isinstance(ip_payload, dict) else None
+    if not isinstance(interfaces, list):
+        raise UbusError(f"WAN connection query 返回格式异常：{response}")
+
+    skip_names = {"LAN", "2_OTHER_B_VID_TRANSP"}
+    names = {
+        str(interface.get("Name", "")).strip()
+        for interface in interfaces
+        if isinstance(interface, dict)
+    }
+    filtered = [
+        name
+        for name in names
+        if name and name not in skip_names and re.match(r"^\d+(?:_|$)", name)
+    ]
+    return tuple(sorted(filtered, key=lambda name: (int(name.split("_", 1)[0]), name)))
+
+
+def query_wan_connection_names(
+    client: UbusHttpClient,
+    session_id: str,
+    *,
+    on_log: LogCallback | None = None,
+) -> tuple[str, ...]:
+    """读取单台 DUT 的现有 WAN 连接名，不执行任何写操作。"""
+    _emit(on_log, f"TX UBUS bbfdm.get path={WAN_INTERFACE_PATH}")
+    response = client.bbfdm_get(session_id, WAN_INTERFACE_PATH, WEB_OPTIONAL)
+    names = parse_wan_connection_names(response)
+    _emit(on_log, f"RX UBUS WAN 连接列表：{list(names)}")
+    return names
 
 
 def build_wan_input(settings: DutWanSettings) -> dict[str, Any]:
@@ -375,9 +415,12 @@ __all__ = [
     "INFORM_RESULT_MESSAGES",
     "MANAGEMENT_SERVER_PATH",
     "WAN_COMMAND",
+    "WAN_INTERFACE_PATH",
     "build_wan_input",
     "configure_tr069",
     "configure_voice",
     "configure_wan",
+    "parse_wan_connection_names",
     "parse_port_bind",
+    "query_wan_connection_names",
 ]

@@ -1,6 +1,7 @@
 import os
 import queue
 import sys
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -27,8 +28,12 @@ from line_check_assistant.onu_registration_store import OnuRegistrationConfig
 from line_check_assistant.page_upgrade import PageUpgradeItemResult, PageUpgradeRequest
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
 from line_check_assistant.test_item_config_store import TestItemConfigStore
-from src.models import DutTelnetEnableRequest, DutTelnetEnableResult
-from src.ui.dut_config_window import DutConfigWindow
+from src.models import DutTelnetEnableRequest, DutTelnetEnableResult, DutWanQueryResult
+from src.ui.dut_config_window import (
+    DutConfigWindow,
+    normalize_wan_address_modes,
+    resolve_wan_form_rules,
+)
 
 
 class CurrentChannelSelectionTests(unittest.TestCase):
@@ -308,6 +313,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("DutConfigWindow(", open_source)
         self.assertIn("username_var=self.parameter_initial_username_var", open_source)
         self.assertIn("password_var=self.parameter_initial_password_var", open_source)
+        self.assertIn("on_query_wan=self._query_dut_wan_connections", open_source)
         self.assertIn('self.notebook.add(telnet_tab, text="Telnet配置")', window_source)
         self.assertIn('self.notebook.add(tab, text="WAN配置")', wan_source)
         self.assertIn('self.notebook.add(tab, text="语音配置")', voice_source)
@@ -389,6 +395,104 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             "配置后手动 Inform",
         ):
             self.assertIn(label, builder_source)
+
+    def test_wan_form_rules_hide_irrelevant_fields_and_apply_protocol_mtu(self):
+        import inspect
+
+        ipoe = resolve_wan_form_rules("新增", "路由", "IPoE", "IPv4", "DHCP", "SLAAC")
+        pppoe = resolve_wan_form_rules("新增", "路由", "PPPoE", "IPv6", "DHCP", "DHCPv6")
+        bridge = resolve_wan_form_rules("新增", "桥接", "IPoE", "IPv4", "DHCP", "SLAAC")
+        delete = resolve_wan_form_rules("删除", "路由", "IPoE", "IPv4", "DHCP", "SLAAC")
+
+        self.assertEqual(ipoe.mtu_default, "1500")
+        self.assertFalse(ipoe.show_pppoe_credentials)
+        self.assertTrue(ipoe.show_ipv4_selector)
+        self.assertFalse(ipoe.show_ipv4_static)
+        self.assertEqual(pppoe.mtu_default, "1492")
+        self.assertTrue(pppoe.show_pppoe_credentials)
+        self.assertFalse(pppoe.show_ipv4_selector)
+        self.assertTrue(pppoe.show_ipv6_selector)
+        self.assertFalse(bridge.show_router)
+        self.assertFalse(delete.show_config)
+        self.assertTrue(delete.show_index)
+        builder_source = inspect.getsource(DutConfigWindow._build_wan_tab)
+        updater_source = inspect.getsource(DutConfigWindow._update_wan_form_visibility)
+        self.assertIn('trace_add("write"', builder_source)
+        self.assertIn('self.wan_mtu_var.set("1492"', updater_source)
+        self.assertIn('"wan_pppoe_username": rules.show_pppoe_credentials', updater_source)
+        self.assertIn("grid_remove()", updater_source)
+
+    def test_wan_address_modes_follow_supported_dual_stack_combinations(self):
+        self.assertEqual(
+            normalize_wan_address_modes("PPPoE", "IPv4+IPv6（双栈）", "静态", "静态"),
+            ("DHCP", "SLAAC"),
+        )
+        self.assertEqual(
+            normalize_wan_address_modes(
+                "IPoE", "IPv4+IPv6（双栈）", "静态", "SLAAC", changed="ipv4_type"
+            ),
+            ("静态", "静态"),
+        )
+        self.assertEqual(
+            normalize_wan_address_modes(
+                "IPoE", "IPv4+IPv6（双栈）", "DHCP", "静态", changed="ipv6_type"
+            ),
+            ("静态", "静态"),
+        )
+
+    def test_wan_existing_connections_use_readonly_query_dropdown(self):
+        import inspect
+
+        builder_source = inspect.getsource(DutConfigWindow._build_wan_tab)
+        query_source = inspect.getsource(LineCheckAssistant._query_dut_wan_connections)
+        worker_source = inspect.getsource(LineCheckAssistant._dut_wan_query_worker)
+        finish_source = inspect.getsource(LineCheckAssistant._finish_dut_wan_query)
+
+        self.assertIn("self.wan_index_combo = ttk.Combobox(", builder_source)
+        self.assertIn('state="readonly"', builder_source)
+        self.assertIn('text="查询现有 WAN"', builder_source)
+        self.assertIn("run_dut_wan_query_batch(", worker_source)
+        self.assertIn("common_wan_connection_names(results)", finish_source)
+        self.assertNotIn("UbusHttpClient(", query_source + worker_source)
+        self.assertNotIn("bbfdm.", query_source + worker_source)
+
+    @patch("line_check_assistant.app.messagebox.showinfo")
+    def test_finish_wan_query_populates_only_common_connections(self, showinfo):
+        window = Mock()
+        window.exists.return_value = True
+        context = SimpleNamespace(
+            dut_config_running=True,
+            dut_config_active_feature="wan_query",
+            dut_config_cancel_event=threading.Event(),
+            dut_config_window=window,
+            _log=Mock(),
+        )
+        request_a = DutTelnetEnableRequest(
+            "通道 12", "vlan112", "VLAN112", "192.168.1.112", "192.168.1.1",
+            "255.255.255.0", "user", "password",
+        )
+        request_b = DutTelnetEnableRequest(
+            "通道 13", "vlan113", "VLAN113", "192.168.1.113", "192.168.1.1",
+            "255.255.255.0", "user", "password",
+        )
+        results = [
+            DutWanQueryResult(
+                request_a, True, "completed", "ok",
+                ("3_INTERNET_R_VID_200", "5_IPTV_B_VID_600"),
+            ),
+            DutWanQueryResult(
+                request_b, True, "completed", "ok",
+                ("3_VOICE_R_VID_335", "5_IPTV_B_VID_600"),
+            ),
+        ]
+
+        LineCheckAssistant._finish_dut_wan_query(context, results)
+
+        window.set_wan_connections.assert_called_once_with(
+            ("5_IPTV_B_VID_600",), target_count=2
+        )
+        self.assertFalse(context.dut_config_running)
+        showinfo.assert_called_once()
 
     def test_dut_request_snapshot_uses_enabled_channel_and_plaintext_shared_password(self):
         context = SimpleNamespace(

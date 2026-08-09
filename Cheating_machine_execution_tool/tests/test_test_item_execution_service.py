@@ -210,7 +210,7 @@ class TestItemExecutionSingleCommandTests(unittest.TestCase):
         with self._patch_session(fake), patch(
             "src.services.test_item_execution_service.prepare_network_for_sample",
             return_value=Mock(ok=True, message="就绪"),
-        ):
+        ) as prepare_network:
             result = run_test_item_execution(req, emit_msgs.append)
 
         self.assertIsInstance(result, TestItemRunResult)
@@ -222,6 +222,7 @@ class TestItemExecutionSingleCommandTests(unittest.TestCase):
         self.assertEqual(len(fake.sent_lines), 3)
         self.assertIn("/userfs/bin/ponmgr gpon get info", fake.sent_lines[2])
         self.assertTrue(fake.closed, "session 应在 finally 中关闭")
+        self.assertTrue(prepare_network.call_args.kwargs["reuse_if_ready"])
         # 写文件验证
         content = self.log_path.read_text(encoding="utf-8")
         self.assertIn("=== 通道 channel_2 (VLAN110) 开始测试 ===", content)

@@ -69,6 +69,7 @@ from src.models import (
     DutTelnetEnableResult,
     DutTr069Settings,
     DutVoiceSettings,
+    DutWanQueryResult,
     DutWanSettings,
     FullPackageUpgradeRequest,
     ParameterGenerationTemplate,
@@ -81,9 +82,11 @@ from src.services import (
     TRANSFER_TFTP_COMMAND,
     TRANSFER_TFTP_PUT,
     clamp_dut_parallel_count,
+    common_wan_connection_names,
     preflight_parameter_targets,
     run_dut_telnet_enable_batch,
     run_dut_advanced_config_batch,
+    run_dut_wan_query_batch,
     run_parallel_tftp_command_upgrades,
     run_parallel_tftp_put_upgrades,
     run_parallel_sample_parameter_writes,
@@ -466,6 +469,8 @@ class LineCheckAssistant(Tk):
                 results = event[2] if len(event) >= 3 else event[1]
                 if feature == "telnet":
                     self._finish_dut_telnet_enable(results)
+                elif feature == "wan_query":
+                    self._finish_dut_wan_query(results)
                 else:
                     self._finish_dut_advanced_config(feature, results)
         try:
@@ -1193,6 +1198,7 @@ class LineCheckAssistant(Tk):
                         subnet_mask,
                         on_output=emit_to_main,
                         sleep_fn=time.sleep,
+                        reuse_if_ready=True,
                     )
                     if not network_result.ok:
                         emit_to_main(f"{r.vlan} 写参前置:网络准备失败:{network_result.message}")
@@ -1281,6 +1287,7 @@ class LineCheckAssistant(Tk):
                     subnet_mask,
                     on_output=emit_to_main,
                     sleep_fn=time.sleep,
+                    reuse_if_ready=True,
                 )
                 if not result.ok:
                     emit_to_main(f"{request.vlan} 工厂模式网段切换失败：{result.message}")
@@ -3742,6 +3749,7 @@ class LineCheckAssistant(Tk):
             on_refresh=self._refresh_dut_config_targets,
             on_start=self._start_dut_telnet_enable,
             on_start_wan=self._start_dut_wan_config,
+            on_query_wan=self._query_dut_wan_connections,
             on_start_voice=self._start_dut_voice_config,
             on_start_tr069=self._start_dut_tr069_config,
             on_stop=self._stop_dut_telnet_enable,
@@ -3972,6 +3980,113 @@ class LineCheckAssistant(Tk):
             return
         self._start_dut_advanced_config("wan", window.wan_settings())
 
+    def _query_dut_wan_connections(self) -> None:
+        """启动只读 WAN 查询；业务流程由 service 执行。"""
+        if self.dut_config_running:
+            return
+        self._refresh_dut_config_targets()
+        window = self.dut_config_window
+        if window is None or not window.exists():
+            return
+        requests = list(self.dut_config_requests)
+        if not requests:
+            messagebox.showwarning(
+                "没有目标 DUT",
+                "请先在主界面勾选至少一个通道并完成 VLAN 配置。",
+                parent=window.window,
+            )
+            return
+        if self.dut_config_validation_errors:
+            details = "\n".join(
+                f"- {channel}：{message.removeprefix('配置错误：')}"
+                for channel, message in self.dut_config_validation_errors.items()
+            )
+            messagebox.showerror(
+                "WAN 查询条件不完整",
+                f"请先修正以下配置：\n{details}",
+                parent=window.window,
+            )
+            return
+
+        parallel_count = clamp_dut_parallel_count(
+            window.parallel_count() or DEFAULT_DUT_PARALLEL_COUNT
+        )
+        self.dut_config_running = True
+        self.dut_config_active_feature = "wan_query"
+        self.dut_config_cancel_event = threading.Event()
+        window.clear_wan_connections("正在查询当前目标 DUT 的现有 WAN……")
+        window.mark_all_pending("wan")
+        window.set_running(True)
+        window.set_summary(
+            f"正在查询现有 WAN：共 {len(requests)} 台，并行数 {parallel_count}",
+            "wan",
+        )
+        self._log(
+            f"[DUT配置][WAN查询] 开始只读查询：{len(requests)} 台，"
+            f"并行数 {parallel_count}；仅共同存在的连接会进入下拉列表。"
+        )
+        threading.Thread(
+            target=self._dut_wan_query_worker,
+            args=(requests, parallel_count, self.dut_config_cancel_event),
+            name="dut-wan-query-batch",
+            daemon=True,
+        ).start()
+
+    def _dut_wan_query_worker(
+        self,
+        requests: list[DutTelnetEnableRequest],
+        parallel_count: int,
+        cancel_event: threading.Event,
+    ) -> None:
+        try:
+            results = run_dut_wan_query_batch(
+                requests,
+                max_workers=parallel_count,
+                stop_event=cancel_event,
+                on_output=self.log_queue.put,
+                on_item_complete=lambda result: self.dut_config_ui_queue.put(
+                    ("item", "wan_query", result)
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001 - 批次边界必须回收 UI 状态
+            self.log_queue.put(f"[DUT配置][WAN查询] 批次异常：{exc}")
+            results = [
+                DutWanQueryResult(
+                    request, False, "exception", f"WAN 查询批次异常：{exc}"
+                )
+                for request in requests
+            ]
+            for result in results:
+                self.dut_config_ui_queue.put(("item", "wan_query", result))
+        self.dut_config_ui_queue.put(("finished", "wan_query", results))
+
+    def _finish_dut_wan_query(self, results: list[DutWanQueryResult]) -> None:
+        success_count = sum(1 for result in results if result.ok)
+        stopped_count = sum(1 for result in results if result.stage == "stopped")
+        failure_count = len(results) - success_count - stopped_count
+        common_names = common_wan_connection_names(results)
+        self.dut_config_running = False
+        self.dut_config_active_feature = None
+        self.dut_config_cancel_event = None
+        summary = (
+            f"WAN 查询结束：成功 {success_count}，失败 {failure_count}，"
+            f"停止/跳过 {stopped_count}，共同 WAN {len(common_names)} 个"
+        )
+        self._log(f"[DUT配置][WAN查询] {summary}：{list(common_names)}")
+        window = self.dut_config_window
+        if window is None or not window.exists():
+            return
+        window.set_running(False)
+        window.set_summary(summary, "wan")
+        if failure_count or stopped_count:
+            window.clear_wan_connections(
+                "部分 DUT 查询失败或停止，未生成批量修改/删除下拉列表。"
+            )
+            messagebox.showwarning("WAN 查询未完成", summary, parent=window.window)
+        else:
+            window.set_wan_connections(common_names, target_count=len(results))
+            messagebox.showinfo("WAN 查询完成", summary, parent=window.window)
+
     def _start_dut_voice_config(self) -> None:
         window = self.dut_config_window
         if window is None or not window.exists():
@@ -4137,6 +4252,8 @@ class LineCheckAssistant(Tk):
         self._log(f"[DUT配置] {summary}")
         window = self.dut_config_window
         if window is not None and window.exists():
+            if feature == "wan":
+                window.clear_wan_connections("WAN 配置已执行，请重新查询最新连接列表。")
             window.set_running(False)
             window.set_summary(summary, feature)
             if failure_count or stopped_count:
@@ -4153,7 +4270,8 @@ class LineCheckAssistant(Tk):
         if window is not None and window.exists():
             window.set_running(True, stopping=True)
         feature_label = {
-            "telnet": "Telnet", "wan": "WAN", "voice": "语音", "tr069": "TR069"
+            "telnet": "Telnet", "wan": "WAN", "wan_query": "WAN查询",
+            "voice": "语音", "tr069": "TR069"
         }.get(getattr(self, "dut_config_active_feature", None), "DUT")
         self._log(
             f"[DUT配置][{feature_label}配置] 操作员请求停止：尚未开始的 DUT 将跳过，"
