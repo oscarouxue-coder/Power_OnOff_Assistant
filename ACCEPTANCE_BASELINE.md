@@ -1,6 +1,6 @@
 # Acceptance Baseline
 
-更新：2026-08-08（DUT 配置批量 UBUS 开启 Telnet）
+更新：2026-08-09（DUT 配置复选框统一显示勾号）
 
 > 与 `PROJECT_STATUS.md` 的关系：本文按"实现 → 单测 → 真实样机验收"三态罗列验收证据与不变量，作为独立验收基线。`PROJECT_STATUS.md` 保留面向项目的进度叙述；两者冲突时以本文为准。
 >
@@ -299,20 +299,26 @@ python scripts\verify_baseline.py
   - `tests/test_app.py`（+1 项：`_current_sample_upgrade_settings` 透传 2 个新字段）
   - `tests/test_pipeline_window.py`（窗口默认无勾选、确认提示、上下文不加载测试项目配置及 7 项状态完整性）
 
-### 2.13 DUT 配置 - UBUS 批量开启 Telnet
+### 2.13 DUT 配置 - UBUS 批量配置
 
 - **状态**：已实现未验收
 - **核心行为**：
-  - 主界面“串口日志”右侧固定显示“DUT配置”按钮；窗口采用 Notebook，首个 Tab 为“Telnet配置”，后续 DUT 能力通过新增 Tab 与独立 service 扩展
+  - 主界面“串口日志”右侧固定显示“DUT配置”按钮；窗口采用 Notebook，包含“Telnet配置”“WAN配置”“语音配置”“TR069配置”四个独立 Tab；协议在 core、批量流程在 service，UI 只收集输入和显示结果
   - 目标来自主界面已勾选通道；表格显示通道、VLAN、网卡、PC 静态 IP、样机管理 IP 和逐台状态；账号密码与写样机参数 `parameter_initial_*` 共享并明文显示、明文记录
   - 启动前拒绝无目标、缺 VLAN/网卡/IP/凭据、IP 格式错误、源 IP 与样机 IP 相同以及重复 VLAN；确认框明确提示会修改本机网卡与 DUT AccessCtrl 规则
   - 单台固定时序：`prepare_network_for_sample` 启用网卡和设置静态 IP → `wait_for_bindable_ip` 最多 15 秒 → 每台独立 `UbusHttpClient(bind_ip, device_host, 80)` → `enable_telnet_via_ubus` → 严格 `source_address=(bind_ip, 0)` 探测 TCP 23 端口；只有 UBUS 与端口探测均成功才标记成功
   - UBUS 首次失败后最多重试 3 次、间隔 2 秒；端口最多探测 3 次、单次 5 秒、间隔 1 秒；UBUS client 每次尝试均关闭。Access denied 最终失败提示操作员退出样机 Web 管理页面后重试
   - 支持 1–8 并行、默认 1；单台失败不阻断其它 DUT。点击停止后不再提交尚未开始的 DUT，已进入系统/HTTP 调用的任务在安全点结束；运行期间输入、刷新、开始和关闭均受控
   - 主执行日志必须包含准备网络、明文 `session.login`、实际 `bbfdm get/set/add` 路径与参数、源/目标 TCP 23 验证以及逐台成功/失败/跳过和批次汇总
-- **禁止破坏**：不得复制第二份 AccessCtrl 协议；必须继续复用 `enable_telnet_via_ubus`，每台独立 UBUS client；Telnet 端口探测必须锁定对应 VLAN 源 IP且不得回退任意地址
-- **待确认**：Windows 桌面布局/Tab/按钮状态；真实样机覆盖 already_present、reused、added_iface、lan 回退、禁用网卡自动启用、Access denied 提示、1/8 台并行、停止和单台失败隔离
-- **对应测试**：`tests/test_dut_config_service.py`、`tests/test_telnet_transport.py`、`tests/test_ubus_enable_telnet.py`、`tests/test_app.py`
+  - WAN：同一参数批量应用到已勾选 DUT；支持新增、修改和按明确连接名/数字索引删除，不提供“删除全部”；支持 router/bridge、IPoE/PPPoE、IPv4、IPv6、`IPv4AndIPv6` 双栈，IPv4 支持 DHCP/静态，IPv6 支持 SLAAC/DHCPv6/静态。新增/修改/删除统一调用登录态 `bbfdm.operate command=Device.X_SDMC_CreateWAN()`，并校验 `Result=OK`；修改/删除必须预检索引，删除确认框明确不可自动恢复
+  - 语音：按 `Device.Services.VoiceService.1` 路径设置 DTMF、SIP 模式、代理/出站代理/注册服务器、账号、5 项编码和 DigitMap，最后回读 SIP 路径；账号启用时必须预检显示名、认证账号和密码
+  - TR069：设置并回读 `Device.ManagementServer.` 的 ACS URL/账号/密码、周期 Inform、连接请求和证书参数；可选触发 `X_SDMC_ManualInformStage=1_wait_inform` 并轮询最终 `X_SDMC_InformResult`，停止事件可中断 Inform 等待
+  - WAN/语音/TR069 复用主界面通道和 Telnet 页 UBUS 凭据/并行数；同一时间只允许一个 DUT 配置批次。每台均执行“准备网络 → 等源 IP 可绑 → 每台独立 UBUS 登录 → 功能配置 → 回读/结果校验 → 关闭 client”，登录失败最多重试3次，功能下发不自动重试，避免 WAN 重复创建
+  - 三个新增 Tab 的主执行日志必须包含功能阶段、明文登录、实际 UBUS method/path/input、成功/跳过/失败和批次汇总；表格只显示简短逐台结果
+  - WAN“启用 NAT”、语音“启用 SIP 账号”、TR069“启用周期 Inform / 启用 HTTP 连接请求 / 启用证书 / 配置后手动 Inform”必须使用 Windows 原生 `Checkbutton`：选中显示标准“✓”，未选为空框，不得继续使用 Clam 主题下显示叉号的 `ttk.Checkbutton`；各 BooleanVar 默认值和配置语义保持不变
+- **禁止破坏**：不得复制第二份 AccessCtrl 协议；Telnet 必须继续复用 `enable_telnet_via_ubus`；每台功能必须使用独立 UBUS client 并绑定对应 VLAN 源 IP；不得直接导入使用共享静态 Session 的 `SdmcUbusLib`；WAN 删除不得自动扩大为删除全部或模糊匹配其它连接
+- **待确认**：Windows 桌面四个 Tab 的完整绘制、字段可见性、按钮状态、6个选择框选中显示“✓”及980×680最小窗口布局；真实样机分别覆盖 Telnet already_present/reused/added_iface/lan 回退，WAN 新增/修改/删除及 IPv4/IPv6/双栈组合，语音回读，TR069 回读/手动 Inform，禁用网卡自动启用、Access denied、1/8 台并行、停止和单台失败隔离
+- **对应测试**：`tests/test_dut_config_service.py`、`tests/test_dut_advanced_config_service.py`、`tests/test_dut_ubus_config.py`、`tests/test_ubus_http_client.py`、`tests/test_telnet_transport.py`、`tests/test_ubus_enable_telnet.py`、`tests/test_app.py`
 
 ---
 

@@ -142,11 +142,44 @@ class UbusHttpClient:
 
     # ---- bbfdm 便捷封装 ----
 
-    def bbfdm_get(self, session_id: str, path: str) -> Any:
-        return self.call(session_id, UBUS_SERVICE_BBFDM, "get", {"path": path})
+    def bbfdm_get(
+        self,
+        session_id: str,
+        path: str,
+        optional: Mapping[str, Any] | None = None,
+    ) -> Any:
+        payload: dict[str, Any] = {"path": path}
+        if optional is not None:
+            payload["optional"] = dict(optional)
+        return self.call(session_id, UBUS_SERVICE_BBFDM, "get", payload)
 
-    def bbfdm_set(self, session_id: str, path: str, obj_path: Mapping[str, Any]) -> Any:
-        return self.call(session_id, UBUS_SERVICE_BBFDM, "set", {"path": path, "obj_path": dict(obj_path)})
+    def bbfdm_set(
+        self,
+        session_id: str,
+        path: str,
+        obj_path: Mapping[str, Any],
+        optional: Mapping[str, Any] | None = None,
+    ) -> Any:
+        payload: dict[str, Any] = {"path": path, "obj_path": dict(obj_path)}
+        if optional is not None:
+            payload["optional"] = dict(optional)
+        return self.call(session_id, UBUS_SERVICE_BBFDM, "set", payload)
+
+    def bbfdm_operate(
+        self,
+        session_id: str,
+        command: str,
+        input_payload: Mapping[str, Any],
+        optional: Mapping[str, Any] | None = None,
+    ) -> Any:
+        """执行需要登录态的 BBFDM ``operate`` 命令。"""
+        payload: dict[str, Any] = {
+            "command": command,
+            "input": dict(input_payload),
+        }
+        if optional is not None:
+            payload["optional"] = dict(optional)
+        return self.call(session_id, UBUS_SERVICE_BBFDM, "operate", payload)
 
     def bbfdm_add(
         self,

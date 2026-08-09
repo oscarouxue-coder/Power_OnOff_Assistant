@@ -78,6 +78,34 @@ class UbusHttpClientTests(unittest.TestCase):
         self.assertEqual(sent[2], "set")
         self.assertEqual(sent[3]["obj_path"], {"Enable": "1"})
 
+    def test_bbfdm_set_and_get_support_web_optional(self):
+        with self._patch_ip():
+            client = UbusHttpClient("127.0.0.1", "127.0.0.1")
+        captured: list[list] = []
+        with patch.object(client, "_post", side_effect=lambda params: captured.append(params) or [0, {}]):
+            client.bbfdm_set("session-id", "Device.ManagementServer.", {"URL": "http://acs"}, {"proto": "web"})
+            client.bbfdm_get("session-id", "Device.ManagementServer.", {"proto": "web"})
+
+        self.assertEqual(captured[0][3]["optional"], {"proto": "web"})
+        self.assertEqual(captured[1][3]["optional"], {"proto": "web"})
+
+    def test_bbfdm_operate_sends_authenticated_wan_command(self):
+        with self._patch_ip():
+            client = UbusHttpClient("127.0.0.1", "127.0.0.1")
+        captured: list[list] = []
+        with patch.object(client, "_post", side_effect=lambda params: captured.append(params) or [0, {}]):
+            client.bbfdm_operate(
+                "session-id",
+                "Device.X_SDMC_CreateWAN()",
+                {"Method": "add", "VLAN": "200"},
+                {"proto": "web"},
+            )
+
+        sent = captured[0]
+        self.assertEqual(sent[2], "operate")
+        self.assertEqual(sent[3]["command"], "Device.X_SDMC_CreateWAN()")
+        self.assertEqual(sent[3]["input"]["VLAN"], "200")
+
     def test_bbfdm_add_supports_optional(self):
         with self._patch_ip():
             client = UbusHttpClient("127.0.0.1", "127.0.0.1")

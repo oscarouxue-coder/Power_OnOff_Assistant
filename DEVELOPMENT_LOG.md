@@ -2,6 +2,26 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-09 - 统一 DUT 选择框勾号显示
+
+- 类型：BUG 修复
+- 背景：DUT配置的WAN、语音和TR069页使用`ttk.Checkbutton`，当前Clam主题把选中态绘制为叉号，容易被操作员理解为错误或未启用。项目负责人要求所有DUT Tab选择框选中时显示勾号。
+- 完成内容：① 新增统一原生选择框构造方法，使用白色选择区和标准Windows勾号；② 替换“启用 NAT”“启用 SIP 账号”“启用周期 Inform”“启用 HTTP 连接请求”“启用证书”“配置后手动 Inform”共6个选择框；③ 保持原BooleanVar、默认开关状态、禁用/恢复控制和配置执行语义不变；④ 增加静态回归，禁止DUT页重新使用Clam叉号样式。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行`python -m py_compile src\ui\dut_config_window.py`、`python -m unittest discover -s tests -p test_app.py -v`、`python scripts\verify_baseline.py`、`git diff --check`。
+- 验证结果：主界面专项99项通过；`python scripts/verify_baseline.py`全绿（48个当前主程序`.py`编译、编译清单完整、525项单测、44个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows桌面打开WAN、语音和TR069页，逐一勾选6个选择框，确认选中显示“✓”、未选为空框；该目视确认不由单元测试替代。
+
+## 2026-08-09 - 扩展 DUT WAN语音TR069配置
+
+- 类型：功能
+- 背景：项目负责人要求在现有 DUT 配置 Notebook 中继续增加 WAN、语音和 TR069 Tab，并确认 WAN 首版必须包含静态 IPv4、IPv6、IPv4/IPv6 双栈以及修改、删除现有 WAN。
+- 完成内容：① DUT 窗口扩展为 Telnet/WAN/语音/TR069 四个 Tab，共享主界面目标、明文 UBUS 凭据、1–8 并行、停止和失败隔离，同一时间只运行一个批次；② 新增每台独立、锁定 VLAN 源 IP 的高级 DUT service，统一执行网络准备、可绑定检查、UBUS 登录重试、功能下发、结果回收和 client 关闭；③ WAN 通过登录态 `Device.X_SDMC_CreateWAN()` 支持新增/修改/按明确索引删除、router/bridge、IPoE/PPPoE、IPv4/IPv6/IPv4+IPv6 双栈，IPv4 DHCP/静态和 IPv6 SLAAC/DHCPv6/静态，删除不提供全删或模糊匹配；④ 语音设置 SIP 基础、服务器、账号、5项编码和DigitMap并回读；⑤ TR069设置并回读ManagementServer，支持可选手动Inform及停止；⑥ 主日志输出明文login、实际UBUS method/path/input及逐台成功/跳过/失败和批次汇总；⑦ 增加payload、校验、单台流程、并行停止、UI分层与客户端operate/optional回归，并纳入强制基线。
+- 修改文件：`.claude/plans/dut_config_wan_voice_tr069.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/core/dut_ubus_config.py`、`Cheating_machine_execution_tool/src/core/ubus_http_client.py`、`Cheating_machine_execution_tool/src/models/dut_config_models.py`、`Cheating_machine_execution_tool/src/models/__init__.py`、`Cheating_machine_execution_tool/src/services/dut_advanced_config_service.py`、`Cheating_machine_execution_tool/src/services/__init__.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_dut_advanced_config_service.py`、`Cheating_machine_execution_tool/tests/test_dut_ubus_config.py`、`Cheating_machine_execution_tool/tests/test_ubus_http_client.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行 DUT UBUS协议、高级service、HTTP客户端、原DUT Telnet和主界面专项单测，再执行 `python scripts/verify_baseline.py`、`git diff --check`。
+- 验证结果：新增 DUT UBUS协议6项、高级service6项、HTTP客户端13项、原DUT Telnet service10项和主界面98项专项测试通过；`python scripts/verify_baseline.py` 全绿（48个当前主程序`.py`编译、编译清单完整、524项单测、43个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows桌面确认四个Tab在1180×780默认窗口及980×680最小窗口完整绘制；真实样机分别验证WAN新增/修改/删除和IPv4/IPv6/双栈组合、语音回读、TR069回读/手动Inform、1/8台并行、停止与单台失败隔离。真实样机结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-08 - 实现 DUT 批量开启 Telnet
 
 - 类型：功能

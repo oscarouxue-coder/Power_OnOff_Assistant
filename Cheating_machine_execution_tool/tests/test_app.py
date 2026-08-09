@@ -300,16 +300,25 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         open_source = inspect.getsource(LineCheckAssistant._open_dut_config_module)
         worker_source = inspect.getsource(LineCheckAssistant._dut_telnet_enable_worker)
+        advanced_worker_source = inspect.getsource(LineCheckAssistant._dut_advanced_config_worker)
         window_source = inspect.getsource(DutConfigWindow.__init__)
+        wan_source = inspect.getsource(DutConfigWindow._build_wan_tab)
+        voice_source = inspect.getsource(DutConfigWindow._build_voice_tab)
+        tr069_source = inspect.getsource(DutConfigWindow._build_tr069_tab)
         self.assertIn("DutConfigWindow(", open_source)
         self.assertIn("username_var=self.parameter_initial_username_var", open_source)
         self.assertIn("password_var=self.parameter_initial_password_var", open_source)
         self.assertIn('self.notebook.add(telnet_tab, text="Telnet配置")', window_source)
+        self.assertIn('self.notebook.add(tab, text="WAN配置")', wan_source)
+        self.assertIn('self.notebook.add(tab, text="语音配置")', voice_source)
+        self.assertIn('self.notebook.add(tab, text="TR069配置")', tr069_source)
+        self.assertIn('values=("IPv4", "IPv6", "IPv4+IPv6（双栈）")', wan_source)
         self.assertIn('text="开启 Telnet"', window_source)
         self.assertNotIn('show="*"', window_source)
         self.assertIn("run_dut_telnet_enable_batch(", worker_source)
+        self.assertIn("run_dut_advanced_config_batch(", advanced_worker_source)
         self.assertNotIn("UbusHttpClient(", open_source + worker_source)
-        self.assertNotIn("bbfdm.", open_source + worker_source)
+        self.assertNotIn("bbfdm.", open_source + worker_source + advanced_worker_source)
 
     def test_dut_success_row_uses_concise_operator_message(self):
         request = DutTelnetEnableRequest(
@@ -352,6 +361,35 @@ class CurrentChannelSelectionTests(unittest.TestCase):
                 ],
             ),
         )
+
+    def test_dut_option_checkbuttons_use_native_checkmark_indicator(self):
+        """DUT 各 Tab 的选项框应使用原生勾号，不受 Clam 叉号样式影响。"""
+        import inspect
+
+        helper_source = inspect.getsource(DutConfigWindow._native_checkbutton)
+        builder_source = "\n".join(
+            (
+                inspect.getsource(DutConfigWindow._build_wan_tab),
+                inspect.getsource(DutConfigWindow._build_voice_tab),
+                inspect.getsource(DutConfigWindow._build_tr069_tab),
+            )
+        )
+
+        self.assertIn("Checkbutton(", helper_source)
+        self.assertIn("selectcolor=DUT_CHECK_BACKGROUND", helper_source)
+        self.assertIn("background=DUT_CHECK_BACKGROUND", helper_source)
+        self.assertNotIn("ttk.Checkbutton(", builder_source)
+        self.assertEqual(builder_source.count("self._native_checkbutton("), 6)
+        for label in (
+            "启用 NAT",
+            "启用 SIP 账号",
+            "启用周期 Inform",
+            "启用 HTTP 连接请求",
+            "启用证书",
+            "配置后手动 Inform",
+        ):
+            self.assertIn(label, builder_source)
+
     def test_dut_request_snapshot_uses_enabled_channel_and_plaintext_shared_password(self):
         context = SimpleNamespace(
             _capture_current_channel=Mock(),

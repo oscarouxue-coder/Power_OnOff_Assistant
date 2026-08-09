@@ -63,8 +63,13 @@ from src.core import (
 )
 from src.config import DEFAULT_LOG_DIR
 from src.models import (
+    DutAdvancedConfigRequest,
+    DutAdvancedConfigResult,
     DutTelnetEnableRequest,
     DutTelnetEnableResult,
+    DutTr069Settings,
+    DutVoiceSettings,
+    DutWanSettings,
     FullPackageUpgradeRequest,
     ParameterGenerationTemplate,
     SampleParameterWriteRequest,
@@ -78,6 +83,7 @@ from src.services import (
     clamp_dut_parallel_count,
     preflight_parameter_targets,
     run_dut_telnet_enable_batch,
+    run_dut_advanced_config_batch,
     run_parallel_tftp_command_upgrades,
     run_parallel_tftp_put_upgrades,
     run_parallel_sample_parameter_writes,
@@ -86,6 +92,7 @@ from src.services import (
     turn_off_selected_channels,
     turn_on_selected_channels,
     validate_dut_telnet_request,
+    validate_dut_advanced_request,
 )
 from src.ui import DutConfigWindow, SerialTerminalWindow
 
@@ -288,6 +295,7 @@ class LineCheckAssistant(Tk):
         self.dut_config_window = None
         self.dut_config_running = False
         self.dut_config_cancel_event = None
+        self.dut_config_active_feature = None
         self.dut_config_requests: list[DutTelnetEnableRequest] = []
         self.dut_config_validation_errors: dict[str, str] = {}
         self.test_item_config_window = None
@@ -448,11 +456,18 @@ class LineCheckAssistant(Tk):
                 break
             kind = event[0]
             if kind == "item":
+                feature = event[1] if len(event) >= 3 else "telnet"
+                result = event[2] if len(event) >= 3 else event[1]
                 window = self.dut_config_window
                 if window is not None and window.exists():
-                    window.update_result(event[1])
+                    window.update_result(result, feature)
             elif kind == "finished":
-                self._finish_dut_telnet_enable(event[1])
+                feature = event[1] if len(event) >= 3 else "telnet"
+                results = event[2] if len(event) >= 3 else event[1]
+                if feature == "telnet":
+                    self._finish_dut_telnet_enable(results)
+                else:
+                    self._finish_dut_advanced_config(feature, results)
         try:
             self.after(50, self._drain_dut_config_ui_tasks)
         except Exception:
@@ -3726,11 +3741,17 @@ class LineCheckAssistant(Tk):
             password_var=self.parameter_initial_password_var,
             on_refresh=self._refresh_dut_config_targets,
             on_start=self._start_dut_telnet_enable,
+            on_start_wan=self._start_dut_wan_config,
+            on_start_voice=self._start_dut_voice_config,
+            on_start_tr069=self._start_dut_tr069_config,
             on_stop=self._stop_dut_telnet_enable,
             on_close=self._close_dut_config_module,
         )
         self._refresh_dut_config_targets()
-        self._log("[DUT配置] 已打开 Telnet 配置页；目标来自主界面已勾选通道。")
+        self._log(
+            "[DUT配置] 已打开 Telnet、WAN、语音和 TR069 配置页；"
+            "目标来自主界面已勾选通道。"
+        )
 
     def _collect_dut_telnet_requests(self) -> list[DutTelnetEnableRequest]:
         """把主界面已勾选通道快照转换成 DUT service 请求。"""
@@ -3850,6 +3871,7 @@ class LineCheckAssistant(Tk):
             return
 
         self.dut_config_running = True
+        self.dut_config_active_feature = "telnet"
         self.dut_config_cancel_event = threading.Event()
         window.mark_all_pending()
         window.set_running(True)
@@ -3880,7 +3902,7 @@ class LineCheckAssistant(Tk):
                 stop_event=cancel_event,
                 on_output=self.log_queue.put,
                 on_item_complete=lambda result: self.dut_config_ui_queue.put(
-                    ("item", result)
+                    ("item", "telnet", result)
                 ),
             )
         except Exception as exc:  # noqa: BLE001 - 批次边界必须回收 UI 状态
@@ -3895,8 +3917,8 @@ class LineCheckAssistant(Tk):
                 for request in requests
             ]
             for result in results:
-                self.dut_config_ui_queue.put(("item", result))
-        self.dut_config_ui_queue.put(("finished", results))
+                self.dut_config_ui_queue.put(("item", "telnet", result))
+        self.dut_config_ui_queue.put(("finished", "telnet", results))
 
     def _finish_dut_telnet_enable(
         self, results: list[DutTelnetEnableResult]
@@ -3905,6 +3927,7 @@ class LineCheckAssistant(Tk):
         stopped_count = sum(1 for result in results if result.stage == "stopped")
         failure_count = len(results) - success_count - stopped_count
         self.dut_config_running = False
+        self.dut_config_active_feature = None
         self.dut_config_cancel_event = None
         summary = (
             f"DUT Telnet 配置结束：成功 {success_count}，失败 {failure_count}，"
@@ -3920,16 +3943,220 @@ class LineCheckAssistant(Tk):
             else:
                 messagebox.showinfo("DUT 配置完成", summary, parent=window.window)
 
+    def _collect_dut_advanced_requests(
+        self,
+        feature: str,
+        settings: DutWanSettings | DutVoiceSettings | DutTr069Settings,
+    ) -> list[DutAdvancedConfigRequest]:
+        """复用当前通道快照，为高级 DUT Tab 附加本批次功能参数。"""
+        return [
+            DutAdvancedConfigRequest(
+                channel=request.channel,
+                vlan=request.vlan,
+                adapter_alias=request.adapter_alias,
+                bind_ip=request.bind_ip,
+                device_host=request.device_host,
+                subnet_mask=request.subnet_mask,
+                username=request.username,
+                password=request.password,
+                ubus_port=request.ubus_port,
+                feature=feature,
+                settings=settings,
+            )
+            for request in self._collect_dut_telnet_requests()
+        ]
+
+    def _start_dut_wan_config(self) -> None:
+        window = self.dut_config_window
+        if window is None or not window.exists():
+            return
+        self._start_dut_advanced_config("wan", window.wan_settings())
+
+    def _start_dut_voice_config(self) -> None:
+        window = self.dut_config_window
+        if window is None or not window.exists():
+            return
+        self._start_dut_advanced_config("voice", window.voice_settings())
+
+    def _start_dut_tr069_config(self) -> None:
+        window = self.dut_config_window
+        if window is None or not window.exists():
+            return
+        self._start_dut_advanced_config("tr069", window.tr069_settings())
+
+    def _start_dut_advanced_config(
+        self,
+        feature: str,
+        settings: DutWanSettings | DutVoiceSettings | DutTr069Settings,
+    ) -> None:
+        if self.dut_config_running:
+            return
+        self._refresh_dut_config_targets()
+        window = self.dut_config_window
+        if window is None or not window.exists():
+            return
+        requests = self._collect_dut_advanced_requests(feature, settings)
+        feature_label = {"wan": "WAN", "voice": "语音", "tr069": "TR069"}[feature]
+        if not requests:
+            messagebox.showwarning(
+                "没有目标 DUT",
+                "请先在主界面勾选至少一个通道并完成 VLAN 配置。",
+                parent=window.window,
+            )
+            return
+        errors_by_channel: dict[str, list[str]] = {}
+        for request in requests:
+            errors_by_channel[request.channel] = list(validate_dut_advanced_request(request))
+            common_error = self.dut_config_validation_errors.get(request.channel, "")
+            if common_error:
+                errors_by_channel[request.channel].append(common_error.removeprefix("配置错误："))
+        errors_by_channel = {
+            channel: list(dict.fromkeys(errors))
+            for channel, errors in errors_by_channel.items()
+            if errors
+        }
+        if errors_by_channel:
+            details = "\n".join(
+                f"- {channel}：{'；'.join(errors)}"
+                for channel, errors in errors_by_channel.items()
+            )
+            messagebox.showerror(
+                f"{feature_label} 配置不完整",
+                f"请先修正以下配置：\n{details}",
+                parent=window.window,
+            )
+            return
+        parallel_count = clamp_dut_parallel_count(
+            window.parallel_count() or DEFAULT_DUT_PARALLEL_COUNT
+        )
+        target_lines = "\n".join(
+            f"- {request.channel} / {request.vlan} / "
+            f"{request.bind_ip} → {request.device_host}:{request.ubus_port}"
+            for request in requests
+        )
+        operation_summary = ""
+        warning = "这会修改 DUT 配置。"
+        if feature == "wan" and isinstance(settings, DutWanSettings):
+            operation_names = {"add": "新增", "modify": "修改", "delete": "删除"}
+            operation_summary = (
+                f"\nWAN 操作：{operation_names.get(settings.operation, settings.operation)}；"
+                f"连接名/索引：{settings.connection_index or '无'}；"
+                f"业务 VLAN：{settings.vlan_id or '无'}；"
+                f"协议：{settings.ip_protocol}。"
+            )
+            if settings.operation == "delete":
+                warning = (
+                    "危险：将删除每台 DUT 上指定索引的现有 WAN；"
+                    "不会自动恢复，请确认索引对应关系一致。"
+                )
+        elif feature == "voice" and isinstance(settings, DutVoiceSettings):
+            operation_summary = (
+                f"\nSIP 线路：{settings.line_index}；注册服务器："
+                f"{settings.registrar_server}:{settings.registrar_server_port}。"
+            )
+        elif feature == "tr069" and isinstance(settings, DutTr069Settings):
+            operation_summary = (
+                f"\nACS：{settings.acs_url}；"
+                f"手动 Inform：{'是' if settings.manual_inform else '否'}。"
+            )
+        if not messagebox.askyesno(
+            f"确认批量执行 {feature_label} 配置",
+            f"将处理 {len(requests)} 台 DUT，并行数 {parallel_count}：\n"
+            f"{target_lines}{operation_summary}\n\n"
+            "每台将先启用 VLAN 网卡并设置 PC 静态 IP，再从对应源 IP 登录 UBUS。\n\n"
+            f"{warning} 是否继续？",
+            parent=window.window,
+        ):
+            self._log(f"[DUT配置][{feature_label}配置] 操作员取消，本次未下发命令。")
+            return
+
+        self.dut_config_running = True
+        self.dut_config_active_feature = feature
+        self.dut_config_cancel_event = threading.Event()
+        window.mark_all_pending(feature)
+        window.set_running(True)
+        window.set_summary(
+            f"正在执行：共 {len(requests)} 台，并行数 {parallel_count}", feature
+        )
+        self._log(
+            f"[DUT配置][{feature_label}配置] 开始批量执行："
+            f"{len(requests)} 台，并行数 {parallel_count}。"
+        )
+        threading.Thread(
+            target=self._dut_advanced_config_worker,
+            args=(feature, requests, parallel_count, self.dut_config_cancel_event),
+            name=f"dut-{feature}-batch",
+            daemon=True,
+        ).start()
+
+    def _dut_advanced_config_worker(
+        self,
+        feature: str,
+        requests: list[DutAdvancedConfigRequest],
+        parallel_count: int,
+        cancel_event: threading.Event,
+    ) -> None:
+        try:
+            results = run_dut_advanced_config_batch(
+                requests,
+                max_workers=parallel_count,
+                stop_event=cancel_event,
+                on_output=self.log_queue.put,
+                on_item_complete=lambda result: self.dut_config_ui_queue.put(
+                    ("item", feature, result)
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001 - 批次边界必须回收 UI 状态
+            self.log_queue.put(f"[DUT配置][{feature}] 批次异常：{exc}")
+            results = [
+                DutAdvancedConfigResult(
+                    request, False, "exception", f"DUT 配置批次异常：{exc}"
+                )
+                for request in requests
+            ]
+            for result in results:
+                self.dut_config_ui_queue.put(("item", feature, result))
+        self.dut_config_ui_queue.put(("finished", feature, results))
+
+    def _finish_dut_advanced_config(
+        self,
+        feature: str,
+        results: list[DutAdvancedConfigResult],
+    ) -> None:
+        feature_label = {"wan": "WAN", "voice": "语音", "tr069": "TR069"}.get(feature, feature)
+        success_count = sum(1 for result in results if result.ok)
+        stopped_count = sum(1 for result in results if result.stage == "stopped")
+        failure_count = len(results) - success_count - stopped_count
+        self.dut_config_running = False
+        self.dut_config_active_feature = None
+        self.dut_config_cancel_event = None
+        summary = (
+            f"DUT {feature_label} 配置结束：成功 {success_count}，失败 {failure_count}，"
+            f"停止/跳过 {stopped_count}，共 {len(results)} 台"
+        )
+        self._log(f"[DUT配置] {summary}")
+        window = self.dut_config_window
+        if window is not None and window.exists():
+            window.set_running(False)
+            window.set_summary(summary, feature)
+            if failure_count or stopped_count:
+                messagebox.showwarning("DUT 配置结束", summary, parent=window.window)
+            else:
+                messagebox.showinfo("DUT 配置完成", summary, parent=window.window)
+
     def _stop_dut_telnet_enable(self) -> None:
         if not self.dut_config_running or self.dut_config_cancel_event is None:
-            self._log("[DUT配置] 当前没有正在执行的 Telnet 配置批次。")
+            self._log("[DUT配置] 当前没有正在执行的配置批次。")
             return
         self.dut_config_cancel_event.set()
         window = self.dut_config_window
         if window is not None and window.exists():
             window.set_running(True, stopping=True)
+        feature_label = {
+            "telnet": "Telnet", "wan": "WAN", "voice": "语音", "tr069": "TR069"
+        }.get(getattr(self, "dut_config_active_feature", None), "DUT")
         self._log(
-            "[DUT配置] 操作员请求停止：尚未开始的 DUT 将跳过，"
+            f"[DUT配置][{feature_label}配置] 操作员请求停止：尚未开始的 DUT 将跳过，"
             "正在执行的网络或 UBUS 调用将在安全点结束。"
         )
 

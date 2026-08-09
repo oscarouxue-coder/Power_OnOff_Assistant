@@ -18,6 +18,15 @@ from .dut_config_service import (
     run_single_dut_telnet_enable,
     validate_dut_telnet_request,
 )
+from .dut_advanced_config_service import (
+    VOICE_CODEC_OPTIONS,
+    run_dut_advanced_config_batch,
+    run_single_dut_advanced_config,
+    validate_dut_advanced_request,
+    validate_tr069_settings,
+    validate_voice_settings,
+    validate_wan_settings,
+)
 from .legacy_power_test_service import (
     LegacyPowerChannel,
     LegacyPowerTestRequest,
@@ -88,6 +97,7 @@ __all__ = [
     "SubTaskResult",
     "SubTaskStatus",
     "UpgradePowerCycleCoordinator",
+    "VOICE_CODEC_OPTIONS",
     "build_log_path",
     "clamp_dut_parallel_count",
     "compute_all_subtask_statuses",
@@ -99,6 +109,8 @@ __all__ = [
     "run_parallel_tftp_put_upgrades",
     "run_single_full_package_upgrade",
     "run_dut_telnet_enable_batch",
+    "run_dut_advanced_config_batch",
+    "run_single_dut_advanced_config",
     "run_single_dut_telnet_enable",
     "run_single_sample_parameter_write",
     "run_legacy_power_test",
@@ -106,4 +118,8 @@ __all__ = [
     "turn_off_selected_channels",
     "turn_on_selected_channels",
     "validate_dut_telnet_request",
+    "validate_dut_advanced_request",
+    "validate_tr069_settings",
+    "validate_voice_settings",
+    "validate_wan_settings",
 ]

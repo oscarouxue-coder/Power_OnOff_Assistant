@@ -1,5 +1,13 @@
 from .serial_models import FullPackageUpgradeRequest, SerialEvent, SerialSettings
-from .dut_config_models import DutTelnetEnableRequest, DutTelnetEnableResult
+from .dut_config_models import (
+    DutAdvancedConfigRequest,
+    DutAdvancedConfigResult,
+    DutTelnetEnableRequest,
+    DutTelnetEnableResult,
+    DutTr069Settings,
+    DutVoiceSettings,
+    DutWanSettings,
+)
 from .sample_parameter_models import (
     PARAMETER_COLUMNS,
     STANDARD_PARAMETER_DEFINITIONS,
@@ -14,8 +22,13 @@ from .sample_parameter_models import (
 
 __all__ = [
     "FullPackageUpgradeRequest",
+    "DutAdvancedConfigRequest",
+    "DutAdvancedConfigResult",
     "DutTelnetEnableRequest",
     "DutTelnetEnableResult",
+    "DutTr069Settings",
+    "DutVoiceSettings",
+    "DutWanSettings",
     "SerialEvent",
     "SerialSettings",
     "PARAMETER_COLUMNS",
