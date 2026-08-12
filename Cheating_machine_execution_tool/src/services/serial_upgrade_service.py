@@ -675,7 +675,7 @@ def run_single_full_package_upgrade(
         if on_output:
             on_output(message)
 
-    port = vlan_to_serial_port(request.vlan)
+    port = (request.serial_port or "").strip().upper() or vlan_to_serial_port(request.vlan)
     owner = f"upgrade:{uuid.uuid4()}"
     # 统一使用全局默认日志目录(目前固定为 D:\Serial_Log),与其他串口日志合并保存
     log_dir = DEFAULT_LOG_DIR

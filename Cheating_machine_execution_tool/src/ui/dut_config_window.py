@@ -31,6 +31,10 @@ from src.services.dut_advanced_config_service import (
     WIFI_MODE_OPTIONS,
     WIFI_SECURITY_MODE_OPTIONS,
 )
+from src.ui.window_paint import (
+    center_toplevel_on_parent,
+    schedule_toplevel_client_refresh,
+)
 
 
 DUT_CHECK_BACKGROUND = "#ffffff"
@@ -397,11 +401,11 @@ class DutConfigWindow:
         on_query_wifi_5g: Callable[[], None],
         on_stop: Callable[[], None],
         on_close: Callable[[], None],
+        on_first_paint_refresh: Callable[[], None] | None = None,
         state_path: Path | None = None,
     ) -> None:
         self._state_path = state_path or DUT_CONFIG_UI_STATE_PATH
         self.window = Toplevel(master)
-        self.window.withdraw()
         self.window.title("DUT配置")
         window_width, window_height = load_dut_window_size(
             self._state_path,
@@ -592,7 +596,17 @@ class DutConfigWindow:
         self.notebook.bind(
             "<<NotebookTabChanged>>", self._on_dut_tab_changed, add="+"
         )
-        self.window.after(0, self._reveal)
+        center_toplevel_on_parent(
+            self.window,
+            master,
+            window_width=window_width,
+            window_height=window_height,
+        )
+        self.window.after_idle(self._constrain_selected_current_status_height)
+        schedule_toplevel_client_refresh(
+            self.window,
+            on_first_refresh=on_first_paint_refresh,
+        )
 
     def _field(
         self,
@@ -1837,14 +1851,6 @@ class DutConfigWindow:
     def wifi_ssid_index(self, feature: str) -> str:
         return str(self._wifi_vars[feature]["ssid_index"].get()).strip()
 
-    def _reveal(self) -> None:
-        self.window.deiconify()
-        self.window.lift()
-        self.window.update_idletasks()
-        self._constrain_selected_current_status_height()
-        self.window.update()
-        self.window.focus_force()
-
     def exists(self) -> bool:
         return bool(self.window.winfo_exists())
 
@@ -1853,6 +1859,7 @@ class DutConfigWindow:
         self.window.lift()
         self.window.after_idle(self._constrain_selected_current_status_height)
         self.window.focus_force()
+        schedule_toplevel_client_refresh(self.window)
 
     def destroy(self) -> None:
         self._remember_current_status_heights()

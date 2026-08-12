@@ -17,6 +17,7 @@ class ChannelConfig:
     section: str
     vlan_name: str = ""
     adapter_alias: str = ""
+    serial_port: str = ""
     network_card_ip: str = ""
     device_manage_ip: str = ""
     subnet_mask: str = DEFAULT_SUBNET_MASK
@@ -50,6 +51,7 @@ class ChannelConfigStore:
                     section=section,
                     vlan_name=parser.get(section, "vlan_name", fallback=""),
                     adapter_alias=parser.get(section, "adapter_alias", fallback=""),
+                    serial_port=parser.get(section, "serial_port", fallback="").strip().upper(),
                     network_card_ip=parser.get(section, "network_card_ip", fallback=""),
                     device_manage_ip=parser.get(section, "device_manage_ip", fallback=""),
                     subnet_mask=parser.get(section, "subnet_mask", fallback=DEFAULT_SUBNET_MASK),
@@ -80,6 +82,7 @@ class ChannelConfigStore:
             parser[channel.section] = {
                 "vlan_name": channel.vlan_name,
                 "adapter_alias": channel.adapter_alias,
+                "serial_port": (channel.serial_port or "").strip().upper(),
                 "network_card_ip": channel.network_card_ip,
                 "device_manage_ip": channel.device_manage_ip,
                 "subnet_mask": channel.subnet_mask or DEFAULT_SUBNET_MASK,

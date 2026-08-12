@@ -33,6 +33,7 @@ from src.services.pipeline_orchestrator import (
     compute_all_subtask_statuses,
     execution_order_for,
 )
+from src.ui.window_paint import center_toplevel_on_parent
 
 
 COLOR_BG = "#f4f6fa"
@@ -76,6 +77,7 @@ class PipelineWindow:
         self.window.bind("<FocusIn>", self._on_focus_in)
         # 操作员关闭窗口时若正在跑,提示
         self.window.protocol("WM_DELETE_WINDOW", self._on_close)
+        center_toplevel_on_parent(self.window, app)
 
     # -- UI 构建 --------------------------------------------------------
 

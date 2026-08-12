@@ -2,6 +2,66 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-13 - 增加通道对应COM口选择
+
+- 类型：功能 / UI / 配置 / 串口 / 回归测试 / 文档
+- 背景：项目负责人要求主界面通道配置表增加“通道对应COM口”选择列，并像VLAN候选一样按程控电源分组；随后明确要求串口日志实际打开用户为通道选择的COM口。
+- 完成内容：① 新增程控电源到样机串口的每组8口候选：`COM101 → COM1–COM8`、`COM102 → COM9–COM16`，后续按当前六组顺延，程控电源为空时展示`COM1–COM48`；② 通道表增加“通道对应 COM口”只读下拉列，切换程控电源只刷新VLAN/COM候选，不清空已保存值，选择后写入`network_card_ip.ini`各通道`serial_port`并记录主日志；③ `ChannelConfigStore`兼容读写新字段，历史配置缺字段时不改写文件、运行期回退原`vlan{N} → COM{N-100}`；④ 写参目标预检、全包升级串口控制、手动串口日志、全流程“打开全部”和自动升级附加日志均优先使用用户实际选择，串口Tab标题与日志文件名同步实际COM；⑤ 新增候选分组、UI接线、配置往返、旧配置兼容、写参/日志目标、升级串口和附加日志回归，并加入强制基线。
+- 修改文件：`.claude/plans/channel_serial_port_mapping.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/config_store.py`、`Cheating_machine_execution_tool/src/models/serial_models.py`、`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/src/ui/serial_terminal.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_channel_config.py`、`Cheating_machine_execution_tool/tests/test_serial_terminal.py`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行相关专项`unittest`、Windows源码界面探针、`python scripts/verify_baseline.py`与`git diff --check`。
+- 验证结果：专项测试通过；Windows源码界面探针在当前`COM102`配置下确认候选严格为`COM9`–`COM16`，`channel_8/VLAN113`兼容显示`COM13`、`channel_9/VLAN112`兼容显示`COM12`，两个实际Combobox的候选和值一致；`python scripts/verify_baseline.py`全绿（52个当前主程序`.py`编译、编译清单完整、588项单测、103个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows主界面切换`COM101/COM102`核对两列候选，给通道选择一个不同于VLAN默认推导的COM，关闭重开后确认保持；分别打开手动串口日志、全流程串口日志和一次全包升级，确认Tab、实际串口及日志文件名全部一致。现场结论由项目负责人提供后更新验收状态。
+
+## 2026-08-13 - 验收各功能入口居中显示
+
+- 类型：Windows桌面验收 / 状态更新
+- 背景：项目负责人完成各功能入口居中显示复验，并明确反馈“各个功能入口居中显示的需求OK了”。
+- 完成内容：将主界面“检查并执行测试”“自动上/下电”“样机升级”“写样机参数”“ONU注册”“串口日志”“DUT配置”和“测试项配置”的相对主界面居中显示从待确认更新为已确认验收；保留DUT/测试项配置先居中后刷新、串口日志有效手动位置优先恢复等既有边界。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：由项目负责人从源码版逐入口打开窗口，现场确认居中显示效果。
+- 验证结果：项目负责人确认需求验收通过（2026-08-13）；本轮只更新验收状态，未修改程序代码。
+- 后续待办：无；后续窗口位置相关改动必须继续通过强制基线中的居中坐标与入口接线测试。
+
+## 2026-08-13 - 优化复杂配置窗口加载速度
+
+- 类型：性能优化 / UI / 回归测试 / 文档
+- 背景：项目负责人反馈“DUT配置”和“测试项配置”虽然已解决透明客户区，但点击后的窗口加载仍有些慢。Windows源码计时显示首次点击回调约为测试项配置171.8ms、DUT配置89.5ms，其中弹出前的通用居中会同步刷新父子窗口布局，分别占约15ms和6ms；已验收客户区首次尺寸刷新原本最早在映射后120ms执行。
+- 完成内容：① 通用居中函数增加可选目标宽高；测试项配置使用固定960×940，DUT配置使用本机状态恢复后的实际目标宽高直接计算位置，不再为获取复杂子窗口尺寸调用其`update_idletasks()`；父窗口已映射且尺寸有效时也不再重复刷新，只有父窗口仍为1px时才按原方式刷新后读取；其它普通窗口仍沿用实际尺寸优先的原居中逻辑；② 客户区尺寸刷新增加映射后20ms快速脉冲，同时完整保留120ms、360ms两次现场已验收兜底；③ 强化专项测试，校验快速刷新时机、三次几何恢复、已知尺寸路径不刷新父子窗口布局以及两个复杂窗口接线；④ 保持标准`Toplevel`生命周期、DUT状态高度空闲校正、复用刷新和窗口尺寸记忆不变。
+- 修改文件：`.claude/plans/complex_window_load_performance.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/ui/window_paint.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_app.py`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p test_app.py`、Windows源码计时探针、`python scripts/verify_baseline.py`与`git diff --check`。
+- 验证结果：主界面119项专项测试通过；同一Windows源码环境优化后首次点击回调为测试项配置154.4ms、DUT配置69.0ms，较优化前171.8ms/89.5ms分别缩短约10%/23%。按回调结束后首个尺寸脉冲计算，预计首轮强制刷新由约291.8ms/209.5ms提前到174.4ms/89.0ms；`python scripts/verify_baseline.py`全绿（52个当前主程序`.py`编译、编译清单完整、582项单测、98个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过），`git diff --check`无空白错误。
+- 后续待办：从VS Code运行源码版，分别点击“测试项配置”和“DUT配置”，确认打开体感加快，同时客户区仍直接完整显示，无透明、闪烁、位置漂移或尺寸变化；现场结论由项目负责人提供后更新验收状态。
+
+## 2026-08-12 - 统一功能窗口居中
+
+- 类型：优化 / UI / 回归测试 / 文档
+- 背景：项目负责人反馈主界面截图中的功能入口点击后，新窗口均默认出现在屏幕左上角，希望改为在屏幕中间弹出。
+- 完成内容：① 在`src/ui/window_paint.py`新增相对父窗口实际屏幕坐标的通用居中函数，兼容主界面位于副屏的场景，并明确优先使用窗口已生效的实际尺寸、仅在实际尺寸仍为1px时回退控件期望尺寸；② 接入全流程执行、自动上/下电选择、样机升级、写样机参数、ONU注册、测试项配置和DUT配置首次创建路径；③ DUT和测试项配置先居中再执行已验收的客户区尺寸脉冲，避免刷新后回到左上角；④ 串口日志无历史位置或历史位置为`+0+0`时居中，用户主动移动后的其它有效历史位置继续恢复；⑤ 新增居中坐标、副屏坐标、实际尺寸优先、八个入口接线、自动上/下电移除硬编码位置估算及串口位置兼容回归，并加入强制基线。
+- 修改文件：`.claude/plans/center_feature_windows.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/src/ui/window_paint.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/src/ui/serial_terminal.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_serial_terminal.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p "test_app.py" -v`、`python -m unittest discover -s tests -p "test_serial_terminal.py" -v`、`python -m unittest discover -s tests -p "test_pipeline_window.py" -v`、`python scripts\verify_baseline.py`与`git diff --check`。
+- 验证结果：主界面119项、串口日志11项、全流程28项专项测试通过；Windows源码坐标探针确认写参、升级、ONU、测试项、DUT、全流程和串口日志窗口的`actual`均与按主界面计算的`expected`中心坐标完全一致；`python scripts\verify_baseline.py`全绿（52个当前主程序`.py`编译、编译清单完整、582项单测、98个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows桌面逐个点击截图中的八个功能入口，确认新窗口位于当前主界面中央；把主程序移动到副屏后再验证一次。现场结论由项目负责人提供后更新验收状态。
+
+## 2026-08-12 - 验收复杂窗口首帧
+
+- 类型：真实样机验收 / 状态更新
+- 背景：项目负责人在Windows桌面复验映射后120ms/360ms的可恢复1像素客户区尺寸刷新，并明确反馈“可以了，验收OK”。
+- 完成内容：① 将“测试项配置”客户区首帧从待确认更新为已确认验收；② 将“DUT配置”六个Tab客户区首帧从待确认更新为已确认验收；③ 固化验收边界为打开后直接完整显示、无需移动鼠标且窗口尺寸位置无异常。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：从VS Code运行源码版，分别打开“测试项配置”和“DUT配置”，观察Windows标题栏出现后客户区是否自动完整绘制，并确认无需移动鼠标触发。
+- 验证结果：项目负责人现场确认两个窗口均显示正常，本问题验收通过（2026-08-12）；同版本此前已通过`python scripts\verify_baseline.py`（52个源码文件、579项单测、96个强制基线测试）。
+- 后续待办：本透明客户区首帧问题无；DUT其它尚未验收的设备配置功能继续按各自待确认清单验收。
+
+## 2026-08-12 - 修复复杂配置窗口透明首帧
+
+- 类型：BUG 修复 / UI / Windows绘制 / 回归测试 / 文档
+- 背景：项目负责人现场反馈“测试项配置”和“DUT配置”点击后只出现透明客户区，需要移动鼠标才完整显示；样机升级、写样机参数和ONU注册不受影响。透明预布局/原生重绘、Git提交`93b33aae`历史隐藏构建以及仅改标准`Toplevel`生命周期均经现场复验确认无效；最新照片明确显示原生标题栏已绘制、Tk客户区未完成首帧提交。
+- 完成内容：① 使用源码探针确认两窗口无`WS_EX_LAYERED`、DWM未cloaked，原生客户区尺寸分别为960×940和1598×880，并抓取到300ms后的完整客户区像素，排除真实透明属性和控件构建失败；② 保留标准`Toplevel`生命周期，在映射后的120ms和360ms分别执行一次1像素宽度脉冲，通过Windows`WM_SIZE/WM_PAINT`强制整棵子控件树重新布局和提交，随后立即恢复原尺寸与位置；③ 首次创建和复用显示均接入，主日志分别输出`[测试项配置]/[DUT配置] 已触发客户区首帧尺寸刷新`，便于确认当前源码已运行；④ DUT状态高度继续在空闲阶段校正，尺寸脉冲不改变窗口尺寸记忆；⑤ 新增两次刷新时机、几何脉冲/恢复、只记录一次及两个窗口接线回归，并加入强制基线。
+- 修改文件：`.claude/plans/window_first_paint_reliability.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/ui/window_paint.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p "test_app.py" -v`、`python scripts\verify_baseline.py`与`git diff --check`。
+- 验证结果：主界面117项专项测试通过；Windows源码探针确认两次脉冲后测试项配置保持`960x940+0+0`、DUT保持`1598x880+0+0`；`python scripts\verify_baseline.py`全绿（52个当前主程序`.py`编译、编译清单完整、579项单测、96个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。自动化与像素探针不能替代项目负责人照片所示客户区首帧的现场验收。
+- 后续待办：Windows桌面连续多次首次打开及复用显示“测试项配置”“DUT配置”，确认窗口直接完整显示、无透明客户区且无需移动鼠标；现场结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-09 - 增加DUT窗口宽高记忆
 
 - 类型：功能 / DUT配置 / UI状态 / 回归测试 / 文档

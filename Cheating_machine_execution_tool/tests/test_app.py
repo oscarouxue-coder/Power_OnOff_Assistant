@@ -20,7 +20,7 @@ from line_check_assistant.app import (
     TEST_ITEM_COMMAND_GROUP_SPACING,
     TEST_ITEM_HIDDEN_UI_DEFAULT_OPTIONS,
     _clear_test_item_rows,
-    _reveal_completed_dialog,
+    serial_options_for_power_serial_port,
     vlan_options_for_power_serial_port,
 )
 from line_check_assistant.config_store import ChannelConfig
@@ -104,6 +104,80 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(
             vlan_options_for_power_serial_port(adapters, "COM2"),
             ["VLAN109", "VLAN116"],
+        )
+
+    def test_power_serial_port_limits_channel_com_options_to_its_eight_port_group(self):
+        self.assertEqual(
+            serial_options_for_power_serial_port("COM101"),
+            [f"COM{index}" for index in range(1, 9)],
+        )
+        self.assertEqual(
+            serial_options_for_power_serial_port("COM102"),
+            [f"COM{index}" for index in range(9, 17)],
+        )
+        self.assertEqual(
+            serial_options_for_power_serial_port("COM2"),
+            [f"COM{index}" for index in range(9, 17)],
+        )
+        self.assertEqual(
+            serial_options_for_power_serial_port(""),
+            [f"COM{index}" for index in range(1, 49)],
+        )
+
+    def test_channel_serial_port_prefers_saved_selection_and_falls_back_to_vlan_mapping(self):
+        configured = ChannelConfig(
+            section="channel_1", vlan_name="VLAN113", serial_port="com8"
+        )
+        legacy = ChannelConfig(section="channel_2", vlan_name="VLAN113")
+
+        self.assertEqual(
+            LineCheckAssistant._serial_port_for_channel(configured),
+            "COM8",
+        )
+        self.assertEqual(
+            LineCheckAssistant._serial_port_for_channel(legacy),
+            "COM13",
+        )
+
+    def test_channel_com_column_is_readonly_and_uses_grouped_options(self):
+        import inspect
+
+        table_source = inspect.getsource(LineCheckAssistant._rebuild_channel_config_rows)
+        capture_source = inspect.getsource(LineCheckAssistant._capture_channel_row)
+
+        self.assertIn('"通道对应 COM口"', table_source)
+        self.assertIn("serial_options = self._current_channel_serial_options()", table_source)
+        self.assertIn('"serial_port": serial_var', table_source)
+        self.assertIn("state=\"readonly\"", table_source)
+        self.assertIn("_on_row_serial_changed", table_source)
+        self.assertIn('row_vars["serial_port"]', capture_source)
+
+    def test_parameter_and_serial_log_targets_use_saved_channel_com_selection(self):
+        channels = [
+            ChannelConfig(
+                section="channel_1",
+                vlan_name="VLAN113",
+                serial_port="COM8",
+                enabled=True,
+            ),
+            ChannelConfig(section="channel_2", vlan_name="VLAN112", enabled=True),
+        ]
+        context = SimpleNamespace(
+            channels=channels,
+            _capture_current_channel=Mock(),
+            _vlan_sort_key=lambda value: (int("".join(filter(str.isdigit, value))), value),
+        )
+
+        parameter_targets = LineCheckAssistant._parameter_channel_ports(context)
+        serial_targets = LineCheckAssistant._selected_serial_targets(context)
+
+        self.assertEqual(
+            parameter_targets,
+            [("VLAN113", "COM8"), ("VLAN112", "COM12")],
+        )
+        self.assertEqual(
+            serial_targets,
+            [("vlan112", "COM12"), ("vlan113", "COM8")],
         )
 
     def test_drain_log_queue_limits_each_ui_tick_and_continues_when_backlogged(self):
@@ -344,6 +418,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         voice_source = inspect.getsource(DutConfigWindow._build_voice_tab)
         tr069_source = inspect.getsource(DutConfigWindow._build_tr069_tab)
         wifi_source = inspect.getsource(DutConfigWindow._build_wifi_tab)
+        show_source = inspect.getsource(DutConfigWindow.show)
         self.assertIn("DutConfigWindow(", open_source)
         self.assertIn("username_var=self.parameter_initial_username_var", open_source)
         self.assertIn("password_var=self.parameter_initial_password_var", open_source)
@@ -360,6 +435,13 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn('text=f"{band} WiFi配置"', wifi_source)
         self.assertIn('values=("IPv4", "IPv6", "IPv4+IPv6（双栈）")', wan_source)
         self.assertIn('text="开启 Telnet"', window_source)
+        self.assertIn(
+            "self.window.after_idle(self._constrain_selected_current_status_height)",
+            window_source,
+        )
+        self.assertIn("self.window.deiconify()", show_source)
+        self.assertIn("self.window.lift()", show_source)
+        self.assertIn("self.window.focus_force()", show_source)
         self.assertNotIn('show="*"', window_source)
         self.assertIn("run_dut_telnet_enable_batch(", worker_source)
         self.assertIn("run_dut_advanced_config_batch(", advanced_worker_source)
@@ -1270,32 +1352,173 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("成功 1", window.set_summary.call_args.args[0])
         showinfo.assert_called_once()
 
-    def test_reveal_completed_dialog_flushes_layout_before_showing(self):
-        dialog = Mock()
-
-        _reveal_completed_dialog(dialog)
-
-        self.assertEqual(
-            dialog.method_calls,
-            [
-                call.deiconify(),
-                call.lift(),
-                call.update_idletasks(),
-                call.update(),
-                call.focus_force(),
-            ],
-        )
-
-    def test_test_item_config_builds_while_hidden_then_reveals(self):
-        """测试项窗口不得先显示空壳，再等待鼠标移动触发重绘。"""
+    def test_complex_config_windows_use_standard_toplevel_lifecycle(self):
+        """异常窗口必须和其它正常窗口一样交由Tk主事件循环首次绘制。"""
         import inspect
 
-        source = inspect.getsource(LineCheckAssistant._open_test_item_config)
-        self.assertLess(source.index("dialog.withdraw()"), source.index("content = Frame"))
-        self.assertGreater(
-            source.index("dialog.after(0, lambda: _reveal_completed_dialog(dialog))"),
-            source.index('dialog.protocol("WM_DELETE_WINDOW", close_dialog)'),
+        test_item_source = inspect.getsource(LineCheckAssistant._open_test_item_config)
+        dut_init_source = inspect.getsource(DutConfigWindow.__init__)
+        dut_show_source = inspect.getsource(DutConfigWindow.show)
+        first_show_source = test_item_source[
+            test_item_source.index("dialog = Toplevel") : test_item_source.index("def close_dialog")
+        ]
+
+        for source in (first_show_source, dut_init_source):
+            self.assertNotIn("withdraw(", source)
+            self.assertNotIn("deiconify(", source)
+            self.assertNotIn("update_idletasks(", source)
+            self.assertNotIn(".update()", source)
+        self.assertNotIn("after(0", test_item_source)
+        self.assertNotIn("after(0", dut_init_source)
+        self.assertIn("self.test_item_config_window.deiconify()", test_item_source)
+        self.assertIn("self.test_item_config_window.lift()", test_item_source)
+        self.assertIn("self.test_item_config_window.focus_force()", test_item_source)
+        self.assertIn("self.window.deiconify()", dut_show_source)
+        self.assertIn("self.window.lift()", dut_show_source)
+        self.assertIn("self.window.focus_force()", dut_show_source)
+        self.assertIn("schedule_toplevel_client_refresh(", test_item_source)
+        self.assertIn("on_first_refresh=lambda", test_item_source)
+        self.assertIn("schedule_toplevel_client_refresh(", dut_init_source)
+        self.assertIn("schedule_toplevel_client_refresh(self.window)", dut_show_source)
+
+    def test_toplevel_client_refresh_pulses_and_restores_geometry(self):
+        from src.ui.window_paint import schedule_toplevel_client_refresh
+
+        class FakeWindow:
+            def __init__(self):
+                self.callbacks = []
+                self.geometry_calls = []
+                self.idle_updates = 0
+
+            def after(self, delay, callback):
+                self.callbacks.append((delay, callback))
+
+            def winfo_exists(self):
+                return True
+
+            def state(self):
+                return "normal"
+
+            def update_idletasks(self):
+                self.idle_updates += 1
+
+            def winfo_width(self):
+                return 960
+
+            def winfo_height(self):
+                return 940
+
+            def winfo_x(self):
+                return 10
+
+            def winfo_y(self):
+                return 20
+
+            def winfo_screenwidth(self):
+                return 1920
+
+            def geometry(self, value):
+                self.geometry_calls.append(value)
+
+        refreshed = []
+        window = FakeWindow()
+        schedule_toplevel_client_refresh(
+            window,
+            on_first_refresh=lambda: refreshed.append(True),
         )
+
+        self.assertEqual(
+            [delay for delay, _callback in window.callbacks],
+            [20, 120, 360],
+        )
+        for _delay, callback in window.callbacks:
+            callback()
+        self.assertEqual(
+            window.geometry_calls,
+            [
+                "961x940+10+20",
+                "960x940+10+20",
+                "961x940+10+20",
+                "960x940+10+20",
+                "961x940+10+20",
+                "960x940+10+20",
+            ],
+        )
+        self.assertEqual(window.idle_updates, 9)
+        self.assertEqual(refreshed, [True])
+
+    def test_center_toplevel_uses_parent_screen_coordinates(self):
+        from src.ui.window_paint import center_toplevel_on_parent
+
+        window = Mock()
+        window.winfo_width.return_value = 800
+        window.winfo_reqwidth.return_value = 1500
+        window.winfo_height.return_value = 600
+        window.winfo_reqheight.return_value = 900
+        parent = Mock()
+        parent.winfo_width.return_value = 1200
+        parent.winfo_height.return_value = 800
+        parent.winfo_rootx.return_value = 1920
+        parent.winfo_rooty.return_value = 40
+
+        position = center_toplevel_on_parent(window, parent)
+
+        self.assertEqual(position, "+2120+140")
+        window.geometry.assert_called_once_with("+2120+140")
+
+        window.reset_mock()
+        position = center_toplevel_on_parent(
+            window,
+            parent,
+            window_width=960,
+            window_height=940,
+        )
+
+        self.assertEqual(position, "+2040-30")
+        window.geometry.assert_called_once_with("+2040-30")
+        window.update_idletasks.assert_not_called()
+        parent.update_idletasks.assert_not_called()
+
+    def test_toolbar_feature_windows_use_shared_centering(self):
+        import inspect
+
+        from line_check_assistant.pipeline_window import PipelineWindow
+        from src.ui.serial_terminal import SerialTerminalWindow
+
+        app_methods = (
+            LineCheckAssistant._open_sample_parameter_writer,
+            LineCheckAssistant._open_upgrade_module,
+            LineCheckAssistant._open_onu_registration_module,
+            LineCheckAssistant._select_power_com_port,
+        )
+        for method in app_methods:
+            self.assertIn(
+                "center_toplevel_on_parent(dialog, self)",
+                inspect.getsource(method),
+            )
+        test_item_source = inspect.getsource(
+            LineCheckAssistant._open_test_item_config
+        )
+        self.assertIn("center_toplevel_on_parent(", test_item_source)
+        self.assertIn("window_width=960", test_item_source)
+        self.assertIn("window_height=940", test_item_source)
+        self.assertIn(
+            "center_toplevel_on_parent(self.window, app)",
+            inspect.getsource(PipelineWindow.__init__),
+        )
+        dut_source = inspect.getsource(DutConfigWindow.__init__)
+        self.assertIn("center_toplevel_on_parent(", dut_source)
+        self.assertIn("window_width=window_width", dut_source)
+        self.assertIn("window_height=window_height", dut_source)
+        serial_source = inspect.getsource(SerialTerminalWindow.show)
+        self.assertIn("saved_geometry is None", serial_source)
+        self.assertIn("self._geometry_is_at_top_left(saved_geometry)", serial_source)
+        self.assertIn(
+            "center_toplevel_on_parent(self.window, self.master)", serial_source
+        )
+        selector_source = inspect.getsource(LineCheckAssistant._select_power_com_port)
+        self.assertNotIn("self.winfo_width() - 460", selector_source)
+        self.assertNotIn("self.winfo_height() - 215", selector_source)
 
     def test_test_item_config_has_power_cycle_runtime_parameters_tab(self):
         """第五个 Tab 必须接入 config.ini [ui_defaults] 的加载、重载和保存。"""
@@ -1432,11 +1655,14 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(row_widgets, [])
 
     def test_serial_log_entry_opens_internal_terminal_for_selected_vlans(self):
-        context = SimpleNamespace(serial_terminal=Mock(), _selected_upgrade_vlans=Mock(return_value=["vlan101"]))
+        context = SimpleNamespace(
+            serial_terminal=Mock(),
+            _selected_serial_targets=Mock(return_value=[("vlan101", "COM8")]),
+        )
 
         LineCheckAssistant._open_serial_log_module(context)
 
-        context.serial_terminal.show.assert_called_once_with(["vlan101"])
+        context.serial_terminal.show.assert_called_once_with([("vlan101", "COM8")])
 
     def test_pipeline_serial_logs_show_then_open_all(self):
         calls = []
@@ -1445,13 +1671,18 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         terminal.open_all.side_effect = lambda: calls.append(("open_all",)) or ()
         context = SimpleNamespace(
             serial_terminal=terminal,
-            _selected_upgrade_vlans=Mock(return_value=["vlan112", "vlan113"]),
+            _selected_serial_targets=Mock(
+                return_value=[("vlan112", "COM12"), ("vlan113", "COM16")]
+            ),
             _log=Mock(),
         )
 
         LineCheckAssistant._open_pipeline_serial_logs(context)
 
-        self.assertEqual(calls, [("show", ["vlan112", "vlan113"]), ("open_all",)])
+        self.assertEqual(
+            calls,
+            [("show", [("vlan112", "COM12"), ("vlan113", "COM16")]), ("open_all",)],
+        )
         context._log.assert_called_once()
         self.assertIn("已执行打开全部，共 2 个通道", context._log.call_args.args[0])
 
@@ -1460,14 +1691,18 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         terminal.open_all.return_value = ("vlan113",)
         context = SimpleNamespace(
             serial_terminal=terminal,
-            _selected_upgrade_vlans=Mock(return_value=["vlan112", "vlan113"]),
+            _selected_serial_targets=Mock(
+                return_value=[("vlan112", "COM12"), ("vlan113", "COM16")]
+            ),
             _log=Mock(),
         )
 
         with self.assertRaisesRegex(RuntimeError, "部分串口未能打开：vlan113"):
             LineCheckAssistant._open_pipeline_serial_logs(context)
 
-        terminal.show.assert_called_once_with(["vlan112", "vlan113"])
+        terminal.show.assert_called_once_with(
+            [("vlan112", "COM12"), ("vlan113", "COM16")]
+        )
         terminal.open_all.assert_called_once_with()
         self.assertIn("失败通道：vlan113", context._log.call_args.args[0])
 
@@ -2272,8 +2507,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
     @patch("line_check_assistant.app.threading.Thread")
     def test_serial_tftp_copy_requests_use_page_credentials(self, thread_class, _is_file, askyesno):
         channels = [
-            ChannelConfig(section="channel_1", vlan_name="VLAN102", enabled=True),
-            ChannelConfig(section="channel_2", vlan_name="VLAN101", enabled=True),
+            ChannelConfig(section="channel_1", vlan_name="VLAN102", serial_port="COM8", enabled=True),
+            ChannelConfig(section="channel_2", vlan_name="VLAN101", serial_port="COM7", enabled=True),
         ]
         context = SimpleNamespace(
             upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\tclinux_allinone")),
@@ -2299,6 +2534,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual([channel.section for channel, _request in upgrade_items], ["channel_1", "channel_2"])
         self.assertEqual([request.vlan for request in requests], ["vlan102", "vlan101"])
         self.assertEqual([request.tftp_server_ip for request in requests], ["192.168.1.102", "192.168.1.101"])
+        self.assertEqual([request.serial_port for request in requests], ["COM8", "COM7"])
         self.assertEqual([request.power_channel for request in requests], [1, 2])
         self.assertTrue(all(request.final_username == "root" for request in requests))
         self.assertTrue(all(request.final_password == "secret" for request in requests))

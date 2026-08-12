@@ -82,8 +82,10 @@ class FakeSessionManager:
     def __init__(self, session):
         self.session = session
         self.released = []
+        self.acquired = []
 
     def acquire_control(self, _owner, _settings, _log_path):
+        self.acquired.append(_settings)
         return self.session
 
     def release(self, owner, port):
@@ -462,11 +464,13 @@ class SerialUpgradeControllerTests(unittest.TestCase):
             final_password="secret",
             transfer_method=TRANSFER_TFTP_PUT,
             power_channel=2,
+            serial_port="COM8",
         )
 
         result = run_single_full_package_upgrade(request, manager, sleep_fn=lambda _seconds: None)
 
         self.assertTrue(result.ok)
+        self.assertEqual(manager.acquired[0].port, "COM8")
 
     @patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=True)
     @patch("src.services.serial_upgrade_service.upload_firmware")

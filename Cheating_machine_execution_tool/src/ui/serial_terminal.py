@@ -13,6 +13,7 @@ from tkinter import END, Frame, Label, StringVar, Text, Toplevel, filedialog, me
 from src.config import DEFAULT_LOG_DIR
 from src.core import SerialSessionManager, vlan_to_serial_port
 from src.models import SerialSettings
+from src.ui.window_paint import center_toplevel_on_parent
 
 
 _DEFAULT_GEOMETRY = "1000x650"
@@ -73,19 +74,28 @@ class SerialTerminalWindow:
         if self._auto_opened_for_upgrade:
             self.close()
 
-    def show(self, vlans: list[str]) -> None:
+    @staticmethod
+    def _target_values(target: str | tuple[str, str]) -> tuple[str, str]:
+        if isinstance(target, tuple):
+            vlan, port = target
+            return str(vlan), str(port).strip().upper()
+        return str(target), ""
+
+    def show(self, vlans: list[str | tuple[str, str]]) -> None:
         if self.window is not None and self.window.winfo_exists():
             self.window.deiconify()
             self.window.lift()
-            for vlan in vlans:
-                self._ensure_tab(vlan)
+            for target in vlans:
+                vlan, port = self._target_values(target)
+                self._ensure_tab(vlan, port)
             return
         # 优先恢复上次保存的日志目录,失效时回退到默认 D:\Serial_Log
         self.log_dir = self._restore_log_dir()
         self.window = Toplevel(self.master)
         self.window.title("串口日志记录")
         # 优先恢复上次窗口位置+大小,无效时回退到默认尺寸
-        self.window.geometry(self._load_geometry() or _DEFAULT_GEOMETRY)
+        saved_geometry = self._load_geometry()
+        self.window.geometry(saved_geometry or _DEFAULT_GEOMETRY)
         # 禁止用户拖拽到比默认更小,避免内容被挤压变形
         self.window.minsize(_MIN_WIDTH, _MIN_HEIGHT)
         toolbar = Frame(self.window)
@@ -103,18 +113,33 @@ class SerialTerminalWindow:
         self.notebook = ttk.Notebook(self.window)
         self.notebook.pack(fill="both", expand=True, padx=12, pady=(0, 12))
         self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
-        for vlan in vlans:
-            self._ensure_tab(vlan)
+        for target in vlans:
+            vlan, port = self._target_values(target)
+            self._ensure_tab(vlan, port)
         self.window.protocol("WM_DELETE_WINDOW", self.close)
+        if saved_geometry is None or self._geometry_is_at_top_left(saved_geometry):
+            center_toplevel_on_parent(self.window, self.master)
         self._poll()
 
-    def _ensure_tab(self, vlan: str) -> None:
+    @staticmethod
+    def _geometry_is_at_top_left(geometry: str) -> bool:
+        match = _GEOMETRY_PATTERN.match(geometry)
+        if match is None:
+            return True
+        return int(match.group("x")) == 0 and int(match.group("y")) == 0
+
+    def _ensure_tab(self, vlan: str, port: str = "") -> None:
         normalized = vlan.lower()
+        resolved_port = (port or "").strip().upper() or vlan_to_serial_port(normalized)
         if normalized in self.tabs:
+            item = self.tabs[normalized]
+            if item["port"] != resolved_port and item["session"] is None:
+                item["port"] = resolved_port
+                item["status"].set(f"{resolved_port} 未打开")
+                self.notebook.tab(item["frame"], text=f"{normalized} / {resolved_port}")
             return
-        port = vlan_to_serial_port(normalized)
         frame = Frame(self.notebook)
-        status = StringVar(value=f"{port} 未打开")
+        status = StringVar(value=f"{resolved_port} 未打开")
         Label(frame, textvariable=status, anchor="w").pack(fill="x", padx=8, pady=5)
         output = Text(frame, wrap="word", state="disabled")
         output.pack(fill="both", expand=True, padx=8, pady=5)
@@ -134,8 +159,8 @@ class SerialTerminalWindow:
         ttk.Button(bottom, text="发送", command=lambda v=normalized: self.send(v)).pack(side="left", padx=(6, 0))
         ttk.Button(bottom, text="回车", command=lambda v=normalized: self.send(v, force_enter=True)).pack(side="left", padx=(6, 0))
         ttk.Button(bottom, text="清屏", command=lambda o=output: self.clear(o)).pack(side="left", padx=(6, 0))
-        self.tabs[normalized] = {"port": port, "frame": frame, "status": status, "output": output, "command": command, "owner": None, "session": None, "subscriber": None}
-        self.notebook.add(frame, text=f"{normalized} / {port}")
+        self.tabs[normalized] = {"port": resolved_port, "frame": frame, "status": status, "output": output, "command": command, "owner": None, "session": None, "subscriber": None}
+        self.notebook.add(frame, text=f"{normalized} / {resolved_port}")
 
     def open_monitor(self, vlan: str) -> bool:
         item = self.tabs[vlan]
@@ -165,13 +190,13 @@ class SerialTerminalWindow:
                 failed.append(vlan)
         return tuple(failed)
 
-    def attach_upgrade(self, vlan: str, session, log_path: Path) -> None:
+    def attach_upgrade(self, vlan: str, session, log_path: Path, port: str = "") -> None:
         opened_by_upgrade = self.window is None or not self.window.winfo_exists()
         if self.window is None or not self.window.winfo_exists():
-            self.show([vlan])
+            self.show([(vlan, port)])
         if opened_by_upgrade and self._upgrade_batch_active:
             self._auto_opened_for_upgrade = True
-        self._ensure_tab(vlan)
+        self._ensure_tab(vlan, port)
         item = self.tabs[vlan.lower()]
         if item["subscriber"] is None:
             subscriber = lambda event, v=vlan.lower(): self.events.put_nowait((v, event))

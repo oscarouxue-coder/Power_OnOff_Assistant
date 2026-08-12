@@ -27,6 +27,7 @@ python scripts\verify_baseline.py
 - 打包：`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1` → `dist\LineCheckAssistant.exe`
 - **构建后不在当前 PC 运行 `dist\LineCheckAssistant.exe`**，仅确认打包成功并报告路径
 - 主界面内容区不得重复显示“开关机测试环境搭建助手”和“配置测试通道、完成自动上/下电并检查全部线路”，“执行日志”标题下不得显示“运行步骤、检查结果和异常信息”；管理员权限状态必须位于常用工具栏右侧、视觉上在“刷新串口”左侧，权限就绪/缺失仍分别使用成功/危险样式，刷新串口与刷新网卡顺序不得改变
+- **已确认验收（2026-08-13）**：项目负责人确认各功能入口居中显示需求验收通过。主界面“检查并执行测试”“自动上/下电”“样机升级”“写样机参数”“ONU注册”“串口日志”“DUT配置”和“测试项配置”首次创建必须相对当前主界面实际屏幕坐标居中，主界面位于副屏时不得跳回主屏；DUT和测试项配置必须先居中再执行已验收的客户区尺寸刷新，刷新后位置不得漂移；串口日志无有效历史位置或历史位置为`+0+0`时居中，用户主动移动后的其它有效历史位置仍按原规则恢复
 
 ### 1.2 测试与目录基线
 
@@ -67,14 +68,15 @@ python scripts\verify_baseline.py
 
 ### 2.1 通道 / 网卡 / Ping
 
-- **状态**：已确认验收（通道 / 网卡配置、线路 Ping、程控电源 COM 与 VLAN 下拉分组筛选、空 COM 全网卡展示与配置保存，2026-07-24）/ 已实现未验收（本次线路 Ping 网卡准备按需复用）
-- **核心行为**：按 VLAN 标识已勾选通道；支持网卡刷新 / 子网配置 / Ping 样机管理 IP；现场配置写 `Auto_power_on_off_tool/config/network_card_ip.ini`
+- **状态**：已确认验收（通道 / 网卡配置、线路 Ping、程控电源 COM 与 VLAN 下拉分组筛选、空 COM 全网卡展示与配置保存，2026-07-24）/ 已实现未验收（通道对应COM口选择与串口流程联动、本次线路 Ping 网卡准备按需复用）
+- **核心行为**：按 VLAN 标识已勾选通道；支持网卡刷新 / 子网配置 / Ping 样机管理 IP；现场配置写 `Auto_power_on_off_tool/config/network_card_ip.ini`。每个通道同时保存独立`serial_port`；历史配置缺字段时仅在运行期回退`vlan{N} → COM{N-100}`，不得因兼容读取擅自改写文件
 - **已确认验收行为（2026-07-23）**：切换程控电源 `COM101` 时 VLAN 下拉候选仅显示 `VLAN101`–`VLAN108`；切换 `COM102` 时仅显示 `VLAN109`–`VLAN116`；切换不会自动改写已保存通道配置。
 - **已确认验收行为（2026-07-24）**：程控电源 COM 为空时，VLAN 下拉候选展示所有已识别网卡；空值可保存到 `network_card_ip.ini`，不会被读取逻辑回填为 `COM101`。
+- **已实现未验收（2026-08-13）**：主界面通道表新增“通道对应 COM口”只读下拉；`COM101`候选仅`COM1`–`COM8`，`COM102`仅`COM9`–`COM16`，后续每组8口顺延；程控电源为空时展示`COM1`–`COM48`。切换程控电源只改变候选，不清空或改写已保存通道VLAN/COM；选择后实时保存。
 - **边界与异常**：写网卡静态 IP 需管理员权限；源 IP 不可绑时**强提示人工检查 ini**，不回退 `0.0.0.0`
 - **禁止破坏**：配置写入位置唯一（不可再新建 `Cheating_machine_execution_tool/config/`）
-- **待确认**：真实 Windows 网卡已满足时线路 Ping 跳过重复启用和静态 IP 设置，网卡/IP 不满足时仍按需修复并正确 Ping。
-- **对应测试**：`tests/test_app.py`、`tests/test_paths.py`、`tests/test_network_ops.py`
+- **待确认**：Windows主界面切换`COM101/COM102`，核对通道COM候选分别为`COM1`–`COM8`/`COM9`–`COM16`，逐通道选择、关闭重开后保持；真实 Windows 网卡已满足时线路 Ping 跳过重复启用和静态 IP 设置，网卡/IP 不满足时仍按需修复并正确 Ping。
+- **对应测试**：`tests/test_app.py`、`tests/test_channel_config.py`、`tests/test_paths.py`、`tests/test_network_ops.py`
 
 ### 2.2 程控电源（COM101-COM116 直连）
 
@@ -90,7 +92,7 @@ python scripts\verify_baseline.py
   - 串口参数 **19200 8N1**
   - **不发送全断电帧**
   - 当前主程序的直连程控电源、升级和写参路径不得依赖旧 GUI 或旧 EXE；仅全流程子任务7可通过独立无 GUI service 子进程复用旧工具的 `test_case/common/clients` 业务类，且不得 import / 实例化 `Auto_Power_On_Off_Tool.py` 的 GUI 主类，不得改变本节直连路径“不发送全断电帧”的已验收行为
-  - 串口路径 `vlan{N} -> COM{N-100}` 硬编码（未配置化）
+  - 样机串口优先使用通道显式`serial_port`；仅历史配置缺少该字段时允许回退`vlan{N} -> COM{N-100}`，不得忽略用户选择
 - **对应测试**：`tests/test_power_supply.py`、`tests/test_app.py`、`tests/test_serial_upgrade_service.py`
 
 ### 2.3 串口日志 / 多 VLAN 终端
@@ -98,14 +100,14 @@ python scripts\verify_baseline.py
 - **状态**：已确认验收（命令输入框回车发送，2026-07-15）/ 已实现未验收（其余）
 - **核心验收行为**：
   - 命令输入框 Enter 发送 — 非空等价「发送」+ 自动清空；空字符串等价「回车」；自动升级占用与危险命令（`reboot` / `reset` / `firstboot` / `tftp` / `upgrade`）二次确认仍生效
-  - 多 Tab、`vlan{N} -> COM{N-100}` 固定映射、按 VLAN 合并后只渲染当前 Tab；33ms 节流渲染
+  - 多 Tab按通道显式COM打开；历史配置无`serial_port`时兼容`vlan{N} -> COM{N-100}`；按 VLAN 合并后只渲染当前 Tab，33ms 节流渲染
   - “打开全部”必须启用窗口当前全部 VLAN/COM Tab；全流程勾选串口日志时必须自动执行同一动作，不能只显示窗口并停留在“COM 未打开”
   - 屏内缓冲上限 48 KiB（工作缓冲）；全局缓冲超 64 KiB 触发合并展示
   - 默认日志目录不可写 / 终端状态文件不可写时显式提示
   - 串口终端原始日志文件名固定为 `<vlan名>_<COM口>_<YYYYMMDD>.log`，日期取打开监控时的本机日期，例如 `vlan112_COM12_20260808.log`；手动打开、“打开全部”和全流程预启动必须共用该规则
   - 串口终端落盘日志的每一行必须以 `YYYY-MM-DD_HH:MM:SS` 开头，方向字段紧随其后，例如 `2026-08-08_19:12:10 RX 打印内容`；RX 多行同包必须逐行加时间戳，半行跨读取块必须先拼接，关闭前末尾残留不得丢失。时间戳不得写入串口原始历史、界面事件文本或升级标记判断
 - **禁止破坏**：自动升级占用的 Tab 手动发送（含 Enter）被锁定；危险命令二次确认；原始终端文件由后台串口线程完整写入磁盘
-- **待确认**：3 路以上高频 WiFi 日志压测；现场观察高频滚动下按钮是否持续可点
+- **待确认**：配置一个与VLAN默认推导不同的通道COM，确认手动串口日志、“打开全部”、全流程串口日志和全包升级附加日志都打开实际选择口，Tab标题与日志文件名一致；3 路以上高频 WiFi 日志压测；现场观察高频滚动下按钮是否持续可点
 - **对应测试**：`tests/test_serial_terminal.py`
 
 ### 2.4 全包升级 - `Tftp指令`（设备拉取固件）
@@ -234,8 +236,8 @@ python scripts\verify_baseline.py
   - 「测试项配置」Telnet 与 WiFi 页所有字段标签必须显示中文含义，不得直接显示 `request_url`、`input_user_flag`、`product_solution` 等 INI 原始键名
   - WiFi 页必须完整映射旧 WiFi 参数窗口并保存到当前测试方案 `[connect_wifi]`：`enable`（主控）、`test_2g_enable`、`test_5g_enable`、`product_solution`、`auth_mode`、`cipher`、`choose_wireless_card`、`wireless_card_name`；老配置缺新增键时必须兼容回退为“2.4G/5G 开启、WPA2-PSK、AES、不指定网卡”。“刷新无线网卡”只枚举当前 pywifi 接口，不执行连接
   - 全流程子任务7必须把上述 8 项映射到无 GUI `OnuCongfig`，不得继续把频段、认证、加密或网卡选择写死；主控关闭时明确记录跳过日志。指定网卡开启但名称为空时启动前失败，运行电脑不存在所选网卡时子进程明确失败，不得静默回退其它网卡
-  - 点击「测试项配置」后，窗口必须先隐藏构建五个 Tab 和动态命令控件，再于下一轮 Tk 事件循环显示并处理完整绘制队列；不得依赖移动鼠标或其它额外输入才完成 Windows 客户区绘制
-  - 2026-08-07 Windows 桌面确认：项目负责人确认窗口绘制 BUG 已解决，点击后不再出现只有标题的透明窗口，无需移动鼠标即可完整显示
+  - 点击「测试项配置」后，首次创建必须使用与样机升级、写参和ONU注册一致的标准`Toplevel`自然映射，禁止执行`withdraw()`隐藏构建、`after(0)`强制恢复或嵌套`update()`；复用已有窗口只执行标准`deiconify → lift → focus_force`，不得依赖移动鼠标或其它额外输入才完成客户区绘制
+  - **已确认验收（2026-08-12）**：映射后120ms/360ms执行可恢复的1像素宽度脉冲，可触发Windows`WM_SIZE/WM_PAINT`整树刷新；项目负责人确认“测试项配置”打开后客户区直接完整显示、无需移动鼠标。刷新前后窗口尺寸与位置保持不变。2026-08-13增加的20ms快速刷新和固定尺寸无阻塞居中只属于加载提速，原两次验收刷新继续保留
   - 旧工具“电源控制”channel 1～16 的复选框必须严格等于新工具选中配置：`network_card_ip.ini` 中存在且 `enabled=1` 的 `channel_N` 才勾选，其余（不存在或 `enabled=0`）全部取消勾选；同步只读配置，不得改写新工具通道
   - 串口终端窗口位置 + 日志目录 → `~/.aouxue_serial_terminal.json`
   - VS Code `.vscode/launch.json` 中 `LineCheckAssistant` 入口以 `Cheating_machine_execution_tool` 为工作目录；`.venv_serial_upgrade` 配套 `tftpy==0.8.7`
@@ -325,11 +327,13 @@ python scripts\verify_baseline.py
   - 六个Tab均必须有“当前状态”区域。Telnet/语音/TR069/WiFi查询及WAN现有连接查询均复用网卡状态预检、源IP可绑等待、锁源client、1–8并行、停止和失败隔离；语音/TR069/WiFi仅在全部目标成功且参数一致时回填表单，不一致/失败不得拿任意一台覆盖整批。目标集合变化或执行对应配置后必须使旧状态失效，主日志必须记录实际get路径、完整状态、成功/失败及注销结果
   - 六个Tab的“当前状态”区域必须统一提供可拖动高度调节条，每个Tab独立限制在2–16行并保存到本机`~/.aouxue_dut_config.json`；底部“已加载 N 台目标 DUT”提示和“刷新/查询/停止/执行/关闭”按钮栏必须组成统一受保护区域，以Tab底部优先保留完整请求高度，再由状态区和目标表格使用剩余空间，不能依赖事后坐标测量。固定最大行数之外，还必须按当前Tab及底部区域的实际位置动态收敛，拖动、首次/再次显示、历史高度恢复和Tab切换均不得使提示或按钮被压缩、裁切、遮挡。拖动结束与窗口关闭均保存，下次打开自动恢复各Tab上次有效高度；恢复值在当前布局下会遮挡底部区域时必须自动降低并保存校正值。状态文件缺失、损坏、字段未知或高度越界时必须安全忽略/收敛，不得阻止DUT窗口打开、关闭、查询或配置
   - DUT配置窗口关闭时必须把实际宽度和高度保存到同一`~/.aouxue_dut_config.json`，下次打开在创建内容前恢复；窗口尺寸与当前状态高度的任一保存均不得覆盖另一字段。尺寸不得低于1530×880；在不低于该最小尺寸的前提下，跨屏幕后超过当前屏幕的历史值必须按当前屏幕收敛；状态文件缺失、损坏、字段未知或尺寸非法时回退默认1530×880，不得阻止窗口打开或关闭
+  - DUT配置首次创建必须使用标准`Toplevel`自然映射，禁止执行`withdraw()`隐藏构建、`after(0)`强制恢复或嵌套`update()`；状态高度校正只在Tk空闲阶段执行，复用已有窗口只做标准恢复、置顶和聚焦，不得出现透明客户区或依赖移动鼠标触发完整显示。DUT和测试项配置已知最终窗口尺寸时，居中不得为了读取客户区尺寸而同步刷新整棵控件树；20ms快速尺寸刷新不得替代或删除120ms/360ms两次已验收兜底
+  - **已确认验收（2026-08-12）**：映射后120ms/360ms的可恢复1像素尺寸刷新生效；项目负责人确认“DUT配置”打开后六个Tab客户区直接完整显示、无需移动鼠标，窗口尺寸位置无异常。2026-08-13增加的20ms快速刷新和已知尺寸无阻塞居中只属于加载提速，原两次验收刷新继续保留
   - WAN/WiFi/语音/TR069 复用主界面通道和 Telnet 页 UBUS 凭据/并行数；同一时间只允许一个 DUT 配置批次。每台均执行“准备网络 → 等源 IP 可绑 → 每台独立 UBUS 登录 → 功能配置 → 回读/结果校验 → 关闭 client”，登录失败最多重试3次，功能下发不自动重试，避免 WAN 重复创建
   - 五个新增 Tab 的主执行日志必须包含功能阶段、明文登录、实际 UBUS method/path/input、成功/跳过/失败和批次汇总；表格只显示简短逐台结果
   - WAN的LAN1–LAN8端口绑定和“启用 NAT”、两个WiFi页的“启用WiFi/隐藏WiFi/启用双频合一/启用WMM”、语音“启用 SIP 账号”、TR069“启用周期 Inform / 启用 HTTP 连接请求 / 启用证书 / 配置后手动 Inform”必须使用 Windows 原生 `Checkbutton`：选中显示标准“✓”，未选为空框，不得继续使用 Clam 主题下显示叉号的 `ttk.Checkbutton`；各 BooleanVar 默认值和配置语义保持不变
 - **禁止破坏**：不得复制第二份 AccessCtrl 协议；Telnet 必须继续复用 `enable_telnet_via_ubus`；每台功能必须使用独立 UBUS client 并绑定对应 VLAN 源 IP，结束时必须释放设备端session；网卡状态、目标 IPv4 或前缀任一不满足时不得错误复用，状态读取失败不得绕过原准备流程，任何复用路径不得跳过 `wait_for_bindable_ip`；不得直接导入使用共享静态 Session 的 `SdmcUbusLib`；WAN 删除不得自动扩大为删除全部或模糊匹配其它连接；不得重新向IPoE展示PPPoE凭据、向PPPoE提供静态地址或允许不受协议封装支持的双栈混合静态组合；不得把查询失败、仅部分DUT存在或同索引不同名称的WAN放入批量修改/删除下拉列表；WiFi不得绕过Mapping直接假定Radio/AP/SSID实例相同，双频合一不得覆盖另一频段Radio参数
-- **待确认**：Windows 桌面六个 Tab 的完整绘制、当前状态区和所有字段名称左对齐；调整DUT窗口宽高后关闭重开，确认恢复上次尺寸，并在屏幕分辨率变化时仍完整可用；分别向下拖动六页当前状态高度，确认达到页面安全上限后停止且底部提示与“刷新/查询/停止/执行/关闭”按钮完整可见，再确认目标表格让位、关闭重开和逐页切换时恢复安全高度；同一DUT连续两次Telnet/WAN/WiFi/语音/TR069查询均成功且每轮日志出现设备session注销；Telnet查询准确显示AccessCtrl/规则/TCP23且不修改设备；WAN状态区使用同批结果展示连接摘要；网卡已满足/仅地址不符/禁用/状态读取失败四类准备日志及真实耗时；WAN查询按钮和只读下拉、完整回填、端口绑定、IPTV组播VLAN、WAN新增/修改/删除及协议联动；2.4G/5G真实Mapping解析、各字段查询回填/下发/回读、开放网络、隐藏SSID和双频合一同步但Radio独立；语音SIP模式、语音/TR069查询与一致参数回填、多台状态不一致不覆盖表单、TR069查询不勾选手动Inform、按钮状态和22个选择框勾号外观；真实样机覆盖禁用网卡自动启用、Access denied、1/8台并行、停止和单台失败隔离
+- **待确认**：Windows 桌面分别点击“测试项配置”和“DUT配置”，确认本次20ms快速刷新使客户区更快完整出现，同时仍无透明、闪烁、位置漂移或尺寸变化；六个 DUT Tab 的当前状态区和所有字段名称左对齐；调整DUT窗口宽高后关闭重开，确认恢复上次尺寸，并在屏幕分辨率变化时仍完整可用；分别向下拖动六页当前状态高度，确认达到页面安全上限后停止且底部提示与“刷新/查询/停止/执行/关闭”按钮完整可见，再确认目标表格让位、关闭重开和逐页切换时恢复安全高度；同一DUT连续两次Telnet/WAN/WiFi/语音/TR069查询均成功且每轮日志出现设备session注销；Telnet查询准确显示AccessCtrl/规则/TCP23且不修改设备；WAN状态区使用同批结果展示连接摘要；网卡已满足/仅地址不符/禁用/状态读取失败四类准备日志及真实耗时；WAN查询按钮和只读下拉、完整回填、端口绑定、IPTV组播VLAN、WAN新增/修改/删除及协议联动；2.4G/5G真实Mapping解析、各字段查询回填/下发/回读、开放网络、隐藏SSID和双频合一同步但Radio独立；语音SIP模式、语音/TR069查询与一致参数回填、多台状态不一致不覆盖表单、TR069查询不勾选手动Inform、按钮状态和22个选择框勾号外观；真实样机覆盖禁用网卡自动启用、Access denied、1/8台并行、停止和单台失败隔离
 - **对应测试**：`tests/test_network_ops.py`、`tests/test_dut_config_service.py`、`tests/test_dut_advanced_config_service.py`、`tests/test_dut_wan_query_service.py`、`tests/test_dut_status_query_service.py`、`tests/test_dut_ubus_config.py`、`tests/test_dut_wifi_config.py`、`tests/test_ubus_http_client.py`、`tests/test_telnet_transport.py`、`tests/test_ubus_enable_telnet.py`、`tests/test_app.py`
 
 ---

@@ -103,6 +103,10 @@ from src.services import (
     validate_dut_advanced_request,
 )
 from src.ui import DutConfigWindow, SerialTerminalWindow
+from src.ui.window_paint import (
+    center_toplevel_on_parent,
+    schedule_toplevel_client_refresh,
+)
 
 
 APP_DIR = resolve_tool_root()
@@ -146,20 +150,35 @@ def _clear_test_item_rows(row_widgets: list[dict]) -> None:
     row_widgets.clear()
 
 
-def _reveal_completed_dialog(dialog) -> None:
-    """显示后处理完整绘制队列，避免 Windows 客户区等待鼠标消息才重绘。"""
-    dialog.deiconify()
-    dialog.lift()
-    dialog.update_idletasks()
-    dialog.update()
-    dialog.focus_force()
-
-
 def power_channel_from_section(section: str) -> int:
     try:
         return int(section.lower().replace("channel_", ""))
     except ValueError:
         return 0
+
+
+def _power_serial_group_index(serial_port: str) -> int:
+    normalized_port = (port_from_display(serial_port) or serial_port or "").strip().upper()
+    port_number = normalized_port[3:] if normalized_port.startswith("COM") else ""
+    try:
+        raw_index = int(port_number)
+    except ValueError:
+        return 0
+    if 101 <= raw_index < 101 + POWER_SUPPLY_COUNT:
+        return raw_index - 100
+    if 1 <= raw_index <= POWER_SUPPLY_COUNT:
+        # 兼容操作员口头所说的 COM1 / COM2；实际程控电源项仍为 COM101 / COM102。
+        return raw_index
+    return 0
+
+
+def serial_options_for_power_serial_port(serial_port: str) -> list[str]:
+    """按程控电源分组返回样机串口候选，每组连续8个COM口。"""
+    power_index = _power_serial_group_index(serial_port)
+    if not power_index:
+        return [f"COM{index}" for index in range(1, POWER_SUPPLY_COUNT * VLAN_PER_POWER_SUPPLY + 1)]
+    start_port = (power_index - 1) * VLAN_PER_POWER_SUPPLY + 1
+    return [f"COM{index}" for index in range(start_port, start_port + VLAN_PER_POWER_SUPPLY)]
 
 
 def vlan_options_for_power_serial_port(adapters: list[str], serial_port: str) -> list[str]:
@@ -179,19 +198,7 @@ def vlan_options_for_power_serial_port(adapters: list[str], serial_port: str) ->
                 options_by_alias.setdefault(alias.lower(), adapter)
         return sorted(options_by_alias.values(), key=lambda value: adapter_alias_from_display(value).lower())
 
-    port_number = normalized_port[3:] if normalized_port.startswith("COM") else ""
-    try:
-        raw_index = int(port_number)
-    except ValueError:
-        raw_index = 0
-
-    if 101 <= raw_index < 101 + POWER_SUPPLY_COUNT:
-        power_index = raw_index - 100
-    elif 1 <= raw_index <= POWER_SUPPLY_COUNT:
-        # 兼容操作员口头所说的 COM1 / COM2；实际下拉项仍为 COM101 / COM102。
-        power_index = raw_index
-    else:
-        power_index = 0
+    power_index = _power_serial_group_index(normalized_port)
 
     start_vlan = FIRST_VLAN_ID + (power_index - 1) * VLAN_PER_POWER_SUPPLY
     end_vlan = start_vlan + VLAN_PER_POWER_SUPPLY - 1
@@ -217,6 +224,7 @@ def vlan_options_for_power_serial_port(adapters: list[str], serial_port: str) ->
         ),
     )
 CHANNEL_TABLE_COMBO_WIDTH = 32
+CHANNEL_TABLE_SERIAL_COMBO_WIDTH = 12
 CHANNEL_TABLE_GROUP_GAP = 24
 CHANNEL_TABLE_ROWS_PER_GROUP = 4
 UPGRADE_MODE_OPTIONS = ("页面升级", DEFAULT_UPGRADE_MODE)
@@ -655,7 +663,7 @@ class LineCheckAssistant(Tk):
         config_header.pack(fill="x")
         ttk.Label(config_header, text="2  配置测试参数", style="CardTitle.TLabel").pack(side="left")
         ttk.Button(config_header, text="测试项配置", command=self._open_test_item_config, style="Tool.TButton").pack(side="right")
-        ttk.Label(config_card, text="通道勾选和 VLAN 选择会实时保存", style="CardHint.TLabel").pack(anchor="w", pady=(3, 10))
+        ttk.Label(config_card, text="通道勾选、VLAN和COM口选择会实时保存", style="CardHint.TLabel").pack(anchor="w", pady=(3, 10))
 
         self.enabled_var = BooleanVar(value=True)
         self.vlan_var = StringVar()
@@ -760,7 +768,7 @@ class LineCheckAssistant(Tk):
         self._configure_log_tags()
         self._log_section("操作步骤")
         self._log("1. 人工接好所有样机线路")
-        self._log("2. 选择本次测试使用的程控电源串口，并确认通道对应的 VLAN")
+        self._log("2. 选择本次测试使用的程控电源串口，并确认通道对应的 VLAN 和 COM口")
         self._log("3. 点击“直接控制程控电源上电”")
         self._log("4. 主程序通过程控电源串口按选中通道执行断电、上电")
         self._log("5. 回到本软件检查线路")
@@ -896,6 +904,7 @@ class LineCheckAssistant(Tk):
             dialog.destroy()
 
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+        center_toplevel_on_parent(dialog, self)
         # 程序重开后内存记录为空，但路径已由 sample_upgrade_settings.ini 恢复；
         # 自动重新加载，使窗口预检和全流程状态都基于同一份已选参数表。
         saved_table_path = self.parameter_table_path_var.get().strip()
@@ -914,10 +923,7 @@ class LineCheckAssistant(Tk):
             if not vlan:
                 items.append(("", ""))
                 continue
-            try:
-                items.append((vlan, vlan_to_serial_port(vlan)))
-            except ValueError:
-                items.append((vlan, ""))
+            items.append((vlan, LineCheckAssistant._serial_port_for_channel(channel)))
         return items
 
     def _channel_for_vlan(self, vlan_name: str) -> ChannelConfig | None:
@@ -1336,7 +1342,7 @@ class LineCheckAssistant(Tk):
                 parallel_count=parallel_count,
                 on_output=emit_to_main,
                 on_session_ready=lambda vlan, session, log_path: self.after(
-                    0, lambda vlan=vlan, session=session, log_path=log_path: self.serial_terminal.attach_upgrade(vlan, session, log_path)
+                    0, lambda vlan=vlan, session=session, log_path=log_path: self._attach_serial_upgrade(vlan, session, log_path)
                 ),
                 cancel_event=cancel_event,
             )
@@ -1734,6 +1740,7 @@ class LineCheckAssistant(Tk):
             side="bottom", anchor="e", pady=(18, 0)
         )
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+        center_toplevel_on_parent(dialog, self)
 
     def _on_onu_telnet_test_clicked(self) -> None:
         if self.onu_telnet_test_running:
@@ -2152,6 +2159,7 @@ class LineCheckAssistant(Tk):
         ttk.Button(buttons, text="关闭", width=12, command=close_dialog, style="Secondary.TButton").pack(side="right")
         ttk.Button(buttons, text="开始升级", width=12, command=self._on_upgrade_start_clicked, style="Primary.TButton").pack(side="right", padx=(0, 8))
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+        center_toplevel_on_parent(dialog, self)
 
     def _toggle_upgrade_restore_factory(self, _event=None) -> str:
         self.upgrade_restore_factory_var.set(not self.upgrade_restore_factory_var.get())
@@ -2387,10 +2395,14 @@ class LineCheckAssistant(Tk):
                 restore_factory=bool(self.upgrade_restore_factory_var.get()),
                 transfer_method=transfer_method,
                 power_channel=power_channel,
+                serial_port=LineCheckAssistant._serial_port_for_channel(channel),
             )
             upgrade_items.append((channel, request))
 
-        target_text = "、".join(request.vlan for _channel, request in upgrade_items)
+        target_text = "、".join(
+            f"{request.vlan}/{request.serial_port or '(未配置COM)'}"
+            for _channel, request in upgrade_items
+        )
         transfer_action = "执行 Tftp Put" if transfer_method == TFTP_PUT_TRANSFER else "下发 Tftp指令"
         execution_mode = LineCheckAssistant._normalize_upgrade_execution_mode(self.upgrade_execution_var.get())
         parallel_count = clamp_parallel_count(self.upgrade_parallel_count_var.get())
@@ -2488,7 +2500,7 @@ class LineCheckAssistant(Tk):
                     self.serial_session_manager,
                     on_output=lambda line: self.log_queue.put(line),
                     on_session_ready=lambda vlan, session, log_path: self.after(
-                        0, lambda: self.serial_terminal.attach_upgrade(vlan, session, log_path)
+                        0, lambda vlan=vlan, session=session, log_path=log_path: self._attach_serial_upgrade(vlan, session, log_path)
                     ),
                 )
             except Exception as exc:
@@ -2558,7 +2570,7 @@ class LineCheckAssistant(Tk):
                 max_workers=max_workers,
                 on_output=lambda vlan, line: self.log_queue.put(f"[{vlan}] {line}"),
                 on_session_ready=lambda vlan, session, log_path: self.after(
-                    0, lambda: self.serial_terminal.attach_upgrade(vlan, session, log_path)
+                    0, lambda vlan=vlan, session=session, log_path=log_path: self._attach_serial_upgrade(vlan, session, log_path)
                 ),
                 on_item_started=on_item_started,
                 on_item_complete=on_item_complete,
@@ -2616,7 +2628,7 @@ class LineCheckAssistant(Tk):
                 max_workers=max_workers,
                 on_output=lambda vlan, line: self.log_queue.put(f"[{vlan}] {line}"),
                 on_session_ready=lambda vlan, session, log_path: self.after(
-                    0, lambda: self.serial_terminal.attach_upgrade(vlan, session, log_path)
+                    0, lambda vlan=vlan, session=session, log_path=log_path: self._attach_serial_upgrade(vlan, session, log_path)
                 ),
                 on_item_started=on_item_started,
                 on_item_complete=on_item_complete,
@@ -2716,6 +2728,25 @@ class LineCheckAssistant(Tk):
             vlans.append(value.lower() if value.lower().startswith("vlan") else value)
         return sorted(vlans, key=self._vlan_sort_key)
 
+    def _selected_serial_targets(self) -> list[tuple[str, str]]:
+        targets: list[tuple[str, str]] = []
+        seen = set()
+        for channel in self.channels:
+            if not channel.enabled:
+                continue
+            vlan = adapter_alias_from_display(channel.vlan_name or channel.adapter_alias).strip()
+            if not vlan or vlan.casefold() in seen:
+                continue
+            seen.add(vlan.casefold())
+            normalized_vlan = vlan.lower() if vlan.lower().startswith("vlan") else vlan
+            targets.append(
+                (normalized_vlan, LineCheckAssistant._serial_port_for_channel(channel))
+            )
+        return sorted(targets, key=lambda item: self._vlan_sort_key(item[0]))
+
+    def _serial_targets_for_vlans(self, vlans: list[str]) -> list[tuple[str, str]]:
+        return [(vlan, self._serial_port_for_vlan(vlan)) for vlan in vlans]
+
     def _refresh_upgrade_targets(self) -> None:
         vlans = self._selected_upgrade_vlans()
         if vlans:
@@ -2742,12 +2773,11 @@ class LineCheckAssistant(Tk):
             self.test_item_config_window.deiconify()
             self.test_item_config_window.lift()
             self.test_item_config_window.focus_force()
+            schedule_toplevel_client_refresh(self.test_item_config_window)
             return
 
         dialog = Toplevel(self)
         self.test_item_config_window = dialog
-        # 测试项命令较多，构建过程中先隐藏，避免 Windows 提前显示未绘制完成的空窗口。
-        dialog.withdraw()
         dialog.title("测试项配置")
         dialog.geometry("960x940")
         dialog.minsize(960, 940)
@@ -2918,8 +2948,18 @@ class LineCheckAssistant(Tk):
         ttk.Button(button_bar, text="保存", command=save, style="Primary.TButton").pack(side="right", padx=(0, 8))
 
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
-        # 必须让当前按钮回调先结束，再显示并处理一次完整 WM_PAINT 队列。
-        dialog.after(0, lambda: _reveal_completed_dialog(dialog))
+        center_toplevel_on_parent(
+            dialog,
+            self,
+            window_width=960,
+            window_height=940,
+        )
+        schedule_toplevel_client_refresh(
+            dialog,
+            on_first_refresh=lambda: self._log(
+                "[测试项配置] 已触发客户区首帧尺寸刷新"
+            ),
+        )
 
     # -- 测试项配置：各 Tab 的具体构建 ------------------------------------
 
@@ -3717,8 +3757,20 @@ class LineCheckAssistant(Tk):
     def _serial_log_directory(self) -> Path:
         return DEFAULT_LOG_DIR
 
+    def _attach_serial_upgrade(self, vlan: str, session, log_path: Path) -> None:
+        self.serial_terminal.attach_upgrade(
+            vlan,
+            session,
+            log_path,
+            port=self._serial_port_for_vlan(vlan),
+        )
+
     def _open_serial_log_module(self, vlans: list[str] | None = None) -> None:
-        targets = vlans or self._selected_upgrade_vlans()
+        targets = (
+            self._serial_targets_for_vlans(vlans)
+            if vlans is not None
+            else self._selected_serial_targets()
+        )
         if not targets:
             messagebox.showwarning("没有目标样机", "请先在主界面勾选至少一个通道。", parent=self)
             return
@@ -3726,14 +3778,18 @@ class LineCheckAssistant(Tk):
 
     def _open_pipeline_serial_logs(self, vlans: list[str] | None = None) -> None:
         """全流程专用：显示串口日志窗口，并打开窗口中的全部串口。"""
-        targets = vlans or self._selected_upgrade_vlans()
+        targets = (
+            self._serial_targets_for_vlans(vlans)
+            if vlans is not None
+            else self._selected_serial_targets()
+        )
         if not targets:
             raise RuntimeError("没有已勾选通道，无法打开串口日志")
         self.serial_terminal.show(targets)
         failed = self.serial_terminal.open_all()
         ports = ", ".join(
-            f"{vlan.lower()}/{vlan_to_serial_port(vlan)}"
-            for vlan in targets
+            f"{vlan.lower()}/{port or '(未配置COM)'}"
+            for vlan, port in targets
         )
         if failed:
             failed_text = ", ".join(failed)
@@ -3773,6 +3829,9 @@ class LineCheckAssistant(Tk):
             on_query_wifi_5g=self._query_dut_wifi_5g_status,
             on_stop=self._stop_dut_telnet_enable,
             on_close=self._close_dut_config_module,
+            on_first_paint_refresh=lambda: self._log(
+                "[DUT配置] 已触发客户区首帧尺寸刷新"
+            ),
         )
         self._refresh_dut_config_targets()
         self._log(
@@ -4592,9 +4651,9 @@ class LineCheckAssistant(Tk):
 
         group_count = 2 if len(selected_channels) > CHANNEL_TABLE_ROWS_PER_GROUP else 1
         rows_per_group = (len(selected_channels) + group_count - 1) // group_count
-        headers = ["通道", "启用检查", "通道对应 VLAN"]
+        headers = ["通道", "启用检查", "通道对应 VLAN", "通道对应 COM口"]
         for group in range(group_count):
-            base_column = group * 4
+            base_column = group * 5
             if group:
                 self.channel_table.columnconfigure(base_column - 1, minsize=CHANNEL_TABLE_GROUP_GAP)
             self.channel_table.columnconfigure(base_column + 2, weight=1)
@@ -4608,15 +4667,18 @@ class LineCheckAssistant(Tk):
                 )
 
         vlan_options = self._current_vlan_options()
+        serial_options = self._current_channel_serial_options()
         for index, channel in enumerate(selected_channels):
             group = index // rows_per_group
             row = index % rows_per_group + 1
-            base_column = group * 4
+            base_column = group * 5
             enabled_var = BooleanVar(value=channel.enabled)
             vlan_var = StringVar(value=channel.vlan_name or channel.adapter_alias)
+            serial_var = StringVar(value=self._serial_port_for_channel(channel))
             self.channel_row_vars[channel.section] = {
                 "enabled": enabled_var,
                 "vlan": vlan_var,
+                "serial_port": serial_var,
             }
 
             Label(self.channel_table, text=channel.section, width=12, anchor="w", background=COLOR_SURFACE, foreground=COLOR_TEXT).grid(row=row, column=base_column, sticky="w", padx=(0, 8), pady=4)
@@ -4638,6 +4700,18 @@ class LineCheckAssistant(Tk):
             )
             vlan_combo.grid(row=row, column=base_column + 2, sticky="ew", padx=(0, 8), pady=3)
             vlan_combo.bind("<<ComboboxSelected>>", lambda _event, section=channel.section: self._on_row_vlan_changed(section))
+            serial_combo = ttk.Combobox(
+                self.channel_table,
+                textvariable=serial_var,
+                values=serial_options,
+                width=CHANNEL_TABLE_SERIAL_COMBO_WIDTH,
+                state="readonly",
+            )
+            serial_combo.grid(row=row, column=base_column + 3, sticky="w", padx=(0, 8), pady=3)
+            serial_combo.bind(
+                "<<ComboboxSelected>>",
+                lambda _event, section=channel.section: self._on_row_serial_changed(section),
+            )
 
     def _on_row_enabled_changed(self, section: str) -> None:
         channel = self._channel_by_section(section)
@@ -4658,6 +4732,20 @@ class LineCheckAssistant(Tk):
         self._refresh_channel_list_item(index)
         self._select_channel_index(index)
         self._persist_config()
+
+    def _on_row_serial_changed(self, section: str) -> None:
+        channel = self._channel_by_section(section)
+        if not channel:
+            return
+        self._capture_channel_row(channel)
+        index = self.channels.index(channel)
+        self._refresh_channel_list_item(index)
+        self._select_channel_index(index)
+        self._persist_config()
+        self._log(
+            f"{channel.section} 通道对应 COM口已更新为 "
+            f"{channel.serial_port or '(空)'}。"
+        )
 
     def _on_device_ip_changed(self, _event=None) -> None:
         self._persist_config()
@@ -4692,6 +4780,7 @@ class LineCheckAssistant(Tk):
         matched_adapter = self._find_adapter_for_vlan(selected_vlan)
         channel.vlan_name = matched_adapter or selected_vlan
         channel.adapter_alias = matched_adapter or selected_vlan
+        channel.serial_port = str(row_vars["serial_port"].get()).strip().upper()
         channel.device_manage_ip = self.device_ip_var.get().strip()
         channel.network_card_ip = self._network_card_ip_for_channel(channel)
         channel.subnet_mask = DEFAULT_SUBNET_MASK
@@ -4719,8 +4808,33 @@ class LineCheckAssistant(Tk):
     def _current_vlan_options(self) -> list[str]:
         return self._vlan_adapter_options()
 
+    def _current_channel_serial_options(self) -> list[str]:
+        return serial_options_for_power_serial_port(self._selected_power_serial_port())
+
     def _vlan_adapter_options(self) -> list[str]:
         return vlan_options_for_power_serial_port(self.adapters, self._selected_power_serial_port())
+
+    @staticmethod
+    def _serial_port_for_channel(channel: ChannelConfig) -> str:
+        configured = (getattr(channel, "serial_port", "") or "").strip().upper()
+        if configured:
+            return configured
+        vlan = adapter_alias_from_display(channel.vlan_name or channel.adapter_alias).strip()
+        if not vlan:
+            return ""
+        try:
+            return vlan_to_serial_port(vlan)
+        except ValueError:
+            return ""
+
+    def _serial_port_for_vlan(self, vlan_name: str) -> str:
+        channel = self._channel_for_vlan(vlan_name)
+        if channel is not None:
+            return self._serial_port_for_channel(channel)
+        try:
+            return vlan_to_serial_port(vlan_name)
+        except ValueError:
+            return ""
 
     def _vlan_sort_key(self, value: str) -> tuple[int, str]:
         alias = adapter_alias_from_display(value).lower()
@@ -4734,15 +4848,24 @@ class LineCheckAssistant(Tk):
         self._rebuild_channel_config_rows()
         self._persist_config()
         options = self._current_vlan_options()
+        serial_options = self._current_channel_serial_options()
         if not selected:
-            self._log("未选择程控电源串口；通道对应 VLAN 下拉框展示所有识别网卡。请手动重启样机后，再进行后续步骤。")
+            self._log(
+                "未选择程控电源串口；通道对应 VLAN 下拉框展示所有识别网卡，"
+                f"通道对应 COM口展示 {serial_options[0]} 到 {serial_options[-1]}。"
+                "请手动重启样机后，再进行后续步骤。"
+            )
         elif options:
             self._log(
                 f"程控电源串口已切换为 {selected}；VLAN 下拉框仅展示 "
-                f"{adapter_alias_from_display(options[0])} 到 {adapter_alias_from_display(options[-1])}。"
+                f"{adapter_alias_from_display(options[0])} 到 {adapter_alias_from_display(options[-1])}；"
+                f"通道对应 COM口仅展示 {serial_options[0]} 到 {serial_options[-1]}。"
             )
         else:
-            self._log(f"程控电源串口已切换为 {selected}；未找到该程控电源对应的 VLAN 网卡。")
+            self._log(
+                f"程控电源串口已切换为 {selected}；未找到该程控电源对应的 VLAN 网卡；"
+                f"通道对应 COM口仅展示 {serial_options[0]} 到 {serial_options[-1]}。"
+            )
 
     def _on_vlan_changed(self, _event=None) -> None:
         matched_adapter = self._find_adapter_for_vlan(self.vlan_var.get())
@@ -4762,7 +4885,10 @@ class LineCheckAssistant(Tk):
 
     def _channel_list_label(self, channel: ChannelConfig) -> str:
         checked = "☑" if channel.enabled else "☐"
-        suffix = f"  {channel.vlan_name}" if channel.vlan_name else ""
+        mappings = " / ".join(
+            value for value in (channel.vlan_name, self._serial_port_for_channel(channel)) if value
+        )
+        suffix = f"  {mappings}" if mappings else ""
         return f"{checked} {channel.section}{suffix}"
 
     def _rebuild_channel_list(self) -> None:
@@ -4999,10 +5125,7 @@ class LineCheckAssistant(Tk):
         dialog.bind("<Return>", lambda _event: confirm())
         dialog.bind("<Escape>", lambda _event: cancel())
 
-        self.update_idletasks()
-        x = self.winfo_x() + max((self.winfo_width() - 460) // 2, 0)
-        y = self.winfo_y() + max((self.winfo_height() - 215) // 2, 0)
-        dialog.geometry(f"+{x}+{y}")
+        center_toplevel_on_parent(dialog, self)
         combo.focus_set()
         self.wait_window(dialog)
         return result["port"], result["action"]

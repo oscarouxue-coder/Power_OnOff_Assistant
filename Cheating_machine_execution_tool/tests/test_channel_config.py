@@ -34,6 +34,7 @@ class ChannelConfigFactoryModeFieldsTests(unittest.TestCase):
                 "channel_3": {
                     "vlan_name": "VLAN103",
                     "adapter_alias": "VLAN103",
+                    "serial_port": "com8",
                     "network_card_ip": "192.168.1.103",
                     "device_manage_ip": "192.168.1.1",
                     "subnet_mask": "255.255.255.0",
@@ -48,6 +49,7 @@ class ChannelConfigFactoryModeFieldsTests(unittest.TestCase):
             channel = channels[0]
             self.assertEqual(channel.factory_device_host, "192.168.29.1")
             self.assertEqual(channel.factory_bind_ip, "192.168.29.103")
+            self.assertEqual(channel.serial_port, "COM8")
             self.assertEqual(channel.subnet_mask, "255.255.255.0")
             self.assertEqual(channel.network_card_ip, "192.168.1.103")
 
@@ -78,6 +80,7 @@ class ChannelConfigFactoryModeFieldsTests(unittest.TestCase):
                     section="channel_7",
                     vlan_name="VLAN107",
                     adapter_alias="VLAN107",
+                    serial_port="COM8",
                     network_card_ip="192.168.1.107",
                     device_manage_ip="192.168.1.1",
                     subnet_mask="255.255.255.0",
@@ -92,6 +95,19 @@ class ChannelConfigFactoryModeFieldsTests(unittest.TestCase):
             self.assertEqual(len(reloaded), 1)
             self.assertEqual(reloaded[0].factory_device_host, "192.168.29.1")
             self.assertEqual(reloaded[0].factory_bind_ip, "192.168.29.107")
+            self.assertEqual(reloaded[0].serial_port, "COM8")
+
+    def test_load_legacy_channel_without_serial_port_keeps_compatible_empty_value(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "network_card_ip.ini"
+            self._write_minimal_ini(
+                config_path,
+                {"channel_8": {"vlan_name": "VLAN113", "enabled": "1"}},
+            )
+
+            channel = ChannelConfigStore(config_path).load()[0]
+
+            self.assertEqual(channel.serial_port, "")
 
     def test_save_and_load_preserves_empty_power_serial_port(self):
         with tempfile.TemporaryDirectory() as directory:

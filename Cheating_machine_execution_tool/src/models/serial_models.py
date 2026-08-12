@@ -39,3 +39,4 @@ class FullPackageUpgradeRequest:
     restore_factory: bool = False
     transfer_method: str = "Tftp指令"
     power_channel: int = 0
+    serial_port: str = ""

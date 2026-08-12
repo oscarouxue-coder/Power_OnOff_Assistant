@@ -12,6 +12,10 @@ from src.ui.serial_terminal import SerialTerminalWindow, build_serial_log_path
 
 
 class SerialTerminalPersistenceTests(unittest.TestCase):
+    def test_only_default_top_left_geometry_is_recentred(self):
+        self.assertTrue(SerialTerminalWindow._geometry_is_at_top_left("1000x650+0+0"))
+        self.assertFalse(SerialTerminalWindow._geometry_is_at_top_left("1000x650+280+120"))
+
     def test_serial_log_path_includes_vlan_port_and_open_date(self):
         path = build_serial_log_path(
             Path(r"D:\Serial_Log"),
@@ -39,6 +43,34 @@ class SerialTerminalPersistenceTests(unittest.TestCase):
             ],
         )
         self.assertEqual(failed, ("vlan113",))
+
+    def test_attach_upgrade_keeps_explicit_channel_port_in_terminal_tab(self):
+        terminal = SerialTerminalWindow(Mock(), Mock(), Path(r"D:\Serial_Log"))
+        terminal.window = None
+        session = Mock()
+        status = Mock()
+
+        def show(targets):
+            terminal.window = Mock()
+            terminal.window.winfo_exists.return_value = True
+            terminal.tabs["vlan113"] = {
+                "port": "COM8",
+                "status": status,
+                "subscriber": None,
+                "session": None,
+            }
+
+        terminal.show = Mock(side_effect=show)
+        terminal._ensure_tab = Mock()
+
+        terminal.attach_upgrade(
+            "vlan113", session, Path(r"D:\Serial_Log\upgrade.log"), port="COM8"
+        )
+
+        terminal.show.assert_called_once_with([("vlan113", "COM8")])
+        terminal._ensure_tab.assert_called_once_with("vlan113", "COM8")
+        self.assertIs(terminal.tabs["vlan113"]["session"], session)
+        self.assertIn("COM8 正在自动升级", status.set.call_args.args[0])
 
     def test_poll_batches_high_frequency_events_by_vlan_and_yields_to_ui(self):
         terminal = SerialTerminalWindow(Mock(), Mock(), Path(r"D:\Serial_Log"))
