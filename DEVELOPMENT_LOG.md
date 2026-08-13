@@ -2,6 +2,66 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-13 - 验收批量参数生成窗口首帧修复
+
+- 类型：真实样机验收 / 状态更新
+- 背景：项目负责人在Windows源码版复验“生成批量样机参数表”窗口首帧修复后明确反馈“可以了”。
+- 完成内容：将该窗口相对父窗口居中及20/120/360ms客户区尺寸刷新从“已实现未验收”更新为“已确认验收”；SN、XPON SN和MAC新生成规则仍保持待Windows实际生成表验收，不随本次窗口显示结论升级状态。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：由项目负责人在Windows源码版打开“生成批量样机参数表”，现场确认窗口无需移动鼠标即可正常完整显示。
+- 验证结果：项目负责人确认窗口透明首帧修复验收通过（2026-08-13）；本轮仅同步验收状态，未修改程序代码。
+- 后续待办：继续现场验收普通SN、XPON SN和用户自定义MAC前缀的实际表格生成结果。
+
+## 2026-08-13 - 修复批量参数生成窗口透明首帧
+
+- 类型：BUG 修复 / UI / 测试 / 文档
+- 背景：项目负责人反馈“生成批量样机参数表”窗口再次出现与此前DUT配置相同的问题：首次打开只显示透明窗口，必须移动鼠标后内容才完整绘制。
+- 完成内容：① 定位该窗口虽然使用标准`Toplevel`，但控件创建完成后没有接入DUT配置/测试项配置已验证的客户区尺寸刷新；② 在全部输入行和按钮创建后，按已知`680×750`尺寸相对“写样机参数”父窗口居中；③ 调用公共`schedule_toplevel_client_refresh`，在映射后20/120/360ms分别执行可恢复的一像素宽度脉冲，触发Windows客户区整树重绘；④ 保持自然映射，不增加`withdraw`、同步`update()`或`after(0)`，首次成功刷新写入主执行日志；⑤ 增加布局完成后居中、刷新调用顺序、父窗口和已知尺寸接线、禁止旧阻塞方案的源码回归，并加入强制基线。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p "test_app.py"`、`python scripts/verify_baseline.py`和`git diff --check`。
+- 验证结果：主界面126项专项测试通过；强制基线全绿（52个当前主程序`.py`编译、编译清单完整、597项单测、112个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows源码版连续多次打开“生成批量样机参数表”，确认每次直接完整显示、无需移动鼠标，并核对居中、无闪烁和尺寸不漂移。现场结论由项目负责人提供后更新验收状态。
+
+## 2026-08-13 - 增加批量参数表MAC前缀输入
+
+- 类型：功能 / 优化 / UI / 测试 / 文档
+- 背景：项目负责人要求“写样机参数 → 生成批量参数表”增加MAC生成规则行，由用户自定义MAC前6位，后6位随机生成十六进制；随后明确要求用户输入不符合十六进制时必须提示错误。
+- 完成内容：① 参数生成模板增加`mac_prefix`字段，生成窗口新增“MAC 前6位（十六进制）”输入行，默认`020000`；② 核心层兼容`A2B3C4`、`A2:B3:C4`、`A2-B3-C4`三种输入形式，去掉分隔符后严格校验6位ASCII十六进制，并校验首字节为单播地址；长度错误、非十六进制和组播前缀均在保存前明确拒绝；③ 用户前缀统一输出为大写冒号格式，每台追加唯一的3字节随机十六进制后缀；④ 保持同批MAC前缀一致、完整MAC唯一及2.4G/5G SSID取各自MAC末4位的已验收关联；⑤ 成功日志增加MAC生成规则，新增自定义前缀、分隔/小写兼容、随机后缀、非法输入和UI接线测试并纳入强制基线。
+- 修改文件：`.claude/plans/sample_parameter_mac_prefix.md`、`Cheating_machine_execution_tool/src/models/sample_parameter_models.py`、`Cheating_machine_execution_tool/src/core/sample_parameter_table.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_table.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p "test_sample_parameter_table.py"`、`python -m unittest discover -s tests -p "test_app.py"`、`python scripts/verify_baseline.py`和`git diff --check`。
+- 验证结果：参数表11项、主界面125项专项测试通过；强制基线全绿（52个当前主程序`.py`编译、编译清单完整、596项单测、111个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows源码版输入有效自定义MAC前缀生成多台记录，核对前6位一致、后6位随机唯一及SSID末4位关联；再分别输入非十六进制、长度错误和组播前缀，核对错误提示。现场结论由项目负责人提供后更新验收状态。
+
+## 2026-08-13 - 限制批量参数表普通SN格式
+
+- 类型：功能 / 优化 / UI / 测试 / 文档
+- 背景：项目负责人在XPON SN固定格式完成后继续明确普通SN规则：SN使用纯数字，字符总长上限为16位，前缀长度加随机后缀长度超过16位时必须提示错误。
+- 完成内容：① 普通SN前缀必须为ASCII纯数字，随机后缀改为仅从`0-9`生成，同批继续保持唯一；② SN前缀与随机后缀长度合计最多16位，超过上限时提示实际前缀长度和后缀长度，前缀为空、含非数字字符或后缀长度不在1–16时也明确拒绝；③ 默认SN前缀改为`12345678`、默认后缀长度保持8，默认生成恰好16位，合计小于16位的有效纯数字配置仍允许生成；④ 界面字段改为“SN 前缀（纯数字）”和“SN 随机后缀长度（总长≤16）”，成功日志同步说明SN与XPON SN两套规则；⑤ 增加纯数字、16位默认值、短配置、同批唯一、非数字和17位越界回归，并加入强制基线；XPON SN固定12位规则、MAC和SSID已验收行为保持不变。
+- 修改文件：`.claude/plans/sample_parameter_sn_format.md`、`Cheating_machine_execution_tool/src/core/sample_parameter_table.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_table.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p "test_sample_parameter_table.py"`、`python -m unittest discover -s tests -p "test_app.py"`、`python scripts/verify_baseline.py`和`git diff --check`。
+- 验证结果：参数表9项、主界面124项专项测试通过；强制基线全绿（52个当前主程序`.py`编译、编译清单完整、593项单测、108个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows源码版使用默认值生成并核对`SN`列为16位纯数字；分别输入非数字前缀、前缀与后缀合计17位确认错误提示，再使用合计小于16位的纯数字配置确认正常生成。现场结论由项目负责人提供后更新验收状态。
+
+## 2026-08-13 - 固定批量参数表XPON SN格式
+
+- 类型：功能 / 优化 / UI / 测试 / 文档
+- 背景：项目负责人要求“写样机参数 → 生成批量参数表”的XPON SN固定为12位，且后8位必须使用十六进制形式；最初口述为SN，随后明确纠正为XPON SN。
+- 完成内容：① XPON SN改为严格4位可编辑前缀（默认`XPON`）加8位唯一大写十六进制后缀（仅`0-9/A-F`），同批保持唯一，前缀非4位时明确拒绝；② 为兼容既有参数表和写参流程，生成结果继续写入`GPON SN`列；③ 普通SN恢复并保留原有可编辑前缀（默认`TESTSN`）和1–32位可调随机后缀，不受XPON SN固定规则影响；④ 生成窗口字段改为“XPON SN 前缀（固定 4 位）”和“SN 随机后缀长度”，成功、生成失败和保存失败继续写入主执行日志；⑤ 新增长度、字符集、同批唯一性、非法前缀、普通SN独立后缀长度及UI接线回归，并纳入强制基线。
+- 修改文件：`.claude/plans/sample_parameter_sn_format.md`、`Cheating_machine_execution_tool/src/core/sample_parameter_table.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_table.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行参数表与主界面专项`unittest`、`python scripts/verify_baseline.py`和`git diff --check`。
+- 验证结果：参数表7项、主界面124项专项测试通过；强制基线全绿（52个当前主程序`.py`编译、编译清单完整、591项单测、106个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过）。
+- 后续待办：Windows源码版打开生成窗口，使用4位与非4位XPON SN前缀分别生成；核对导出表`GPON SN`列为12位、后8位仅大写十六进制且同批唯一，非4位前缀被明确拒绝，同时普通SN后缀长度仍可独立调整。现场结论由项目负责人提供后更新验收状态。
+
+## 2026-08-13 - 验收通道COM与串口日志联动
+
+- 类型：真实样机验收 / 状态更新
+- 背景：项目负责人完成新增“通道对应 COM口”以及串口日志使用用户实际选择COM的现场复验，并明确反馈“验收OK”。
+- 完成内容：① 将通道COM分组候选、逐通道选择、实时保存和旧配置兼容从待确认更新为已确认验收；② 将串口日志按通道实际选择COM打开及Tab映射更新为已确认验收；③ 保留写参、全包升级、全流程串口日志和升级附加日志共用同一显式COM优先边界。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：由项目负责人在Windows源码版选择通道COM并打开串口日志，现场核对分组候选、配置保持和实际打开串口。
+- 验证结果：项目负责人确认验收通过（2026-08-13）；本轮仅更新验收状态，未修改程序代码。
+- 后续待办：无；后续串口映射改动必须继续通过通道COM持久化、升级和串口日志强制基线。
+
 ## 2026-08-13 - 增加通道对应COM口选择
 
 - 类型：功能 / UI / 配置 / 串口 / 回归测试 / 文档

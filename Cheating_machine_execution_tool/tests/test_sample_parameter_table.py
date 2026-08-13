@@ -17,8 +17,9 @@ from src.models import PARAMETER_COLUMNS, ParameterGenerationTemplate
 
 def template():
     return ParameterGenerationTemplate(
-        sn_prefix="SN",
+        sn_prefix="1234567890",
         xpon_prefix="XPON",
+        mac_prefix="A2B3C4",
         ssid_24_prefix="WIFI24",
         ssid_5_prefix="WIFI5",
         suffix_length=6,
@@ -27,6 +28,85 @@ def template():
 
 
 class SampleParameterTableTests(unittest.TestCase):
+    def test_generated_xpon_sn_is_fixed_12_chars_with_upper_hex_last_8(self):
+        records = generate_parameter_records(
+            ["vlan101", "vlan102", "vlan103"], template()
+        )
+
+        serial_numbers = [record.values["GPON SN"] for record in records]
+        self.assertEqual(len(set(serial_numbers)), 3)
+        for serial_number in serial_numbers:
+            self.assertEqual(len(serial_number), 12)
+            self.assertTrue(serial_number.startswith("XPON"))
+            self.assertRegex(serial_number[-8:], r"^[0-9A-F]{8}$")
+        # 普通SN继续使用自己的可调后缀长度，并按默认模板生成16位纯数字。
+        self.assertTrue(
+            all(len(record.values["SN"]) == 16 for record in records)
+        )
+        self.assertTrue(all(record.values["SN"].isdigit() for record in records))
+
+    def test_generated_xpon_sn_rejects_prefix_that_is_not_exactly_4_chars(self):
+        for prefix in ("", "SN", "ABCDE"):
+            tpl = ParameterGenerationTemplate(
+                sn_prefix="12345678",
+                xpon_prefix=prefix,
+                mac_prefix="A2B3C4",
+                ssid_24_prefix="WIFI24",
+                ssid_5_prefix="WIFI5",
+                suffix_length=8,
+            )
+            with self.subTest(prefix=prefix), self.assertRaisesRegex(
+                ValueError, "XPON SN 前缀必须固定为 4 位"
+            ):
+                generate_parameter_records(["vlan101"], tpl)
+
+    def test_generated_sn_is_numeric_and_total_length_does_not_exceed_16(self):
+        records = generate_parameter_records(
+            ["vlan101", "vlan102", "vlan103"], template()
+        )
+
+        serial_numbers = [record.values["SN"] for record in records]
+        self.assertEqual(len(set(serial_numbers)), 3)
+        for serial_number in serial_numbers:
+            self.assertEqual(len(serial_number), 16)
+            self.assertTrue(serial_number.startswith("1234567890"))
+            self.assertRegex(serial_number, r"^[0-9]{16}$")
+
+        shorter = ParameterGenerationTemplate(
+            sn_prefix="1234",
+            xpon_prefix="XPON",
+            mac_prefix="A2B3C4",
+            ssid_24_prefix="WIFI24",
+            ssid_5_prefix="WIFI5",
+            suffix_length=6,
+        )
+        value = generate_parameter_records(["vlan101"], shorter)[0].values["SN"]
+        self.assertEqual(len(value), 10)
+        self.assertRegex(value, r"^[0-9]{10}$")
+
+    def test_generated_sn_rejects_non_numeric_prefix_or_total_over_16(self):
+        non_numeric = ParameterGenerationTemplate(
+            sn_prefix="12AB",
+            xpon_prefix="XPON",
+            mac_prefix="A2B3C4",
+            ssid_24_prefix="WIFI24",
+            ssid_5_prefix="WIFI5",
+            suffix_length=6,
+        )
+        with self.assertRaisesRegex(ValueError, "SN 前缀必须为纯数字"):
+            generate_parameter_records(["vlan101"], non_numeric)
+
+        too_long = ParameterGenerationTemplate(
+            sn_prefix="12345678901",
+            xpon_prefix="XPON",
+            mac_prefix="A2B3C4",
+            ssid_24_prefix="WIFI24",
+            ssid_5_prefix="WIFI5",
+            suffix_length=6,
+        )
+        with self.assertRaisesRegex(ValueError, "不能超过 16 位"):
+            generate_parameter_records(["vlan101"], too_long)
+
     def test_generate_records_are_unique_and_local_unicast(self):
         records = generate_parameter_records(["vlan101", "vlan102", "vlan103"], template())
 
@@ -38,24 +118,54 @@ class SampleParameterTableTests(unittest.TestCase):
             self.assertEqual(first_octet & 0x01, 0)
             self.assertEqual(first_octet & 0x02, 0x02)
 
-    def test_generate_records_share_same_mac_oui_within_batch(self):
-        # 同批 MAC 前 3 字节（OUI）固定,后 3 字节每台唯一。
+    def test_generate_records_use_custom_mac_prefix_and_unique_hex_suffix(self):
+        # 同批 MAC 前 3 字节由用户指定，后 3 字节每台随机且唯一。
         records = generate_parameter_records(
             ["vlan101", "vlan102", "vlan103", "vlan104", "vlan105"], template()
         )
 
         ouis = {":".join(record.values["MAC"].split(":")[:3]) for record in records}
         nics = {":".join(record.values["MAC"].split(":")[3:]) for record in records}
-        # 同批只有 1 个 OUI
-        self.assertEqual(len(ouis), 1, f"OUI 应在同批内一致,实际 {ouis}")
+        self.assertEqual(ouis, {"A2:B3:C4"})
         # NIC 标识（后 3 字节）每台唯一
         self.assertEqual(len(nics), 5)
         # 完整 MAC 仍全部唯一
         self.assertEqual(len({record.values["MAC"] for record in records}), 5)
-        # 首字节仍保留本地管理(bit1=1)+ 单播(bit0=0)位
+        # 用户前缀仍必须是单播地址；是否为本地管理地址由用户输入决定。
         first_octet = int(next(iter(ouis)).split(":")[0], 16)
         self.assertEqual(first_octet & 0x01, 0)
-        self.assertEqual(first_octet & 0x02, 0x02)
+        for nic in nics:
+            self.assertRegex(nic.replace(":", ""), r"^[0-9A-F]{6}$")
+
+    def test_generate_records_accept_separated_lowercase_mac_prefix(self):
+        tpl = ParameterGenerationTemplate(
+            sn_prefix="1234567890",
+            xpon_prefix="XPON",
+            mac_prefix="a2:b3:c4",
+            ssid_24_prefix="WIFI24",
+            ssid_5_prefix="WIFI5",
+            suffix_length=6,
+        )
+
+        mac = generate_parameter_records(["vlan101"], tpl)[0].values["MAC"]
+        self.assertRegex(mac, r"^A2:B3:C4:[0-9A-F]{2}:[0-9A-F]{2}:[0-9A-F]{2}$")
+
+    def test_generate_records_reject_invalid_hex_or_multicast_mac_prefix(self):
+        for prefix, message in (
+            ("A2B3", "恰好 6 个十六进制字符"),
+            ("A2B3G4", "必须为十六进制字符"),
+            ("A3B3C4", "必须为单播地址"),
+        ):
+            tpl = ParameterGenerationTemplate(
+                sn_prefix="1234567890",
+                xpon_prefix="XPON",
+                mac_prefix=prefix,
+                ssid_24_prefix="WIFI24",
+                ssid_5_prefix="WIFI5",
+                suffix_length=6,
+            )
+            with self.subTest(prefix=prefix), self.assertRaisesRegex(ValueError, message):
+                generate_parameter_records(["vlan101"], tpl)
 
     def test_generate_records_ssid_suffix_matches_mac_last_4_hex(self):
         # 2026-07-19:2.4G / 5G SSID 后缀取本机 MAC 末 4 位十六进制（大写）,

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import secrets
-import string
 from pathlib import Path
 from typing import Iterable
 
@@ -13,6 +12,14 @@ from src.models import (
     ParameterGenerationTemplate,
     SampleParameterRecord,
 )
+
+
+XPON_SN_TOTAL_LENGTH = 12
+XPON_SN_HEX_SUFFIX_LENGTH = 8
+XPON_SN_PREFIX_LENGTH = XPON_SN_TOTAL_LENGTH - XPON_SN_HEX_SUFFIX_LENGTH
+_UPPER_HEX_ALPHABET = "0123456789ABCDEF"
+SN_MAX_LENGTH = 16
+_DIGIT_ALPHABET = "0123456789"
 
 
 def load_parameter_records(path: Path) -> list[SampleParameterRecord]:
@@ -59,8 +66,8 @@ def save_parameter_records_xlsx(path: Path, records: Iterable[SampleParameterRec
 
 def generate_parameter_records(vlans: Iterable[str], template: ParameterGenerationTemplate) -> list[SampleParameterRecord]:
     suffix_length = int(template.suffix_length)
-    if not 1 <= suffix_length <= 32:
-        raise ValueError("SN/GPON SN 随机后缀长度必须在 1 到 32 之间。")
+    if not 1 <= suffix_length <= SN_MAX_LENGTH:
+        raise ValueError(f"SN 随机后缀长度必须在 1 到 {SN_MAX_LENGTH} 之间。")
     normalized_vlans = [str(vlan).strip() for vlan in vlans if str(vlan).strip()]
     if not normalized_vlans:
         raise ValueError("没有可生成的 VLAN。")
@@ -68,11 +75,8 @@ def generate_parameter_records(vlans: Iterable[str], template: ParameterGenerati
         raise ValueError("已勾选通道存在重复 VLAN，无法生成参数表。")
     seen_mac: set[str] = set()
     seen_values: dict[str, set[str]] = {"SN": set(), "GPON SN": set()}
-    # 同批 MAC 前 3 字节（OUI）固定,后 3 字节每台唯一(NIC 标识)。
-    # 一次性生成 OUI,保持本地管理 + 单播的 bit 设置
-    # (首字节 bit1=1 本地管理 / bit0=0 单播,等价于原 _unique_local_mac 的处理)。
-    mac_oui = bytearray(secrets.token_bytes(3))
-    mac_oui[0] = (mac_oui[0] & 0xFE) | 0x02
+    # 同批 MAC 前 3 字节由用户指定，后 3 字节为每台唯一的随机十六进制值。
+    mac_prefix = _normalize_mac_prefix(template.mac_prefix)
     # 2.4G / 5G SSID 前缀必须非空(用于拼接 MAC 末 4 位作为共同后缀);
     # 若用户没填,与旧版"SSID 前缀不能为空"的约束保持一致,避免空字符串拼出裸后缀。
     for prefix_field, prefix_value in (
@@ -84,12 +88,12 @@ def generate_parameter_records(vlans: Iterable[str], template: ParameterGenerati
     records: list[SampleParameterRecord] = []
     for index, vlan in enumerate(normalized_vlans, start=2):
         values = {column: str(template.fixed_values.get(column, "")).strip() for column in PARAMETER_COLUMNS}
-        values["SN"] = _unique_prefixed_value(template.sn_prefix, suffix_length, seen_values["SN"])
-        values["GPON SN"] = _unique_prefixed_value(template.xpon_prefix, suffix_length, seen_values["GPON SN"])
+        values["SN"] = _unique_numeric_sn(template.sn_prefix, suffix_length, seen_values["SN"])
+        values["GPON SN"] = _unique_fixed_xpon_sn(template.xpon_prefix, seen_values["GPON SN"])
         # 2026-07-19 优化:2.4G / 5G SSID 后缀改为本机 MAC 末 4 位十六进制
         # (与 MAC 强绑定,同一行两个 SSID 自动共享后缀,操作员可一眼对应本机 MAC)。
         # 例:MAC=CA:7A:85:18:B0:E8,后缀="B0E8" → SSID = prefix + "B0E8"。
-        mac = _unique_local_mac(mac_oui, seen_mac)
+        mac = _unique_mac(mac_prefix, seen_mac)
         ssid_suffix = mac.replace(":", "")[-4:]
         values["MAC"] = mac
         values["2.4G SSID"] = f"{template.ssid_24_prefix}{ssid_suffix}"
@@ -98,29 +102,67 @@ def generate_parameter_records(vlans: Iterable[str], template: ParameterGenerati
     return records
 
 
-def _unique_prefixed_value(prefix: str, length: int, seen: set[str]) -> str:
+def _unique_fixed_xpon_sn(prefix: str, seen: set[str]) -> str:
+    """生成固定12位XPON SN：4位操作员前缀 + 8位大写十六进制后缀。"""
     clean_prefix = (prefix or "").strip()
-    if not clean_prefix:
-        raise ValueError("SN 和 GPON SN 前缀均不能为空。")
-    alphabet = string.ascii_uppercase + string.digits
+    if len(clean_prefix) != XPON_SN_PREFIX_LENGTH:
+        raise ValueError(
+            f"XPON SN 前缀必须固定为 {XPON_SN_PREFIX_LENGTH} 位，生成结果才是 "
+            f"{XPON_SN_TOTAL_LENGTH} 位（后 {XPON_SN_HEX_SUFFIX_LENGTH} 位为十六进制）。"
+        )
     for _ in range(1000):
-        value = clean_prefix + "".join(secrets.choice(alphabet) for _ in range(length))
+        suffix = "".join(
+            secrets.choice(_UPPER_HEX_ALPHABET)
+            for _ in range(XPON_SN_HEX_SUFFIX_LENGTH)
+        )
+        value = clean_prefix + suffix
         if value not in seen:
             seen.add(value)
             return value
-    raise RuntimeError("随机参数生成碰撞次数过多，请重新生成。")
+    raise RuntimeError("随机 XPON SN 生成碰撞次数过多，请重新生成。")
 
 
-def _unique_local_mac(oui: bytearray, seen: set[str]) -> str:
-    """根据同批固定的 OUI (3 字节) 生成唯一的 MAC 地址。
+def _unique_numeric_sn(prefix: str, suffix_length: int, seen: set[str]) -> str:
+    """生成纯数字SN，前缀与随机后缀合计最多16位。"""
+    clean_prefix = (prefix or "").strip()
+    if not clean_prefix:
+        raise ValueError("SN 前缀不能为空。")
+    if not clean_prefix.isascii() or not clean_prefix.isdigit():
+        raise ValueError("SN 前缀必须为纯数字（仅 0-9）。")
+    total_length = len(clean_prefix) + suffix_length
+    if total_length > SN_MAX_LENGTH:
+        raise ValueError(
+            f"SN 前缀长度（{len(clean_prefix)}）+ 随机后缀长度（{suffix_length}）"
+            f"不能超过 {SN_MAX_LENGTH} 位。"
+        )
+    for _ in range(1000):
+        value = clean_prefix + "".join(
+            secrets.choice(_DIGIT_ALPHABET) for _ in range(suffix_length)
+        )
+        if value not in seen:
+            seen.add(value)
+            return value
+    raise RuntimeError("随机 SN 生成碰撞次数过多，请重新生成。")
 
-    OUI 一次性由 ``generate_parameter_records`` 生成并保持本地管理 + 单播位
-    (首字节 bit1=1 本地管理 / bit0=0 单播);本函数只随机生成后 3 字节 NIC
-    标识并拼接成完整 MAC。
-    """
+
+def _normalize_mac_prefix(prefix: str) -> bytes:
+    """校验用户输入的MAC前6位，并返回3字节前缀。"""
+    compact = (prefix or "").strip().replace(":", "").replace("-", "")
+    if len(compact) != 6:
+        raise ValueError("MAC 前6位必须包含恰好 6 个十六进制字符。")
+    if not compact.isascii() or any(character not in _UPPER_HEX_ALPHABET for character in compact.upper()):
+        raise ValueError("MAC 前6位必须为十六进制字符（仅 0-9、A-F）。")
+    raw = bytes.fromhex(compact)
+    if raw[0] & 0x01:
+        raise ValueError("MAC 前6位的首字节必须为单播地址（最低位不能为 1）。")
+    return raw
+
+
+def _unique_mac(prefix: bytes, seen: set[str]) -> str:
+    """根据用户指定的3字节前缀生成唯一的3字节随机后缀。"""
     for _ in range(1000):
         nic = bytearray(secrets.token_bytes(3))
-        raw = bytes(oui) + bytes(nic)
+        raw = prefix + bytes(nic)
         value = ":".join(f"{item:02X}" for item in raw)
         if value not in seen:
             seen.add(value)

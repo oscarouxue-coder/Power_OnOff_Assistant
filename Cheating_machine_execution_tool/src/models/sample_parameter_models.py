@@ -98,6 +98,7 @@ class ParameterTablePreflight:
 class ParameterGenerationTemplate:
     sn_prefix: str
     xpon_prefix: str
+    mac_prefix: str
     ssid_24_prefix: str
     ssid_5_prefix: str
     suffix_length: int

@@ -1424,8 +1424,8 @@ class LineCheckAssistant(Tk):
             return
         dialog = Toplevel(self.parameter_writer_window)
         dialog.title("生成批量样机参数表")
-        dialog.geometry("680x750")
-        dialog.minsize(680, 750)
+        dialog.geometry("680x800")
+        dialog.minsize(680, 800)
         dialog.transient(self.parameter_writer_window)
         dialog.grab_set()
         container = ttk.Frame(dialog, padding=14)
@@ -1433,11 +1433,12 @@ class LineCheckAssistant(Tk):
         ttk.Label(container, text=f"将为 {len(vlans)} 个已勾选 VLAN 生成一行参数。", style="CardHint.TLabel").pack(anchor="w", pady=(0, 10))
 
         fields = {
-            "SN 前缀": StringVar(value="TESTSN"),
-            "XPON SN 前缀": StringVar(value="XPON"),
+            "SN 前缀（纯数字）": StringVar(value="12345678"),
+            "XPON SN 前缀（固定 4 位）": StringVar(value="XPON"),
+            "MAC 前6位（十六进制）": StringVar(value="020000"),
             "2.4G SSID 前缀": StringVar(value="Test24G"),
             "5G SSID 前缀": StringVar(value="Test5G"),
-            "SN/GPON SN 随机后缀长度": StringVar(value="8"),
+            "SN 随机后缀长度（总长≤16）": StringVar(value="8"),
             "2.4G WiFi Password": StringVar(),
             "5G WiFi Password": StringVar(),
             "2.4G Country Code": StringVar(value="CN"),
@@ -1458,7 +1459,7 @@ class LineCheckAssistant(Tk):
 
         def generate_and_save() -> None:
             try:
-                suffix_length = int(fields["SN/GPON SN 随机后缀长度"].get().strip())
+                suffix_length = int(fields["SN 随机后缀长度（总长≤16）"].get().strip())
                 fixed_values = {
                     column: fields[column].get()
                     for column in (
@@ -1469,8 +1470,9 @@ class LineCheckAssistant(Tk):
                 records = generate_parameter_records(
                     vlans,
                     ParameterGenerationTemplate(
-                        sn_prefix=fields["SN 前缀"].get(),
-                        xpon_prefix=fields["XPON SN 前缀"].get(),
+                        sn_prefix=fields["SN 前缀（纯数字）"].get(),
+                        xpon_prefix=fields["XPON SN 前缀（固定 4 位）"].get(),
+                        mac_prefix=fields["MAC 前6位（十六进制）"].get(),
                         ssid_24_prefix=fields["2.4G SSID 前缀"].get(),
                         ssid_5_prefix=fields["5G SSID 前缀"].get(),
                         suffix_length=suffix_length,
@@ -1479,6 +1481,7 @@ class LineCheckAssistant(Tk):
                 )
             except Exception as exc:
                 messagebox.showwarning("生成参数表失败", str(exc), parent=dialog)
+                self._log(f"[写样机参数][生成批量参数表] 参数生成失败：{exc}")
                 return
             path = filedialog.asksaveasfilename(
                 title="保存批量样机参数表",
@@ -1493,7 +1496,14 @@ class LineCheckAssistant(Tk):
                 save_parameter_records_xlsx(Path(path), records)
             except Exception as exc:
                 messagebox.showerror("保存参数表失败", str(exc), parent=dialog)
+                self._log(f"[写样机参数][生成批量参数表] 保存失败：{exc}")
                 return
+            self._log(
+                f"[写样机参数][生成批量参数表] 成功：已生成 {len(records)} 条记录；"
+                f"SN为纯数字且前缀+随机后缀不超过16位；"
+                f"XPON SN固定12位（前缀4位 + 后8位大写十六进制）；"
+                f"MAC前6位由用户指定、后6位为唯一随机十六进制；文件={path}"
+            )
             dialog.grab_release()
             dialog.destroy()
             self._load_parameter_table(Path(path))
@@ -1503,6 +1513,18 @@ class LineCheckAssistant(Tk):
         buttons.pack(fill="x", pady=(10, 0))
         ttk.Button(buttons, text="生成并保存...", command=generate_and_save, style="Primary.TButton").pack(side="right")
         ttk.Button(buttons, text="取消", command=lambda: (dialog.grab_release(), dialog.destroy()), style="Secondary.TButton").pack(side="right", padx=(0, 8))
+        center_toplevel_on_parent(
+            dialog,
+            self.parameter_writer_window,
+            window_width=680,
+            window_height=750,
+        )
+        schedule_toplevel_client_refresh(
+            dialog,
+            on_first_refresh=lambda: self._log(
+                "[写样机参数][生成批量参数表] 已触发客户区首帧尺寸刷新"
+            ),
+        )
 
     def _bind_onu_registration_autosave(self) -> None:
         for variable in (self.onu_olt_ip_var, self.onu_username_var, self.onu_password_var):

@@ -70,6 +70,45 @@ from src.ui.dut_config_window import (
 
 
 class CurrentChannelSelectionTests(unittest.TestCase):
+    def test_parameter_generator_labels_xpon_sn_fixed_format_and_sn_length_separately(self):
+        import inspect
+
+        source = inspect.getsource(LineCheckAssistant._open_parameter_generator)
+
+        self.assertIn('"SN 前缀（纯数字）": StringVar(value="12345678")', source)
+        self.assertIn('"XPON SN 前缀（固定 4 位）": StringVar(value="XPON")', source)
+        self.assertIn('"SN 随机后缀长度（总长≤16）": StringVar(value="8")', source)
+        self.assertIn('sn_prefix=fields["SN 前缀（纯数字）"].get()', source)
+        self.assertIn('xpon_prefix=fields["XPON SN 前缀（固定 4 位）"].get()', source)
+        self.assertNotIn('"SN/GPON SN 随机后缀长度"', source)
+
+    def test_parameter_generator_has_custom_hex_mac_prefix_field(self):
+        import inspect
+
+        source = inspect.getsource(LineCheckAssistant._open_parameter_generator)
+
+        self.assertIn('"MAC 前6位（十六进制）": StringVar(value="020000")', source)
+        self.assertIn('mac_prefix=fields["MAC 前6位（十六进制）"].get()', source)
+        self.assertIn("MAC前6位由用户指定、后6位为唯一随机十六进制", source)
+
+    def test_parameter_generator_centers_and_refreshes_client_area_after_layout(self):
+        import inspect
+
+        source = inspect.getsource(LineCheckAssistant._open_parameter_generator)
+        button_index = source.index('text="取消"')
+        center_index = source.index("center_toplevel_on_parent(")
+        refresh_index = source.index("schedule_toplevel_client_refresh(")
+
+        self.assertLess(button_index, center_index)
+        self.assertLess(center_index, refresh_index)
+        self.assertIn("self.parameter_writer_window", source[center_index:refresh_index])
+        self.assertIn("window_width=680", source[center_index:refresh_index])
+        self.assertIn("window_height=750", source[center_index:refresh_index])
+        self.assertIn("on_first_refresh=lambda", source[refresh_index:])
+        self.assertIn("已触发客户区首帧尺寸刷新", source[refresh_index:])
+        self.assertNotIn("withdraw(", source)
+        self.assertNotIn("after(0", source)
+
     def test_empty_power_serial_port_shows_all_detected_adapters(self):
         adapters = ["VLAN109 [Up]", "Ethernet [Up]", "VLAN101 [Down]"]
 
