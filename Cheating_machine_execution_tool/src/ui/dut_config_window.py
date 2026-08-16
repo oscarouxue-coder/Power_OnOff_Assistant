@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from tkinter import BooleanVar, Checkbutton, END, StringVar, TclError, Text, Toplevel, ttk
 
@@ -15,6 +15,7 @@ from src.models import (
     DutTelnetStatus,
     DutTr069Settings,
     DutVoiceSettings,
+    DutWifiRadioSettings,
     DutWifiSettings,
     DutWanConnectionInfo,
     DutWanQueryResult,
@@ -275,8 +276,8 @@ def tr069_status_form_values(settings: DutTr069Settings) -> dict[str, object]:
 
 
 def wifi_status_form_values(settings: DutWifiSettings) -> dict[str, object]:
-    """把只读 WiFi 状态映射为当前频段表单值。"""
-    return {
+    """把只读WiFi状态映射为公共参数和两套Radio表单值。"""
+    values: dict[str, object] = {
         "ssid_index": settings.ssid_index,
         "ssid": settings.ssid,
         "password": settings.password,
@@ -291,6 +292,20 @@ def wifi_status_form_values(settings: DutWifiSettings) -> dict[str, object]:
         "max_associations": settings.max_associations,
         "wmm_enabled": settings.wmm_enabled,
     }
+    peer_band = "5G" if settings.band == "2.4G" else "2.4G"
+    peer = settings.peer_radio or DutWifiRadioSettings(
+        band=peer_band,
+        channel_bandwidth="20/40MHz" if peer_band == "2.4G" else "160MHz",
+        operating_mode="b,g,n,ax" if peer_band == "2.4G" else "a,n,ac,ax",
+    )
+    values.update(
+        {
+            "peer_channel": peer.channel,
+            "peer_channel_bandwidth": peer.channel_bandwidth,
+            "peer_operating_mode": peer.operating_mode,
+        }
+    )
+    return values
 
 
 def voice_choice_options(settings: DutVoiceSettings) -> dict[str, tuple[str, ...]]:
@@ -366,6 +381,54 @@ def wifi_choice_options(settings: DutWifiSettings) -> dict[str, tuple[str, ...]]
         if current and current not in options:
             options = (current, *options)
         options_by_key[key] = options
+    peer_band = "5G" if band == "2.4G" else "2.4G"
+    peer = settings.peer_radio or DutWifiRadioSettings(
+        band=peer_band,
+        channel_bandwidth="20/40MHz" if peer_band == "2.4G" else "160MHz",
+        operating_mode="b,g,n,ax" if peer_band == "2.4G" else "a,n,ac,ax",
+    )
+    if peer is not None:
+        peer_supported = {
+            "peer_channel": peer.supported_channels,
+            "peer_channel_bandwidth": peer.supported_bandwidths,
+            "peer_operating_mode": peer.supported_modes,
+        }
+        peer_fallback = {
+            "peer_channel": WIFI_CHANNEL_OPTIONS[peer.band],
+            "peer_channel_bandwidth": WIFI_BANDWIDTH_OPTIONS[peer.band],
+            "peer_operating_mode": WIFI_MODE_OPTIONS[peer.band],
+        }
+        peer_current = {
+            "peer_channel": peer.channel,
+            "peer_channel_bandwidth": peer.channel_bandwidth,
+            "peer_operating_mode": peer.operating_mode,
+        }
+        for key in peer_supported:
+            options = tuple(
+                dict.fromkeys(
+                    str(value).strip()
+                    for value in (peer_supported[key] or peer_fallback[key])
+                    if str(value).strip()
+                )
+            )
+            current = str(peer_current[key]).strip()
+            if current and current not in options:
+                options = (current, *options)
+            options_by_key[key] = options
+
+        if settings.dual_band_enabled:
+            primary_powers = tuple(
+                settings.supported_transmit_powers or WIFI_TRANSMIT_POWER_OPTIONS
+            )
+            peer_powers = set(
+                peer.supported_transmit_powers or WIFI_TRANSMIT_POWER_OPTIONS
+            )
+            shared_powers = tuple(
+                value for value in primary_powers if value in peer_powers
+            )
+            if settings.transmit_power and settings.transmit_power not in shared_powers:
+                shared_powers = (settings.transmit_power, *shared_powers)
+            options_by_key["transmit_power"] = shared_powers
     return options_by_key
 
 
@@ -536,8 +599,10 @@ class DutConfigWindow:
         )
         self._wifi_vars: dict[str, dict[str, StringVar | BooleanVar]] = {}
         self._wifi_password_groups: dict[str, tuple[object, object]] = {}
+        self._wifi_peer_radio_groups: dict[str, ttk.LabelFrame] = {}
         self._wifi_choice_widgets: dict[str, dict[str, ttk.Combobox]] = {}
         self._wifi_supported_options: dict[str, dict[str, tuple[str, ...]]] = {}
+        self._wifi_last_status: dict[str, DutWifiSettings] = {}
         self._voice_choice_widgets: dict[str, object] = {}
         self._voice_supported_options: dict[str, tuple[str, ...]] = {}
         self._tr069_capability_widgets: dict[str, object] = {}
@@ -1495,7 +1560,8 @@ class DutConfigWindow:
                 f"批量配置主 {band} SSID；查询会按厂商 Mapping 解析真实 Radio/AP/SSID 路径。"
                 "查询成功后，认证、信道、带宽、协议和功率下拉会按DUT实际能力更新。"
                 "开启双频合一时，当前名称、启用/隐藏、认证密码、最大接入数和WMM会同步到两个频段，"
-                "信道、带宽、协议及功率仍只修改当前频段。UBUS凭据和并行数与Telnet页共享。"
+                "同时显示并独立配置2.4G/5G的信道、带宽和协议，公共发射功率写入两个Radio。"
+                "UBUS凭据和并行数与Telnet页共享。"
             ),
             style="Muted.TLabel",
             wraplength=1180,
@@ -1514,6 +1580,18 @@ class DutConfigWindow:
             "transmit_power": "100",
             "max_associations": "32",
         }
+        peer_band = "5G" if band == "2.4G" else "2.4G"
+        defaults.update(
+            {
+                "peer_channel": "auto",
+                "peer_channel_bandwidth": (
+                    "20/40MHz" if peer_band == "2.4G" else "160MHz"
+                ),
+                "peer_operating_mode": (
+                    "b,g,n,ax" if peer_band == "2.4G" else "a,n,ac,ax"
+                ),
+            }
+        )
         variables: dict[str, StringVar | BooleanVar] = {
             key: StringVar(value=value) for key, value in defaults.items()
         }
@@ -1541,25 +1619,13 @@ class DutConfigWindow:
             form, 0, 3, "认证/加密模式：", variables["security_mode"],
             values=WIFI_SECURITY_MODE_OPTIONS, width=24,
         )
-        channel_combo = self._field(
-            form, 1, 0, "信道：", variables["channel"],
-            values=WIFI_CHANNEL_OPTIONS[band],
-        )
-        bandwidth_combo = self._field(
-            form, 1, 1, "信道带宽：", variables["channel_bandwidth"],
-            values=WIFI_BANDWIDTH_OPTIONS[band],
-        )
-        mode_combo = self._field(
-            form, 1, 2, "WiFi 协议类型：", variables["operating_mode"],
-            values=WIFI_MODE_OPTIONS[band], width=20,
-        )
         power_combo = self._field(
-            form, 1, 3, "发射功率(%)：", variables["transmit_power"],
+            form, 1, 0, "公共发射功率(%)：", variables["transmit_power"],
             values=WIFI_TRANSMIT_POWER_OPTIONS,
         )
-        self._field(form, 2, 0, "最大接入数：", variables["max_associations"])
+        self._field(form, 1, 1, "最大接入数：", variables["max_associations"])
         options = ttk.Frame(form)
-        options.grid(row=2, column=2, columnspan=6, sticky="w", padx=(4, 0), pady=3)
+        options.grid(row=1, column=4, columnspan=4, sticky="w", padx=(4, 0), pady=3)
         for column, (text, variable) in enumerate(
             (
                 ("启用 WiFi", variables["enabled"]),
@@ -1571,6 +1637,73 @@ class DutConfigWindow:
         ):
             option = self._native_checkbutton(options, text=text, variable=variable)
             option.grid(row=0, column=column, sticky="w", padx=(0, 18))
+
+        radio_groups = ttk.Frame(form)
+        radio_groups.grid(
+            row=2, column=0, columnspan=8, sticky="ew", padx=4, pady=(6, 0)
+        )
+        radio_groups.columnconfigure(0, weight=1)
+        radio_groups.columnconfigure(1, weight=1)
+        primary_radio_group = ttk.LabelFrame(
+            radio_groups, text=f"{band} 射频参数", padding=6
+        )
+        primary_radio_group.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        peer_radio_group = ttk.LabelFrame(
+            radio_groups, text=f"{peer_band} 射频参数（双频合一）", padding=6
+        )
+        peer_radio_group.grid(row=0, column=1, sticky="ew", padx=(4, 0))
+        self._wifi_peer_radio_groups[feature] = peer_radio_group
+
+        channel_combo = self._field(
+            primary_radio_group,
+            0,
+            0,
+            f"{band} 信道：",
+            variables["channel"],
+            values=WIFI_CHANNEL_OPTIONS[band],
+        )
+        bandwidth_combo = self._field(
+            primary_radio_group,
+            0,
+            1,
+            f"{band} 信道带宽：",
+            variables["channel_bandwidth"],
+            values=WIFI_BANDWIDTH_OPTIONS[band],
+        )
+        mode_combo = self._field(
+            primary_radio_group,
+            1,
+            0,
+            f"{band} WiFi 协议类型：",
+            variables["operating_mode"],
+            values=WIFI_MODE_OPTIONS[band],
+            width=20,
+        )
+        peer_channel_combo = self._field(
+            peer_radio_group,
+            0,
+            0,
+            f"{peer_band} 信道：",
+            variables["peer_channel"],
+            values=WIFI_CHANNEL_OPTIONS[peer_band],
+        )
+        peer_bandwidth_combo = self._field(
+            peer_radio_group,
+            0,
+            1,
+            f"{peer_band} 信道带宽：",
+            variables["peer_channel_bandwidth"],
+            values=WIFI_BANDWIDTH_OPTIONS[peer_band],
+        )
+        peer_mode_combo = self._field(
+            peer_radio_group,
+            1,
+            0,
+            f"{peer_band} WiFi 协议类型：",
+            variables["peer_operating_mode"],
+            values=WIFI_MODE_OPTIONS[peer_band],
+            width=20,
+        )
 
         hint_var = StringVar(value="")
         variables["hint"] = hint_var
@@ -1589,6 +1722,9 @@ class DutConfigWindow:
             "channel_bandwidth": bandwidth_combo,
             "operating_mode": mode_combo,
             "transmit_power": power_combo,
+            "peer_channel": peer_channel_combo,
+            "peer_channel_bandwidth": peer_bandwidth_combo,
+            "peer_operating_mode": peer_mode_combo,
         }
         variables["security_mode"].trace_add(
             "write", lambda *_args, selected=feature: self._update_wifi_form(selected)
@@ -1630,10 +1766,25 @@ class DutConfigWindow:
             password_label.grid()
             password_entry.grid()
             security_hint = "加密网络密码须为8–63个字符，或64位十六进制密钥。"
+        dual_enabled = bool(variables["dual_band_enabled"].get())
+        peer_radio_group = self._wifi_peer_radio_groups.get(feature)
+        if peer_radio_group is not None:
+            peer_radio_group.grid() if dual_enabled else peer_radio_group.grid_remove()
+        last_status = getattr(self, "_wifi_last_status", {}).get(feature)
+        if last_status is not None and last_status.peer_radio is not None:
+            options_by_key = wifi_choice_options(
+                replace(last_status, dual_band_enabled=dual_enabled)
+            )
+            self._wifi_supported_options[feature] = options_by_key
+            for key, options in options_by_key.items():
+                widget = self._wifi_choice_widgets.get(feature, {}).get(key)
+                if widget is not None:
+                    widget.configure(values=options)
         dual_hint = (
-            "已开启双频合一：名称和安全/AP参数会同步到2.4G与5G。"
-            if bool(variables["dual_band_enabled"].get())
-            else "双频独立：只修改当前频段。"
+            "已开启双频合一：名称和安全/AP参数同步；2.4G/5G信道、带宽和协议独立配置，"
+            "公共发射功率写入两个Radio。"
+            if dual_enabled
+            else "双频独立：只显示并修改当前频段Radio。"
         )
         increment_hint = (
             "SSID递增已开启：名称须以数字结尾，并按已选DUT的目标表顺序逐台加1。"
@@ -1839,16 +1990,23 @@ class DutConfigWindow:
 
     @staticmethod
     def _wifi_status_text(settings: DutWifiSettings) -> str:
-        return (
+        text = (
             f"频段={settings.band}，SSID索引={settings.ssid_index}，"
             f"WiFi={'启用' if settings.enabled else '禁用'}，名称={settings.ssid}，"
             f"密码={settings.password if settings.security_mode != 'None' else '开放网络'}，"
-            f"信道={settings.channel}，带宽={settings.channel_bandwidth}，"
+            f"{settings.band}信道={settings.channel}，带宽={settings.channel_bandwidth}，"
             f"双频合一={'启用' if settings.dual_band_enabled else '禁用'}，"
             f"隐藏={'是' if settings.hidden else '否'}，认证/加密={settings.security_mode}，"
-            f"协议={settings.operating_mode}，功率={settings.transmit_power}%，"
+            f"{settings.band}协议={settings.operating_mode}，公共功率={settings.transmit_power}%，"
             f"最大接入={settings.max_associations}，WMM={'启用' if settings.wmm_enabled else '禁用'}"
         )
+        if settings.peer_radio is not None:
+            peer = settings.peer_radio
+            text += (
+                f"，{peer.band}信道={peer.channel}，带宽={peer.channel_bandwidth}，"
+                f"协议={peer.operating_mode}，实际功率={peer.transmit_power}%"
+            )
+        return text
 
     def set_current_status_results(
         self,
@@ -1945,6 +2103,9 @@ class DutConfigWindow:
         elif feature in {"wifi_2g", "wifi_5g"} and isinstance(
             settings, DutWifiSettings
         ):
+            if not hasattr(self, "_wifi_last_status"):
+                self._wifi_last_status = {}
+            self._wifi_last_status[feature] = settings
             values = wifi_status_form_values(settings)
             variables = self._wifi_vars[feature]
             for key in (
@@ -1955,6 +2116,9 @@ class DutConfigWindow:
                 "channel_bandwidth",
                 "security_mode",
                 "operating_mode",
+                "peer_channel",
+                "peer_channel_bandwidth",
+                "peer_operating_mode",
                 "transmit_power",
                 "max_associations",
             ):
@@ -2023,9 +2187,11 @@ class DutConfigWindow:
     def _reset_wifi_choice_options(self, feature: str) -> None:
         variables = self._wifi_vars.get(feature)
         widgets = self._wifi_choice_widgets.get(feature, {})
+        getattr(self, "_wifi_last_status", {}).pop(feature, None)
         if variables is None:
             return
         band = "2.4G" if feature == "wifi_2g" else "5G"
+        peer_band = "5G" if band == "2.4G" else "2.4G"
         settings = DutWifiSettings(
             band=band,
             channel="auto",
@@ -2033,14 +2199,28 @@ class DutConfigWindow:
             security_mode="WPA2-Personal",
             operating_mode="b,g,n,ax" if band == "2.4G" else "a,n,ac,ax",
             transmit_power="100",
+            peer_radio=DutWifiRadioSettings(
+                band=peer_band,
+                channel="auto",
+                channel_bandwidth=(
+                    "20/40MHz" if peer_band == "2.4G" else "160MHz"
+                ),
+                operating_mode=(
+                    "b,g,n,ax" if peer_band == "2.4G" else "a,n,ac,ax"
+                ),
+                transmit_power="100",
+            ),
         )
         options_by_key = wifi_choice_options(settings)
+        default_values = wifi_status_form_values(settings)
         self._wifi_supported_options[feature] = options_by_key
         for key, options in options_by_key.items():
+            if key not in variables:
+                continue
             if key in widgets:
                 widgets[key].configure(values=options)
             if str(variables[key].get()).strip() not in options:
-                variables[key].set(getattr(settings, key))
+                variables[key].set(default_values[key])
 
     def wan_settings(self) -> DutWanSettings:
         self._sync_wan_port_bind_from_checks()
@@ -2099,19 +2279,44 @@ class DutConfigWindow:
     def wifi_settings(self, feature: str) -> DutWifiSettings:
         variables = self._wifi_vars[feature]
         supported = self._wifi_supported_options.get(feature, {})
+        band = "2.4G" if feature == "wifi_2g" else "5G"
+        peer_band = "5G" if band == "2.4G" else "2.4G"
+        dual_enabled = bool(variables["dual_band_enabled"].get())
+        transmit_power = str(variables["transmit_power"].get()).strip()
+        peer_radio = (
+            DutWifiRadioSettings(
+                band=peer_band,
+                channel=str(variables["peer_channel"].get()).strip(),
+                channel_bandwidth=str(
+                    variables["peer_channel_bandwidth"].get()
+                ).strip(),
+                operating_mode=str(
+                    variables["peer_operating_mode"].get()
+                ).strip(),
+                transmit_power=transmit_power,
+                supported_channels=supported.get("peer_channel", ()),
+                supported_bandwidths=supported.get(
+                    "peer_channel_bandwidth", ()
+                ),
+                supported_modes=supported.get("peer_operating_mode", ()),
+                supported_transmit_powers=supported.get("transmit_power", ()),
+            )
+            if dual_enabled
+            else None
+        )
         return DutWifiSettings(
-            band="2.4G" if feature == "wifi_2g" else "5G",
+            band=band,
             ssid_index=str(variables["ssid_index"].get()).strip(),
             ssid=str(variables["ssid"].get()),
             password=str(variables["password"].get()),
             channel=str(variables["channel"].get()).strip(),
             channel_bandwidth=str(variables["channel_bandwidth"].get()).strip(),
-            dual_band_enabled=bool(variables["dual_band_enabled"].get()),
+            dual_band_enabled=dual_enabled,
             enabled=bool(variables["enabled"].get()),
             hidden=bool(variables["hidden"].get()),
             security_mode=str(variables["security_mode"].get()).strip(),
             operating_mode=str(variables["operating_mode"].get()).strip(),
-            transmit_power=str(variables["transmit_power"].get()).strip(),
+            transmit_power=transmit_power,
             max_associations=str(variables["max_associations"].get()).strip(),
             wmm_enabled=bool(variables["wmm_enabled"].get()),
             supported_channels=supported.get("channel", ()),
@@ -2119,6 +2324,7 @@ class DutConfigWindow:
             supported_modes=supported.get("operating_mode", ()),
             supported_security_modes=supported.get("security_mode", ()),
             supported_transmit_powers=supported.get("transmit_power", ()),
+            peer_radio=peer_radio,
         )
 
     def wifi_ssid_index(self, feature: str) -> str:

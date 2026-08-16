@@ -12,7 +12,7 @@ from src.core.dut_wifi_config import (
     verify_wifi_config,
 )
 from src.core.ubus_http_client import UbusTransportError
-from src.models import DutWifiSettings
+from src.models import DutWifiRadioSettings, DutWifiSettings
 
 
 class _FakeWifiClient:
@@ -154,6 +154,9 @@ class DutWifiConfigTests(unittest.TestCase):
         self.assertEqual(
             settings.supported_transmit_powers, ("20", "40", "60", "80", "100")
         )
+        self.assertIsNotNone(settings.peer_radio)
+        self.assertEqual(settings.peer_radio.band, "5G")
+        self.assertEqual(settings.peer_radio.supported_channels, ("36", "40", "44", "48"))
         self.assertEqual(
             resolve_wifi_paths(client, "session", "5G", "1"),
             {
@@ -204,10 +207,10 @@ class DutWifiConfigTests(unittest.TestCase):
             for call in client.calls
             if call[0] == "get" and call[2] == "Device.WiFi.Radio."
         ]
-        self.assertEqual(len(radio_list_gets), 2)
+        self.assertEqual(len(radio_list_gets), 3)
         self.assertTrue(any("重建连接重试 1/1" in line for line in logs))
 
-    def test_configure_dual_band_syncs_ssid_security_but_only_target_radio(self) -> None:
+    def test_configure_dual_band_sets_independent_radios_and_common_power(self) -> None:
         client = _FakeWifiClient()
         settings = DutWifiSettings(
             band="2.4G",
@@ -224,6 +227,13 @@ class DutWifiConfigTests(unittest.TestCase):
             transmit_power="60",
             max_associations="20",
             wmm_enabled=False,
+            peer_radio=DutWifiRadioSettings(
+                band="5G",
+                channel="44",
+                channel_bandwidth="80MHz",
+                operating_mode="a,n,ac,ax",
+                transmit_power="60",
+            ),
         )
 
         delays: list[float] = []
@@ -239,7 +249,14 @@ class DutWifiConfigTests(unittest.TestCase):
             "merged-pass",
         )
         self.assertEqual(client.radios["Device.WiFi.Radio.31."]["X_SDMC_ChannelEnabled"], "6")
-        self.assertEqual(client.radios["Device.WiFi.Radio.32."]["X_SDMC_ChannelEnabled"], "auto")
+        self.assertEqual(client.radios["Device.WiFi.Radio.32."]["X_SDMC_ChannelEnabled"], "44")
+        self.assertEqual(
+            client.radios["Device.WiFi.Radio.32."]["OperatingChannelBandwidth"],
+            "80MHz",
+        )
+        self.assertEqual(client.radios["Device.WiFi.Radio.32."]["TransmitPower"], "60")
+        self.assertIsNotNone(actual.peer_radio)
+        self.assertEqual(actual.peer_radio.channel, "44")
         self.assertEqual(delays, [WIFI_APPLY_SETTLE_SECONDS])
         set_payload = next(call[4] for call in client.calls if call[0] == "call")
         self.assertIn(

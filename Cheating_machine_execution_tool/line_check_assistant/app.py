@@ -4612,10 +4612,18 @@ class LineCheckAssistant(Tk):
             operation_summary = (
                 f"\n频段：{settings.band}；SSID索引：{settings.ssid_index}；"
                 f"SSID递增：{'是' if increment_wifi_ssid else '否'}；"
-                f"起始名称：{settings.ssid}；信道/带宽："
-                f"{settings.channel}/{settings.channel_bandwidth}；"
+                f"起始名称：{settings.ssid}；{settings.band}信道/带宽/协议："
+                f"{settings.channel}/{settings.channel_bandwidth}/"
+                f"{settings.operating_mode}；公共发射功率："
+                f"{settings.transmit_power}%；"
                 f"双频合一：{'是' if settings.dual_band_enabled else '否'}。"
             )
+            if settings.dual_band_enabled and settings.peer_radio is not None:
+                peer = settings.peer_radio
+                operation_summary += (
+                    f"\n{peer.band}信道/带宽/协议：{peer.channel}/"
+                    f"{peer.channel_bandwidth}/{peer.operating_mode}。"
+                )
             if shared_wifi_settle:
                 operation_summary += (
                     "\n等待方式：全部目标下发完成后，仅最后一台统一等待60秒，"
@@ -4623,8 +4631,8 @@ class LineCheckAssistant(Tk):
                 )
             if settings.dual_band_enabled:
                 warning = (
-                    "这会修改当前频段Radio配置，并把SSID、启用/隐藏、认证密码及AP参数"
-                    "同步到2.4G和5G对应SSID。"
+                    "这会把SSID、启用/隐藏、认证密码及AP参数同步到2.4G和5G，"
+                    "分别修改两个频段的信道、带宽和协议，并把公共发射功率写入两个Radio。"
                 )
         if not messagebox.askyesno(
             f"确认批量执行 {feature_label} 配置",

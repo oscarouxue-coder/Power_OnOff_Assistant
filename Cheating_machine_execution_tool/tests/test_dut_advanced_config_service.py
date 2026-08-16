@@ -11,6 +11,7 @@ from src.models import (
     DutTr069Settings,
     DutVoiceSettings,
     DutWanSettings,
+    DutWifiRadioSettings,
     DutWifiSettings,
 )
 from src.services.dut_advanced_config_service import (
@@ -177,6 +178,57 @@ class DutAdvancedConfigServiceTests(unittest.TestCase):
         self.assertTrue(any("信道带宽" in error for error in errors))
         self.assertTrue(any("协议类型" in error for error in errors))
         self.assertTrue(any("发射功率不在DUT支持列表" in error for error in errors))
+
+    def test_dual_band_wifi_validates_each_radio_and_common_power(self) -> None:
+        settings = DutWifiSettings(
+            band="2.4G",
+            ssid="Dual_WiFi",
+            password="password123",
+            channel="6",
+            channel_bandwidth="40MHz",
+            operating_mode="b,g,n,ax",
+            transmit_power="60",
+            dual_band_enabled=True,
+            supported_channels=("1", "6", "11"),
+            supported_bandwidths=("20MHz", "40MHz"),
+            supported_modes=("b,g,n", "b,g,n,ax"),
+            supported_transmit_powers=("40", "60", "80"),
+            peer_radio=DutWifiRadioSettings(
+                band="5G",
+                channel="44",
+                channel_bandwidth="80MHz",
+                operating_mode="a,n,ac,ax",
+                transmit_power="60",
+                supported_channels=("36", "40", "44", "48"),
+                supported_bandwidths=("40MHz", "80MHz"),
+                supported_modes=("a,n,ac", "a,n,ac,ax"),
+                supported_transmit_powers=("20", "40", "60"),
+            ),
+        )
+
+        self.assertEqual(validate_wifi_settings(settings), ())
+
+        invalid = DutWifiSettings(
+            **{
+                **settings.__dict__,
+                "transmit_power": "80",
+                "peer_radio": DutWifiRadioSettings(
+                    **{
+                        **settings.peer_radio.__dict__,
+                        "channel": "6",
+                        "transmit_power": "60",
+                    }
+                ),
+            }
+        )
+        errors = validate_wifi_settings(invalid)
+        self.assertTrue(any("5G WiFi 信道" in error for error in errors))
+        self.assertTrue(any("5G WiFi 发射功率" in error for error in errors))
+        self.assertTrue(any("公共参数" in error for error in errors))
+        missing_peer = DutWifiSettings(**{**settings.__dict__, "peer_radio": None})
+        self.assertTrue(
+            any("缺少5G射频参数" in error for error in validate_wifi_settings(missing_peer))
+        )
 
     def test_dual_stack_static_validation_accepts_complete_ipoe_settings(self) -> None:
         settings = DutWanSettings(

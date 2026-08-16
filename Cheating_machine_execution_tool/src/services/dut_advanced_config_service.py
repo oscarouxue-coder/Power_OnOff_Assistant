@@ -322,6 +322,52 @@ def validate_tr069_settings(settings: DutTr069Settings) -> tuple[str, ...]:
     return tuple(errors)
 
 
+def _validate_wifi_radio(
+    *,
+    band: str,
+    channel: str,
+    channel_bandwidth: str,
+    operating_mode: str,
+    transmit_power: str,
+    supported_channels: tuple[str, ...],
+    supported_bandwidths: tuple[str, ...],
+    supported_modes: tuple[str, ...],
+    supported_transmit_powers: tuple[str, ...],
+) -> list[str]:
+    errors: list[str] = []
+    normalized_channel = channel.strip().lower()
+    normalized_supported_channels = tuple(
+        value.lower() for value in supported_channels
+    )
+    if normalized_supported_channels and normalized_channel not in normalized_supported_channels:
+        errors.append(f"{band} WiFi 信道不在DUT支持列表：{channel}")
+    elif not normalized_supported_channels and normalized_channel != "auto":
+        try:
+            channel_number = int(normalized_channel)
+        except ValueError:
+            errors.append(f"{band} WiFi 信道无效：{channel}")
+        else:
+            if band == "2.4G" and not 1 <= channel_number <= 14:
+                errors.append(f"2.4G WiFi 信道必须为 auto 或 1–14：{channel}")
+            if band == "5G" and channel_number not in {
+                36, 40, 44, 48, 52, 56, 60, 64,
+                100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140,
+                144, 149, 153, 157, 161, 165,
+            }:
+                errors.append(f"5G WiFi 信道不受支持：{channel}")
+    bandwidths = supported_bandwidths or WIFI_BANDWIDTH_OPTIONS[band]
+    if channel_bandwidth not in bandwidths:
+        errors.append(f"{band} WiFi 信道带宽无效：{channel_bandwidth}")
+    modes = supported_modes or WIFI_MODE_OPTIONS[band]
+    if operating_mode not in modes:
+        errors.append(f"{band} WiFi 协议类型无效：{operating_mode}")
+    if supported_transmit_powers and transmit_power not in supported_transmit_powers:
+        errors.append(
+            f"{band} WiFi 发射功率不在DUT支持列表：{transmit_power}"
+        )
+    return errors
+
+
 def validate_wifi_settings(settings: DutWifiSettings) -> tuple[str, ...]:
     """校验首版 WiFi 页面支持且能由参考 UBUS 模型稳定表达的组合。"""
     errors: list[str] = []
@@ -346,39 +392,46 @@ def validate_wifi_settings(settings: DutWifiSettings) -> tuple[str, ...]:
         if not (8 <= len(password) <= 63 or is_hex_key):
             errors.append("WiFi 密码必须为 8–63 个字符，或 64 位十六进制密钥")
 
-    channel = settings.channel.strip().lower()
-    supported_channels = tuple(value.lower() for value in settings.supported_channels)
-    if supported_channels and channel not in supported_channels:
-        errors.append(f"{settings.band} WiFi 信道不在DUT支持列表：{settings.channel}")
-    elif not supported_channels and channel != "auto":
-        try:
-            channel_number = int(channel)
-        except ValueError:
-            errors.append(f"WiFi 信道无效：{settings.channel}")
-        else:
-            if settings.band == "2.4G" and not 1 <= channel_number <= 14:
-                errors.append(f"2.4G WiFi 信道必须为 auto 或 1–14：{settings.channel}")
-            if settings.band == "5G" and channel_number not in {
-                36, 40, 44, 48, 52, 56, 60, 64,
-                100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140,
-                144, 149, 153, 157, 161, 165,
-            }:
-                errors.append(f"5G WiFi 信道不受支持：{settings.channel}")
-    supported_bandwidths = (
-        settings.supported_bandwidths or WIFI_BANDWIDTH_OPTIONS[settings.band]
-    )
-    if settings.channel_bandwidth not in supported_bandwidths:
-        errors.append(
-            f"{settings.band} WiFi 信道带宽无效：{settings.channel_bandwidth}"
+    errors.extend(
+        _validate_wifi_radio(
+            band=settings.band,
+            channel=settings.channel,
+            channel_bandwidth=settings.channel_bandwidth,
+            operating_mode=settings.operating_mode,
+            transmit_power=settings.transmit_power,
+            supported_channels=settings.supported_channels,
+            supported_bandwidths=settings.supported_bandwidths,
+            supported_modes=settings.supported_modes,
+            supported_transmit_powers=settings.supported_transmit_powers,
         )
-    supported_modes = settings.supported_modes or WIFI_MODE_OPTIONS[settings.band]
-    if settings.operating_mode not in supported_modes:
-        errors.append(f"{settings.band} WiFi 协议类型无效：{settings.operating_mode}")
-    if (
-        settings.supported_transmit_powers
-        and settings.transmit_power not in settings.supported_transmit_powers
-    ):
-        errors.append(f"WiFi 发射功率不在DUT支持列表：{settings.transmit_power}")
+    )
+    if settings.dual_band_enabled:
+        expected_peer_band = "5G" if settings.band == "2.4G" else "2.4G"
+        if settings.peer_radio is None:
+            errors.append(f"双频合一缺少{expected_peer_band}射频参数")
+        else:
+            peer = settings.peer_radio
+            if peer.band != expected_peer_band:
+                errors.append(
+                    f"双频合一另一频段应为{expected_peer_band}，实际为{peer.band}"
+                )
+            if peer.transmit_power != settings.transmit_power:
+                errors.append(
+                    "双频合一的发射功率是公共参数，两个Radio必须使用同一值"
+                )
+            errors.extend(
+                _validate_wifi_radio(
+                    band=expected_peer_band,
+                    channel=peer.channel,
+                    channel_bandwidth=peer.channel_bandwidth,
+                    operating_mode=peer.operating_mode,
+                    transmit_power=settings.transmit_power,
+                    supported_channels=peer.supported_channels,
+                    supported_bandwidths=peer.supported_bandwidths,
+                    supported_modes=peer.supported_modes,
+                    supported_transmit_powers=peer.supported_transmit_powers,
+                )
+            )
     try:
         transmit_power = int(settings.transmit_power)
         if not 1 <= transmit_power <= 100:

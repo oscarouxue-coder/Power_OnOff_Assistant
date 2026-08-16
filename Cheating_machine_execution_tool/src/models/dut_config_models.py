@@ -168,6 +168,21 @@ class DutTr069Settings:
 
 
 @dataclass(frozen=True)
+class DutWifiRadioSettings:
+    """单个WiFi Radio的频段参数与设备能力快照。"""
+
+    band: str
+    channel: str = "auto"
+    channel_bandwidth: str = "20/40MHz"
+    operating_mode: str = "b,g,n,ax"
+    transmit_power: str = "100"
+    supported_channels: tuple[str, ...] = ()
+    supported_bandwidths: tuple[str, ...] = ()
+    supported_modes: tuple[str, ...] = ()
+    supported_transmit_powers: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class DutWifiSettings:
     """一批 DUT 共用的单个频段、单个 SSID 配置与查询快照。"""
 
@@ -190,6 +205,7 @@ class DutWifiSettings:
     supported_modes: tuple[str, ...] = ()
     supported_security_modes: tuple[str, ...] = ()
     supported_transmit_powers: tuple[str, ...] = ()
+    peer_radio: DutWifiRadioSettings | None = None
 
 
 @dataclass(frozen=True)

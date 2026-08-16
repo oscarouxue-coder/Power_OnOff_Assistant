@@ -4,9 +4,10 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from typing import Any
 
-from src.models.dut_config_models import DutWifiSettings
+from src.models.dut_config_models import DutWifiRadioSettings, DutWifiSettings
 
 from .ubus_http_client import (
     UBUS_SERVICE_BBFDM,
@@ -258,7 +259,7 @@ def _updated_dual_value(value: Any, ssid_index: str, enabled: bool) -> str:
     return ",".join(values)
 
 
-def query_wifi_status(
+def _query_wifi_status_single(
     client: UbusHttpClient,
     session_id: str,
     band: str,
@@ -267,7 +268,7 @@ def query_wifi_status(
     on_log: LogCallback | None = None,
     sleep_fn: SleepCallback = time.sleep,
 ) -> DutWifiSettings:
-    """只读查询指定频段/SSID；本函数不会调用 ``bbfdm.set``。"""
+    """只读查询单个频段/SSID；不递归查询另一频段。"""
     paths = resolve_wifi_paths(
         client,
         session_id,
@@ -367,6 +368,56 @@ def query_wifi_status(
     return settings
 
 
+def _radio_snapshot(settings: DutWifiSettings) -> DutWifiRadioSettings:
+    return DutWifiRadioSettings(
+        band=settings.band,
+        channel=settings.channel,
+        channel_bandwidth=settings.channel_bandwidth,
+        operating_mode=settings.operating_mode,
+        transmit_power=settings.transmit_power,
+        supported_channels=settings.supported_channels,
+        supported_bandwidths=settings.supported_bandwidths,
+        supported_modes=settings.supported_modes,
+        supported_transmit_powers=settings.supported_transmit_powers,
+    )
+
+
+def query_wifi_status(
+    client: UbusHttpClient,
+    session_id: str,
+    band: str,
+    ssid_index: str = "1",
+    *,
+    on_log: LogCallback | None = None,
+    sleep_fn: SleepCallback = time.sleep,
+) -> DutWifiSettings:
+    """只读查询指定频段，并预读另一频段Radio供双频配置使用。"""
+    settings = _query_wifi_status_single(
+        client,
+        session_id,
+        band,
+        ssid_index,
+        on_log=on_log,
+        sleep_fn=sleep_fn,
+    )
+    peer_band = "5G" if band == "2.4G" else "2.4G"
+    peer = _query_wifi_status_single(
+        client,
+        session_id,
+        peer_band,
+        ssid_index,
+        on_log=on_log,
+        sleep_fn=sleep_fn,
+    )
+    combined = replace(settings, peer_radio=_radio_snapshot(peer))
+    _emit(
+        on_log,
+        f"RX UBUS 双频Radio当前状态：{band}={_radio_snapshot(settings)}，"
+        f"{peer_band}={combined.peer_radio}",
+    )
+    return combined
+
+
 def _wifi_set_paths(
     settings: DutWifiSettings,
     target_paths: Mapping[str, str],
@@ -419,6 +470,24 @@ def _wifi_set_paths(
             },
         }
     )
+    if settings.dual_band_enabled:
+        if peer_paths is None or settings.peer_radio is None:
+            raise UbusError("双频合一缺少另一频段Radio参数，已拒绝下发")
+        paths.append(
+            {
+                "addr": peer_paths["radio"],
+                "obj_path": {
+                    f"{VENDOR_PREFIX}ChannelEnabled": settings.peer_radio.channel,
+                    f"{VENDOR_PREFIX}OperatingStandards": (
+                        settings.peer_radio.operating_mode
+                    ),
+                    "OperatingChannelBandwidth": (
+                        settings.peer_radio.channel_bandwidth
+                    ),
+                    "TransmitPower": settings.transmit_power,
+                },
+            }
+        )
     return paths
 
 
@@ -506,7 +575,7 @@ def verify_wifi_config(
 ) -> DutWifiSettings:
     """回读并校验指定频段；本函数不重复下发配置。"""
     peer_band = "5G" if settings.band == "2.4G" else "2.4G"
-    actual = query_wifi_status(
+    actual = _query_wifi_status_single(
         client,
         session_id,
         settings.band,
@@ -516,7 +585,9 @@ def verify_wifi_config(
     )
     _assert_wifi_readback(settings, actual)
     if settings.dual_band_enabled:
-        peer = query_wifi_status(
+        if settings.peer_radio is None:
+            raise UbusError("双频合一回读缺少另一频段Radio期望参数")
+        peer = _query_wifi_status_single(
             client,
             session_id,
             peer_band,
@@ -541,6 +612,24 @@ def verify_wifi_config(
         ]
         if mismatches:
             raise UbusError(f"双频合一回读不一致：{peer_band} 的 {', '.join(mismatches)} 未同步")
+        peer_radio = _radio_snapshot(peer)
+        peer_radio_mismatches = [
+            f"{field}={getattr(peer_radio, field)!r}"
+            f"（期望 {getattr(settings.peer_radio, field)!r}）"
+            for field in ("channel", "channel_bandwidth", "operating_mode")
+            if getattr(peer_radio, field) != getattr(settings.peer_radio, field)
+        ]
+        if peer_radio.transmit_power != settings.transmit_power:
+            peer_radio_mismatches.append(
+                f"transmit_power={peer_radio.transmit_power!r}"
+                f"（期望公共值 {settings.transmit_power!r}）"
+            )
+        if peer_radio_mismatches:
+            raise UbusError(
+                f"双频合一回读不一致：{peer_band} Radio "
+                f"{', '.join(peer_radio_mismatches)}"
+            )
+        actual = replace(actual, peer_radio=peer_radio)
     _emit(on_log, f"成功：{settings.band} WiFi 参数已下发并完成回读")
     return actual
 

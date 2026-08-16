@@ -38,6 +38,7 @@ from src.models import (
     DutTelnetStatus,
     DutWanConnectionInfo,
     DutWanQueryResult,
+    DutWifiRadioSettings,
     DutWifiSettings,
 )
 from src.services.dut_advanced_config_service import (
@@ -750,6 +751,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         import inspect
 
         builder_source = inspect.getsource(DutConfigWindow._build_wifi_tab)
+        update_form_source = inspect.getsource(DutConfigWindow._update_wifi_form)
+        settings_source = inspect.getsource(DutConfigWindow.wifi_settings)
         open_source = inspect.getsource(LineCheckAssistant._open_dut_config_module)
         query_source = inspect.getsource(LineCheckAssistant._query_dut_current_status)
         query_worker_source = inspect.getsource(
@@ -782,6 +785,13 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("SSID={request.settings.ssid}", configure_source)
         self.assertIn("[SSID分配]", configure_source)
         self.assertIn('"ssid_increment": BooleanVar(value=False)', builder_source)
+        self.assertIn('text=f"{band} 射频参数"', builder_source)
+        self.assertIn('text=f"{peer_band} 射频参数（双频合一）"', builder_source)
+        self.assertIn('"peer_channel": peer_channel_combo', builder_source)
+        self.assertIn("peer_radio_group.grid_remove()", update_form_source)
+        self.assertIn("peer_radio = (", settings_source)
+        self.assertIn("DutWifiRadioSettings(", settings_source)
+        self.assertIn("peer_radio=peer_radio", settings_source)
         self.assertIn(
             '_wifi_vars[feature]["ssid_increment"]',
             inspect.getsource(DutConfigWindow.wifi_ssid_increment_enabled),
@@ -801,12 +811,20 @@ class CurrentChannelSelectionTests(unittest.TestCase):
                 dual_band_enabled=True,
                 channel_bandwidth="160MHz",
                 operating_mode="a,n,ac,ax",
+                peer_radio=DutWifiRadioSettings(
+                    band="2.4G",
+                    channel="6",
+                    channel_bandwidth="40MHz",
+                    operating_mode="b,g,n,ax",
+                ),
             )
         )
         self.assertEqual(values["ssid_index"], "2")
         self.assertEqual(values["ssid"], "Lab_5G")
         self.assertTrue(values["hidden"])
         self.assertTrue(values["dual_band_enabled"])
+        self.assertEqual(values["peer_channel"], "6")
+        self.assertEqual(values["peer_channel_bandwidth"], "40MHz")
 
     def test_wifi_choice_options_follow_dut_reported_capabilities(self):
         options = wifi_choice_options(
@@ -852,6 +870,39 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(options["security_mode"], WIFI_SECURITY_MODE_OPTIONS)
         self.assertEqual(options["channel_bandwidth"], WIFI_BANDWIDTH_OPTIONS["5G"])
         self.assertEqual(options["operating_mode"], WIFI_MODE_OPTIONS["5G"])
+
+    def test_dual_band_wifi_choices_keep_radios_independent_and_power_common(self):
+        options = wifi_choice_options(
+            DutWifiSettings(
+                band="2.4G",
+                channel="6",
+                channel_bandwidth="40MHz",
+                operating_mode="b,g,n,ax",
+                transmit_power="60",
+                dual_band_enabled=True,
+                supported_channels=("1", "6", "11"),
+                supported_bandwidths=("20MHz", "40MHz"),
+                supported_modes=("b,g,n", "b,g,n,ax"),
+                supported_transmit_powers=("40", "60", "80"),
+                peer_radio=DutWifiRadioSettings(
+                    band="5G",
+                    channel="44",
+                    channel_bandwidth="80MHz",
+                    operating_mode="a,n,ac,ax",
+                    transmit_power="60",
+                    supported_channels=("36", "40", "44", "48"),
+                    supported_bandwidths=("40MHz", "80MHz"),
+                    supported_modes=("a,n,ac", "a,n,ac,ax"),
+                    supported_transmit_powers=("20", "40", "60"),
+                ),
+            )
+        )
+
+        self.assertEqual(options["channel"], ("1", "6", "11"))
+        self.assertEqual(options["peer_channel"], ("36", "40", "44", "48"))
+        self.assertEqual(options["peer_channel_bandwidth"], ("40MHz", "80MHz"))
+        self.assertEqual(options["peer_operating_mode"], ("a,n,ac", "a,n,ac,ax"))
+        self.assertEqual(options["transmit_power"], ("40", "60"))
 
     def test_wifi_target_change_removes_previous_dut_capability_options(self):
         class FakeVar:
