@@ -1620,7 +1620,7 @@ class DutConfigWindow:
             values=WIFI_SECURITY_MODE_OPTIONS, width=24,
         )
         power_combo = self._field(
-            form, 1, 0, "公共发射功率(%)：", variables["transmit_power"],
+            form, 1, 0, "发射功率(%)：", variables["transmit_power"],
             values=WIFI_TRANSMIT_POWER_OPTIONS,
         )
         self._field(form, 1, 1, "最大接入数：", variables["max_associations"])
