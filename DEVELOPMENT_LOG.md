@@ -2,6 +2,16 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-16 - DUT配置窗口增加独立目标选择
+
+- 类型：功能 / DUT配置 / 批量目标 / 回归测试 / 文档
+- 背景：主界面需要同时保持多台样机启用，但操作员可能只想在DUT配置窗口查询或修改其中一台。例如主界面同时勾选vlan112和vlan113时，需要允许DUT窗口本批只处理vlan112。
+- 完成内容：① 六个DUT Tab的目标表增加共享“选择”列及“全选/清除”，首次加载默认继承主界面全部候选，在任一Tab逐台切换会同步到其它Tab；② 刷新相同候选保留手动取消，新加入候选默认选中，主界面移除的候选自动删除；③ Telnet启用、WAN配置、2.4G/5G WiFi配置、语音/TR069配置及全部只读查询统一只收集窗口内已选目标，确认框、参数校验和批次统计使用同一范围；④ 未选目标的配置错误不再阻塞已选目标，窗口未选任何目标时明确提示再次勾选；⑤ 目标选择变化后旧WAN下拉、当前状态和DUT动态能力立即失效，批次运行期间禁止修改目标；⑥ 新增选择继承、跨Tab同步、请求过滤、入口接线、空选择拦截及未选错误隔离回归，并纳入强制基线。
+- 修改文件：`.claude/plans/dut_config_target_selection.md`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p test_app.py`、`python -m py_compile line_check_assistant\app.py src\ui\dut_config_window.py`、`python scripts\verify_baseline.py`与`git diff --check`；Windows源码版主界面同时勾选vlan112/vlan113，打开DUT配置后取消vlan113，分别执行查询和配置并核对日志只出现vlan112。
+- 验证结果：主程序专项测试137项全部`OK`；完整基线门禁615项单元测试通过，52个源码文件编译覆盖、118个强制基线测试实际执行，8条MUST_EXIST与1条MUST_NOT_EXIST均通过，最终`ALL CHECKS PASSED`。自动化测试不替代Windows桌面和真实DUT验收。
+- 后续待办：Windows桌面确认六页选择列显示、逐台点击和“全选/清除”同步；真实DUT按主界面vlan112/vlan113均勾选、窗口只选vlan112的场景，确认所有配置与查询都不访问vlan113，现场结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-14 - 扩展DUT动态能力范围
 
 - 类型：功能

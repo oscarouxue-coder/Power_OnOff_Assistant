@@ -310,11 +310,11 @@ python scripts\verify_baseline.py
 
 ### 2.13 DUT 配置 - UBUS 批量配置
 
-- **状态**：已确认验收（2026-08-13 DUT配置窗口布局、连续查询与session注销、DUT网卡按需复用、WAN配置；2026-08-14单台2.4G WiFi连续两次配置、60秒稳定等待及回读、仅2.4G WiFi五类下拉按DUT实际能力动态加载）/ 已实现未验收（5G WiFi动态能力、语音DTMF/SIP/编码动态能力、TR069实际字段约束、WiFi能力字段缺失兜底与目标变化清理、2.4G其它参数组合、5G/语音/TR069实际配置、Telnet状态准确性、1/8台并行及异常隔离）
+- **状态**：已确认验收（2026-08-13 DUT配置窗口布局、连续查询与session注销、DUT网卡按需复用、WAN配置；2026-08-14单台2.4G WiFi连续两次配置、60秒稳定等待及回读、仅2.4G WiFi五类下拉按DUT实际能力动态加载）/ 已实现未验收（DUT窗口独立目标选择及按选择过滤配置/查询、5G WiFi动态能力、语音DTMF/SIP/编码动态能力、TR069实际字段约束、WiFi能力字段缺失兜底与目标变化清理、2.4G其它参数组合、5G/语音/TR069实际配置、Telnet状态准确性、1/8台并行及异常隔离）
 - **核心行为**：
   - 主界面“串口日志”右侧固定显示“DUT配置”按钮；窗口采用 Notebook，包含“Telnet配置”“WAN配置”“2.4G WiFi配置”“5G WiFi配置”“语音配置”“TR069配置”六个独立 Tab；协议在 core、批量流程在 service，UI 只收集输入和显示结果
   - 六个 Tab 的字段名称必须在各自标签单元格内统一左对齐；公共 `_field()` 创建的 WAN、WiFi、语音、TR069 标签及单独创建的“现有连接名/索引”不得恢复为右对齐，Telnet 页标签继续从左侧排列
-  - 目标来自主界面已勾选通道；表格显示通道、VLAN、网卡、PC 静态 IP、样机管理 IP 和逐台状态；账号密码与写样机参数 `parameter_initial_*` 共享并明文显示、明文记录
+  - 主界面已勾选通道只作为DUT候选范围；六个Tab目标表必须共享同一套独立“选择”列及“全选/清除”，首次加载默认选中全部候选，在任一Tab逐台切换后其它Tab立即同步。刷新相同候选必须保留手动取消状态，新加入候选默认选中，已移除候选自动删除；运行期间不得修改选择。所有配置、Telnet/WAN/WiFi/语音/TR069查询、启动前校验、确认目标和批次统计只能处理DUT窗口当前已选目标，未选目标的配置错误不得阻塞本批；未选任何目标时必须明确提示在DUT目标表勾选。选择变化必须使旧状态、WAN下拉及DUT动态能力失效；表格同时显示通道、VLAN、网卡、PC 静态 IP、样机管理 IP 和逐台状态。账号密码与写样机参数 `parameter_initial_*` 共享并明文显示、明文记录
   - 启动前拒绝无目标、缺 VLAN/网卡/IP/凭据、IP 格式错误、源 IP 与样机 IP 相同以及重复 VLAN；确认框明确提示会修改本机网卡与 DUT AccessCtrl 规则
   - 单台固定时序：`prepare_network_for_sample(reuse_if_ready=True)` 先只读查询目标网卡启用状态及 IPv4/前缀；已启用且目标地址/前缀完全匹配时跳过重复启用和静态 IP 设置，部分不匹配时只修复对应项，状态读取失败时回退原完整准备流程 → `wait_for_bindable_ip` 最多 15 秒（复用时也不得跳过）→ 每台独立 `UbusHttpClient(bind_ip, device_host, 80)` → `enable_telnet_via_ubus` → 严格 `source_address=(bind_ip, 0)` 探测 TCP 23 端口；只有 UBUS 与端口探测均成功才标记成功
   - UBUS 首次失败后最多重试 3 次、间隔 2 秒；端口最多探测 3 次、单次 5 秒、间隔 1 秒；UBUS client 每次尝试均关闭。Access denied 最终失败提示操作员退出样机 Web 管理页面后重试
@@ -345,7 +345,7 @@ python scripts\verify_baseline.py
   - 五个新增 Tab 的主执行日志必须包含功能阶段、明文登录、实际 UBUS method/path/input、成功/跳过/失败和批次汇总；表格只显示简短逐台结果
   - WAN的LAN1–LAN8端口绑定和“启用 NAT”、两个WiFi页的“启用WiFi/隐藏WiFi/启用双频合一/启用WMM”、语音“启用 SIP 账号”、TR069“启用周期 Inform / 启用 HTTP 连接请求 / 启用证书 / 配置后手动 Inform”必须使用 Windows 原生 `Checkbutton`：选中显示标准“✓”，未选为空框，不得继续使用 Clam 主题下显示叉号的 `ttk.Checkbutton`；各 BooleanVar 默认值和配置语义保持不变
 - **禁止破坏**：不得复制第二份 AccessCtrl 协议；Telnet 必须继续复用 `enable_telnet_via_ubus`；每台功能必须使用独立 UBUS client 并绑定对应 VLAN 源 IP，结束时必须释放设备端session；网卡状态、目标 IPv4 或前缀任一不满足时不得错误复用，状态读取失败不得绕过原准备流程，任何复用路径不得跳过 `wait_for_bindable_ip`；不得直接导入使用共享静态 Session 的 `SdmcUbusLib`；WAN 删除不得自动扩大为删除全部或模糊匹配其它连接；不得重新向IPoE展示PPPoE凭据、向PPPoE提供静态地址或允许不受协议封装支持的双栈混合静态组合；不得把查询失败、仅部分DUT存在或同索引不同名称的WAN放入批量修改/删除下拉列表；WiFi不得绕过Mapping直接假定Radio/AP/SSID实例相同，双频合一不得覆盖另一频段Radio参数
-- **待确认**：测试项配置窗口的20ms加载提速体感；Telnet查询准确显示AccessCtrl/规则/TCP23且不修改设备；WiFi设备缺少能力字段时正确兜底、目标变化后旧能力不残留；5G五类下拉与真实DUT能力一致，2.4G其它参数组合及5G真实Mapping、各字段查询回填/下发/回读、开放网络、隐藏SSID和双频合一同步但Radio独立；语音DTMF/SIP/编码动态候选与真实DUT一致及实际下发/回读；TR069缺失字段正确禁用且不下发、查询参数准确性与一致参数回填；多台状态或能力不一致不覆盖表单、TR069查询不勾选手动Inform；真实样机覆盖主动触发Access denied、1/8台并行、停止和单台失败隔离。
+- **待确认**：Windows桌面确认六页独立目标选择列、逐台切换和“全选/清除”同步；主界面同时勾选vlan112/vlan113，DUT窗口仅选vlan112后分别确认配置与各项查询均不访问vlan113。测试项配置窗口的20ms加载提速体感；Telnet查询准确显示AccessCtrl/规则/TCP23且不修改设备；WiFi设备缺少能力字段时正确兜底、目标变化后旧能力不残留；5G五类下拉与真实DUT能力一致，2.4G其它参数组合及5G真实Mapping、各字段查询回填/下发/回读、开放网络、隐藏SSID和双频合一同步但Radio独立；语音DTMF/SIP/编码动态候选与真实DUT一致及实际下发/回读；TR069缺失字段正确禁用且不下发、查询参数准确性与一致参数回填；多台状态或能力不一致不覆盖表单、TR069查询不勾选手动Inform；真实样机覆盖主动触发Access denied、1/8台并行、停止和单台失败隔离。
 - **对应测试**：`tests/test_network_ops.py`、`tests/test_dut_config_service.py`、`tests/test_dut_advanced_config_service.py`、`tests/test_dut_wan_query_service.py`、`tests/test_dut_status_query_service.py`、`tests/test_dut_ubus_config.py`、`tests/test_dut_wifi_config.py`、`tests/test_ubus_http_client.py`、`tests/test_telnet_transport.py`、`tests/test_ubus_enable_telnet.py`、`tests/test_app.py`
 
 ---

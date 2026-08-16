@@ -40,6 +40,8 @@ from src.ui.window_paint import (
 
 DUT_CHECK_BACKGROUND = "#ffffff"
 DUT_CHECK_FOREGROUND = "#17202a"
+DUT_TARGET_SELECTED_MARK = "☑"
+DUT_TARGET_UNSELECTED_MARK = "☐"
 WAN_ROUTER_SERVICE_TYPES = (
     "INTERNET",
     "TR069",
@@ -77,6 +79,20 @@ DUT_CURRENT_STATUS_MIN_HEIGHT = 2
 DUT_CURRENT_STATUS_MAX_HEIGHT = 16
 DUT_CURRENT_STATUS_DRAG_PIXELS_PER_ROW = 18
 DUT_CURRENT_STATUS_BOTTOM_GUARD_PIXELS = 0
+
+
+def reconcile_dut_target_selection(
+    previous_selected: Iterable[str],
+    previous_targets: Iterable[str],
+    current_targets: Iterable[str],
+) -> tuple[str, ...]:
+    """保留仍存在目标的手动选择，并默认选中新加入的主界面目标。"""
+    selected = set(previous_selected)
+    known = set(previous_targets)
+    current = tuple(dict.fromkeys(current_targets))
+    return tuple(
+        channel for channel in current if channel in selected or channel not in known
+    )
 
 
 def _load_dut_config_ui_state(path: Path) -> dict[str, object]:
@@ -501,6 +517,10 @@ class DutConfigWindow:
         self._row_by_channel: dict[str, str] = {}
         self._trees: dict[str, ttk.Treeview] = {}
         self._rows_by_feature: dict[str, dict[str, str]] = {}
+        self._target_channels: tuple[str, ...] = ()
+        self._selected_target_channels: set[str] = set()
+        self._target_errors_by_channel: dict[str, str] = {}
+        self._running = False
         self._summary_vars: dict[str, StringVar] = {"telnet": self.summary_var}
         self._input_widgets: list = []
         self._field_groups: dict[str, tuple[object, object]] = {}
@@ -531,7 +551,9 @@ class DutConfigWindow:
         ttk.Label(outer, text="DUT配置", style="Header.TLabel").pack(anchor="w")
         ttk.Label(
             outer,
-            text="通过独立功能页配置已勾选 DUT；后续 UBUS 能力将在此窗口增加新的 Tab。",
+            text=(
+                "主界面已勾选通道作为候选；在下方目标表再次勾选本次需要配置或查询的 DUT。"
+            ),
             style="Subtitle.TLabel",
         ).pack(anchor="w", pady=(3, 12))
 
@@ -572,7 +594,7 @@ class DutConfigWindow:
             telnet_tab,
             text=(
                 "目标来自主界面已勾选通道。执行时会启用对应 VLAN 网卡、设置 PC 静态 IP，"
-                "通过 UBUS 开启 Telnet，并从该 VLAN 源 IP 验证 TCP 23 端口。"
+                "目标表内可再次勾选本次范围；通过 UBUS 开启 Telnet，并从该 VLAN 源 IP 验证 TCP 23 端口。"
             ),
             style="Muted.TLabel",
             wraplength=850,
@@ -585,11 +607,14 @@ class DutConfigWindow:
 
         table_frame = ttk.Frame(telnet_tab)
         table_frame.pack(fill="both", expand=True)
-        columns = ("channel", "vlan", "adapter", "bind_ip", "device_host", "status")
+        columns = (
+            "selected", "channel", "vlan", "adapter", "bind_ip", "device_host", "status"
+        )
         self.target_tree = ttk.Treeview(
             table_frame, columns=columns, show="headings", height=13
         )
         headings = {
+            "selected": "选择",
             "channel": "通道",
             "vlan": "VLAN",
             "adapter": "网卡",
@@ -598,6 +623,7 @@ class DutConfigWindow:
             "status": "状态",
         }
         widths = {
+            "selected": 55,
             "channel": 80,
             "vlan": 85,
             "adapter": 135,
@@ -607,11 +633,17 @@ class DutConfigWindow:
         }
         for column in columns:
             self.target_tree.heading(column, text=headings[column])
-            self.target_tree.column(column, width=widths[column], anchor="w", stretch=column == "status")
+            self.target_tree.column(
+                column,
+                width=widths[column],
+                anchor="center" if column == "selected" else "w",
+                stretch=column == "status",
+            )
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.target_tree.yview)
         self.target_tree.configure(yscrollcommand=scrollbar.set)
         self.target_tree.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+        self._bind_target_tree_selection(self.target_tree)
 
         footer = ttk.Frame(telnet_tab)
         self._pack_protected_bottom_area(telnet_tab, footer)
@@ -626,6 +658,14 @@ class DutConfigWindow:
             actions, text="刷新目标", command=on_refresh, style="Secondary.TButton"
         )
         self.refresh_button.pack(side="left")
+        self.select_all_button = ttk.Button(
+            actions, text="全选", command=self.select_all_targets, style="Secondary.TButton"
+        )
+        self.select_all_button.pack(side="left", padx=(8, 0))
+        self.clear_targets_button = ttk.Button(
+            actions, text="清除", command=self.clear_all_targets, style="Secondary.TButton"
+        )
+        self.clear_targets_button.pack(side="left", padx=(8, 0))
         self.telnet_query_button = ttk.Button(
             actions,
             text="查询当前Telnet",
@@ -654,6 +694,8 @@ class DutConfigWindow:
                 self.password_entry,
                 self.parallel_spinbox,
                 self.refresh_button,
+                self.select_all_button,
+                self.clear_targets_button,
                 self.telnet_query_button,
             ]
         )
@@ -768,23 +810,33 @@ class DutConfigWindow:
     ) -> None:
         table_frame = ttk.Frame(tab)
         table_frame.pack(fill="both", expand=True, pady=(8, 0))
-        columns = ("channel", "vlan", "adapter", "bind_ip", "device_host", "status")
+        columns = (
+            "selected", "channel", "vlan", "adapter", "bind_ip", "device_host", "status"
+        )
         tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=6)
         headings = {
+            "selected": "选择",
             "channel": "通道", "vlan": "管理 VLAN", "adapter": "网卡",
             "bind_ip": "PC 静态 IP", "device_host": "样机管理 IP", "status": "状态",
         }
         widths = {
+            "selected": 55,
             "channel": 75, "vlan": 90, "adapter": 125, "bind_ip": 115,
             "device_host": 115, "status": 330,
         }
         for column in columns:
             tree.heading(column, text=headings[column])
-            tree.column(column, width=widths[column], anchor="w", stretch=column == "status")
+            tree.column(
+                column,
+                width=widths[column],
+                anchor="center" if column == "selected" else "w",
+                stretch=column == "status",
+            )
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=scrollbar.set)
         tree.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+        self._bind_target_tree_selection(tree)
         summary_var = StringVar(value="尚未加载目标 DUT")
         footer = ttk.Frame(tab)
         self._pack_protected_bottom_area(tab, footer)
@@ -797,6 +849,14 @@ class DutConfigWindow:
         self._current_status_action_frames[feature] = actions
         refresh = ttk.Button(actions, text="刷新目标", command=on_refresh, style="Secondary.TButton")
         refresh.pack(side="left")
+        select_all = ttk.Button(
+            actions, text="全选", command=self.select_all_targets, style="Secondary.TButton"
+        )
+        select_all.pack(side="left", padx=(8, 0))
+        clear_targets = ttk.Button(
+            actions, text="清除", command=self.clear_all_targets, style="Secondary.TButton"
+        )
+        clear_targets.pack(side="left", padx=(8, 0))
         if query_text and on_query is not None:
             query = ttk.Button(
                 actions, text=query_text, command=on_query, style="Secondary.TButton"
@@ -811,7 +871,7 @@ class DutConfigWindow:
         self._trees[feature] = tree
         self._rows_by_feature[feature] = {}
         self._summary_vars[feature] = summary_var
-        self._input_widgets.append(refresh)
+        self._input_widgets.extend((refresh, select_all, clear_targets))
         self._start_buttons[feature] = start
         self._stop_buttons.append(stop)
 
@@ -2089,6 +2149,99 @@ class DutConfigWindow:
     def parallel_count(self) -> str:
         return self.parallel_count_var.get()
 
+    def _bind_target_tree_selection(self, tree: ttk.Treeview) -> None:
+        tree.bind(
+            "<ButtonRelease-1>",
+            lambda event, selected_tree=tree: self._on_target_tree_click(
+                selected_tree, event
+            ),
+            add="+",
+        )
+
+    def _on_target_tree_click(self, tree: ttk.Treeview, event) -> str | None:
+        if self._running or tree.identify_region(event.x, event.y) != "cell":
+            return None
+        if tree.identify_column(event.x) != "#1":
+            return None
+        row_id = tree.identify_row(event.y)
+        if not row_id:
+            return None
+        values = tuple(tree.item(row_id, "values"))
+        if len(values) < 2:
+            return None
+        channel = str(values[1])
+        if channel in self._selected_target_channels:
+            self._selected_target_channels.discard(channel)
+        else:
+            self._selected_target_channels.add(channel)
+        self._invalidate_status_after_target_selection_change()
+        self._sync_target_selection_display()
+        return "break"
+
+    def _invalidate_status_after_target_selection_change(self) -> None:
+        self.clear_wan_connections("DUT窗口目标选择已变化，请重新查询现有 WAN。")
+        self.clear_current_status("telnet", "DUT窗口目标选择已变化，请重新查询当前Telnet状态。")
+        self.clear_current_status("wan", "DUT窗口目标选择已变化，请重新查询当前WAN状态。")
+        self.clear_current_status("voice", "DUT窗口目标选择已变化，请重新查询当前语音状态。")
+        self.clear_current_status("tr069", "DUT窗口目标选择已变化，请重新查询当前TR069状态。")
+        self.clear_current_status("wifi_2g", "DUT窗口目标选择已变化，请重新查询当前2.4G WiFi状态。")
+        self.clear_current_status("wifi_5g", "DUT窗口目标选择已变化，请重新查询当前5G WiFi状态。")
+        self._reset_wifi_choice_options("wifi_2g")
+        self._reset_wifi_choice_options("wifi_5g")
+        self._reset_voice_choice_options()
+        self._reset_tr069_capabilities()
+
+    def _sync_target_selection_display(self) -> None:
+        for feature, tree in self._trees.items():
+            rows = self._rows_by_feature[feature]
+            for channel, row_id in rows.items():
+                values = list(tree.item(row_id, "values"))
+                if not values:
+                    continue
+                selected = channel in self._selected_target_channels
+                values[0] = (
+                    DUT_TARGET_SELECTED_MARK if selected else DUT_TARGET_UNSELECTED_MARK
+                )
+                values[-1] = (
+                    self._target_errors_by_channel.get(
+                        channel, "配置完整，等待执行"
+                    )
+                    if selected
+                    else "未选择，本次跳过"
+                )
+                tree.item(row_id, values=values)
+            selected_count = sum(
+                1 for channel in self._target_channels
+                if channel in self._selected_target_channels
+            )
+            self._summary_vars[feature].set(
+                f"已加载 {len(self._target_channels)} 台目标 DUT，已选择 {selected_count} 台"
+                if self._target_channels
+                else "主界面当前没有已勾选通道"
+            )
+
+    def select_all_targets(self) -> None:
+        if self._running:
+            return
+        if self._selected_target_channels == set(self._target_channels):
+            return
+        self._selected_target_channels = set(self._target_channels)
+        self._invalidate_status_after_target_selection_change()
+        self._sync_target_selection_display()
+
+    def clear_all_targets(self) -> None:
+        if self._running or not self._selected_target_channels:
+            return
+        self._selected_target_channels.clear()
+        self._invalidate_status_after_target_selection_change()
+        self._sync_target_selection_display()
+
+    def selected_target_channels(self) -> tuple[str, ...]:
+        return tuple(
+            channel for channel in self._target_channels
+            if channel in self._selected_target_channels
+        )
+
     def voice_line_index(self) -> str:
         return self.voice_line_index_var.get().strip()
 
@@ -2098,6 +2251,16 @@ class DutConfigWindow:
         errors_by_channel: Mapping[str, str],
     ) -> None:
         request_list = list(requests)
+        current_channels = tuple(request.channel for request in request_list)
+        self._selected_target_channels = set(
+            reconcile_dut_target_selection(
+                self._selected_target_channels,
+                self._target_channels,
+                current_channels,
+            )
+        )
+        self._target_channels = current_channels
+        self._target_errors_by_channel = dict(errors_by_channel)
         target_signature = tuple(
             (request.channel, request.vlan, request.bind_ip, request.device_host)
             for request in request_list
@@ -2125,20 +2288,29 @@ class DutConfigWindow:
                 row_id = tree.insert(
                     "", END,
                     values=(
+                        (
+                            DUT_TARGET_SELECTED_MARK
+                            if request.channel in self._selected_target_channels
+                            else DUT_TARGET_UNSELECTED_MARK
+                        ),
                         request.channel, request.vlan or "未配置", request.adapter_alias or "未配置",
                         request.bind_ip or "未配置", request.device_host or "未配置", status,
                     ),
                 )
                 rows[request.channel or f"row-{index}"] = row_id
-            self._summary_vars[feature].set(
-                f"已加载 {len(request_list)} 台目标 DUT" if request_list else "主界面当前没有已勾选通道"
-            )
+        self._sync_target_selection_display()
 
     def mark_all_pending(self, feature: str = "telnet") -> None:
         tree = self._trees.get(feature, self.target_tree)
-        for row_id in self._rows_by_feature.get(feature, self._row_by_channel).values():
+        for channel, row_id in self._rows_by_feature.get(
+            feature, self._row_by_channel
+        ).items():
             values = list(tree.item(row_id, "values"))
-            values[-1] = "等待执行"
+            values[-1] = (
+                "等待执行"
+                if channel in self._selected_target_channels
+                else "未选择，本次跳过"
+            )
             tree.item(row_id, values=values)
 
     def update_result(
@@ -2189,6 +2361,7 @@ class DutConfigWindow:
         self._summary_vars.get(feature, self.summary_var).set(text)
 
     def set_running(self, running: bool, *, stopping: bool = False) -> None:
+        self._running = running
         input_state = "disabled" if running else "normal"
         self.username_entry.configure(state=input_state)
         self.password_entry.configure(state=input_state)
@@ -2226,6 +2399,8 @@ __all__ = [
     "DUT_CURRENT_STATUS_DEFAULT_HEIGHT",
     "DUT_CURRENT_STATUS_MAX_HEIGHT",
     "DUT_CURRENT_STATUS_MIN_HEIGHT",
+    "DUT_TARGET_SELECTED_MARK",
+    "DUT_TARGET_UNSELECTED_MARK",
     "DutConfigWindow",
     "WanFormRules",
     "clamp_dut_window_size",
@@ -2234,6 +2409,7 @@ __all__ = [
     "load_dut_current_status_heights",
     "load_dut_window_size",
     "resolve_wan_form_rules",
+    "reconcile_dut_target_selection",
     "wan_lan_ports_from_port_bind",
     "wan_port_bind_from_lan_ports",
     "tr069_status_form_values",

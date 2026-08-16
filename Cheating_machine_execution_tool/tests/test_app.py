@@ -52,11 +52,14 @@ from src.ui.dut_config_window import (
     DUT_CURRENT_STATUS_MAX_HEIGHT,
     DUT_CURRENT_STATUS_MIN_HEIGHT,
     DutConfigWindow,
+    DUT_TARGET_SELECTED_MARK,
+    DUT_TARGET_UNSELECTED_MARK,
     clamp_dut_window_size,
     clamp_dut_current_status_height,
     load_dut_current_status_heights,
     load_dut_window_size,
     normalize_wan_address_modes,
+    reconcile_dut_target_selection,
     resolve_wan_form_rules,
     wan_connection_form_values,
     wan_lan_ports_from_port_bind,
@@ -488,6 +491,137 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("run_dut_advanced_config_batch(", advanced_worker_source)
         self.assertNotIn("UbusHttpClient(", open_source + worker_source)
         self.assertNotIn("bbfdm.", open_source + worker_source + advanced_worker_source)
+
+    def test_dut_target_selection_preserves_manual_clear_and_selects_new_targets(self):
+        self.assertEqual(
+            reconcile_dut_target_selection(
+                ("通道 12",),
+                ("通道 12", "通道 13"),
+                ("通道 12", "通道 13", "通道 14"),
+            ),
+            ("通道 12", "通道 14"),
+        )
+        self.assertEqual(
+            reconcile_dut_target_selection((), (), ("通道 12", "通道 13")),
+            ("通道 12", "通道 13"),
+        )
+
+    def test_dut_target_selection_is_shared_by_every_tab(self):
+        class FakeTree:
+            def __init__(self):
+                self.rows = {
+                    "row12": [DUT_TARGET_SELECTED_MARK, "通道 12", "vlan112", "ok"],
+                    "row13": [DUT_TARGET_SELECTED_MARK, "通道 13", "vlan113", "ok"],
+                }
+
+            def item(self, row_id, option=None, **kwargs):
+                if "values" in kwargs:
+                    self.rows[row_id] = list(kwargs["values"])
+                if option == "values":
+                    return tuple(self.rows[row_id])
+                return {"values": tuple(self.rows[row_id])}
+
+        window = object.__new__(DutConfigWindow)
+        window._trees = {"telnet": FakeTree(), "wifi_2g": FakeTree()}
+        window._rows_by_feature = {
+            "telnet": {"通道 12": "row12", "通道 13": "row13"},
+            "wifi_2g": {"通道 12": "row12", "通道 13": "row13"},
+        }
+        window._summary_vars = {"telnet": Mock(), "wifi_2g": Mock()}
+        window._target_channels = ("通道 12", "通道 13")
+        window._selected_target_channels = {"通道 12"}
+        window._target_errors_by_channel = {}
+
+        window._sync_target_selection_display()
+
+        for tree in window._trees.values():
+            self.assertEqual(tree.rows["row12"][0], DUT_TARGET_SELECTED_MARK)
+            self.assertEqual(tree.rows["row12"][-1], "配置完整，等待执行")
+            self.assertEqual(tree.rows["row13"][0], DUT_TARGET_UNSELECTED_MARK)
+            self.assertEqual(tree.rows["row13"][-1], "未选择，本次跳过")
+        for summary in window._summary_vars.values():
+            self.assertIn("已选择 1 台", summary.set.call_args.args[0])
+
+    def test_dut_target_selection_click_and_bulk_actions_update_shared_state(self):
+        class FakeTree:
+            @staticmethod
+            def identify_region(_x, _y):
+                return "cell"
+
+            @staticmethod
+            def identify_column(_x):
+                return "#1"
+
+            @staticmethod
+            def identify_row(_y):
+                return "row12"
+
+            @staticmethod
+            def item(_row_id, _option=None):
+                return (DUT_TARGET_SELECTED_MARK, "通道 12")
+
+        window = SimpleNamespace(
+            _running=False,
+            _target_channels=("通道 12", "通道 13"),
+            _selected_target_channels={"通道 12"},
+            _invalidate_status_after_target_selection_change=Mock(),
+            _sync_target_selection_display=Mock(),
+        )
+
+        result = DutConfigWindow._on_target_tree_click(
+            window, FakeTree(), SimpleNamespace(x=5, y=5)
+        )
+
+        self.assertEqual(result, "break")
+        self.assertEqual(window._selected_target_channels, set())
+        window._invalidate_status_after_target_selection_change.assert_called_once_with()
+        window._sync_target_selection_display.assert_called_once_with()
+
+        DutConfigWindow.select_all_targets(window)
+        self.assertEqual(
+            window._selected_target_channels, {"通道 12", "通道 13"}
+        )
+        DutConfigWindow.clear_all_targets(window)
+        self.assertEqual(window._selected_target_channels, set())
+
+    def test_selected_dut_requests_follow_window_selection_without_changing_main_targets(self):
+        requests = [
+            DutTelnetEnableRequest(
+                channel="通道 12", vlan="vlan112", adapter_alias="VLAN112",
+                bind_ip="192.168.1.112", device_host="192.168.1.1",
+                subnet_mask="255.255.255.0", username="user", password="pass",
+            ),
+            DutTelnetEnableRequest(
+                channel="通道 13", vlan="vlan113", adapter_alias="VLAN113",
+                bind_ip="192.168.1.113", device_host="192.168.1.1",
+                subnet_mask="255.255.255.0", username="user", password="pass",
+            ),
+        ]
+        window = Mock()
+        window.exists.return_value = True
+        window.selected_target_channels.return_value = ("通道 12",)
+        context = SimpleNamespace(dut_config_window=window, dut_config_requests=requests)
+
+        selected = LineCheckAssistant._selected_dut_config_requests(context, window)
+
+        self.assertEqual([request.vlan for request in selected], ["vlan112"])
+        self.assertEqual([request.vlan for request in requests], ["vlan112", "vlan113"])
+
+    def test_dut_config_and_query_entrypoints_use_window_target_selection(self):
+        import inspect
+
+        sources = (
+            inspect.getsource(LineCheckAssistant._start_dut_telnet_enable),
+            inspect.getsource(LineCheckAssistant._query_dut_wan_connections),
+            inspect.getsource(LineCheckAssistant._query_dut_current_status),
+            inspect.getsource(LineCheckAssistant._collect_dut_advanced_requests),
+        )
+        for source in sources:
+            self.assertIn("_selected_dut_config_requests", source)
+        window_source = inspect.getsource(DutConfigWindow._advanced_target_area)
+        self.assertIn('text="全选"', window_source)
+        self.assertIn('text="清除"', window_source)
+        self.assertIn('"selected"', window_source)
 
     def test_voice_and_tr069_tabs_query_current_status_and_map_common_values(self):
         import inspect
@@ -1457,14 +1591,25 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             username="telecomadmin",
             password="plain-password",
         )
+        unselected_invalid = DutTelnetEnableRequest(
+            channel="通道 13",
+            vlan="vlan113",
+            adapter_alias="",
+            bind_ip="",
+            device_host="",
+            subnet_mask="255.255.255.0",
+            username="telecomadmin",
+            password="plain-password",
+        )
         window = Mock()
         window.exists.return_value = True
         window.parallel_count.return_value = "8"
+        window.selected_target_channels.return_value = ("通道 12",)
         context = SimpleNamespace(
             dut_config_running=False,
             dut_config_window=window,
-            dut_config_requests=[request],
-            dut_config_validation_errors={},
+            dut_config_requests=[request, unselected_invalid],
+            dut_config_validation_errors={"通道 13": "配置错误：未配置"},
             dut_config_cancel_event=None,
             _refresh_dut_config_targets=Mock(),
             _dut_telnet_enable_worker=Mock(),
@@ -1480,7 +1625,37 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         window.mark_all_pending.assert_called_once_with()
         window.set_running.assert_called_once_with(True)
         thread_class.assert_called_once()
+        started_requests = thread_class.call_args.kwargs["args"][0]
+        self.assertEqual([item.channel for item in started_requests], ["通道 12"])
         thread.start.assert_called_once_with()
+
+    def test_start_dut_config_requires_a_window_selected_target(self):
+        request = DutTelnetEnableRequest(
+            channel="通道 12",
+            vlan="vlan112",
+            adapter_alias="VLAN112",
+            bind_ip="192.168.1.112",
+            device_host="192.168.1.1",
+            subnet_mask="255.255.255.0",
+            username="telecomadmin",
+            password="plain-password",
+        )
+        window = Mock()
+        window.exists.return_value = True
+        window.selected_target_channels.return_value = ()
+        context = SimpleNamespace(
+            dut_config_running=False,
+            dut_config_window=window,
+            dut_config_requests=[request],
+            _refresh_dut_config_targets=Mock(),
+        )
+
+        with patch("line_check_assistant.app.messagebox.showwarning") as warning, \
+             patch("line_check_assistant.app.threading.Thread") as thread_class:
+            LineCheckAssistant._start_dut_telnet_enable(context)
+
+        self.assertIn("DUT配置目标表", warning.call_args.args[1])
+        thread_class.assert_not_called()
 
     def test_stop_dut_telnet_enable_sets_shared_cancel_event(self):
         cancel_event = __import__("threading").Event()

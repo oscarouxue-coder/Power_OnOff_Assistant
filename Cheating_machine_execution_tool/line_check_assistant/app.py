@@ -3858,7 +3858,7 @@ class LineCheckAssistant(Tk):
         self._refresh_dut_config_targets()
         self._log(
             "[DUT配置] 已打开 Telnet、WAN、2.4G WiFi、5G WiFi、语音和 TR069 配置页；"
-            "目标来自主界面已勾选通道。"
+            "候选目标来自主界面已勾选通道，实际配置和查询按DUT窗口内勾选目标执行。"
         )
 
     def _collect_dut_telnet_requests(self) -> list[DutTelnetEnableRequest]:
@@ -3927,10 +3927,25 @@ class LineCheckAssistant(Tk):
         window = self.dut_config_window
         if window is not None and window.exists():
             window.set_targets(requests, errors)
+            selected_count = len(window.selected_target_channels())
+        else:
+            selected_count = len(requests)
         self._log(
             f"[DUT配置] 已刷新目标：{len(requests)} 台，"
-            f"配置错误 {len(errors)} 台。"
+            f"DUT窗口已选择 {selected_count} 台，配置错误 {len(errors)} 台。"
         )
+
+    def _selected_dut_config_requests(
+        self, window: DutConfigWindow | None = None
+    ) -> list[DutTelnetEnableRequest]:
+        selected_window = window or self.dut_config_window
+        if selected_window is None or not selected_window.exists():
+            return []
+        selected_channels = set(selected_window.selected_target_channels())
+        return [
+            request for request in self.dut_config_requests
+            if request.channel in selected_channels
+        ]
 
     def _start_dut_telnet_enable(self) -> None:
         if self.dut_config_running:
@@ -3939,18 +3954,25 @@ class LineCheckAssistant(Tk):
         window = self.dut_config_window
         if window is None or not window.exists():
             return
-        requests = list(self.dut_config_requests)
+        requests = LineCheckAssistant._selected_dut_config_requests(self, window)
         if not requests:
             messagebox.showwarning(
                 "没有目标 DUT",
-                "请先在主界面勾选至少一个通道并完成 VLAN 配置。",
+                (
+                    "请先在主界面勾选至少一个通道并完成 VLAN 配置。"
+                    if not self.dut_config_requests
+                    else "请在DUT配置目标表中至少勾选一台目标样机。"
+                ),
                 parent=window.window,
             )
             return
-        if self.dut_config_validation_errors:
+        selected_errors = LineCheckAssistant._dut_request_validation_errors(
+            self, requests
+        )
+        if selected_errors:
             details = "\n".join(
                 f"- {channel}：{message.removeprefix('配置错误：')}"
-                for channel, message in self.dut_config_validation_errors.items()
+                for channel, message in selected_errors.items()
             )
             messagebox.showerror(
                 "DUT 配置不完整",
@@ -4074,7 +4096,7 @@ class LineCheckAssistant(Tk):
                 feature=feature,
                 settings=settings,
             )
-            for request in self._collect_dut_telnet_requests()
+            for request in LineCheckAssistant._selected_dut_config_requests(self)
         ]
 
     def _start_dut_wan_config(self) -> None:
@@ -4091,18 +4113,25 @@ class LineCheckAssistant(Tk):
         window = self.dut_config_window
         if window is None or not window.exists():
             return
-        requests = list(self.dut_config_requests)
+        requests = LineCheckAssistant._selected_dut_config_requests(self, window)
         if not requests:
             messagebox.showwarning(
                 "没有目标 DUT",
-                "请先在主界面勾选至少一个通道并完成 VLAN 配置。",
+                (
+                    "请先在主界面勾选至少一个通道并完成 VLAN 配置。"
+                    if not self.dut_config_requests
+                    else "请在DUT配置目标表中至少勾选一台目标样机。"
+                ),
                 parent=window.window,
             )
             return
-        if self.dut_config_validation_errors:
+        selected_errors = LineCheckAssistant._dut_request_validation_errors(
+            self, requests
+        )
+        if selected_errors:
             details = "\n".join(
                 f"- {channel}：{message.removeprefix('配置错误：')}"
-                for channel, message in self.dut_config_validation_errors.items()
+                for channel, message in selected_errors.items()
             )
             messagebox.showerror(
                 "WAN 查询条件不完整",
@@ -4257,7 +4286,7 @@ class LineCheckAssistant(Tk):
         window = self.dut_config_window
         if window is None or not window.exists():
             return
-        requests = list(self.dut_config_requests)
+        requests = LineCheckAssistant._selected_dut_config_requests(self, window)
         feature_label = {
             "telnet": "Telnet", "voice": "语音", "tr069": "TR069",
             "wifi_2g": "2.4G WiFi", "wifi_5g": "5G WiFi",
@@ -4265,14 +4294,21 @@ class LineCheckAssistant(Tk):
         if not requests:
             messagebox.showwarning(
                 "没有目标 DUT",
-                "请先在主界面勾选至少一个通道并完成 VLAN 配置。",
+                (
+                    "请先在主界面勾选至少一个通道并完成 VLAN 配置。"
+                    if not self.dut_config_requests
+                    else "请在DUT配置目标表中至少勾选一台目标样机。"
+                ),
                 parent=window.window,
             )
             return
-        if self.dut_config_validation_errors:
+        selected_errors = LineCheckAssistant._dut_request_validation_errors(
+            self, requests
+        )
+        if selected_errors:
             details = "\n".join(
                 f"- {channel}：{message.removeprefix('配置错误：')}"
-                for channel, message in self.dut_config_validation_errors.items()
+                for channel, message in selected_errors.items()
             )
             messagebox.showerror(
                 f"{feature_label}查询条件不完整",
@@ -4442,14 +4478,35 @@ class LineCheckAssistant(Tk):
         if not requests:
             messagebox.showwarning(
                 "没有目标 DUT",
-                "请先在主界面勾选至少一个通道并完成 VLAN 配置。",
+                (
+                    "请先在主界面勾选至少一个通道并完成 VLAN 配置。"
+                    if not self.dut_config_requests
+                    else "请在DUT配置目标表中至少勾选一台目标样机。"
+                ),
                 parent=window.window,
             )
             return
         errors_by_channel: dict[str, list[str]] = {}
+        selected_common_errors = LineCheckAssistant._dut_request_validation_errors(
+            self,
+            [
+                DutTelnetEnableRequest(
+                    channel=request.channel,
+                    vlan=request.vlan,
+                    adapter_alias=request.adapter_alias,
+                    bind_ip=request.bind_ip,
+                    device_host=request.device_host,
+                    subnet_mask=request.subnet_mask,
+                    username=request.username,
+                    password=request.password,
+                    ubus_port=request.ubus_port,
+                )
+                for request in requests
+            ]
+        )
         for request in requests:
             errors_by_channel[request.channel] = list(validate_dut_advanced_request(request))
-            common_error = self.dut_config_validation_errors.get(request.channel, "")
+            common_error = selected_common_errors.get(request.channel, "")
             if common_error:
                 errors_by_channel[request.channel].append(common_error.removeprefix("配置错误："))
         errors_by_channel = {
