@@ -455,6 +455,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         import inspect
 
         open_source = inspect.getsource(LineCheckAssistant._open_dut_config_module)
+        start_source = inspect.getsource(LineCheckAssistant._start_dut_advanced_config)
         worker_source = inspect.getsource(LineCheckAssistant._dut_telnet_enable_worker)
         advanced_worker_source = inspect.getsource(LineCheckAssistant._dut_advanced_config_worker)
         window_source = inspect.getsource(DutConfigWindow.__init__)
@@ -489,6 +490,11 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertNotIn('show="*"', window_source)
         self.assertIn("run_dut_telnet_enable_batch(", worker_source)
         self.assertIn("run_dut_advanced_config_batch(", advanced_worker_source)
+        self.assertIn(
+            "shared_wifi_settle = increment_wifi_ssid and len(requests) > 1",
+            start_source,
+        )
+        self.assertIn("shared_wifi_settle=shared_wifi_settle", advanced_worker_source)
         self.assertNotIn("UbusHttpClient(", open_source + worker_source)
         self.assertNotIn("bbfdm.", open_source + worker_source + advanced_worker_source)
 

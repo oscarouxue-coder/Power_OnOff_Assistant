@@ -4,6 +4,7 @@ import threading
 import unittest
 
 from line_check_assistant.network_ops import CommandResult
+from src.core.dut_wifi_config import WIFI_APPLY_SETTLE_SECONDS
 from src.models import (
     DutAdvancedConfigRequest,
     DutAdvancedConfigResult,
@@ -397,6 +398,145 @@ class DutAdvancedConfigServiceTests(unittest.TestCase):
         self.assertTrue(client.closed)
         self.assertTrue(any("[5G WiFi配置]" in line for line in logs))
         self.assertTrue(any("成功：5G WiFi 配置成功" in line for line in logs))
+
+    def test_single_wifi_supports_separate_apply_and_verify_phases(self) -> None:
+        settings = DutWifiSettings(
+            band="2.4G",
+            ssid="Batch_001",
+            password="password123",
+            channel="6",
+            channel_bandwidth="40MHz",
+            operating_mode="b,g,n,ax",
+        )
+        request = _request("wifi_2g", settings)
+        calls: list[str] = []
+
+        common = {
+            "network_prepare_fn": lambda *_args, **_kwargs: CommandResult(True, "ok"),
+            "bind_waiter": lambda _ip, _timeout: True,
+            "client_factory": lambda *_args, **_kwargs: _FakeClient(),
+            "wifi_fn": lambda *_args, **_kwargs: calls.append("configure"),
+            "wifi_apply_fn": lambda *_args, **_kwargs: calls.append("apply"),
+            "wifi_verify_fn": lambda *_args, **_kwargs: calls.append("verify") or settings,
+            "sleep_fn": lambda _seconds: None,
+        }
+
+        apply_result = run_single_dut_advanced_config(
+            request, wifi_phase="apply", **common
+        )
+        verify_result = run_single_dut_advanced_config(
+            request, wifi_phase="verify", **common
+        )
+
+        self.assertTrue(apply_result.ok)
+        self.assertTrue(verify_result.ok)
+        self.assertEqual(calls, ["apply", "verify"])
+        self.assertIn("等待批次统一稳定后回读", apply_result.message)
+        self.assertIn("回读校验成功", verify_result.message)
+
+    def test_increment_batch_waits_once_on_last_target_then_verifies_each_dut(self) -> None:
+        settings = build_dut_wifi_settings_sequence(
+            DutWifiSettings(
+                band="2.4G",
+                ssid="Batch_001",
+                password="password123",
+                channel="6",
+                channel_bandwidth="40MHz",
+                operating_mode="b,g,n,ax",
+            ),
+            3,
+            increment_enabled=True,
+        )
+        requests = [
+            DutAdvancedConfigRequest(
+                **{
+                    **_request("wifi_2g", wifi_settings).__dict__,
+                    "channel": f"通道 {channel}",
+                    "vlan": f"vlan{100 + channel}",
+                }
+            )
+            for channel, wifi_settings in zip((6, 7, 8), settings)
+        ]
+        phase_calls: list[tuple[str, str]] = []
+        delays: list[float] = []
+        logs: list[str] = []
+        completed: list[DutAdvancedConfigResult] = []
+
+        def runner(request, *, wifi_phase="configure", **_kwargs):
+            phase_calls.append((request.channel, wifi_phase))
+            return DutAdvancedConfigResult(
+                request,
+                True,
+                "completed",
+                wifi_phase,
+                request.settings,
+            )
+
+        results = run_dut_advanced_config_batch(
+            requests,
+            max_workers=1,
+            single_runner=runner,
+            shared_wifi_settle=True,
+            sleep_fn=delays.append,
+            on_output=logs.append,
+            on_item_complete=completed.append,
+        )
+
+        self.assertEqual(
+            phase_calls,
+            [
+                ("通道 6", "apply"),
+                ("通道 7", "apply"),
+                ("通道 8", "apply"),
+                ("通道 6", "verify"),
+                ("通道 7", "verify"),
+                ("通道 8", "verify"),
+            ],
+        )
+        self.assertEqual(delays, [WIFI_APPLY_SETTLE_SECONDS])
+        wait_logs = [line for line in logs if "等待 WiFi 参数生效并稳定" in line]
+        self.assertEqual(len(wait_logs), 1)
+        self.assertIn("[通道 8]", wait_logs[0])
+        self.assertTrue(all(result.ok for result in results))
+        self.assertEqual(len(completed), 3)
+
+    def test_increment_batch_stop_during_shared_wait_does_not_claim_success(self) -> None:
+        stop_event = threading.Event()
+        requests = [
+            _request(
+                "wifi_2g",
+                DutWifiSettings(
+                    band="2.4G",
+                    ssid=f"Batch_00{index}",
+                    password="password123",
+                    channel="6",
+                    channel_bandwidth="40MHz",
+                    operating_mode="b,g,n,ax",
+                ),
+            )
+            for index in (1, 2)
+        ]
+        phases: list[str] = []
+
+        def runner(request, *, wifi_phase="configure", **_kwargs):
+            phases.append(wifi_phase)
+            return DutAdvancedConfigResult(request, True, "completed", wifi_phase)
+
+        def stop_during_wait(_seconds: float) -> None:
+            stop_event.set()
+
+        results = run_dut_advanced_config_batch(
+            requests,
+            max_workers=1,
+            stop_event=stop_event,
+            single_runner=runner,
+            shared_wifi_settle=True,
+            sleep_fn=stop_during_wait,
+        )
+
+        self.assertEqual(phases, ["apply", "apply"])
+        self.assertEqual([result.stage for result in results], ["stopped", "stopped"])
+        self.assertTrue(all("已下发" in result.message for result in results))
 
     def test_batch_stop_skips_not_started_devices(self) -> None:
         stop_event = threading.Event()

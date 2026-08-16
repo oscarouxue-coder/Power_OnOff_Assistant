@@ -13,7 +13,12 @@ from urllib.parse import urlsplit
 from line_check_assistant.network_ops import prepare_network_for_sample
 from src.core.bind_socket import wait_for_bindable_ip
 from src.core.dut_ubus_config import configure_tr069, configure_voice, configure_wan, parse_port_bind
-from src.core.dut_wifi_config import configure_wifi
+from src.core.dut_wifi_config import (
+    WIFI_APPLY_SETTLE_SECONDS,
+    apply_wifi_config,
+    configure_wifi,
+    verify_wifi_config,
+)
 from src.core.ubus_http_client import UbusHttpClient
 from src.models.dut_config_models import (
     DutAdvancedConfigRequest,
@@ -423,6 +428,9 @@ def run_single_dut_advanced_config(
     voice_fn: Callable = configure_voice,
     tr069_fn: Callable = configure_tr069,
     wifi_fn: Callable = configure_wifi,
+    wifi_apply_fn: Callable = apply_wifi_config,
+    wifi_verify_fn: Callable = verify_wifi_config,
+    wifi_phase: str = "configure",
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> DutAdvancedConfigResult:
     label = request.channel or request.vlan or request.device_host or "DUT"
@@ -530,7 +538,27 @@ def run_single_dut_advanced_config(
                 sleep_fn=pause,
             )
             success_message = "TR069 配置成功"
-        else:
+        elif wifi_phase == "apply":
+            details = wifi_apply_fn(
+                client,
+                session_id,
+                request.settings,
+                on_log=emit,
+                sleep_fn=pause,
+            )
+            success_message = (
+                f"{request.settings.band} WiFi 参数已下发，等待批次统一稳定后回读"
+            )
+        elif wifi_phase == "verify":
+            details = wifi_verify_fn(
+                client,
+                session_id,
+                request.settings,
+                on_log=emit,
+                sleep_fn=pause,
+            )
+            success_message = f"{request.settings.band} WiFi 回读校验成功"
+        elif wifi_phase == "configure":
             details = wifi_fn(
                 client,
                 session_id,
@@ -539,6 +567,8 @@ def run_single_dut_advanced_config(
                 sleep_fn=pause,
             )
             success_message = f"{request.settings.band} WiFi 配置成功"
+        else:
+            raise ValueError(f"WiFi执行阶段无效：{wifi_phase}")
         ensure_not_stopped()
         emit(f"成功：{success_message}")
         return DutAdvancedConfigResult(request, True, "completed", success_message, details)
@@ -563,15 +593,14 @@ def run_dut_advanced_config_batch(
     on_output: OutputCallback | None = None,
     on_item_complete: ItemCompleteCallback | None = None,
     single_runner: Callable[..., DutAdvancedConfigResult] = run_single_dut_advanced_config,
+    shared_wifi_settle: bool = False,
+    sleep_fn: Callable[[float], None] = time.sleep,
 ) -> list[DutAdvancedConfigResult]:
     items = list(requests)
     if not items:
         return []
     cancel = stop_event or threading.Event()
     workers = min(clamp_dut_parallel_count(max_workers), len(items))
-    results_by_index: dict[int, DutAdvancedConfigResult] = {}
-    next_index = 0
-
     def report(result: DutAdvancedConfigResult) -> None:
         if on_item_complete is not None:
             on_item_complete(result)
@@ -579,30 +608,185 @@ def run_dut_advanced_config_batch(
     def stopped_result(request: DutAdvancedConfigRequest) -> DutAdvancedConfigResult:
         return DutAdvancedConfigResult(request, False, "stopped", "用户已停止，未启动本台 DUT 配置")
 
-    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix=f"dut-{items[0].feature}") as executor:
-        futures: dict[Future, int] = {}
-        while next_index < len(items) and len(futures) < workers and not cancel.is_set():
-            futures[executor.submit(single_runner, items[next_index], stop_event=cancel, on_output=on_output)] = next_index
-            next_index += 1
-        while futures:
-            completed, _pending = wait(tuple(futures), return_when=FIRST_COMPLETED)
-            for future in completed:
-                index = futures.pop(future)
-                try:
-                    result = future.result()
-                except Exception as exc:  # noqa: BLE001
-                    result = DutAdvancedConfigResult(items[index], False, "exception", f"DUT 配置异常：{exc}")
-                results_by_index[index] = result
+    def run_phase(
+        indexes: list[int],
+        *,
+        runner_kwargs: dict[str, object] | None = None,
+        report_immediately: bool,
+    ) -> dict[int, DutAdvancedConfigResult]:
+        phase_results: dict[int, DutAdvancedConfigResult] = {}
+        next_position = 0
+        kwargs = runner_kwargs or {}
+        phase_workers = min(workers, len(indexes)) if indexes else 1
+        with ThreadPoolExecutor(
+            max_workers=phase_workers,
+            thread_name_prefix=f"dut-{items[0].feature}",
+        ) as executor:
+            futures: dict[Future, int] = {}
+            while (
+                next_position < len(indexes)
+                and len(futures) < phase_workers
+                and not cancel.is_set()
+            ):
+                index = indexes[next_position]
+                futures[
+                    executor.submit(
+                        single_runner,
+                        items[index],
+                        stop_event=cancel,
+                        on_output=on_output,
+                        **kwargs,
+                    )
+                ] = index
+                next_position += 1
+            while futures:
+                completed, _pending = wait(
+                    tuple(futures), return_when=FIRST_COMPLETED
+                )
+                for future in completed:
+                    index = futures.pop(future)
+                    try:
+                        result = future.result()
+                    except Exception as exc:  # noqa: BLE001
+                        result = DutAdvancedConfigResult(
+                            items[index],
+                            False,
+                            "exception",
+                            f"DUT 配置异常：{exc}",
+                        )
+                    phase_results[index] = result
+                    if report_immediately:
+                        report(result)
+                    if next_position < len(indexes) and not cancel.is_set():
+                        next_index = indexes[next_position]
+                        futures[
+                            executor.submit(
+                                single_runner,
+                                items[next_index],
+                                stop_event=cancel,
+                                on_output=on_output,
+                                **kwargs,
+                            )
+                        ] = next_index
+                        next_position += 1
+        while next_position < len(indexes):
+            index = indexes[next_position]
+            result = stopped_result(items[index])
+            phase_results[index] = result
+            if report_immediately:
                 report(result)
-                if next_index < len(items) and not cancel.is_set():
-                    futures[executor.submit(single_runner, items[next_index], stop_event=cancel, on_output=on_output)] = next_index
-                    next_index += 1
-    while next_index < len(items):
-        result = stopped_result(items[next_index])
-        results_by_index[next_index] = result
+            next_position += 1
+        return phase_results
+
+    use_shared_wifi_settle = (
+        shared_wifi_settle
+        and len(items) > 1
+        and all(item.feature in {"wifi_2g", "wifi_5g"} for item in items)
+    )
+    all_indexes = list(range(len(items)))
+    if not use_shared_wifi_settle:
+        results_by_index = run_phase(
+            all_indexes,
+            report_immediately=True,
+        )
+        return [results_by_index[index] for index in all_indexes]
+
+    apply_results = run_phase(
+        all_indexes,
+        runner_kwargs={"wifi_phase": "apply"},
+        report_immediately=False,
+    )
+    applied_indexes = [
+        index for index in all_indexes if apply_results[index].ok
+    ]
+    if not applied_indexes:
+        final_results = [apply_results[index] for index in all_indexes]
+        for result in final_results:
+            report(result)
+        return final_results
+
+    def unverified_result(index: int, message: str) -> DutAdvancedConfigResult:
+        return DutAdvancedConfigResult(
+            items[index],
+            False,
+            "stopped",
+            message,
+        )
+
+    if cancel.is_set():
+        for index in applied_indexes:
+            apply_results[index] = unverified_result(
+                index,
+                "WiFi参数已下发，但用户停止后未执行统一等待和回读校验",
+            )
+        final_results = [apply_results[index] for index in all_indexes]
+        for result in final_results:
+            report(result)
+        return final_results
+
+    last_index = applied_indexes[-1]
+    last_request = items[last_index]
+    last_label = (
+        last_request.channel
+        or last_request.vlan
+        or last_request.device_host
+        or "DUT"
+    )
+    feature_label = (
+        "2.4G WiFi配置" if last_request.feature == "wifi_2g" else "5G WiFi配置"
+    )
+    if on_output is not None:
+        on_output(
+            f"[DUT配置][{feature_label}][{last_label}] "
+            f"等待 WiFi 参数生效并稳定：{WIFI_APPLY_SETTLE_SECONDS:g} 秒"
+            "（SSID递增批次统一等待，仅最后一台执行）"
+        )
+    try:
+        if sleep_fn is time.sleep:
+            stopped_during_wait = cancel.wait(WIFI_APPLY_SETTLE_SECONDS)
+        else:
+            sleep_fn(WIFI_APPLY_SETTLE_SECONDS)
+            stopped_during_wait = cancel.is_set()
+    except Exception as exc:  # noqa: BLE001 - 批次等待异常必须形成逐台结果
+        for index in applied_indexes:
+            apply_results[index] = DutAdvancedConfigResult(
+                items[index],
+                False,
+                "exception",
+                f"WiFi统一稳定等待异常：{exc}",
+            )
+        final_results = [apply_results[index] for index in all_indexes]
+        for result in final_results:
+            report(result)
+        return final_results
+
+    if stopped_during_wait:
+        for index in applied_indexes:
+            apply_results[index] = unverified_result(
+                index,
+                "WiFi参数已下发，但用户在统一稳定等待期间停止，未完成回读校验",
+            )
+        final_results = [apply_results[index] for index in all_indexes]
+        for result in final_results:
+            report(result)
+        return final_results
+
+    if on_output is not None:
+        on_output(
+            f"[DUT配置][{feature_label}][{last_label}] "
+            "SSID递增批次统一等待完成，开始逐台回读校验"
+        )
+    verify_results = run_phase(
+        applied_indexes,
+        runner_kwargs={"wifi_phase": "verify"},
+        report_immediately=False,
+    )
+    final_by_index = dict(apply_results)
+    final_by_index.update(verify_results)
+    final_results = [final_by_index[index] for index in all_indexes]
+    for result in final_results:
         report(result)
-        next_index += 1
-    return [results_by_index[index] for index in range(len(items))]
+    return final_results
 
 
 __all__ = [

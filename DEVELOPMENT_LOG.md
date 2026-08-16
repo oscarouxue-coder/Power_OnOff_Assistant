@@ -2,6 +2,16 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-16 - 合并WiFi递增批次稳定等待
+
+- 类型：优化
+- 背景：多台DUT开启SSID递增后，原流程每台样机都在`bbfdm.set`后独立等待60秒，批次耗时随目标数线性增加。项目负责人要求仅最后一台等待60秒，同时必须保留各台配置结果查询。
+- 完成内容：① core将WiFi“下发”和“回读校验”拆为独立协议切片，原`configure_wifi`继续组合为单台下发、等待60秒、回读的已验收时序；② service仅对“多台且开启SSID递增”启用批次两阶段编排，先完成全部目标下发，再把唯一一次可停止的60秒稳定等待记在最后成功下发目标日志下，最后逐台重新准备网络、登录并回读；③ 下发失败目标不进入回读且不阻断其它目标，等待期间停止会把已下发但未回读目标标记停止，不误报成功；④ 单台设置和未开启递增的批量设置保持每台各自等待60秒；⑤ 主界面确认框与主日志明确提示本批等待策略；⑥ 新增分阶段协议、仅等待一次、最后目标日志归属、逐台回读、等待中停止及入口透传回归，并纳入强制基线。
+- 修改文件：`.claude/plans/dut_wifi_increment_shared_settle.md`、`Cheating_machine_execution_tool/src/core/dut_wifi_config.py`、`Cheating_machine_execution_tool/src/services/dut_advanced_config_service.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_dut_wifi_config.py`、`Cheating_machine_execution_tool/tests/test_dut_advanced_config_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p test_dut_wifi_config.py -v`、`python -m unittest discover -s tests -p test_dut_advanced_config_service.py -v`、`python -m unittest discover -s tests -p test_app.py -v`、`python scripts\verify_baseline.py`与`git diff --check`；Windows真实DUT勾选多台并开启SSID递增，核对仅最后一台出现一次60秒等待且等待后每台均完成回读。
+- 验证结果：WiFi core专项7项、DUT高级配置service专项21项、主程序专项140项全部`OK`；完整基线门禁625项单元测试通过，52个源码文件编译覆盖、126个强制基线测试实际执行，8条MUST_EXIST与1条MUST_NOT_EXIST均通过，最终`ALL CHECKS PASSED`。自动化测试不替代多台真实DUT时序验收。
+- 后续待办：Windows真实DUT覆盖2/4/8台递增下发，确认仅最后成功下发目标显示并执行一次60秒等待、每台回读结果正确；再验证统一等待期间停止和单台下发/回读失败隔离。现场结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-16 - 支持点击主界面切换到前方
 
 - 类型：功能 / UI窗口层级 / 回归测试 / 文档

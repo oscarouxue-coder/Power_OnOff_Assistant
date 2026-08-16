@@ -4526,6 +4526,7 @@ class LineCheckAssistant(Tk):
                 parent=window.window,
             )
             return
+        shared_wifi_settle = increment_wifi_ssid and len(requests) > 1
         errors_by_channel: dict[str, list[str]] = {}
         selected_common_errors = LineCheckAssistant._dut_request_validation_errors(
             self,
@@ -4615,6 +4616,11 @@ class LineCheckAssistant(Tk):
                 f"{settings.channel}/{settings.channel_bandwidth}；"
                 f"双频合一：{'是' if settings.dual_band_enabled else '否'}。"
             )
+            if shared_wifi_settle:
+                operation_summary += (
+                    "\n等待方式：全部目标下发完成后，仅最后一台统一等待60秒，"
+                    "随后逐台回读校验。"
+                )
             if settings.dual_band_enabled:
                 warning = (
                     "这会修改当前频段Radio配置，并把SSID、启用/隐藏、认证密码及AP参数"
@@ -4643,6 +4649,11 @@ class LineCheckAssistant(Tk):
             f"[DUT配置][{feature_label}配置] 开始批量执行："
             f"{len(requests)} 台，并行数 {parallel_count}。"
         )
+        if shared_wifi_settle:
+            self._log(
+                f"[DUT配置][{feature_label}配置] SSID递增批次等待策略："
+                "全部目标先下发，仅最后一台统一等待60秒，再逐台回读校验。"
+            )
         if feature in {"wifi_2g", "wifi_5g"}:
             for request in requests:
                 if isinstance(request.settings, DutWifiSettings):
@@ -4652,7 +4663,13 @@ class LineCheckAssistant(Tk):
                     )
         threading.Thread(
             target=self._dut_advanced_config_worker,
-            args=(feature, requests, parallel_count, self.dut_config_cancel_event),
+            args=(
+                feature,
+                requests,
+                parallel_count,
+                self.dut_config_cancel_event,
+                shared_wifi_settle,
+            ),
             name=f"dut-{feature}-batch",
             daemon=True,
         ).start()
@@ -4663,6 +4680,7 @@ class LineCheckAssistant(Tk):
         requests: list[DutAdvancedConfigRequest],
         parallel_count: int,
         cancel_event: threading.Event,
+        shared_wifi_settle: bool = False,
     ) -> None:
         try:
             results = run_dut_advanced_config_batch(
@@ -4673,6 +4691,7 @@ class LineCheckAssistant(Tk):
                 on_item_complete=lambda result: self.dut_config_ui_queue.put(
                     ("item", feature, result)
                 ),
+                shared_wifi_settle=shared_wifi_settle,
             )
         except Exception as exc:  # noqa: BLE001 - 批次边界必须回收 UI 状态
             self.log_queue.put(f"[DUT配置][{feature}] 批次异常：{exc}")

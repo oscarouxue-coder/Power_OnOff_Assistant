@@ -5,9 +5,11 @@ import unittest
 from src.core.dut_wifi_config import (
     WIFI_APPLY_SETTLE_SECONDS,
     WIFI_GET_RETRY_DELAY_SECONDS,
+    apply_wifi_config,
     configure_wifi,
     query_wifi_status,
     resolve_wifi_paths,
+    verify_wifi_config,
 )
 from src.core.ubus_http_client import UbusTransportError
 from src.models import DutWifiSettings
@@ -243,6 +245,45 @@ class DutWifiConfigTests(unittest.TestCase):
         self.assertIn(
             "Device.WiFi.AccessPoint.22.Security.",
             [item["addr"] for item in set_payload["paths"]],
+        )
+
+    def test_apply_and_verify_can_share_one_batch_settle_wait(self) -> None:
+        client = _FakeWifiClient()
+        settings = DutWifiSettings(
+            band="2.4G",
+            ssid="Batch_001",
+            password="batch-pass",
+            channel="6",
+            channel_bandwidth="40MHz",
+            security_mode="WPA2-Personal",
+            operating_mode="b,g,n,ax",
+        )
+        delays: list[float] = []
+
+        applied = apply_wifi_config(
+            client,
+            "session",
+            settings,
+            sleep_fn=delays.append,
+        )
+
+        self.assertIsNone(applied)
+        self.assertEqual(delays, [])
+        self.assertEqual(client.ssids["Device.WiFi.SSID.11."]["SSID"], "Batch_001")
+        call_count_after_apply = sum(call[0] == "call" for call in client.calls)
+
+        actual = verify_wifi_config(
+            client,
+            "session",
+            settings,
+            sleep_fn=delays.append,
+        )
+
+        self.assertEqual(actual.ssid, "Batch_001")
+        self.assertEqual(delays, [])
+        self.assertEqual(
+            sum(call[0] == "call" for call in client.calls),
+            call_count_after_apply,
         )
 
     def test_open_network_does_not_send_stale_password(self) -> None:

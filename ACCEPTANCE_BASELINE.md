@@ -311,7 +311,7 @@ python scripts\verify_baseline.py
 
 ### 2.13 DUT 配置 - UBUS 批量配置
 
-- **状态**：已确认验收（2026-08-13 DUT配置窗口布局、连续查询与session注销、DUT网卡按需复用、WAN配置；2026-08-14单台2.4G WiFi连续两次配置、60秒稳定等待及回读、仅2.4G WiFi五类下拉按DUT实际能力动态加载）/ 已实现未验收（DUT窗口独立目标选择及按选择过滤配置/查询、2.4G/5G WiFi SSID递增、5G WiFi动态能力、语音DTMF/SIP/编码动态能力、TR069实际字段约束、WiFi能力字段缺失兜底与目标变化清理、2.4G其它参数组合、5G/语音/TR069实际配置、Telnet状态准确性、1/8台并行及异常隔离）
+- **状态**：已确认验收（2026-08-13 DUT配置窗口布局、连续查询与session注销、DUT网卡按需复用、WAN配置；2026-08-14单台2.4G WiFi连续两次配置、60秒稳定等待及回读、仅2.4G WiFi五类下拉按DUT实际能力动态加载）/ 已实现未验收（DUT窗口独立目标选择及按选择过滤配置/查询、2.4G/5G WiFi SSID递增及多台递增批次统一等待一次60秒后逐台回读、5G WiFi动态能力、语音DTMF/SIP/编码动态能力、TR069实际字段约束、WiFi能力字段缺失兜底与目标变化清理、2.4G其它参数组合、5G/语音/TR069实际配置、Telnet状态准确性、1/8台并行及异常隔离）
 - **核心行为**：
   - 主界面“串口日志”右侧固定显示“DUT配置”按钮；窗口采用 Notebook，包含“Telnet配置”“WAN配置”“2.4G WiFi配置”“5G WiFi配置”“语音配置”“TR069配置”六个独立 Tab；协议在 core、批量流程在 service，UI 只收集输入和显示结果
   - 六个 Tab 的字段名称必须在各自标签单元格内统一左对齐；公共 `_field()` 创建的 WAN、WiFi、语音、TR069 标签及单独创建的“现有连接名/索引”不得恢复为右对齐，Telnet 页标签继续从左侧排列
@@ -329,6 +329,7 @@ python scripts\verify_baseline.py
   - WAN：“查询现有 WAN”的同一批逐台结果必须同时展示在WAN当前状态区，至少包含连接名、路由/桥接模式、业务类型和VLAN；不得仅为状态展示重复发起第二轮WAN查询。目标变化或WAN配置执行后必须清除旧状态
   - WiFi：2.4G与5G必须使用独立Tab，至少包含SSID索引、WiFi名称/密码、信道、信道带宽、启用/隐藏、认证/加密模式、协议类型、发射功率、最大接入数、WMM和双频合一。开放模式必须隐藏并忽略密码；加密模式必须校验WPA密码。2.4G与5G的信道、带宽和协议候选值必须分频段限制，不能把一个频段的Radio规则套到另一个频段
   - 2.4G与5G页必须各自提供默认关闭且互相独立的“SSID递增”。关闭时维持同一SSID批量下发；开启时输入SSID必须以数字结尾，按DUT窗口已选择目标的固定表格顺序生成逐台不可变请求，第一台保持输入值、后续加1并保留数字尾缀宽度。无数字尾缀不得自动补数，任一生成值按UTF-8超过32字节不得截断且必须整批拒绝。确认框与主执行日志必须逐台展示通道/VLAN到最终SSID的映射；并行补位或单台重试不得重新编号。双频合一继续使用当前DUT最终生成的SSID同步两个频段；查询只读设备现状，不得参与递增或改变开关
+  - 多台目标开启SSID递增时，必须先完成所有目标的WiFi参数下发，仅在原目标顺序中最后一台成功下发的样机日志下执行一次可停止的60秒统一稳定等待，再为每台成功下发目标重新准备网络、登录并逐台回读校验；不得让前面每台各自重复等待60秒，也不得省略其回读。下发失败目标不进入回读且不阻断其它目标；统一等待期间停止时，已下发但尚未回读的目标必须标记停止而非成功。单台设置或未开启SSID递增时继续保持每台下发后等待60秒再回读的既有时序
   - WiFi查询必须先只读获取`Device.WiFi.X_SDMC_Mapping_2G/5G`，结合Radio、AccessPoint、SSID节点的`X_SDMC_Instance`把界面SSID索引解析为真实对象路径，再读取SSID/AP/Security/Radio及`X_SDMC_DualBandEnable`；严禁查询路径执行set。配置必须使用解析后的真实路径并回读校验。开启双频合一时，同一SSID索引的名称、启用/隐藏、认证密码、最大接入数和WMM同步到两个频段，Radio信道/带宽/协议/功率仍只修改当前Tab频段；关闭时只修改当前频段
   - WiFi查询成功后，认证/加密模式必须按AP Security的`ModesSupported`加载，信道必须按`X_SDMC_ChannelsSupported`加载，带宽和协议必须按`X_SDMC_ModeBWMap`加载，发射功率优先按`TransmitPowerSupported`或兼容厂商字段加载；设备返回能力时不得继续展示该设备不支持的固定候选，当前实际值即使未列入能力字段也必须保留以便显示。设备缺少对应能力字段时才允许使用分频段兼容兜底。目标DUT变化后必须清除上一目标的动态能力候选并要求重新查询；多台参数或能力不一致时不得拿任意一台覆盖整批表单
   - 语音：按 `Device.Services.VoiceService.1` 路径设置 DTMF、SIP 模式、代理/出站代理/注册服务器、账号、5 项编码和 DigitMap，最后回读 SIP 路径；查询后必须从VoIPProfile的DTMF支持字段、SIP的`X_SDMC_SIPModeSupported`兼容字段及标准`Device.Services.VoiceService.1.Capabilities.Codecs.`能力表加载DTMF、SIP模式和编码下拉，当前实际值必须保留，缺少能力字段时才使用兼容候选；UI与service使用同一能力列表，所选值原样写入设备，未知或当前DUT不支持的值必须在下发前拒绝；账号启用时必须预检显示名、认证账号和密码；“查询当前语音”必须按当前线路索引只读获取并展示上述完整状态
@@ -347,7 +348,7 @@ python scripts\verify_baseline.py
   - 五个新增 Tab 的主执行日志必须包含功能阶段、明文登录、实际 UBUS method/path/input、成功/跳过/失败和批次汇总；表格只显示简短逐台结果
   - WAN的LAN1–LAN8端口绑定和“启用 NAT”、两个WiFi页的“启用WiFi/隐藏WiFi/启用双频合一/启用WMM/SSID递增”、语音“启用 SIP 账号”、TR069“启用周期 Inform / 启用 HTTP 连接请求 / 启用证书 / 配置后手动 Inform”必须使用 Windows 原生 `Checkbutton`：选中显示标准“✓”，未选为空框，不得继续使用 Clam 主题下显示叉号的 `ttk.Checkbutton`；各 BooleanVar 默认值和配置语义保持不变
 - **禁止破坏**：不得复制第二份 AccessCtrl 协议；Telnet 必须继续复用 `enable_telnet_via_ubus`；每台功能必须使用独立 UBUS client 并绑定对应 VLAN 源 IP，结束时必须释放设备端session；网卡状态、目标 IPv4 或前缀任一不满足时不得错误复用，状态读取失败不得绕过原准备流程，任何复用路径不得跳过 `wait_for_bindable_ip`；不得直接导入使用共享静态 Session 的 `SdmcUbusLib`；WAN 删除不得自动扩大为删除全部或模糊匹配其它连接；不得重新向IPoE展示PPPoE凭据、向PPPoE提供静态地址或允许不受协议封装支持的双栈混合静态组合；不得把查询失败、仅部分DUT存在或同索引不同名称的WAN放入批量修改/删除下拉列表；WiFi不得绕过Mapping直接假定Radio/AP/SSID实例相同，双频合一不得覆盖另一频段Radio参数
-- **待确认**：Windows桌面确认六页独立目标选择列、逐台切换和“全选/清除”同步；主界面同时勾选vlan112/vlan113，DUT窗口仅选vlan112后分别确认配置与各项查询均不访问vlan113。Windows桌面确认2.4G/5G“SSID递增”默认关闭且互不影响；真实DUT以`Aouxue_001`对多台已选目标执行，核对确认框、主日志、实际下发与回读依次为001/002/003，并复验非法尾缀和32字节超限均不下发。测试项配置窗口的20ms加载提速体感；Telnet查询准确显示AccessCtrl/规则/TCP23且不修改设备；WiFi设备缺少能力字段时正确兜底、目标变化后旧能力不残留；5G五类下拉与真实DUT能力一致，2.4G其它参数组合及5G真实Mapping、各字段查询回填/下发/回读、开放网络、隐藏SSID和双频合一同步但Radio独立；语音DTMF/SIP/编码动态候选与真实DUT一致及实际下发/回读；TR069缺失字段正确禁用且不下发、查询参数准确性与一致参数回填；多台状态或能力不一致不覆盖表单、TR069查询不勾选手动Inform；真实样机覆盖主动触发Access denied、1/8台并行、停止和单台失败隔离。
+- **待确认**：Windows桌面确认六页独立目标选择列、逐台切换和“全选/清除”同步；主界面同时勾选vlan112/vlan113，DUT窗口仅选vlan112后分别确认配置与各项查询均不访问vlan113。Windows桌面确认2.4G/5G“SSID递增”默认关闭且互不影响；真实DUT以`Aouxue_001`对多台已选目标执行，核对确认框、主日志、实际下发与回读依次为001/002/003，且仅最后一台出现一次“等待 WiFi 参数生效并稳定：60 秒”、等待后每台均完成回读；再复验统一等待期间停止、单台下发/回读失败隔离、非法尾缀和32字节超限均不误报成功或产生错误写操作。测试项配置窗口的20ms加载提速体感；Telnet查询准确显示AccessCtrl/规则/TCP23且不修改设备；WiFi设备缺少能力字段时正确兜底、目标变化后旧能力不残留；5G五类下拉与真实DUT能力一致，2.4G其它参数组合及5G真实Mapping、各字段查询回填/下发/回读、开放网络、隐藏SSID和双频合一同步但Radio独立；语音DTMF/SIP/编码动态候选与真实DUT一致及实际下发/回读；TR069缺失字段正确禁用且不下发、查询参数准确性与一致参数回填；多台状态或能力不一致不覆盖表单、TR069查询不勾选手动Inform；真实样机覆盖主动触发Access denied、1/8台并行、停止和单台失败隔离。
 - **对应测试**：`tests/test_network_ops.py`、`tests/test_dut_config_service.py`、`tests/test_dut_advanced_config_service.py`、`tests/test_dut_wan_query_service.py`、`tests/test_dut_status_query_service.py`、`tests/test_dut_ubus_config.py`、`tests/test_dut_wifi_config.py`、`tests/test_ubus_http_client.py`、`tests/test_telnet_transport.py`、`tests/test_ubus_enable_telnet.py`、`tests/test_app.py`
 
 ---

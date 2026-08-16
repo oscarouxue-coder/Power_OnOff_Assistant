@@ -447,15 +447,15 @@ def _assert_wifi_readback(expected: DutWifiSettings, actual: DutWifiSettings) ->
         raise UbusError(f"{expected.band} WiFi 回读不一致：{', '.join(mismatches)}")
 
 
-def configure_wifi(
+def apply_wifi_config(
     client: UbusHttpClient,
     session_id: str,
     settings: DutWifiSettings,
     *,
     on_log: LogCallback | None = None,
     sleep_fn: SleepCallback = time.sleep,
-) -> DutWifiSettings:
-    """配置指定频段；双频合一时同步两个频段的 SSID/AP/安全参数。"""
+) -> None:
+    """下发指定频段配置；不等待Radio稳定，也不执行回读。"""
     target_paths = resolve_wifi_paths(
         client,
         session_id,
@@ -495,12 +495,17 @@ def configure_wifi(
     _require_rpc_ok(response, f"{settings.band} WiFi set")
     _emit(on_log, f"RX UBUS {settings.band} WiFi配置结果：{response}")
 
-    _emit(
-        on_log,
-        f"等待 WiFi 参数生效并稳定：{WIFI_APPLY_SETTLE_SECONDS:g} 秒",
-    )
-    sleep_fn(WIFI_APPLY_SETTLE_SECONDS)
 
+def verify_wifi_config(
+    client: UbusHttpClient,
+    session_id: str,
+    settings: DutWifiSettings,
+    *,
+    on_log: LogCallback | None = None,
+    sleep_fn: SleepCallback = time.sleep,
+) -> DutWifiSettings:
+    """回读并校验指定频段；本函数不重复下发配置。"""
+    peer_band = "5G" if settings.band == "2.4G" else "2.4G"
     actual = query_wifi_status(
         client,
         session_id,
@@ -540,10 +545,43 @@ def configure_wifi(
     return actual
 
 
+def configure_wifi(
+    client: UbusHttpClient,
+    session_id: str,
+    settings: DutWifiSettings,
+    *,
+    on_log: LogCallback | None = None,
+    sleep_fn: SleepCallback = time.sleep,
+) -> DutWifiSettings:
+    """下发WiFi，等待Radio稳定后回读；保留单台既有完整时序。"""
+    apply_wifi_config(
+        client,
+        session_id,
+        settings,
+        on_log=on_log,
+        sleep_fn=sleep_fn,
+    )
+
+    _emit(
+        on_log,
+        f"等待 WiFi 参数生效并稳定：{WIFI_APPLY_SETTLE_SECONDS:g} 秒",
+    )
+    sleep_fn(WIFI_APPLY_SETTLE_SECONDS)
+    return verify_wifi_config(
+        client,
+        session_id,
+        settings,
+        on_log=on_log,
+        sleep_fn=sleep_fn,
+    )
+
+
 __all__ = [
     "WIFI_DUAL_BAND_PATH",
     "WIFI_MAPPING_PATHS",
+    "apply_wifi_config",
     "configure_wifi",
     "query_wifi_status",
     "resolve_wifi_paths",
+    "verify_wifi_config",
 ]
