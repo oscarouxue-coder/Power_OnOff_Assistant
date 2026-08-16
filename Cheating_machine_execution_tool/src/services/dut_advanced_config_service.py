@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import ipaddress
+import re
 import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from collections.abc import Callable, Iterable
+from dataclasses import replace
 from urllib.parse import urlsplit
 
 from line_check_assistant.network_ops import prepare_network_for_sample
@@ -62,6 +64,39 @@ ItemCompleteCallback = Callable[[DutAdvancedConfigResult], None]
 
 class _DutAdvancedConfigCancelled(RuntimeError):
     pass
+
+
+def build_dut_wifi_settings_sequence(
+    settings: DutWifiSettings,
+    target_count: int,
+    *,
+    increment_enabled: bool,
+) -> tuple[DutWifiSettings, ...]:
+    """按固定目标顺序生成逐台WiFi参数，递增时保留SSID数字尾缀宽度。"""
+    if target_count < 0:
+        raise ValueError(f"目标数量不能为负数：{target_count}")
+    if target_count == 0:
+        return ()
+    if not increment_enabled:
+        return tuple(settings for _index in range(target_count))
+
+    match = re.fullmatch(r"(.*?)(\d+)", settings.ssid)
+    if match is None:
+        raise ValueError(
+            "已勾选“SSID递增”，WiFi名称必须以数字结尾，例如 Test_2G_01。"
+        )
+    prefix, suffix = match.groups()
+    start_number = int(suffix)
+    suffix_width = len(suffix)
+    sequence: list[DutWifiSettings] = []
+    for offset in range(target_count):
+        ssid = f"{prefix}{str(start_number + offset).zfill(suffix_width)}"
+        if len(ssid.encode("utf-8")) > 32:
+            raise ValueError(
+                f"SSID递增生成的名称“{ssid}”按UTF-8编码后超过32字节。"
+            )
+        sequence.append(replace(settings, ssid=ssid))
+    return tuple(sequence)
 
 
 def _validate_common(request: DutAdvancedConfigRequest) -> list[str]:
@@ -577,6 +612,7 @@ __all__ = [
     "WIFI_BANDWIDTH_OPTIONS",
     "WIFI_MODE_OPTIONS",
     "WIFI_SECURITY_MODE_OPTIONS",
+    "build_dut_wifi_settings_sequence",
     "run_dut_advanced_config_batch",
     "run_single_dut_advanced_config",
     "validate_dut_advanced_request",

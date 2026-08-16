@@ -14,6 +14,7 @@ from src.models import (
 )
 from src.services.dut_advanced_config_service import (
     VOICE_SIP_MODE_OPTIONS,
+    build_dut_wifi_settings_sequence,
     run_dut_advanced_config_batch,
     run_single_dut_advanced_config,
     validate_tr069_settings,
@@ -52,6 +53,45 @@ class _FakeClient:
 
 
 class DutAdvancedConfigServiceTests(unittest.TestCase):
+    def test_wifi_ssid_sequence_preserves_numeric_width_and_settings(self) -> None:
+        settings = DutWifiSettings(
+            band="2.4G",
+            ssid="测试_008",
+            password="password123",
+        )
+
+        sequence = build_dut_wifi_settings_sequence(
+            settings, 3, increment_enabled=True
+        )
+
+        self.assertEqual(
+            tuple(item.ssid for item in sequence),
+            ("测试_008", "测试_009", "测试_010"),
+        )
+        self.assertTrue(all(item.password == "password123" for item in sequence))
+        self.assertEqual(settings.ssid, "测试_008")
+
+    def test_wifi_ssid_sequence_rejects_missing_suffix_and_utf8_overflow(self) -> None:
+        with self.assertRaisesRegex(ValueError, "必须以数字结尾"):
+            build_dut_wifi_settings_sequence(
+                DutWifiSettings(ssid="LabWiFi"), 2, increment_enabled=True
+            )
+        with self.assertRaisesRegex(ValueError, "超过32字节"):
+            build_dut_wifi_settings_sequence(
+                DutWifiSettings(ssid=f"{'测' * 10}_09"),
+                2,
+                increment_enabled=True,
+            )
+
+    def test_wifi_ssid_sequence_disabled_reuses_original_name(self) -> None:
+        settings = DutWifiSettings(ssid="LabWiFi")
+
+        sequence = build_dut_wifi_settings_sequence(
+            settings, 2, increment_enabled=False
+        )
+
+        self.assertEqual(tuple(item.ssid for item in sequence), ("LabWiFi", "LabWiFi"))
+
     def test_wifi_validation_covers_band_rules_security_and_extra_fields(self) -> None:
         valid = DutWifiSettings(
             band="2.4G",

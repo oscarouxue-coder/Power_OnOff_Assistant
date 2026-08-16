@@ -2,6 +2,16 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-16 - 增加DUT WiFi SSID递增
+
+- 类型：功能 / DUT配置 / WiFi / 批量目标 / 回归测试 / 文档
+- 背景：多台DUT同时配置WiFi时需要各自使用连续且唯一的SSID。项目负责人确认采用数字尾缀递增：第一台使用输入值，后续按DUT窗口已选目标固定顺序加1，并要求执行前逐台预览。
+- 完成内容：① 2.4G与5G页分别增加默认关闭、互不影响的原生“SSID递增”勾选项和实时规则提示；② service按已选目标数生成逐台不可变`DutWifiSettings`，保留数字尾缀宽度且不修改原始表单参数；③ 开启时拒绝没有数字尾缀的名称，不自动追加数字；逐项按UTF-8校验32字节上限，任一超限整批不下发；④ 主程序按DUT窗口目标表固定顺序冻结逐台SSID，请求确认框和主执行日志明确展示`通道/VLAN → 最终SSID`，并行补位和单台重试复用相同请求；⑤ 双频合一继续以每台最终SSID同步两个频段，查询功能保持只读且不参与递增；⑥ 增加尾缀位宽、中文UTF-8超限、关闭兼容、逐台请求顺序和UI/预览/日志接线回归，并纳入强制基线。
+- 修改文件：`.claude/plans/dut_wifi_ssid_increment.md`、`Cheating_machine_execution_tool/src/services/dut_advanced_config_service.py`、`Cheating_machine_execution_tool/src/services/__init__.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_dut_advanced_config_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p test_dut_advanced_config_service.py`、`python -m unittest discover -s tests -p test_app.py`、相关源码`py_compile`、`python scripts\verify_baseline.py`与`git diff --check`；Windows源码版在2.4G/5G页分别使用`Aouxue_001`勾选递增，对多台已选DUT执行并核对确认框、主日志、实际下发和回读。
+- 验证结果：DUT高级配置service专项18项、主程序专项138项全部`OK`；完整基线门禁619项单元测试通过，52个源码文件编译覆盖、121个强制基线测试实际执行，8条MUST_EXIST与1条MUST_NOT_EXIST均通过，最终`ALL CHECKS PASSED`。自动化测试不替代Windows桌面和真实DUT验收。
+- 后续待办：Windows桌面确认两个WiFi页勾选框默认值、互相独立及提示显示；真实DUT覆盖连续SSID逐台下发/回读、双频合一、并行失败/重试映射不变，以及非法尾缀和32字节超限均不产生设备写操作，现场结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-16 - DUT配置窗口增加独立目标选择
 
 - 类型：功能 / DUT配置 / 批量目标 / 回归测试 / 文档

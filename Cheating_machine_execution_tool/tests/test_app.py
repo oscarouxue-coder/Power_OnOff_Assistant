@@ -607,6 +607,44 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual([request.vlan for request in selected], ["vlan112"])
         self.assertEqual([request.vlan for request in requests], ["vlan112", "vlan113"])
 
+    def test_wifi_advanced_requests_increment_ssid_in_selected_target_order(self):
+        requests = [
+            DutTelnetEnableRequest(
+                channel=f"通道 {channel}", vlan=f"vlan1{channel}",
+                adapter_alias=f"VLAN1{channel}", bind_ip=f"192.168.1.{channel}",
+                device_host="192.168.1.1", subnet_mask="255.255.255.0",
+                username="user", password="pass",
+            )
+            for channel in (12, 13, 15)
+        ]
+        window = Mock()
+        window.exists.return_value = True
+        window.selected_target_channels.return_value = (
+            "通道 12", "通道 13", "通道 15"
+        )
+        context = SimpleNamespace(
+            dut_config_window=window,
+            dut_config_requests=requests,
+        )
+
+        advanced = LineCheckAssistant._collect_dut_advanced_requests(
+            context,
+            "wifi_2g",
+            DutWifiSettings(
+                band="2.4G", ssid="Aouxue_001", password="password123"
+            ),
+            increment_wifi_ssid=True,
+        )
+
+        self.assertEqual(
+            [request.channel for request in advanced],
+            ["通道 12", "通道 13", "通道 15"],
+        )
+        self.assertEqual(
+            [request.settings.ssid for request in advanced],
+            ["Aouxue_001", "Aouxue_002", "Aouxue_003"],
+        )
+
     def test_dut_config_and_query_entrypoints_use_window_target_selection(self):
         import inspect
 
@@ -725,6 +763,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             "隐藏 WiFi",
             "启用双频合一",
             "启用 WMM",
+            "SSID递增",
         ):
             self.assertIn(label, builder_source)
         self.assertIn('"2.4G", "wifi_2g"', inspect.getsource(DutConfigWindow.__init__))
@@ -733,6 +772,15 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("on_start_wifi_5g", open_source)
         self.assertIn("ssid_index=ssid_index", query_worker_source)
         self.assertIn("settings.dual_band_enabled", configure_source)
+        self.assertIn("increment_wifi_ssid", configure_source)
+        self.assertIn("SSID={request.settings.ssid}", configure_source)
+        self.assertIn("[SSID分配]", configure_source)
+        self.assertIn('"ssid_increment": BooleanVar(value=False)', builder_source)
+        self.assertIn(
+            '_wifi_vars[feature]["ssid_increment"]',
+            inspect.getsource(DutConfigWindow.wifi_ssid_increment_enabled),
+        )
+        self.assertNotIn("ssid_increment", query_source + query_worker_source)
         self.assertEqual(WIFI_BANDWIDTH_OPTIONS["5G"][-1], "160MHz")
         self.assertIn("WPA3-Personal-Transition", WIFI_SECURITY_MODE_OPTIONS)
         self.assertIn("b,g,n,ax", WIFI_MODE_OPTIONS["2.4G"])
@@ -1265,6 +1313,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             "隐藏 WiFi",
             "启用双频合一",
             "启用 WMM",
+            "SSID递增",
         ):
             self.assertIn(label, builder_source)
         self.assertIn('text=f"LAN{port}"', builder_source)

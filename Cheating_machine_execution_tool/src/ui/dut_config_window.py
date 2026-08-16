@@ -1524,6 +1524,7 @@ class DutConfigWindow:
                 "enabled": BooleanVar(value=True),
                 "hidden": BooleanVar(value=False),
                 "wmm_enabled": BooleanVar(value=True),
+                "ssid_increment": BooleanVar(value=False),
             }
         )
         self._wifi_vars[feature] = variables
@@ -1566,6 +1567,7 @@ class DutConfigWindow:
                 ("隐藏 WiFi", variables["hidden"]),
                 ("启用双频合一", variables["dual_band_enabled"]),
                 ("启用 WMM", variables["wmm_enabled"]),
+                ("SSID递增", variables["ssid_increment"]),
             )
         ):
             option = self._native_checkbutton(options, text=text, variable=variable)
@@ -1593,6 +1595,9 @@ class DutConfigWindow:
             "write", lambda *_args, selected=feature: self._update_wifi_form(selected)
         )
         variables["dual_band_enabled"].trace_add(
+            "write", lambda *_args, selected=feature: self._update_wifi_form(selected)
+        )
+        variables["ssid_increment"].trace_add(
             "write", lambda *_args, selected=feature: self._update_wifi_form(selected)
         )
         self._update_wifi_form(feature)
@@ -1631,7 +1636,12 @@ class DutConfigWindow:
             if bool(variables["dual_band_enabled"].get())
             else "双频独立：只修改当前频段。"
         )
-        variables["hint"].set(f"{security_hint} {dual_hint}")
+        increment_hint = (
+            "SSID递增已开启：名称须以数字结尾，并按已选DUT的目标表顺序逐台加1。"
+            if bool(variables["ssid_increment"].get())
+            else "SSID递增关闭：所有已选DUT使用同一名称。"
+        )
+        variables["hint"].set(f"{security_hint} {dual_hint} {increment_hint}")
 
     def _build_voice_tab(self, on_refresh, on_start, on_query, on_stop, on_close) -> None:
         tab = ttk.Frame(self.notebook, padding=12)
@@ -2114,6 +2124,9 @@ class DutConfigWindow:
 
     def wifi_ssid_index(self, feature: str) -> str:
         return str(self._wifi_vars[feature]["ssid_index"].get()).strip()
+
+    def wifi_ssid_increment_enabled(self, feature: str) -> bool:
+        return bool(self._wifi_vars[feature]["ssid_increment"].get())
 
     def exists(self) -> bool:
         return bool(self.window.winfo_exists())

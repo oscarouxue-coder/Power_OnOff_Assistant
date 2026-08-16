@@ -83,6 +83,7 @@ from src.services import (
     PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS,
     TRANSFER_TFTP_COMMAND,
     TRANSFER_TFTP_PUT,
+    build_dut_wifi_settings_sequence,
     clamp_dut_parallel_count,
     common_wan_connection_details,
     common_wan_connection_names,
@@ -4080,8 +4081,21 @@ class LineCheckAssistant(Tk):
         self,
         feature: str,
         settings: DutWanSettings | DutVoiceSettings | DutTr069Settings | DutWifiSettings,
+        *,
+        increment_wifi_ssid: bool = False,
     ) -> list[DutAdvancedConfigRequest]:
         """复用当前通道快照，为高级 DUT Tab 附加本批次功能参数。"""
+        selected_requests = LineCheckAssistant._selected_dut_config_requests(self)
+        if feature in {"wifi_2g", "wifi_5g"} and isinstance(
+            settings, DutWifiSettings
+        ):
+            settings_sequence = build_dut_wifi_settings_sequence(
+                settings,
+                len(selected_requests),
+                increment_enabled=increment_wifi_ssid,
+            )
+        else:
+            settings_sequence = tuple(settings for _request in selected_requests)
         return [
             DutAdvancedConfigRequest(
                 channel=request.channel,
@@ -4094,9 +4108,11 @@ class LineCheckAssistant(Tk):
                 password=request.password,
                 ubus_port=request.ubus_port,
                 feature=feature,
-                settings=settings,
+                settings=target_settings,
             )
-            for request in LineCheckAssistant._selected_dut_config_requests(self)
+            for request, target_settings in zip(
+                selected_requests, settings_sequence
+            )
         ]
 
     def _start_dut_wan_config(self) -> None:
@@ -4470,11 +4486,28 @@ class LineCheckAssistant(Tk):
         window = self.dut_config_window
         if window is None or not window.exists():
             return
-        requests = self._collect_dut_advanced_requests(feature, settings)
         feature_label = {
             "wan": "WAN", "voice": "语音", "tr069": "TR069",
             "wifi_2g": "2.4G WiFi", "wifi_5g": "5G WiFi",
         }[feature]
+        increment_wifi_ssid = (
+            feature in {"wifi_2g", "wifi_5g"}
+            and window.wifi_ssid_increment_enabled(feature)
+        )
+        try:
+            requests = self._collect_dut_advanced_requests(
+                feature,
+                settings,
+                increment_wifi_ssid=increment_wifi_ssid,
+            )
+        except ValueError as exc:
+            self._log(
+                f"[DUT配置][{feature_label}配置] SSID递增预检失败：{exc}"
+            )
+            messagebox.showerror(
+                "SSID递增条件不完整", str(exc), parent=window.window
+            )
+            return
         if not requests:
             messagebox.showwarning(
                 "没有目标 DUT",
@@ -4528,11 +4561,18 @@ class LineCheckAssistant(Tk):
         parallel_count = clamp_dut_parallel_count(
             window.parallel_count() or DEFAULT_DUT_PARALLEL_COUNT
         )
-        target_lines = "\n".join(
-            f"- {request.channel} / {request.vlan} / "
-            f"{request.bind_ip} → {request.device_host}:{request.ubus_port}"
-            for request in requests
-        )
+        target_lines_parts: list[str] = []
+        for request in requests:
+            line = (
+                f"- {request.channel} / {request.vlan} / "
+                f"{request.bind_ip} → {request.device_host}:{request.ubus_port}"
+            )
+            if feature in {"wifi_2g", "wifi_5g"} and isinstance(
+                request.settings, DutWifiSettings
+            ):
+                line += f"；SSID={request.settings.ssid}"
+            target_lines_parts.append(line)
+        target_lines = "\n".join(target_lines_parts)
         operation_summary = ""
         warning = "这会修改 DUT 配置。"
         if feature == "wan" and isinstance(settings, DutWanSettings):
@@ -4563,7 +4603,8 @@ class LineCheckAssistant(Tk):
         ):
             operation_summary = (
                 f"\n频段：{settings.band}；SSID索引：{settings.ssid_index}；"
-                f"名称：{settings.ssid}；信道/带宽："
+                f"SSID递增：{'是' if increment_wifi_ssid else '否'}；"
+                f"起始名称：{settings.ssid}；信道/带宽："
                 f"{settings.channel}/{settings.channel_bandwidth}；"
                 f"双频合一：{'是' if settings.dual_band_enabled else '否'}。"
             )
@@ -4595,6 +4636,13 @@ class LineCheckAssistant(Tk):
             f"[DUT配置][{feature_label}配置] 开始批量执行："
             f"{len(requests)} 台，并行数 {parallel_count}。"
         )
+        if feature in {"wifi_2g", "wifi_5g"}:
+            for request in requests:
+                if isinstance(request.settings, DutWifiSettings):
+                    self._log(
+                        f"[DUT配置][{feature_label}配置][SSID分配] "
+                        f"{request.channel} / {request.vlan} → {request.settings.ssid}"
+                    )
         threading.Thread(
             target=self._dut_advanced_config_worker,
             args=(feature, requests, parallel_count, self.dut_config_cancel_event),
