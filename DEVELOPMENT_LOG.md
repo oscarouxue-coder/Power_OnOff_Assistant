@@ -2,6 +2,16 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-16 - 支持点击主界面切换到前方
+
+- 类型：功能 / UI窗口层级 / 回归测试 / 文档
+- 背景：打开DUT配置等二级功能窗口后，Windows因`transient(main)`所有者关系始终让二级窗口压住主界面；项目负责人要求点击主界面任意位置即可让主界面最前显示，同时保持二级窗口继续打开。
+- 完成内容：① 主窗口统一绑定自身及子控件的鼠标按下事件并执行`lift()`，不调用`focus_force()`，避免抢走操作员刚点击的输入控件焦点；② 写样机参数、ONU注册、样机升级、测试项配置、DUT配置和全流程执行解除相对主界面的`transient`强制所有者关系，串口日志延续已有非模态行为；③ 二级窗口不关闭、不重建，再次点击原功能入口仍复用窗口并升到前方；④ 生成批量参数表、选择程控电源以及确认/警告等必须先处理的模态交互继续保留`transient + grab`，不允许绕过必要输入或危险确认；⑤ 增加主界面点击升层、不强制焦点、六类非模态窗口层级及两类模态边界回归，并纳入强制基线。
+- 修改文件：`.claude/plans/main_window_click_raise.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p test_app.py`、相关源码`py_compile`、`python scripts\verify_baseline.py`与`git diff --check`；Windows源码版逐个打开DUT配置、样机升级、写样机参数、ONU注册、测试项配置、全流程执行和串口日志，点击主界面空白/输入框/按钮区域确认主界面升到前方，再点击功能入口确认原窗口恢复前方且状态未丢失。
+- 验证结果：主程序专项140项全部`OK`；完整基线门禁621项单元测试通过，52个源码文件编译覆盖、123个强制基线测试实际执行，8条MUST_EXIST与1条MUST_NOT_EXIST均通过，最终`ALL CHECKS PASSED`。自动化测试不替代Windows桌面层级验收。
+- 后续待办：Windows桌面逐个确认上述非模态窗口与主界面可双向切换前后层级；同时确认生成参数表、程控电源选择和危险确认仍保持模态阻塞。现场结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-16 - 增加DUT WiFi SSID递增
 
 - 类型：功能 / DUT配置 / WiFi / 批量目标 / 回归测试 / 文档

@@ -186,6 +186,8 @@ REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
     "test_app.CurrentChannelSelectionTests.test_dut_current_status_resize_stops_before_bottom_actions_are_clipped",
     "test_app.CurrentChannelSelectionTests.test_dut_window_size_round_trip_preserves_status_and_fits_screen",
     "test_app.CurrentChannelSelectionTests.test_complex_config_windows_use_standard_toplevel_lifecycle",
+    "test_app.CurrentChannelSelectionTests.test_clicking_main_window_lifts_it_without_forcing_widget_focus",
+    "test_app.CurrentChannelSelectionTests.test_non_modal_feature_windows_do_not_stay_transient_above_main",
     "test_app.CurrentChannelSelectionTests.test_toplevel_client_refresh_pulses_and_restores_geometry",
     "test_app.CurrentChannelSelectionTests.test_center_toplevel_uses_parent_screen_coordinates",
     "test_app.CurrentChannelSelectionTests.test_toolbar_feature_windows_use_shared_centering",

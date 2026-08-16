@@ -59,7 +59,6 @@ class PipelineWindow:
         # 7 行选择框 + 必填项状态 + 底部按钮需要至少 ~730px 高度。
         self.window.geometry("920x750")
         self.window.minsize(880, 730)
-        self.window.transient(app)
         self.window.configure(background=COLOR_BG)
         # 状态变量
         self._check_vars: Dict[str, BooleanVar] = {}

@@ -1781,6 +1781,46 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("schedule_toplevel_client_refresh(", dut_init_source)
         self.assertIn("schedule_toplevel_client_refresh(self.window)", dut_show_source)
 
+    def test_clicking_main_window_lifts_it_without_forcing_widget_focus(self):
+        import inspect
+
+        context = SimpleNamespace(lift=Mock())
+
+        LineCheckAssistant._bring_main_window_to_front(context)
+
+        context.lift.assert_called_once_with()
+        handler_source = inspect.getsource(
+            LineCheckAssistant._bring_main_window_to_front
+        )
+        init_source = inspect.getsource(LineCheckAssistant.__init__)
+        self.assertIn('"<ButtonPress-1>"', init_source)
+        self.assertIn("self._bring_main_window_to_front", init_source)
+        self.assertIn('add="+"', init_source)
+        self.assertNotIn("focus_force", handler_source)
+
+    def test_non_modal_feature_windows_do_not_stay_transient_above_main(self):
+        import inspect
+
+        from line_check_assistant.pipeline_window import PipelineWindow
+
+        non_modal_sources = (
+            inspect.getsource(LineCheckAssistant._open_sample_parameter_writer),
+            inspect.getsource(LineCheckAssistant._open_onu_registration_module),
+            inspect.getsource(LineCheckAssistant._open_upgrade_module),
+            inspect.getsource(LineCheckAssistant._open_test_item_config),
+            inspect.getsource(DutConfigWindow.__init__),
+            inspect.getsource(PipelineWindow.__init__),
+        )
+        for source in non_modal_sources:
+            self.assertNotIn(".transient(", source)
+
+        for modal_source in (
+            inspect.getsource(LineCheckAssistant._open_parameter_generator),
+            inspect.getsource(LineCheckAssistant._select_power_com_port),
+        ):
+            self.assertIn(".transient(", modal_source)
+            self.assertIn(".grab_set()", modal_source)
+
     def test_toplevel_client_refresh_pulses_and_restores_geometry(self):
         from src.ui.window_paint import schedule_toplevel_client_refresh
 

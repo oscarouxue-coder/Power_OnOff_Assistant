@@ -375,6 +375,9 @@ class LineCheckAssistant(Tk):
         self.log_path = LOG_DIR / f"line_check_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
         self._build_ui()
+        self.bind(
+            "<ButtonPress-1>", self._bring_main_window_to_front, add="+"
+        )
         self._load_current_channel()
         self._show_startup_warnings()
         self.after_idle(self._maximize_window)
@@ -387,6 +390,14 @@ class LineCheckAssistant(Tk):
         try:
             self.state("zoomed")
         except Exception:
+            return
+
+    def _bring_main_window_to_front(self, _event=None) -> None:
+        """主界面任意位置被点击时升层，不强制改写当前控件焦点。"""
+        try:
+            self.lift()
+        except Exception:
+            # 应用退出过程中Tk窗口可能已销毁，点击升层无需阻断关闭流程。
             return
 
     def _on_app_close(self) -> None:
@@ -828,7 +839,6 @@ class LineCheckAssistant(Tk):
         dialog.title("写样机参数")
         dialog.geometry("980x690")
         dialog.minsize(860, 590)
-        dialog.transient(self)
 
         # 参数表路径是全流程子任务 4 的必填项，必须直接复用实例级持久变量；
         # 不能每次开写参窗口再新建临时 StringVar，否则选表后全流程仍会读到空路径。
@@ -1626,7 +1636,6 @@ class LineCheckAssistant(Tk):
         dialog.title("ONU注册")
         dialog.geometry("896x580")
         dialog.minsize(836, 530)
-        dialog.transient(self)
         dialog.configure(background=COLOR_BG)
 
         content = Frame(dialog, padx=20, pady=18, background=COLOR_BG)
@@ -2033,7 +2042,6 @@ class LineCheckAssistant(Tk):
         dialog.title("样机升级")
         dialog.geometry("820x580")
         dialog.minsize(760, 530)
-        dialog.transient(self)
         dialog.configure(background=COLOR_BG)
 
         content = Frame(dialog, padx=20, pady=18, background=COLOR_BG)
@@ -2804,7 +2812,6 @@ class LineCheckAssistant(Tk):
         dialog.title("测试项配置")
         dialog.geometry("960x940")
         dialog.minsize(960, 940)
-        dialog.transient(self)
         dialog.configure(background=COLOR_BG)
 
         content = Frame(dialog, padx=20, pady=18, background=COLOR_BG)

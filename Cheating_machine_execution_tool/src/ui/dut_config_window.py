@@ -507,7 +507,6 @@ class DutConfigWindow:
         )
         self.window.geometry(f"{window_width}x{window_height}")
         self.window.minsize(DUT_CONFIG_MIN_WIDTH, DUT_CONFIG_MIN_HEIGHT)
-        self.window.transient(master)
         self.window.protocol("WM_DELETE_WINDOW", on_close)
 
         self.username_var = username_var
