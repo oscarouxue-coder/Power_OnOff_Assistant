@@ -2,12 +2,18 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
 from src.models.dut_config_models import DutWifiSettings
 
-from .ubus_http_client import UBUS_SERVICE_BBFDM, UbusError, UbusHttpClient
+from .ubus_http_client import (
+    UBUS_SERVICE_BBFDM,
+    UbusError,
+    UbusHttpClient,
+    UbusTransportError,
+)
 
 
 VENDOR_PREFIX = "X_SDMC_"
@@ -18,8 +24,12 @@ WIFI_MAPPING_PATHS = {
     "5G": f"{WIFI_ROOT}{VENDOR_PREFIX}Mapping_5G",
 }
 WIFI_DUAL_BAND_PATH = f"{WIFI_ROOT}{VENDOR_PREFIX}DualBandEnable"
+WIFI_APPLY_SETTLE_SECONDS = 60.0
+WIFI_GET_RETRY_DELAY_SECONDS = 1.0
+WIFI_GET_MAX_RETRIES = 1
 
 LogCallback = Callable[[str], None]
+SleepCallback = Callable[[float], None]
 
 
 def _emit(on_log: LogCallback | None, message: str) -> None:
@@ -87,6 +97,19 @@ def _split_values(value: Any) -> tuple[str, ...]:
     return tuple(dict.fromkeys(_as_text(item) for item in items if _as_text(item)))
 
 
+def _first_supported_values(
+    values: Mapping[str, Any],
+    *keys: str,
+) -> tuple[str, ...]:
+    """读取设备能力字段的首个有效兼容名称。"""
+
+    for key in keys:
+        supported = _split_values(values.get(key))
+        if supported:
+            return supported
+    return ()
+
+
 def _parse_mode_bw_map(value: Any) -> tuple[tuple[str, ...], tuple[str, ...]]:
     try:
         decoded = json.loads(value) if isinstance(value, str) else value
@@ -113,9 +136,23 @@ def _get(
     path: str,
     *,
     on_log: LogCallback | None,
+    sleep_fn: SleepCallback = time.sleep,
 ) -> dict[str, Any]:
-    _emit(on_log, f"TX UBUS bbfdm.get path={path}")
-    response = client.bbfdm_get(session_id, path, optional=WEB_OPTIONAL)
+    for attempt in range(1, WIFI_GET_MAX_RETRIES + 2):
+        _emit(on_log, f"TX UBUS bbfdm.get path={path}")
+        try:
+            response = client.bbfdm_get(session_id, path, optional=WEB_OPTIONAL)
+            break
+        except UbusTransportError as exc:
+            if attempt > WIFI_GET_MAX_RETRIES:
+                raise
+            _emit(
+                on_log,
+                "UBUS WiFi只读请求连接异常："
+                f"{exc}；等待 {WIFI_GET_RETRY_DELAY_SECONDS:g} 秒后重建连接重试 "
+                f"{attempt}/{WIFI_GET_MAX_RETRIES}",
+            )
+            sleep_fn(WIFI_GET_RETRY_DELAY_SECONDS)
     payload = _response_payload(response, f"WiFi get {path}")
     _emit(on_log, f"RX UBUS {path}：{payload}")
     return payload
@@ -156,6 +193,7 @@ def resolve_wifi_paths(
     ssid_index: str,
     *,
     on_log: LogCallback | None = None,
+    sleep_fn: SleepCallback = time.sleep,
 ) -> dict[str, str]:
     """把厂商 Mapping 的第 N 组解析为真实 Radio/AP/SSID 实例路径。"""
     if band not in WIFI_MAPPING_PATHS:
@@ -165,7 +203,11 @@ def resolve_wifi_paths(
     except (TypeError, ValueError) as exc:
         raise ValueError(f"SSID 索引必须为正整数：{ssid_index}") from exc
     mapping_payload = _get(
-        client, session_id, WIFI_MAPPING_PATHS[band], on_log=on_log
+        client,
+        session_id,
+        WIFI_MAPPING_PATHS[band],
+        on_log=on_log,
+        sleep_fn=sleep_fn,
     )
     groups = _mapping_value(mapping_payload, band).split("@")
     if not 1 <= position <= len(groups):
@@ -179,7 +221,9 @@ def resolve_wifi_paths(
     resolved: list[str] = []
     for token, node_name in zip(tokens, ("Radio", "AccessPoint", "SSID")):
         base_path = f"{WIFI_ROOT}{node_name}."
-        payload = _get(client, session_id, base_path, on_log=on_log)
+        payload = _get(
+            client, session_id, base_path, on_log=on_log, sleep_fn=sleep_fn
+        )
         nodes = _find_named_list(payload, node_name)
         if not nodes:
             raise UbusError(f"WiFi {node_name} 节点列表为空：{payload}")
@@ -221,16 +265,38 @@ def query_wifi_status(
     ssid_index: str = "1",
     *,
     on_log: LogCallback | None = None,
+    sleep_fn: SleepCallback = time.sleep,
 ) -> DutWifiSettings:
     """只读查询指定频段/SSID；本函数不会调用 ``bbfdm.set``。"""
     paths = resolve_wifi_paths(
-        client, session_id, band, ssid_index, on_log=on_log
+        client,
+        session_id,
+        band,
+        ssid_index,
+        on_log=on_log,
+        sleep_fn=sleep_fn,
     )
-    dual_payload = _get(client, session_id, WIFI_DUAL_BAND_PATH, on_log=on_log)
+    dual_payload = _get(
+        client,
+        session_id,
+        WIFI_DUAL_BAND_PATH,
+        on_log=on_log,
+        sleep_fn=sleep_fn,
+    )
     dual_raw = dual_payload.get(f"{VENDOR_PREFIX}DualBandEnable", "0")
-    ssid_payload = _get(client, session_id, paths["ssid"], on_log=on_log)
-    ap_payload = _get(client, session_id, paths["access_point"], on_log=on_log)
-    radio_payload = _get(client, session_id, paths["radio"], on_log=on_log)
+    ssid_payload = _get(
+        client, session_id, paths["ssid"], on_log=on_log, sleep_fn=sleep_fn
+    )
+    ap_payload = _get(
+        client,
+        session_id,
+        paths["access_point"],
+        on_log=on_log,
+        sleep_fn=sleep_fn,
+    )
+    radio_payload = _get(
+        client, session_id, paths["radio"], on_log=on_log, sleep_fn=sleep_fn
+    )
 
     ssid_items = _find_named_list(ssid_payload, "SSID")
     ap_items = _find_named_list(ap_payload, "AccessPoint")
@@ -248,12 +314,27 @@ def query_wifi_status(
             session_id,
             f"{paths['access_point']}Security.",
             on_log=on_log,
+            sleep_fn=sleep_fn,
         )
         security_items = _find_named_list(security_payload, "Security")
         security = security_items[0] if security_items else security_payload
 
     modes, bandwidths = _parse_mode_bw_map(
         radio_data.get(f"{VENDOR_PREFIX}ModeBWMap")
+    )
+    security_modes = _first_supported_values(
+        security,
+        "ModesSupported",
+        f"{VENDOR_PREFIX}ModesSupported",
+        "ModeSupported",
+    )
+    transmit_powers = _first_supported_values(
+        radio_data,
+        "TransmitPowerSupported",
+        f"{VENDOR_PREFIX}TransmitPowerSupported",
+        f"{VENDOR_PREFIX}TransmitPowersSupported",
+        "TransmitPowerList",
+        f"{VENDOR_PREFIX}TransmitPowerList",
     )
     settings = DutWifiSettings(
         band=band,
@@ -279,6 +360,8 @@ def query_wifi_status(
         ),
         supported_bandwidths=bandwidths,
         supported_modes=modes,
+        supported_security_modes=security_modes,
+        supported_transmit_powers=transmit_powers,
     )
     _emit(on_log, f"RX UBUS {band} WiFi当前状态：{settings}")
     return settings
@@ -370,20 +453,37 @@ def configure_wifi(
     settings: DutWifiSettings,
     *,
     on_log: LogCallback | None = None,
+    sleep_fn: SleepCallback = time.sleep,
 ) -> DutWifiSettings:
     """配置指定频段；双频合一时同步两个频段的 SSID/AP/安全参数。"""
     target_paths = resolve_wifi_paths(
-        client, session_id, settings.band, settings.ssid_index, on_log=on_log
+        client,
+        session_id,
+        settings.band,
+        settings.ssid_index,
+        on_log=on_log,
+        sleep_fn=sleep_fn,
     )
     peer_band = "5G" if settings.band == "2.4G" else "2.4G"
     peer_paths = (
         resolve_wifi_paths(
-            client, session_id, peer_band, settings.ssid_index, on_log=on_log
+            client,
+            session_id,
+            peer_band,
+            settings.ssid_index,
+            on_log=on_log,
+            sleep_fn=sleep_fn,
         )
         if settings.dual_band_enabled
         else None
     )
-    dual_payload = _get(client, session_id, WIFI_DUAL_BAND_PATH, on_log=on_log)
+    dual_payload = _get(
+        client,
+        session_id,
+        WIFI_DUAL_BAND_PATH,
+        on_log=on_log,
+        sleep_fn=sleep_fn,
+    )
     current_dual = dual_payload.get(f"{VENDOR_PREFIX}DualBandEnable", "0")
     dual_value = _updated_dual_value(
         current_dual, settings.ssid_index, settings.dual_band_enabled
@@ -395,12 +495,19 @@ def configure_wifi(
     _require_rpc_ok(response, f"{settings.band} WiFi set")
     _emit(on_log, f"RX UBUS {settings.band} WiFi配置结果：{response}")
 
+    _emit(
+        on_log,
+        f"等待 WiFi 参数生效并稳定：{WIFI_APPLY_SETTLE_SECONDS:g} 秒",
+    )
+    sleep_fn(WIFI_APPLY_SETTLE_SECONDS)
+
     actual = query_wifi_status(
         client,
         session_id,
         settings.band,
         settings.ssid_index,
         on_log=on_log,
+        sleep_fn=sleep_fn,
     )
     _assert_wifi_readback(settings, actual)
     if settings.dual_band_enabled:
@@ -410,6 +517,7 @@ def configure_wifi(
             peer_band,
             settings.ssid_index,
             on_log=on_log,
+            sleep_fn=sleep_fn,
         )
         shared_fields = (
             "ssid",

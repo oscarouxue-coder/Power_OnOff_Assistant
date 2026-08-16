@@ -353,7 +353,10 @@ class DutUbusConfigTests(unittest.TestCase):
             def bbfdm_get(self, session, path, optional=None):
                 self.calls.append(("get", session, path, optional))
                 if path.endswith("VoIPProfile.1."):
-                    return [0, {"VoIPProfile": [{"DTMFMethod": "SIPINFO"}]}]
+                    return [0, {"VoIPProfile": [{
+                        "DTMFMethod": "SIPINFO",
+                        "DTMFMethodSupported": "RFC2833,SIPINFO",
+                    }]}]
                 if path.endswith("SIP.Network.1."):
                     return [0, {"Network": {
                         "ProxyServer": "172.33.5.251",
@@ -365,7 +368,16 @@ class DutUbusConfigTests(unittest.TestCase):
                         "RegisterExpires": 7200,
                     }}]
                 if path.endswith("SIP."):
-                    return [0, {"SIP": {"X_SDMC_SIPMode": "IMSSIP"}}]
+                    return [0, {"SIP": {
+                        "X_SDMC_SIPMode": "IMSSIP",
+                        "X_SDMC_SIPModeSupported": "SIP,IMSSIP",
+                    }}]
+                if path.endswith("Capabilities.Codecs."):
+                    return [0, {"Codecs": [
+                        {"Codec": "G.711 U-law"},
+                        {"Codec": "G.711 A-law"},
+                        {"Codec": "G.729"},
+                    ]}]
                 if path.endswith("SIP.Client.2."):
                     return [0, {"Client": [{
                         "Enable": "1",
@@ -395,7 +407,13 @@ class DutUbusConfigTests(unittest.TestCase):
         self.assertEqual(settings.dtmf_method, "SIPINFO")
         self.assertEqual(settings.sip_mode, "IMSSIP")
         self.assertEqual(settings.codecs, tuple(f"codec-{index}" for index in range(1, 6)))
-        self.assertEqual(sum(1 for call in client.calls if call[0] == "get"), 10)
+        self.assertEqual(settings.supported_dtmf_methods, ("RFC2833", "SIPINFO"))
+        self.assertEqual(settings.supported_sip_modes, ("SIP", "IMSSIP"))
+        self.assertEqual(
+            settings.supported_codecs,
+            ("G.711 U-law", "G.711 A-law", "G.729"),
+        )
+        self.assertEqual(sum(1 for call in client.calls if call[0] == "get"), 11)
         self.assertTrue(all(call[0] == "get" for call in client.calls))
         self.assertTrue(any("语音当前状态" in item and "voice-pass" in item for item in logs))
 
@@ -443,8 +461,38 @@ class DutUbusConfigTests(unittest.TestCase):
         self.assertFalse(settings.connection_request_enabled)
         self.assertTrue(settings.certificate_enabled)
         self.assertFalse(settings.manual_inform)
+        self.assertEqual(
+            settings.supported_fields,
+            (
+                "acs_url",
+                "acs_username",
+                "acs_password",
+                "periodic_inform_enabled",
+                "periodic_inform_interval",
+                "connection_request_enabled",
+                "connection_request_username",
+                "connection_request_password",
+                "certificate_enabled",
+            ),
+        )
         self.assertTrue(all(call[0] == "get" for call in client.calls))
         self.assertTrue(any("TR069当前状态" in item and "request-pass" in item for item in logs))
+
+    def test_tr069_config_omits_fields_not_reported_by_dut(self) -> None:
+        client = _FakeClient()
+        settings = DutTr069Settings(
+            acs_url="https://acs.example.com/acs",
+            periodic_inform_interval="7200",
+            supported_fields=("acs_url", "periodic_inform_interval"),
+        )
+
+        configure_tr069(client, "session", settings)
+
+        set_call = next(call for call in client.calls if call[0] == "set")
+        self.assertEqual(
+            set_call[3],
+            {"URL": "https://acs.example.com/acs", "PeriodicInformInterval": 7200},
+        )
 
     def test_tr069_manual_inform_waits_for_success_result(self) -> None:
         client = _FakeClient()

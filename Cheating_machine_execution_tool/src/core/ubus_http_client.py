@@ -34,6 +34,10 @@ class UbusError(RuntimeError):
     """UBUS HTTP 请求错误（含 JSON-RPC 错误码、HTTP 错误等）。"""
 
 
+class UbusTransportError(UbusError):
+    """UBUS HTTP 连接层瞬时错误；只允许幂等读取按策略重试。"""
+
+
 class UbusHttpClient:
     """按 VLAN 网卡 IP 锁定源 IP,目标 device_host:port 的 UBUS HTTP 客户端。
 
@@ -83,6 +87,17 @@ class UbusHttpClient:
         )
         return self._connection
 
+    def _discard_connection(self) -> None:
+        """丢弃已异常或已用完的 HTTP 连接，同时保留设备 session。"""
+
+        connection = self._connection
+        self._connection = None
+        if connection is not None:
+            try:
+                connection.close()
+            except OSError:
+                pass
+
     def _post(self, params: list) -> Any:
         payload = {
             "jsonrpc": JSON_RPC_VERSION,
@@ -96,7 +111,10 @@ class UbusHttpClient:
             connection.request("POST", UBUS_PATH, body=body, headers={"Content-Type": "application/json"})
             response = connection.getresponse()
             response_body = response.read()
-        except (socket.error, OSError) as exc:
+        except (socket.error, OSError, http.client.HTTPException) as exc:
+            # 超时/断连后的 HTTPConnection 不可继续安全复用。先丢弃，让上层仅对
+            # bbfdm.get 之类幂等读取决定是否新建连接重试；set/operate 不重发。
+            self._discard_connection()
             # 2026-07-18: bind_ip 与 device_host 相同 → PC 把自己作为目标连接,
             # 给操作员明确修复指引(与 TelnetSession._open_socket 同款 hint)。
             hint = ""
@@ -106,7 +124,9 @@ class UbusHttpClient:
                     "请检查 network_card_ip.ini 中该 VLAN 的 device_manage_ip 是否误填为 PC 静态 IP,"
                     "样机管理 IP 应是设备自身 IP,典型 192.168.1.1。）"
                 )
-            raise UbusError(f"UBUS HTTP 请求失败 {self.device_host}:{self.ubus_port}：{exc}{hint}") from exc
+            raise UbusTransportError(
+                f"UBUS HTTP 请求失败 {self.device_host}:{self.ubus_port}：{exc}{hint}"
+            ) from exc
         if response.status != 200:
             raise UbusError(
                 f"UBUS HTTP 状态非 200：{self.device_host}:{self.ubus_port} status={response.status}"
@@ -236,9 +256,4 @@ class UbusHttpClient:
             except Exception:
                 # close 是 finally 清理入口；设备会话已失效或网络中断时仍须关闭本机连接。
                 self._session_id = ""
-        if self._connection is not None:
-            try:
-                self._connection.close()
-            except OSError:
-                pass
-            self._connection = None
+        self._discard_connection()

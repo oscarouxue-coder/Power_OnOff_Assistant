@@ -145,6 +145,9 @@ class DutVoiceSettings:
         "G.722",
         "G.723",
     )
+    supported_dtmf_methods: tuple[str, ...] = ()
+    supported_sip_modes: tuple[str, ...] = ()
+    supported_codecs: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -161,6 +164,7 @@ class DutTr069Settings:
     connection_request_password: str = ""
     certificate_enabled: bool = False
     manual_inform: bool = False
+    supported_fields: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -184,6 +188,8 @@ class DutWifiSettings:
     supported_channels: tuple[str, ...] = ()
     supported_bandwidths: tuple[str, ...] = ()
     supported_modes: tuple[str, ...] = ()
+    supported_security_modes: tuple[str, ...] = ()
+    supported_transmit_powers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

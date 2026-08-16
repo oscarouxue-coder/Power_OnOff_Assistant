@@ -3,7 +3,7 @@ import unittest
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from src.core.ubus_http_client import UbusError, UbusHttpClient
+from src.core.ubus_http_client import UbusError, UbusHttpClient, UbusTransportError
 
 
 def _fake_response(payload: dict, status: int = 200) -> MagicMock:
@@ -227,6 +227,21 @@ class UbusHttpClientTests(unittest.TestCase):
             with self.assertRaises(UbusError) as ctx:
                 client._post(["session-id", "bbf.shell", "get", {"path": "x"}])
         self.assertNotIn("提示", str(ctx.exception))
+
+    def test_transport_error_discards_connection_before_safe_read_retry(self):
+        with self._patch_ip():
+            client = UbusHttpClient("192.168.1.113", "192.168.1.1")
+        connection = MagicMock()
+        connection.request.side_effect = TimeoutError("timed out")
+        client._connection = connection
+
+        with self.assertRaisesRegex(UbusTransportError, "timed out"):
+            client._post(
+                ["session-id", "bbf.shell", "get", {"path": "Device.WiFi.Radio."}]
+            )
+
+        connection.close.assert_called_once_with()
+        self.assertIsNone(client._connection)
 
 
 if __name__ == "__main__":

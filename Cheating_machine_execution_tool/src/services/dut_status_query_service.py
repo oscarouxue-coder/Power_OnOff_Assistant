@@ -184,7 +184,12 @@ def run_single_dut_status_query(
                 else:
                     band = "2.4G" if feature == "wifi_2g" else "5G"
                     settings = query_wifi_status(
-                        client, session_id, band, ssid_index, on_log=emit
+                        client,
+                        session_id,
+                        band,
+                        ssid_index,
+                        on_log=emit,
+                        sleep_fn=pause,
                     )
                 expected_type = {
                     "telnet": DutTelnetStatus,

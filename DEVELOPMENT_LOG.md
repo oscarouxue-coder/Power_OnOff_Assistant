@@ -2,6 +2,66 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-14 - 扩展DUT动态能力范围
+
+- 类型：功能
+- 背景：项目负责人纠正此前验收范围：按DUT能力动态加载只在2.4G WiFi完成现场验收；5G WiFi、语音和TR069仍需要实现并分别验收。
+- 完成内容：① 将验收记录严格收窄为仅2.4G WiFi五类下拉通过，5G不再误列为已验收；② 明确5G查询使用独立`X_SDMC_Mapping_5G`、5G Radio及自己的认证/信道/带宽/协议/功率能力，补独立回归防止复用2.4G候选；③ 语音模型增加DTMF、SIP模式和编码能力，查询VoIPProfile/SIP支持字段及标准`Device.Services.VoiceService.1.Capabilities.Codecs.`，查询后动态更新三个下拉，service按同一DUT能力再次预检；④ TR069查询记录`Device.ManagementServer.`实际存在字段，缺失参数在界面禁用，配置载荷同步裁剪，设备未返回手动Inform能力时拒绝选择；⑤ 切换DUT或多台参数/能力不一致时清除语音、TR069和WiFi旧能力，避免拿任意一台覆盖整批。
+- 修改文件：`.claude/plans/dut_dynamic_capabilities_5g_voice_tr069.md`、`Cheating_machine_execution_tool/src/models/dut_config_models.py`、`Cheating_machine_execution_tool/src/core/dut_ubus_config.py`、`Cheating_machine_execution_tool/src/services/dut_advanced_config_service.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_dut_ubus_config.py`、`Cheating_machine_execution_tool/tests/test_dut_advanced_config_service.py`、`Cheating_machine_execution_tool/tests/test_dut_wifi_config.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录分别执行四个相关测试文件及`python scripts\verify_baseline.py`；Windows真实DUT分别查询5G WiFi、语音和TR069，核对候选/可配置字段后执行下发与回读。
+- 验证结果：针对性测试14项、15项、6项与131项全部`OK`；完整基线门禁609项单元测试通过，52个源码文件编译覆盖、112个强制基线测试实际执行，最终`ALL CHECKS PASSED`。
+- 后续待办：真实DUT验收5G五类下拉和实际配置、语音DTMF/SIP/编码能力与实际下发回读、TR069缺失字段禁用及实际下发回读；自动化测试不替代现场验收。
+
+## 2026-08-14 - 验收WiFi动态能力下拉
+
+- 类型：真实样机验收 / 状态更新
+- 背景：项目负责人在Windows源码版连接真实DUT，确认2.4G WiFi参数下拉按DUT实际能力动态加载验收通过。
+- 完成内容：① 将仅2.4G页的认证/加密模式、信道、信道带宽、WiFi协议类型和发射功率五类下拉按DUT实际能力动态加载更新为已确认验收；② 认证/加密模式与DUT管理页面一致，仅显示`None`、`WPA2-Personal`和`WPA3-Personal-Transition`三项；③ 本次不包含5G，也不扩大为设备缺能力字段兜底、目标变化清理、WiFi实际下发或其它配置组合验收。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：项目负责人在Windows源码版连接真实DUT，查询WiFi状态后核对五类只读下拉与DUT管理页面实际支持能力一致；在主源码目录执行`python scripts\verify_baseline.py`。
+- 验证结果：项目负责人确认“2.4G按DUT实际能力动态加载”验收通过（2026-08-14）；完整基线门禁604项单元测试通过，最终`ALL CHECKS PASSED`。
+- 后续待办：继续验收设备缺少能力字段时的兜底、目标变化后旧能力清理、2.4G其它参数组合、5G实际配置、开放网络、隐藏SSID、双频合一及并行异常场景。
+
+## 2026-08-14 - 按DUT能力加载WiFi候选
+
+- 类型：BUG 修复
+- 背景：DUT管理页面的认证/加密模式实际只有`None`、`WPA2-Personal`、`WPA3-Personal-Transition`三项，但工具固定展示五项；信道、带宽、协议和发射功率也应以当前DUT实际能力为准，避免操作员选择设备不支持的值。
+- 完成内容：① WiFi状态模型增加认证模式和发射功率能力列表，保留已有信道、带宽和协议能力；② 从AP Security `ModesSupported`解析认证候选，从Radio `X_SDMC_ChannelsSupported`及`X_SDMC_ModeBWMap`解析信道/带宽/协议，从`TransmitPowerSupported`及四个厂商兼容名称解析功率；③ 查询成功后五个只读下拉按DUT返回顺序更新，当前实际值缺失时仍保留，单项未返回能力才使用原分频段兜底；④ 目标变化后清除上一台DUT的动态候选并提示重新查询；⑤ 配置预检使用当前下拉携带的DUT能力列表，既允许设备实际支持的厂商值，也拒绝不在该设备能力列表中的值；⑥ 补设备三项认证模式、标准/厂商功率字段、五类动态候选、缺字段兜底及能力约束回归。
+- 修改文件：`Cheating_machine_execution_tool/src/models/dut_config_models.py`、`Cheating_machine_execution_tool/src/core/dut_wifi_config.py`、`Cheating_machine_execution_tool/src/services/dut_advanced_config_service.py`、`Cheating_machine_execution_tool/src/ui/dut_config_window.py`、`Cheating_machine_execution_tool/tests/test_dut_wifi_config.py`、`Cheating_machine_execution_tool/tests/test_dut_advanced_config_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p test_dut_wifi_config.py -v`、`python -m unittest discover -s tests -p test_dut_advanced_config_service.py -v`、`python -m unittest discover -s tests -p test_app.py -v`及`python scripts\verify_baseline.py`；Windows现场选择同一DUT，分别点击2.4G/5G“查询当前…”，核对五类下拉与DUT管理页面一致。
+- 验证结果：针对性测试5项、14项与129项全部`OK`；完整基线门禁604项单元测试通过，最终`ALL CHECKS PASSED`。动态下拉的真实DUT/Windows显示仍待现场确认。
+- 后续待办：现场确认截图中的DUT查询后认证下拉仅显示三项，并核对信道、带宽、协议、功率；再覆盖设备缺少`TransmitPowerSupported`时的兜底表现。
+
+## 2026-08-14 - 验收WiFi连续两次配置
+
+- 类型：真实样机验收 / 状态更新
+- 背景：项目负责人在同一真实DUT上复验连续两次修改WiFi配置，确认此前第二轮读取`Device.WiFi.Radio.`超时的问题已经解决。
+- 完成内容：① 将单台DUT的2.4G WiFi连续两次配置、每次下发后等待60秒稳定并完成回读更新为已确认验收；② 仅确认本次连续下发时序，不扩大为5G、2.4G其它参数组合、开放网络、隐藏SSID、双频合一或多台并行验收；③ 同步项目交接状态与DUT配置验收基线。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：项目负责人在Windows源码版连接同一真实DUT，连续执行两次2.4G WiFi修改，核对每轮下发、60秒稳定等待及回读结果；在主源码目录执行`python scripts\verify_baseline.py`。
+- 验证结果：项目负责人确认“连续下发两次修改wifi配置会报错”BUG已解决，即单台2.4G WiFi连续两次配置真实样机验收通过（2026-08-14）；完整基线门禁600项单元测试通过，最终`ALL CHECKS PASSED`。
+- 后续待办：继续验收5G WiFi、2.4G其它参数组合、开放网络、隐藏SSID、双频合一、1/8台并行、停止及单台失败隔离。
+
+## 2026-08-14 - 修正WiFi连续配置超时
+
+- 类型：BUG 修复
+- 背景：真实DUT第一次2.4G WiFi配置、回读成功后立即再次执行，第二轮可完成登录与Mapping读取，但读取`Device.WiFi.Radio.`时出现`UBUS HTTP 请求失败 192.168.1.1:80：timed out`。WiFi set返回后设备Radio仍可能在后台重载，原流程却立即回读并过早宣告本轮成功。
+- 完成内容：① 按真实DUT稳定时间将WiFi set成功后的可停止等待设为60秒，再执行回读并宣告成功，避免下一轮撞上Radio重载窗口；② 将HTTP连接层超时单独标记为`UbusTransportError`并立即丢弃异常连接；③ WiFi只读get遇到该瞬时连接错误时等待1秒、重建连接并仅重试1次，set/operate等写操作不自动重发；④ 查询与配置service均复用可响应停止事件的等待函数；⑤ 新增连续两次配置、Radio读取瞬时超时和异常连接丢弃回归。
+- 修改文件：`Cheating_machine_execution_tool/src/core/ubus_http_client.py`、`Cheating_machine_execution_tool/src/core/dut_wifi_config.py`、`Cheating_machine_execution_tool/src/services/dut_advanced_config_service.py`、`Cheating_machine_execution_tool/src/services/dut_status_query_service.py`、`Cheating_machine_execution_tool/tests/test_ubus_http_client.py`、`Cheating_machine_execution_tool/tests/test_dut_wifi_config.py`、`Cheating_machine_execution_tool/tests/test_dut_advanced_config_service.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p test_ubus_http_client.py -v`、`python -m unittest discover -s tests -p test_dut_wifi_config.py -v`、`python -m unittest discover -s tests -p test_dut_advanced_config_service.py -v`、`python -m unittest discover -s tests -p test_dut_status_query_service.py -v`及`python scripts\verify_baseline.py`。
+- 验证结果：针对性测试分别为16、5、13、7项，全部`OK`；基线门禁52个源码文件编译通过、600项单元测试通过、112个强制基线测试实际执行，不变量检查通过，最终`ALL CHECKS PASSED`。
+- 后续待办：在同一真实DUT上连续执行至少两次2.4G WiFi配置，确认每轮日志均出现“等待 WiFi 参数生效并稳定：60 秒”且下发、回读成功；再按需复验5G WiFi。自动化测试不能替代真实Radio重载时序验收。
+
+## 2026-08-13 - 验收参数表与DUT四组功能
+
+- 类型：真实样机验收 / 状态更新
+- 背景：项目负责人完成实际验收并明确确认四组功能通过：①批量样机参数表生成规则；②DUT配置窗口布局；③DUT连续查询和网卡复用；④WAN配置。
+- 完成内容：① 将普通SN纯数字及16位上限、XPON SN固定12位、MAC前6位自定义/后6位随机十六进制、非法输入提示及SSID-MAC关联更新为已确认验收；② 将DUT六Tab左对齐/原生勾号、状态高度和底部按钮保护、窗口尺寸恢复及快速刷新更新为已确认验收；③ 将连续Telnet/WAN/WiFi/语音/TR069查询、设备session注销和DUT专用网卡四类按需准备路径更新为已确认验收；④ 将WAN完整查询回填、新增/修改/删除、协议和字段联动、端口绑定、IPTV组播VLAN及多台共同WAN更新为已确认验收；⑤ WiFi实际配置、语音/TR069实际配置、Telnet状态准确性、主动Access denied、1/8台并行、停止和单台失败隔离继续保留待验收。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：由项目负责人在Windows源码版及真实DUT环境按待验收清单逐项操作并核对界面、生成结果、设备状态与主执行日志。
+- 验证结果：上述四组功能由项目负责人确认实际验收通过（2026-08-13）；本轮仅同步验收状态，未修改程序代码。
+- 后续待办：继续验收DUT WiFi、语音/TR069、Telnet状态准确性及其它尚未覆盖的专项功能。
+
 ## 2026-08-13 - 验收批量参数生成窗口首帧修复
 
 - 类型：真实样机验收 / 状态更新

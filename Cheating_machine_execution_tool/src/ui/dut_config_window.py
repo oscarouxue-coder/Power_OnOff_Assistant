@@ -26,6 +26,7 @@ from src.services.dut_config_service import (
 )
 from src.services.dut_advanced_config_service import (
     VOICE_CODEC_OPTIONS,
+    VOICE_DTMF_OPTIONS,
     VOICE_SIP_MODE_OPTIONS,
     WIFI_BANDWIDTH_OPTIONS,
     WIFI_MODE_OPTIONS,
@@ -276,6 +277,82 @@ def wifi_status_form_values(settings: DutWifiSettings) -> dict[str, object]:
     }
 
 
+def voice_choice_options(settings: DutVoiceSettings) -> dict[str, tuple[str, ...]]:
+    """按 DUT 查询能力生成语音只读下拉候选；缺能力字段时兼容兜底。"""
+
+    current_by_key = {
+        "dtmf_method": (settings.dtmf_method,),
+        "sip_mode": (settings.sip_mode,),
+        "codecs": settings.codecs,
+    }
+    supported_by_key = {
+        "dtmf_method": settings.supported_dtmf_methods,
+        "sip_mode": settings.supported_sip_modes,
+        "codecs": settings.supported_codecs,
+    }
+    fallback_by_key = {
+        "dtmf_method": VOICE_DTMF_OPTIONS,
+        "sip_mode": VOICE_SIP_MODE_OPTIONS,
+        "codecs": tuple(sorted(VOICE_CODEC_OPTIONS)),
+    }
+    options_by_key: dict[str, tuple[str, ...]] = {}
+    for key in supported_by_key:
+        options = tuple(
+            dict.fromkeys(
+                str(value).strip()
+                for value in (supported_by_key[key] or fallback_by_key[key])
+                if str(value).strip()
+            )
+        )
+        current_values = tuple(
+            str(value).strip() for value in current_by_key[key] if str(value).strip()
+        )
+        missing_current = tuple(value for value in current_values if value not in options)
+        options_by_key[key] = tuple(dict.fromkeys((*missing_current, *options)))
+    return options_by_key
+
+
+def wifi_choice_options(settings: DutWifiSettings) -> dict[str, tuple[str, ...]]:
+    """按 DUT 查询能力生成 WiFi 只读下拉候选；缺能力字段时使用兼容兜底。"""
+
+    band = settings.band if settings.band in WIFI_CHANNEL_OPTIONS else "2.4G"
+    supported_by_key = {
+        "security_mode": settings.supported_security_modes,
+        "channel": settings.supported_channels,
+        "channel_bandwidth": settings.supported_bandwidths,
+        "operating_mode": settings.supported_modes,
+        "transmit_power": settings.supported_transmit_powers,
+    }
+    fallback_by_key = {
+        "security_mode": WIFI_SECURITY_MODE_OPTIONS,
+        "channel": WIFI_CHANNEL_OPTIONS[band],
+        "channel_bandwidth": WIFI_BANDWIDTH_OPTIONS[band],
+        "operating_mode": WIFI_MODE_OPTIONS[band],
+        "transmit_power": WIFI_TRANSMIT_POWER_OPTIONS,
+    }
+    current_by_key = {
+        "security_mode": settings.security_mode,
+        "channel": settings.channel,
+        "channel_bandwidth": settings.channel_bandwidth,
+        "operating_mode": settings.operating_mode,
+        "transmit_power": settings.transmit_power,
+    }
+    options_by_key: dict[str, tuple[str, ...]] = {}
+    for key in supported_by_key:
+        options = tuple(
+            dict.fromkeys(
+                str(value).strip()
+                for value in (supported_by_key[key] or fallback_by_key[key])
+                if str(value).strip()
+            )
+        )
+        current = str(current_by_key[key]).strip()
+        if current and current not in options:
+            options = (current, *options)
+        options_by_key[key] = options
+    return options_by_key
+
+
 @dataclass(frozen=True)
 class WanFormRules:
     """WAN 当前选择对应的可见字段；不包含任何 UBUS 业务执行。"""
@@ -441,6 +518,12 @@ class DutConfigWindow:
         self._wifi_vars: dict[str, dict[str, StringVar | BooleanVar]] = {}
         self._wifi_password_groups: dict[str, tuple[object, object]] = {}
         self._wifi_choice_widgets: dict[str, dict[str, ttk.Combobox]] = {}
+        self._wifi_supported_options: dict[str, dict[str, tuple[str, ...]]] = {}
+        self._voice_choice_widgets: dict[str, object] = {}
+        self._voice_supported_options: dict[str, tuple[str, ...]] = {}
+        self._tr069_capability_widgets: dict[str, object] = {}
+        self._tr069_supported_fields: tuple[str, ...] = ()
+        self._capability_disabled_widgets: set[object] = set()
         self.wifi_dual_band_var = BooleanVar(value=False)
 
         outer = ttk.Frame(self.window, padding=18)
@@ -1351,6 +1434,7 @@ class DutConfigWindow:
             tab,
             text=(
                 f"批量配置主 {band} SSID；查询会按厂商 Mapping 解析真实 Radio/AP/SSID 路径。"
+                "查询成功后，认证、信道、带宽、协议和功率下拉会按DUT实际能力更新。"
                 "开启双频合一时，当前名称、启用/隐藏、认证密码、最大接入数和WMM会同步到两个频段，"
                 "信道、带宽、协议及功率仍只修改当前频段。UBUS凭据和并行数与Telnet页共享。"
             ),
@@ -1533,9 +1617,12 @@ class DutConfigWindow:
         self._field(form, 2, 0, "出站代理端口：", self.voice_outbound_proxy_port_var)
         self._field(form, 2, 1, "注册服务器：", self.voice_registrar_server_var)
         self._field(form, 2, 2, "注册服务器端口：", self.voice_registrar_server_port_var)
-        self._field(form, 2, 3, "DTMF：", self.voice_dtmf_method_var, values=("RFC2833", "InBand", "SIPINFO"))
+        self._voice_choice_widgets["dtmf_method"] = self._field(
+            form, 2, 3, "DTMF：", self.voice_dtmf_method_var,
+            values=VOICE_DTMF_OPTIONS,
+        )
         self._field(form, 3, 0, "注册有效期：", self.voice_register_expires_var)
-        self._field(
+        self._voice_choice_widgets["sip_mode"] = self._field(
             form,
             3,
             1,
@@ -1545,8 +1632,14 @@ class DutConfigWindow:
         )
         self._field(form, 3, 2, "DigitMap：", self.voice_digit_map_var, width=24)
         codec_values = tuple(sorted(VOICE_CODEC_OPTIONS))
+        self._voice_choice_widgets["codecs"] = []
         for index, variable in enumerate(self.voice_codec_vars):
-            self._field(form, 4 + index // 4, index % 4, f"编码 {index + 1}：", variable, values=codec_values)
+            self._voice_choice_widgets["codecs"].append(
+                self._field(
+                    form, 4 + index // 4, index % 4,
+                    f"编码 {index + 1}：", variable, values=codec_values,
+                )
+            )
         self._build_current_status_area(
             tab, "voice", "尚未查询；查询时使用当前选择的语音线路索引。"
         )
@@ -1579,30 +1672,46 @@ class DutConfigWindow:
         self.tr069_connection_password_var = StringVar(value="itms")
         self.tr069_certificate_enabled_var = BooleanVar(value=False)
         self.tr069_manual_inform_var = BooleanVar(value=False)
-        self._field(form, 0, 0, "ACS URL：", self.tr069_acs_url_var, width=35)
-        self._field(form, 0, 1, "ACS 账号：", self.tr069_acs_username_var)
-        self._field(form, 0, 2, "ACS 密码：", self.tr069_acs_password_var)
+        self._tr069_capability_widgets["acs_url"] = self._field(
+            form, 0, 0, "ACS URL：", self.tr069_acs_url_var, width=35
+        )
+        self._tr069_capability_widgets["acs_username"] = self._field(
+            form, 0, 1, "ACS 账号：", self.tr069_acs_username_var
+        )
+        self._tr069_capability_widgets["acs_password"] = self._field(
+            form, 0, 2, "ACS 密码：", self.tr069_acs_password_var
+        )
         periodic = self._native_checkbutton(
             form, text="启用周期 Inform", variable=self.tr069_periodic_enabled_var
         )
         periodic.grid(row=0, column=6, columnspan=2, sticky="w", padx=4, pady=3)
-        self._field(form, 1, 0, "Inform 间隔(秒)：", self.tr069_interval_var)
+        self._tr069_capability_widgets["periodic_inform_enabled"] = periodic
+        self._tr069_capability_widgets["periodic_inform_interval"] = self._field(
+            form, 1, 0, "Inform 间隔(秒)：", self.tr069_interval_var
+        )
         conn_enable = self._native_checkbutton(
             form,
             text="启用 HTTP 连接请求",
             variable=self.tr069_connection_request_enabled_var,
         )
         conn_enable.grid(row=1, column=2, columnspan=2, sticky="w", padx=4, pady=3)
-        self._field(form, 1, 2, "连接请求账号：", self.tr069_connection_username_var)
-        self._field(form, 1, 3, "连接请求密码：", self.tr069_connection_password_var)
+        self._tr069_capability_widgets["connection_request_enabled"] = conn_enable
+        self._tr069_capability_widgets["connection_request_username"] = self._field(
+            form, 1, 2, "连接请求账号：", self.tr069_connection_username_var
+        )
+        self._tr069_capability_widgets["connection_request_password"] = self._field(
+            form, 1, 3, "连接请求密码：", self.tr069_connection_password_var
+        )
         cert = self._native_checkbutton(
             form, text="启用证书", variable=self.tr069_certificate_enabled_var
         )
         cert.grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=3)
+        self._tr069_capability_widgets["certificate_enabled"] = cert
         manual = self._native_checkbutton(
             form, text="配置后手动 Inform", variable=self.tr069_manual_inform_var
         )
         manual.grid(row=2, column=2, columnspan=2, sticky="w", padx=4, pady=3)
+        self._tr069_capability_widgets["manual_inform"] = manual
         self._build_current_status_area(
             tab, "tr069", "尚未查询；“配置后手动 Inform”是动作选项，不属于设备持久状态。"
         )
@@ -1696,6 +1805,12 @@ class DutConfigWindow:
             self.apply_current_status(feature, common_settings)
             lines.append("已确认全部成功目标参数一致，并同步到当前配置表单。")
         elif feature in sync_features and any(result.ok for result in results):
+            if feature == "voice":
+                self._reset_voice_choice_options()
+            elif feature == "tr069":
+                self._reset_tr069_capabilities()
+            elif feature in {"wifi_2g", "wifi_5g"}:
+                self._reset_wifi_choice_options(feature)
             lines.append("目标状态不完全一致或存在失败，未使用任意一台覆盖当前配置表单。")
         self.clear_current_status(feature, "\n".join(lines) or "未返回查询结果。")
 
@@ -1706,6 +1821,17 @@ class DutConfigWindow:
     ) -> None:
         if feature == "voice" and isinstance(settings, DutVoiceSettings):
             values = voice_status_form_values(settings)
+            options_by_key = voice_choice_options(settings)
+            self._voice_supported_options = options_by_key
+            dtmf_widget = self._voice_choice_widgets.get("dtmf_method")
+            sip_widget = self._voice_choice_widgets.get("sip_mode")
+            codec_widgets = self._voice_choice_widgets.get("codecs", ())
+            if dtmf_widget is not None:
+                dtmf_widget.configure(values=options_by_key["dtmf_method"])
+            if sip_widget is not None:
+                sip_widget.configure(values=options_by_key["sip_mode"])
+            for widget in codec_widgets:
+                widget.configure(values=options_by_key["codecs"])
             variables = {
                 "line_index": self.voice_line_index_var,
                 "display_name": self.voice_display_name_var,
@@ -1746,6 +1872,7 @@ class DutConfigWindow:
                 bool(values["connection_request_enabled"])
             )
             self.tr069_certificate_enabled_var.set(bool(values["certificate_enabled"]))
+            self._apply_tr069_capabilities(settings.supported_fields)
         elif feature in {"wifi_2g", "wifi_5g"} and isinstance(
             settings, DutWifiSettings
         ):
@@ -1766,18 +1893,85 @@ class DutConfigWindow:
             for key in ("dual_band_enabled", "enabled", "hidden", "wmm_enabled"):
                 variables[key].set(bool(values[key]))
             widgets = self._wifi_choice_widgets.get(feature, {})
-            dynamic_options = {
-                "channel": settings.supported_channels,
-                "channel_bandwidth": settings.supported_bandwidths,
-                "operating_mode": settings.supported_modes,
-            }
-            for key, supported in dynamic_options.items():
-                if supported and key in widgets:
-                    current = str(values[key])
-                    widgets[key].configure(
-                        values=tuple(dict.fromkeys((current, *supported)))
-                    )
+            options_by_key = wifi_choice_options(settings)
+            self._wifi_supported_options[feature] = options_by_key
+            for key, options in options_by_key.items():
+                if key in widgets:
+                    widgets[key].configure(values=options)
             self._update_wifi_form(feature)
+
+    def _reset_voice_choice_options(self) -> None:
+        if not hasattr(self, "_voice_choice_widgets"):
+            return
+        settings = DutVoiceSettings()
+        options_by_key = voice_choice_options(settings)
+        self._voice_supported_options = options_by_key
+        dtmf_widget = self._voice_choice_widgets.get("dtmf_method")
+        sip_widget = self._voice_choice_widgets.get("sip_mode")
+        codec_widgets = self._voice_choice_widgets.get("codecs", ())
+        if dtmf_widget is not None:
+            dtmf_widget.configure(values=options_by_key["dtmf_method"])
+        if sip_widget is not None:
+            sip_widget.configure(values=options_by_key["sip_mode"])
+        for widget in codec_widgets:
+            widget.configure(values=options_by_key["codecs"])
+        if self.voice_dtmf_method_var.get() not in options_by_key["dtmf_method"]:
+            self.voice_dtmf_method_var.set(settings.dtmf_method)
+        if self.voice_sip_mode_var.get() not in options_by_key["sip_mode"]:
+            self.voice_sip_mode_var.set(settings.sip_mode)
+        for variable, default in zip(self.voice_codec_vars, settings.codecs):
+            if variable.get() not in options_by_key["codecs"]:
+                variable.set(default)
+
+    def _apply_tr069_capabilities(self, supported_fields: tuple[str, ...]) -> None:
+        self._tr069_supported_fields = tuple(dict.fromkeys(supported_fields))
+        supported = set(self._tr069_supported_fields)
+        for field, widget in self._tr069_capability_widgets.items():
+            disabled = bool(supported) and field not in supported
+            if disabled:
+                self._capability_disabled_widgets.add(widget)
+                widget.configure(state="disabled")
+            else:
+                self._capability_disabled_widgets.discard(widget)
+                if isinstance(widget, ttk.Combobox):
+                    widget.configure(state="readonly")
+                else:
+                    widget.configure(state="normal")
+        if supported and "manual_inform" not in supported:
+            self.tr069_manual_inform_var.set(False)
+
+    def _reset_tr069_capabilities(self) -> None:
+        if not hasattr(self, "_tr069_capability_widgets"):
+            return
+        self._tr069_supported_fields = ()
+        for widget in self._tr069_capability_widgets.values():
+            self._capability_disabled_widgets.discard(widget)
+            if isinstance(widget, ttk.Combobox):
+                widget.configure(state="readonly")
+            else:
+                widget.configure(state="normal")
+
+    def _reset_wifi_choice_options(self, feature: str) -> None:
+        variables = self._wifi_vars.get(feature)
+        widgets = self._wifi_choice_widgets.get(feature, {})
+        if variables is None:
+            return
+        band = "2.4G" if feature == "wifi_2g" else "5G"
+        settings = DutWifiSettings(
+            band=band,
+            channel="auto",
+            channel_bandwidth="20/40MHz" if band == "2.4G" else "160MHz",
+            security_mode="WPA2-Personal",
+            operating_mode="b,g,n,ax" if band == "2.4G" else "a,n,ac,ax",
+            transmit_power="100",
+        )
+        options_by_key = wifi_choice_options(settings)
+        self._wifi_supported_options[feature] = options_by_key
+        for key, options in options_by_key.items():
+            if key in widgets:
+                widgets[key].configure(values=options)
+            if str(variables[key].get()).strip() not in options:
+                variables[key].set(getattr(settings, key))
 
     def wan_settings(self) -> DutWanSettings:
         self._sync_wan_port_bind_from_checks()
@@ -1814,6 +2008,9 @@ class DutConfigWindow:
             dtmf_method=self.voice_dtmf_method_var.get(), register_expires=self.voice_register_expires_var.get().strip(),
             sip_mode=self.voice_sip_mode_var.get(), digit_map=self.voice_digit_map_var.get(),
             codecs=tuple(variable.get() for variable in self.voice_codec_vars),
+            supported_dtmf_methods=self._voice_supported_options.get("dtmf_method", ()),
+            supported_sip_modes=self._voice_supported_options.get("sip_mode", ()),
+            supported_codecs=self._voice_supported_options.get("codecs", ()),
         )
 
     def tr069_settings(self) -> DutTr069Settings:
@@ -1827,10 +2024,12 @@ class DutConfigWindow:
             connection_request_password=self.tr069_connection_password_var.get(),
             certificate_enabled=bool(self.tr069_certificate_enabled_var.get()),
             manual_inform=bool(self.tr069_manual_inform_var.get()),
+            supported_fields=self._tr069_supported_fields,
         )
 
     def wifi_settings(self, feature: str) -> DutWifiSettings:
         variables = self._wifi_vars[feature]
+        supported = self._wifi_supported_options.get(feature, {})
         return DutWifiSettings(
             band="2.4G" if feature == "wifi_2g" else "5G",
             ssid_index=str(variables["ssid_index"].get()).strip(),
@@ -1846,6 +2045,11 @@ class DutConfigWindow:
             transmit_power=str(variables["transmit_power"].get()).strip(),
             max_associations=str(variables["max_associations"].get()).strip(),
             wmm_enabled=bool(variables["wmm_enabled"].get()),
+            supported_channels=supported.get("channel", ()),
+            supported_bandwidths=supported.get("channel_bandwidth", ()),
+            supported_modes=supported.get("operating_mode", ()),
+            supported_security_modes=supported.get("security_mode", ()),
+            supported_transmit_powers=supported.get("transmit_power", ()),
         )
 
     def wifi_ssid_index(self, feature: str) -> str:
@@ -1906,6 +2110,10 @@ class DutConfigWindow:
             self.clear_current_status("tr069", "目标 DUT 已变化，请重新查询当前TR069状态。")
             self.clear_current_status("wifi_2g", "目标 DUT 已变化，请重新查询当前2.4G WiFi状态。")
             self.clear_current_status("wifi_5g", "目标 DUT 已变化，请重新查询当前5G WiFi状态。")
+            self._reset_wifi_choice_options("wifi_2g")
+            self._reset_wifi_choice_options("wifi_5g")
+            self._reset_voice_choice_options()
+            self._reset_tr069_capabilities()
             self._wan_target_signature = target_signature
         for feature, tree in self._trees.items():
             for item in tree.get_children():
@@ -1987,7 +2195,9 @@ class DutConfigWindow:
         self.parallel_spinbox.configure(state=input_state)
         for widget in self._input_widgets:
             try:
-                if isinstance(widget, ttk.Combobox):
+                if not running and widget in self._capability_disabled_widgets:
+                    widget.configure(state="disabled")
+                elif isinstance(widget, ttk.Combobox):
                     widget.configure(state="disabled" if running else "readonly")
                 else:
                     widget.configure(state=input_state)
@@ -2029,6 +2239,8 @@ __all__ = [
     "tr069_status_form_values",
     "voice_status_form_values",
     "wifi_status_form_values",
+    "wifi_choice_options",
+    "voice_choice_options",
     "save_dut_current_status_heights",
     "save_dut_window_size",
 ]

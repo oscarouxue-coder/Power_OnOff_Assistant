@@ -41,6 +41,7 @@ VOICE_PROFILE_PATH = "Device.Services.VoiceService.1.VoIPProfile.1."
 VOICE_NETWORK_PATH = "Device.Services.VoiceService.1.SIP.Network.1."
 VOICE_SIP_PATH = "Device.Services.VoiceService.1.SIP."
 VOICE_DIGIT_MAP_PATH = "Device.Services.VoiceService.1.Interwork.1.Map.1."
+VOICE_CODEC_CAPABILITIES_PATH = "Device.Services.VoiceService.1.Capabilities.Codecs."
 MANUAL_INFORM_STAGE_PATH = f"Device.ManagementServer.{VENDOR_PREFIX}ManualInformStage"
 INFORM_RESULT_PATH = f"Device.ManagementServer.{VENDOR_PREFIX}InformResult"
 WEB_OPTIONAL = {"proto": "web"}
@@ -744,6 +745,35 @@ def _text_parameter(payload: Any, *names: str) -> str:
     return "" if value is _MISSING or value is None else str(value)
 
 
+def _parameter_present(payload: Any, *names: str) -> bool:
+    return _find_parameter(payload, *names) is not _MISSING
+
+
+def _split_capability_values(value: Any) -> tuple[str, ...]:
+    if value is _MISSING or value is None:
+        return ()
+    if isinstance(value, (list, tuple, set)):
+        parts = [str(item).strip() for item in value]
+    else:
+        text = str(value).strip().strip("[]")
+        parts = [part.strip().strip("'\"") for part in re.split(r"[;,|]", text)]
+    return tuple(dict.fromkeys(part for part in parts if part))
+
+
+def _collect_parameter_values(payload: Any, *names: str) -> tuple[str, ...]:
+    values: list[str] = []
+    if isinstance(payload, dict):
+        for name in names:
+            if name in payload:
+                values.extend(_split_capability_values(payload[name]))
+        for value in payload.values():
+            values.extend(_collect_parameter_values(value, *names))
+    elif isinstance(payload, list):
+        for value in payload:
+            values.extend(_collect_parameter_values(value, *names))
+    return tuple(dict.fromkeys(values))
+
+
 def _bool_parameter(payload: Any, *names: str) -> bool:
     value = _find_parameter(payload, *names)
     if value is _MISSING or value is None:
@@ -790,6 +820,17 @@ def query_voice_status(
             on_log=on_log, action="VoIP DigitMap query",
         ),
     }
+    try:
+        payloads["codec_capabilities"] = _query_payload(
+            client,
+            session_id,
+            VOICE_CODEC_CAPABILITIES_PATH,
+            on_log=on_log,
+            action="VoIP codec capabilities query",
+        )
+    except UbusError as exc:
+        payloads["codec_capabilities"] = {}
+        _emit(on_log, f"跳过：DUT未返回语音编码能力列表，将使用兼容候选：{exc}")
     codecs: list[str] = []
     for index in range(1, 6):
         codec_path = f"{client_path}{VENDOR_PREFIX}Codec.{index}.Codec"
@@ -822,6 +863,26 @@ def query_voice_status(
         ),
         digit_map=_text_parameter(payloads["digit_map"], "DigitMap"),
         codecs=tuple(codecs),
+        supported_dtmf_methods=_split_capability_values(
+            _find_parameter(
+                payloads["profile"],
+                "DTMFMethodSupported",
+                f"{VENDOR_PREFIX}DTMFMethodSupported",
+                "DTMFMethodsSupported",
+            )
+        ),
+        supported_sip_modes=_split_capability_values(
+            _find_parameter(
+                payloads["sip"],
+                f"{VENDOR_PREFIX}SIPModeSupported",
+                f"{VENDOR_PREFIX}SIPModesSupported",
+                "SIPModeSupported",
+                "SIPModesSupported",
+            )
+        ),
+        supported_codecs=_collect_parameter_values(
+            payloads["codec_capabilities"], "Codec", "CodecName"
+        ),
     )
     _emit(
         on_log,
@@ -832,17 +893,32 @@ def query_voice_status(
 
 
 def _management_server_payload(settings: DutTr069Settings) -> dict[str, Any]:
-    return {
-        "PeriodicInformEnable": bool(settings.periodic_inform_enabled),
-        "PeriodicInformInterval": int(settings.periodic_inform_interval),
-        "URL": settings.acs_url,
-        "Username": settings.acs_username,
-        "Password": settings.acs_password,
-        "HTTPConnectionRequestEnable": bool(settings.connection_request_enabled),
-        "ConnectionRequestUsername": settings.connection_request_username,
-        "ConnectionRequestPassword": settings.connection_request_password,
-        f"{VENDOR_PREFIX}CertificateEnable": bool(settings.certificate_enabled),
-    }
+    supported = set(settings.supported_fields)
+    allowed = lambda field: not supported or field in supported
+    values: dict[str, Any] = {}
+    if allowed("periodic_inform_enabled"):
+        values["PeriodicInformEnable"] = bool(settings.periodic_inform_enabled)
+    if allowed("periodic_inform_interval"):
+        values["PeriodicInformInterval"] = int(settings.periodic_inform_interval)
+    if allowed("acs_url"):
+        values["URL"] = settings.acs_url
+    if allowed("acs_username"):
+        values["Username"] = settings.acs_username
+    if allowed("acs_password"):
+        values["Password"] = settings.acs_password
+    if allowed("connection_request_enabled"):
+        values["HTTPConnectionRequestEnable"] = bool(
+            settings.connection_request_enabled
+        )
+    if allowed("connection_request_username"):
+        values["ConnectionRequestUsername"] = settings.connection_request_username
+    if allowed("connection_request_password"):
+        values["ConnectionRequestPassword"] = settings.connection_request_password
+    if allowed("certificate_enabled"):
+        values[f"{VENDOR_PREFIX}CertificateEnable"] = bool(
+            settings.certificate_enabled
+        )
+    return values
 
 
 def _extract_management_server(response: Any) -> dict[str, Any]:
@@ -868,6 +944,27 @@ def query_tr069_status(
         on_log=on_log,
         action="TR069 status query",
     )
+    field_parameters = {
+        "acs_url": ("URL",),
+        "acs_username": ("Username",),
+        "acs_password": ("Password",),
+        "periodic_inform_enabled": ("PeriodicInformEnable",),
+        "periodic_inform_interval": ("PeriodicInformInterval",),
+        "connection_request_enabled": ("HTTPConnectionRequestEnable",),
+        "connection_request_username": ("ConnectionRequestUsername",),
+        "connection_request_password": ("ConnectionRequestPassword",),
+        "certificate_enabled": (
+            f"{VENDOR_PREFIX}CertificateEnable", "CertificateEnable"
+        ),
+        "manual_inform": (
+            f"{VENDOR_PREFIX}ManualInformStage", "ManualInformStage"
+        ),
+    }
+    supported_fields = tuple(
+        field
+        for field, parameter_names in field_parameters.items()
+        if _parameter_present(payload, *parameter_names)
+    )
     settings = DutTr069Settings(
         acs_url=_text_parameter(payload, "URL"),
         acs_username=_text_parameter(payload, "Username"),
@@ -887,6 +984,7 @@ def query_tr069_status(
             payload, f"{VENDOR_PREFIX}CertificateEnable", "CertificateEnable"
         ),
         manual_inform=False,
+        supported_fields=supported_fields,
     )
     _emit(
         on_log,
@@ -953,6 +1051,7 @@ def configure_tr069(
 __all__ = [
     "INFORM_RESULT_MESSAGES",
     "MANAGEMENT_SERVER_PATH",
+    "VOICE_CODEC_CAPABILITIES_PATH",
     "WAN_COMMAND",
     "WAN_INTERFACE_PATH",
     "build_wan_input",

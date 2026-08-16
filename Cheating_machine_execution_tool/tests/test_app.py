@@ -62,7 +62,9 @@ from src.ui.dut_config_window import (
     wan_lan_ports_from_port_bind,
     wan_port_bind_from_lan_ports,
     tr069_status_form_values,
+    voice_choice_options,
     voice_status_form_values,
+    wifi_choice_options,
     wifi_status_form_values,
     save_dut_current_status_heights,
     save_dut_window_size,
@@ -523,6 +525,49 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertFalse(tr069_values["periodic_inform_enabled"])
         self.assertNotIn("manual_inform", tr069_values)
 
+    def test_voice_choice_options_follow_dut_reported_capabilities(self):
+        options = voice_choice_options(
+            DutVoiceSettings(
+                dtmf_method="SIPINFO",
+                sip_mode="IMSSIP",
+                codecs=("G.711 U-law", "G.729", "G.711 U-law", "G.729", "G.711 U-law"),
+                supported_dtmf_methods=("RFC2833", "SIPINFO"),
+                supported_sip_modes=("SIP", "IMSSIP"),
+                supported_codecs=("G.711 U-law", "G.729"),
+            )
+        )
+
+        self.assertEqual(options["dtmf_method"], ("RFC2833", "SIPINFO"))
+        self.assertEqual(options["sip_mode"], ("SIP", "IMSSIP"))
+        self.assertEqual(options["codecs"], ("G.711 U-law", "G.729"))
+
+    def test_tr069_capability_fields_disable_unsupported_controls(self):
+        class FakeWidget:
+            def __init__(self):
+                self.state = "normal"
+
+            def configure(self, **kwargs):
+                self.state = kwargs["state"]
+
+        window = object.__new__(DutConfigWindow)
+        url_widget = FakeWidget()
+        certificate_widget = FakeWidget()
+        manual_widget = FakeWidget()
+        window._tr069_capability_widgets = {
+            "acs_url": url_widget,
+            "certificate_enabled": certificate_widget,
+            "manual_inform": manual_widget,
+        }
+        window._capability_disabled_widgets = set()
+        window.tr069_manual_inform_var = Mock()
+
+        window._apply_tr069_capabilities(("acs_url", "certificate_enabled"))
+
+        self.assertEqual(url_widget.state, "normal")
+        self.assertEqual(certificate_widget.state, "normal")
+        self.assertEqual(manual_widget.state, "disabled")
+        window.tr069_manual_inform_var.set.assert_called_once_with(False)
+
     def test_wifi_tabs_cover_required_fields_query_and_form_mapping(self):
         import inspect
 
@@ -574,6 +619,98 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(values["ssid"], "Lab_5G")
         self.assertTrue(values["hidden"])
         self.assertTrue(values["dual_band_enabled"])
+
+    def test_wifi_choice_options_follow_dut_reported_capabilities(self):
+        options = wifi_choice_options(
+            DutWifiSettings(
+                band="2.4G",
+                security_mode="WPA2-Personal",
+                channel="auto",
+                channel_bandwidth="20/40MHz",
+                operating_mode="b,g,n,ax",
+                transmit_power="100",
+                supported_security_modes=(
+                    "None",
+                    "WPA2-Personal",
+                    "WPA3-Personal-Transition",
+                ),
+                supported_channels=("auto", "1", "6", "11"),
+                supported_bandwidths=("20/40MHz", "20MHz", "40MHz"),
+                supported_modes=("b", "b,g", "b,g,n", "b,g,n,ax"),
+                supported_transmit_powers=("25", "50", "75", "100"),
+            )
+        )
+
+        self.assertEqual(
+            options["security_mode"],
+            ("None", "WPA2-Personal", "WPA3-Personal-Transition"),
+        )
+        self.assertEqual(options["channel"], ("auto", "1", "6", "11"))
+        self.assertEqual(
+            options["channel_bandwidth"], ("20/40MHz", "20MHz", "40MHz")
+        )
+        self.assertEqual(options["operating_mode"], ("b", "b,g", "b,g,n", "b,g,n,ax"))
+        self.assertEqual(options["transmit_power"], ("25", "50", "75", "100"))
+
+    def test_wifi_choice_options_fall_back_only_when_dut_omits_capability(self):
+        options = wifi_choice_options(
+            DutWifiSettings(
+                band="5G",
+                channel_bandwidth="160MHz",
+                operating_mode="a,n,ac,ax",
+            )
+        )
+
+        self.assertEqual(options["security_mode"], WIFI_SECURITY_MODE_OPTIONS)
+        self.assertEqual(options["channel_bandwidth"], WIFI_BANDWIDTH_OPTIONS["5G"])
+        self.assertEqual(options["operating_mode"], WIFI_MODE_OPTIONS["5G"])
+
+    def test_wifi_target_change_removes_previous_dut_capability_options(self):
+        class FakeVar:
+            def __init__(self, value):
+                self.value = value
+
+            def get(self):
+                return self.value
+
+            def set(self, value):
+                self.value = value
+
+        class FakeCombo:
+            def __init__(self):
+                self.values = ()
+
+            def configure(self, **kwargs):
+                self.values = kwargs["values"]
+
+        keys = (
+            "security_mode",
+            "channel",
+            "channel_bandwidth",
+            "operating_mode",
+            "transmit_power",
+        )
+        window = object.__new__(DutConfigWindow)
+        window._wifi_vars = {
+            "wifi_2g": {key: FakeVar("OLD_DUT_ONLY") for key in keys}
+        }
+        window._wifi_choice_widgets = {
+            "wifi_2g": {key: FakeCombo() for key in keys}
+        }
+        window._wifi_supported_options = {
+            "wifi_2g": {key: ("OLD_DUT_ONLY",) for key in keys}
+        }
+
+        window._reset_wifi_choice_options("wifi_2g")
+
+        for key in keys:
+            self.assertNotIn(
+                "OLD_DUT_ONLY", window._wifi_choice_widgets["wifi_2g"][key].values
+            )
+        self.assertEqual(
+            window._wifi_vars["wifi_2g"]["security_mode"].get(), "WPA2-Personal"
+        )
+        self.assertEqual(window._wifi_vars["wifi_2g"]["channel"].get(), "auto")
 
     def test_telnet_and_wan_tabs_also_show_current_status_without_duplicate_wan_query(self):
         import inspect

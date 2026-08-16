@@ -100,6 +100,43 @@ class DutAdvancedConfigServiceTests(unittest.TestCase):
         self.assertTrue(any("发射功率" in error for error in errors))
         self.assertTrue(any("最大接入数" in error for error in errors))
 
+    def test_wifi_validation_uses_dut_reported_capabilities_when_available(self) -> None:
+        supported = DutWifiSettings(
+            band="2.4G",
+            ssid="Capability_WiFi",
+            password="password123",
+            channel="11",
+            channel_bandwidth="20/40MHz",
+            security_mode="WPA2-WPA3-Personal",
+            operating_mode="g,n,ax",
+            transmit_power="75",
+            max_associations="32",
+            supported_channels=("auto", "1", "6", "11"),
+            supported_bandwidths=("20MHz", "20/40MHz"),
+            supported_modes=("g,n", "g,n,ax"),
+            supported_security_modes=("None", "WPA2-WPA3-Personal"),
+            supported_transmit_powers=("25", "50", "75", "100"),
+        )
+        self.assertEqual(validate_wifi_settings(supported), ())
+
+        errors = validate_wifi_settings(
+            DutWifiSettings(
+                **{
+                    **supported.__dict__,
+                    "security_mode": "WPA3-Personal",
+                    "channel": "13",
+                    "channel_bandwidth": "40MHz",
+                    "operating_mode": "b,g,n,ax",
+                    "transmit_power": "80",
+                }
+            )
+        )
+        self.assertTrue(any("认证/加密模式" in error for error in errors))
+        self.assertTrue(any("信道不在DUT支持列表" in error for error in errors))
+        self.assertTrue(any("信道带宽" in error for error in errors))
+        self.assertTrue(any("协议类型" in error for error in errors))
+        self.assertTrue(any("发射功率不在DUT支持列表" in error for error in errors))
+
     def test_dual_stack_static_validation_accepts_complete_ipoe_settings(self) -> None:
         settings = DutWanSettings(
             vlan_id="200",
@@ -240,6 +277,32 @@ class DutAdvancedConfigServiceTests(unittest.TestCase):
         )
         self.assertTrue(any("SIP 模式无效" in error for error in errors))
 
+    def test_voice_and_tr069_validation_follow_reported_dut_capabilities(self) -> None:
+        voice = DutVoiceSettings(
+            account_enabled=False,
+            proxy_server="172.33.5.251",
+            registrar_server="172.33.5.251",
+            dtmf_method="InBand",
+            sip_mode="TLS",
+            codecs=("G.729",) * 5,
+            supported_dtmf_methods=("RFC2833",),
+            supported_sip_modes=("SIP", "IMSSIP"),
+            supported_codecs=("G.711 U-law", "G.729"),
+        )
+        voice_errors = validate_voice_settings(voice)
+        self.assertTrue(any("DTMF 模式无效" in error for error in voice_errors))
+        self.assertTrue(any("SIP 模式无效" in error for error in voice_errors))
+
+        tr069_errors = validate_tr069_settings(
+            DutTr069Settings(
+                acs_url="",
+                periodic_inform_interval="",
+                manual_inform=True,
+                supported_fields=("acs_username",),
+            )
+        )
+        self.assertEqual(tr069_errors, ("当前DUT不支持配置后手动 Inform",))
+
     def test_single_wan_success_prepares_network_logs_in_and_closes_client(self) -> None:
         client = _FakeClient()
         logs: list[str] = []
@@ -290,6 +353,7 @@ class DutAdvancedConfigServiceTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(calls[0][0][2], settings)
+        self.assertTrue(callable(calls[0][1]["sleep_fn"]))
         self.assertTrue(client.closed)
         self.assertTrue(any("[5G WiFi配置]" in line for line in logs))
         self.assertTrue(any("成功：5G WiFi 配置成功" in line for line in logs))

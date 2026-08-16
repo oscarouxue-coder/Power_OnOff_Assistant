@@ -38,6 +38,7 @@ VOICE_CODEC_OPTIONS = {
     "G.726 - 32",
     "G.726 - 40",
 }
+VOICE_DTMF_OPTIONS = ("RFC2833", "InBand", "SIPINFO")
 VOICE_SIP_MODE_OPTIONS = ("SIP", "IMSSIP", "UDP", "TCP", "TLS")
 WIFI_SECURITY_MODE_OPTIONS = (
     "None",
@@ -214,9 +215,15 @@ def validate_wan_settings(settings: DutWanSettings) -> tuple[str, ...]:
 
 def validate_voice_settings(settings: DutVoiceSettings) -> tuple[str, ...]:
     errors: list[str] = []
-    if settings.sip_mode not in VOICE_SIP_MODE_OPTIONS:
+    supported_sip_modes = settings.supported_sip_modes or VOICE_SIP_MODE_OPTIONS
+    if settings.sip_mode not in supported_sip_modes:
         errors.append(
-            f"SIP 模式无效：{settings.sip_mode}；仅支持 {'、'.join(VOICE_SIP_MODE_OPTIONS)}"
+            f"SIP 模式无效：{settings.sip_mode}；仅支持 {'、'.join(supported_sip_modes)}"
+        )
+    supported_dtmf_methods = settings.supported_dtmf_methods or VOICE_DTMF_OPTIONS
+    if settings.dtmf_method not in supported_dtmf_methods:
+        errors.append(
+            f"DTMF 模式无效：{settings.dtmf_method}；仅支持 {'、'.join(supported_dtmf_methods)}"
         )
     try:
         line_index = int(settings.line_index)
@@ -251,21 +258,27 @@ def validate_voice_settings(settings: DutVoiceSettings) -> tuple[str, ...]:
             raise ValueError
     except ValueError:
         errors.append(f"注册有效期必须为正整数：{settings.register_expires}")
-    if len(settings.codecs) != 5 or any(codec not in VOICE_CODEC_OPTIONS for codec in settings.codecs):
+    supported_codecs = settings.supported_codecs or tuple(sorted(VOICE_CODEC_OPTIONS))
+    if len(settings.codecs) != 5 or any(codec not in supported_codecs for codec in settings.codecs):
         errors.append("语音编码必须选择 5 个受支持的编码")
     return tuple(errors)
 
 
 def validate_tr069_settings(settings: DutTr069Settings) -> tuple[str, ...]:
     errors: list[str] = []
-    parsed = urlsplit(settings.acs_url.strip())
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        errors.append(f"ACS URL 必须是完整的 http/https 地址：{settings.acs_url}")
-    try:
-        if int(settings.periodic_inform_interval) <= 0:
-            raise ValueError
-    except ValueError:
-        errors.append(f"周期 Inform 间隔必须为正整数：{settings.periodic_inform_interval}")
+    supported = set(settings.supported_fields)
+    if not supported or "acs_url" in supported:
+        parsed = urlsplit(settings.acs_url.strip())
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            errors.append(f"ACS URL 必须是完整的 http/https 地址：{settings.acs_url}")
+    if not supported or "periodic_inform_interval" in supported:
+        try:
+            if int(settings.periodic_inform_interval) <= 0:
+                raise ValueError
+        except ValueError:
+            errors.append(f"周期 Inform 间隔必须为正整数：{settings.periodic_inform_interval}")
+    if supported and settings.manual_inform and "manual_inform" not in supported:
+        errors.append("当前DUT不支持配置后手动 Inform")
     return tuple(errors)
 
 
@@ -284,7 +297,8 @@ def validate_wifi_settings(settings: DutWifiSettings) -> tuple[str, ...]:
         errors.append("WiFi 名称为空")
     elif len(settings.ssid.encode("utf-8")) > 32:
         errors.append("WiFi 名称按 UTF-8 编码后不能超过 32 字节")
-    if settings.security_mode not in WIFI_SECURITY_MODE_OPTIONS:
+    security_modes = settings.supported_security_modes or WIFI_SECURITY_MODE_OPTIONS
+    if settings.security_mode not in security_modes:
         errors.append(f"WiFi 认证/加密模式无效：{settings.security_mode}")
     elif settings.security_mode != "None":
         password = settings.password
@@ -293,7 +307,10 @@ def validate_wifi_settings(settings: DutWifiSettings) -> tuple[str, ...]:
             errors.append("WiFi 密码必须为 8–63 个字符，或 64 位十六进制密钥")
 
     channel = settings.channel.strip().lower()
-    if channel != "auto":
+    supported_channels = tuple(value.lower() for value in settings.supported_channels)
+    if supported_channels and channel not in supported_channels:
+        errors.append(f"{settings.band} WiFi 信道不在DUT支持列表：{settings.channel}")
+    elif not supported_channels and channel != "auto":
         try:
             channel_number = int(channel)
         except ValueError:
@@ -307,12 +324,21 @@ def validate_wifi_settings(settings: DutWifiSettings) -> tuple[str, ...]:
                 144, 149, 153, 157, 161, 165,
             }:
                 errors.append(f"5G WiFi 信道不受支持：{settings.channel}")
-    if settings.channel_bandwidth not in WIFI_BANDWIDTH_OPTIONS[settings.band]:
+    supported_bandwidths = (
+        settings.supported_bandwidths or WIFI_BANDWIDTH_OPTIONS[settings.band]
+    )
+    if settings.channel_bandwidth not in supported_bandwidths:
         errors.append(
             f"{settings.band} WiFi 信道带宽无效：{settings.channel_bandwidth}"
         )
-    if settings.operating_mode not in WIFI_MODE_OPTIONS[settings.band]:
+    supported_modes = settings.supported_modes or WIFI_MODE_OPTIONS[settings.band]
+    if settings.operating_mode not in supported_modes:
         errors.append(f"{settings.band} WiFi 协议类型无效：{settings.operating_mode}")
+    if (
+        settings.supported_transmit_powers
+        and settings.transmit_power not in settings.supported_transmit_powers
+    ):
+        errors.append(f"WiFi 发射功率不在DUT支持列表：{settings.transmit_power}")
     try:
         transmit_power = int(settings.transmit_power)
         if not 1 <= transmit_power <= 100:
@@ -470,7 +496,13 @@ def run_single_dut_advanced_config(
             )
             success_message = "TR069 配置成功"
         else:
-            details = wifi_fn(client, session_id, request.settings, on_log=emit)
+            details = wifi_fn(
+                client,
+                session_id,
+                request.settings,
+                on_log=emit,
+                sleep_fn=pause,
+            )
             success_message = f"{request.settings.band} WiFi 配置成功"
         ensure_not_stopped()
         emit(f"成功：{success_message}")
@@ -541,6 +573,7 @@ def run_dut_advanced_config_batch(
 __all__ = [
     "UBUS_LOGIN_MAX_RETRIES",
     "VOICE_CODEC_OPTIONS",
+    "VOICE_DTMF_OPTIONS",
     "WIFI_BANDWIDTH_OPTIONS",
     "WIFI_MODE_OPTIONS",
     "WIFI_SECURITY_MODE_OPTIONS",
