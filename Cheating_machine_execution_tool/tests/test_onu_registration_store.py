@@ -47,6 +47,44 @@ class OnuRegistrationStoreTests(unittest.TestCase):
 
             self.assertEqual(loaded.password, "abc%123")
 
+    def test_save_and_load_preserves_dual_olt_settings(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            store = OnuRegistrationStore(Path(temp_dir) / "onu_registration.ini")
+            saved = OnuRegistrationConfig(
+                olt_ip="172.18.18.152",
+                source_ip="172.33.5.35",
+                username="zte",
+                password="secret",
+                olt_family="C600",
+                c600_shelf=1,
+                c600_slot=2,
+                c600_pon=5,
+                c600_onu_id=55,
+                c600_onu_type="CXP-55",
+                c600_services="1,170\n2,335",
+                c300_allow_offline_cleanup=True,
+            )
+
+            store.save(saved)
+            loaded = store.load()
+
+            self.assertEqual(loaded, saved)
+
+    def test_invalid_numeric_and_boolean_values_fall_back_safely(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "onu_registration.ini"
+            path.write_text(
+                "[onu_registration]\nc600_onu_id=bad\nc600_sn_bind_both=bad\n"
+                "c300_allow_offline_cleanup=bad\n",
+                encoding="utf-8",
+            )
+
+            loaded = OnuRegistrationStore(path).load()
+
+            self.assertEqual(loaded.c600_onu_id, 1)
+            self.assertTrue(loaded.c600_sn_bind_both)
+            self.assertFalse(loaded.c300_allow_offline_cleanup)
+
 
 if __name__ == "__main__":
     unittest.main()

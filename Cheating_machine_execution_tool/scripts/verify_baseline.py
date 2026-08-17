@@ -82,6 +82,7 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/services/dut_status_query_service.py",
     "src/services/dut_wan_query_service.py",
     "src/services/legacy_power_test_service.py",
+    "src/services/onu_registration_service.py",
     "src/services/power_on_service.py",
     "src/services/sample_parameter_service.py",
     "src/services/serial_upgrade_service.py",
@@ -99,6 +100,10 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/core/ubus_enable_telnet.py",
     "src/core/ubus_http_client.py",
     "src/core/wifi_interfaces.py",
+    "src/core/zte_c300_onu.py",
+    "src/core/zte_c600_onu.py",
+    "src/core/zte_olt_telnet.py",
+    "src/models/onu_registration_models.py",
     "src/models/sample_parameter_models.py",
     "src/models/dut_config_models.py",
     "src/models/serial_models.py",
@@ -238,6 +243,12 @@ REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
     "test_legacy_power_test_service.LegacyPowerTestServiceTests.test_power_frame_is_rendered_in_execution_log_format",
     "test_legacy_power_test_service.LegacyPowerTestServiceTests.test_result_file_success_line_is_forwarded_without_changing_file",
     "test_pipeline_orchestrator.LegacyPowerTestDispatchTests.test_legacy_power_test_delegates_to_headless_service",
+    "test_onu_registration_service.DriverTests.test_c300_uses_underscore_interface_and_confirmed_fixed_template",
+    "test_onu_registration_service.DriverTests.test_c600_uses_hyphen_interfaces_and_vport_context",
+    "test_onu_registration_service.ServiceTests.test_c600_register_runs_precheck_provision_and_three_verifications",
+    "test_onu_registration_service.ServiceTests.test_c300_failure_does_not_delete_when_cleanup_not_authorized",
+    "test_onu_registration_service.TelnetBindingTests.test_session_binds_explicit_source_ip",
+    "test_app.CurrentChannelSelectionTests.test_c600_success_never_offers_automatic_write",
 )
 
 # 2. 必须命中(§1.3 / §1.4) - (pattern, 搜索目录组)

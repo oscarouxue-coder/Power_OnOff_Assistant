@@ -25,6 +25,17 @@ from .sample_parameter_models import (
     SampleParameterTarget,
     SampleParameterWriteRequest,
 )
+from .onu_registration_models import (
+    DiscoveredOnu,
+    OLT_FAMILIES,
+    OLT_FAMILY_C300,
+    OLT_FAMILY_C600,
+    OltConnection,
+    OnuDiscoveryScope,
+    OnuOperationResult,
+    OnuProvisionRequest,
+    OnuServiceMapping,
+)
 
 __all__ = [
     "FullPackageUpgradeRequest",
@@ -52,4 +63,13 @@ __all__ = [
     "SampleParameterRecord",
     "SampleParameterTarget",
     "SampleParameterWriteRequest",
+    "DiscoveredOnu",
+    "OLT_FAMILIES",
+    "OLT_FAMILY_C300",
+    "OLT_FAMILY_C600",
+    "OltConnection",
+    "OnuDiscoveryScope",
+    "OnuOperationResult",
+    "OnuProvisionRequest",
+    "OnuServiceMapping",
 ]

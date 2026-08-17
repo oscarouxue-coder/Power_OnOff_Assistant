@@ -258,19 +258,23 @@ def _summarize_sample_parameter_write(ctx: PipelineContext) -> SubTaskStatus:
 
 
 def _summarize_onu_registration(ctx: PipelineContext) -> SubTaskStatus:
-    """4. ONU 注册 必填项:OLT IP / 用户名 / 密码。"""
+    """ONU 注册必填项：OLT 型号 / OLT IP / 源 IP / 用户名 / 密码。"""
     cfg = ctx.onu_registration
+    family = (getattr(cfg, "olt_family", "C300") or "C300").strip()
     ip = (cfg.olt_ip or "").strip()
+    source_ip = (getattr(cfg, "source_ip", "") or "").strip()
     username = (cfg.username or "").strip()
     password = cfg.password or ""
     missing_list: List[str] = []
     if not ip:
         missing_list.append("OLT IP")
+    if not source_ip:
+        missing_list.append("OLT 源 IP")
     if not username:
         missing_list.append("OLT 用户名")
     if not password:
         missing_list.append("OLT 密码")
-    summary = f"OLT={ip or '(未填)'} / 用户={username or '(空)'}"
+    summary = f"OLT={family} {ip or '(未填)'} / 源IP={source_ip or '(未填)'} / 用户={username or '(空)'}"
     return SubTaskStatus(
         code="onu_registration",
         ready=not missing_list,

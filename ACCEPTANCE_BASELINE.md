@@ -1,6 +1,6 @@
 # Acceptance Baseline
 
-更新：2026-08-16（主界面与非模态二级窗口层级切换）
+更新：2026-08-17（统一中兴C300/C600 ONU注册）
 
 > 与 `PROJECT_STATUS.md` 的关系：本文按"实现 → 单测 → 真实样机验收"三态罗列验收证据与不变量，作为独立验收基线。`PROJECT_STATUS.md` 保留面向项目的进度叙述；两者冲突时以本文为准。
 >
@@ -219,20 +219,24 @@ python scripts\verify_baseline.py
 
 - **状态**：已实现未验收
 - **核心行为**：
-  - 未注册 ONU 复选列表 + 全选 / 取消全选
-  - SD-41 模板下发（`interface gpon-olt`、`gpon-onu`、业务 VLAN、`pon-onu-mng`）
-  - 新增业务配置失败时改用「删除已注册但不在线 ONU → `registration-method sn 新SN`」复用旧 ONU
-  - 注册完成后询问保存 OLT 配置（先退出 `ZXAN(config)#` / `config-if`，再 `write`）
-- **禁止破坏**：注册不自动保存 OLT 配置；窗口默认尺寸 896x580；本机凭据不入 Git
-- **待确认**：现场 OLT `Access denied`、新增配置失败、删除 / 重注册三类实际表现与提示文案
-- **对应测试**：`tests/test_network_ops.py`（含离线 ONU 优先同 PON 删除）、`tests/test_app.py`
+  - 主界面单一入口和`896x580`默认尺寸不变；窗口通过“连接与发现 / C600参数 / 命令预览”分页支持C300与C600，不导入或启动原独立GUI
+  - 统一service只编排“登录 → 未注册查询 → 下发前预检 → 逐条配置 → 只读验证 → 结果”，C300与C600命令生成、接口格式和解析器由两个独立driver负责，不允许跨型号替换字符串
+  - C300：全局`show gpon onu uncfg`、多选，使用`gpon-olt_` / `gpon-onu_`、SD-41固定业务模板、`pon-onu-mng`和`mvlan 600`；下发前重新确认目标仍未注册，下发后重新查询未注册表和状态表
+  - C600：按PON执行`show pon onu uncfg gpon_olt-... sn model speed-mode`、每次一台，使用`gpon_olt-` / `gpon_onu-` / `vport-`及可编辑ServiceID/VLAN映射；下发前拒绝ONU ID/SN冲突并确认SN仍未注册，下发后执行collection、service-port和detail-info三组只读验证
+  - 两种型号遇到第一条CLI错误即停止并尝试退出配置模式；主日志必须记录型号、关键阶段、实际`TX OLT`命令、返回、成功、停止或失败
+  - Telnet必须使用操作员填写的源IP调用`source_address=(bind_ip, 0)`锁定Windows出口；源IP为空/格式错误/不可绑定必须失败，不得回退系统默认网卡
+  - C300离线ONU删除重试是默认关闭的独立危险选项；未勾选时失败不得下发`no onu`，勾选时二次确认必须明确提示会查询并删除可复用离线ONU；C600任何场景都不得自动删除或回滚ONU
+  - 注册不自动保存OLT配置；C300成功后单独询问`write`，C600不提供自动`write`并提示操作员按现场要求手工决定
+- **禁止破坏**：C300/C600命令体系隔离；源IP锁定；第一条错误停止；危险删除默认关闭；C600不删除、不自动`write`；窗口默认尺寸896x580；本机凭据和`onu_registration.ini`不入Git
+- **待确认**：Windows分页布局、型号切换/选择/停止/预览；真实C300查询、注册、默认不删除、显式授权删除和`write`；真实C600按PON查询、冲突预检、完整配置、三组验证、停止、`Access denied`及不自动`write`
+- **对应测试**：`tests/test_onu_registration_service.py`（双driver语法、锁源Telnet、预检、错误停止、危险删除开关、C600验证和禁止write）、`tests/test_app.py`（统一UI路由、C600参数、C600成功不询问write）、`tests/test_onu_registration_store.py`、`tests/test_network_ops.py`（历史C300兼容边界）
 
 ### 2.11 输入持久化与启动 / 打包
 
 - **状态**：已确认验收（测试项「恢复默认」清除全部手动命令并加载固定模板，2026-08-07）/ 已实现未验收（其余输入持久化与打包交互）
 - **核心行为**：
   - 升级方式 / 固件路径 / 恢复出厂 / 超级凭据 / 并行数 → `Auto_power_on_off_tool/config/sample_upgrade_settings.ini`
-  - OLT IP / 用户名 / 密码 → `Auto_power_on_off_tool/config/onu_registration.ini`
+  - OLT型号 / OLT IP / 源IP / 用户名 / 密码 / C600参数 / C300危险删除选项 → `Auto_power_on_off_tool/config/onu_registration.ini`
   - 测试项默认模板 → `Auto_power_on_off_tool/config/test_project_config.default.ini`；「测试项」页点击「恢复默认」只恢复 `[order]` 测试命令，确认后先加载到界面、再由操作员点击「保存」写入 `test_project_config.ini`，不得覆盖当前指令重试间隔、Telnet / WiFi / 项目信息
   - 2026-08-07 Windows 桌面确认：先手动增加测试命令，再点击「恢复默认」，手动命令全部消失，界面不再出现旧命令与默认命令混排或重复编号
   - 旧工具顶部其它启动参数由 `Auto_power_on_off_tool/config/config.ini [ui_defaults]` 加载；其中 `serial_num` 必须始终严格等于新工具保存在 `network_card_ip.ini [power_supply] serial_port` 的“程控电源 COM”，新工具 COM 为空或尚未保存时旧工具也必须为空，严禁回退或自动选择其它 COM；成功日志必须显示实际 COM 及来源，配置缺失或校验失败时保留旧界面的回退值并记录错误日志

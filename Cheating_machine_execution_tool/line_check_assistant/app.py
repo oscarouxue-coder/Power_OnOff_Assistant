@@ -12,20 +12,18 @@ from .legacy_ui_defaults_store import LegacyUiDefaultsStore, TELNET_ENABLE_OPTIO
 from .network_ops import (
     CommandResult,
     adapter_alias_from_display,
-    check_telnet_connection,
     is_admin,
     list_adapter_display_names,
-    login_olt_and_enter_global_mode,
-    parse_unregistered_onus,
-    query_unregistered_onus,
-    register_unregistered_onus,
     run_line_check,
-    save_olt_configuration,
     static_ip_for_vlan,
     factory_bind_ip_for,
     factory_device_host_for,
 )
-from .onu_registration_store import DEFAULT_OLT_IP, OnuRegistrationConfig, OnuRegistrationStore
+from .onu_registration_store import (
+    DEFAULT_C600_SERVICES,
+    OnuRegistrationConfig,
+    OnuRegistrationStore,
+)
 from .page_upgrade import PageUpgradeRequest, run_page_upgrade_batch
 from .paths import resolve_config_dir, resolve_tool_root
 from .sample_upgrade_settings_store import (
@@ -54,6 +52,7 @@ from .test_item_config_store import (
     WIFI_CIPHER_OPTIONS,
 )
 from src.core.wifi_interfaces import list_wifi_interface_names
+from src.core.zte_c600_onu import parse_service_mappings, speed_mode_to_cli
 from src.core import (
     SerialSessionManager,
     generate_parameter_records,
@@ -74,6 +73,12 @@ from src.models import (
     DutWanQueryResult,
     DutWanSettings,
     FullPackageUpgradeRequest,
+    OLT_FAMILIES,
+    OLT_FAMILY_C300,
+    OLT_FAMILY_C600,
+    OltConnection,
+    OnuDiscoveryScope,
+    OnuProvisionRequest,
     ParameterGenerationTemplate,
     SampleParameterWriteRequest,
 )
@@ -103,6 +108,7 @@ from src.services import (
     validate_dut_telnet_request,
     validate_dut_advanced_request,
 )
+from src.services.onu_registration_service import OnuRegistrationService
 from src.ui import DutConfigWindow, SerialTerminalWindow
 from src.ui.window_paint import (
     center_toplevel_on_parent,
@@ -326,13 +332,33 @@ class LineCheckAssistant(Tk):
         self.onu_register_running = False
         self.onu_save_olt_running = False
         self.onu_save_after_id = None
+        saved_onu_family = self.onu_registration_config.olt_family
+        if saved_onu_family not in OLT_FAMILIES:
+            saved_onu_family = OLT_FAMILY_C300
+        self.onu_family_var = StringVar(value=saved_onu_family)
         self.onu_olt_ip_var = StringVar(value=self.onu_registration_config.olt_ip)
+        self.onu_source_ip_var = StringVar(value=self.onu_registration_config.source_ip)
         self.onu_username_var = StringVar(value=self.onu_registration_config.username)
         self.onu_password_var = StringVar(value=self.onu_registration_config.password)
+        self.onu_c600_shelf_var = StringVar(value=str(self.onu_registration_config.c600_shelf))
+        self.onu_c600_slot_var = StringVar(value=str(self.onu_registration_config.c600_slot))
+        self.onu_c600_pon_var = StringVar(value=str(self.onu_registration_config.c600_pon))
+        self.onu_c600_onu_id_var = StringVar(value=str(self.onu_registration_config.c600_onu_id))
+        self.onu_c600_onu_type_var = StringVar(value=self.onu_registration_config.c600_onu_type)
+        self.onu_c600_real_speed_var = StringVar(value=self.onu_registration_config.c600_real_speed)
+        self.onu_c600_tcont_id_var = StringVar(value=str(self.onu_registration_config.c600_tcont_id))
+        self.onu_c600_tcont_profile_var = StringVar(value=self.onu_registration_config.c600_tcont_profile)
+        self.onu_c600_gemport_id_var = StringVar(value=str(self.onu_registration_config.c600_gemport_id))
+        self.onu_c600_vport_id_var = StringVar(value=str(self.onu_registration_config.c600_vport_id))
+        self.onu_c600_sn_bind_both_var = BooleanVar(value=self.onu_registration_config.c600_sn_bind_both)
+        self.onu_c300_allow_offline_cleanup_var = BooleanVar(
+            value=self.onu_registration_config.c300_allow_offline_cleanup
+        )
         self.onu_password_visible = False
         self.onu_telnet_status_var = StringVar(value="")
         self.onu_query_status_var = StringVar(value="")
         self.onu_unregistered_selection_vars = []
+        self.onu_cancel_event = threading.Event()
         self._bind_onu_registration_autosave()
         upgrade_mode = self.sample_upgrade_settings.upgrade_mode if self.sample_upgrade_settings.upgrade_mode in UPGRADE_MODE_OPTIONS else DEFAULT_UPGRADE_MODE
         saved_transfer_method = LineCheckAssistant._normalize_upgrade_transfer_method(self.sample_upgrade_settings.transfer_method)
@@ -1538,14 +1564,57 @@ class LineCheckAssistant(Tk):
         )
 
     def _bind_onu_registration_autosave(self) -> None:
-        for variable in (self.onu_olt_ip_var, self.onu_username_var, self.onu_password_var):
+        for variable in (
+            self.onu_family_var,
+            self.onu_olt_ip_var,
+            self.onu_source_ip_var,
+            self.onu_username_var,
+            self.onu_password_var,
+            self.onu_c600_shelf_var,
+            self.onu_c600_slot_var,
+            self.onu_c600_pon_var,
+            self.onu_c600_onu_id_var,
+            self.onu_c600_onu_type_var,
+            self.onu_c600_real_speed_var,
+            self.onu_c600_tcont_id_var,
+            self.onu_c600_tcont_profile_var,
+            self.onu_c600_gemport_id_var,
+            self.onu_c600_vport_id_var,
+            self.onu_c600_sn_bind_both_var,
+            self.onu_c300_allow_offline_cleanup_var,
+        ):
             variable.trace_add("write", lambda *_args: self._schedule_onu_registration_save())
 
     def _current_onu_registration_config(self) -> OnuRegistrationConfig:
+        services = self.onu_registration_config.c600_services or DEFAULT_C600_SERVICES
+        if hasattr(self, "onu_c600_services_text"):
+            services = self.onu_c600_services_text.get("1.0", "end").strip()
+
+        def integer_value(variable, fallback: int) -> int:
+            try:
+                return int(variable.get().strip())
+            except (TypeError, ValueError):
+                return fallback
+
         return OnuRegistrationConfig(
             olt_ip=self.onu_olt_ip_var.get(),
             username=self.onu_username_var.get(),
             password=self.onu_password_var.get(),
+            olt_family=self.onu_family_var.get(),
+            source_ip=self.onu_source_ip_var.get(),
+            c600_shelf=integer_value(self.onu_c600_shelf_var, 1),
+            c600_slot=integer_value(self.onu_c600_slot_var, 1),
+            c600_pon=integer_value(self.onu_c600_pon_var, 5),
+            c600_onu_id=integer_value(self.onu_c600_onu_id_var, 1),
+            c600_onu_type=self.onu_c600_onu_type_var.get(),
+            c600_real_speed=self.onu_c600_real_speed_var.get(),
+            c600_tcont_id=integer_value(self.onu_c600_tcont_id_var, 1),
+            c600_tcont_profile=self.onu_c600_tcont_profile_var.get(),
+            c600_gemport_id=integer_value(self.onu_c600_gemport_id_var, 1),
+            c600_vport_id=integer_value(self.onu_c600_vport_id_var, 1),
+            c600_sn_bind_both=bool(self.onu_c600_sn_bind_both_var.get()),
+            c600_services=services,
+            c300_allow_offline_cleanup=bool(self.onu_c300_allow_offline_cleanup_var.get()),
         )
 
     def _schedule_onu_registration_save(self) -> None:
@@ -1643,18 +1712,45 @@ class LineCheckAssistant(Tk):
         Label(content, text="ONU注册", font=(FONT_FAMILY, 18, "bold"), background=COLOR_BG, foreground=COLOR_TEXT).pack(anchor="w")
         Label(
             content,
-            text="输入 OLT IP 和登录凭据后，可先进行 Telnet 连通性测试，再查询未注册的 ONU。",
+            text="统一支持中兴 C300 与 C600；业务流程一致，实际 CLI 按型号严格隔离。",
             foreground=COLOR_MUTED,
             background=COLOR_BG,
-        ).pack(anchor="w", pady=(6, 16))
+        ).pack(anchor="w", pady=(6, 10))
 
-        overview = ttk.LabelFrame(content, text="ONU注册配置")
-        overview.pack(fill="x")
+        self.onu_notebook = ttk.Notebook(content)
+        self.onu_notebook.pack(fill="both", expand=True)
+        discovery_tab = Frame(self.onu_notebook, padx=8, pady=8, background=COLOR_BG)
+        c600_tab = Frame(self.onu_notebook, padx=8, pady=8, background=COLOR_BG)
+        preview_tab = Frame(self.onu_notebook, padx=8, pady=8, background=COLOR_BG)
+        self.onu_discovery_tab = discovery_tab
+        self.onu_c600_tab = c600_tab
+        self.onu_preview_tab = preview_tab
+        self.onu_notebook.add(discovery_tab, text="连接与发现")
+        self.onu_notebook.add(c600_tab, text="C600 参数")
+        self.onu_notebook.add(preview_tab, text="命令预览")
+
+        overview = ttk.LabelFrame(discovery_tab, text="ONU注册配置")
+        overview.pack(fill="both", expand=True)
         for column, weight in ((1, 1), (3, 1), (4, 1), (5, 0)):
             overview.columnconfigure(column, weight=weight)
 
-        Label(overview, text="OLT IP", width=16, anchor="w").grid(row=0, column=0, sticky="w", padx=12, pady=8)
-        ttk.Entry(overview, textvariable=self.onu_olt_ip_var, width=22).grid(row=0, column=1, sticky="ew", padx=(0, 12), pady=8)
+        Label(overview, text="OLT 型号", width=16, anchor="w").grid(row=0, column=0, sticky="w", padx=12, pady=6)
+        self.onu_family_combo = ttk.Combobox(
+            overview,
+            textvariable=self.onu_family_var,
+            values=OLT_FAMILIES,
+            state="readonly",
+            width=20,
+        )
+        self.onu_family_combo.grid(row=0, column=1, sticky="ew", padx=(0, 12), pady=6)
+        self.onu_family_combo.bind("<<ComboboxSelected>>", self._on_onu_family_changed)
+        Label(overview, text="源 IP", width=8, anchor="w").grid(row=0, column=2, sticky="w", padx=(12, 8), pady=6)
+        ttk.Entry(overview, textvariable=self.onu_source_ip_var, width=22).grid(
+            row=0, column=3, columnspan=2, sticky="ew", padx=(0, 12), pady=6
+        )
+
+        Label(overview, text="OLT IP", width=16, anchor="w").grid(row=1, column=0, sticky="w", padx=12, pady=6)
+        ttk.Entry(overview, textvariable=self.onu_olt_ip_var, width=22).grid(row=1, column=1, sticky="ew", padx=(0, 12), pady=6)
         self.onu_status_label = Label(
             overview,
             textvariable=self.onu_telnet_status_var,
@@ -1666,20 +1762,20 @@ class LineCheckAssistant(Tk):
             borderwidth=1,
             padx=8,
         )
-        self.onu_status_label.grid(row=0, column=2, columnspan=3, sticky="ew", padx=(0, 12), pady=8)
+        self.onu_status_label.grid(row=1, column=2, columnspan=3, sticky="ew", padx=(0, 12), pady=6)
         self.onu_telnet_test_button = ttk.Button(
             overview,
-            text="连通性测试",
+            text="登录测试",
             command=self._on_onu_telnet_test_clicked,
             style="Secondary.TButton",
         )
-        self.onu_telnet_test_button.grid(row=0, column=5, sticky="e", padx=12, pady=8)
+        self.onu_telnet_test_button.grid(row=1, column=5, sticky="e", padx=12, pady=6)
 
-        Label(overview, text="用户名", width=16, anchor="w").grid(row=1, column=0, sticky="w", padx=12, pady=8)
-        ttk.Entry(overview, textvariable=self.onu_username_var, width=22).grid(row=1, column=1, sticky="ew", padx=(0, 12), pady=8)
-        Label(overview, text="密码", width=8, anchor="w").grid(row=1, column=2, sticky="w", padx=(12, 8), pady=8)
+        Label(overview, text="用户名", width=16, anchor="w").grid(row=2, column=0, sticky="w", padx=12, pady=6)
+        ttk.Entry(overview, textvariable=self.onu_username_var, width=22).grid(row=2, column=1, sticky="ew", padx=(0, 12), pady=6)
+        Label(overview, text="密码", width=8, anchor="w").grid(row=2, column=2, sticky="w", padx=(12, 8), pady=6)
         onu_password_container = Frame(overview, background=COLOR_SURFACE)
-        onu_password_container.grid(row=1, column=3, columnspan=2, sticky="ew", padx=(0, 0), pady=8)
+        onu_password_container.grid(row=2, column=3, columnspan=2, sticky="ew", padx=(0, 0), pady=6)
         self.onu_password_entry = ttk.Entry(onu_password_container, textvariable=self.onu_password_var, width=22, show="*")
         self.onu_password_entry.pack(side="left", fill="x", expand=True)
         self.onu_password_toggle = Button(
@@ -1690,14 +1786,14 @@ class LineCheckAssistant(Tk):
         )
         self.onu_password_toggle.pack(side="right", padx=(8, 0))
 
-        Label(overview, text="查询未注册的ONU", width=16, anchor="w").grid(row=2, column=0, sticky="w", padx=12, pady=8)
+        Label(overview, text="查询未注册 ONU", width=16, anchor="w").grid(row=3, column=0, sticky="w", padx=12, pady=6)
         self.onu_query_button = ttk.Button(
             overview,
             text="开始查询",
             command=self._on_onu_query_unregistered_clicked,
             style="Secondary.TButton",
         )
-        self.onu_query_button.grid(row=2, column=1, sticky="w", padx=(0, 12), pady=8)
+        self.onu_query_button.grid(row=3, column=1, sticky="w", padx=(0, 8), pady=6)
         self.onu_select_all_button = ttk.Button(
             overview,
             text="全选",
@@ -1705,7 +1801,7 @@ class LineCheckAssistant(Tk):
             style="Secondary.TButton",
             state="disabled",
         )
-        self.onu_select_all_button.grid(row=2, column=2, sticky="w", padx=(12, 6), pady=8)
+        self.onu_select_all_button.grid(row=3, column=2, sticky="w", padx=(12, 6), pady=6)
         self.onu_clear_selection_button = ttk.Button(
             overview,
             text="取消全选",
@@ -1713,7 +1809,15 @@ class LineCheckAssistant(Tk):
             style="Secondary.TButton",
             state="disabled",
         )
-        self.onu_clear_selection_button.grid(row=2, column=3, sticky="w", padx=(0, 4), pady=8)
+        self.onu_clear_selection_button.grid(row=3, column=3, sticky="w", padx=(0, 4), pady=6)
+        self.onu_preview_button = ttk.Button(
+            overview,
+            text="生成预览",
+            command=self._on_onu_preview_clicked,
+            style="Secondary.TButton",
+            state="disabled",
+        )
+        self.onu_preview_button.grid(row=3, column=4, sticky="w", padx=(0, 6), pady=6)
         self.onu_register_button = ttk.Button(
             overview,
             text="开始注册",
@@ -1721,7 +1825,7 @@ class LineCheckAssistant(Tk):
             style="Primary.TButton",
             state="disabled",
         )
-        self.onu_register_button.grid(row=2, column=4, sticky="w", padx=(0, 6), pady=8)
+        self.onu_register_button.grid(row=3, column=5, sticky="e", padx=12, pady=6)
         self.onu_query_status_label = Label(
             overview,
             textvariable=self.onu_query_status_var,
@@ -1735,7 +1839,7 @@ class LineCheckAssistant(Tk):
             pady=4,
             wraplength=640,
         )
-        self.onu_query_status_label.grid(row=3, column=1, columnspan=5, sticky="ew", padx=(0, 12), pady=(0, 8))
+        self.onu_query_status_label.grid(row=4, column=1, columnspan=5, sticky="ew", padx=(0, 12), pady=(0, 6))
         self.onu_query_status_label.bind(
             "<Configure>",
             lambda event: self.onu_query_status_label.configure(wraplength=max(280, event.width - 18)),
@@ -1748,17 +1852,85 @@ class LineCheckAssistant(Tk):
             padx=6,
             pady=4,
         )
-        self.onu_unregistered_list_frame.grid(row=4, column=1, columnspan=5, sticky="ew", padx=(0, 12), pady=(0, 8))
+        self.onu_unregistered_list_frame.grid(row=5, column=1, columnspan=5, sticky="nsew", padx=(0, 12), pady=(0, 6))
         overview.columnconfigure(1, weight=1)
+        overview.rowconfigure(5, weight=1)
+
+        self.onu_c300_cleanup_check = ttk.Checkbutton(
+            overview,
+            text="C300 配置失败时，允许删除离线 ONU 后重试（危险）",
+            variable=self.onu_c300_allow_offline_cleanup_var,
+        )
+        self.onu_c300_cleanup_check.grid(row=6, column=1, columnspan=5, sticky="w", padx=(0, 12), pady=(0, 6))
+
+        c600_form = ttk.LabelFrame(c600_tab, text="C600 注册与业务参数")
+        c600_form.pack(fill="x")
+        for column in (1, 3, 5, 7):
+            c600_form.columnconfigure(column, weight=1)
+
+        def c600_field(row, column, label, variable, width=10):
+            Label(c600_form, text=label, anchor="w").grid(
+                row=row, column=column, sticky="w", padx=(10, 4), pady=5
+            )
+            entry = ttk.Entry(c600_form, textvariable=variable, width=width)
+            entry.grid(row=row, column=column + 1, sticky="ew", padx=(0, 8), pady=5)
+            return entry
+
+        c600_field(0, 0, "机框", self.onu_c600_shelf_var, 6)
+        c600_field(0, 2, "槽位", self.onu_c600_slot_var, 6)
+        c600_field(0, 4, "PON", self.onu_c600_pon_var, 6)
+        c600_field(0, 6, "ONU ID", self.onu_c600_onu_id_var, 8)
+        c600_field(1, 0, "ONU 型号", self.onu_c600_onu_type_var, 14)
+        Label(c600_form, text="实际速率", anchor="w").grid(row=1, column=2, sticky="w", padx=(10, 4), pady=5)
+        ttk.Combobox(
+            c600_form,
+            textvariable=self.onu_c600_real_speed_var,
+            values=("xgspon", "xgpon", "gpon", "auto"),
+            state="readonly",
+            width=10,
+        ).grid(row=1, column=3, sticky="ew", padx=(0, 8), pady=5)
+        c600_field(1, 4, "T-CONT ID", self.onu_c600_tcont_id_var, 8)
+        c600_field(1, 6, "T-CONT模板", self.onu_c600_tcont_profile_var, 12)
+        c600_field(2, 0, "GEM Port", self.onu_c600_gemport_id_var, 8)
+        c600_field(2, 2, "VPort", self.onu_c600_vport_id_var, 8)
+        ttk.Checkbutton(
+            c600_form,
+            text="启用 SN 双重绑定",
+            variable=self.onu_c600_sn_bind_both_var,
+        ).grid(row=2, column=4, columnspan=4, sticky="w", padx=10, pady=5)
+
+        mapping_frame = ttk.LabelFrame(c600_tab, text="业务映射（每行 ServiceID,VLAN）")
+        mapping_frame.pack(fill="both", expand=True, pady=(8, 0))
+        self.onu_c600_services_text = Text(mapping_frame, height=10, font=("Consolas", 10), wrap="none")
+        self.onu_c600_services_text.insert("1.0", self.onu_registration_config.c600_services or DEFAULT_C600_SERVICES)
+        self.onu_c600_services_text.pack(fill="both", expand=True, padx=8, pady=8)
+        ttk.Label(
+            mapping_frame,
+            text="先在“连接与发现”查询并选择一台 ONU；C600 每次只配置一个 ONU ID。",
+        ).pack(anchor="w", padx=8, pady=(0, 8))
+
+        ttk.Label(
+            preview_tab,
+            text="预览严格按当前 OLT 型号生成，不包含 write；实际下发前会重新做冲突检查。",
+        ).pack(anchor="w", pady=(0, 6))
+        self.onu_command_preview_text = Text(preview_tab, font=("Consolas", 10), wrap="none", state="disabled")
+        self.onu_command_preview_text.pack(fill="both", expand=True)
 
         Label(
             content,
-            text="注册会修改 OLT 当前配置；执行前会再次确认，完成后请重新查询确认 ONU 上线。",
+            text="注册会修改 OLT 当前配置；C300 的 write 独立确认，C600 不自动 write、不自动删除 ONU。",
             foreground=COLOR_WARNING,
             background=COLOR_BG,
-        ).pack(anchor="w", pady=(16, 0))
+        ).pack(anchor="w", pady=(8, 0))
 
         def close_dialog() -> None:
+            if self.onu_telnet_test_running or self.onu_query_running or self.onu_register_running or self.onu_save_olt_running:
+                messagebox.showwarning(
+                    "ONU 操作正在执行",
+                    "请先点击“停止”并等待当前操作安全结束，再关闭窗口。",
+                    parent=dialog,
+                )
+                return
             try:
                 self._cancel_pending_onu_registration_save()
                 self._save_onu_registration_config()
@@ -1768,162 +1940,289 @@ class LineCheckAssistant(Tk):
                 dialog.destroy()
                 self.onu_registration_window = None
 
-        ttk.Button(content, text="关闭", width=12, command=close_dialog, style="Secondary.TButton").pack(
-            side="bottom", anchor="e", pady=(18, 0)
+        bottom_actions = Frame(content, background=COLOR_BG)
+        bottom_actions.pack(side="bottom", fill="x", pady=(8, 0))
+        self.onu_stop_button = ttk.Button(
+            bottom_actions,
+            text="停止",
+            width=12,
+            command=self._on_onu_stop_clicked,
+            style="Secondary.TButton",
+            state="disabled",
         )
+        self.onu_stop_button.pack(side="right", padx=(8, 0))
+        ttk.Button(bottom_actions, text="关闭", width=12, command=close_dialog, style="Secondary.TButton").pack(side="right")
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+        self._on_onu_family_changed()
         center_toplevel_on_parent(dialog, self)
+
+    def _on_onu_family_changed(self, _event=None) -> None:
+        family = self.onu_family_var.get()
+        if family not in OLT_FAMILIES:
+            family = OLT_FAMILY_C300
+            self.onu_family_var.set(family)
+        if self.onu_olt_ip_var.get().strip() in {"172.18.18.151", "172.18.18.152", ""}:
+            self.onu_olt_ip_var.set("172.18.18.151" if family == OLT_FAMILY_C300 else "172.18.18.152")
+        if hasattr(self, "onu_notebook"):
+            self.onu_notebook.tab(self.onu_c600_tab, state="normal" if family == OLT_FAMILY_C600 else "disabled")
+        if hasattr(self, "onu_c300_cleanup_check"):
+            self.onu_c300_cleanup_check.configure(state="normal" if family == OLT_FAMILY_C300 else "disabled")
+        self._render_unregistered_onu_selection([])
+        self._set_onu_telnet_status("")
+        query_hint = (
+            "C300 将查询所有 PON 口"
+            if family == OLT_FAMILY_C300
+            else "C600 将按 C600 参数页的机框/槽位/PON 查询"
+        )
+        self._set_onu_query_status(query_hint, COLOR_MUTED)
+
+    def _current_onu_connection(self) -> OltConnection:
+        connection = OltConnection(
+            host=self.onu_olt_ip_var.get().strip(),
+            source_ip=self.onu_source_ip_var.get().strip(),
+            username=self.onu_username_var.get().strip(),
+            password=self.onu_password_var.get(),
+        )
+        errors = connection.validate()
+        if errors:
+            raise ValueError("\n".join(f"• {error}" for error in errors))
+        return connection
+
+    def _current_onu_discovery_scope(self) -> OnuDiscoveryScope:
+        try:
+            scope = OnuDiscoveryScope(
+                int(self.onu_c600_shelf_var.get().strip()),
+                int(self.onu_c600_slot_var.get().strip()),
+                int(self.onu_c600_pon_var.get().strip()),
+            )
+        except ValueError as exc:
+            raise ValueError("C600 机框、槽位和 PON 必须是整数") from exc
+        errors = scope.validate()
+        if errors:
+            raise ValueError("；".join(errors))
+        return scope
+
+    def _build_onu_provision_requests(self):
+        selected_onus = self._selected_unregistered_onus()
+        if not selected_onus:
+            raise ValueError("请先选择要注册的 ONU")
+        family = self.onu_family_var.get()
+        if family == OLT_FAMILY_C300:
+            return [
+                OnuProvisionRequest(family=family, onu=onu, onu_type="SD-41")
+                for onu in selected_onus
+            ]
+        if len(selected_onus) != 1:
+            raise ValueError("C600 每次只能选择一台未注册 ONU")
+        try:
+            request = OnuProvisionRequest(
+                family=family,
+                onu=selected_onus[0],
+                onu_id=int(self.onu_c600_onu_id_var.get().strip()),
+                onu_type=self.onu_c600_onu_type_var.get().strip(),
+                real_speed=self.onu_c600_real_speed_var.get().strip(),
+                tcont_id=int(self.onu_c600_tcont_id_var.get().strip()),
+                tcont_profile=self.onu_c600_tcont_profile_var.get().strip(),
+                gemport_id=int(self.onu_c600_gemport_id_var.get().strip()),
+                vport_id=int(self.onu_c600_vport_id_var.get().strip()),
+                sn_bind_both=bool(self.onu_c600_sn_bind_both_var.get()),
+                services=tuple(parse_service_mappings(self.onu_c600_services_text.get("1.0", "end"))),
+            )
+        except ValueError as exc:
+            raise ValueError(f"C600 参数错误：{exc}") from exc
+        return [request]
+
+    def _on_onu_preview_clicked(self) -> None:
+        try:
+            requests = self._build_onu_provision_requests()
+            commands = OnuRegistrationService().build_preview(requests)
+        except Exception as exc:
+            self._set_onu_query_status(str(exc), COLOR_DANGER)
+            messagebox.showwarning("无法生成命令预览", str(exc), parent=self.onu_registration_window)
+            return
+        self.onu_command_preview_text.configure(state="normal")
+        self.onu_command_preview_text.delete("1.0", "end")
+        self.onu_command_preview_text.insert("1.0", "\n".join(commands))
+        self.onu_command_preview_text.configure(state="disabled")
+        self.onu_notebook.select(self.onu_preview_tab)
+        self._set_onu_query_status(f"已生成 {len(commands)} 条命令；尚未连接 OLT", COLOR_SUCCESS)
+
+    def _on_onu_stop_clicked(self) -> None:
+        self.onu_cancel_event.set()
+        self._set_onu_query_status("正在停止 ONU 操作，等待当前安全点...", COLOR_WARNING)
+        self._log(f"[ONU注册][{self.onu_family_var.get()}] 操作员请求停止")
 
     def _on_onu_telnet_test_clicked(self) -> None:
         if self.onu_telnet_test_running:
             return
-        host = self.onu_olt_ip_var.get().strip()
-        if not host:
-            self._set_onu_telnet_status("请先输入 OLT IP", COLOR_DANGER)
-            messagebox.showwarning("OLT IP 为空", "请先输入 OLT IP 后再进行连通性测试。", parent=self.onu_registration_window)
+        try:
+            connection = self._current_onu_connection()
+        except ValueError as exc:
+            self._set_onu_telnet_status(str(exc), COLOR_DANGER)
+            messagebox.showwarning("连接参数错误", str(exc), parent=self.onu_registration_window)
             return
-        username = self.onu_username_var.get().strip()
-        password = self.onu_password_var.get()
-        if not username or not password:
-            self._set_onu_query_status("请先输入 OLT 用户名和密码", COLOR_DANGER)
-            messagebox.showwarning("登录信息不完整", "请先输入 OLT 用户名和密码。", parent=self.onu_registration_window)
-            return
+        family = self.onu_family_var.get()
         confirmed = messagebox.askyesno(
             "确认登录 OLT",
-            "连通性测试通过后将登录 OLT，并下发 configure terminal 进入全局模式。\n是否继续？",
+            f"将使用源 IP {connection.source_ip} 登录 {family} OLT。登录测试不下发配置命令。\n是否继续？",
             parent=self.onu_registration_window,
         )
         if not confirmed:
             return
 
         self.onu_telnet_test_running = True
-        self._set_onu_telnet_status(f"正在测试 Telnet 连接：{host}:23", COLOR_WARNING)
-        self._set_onu_query_status("等待 Telnet 连通性测试通过后登录 OLT", COLOR_WARNING)
+        self.onu_cancel_event = threading.Event()
+        self._set_onu_telnet_status(f"正在登录 {family}：{connection.host}:23", COLOR_WARNING)
         if hasattr(self, "onu_telnet_test_button"):
             self.onu_telnet_test_button.configure(state="disabled")
-        thread = threading.Thread(target=self._onu_telnet_test_worker, args=(host, username, password), daemon=True)
+        if hasattr(self, "onu_stop_button"):
+            self.onu_stop_button.configure(state="normal")
+        thread = threading.Thread(target=self._onu_telnet_test_worker, args=(family, connection), daemon=True)
         thread.start()
 
-    def _onu_telnet_test_worker(self, host: str, username: str, password: str) -> None:
-        telnet_result = check_telnet_connection(host)
-        login_result = None
-        if telnet_result.ok:
-            login_result = login_olt_and_enter_global_mode(host, username, password)
-        self.after(0, lambda: self._complete_onu_telnet_test(host, telnet_result, login_result))
+    def _onu_telnet_test_worker(self, family: str, connection: OltConnection) -> None:
+        result = OnuRegistrationService(logger=self._log).test_connection(
+            family, connection, self.onu_cancel_event
+        )
+        self.after(0, lambda: self._complete_onu_telnet_test(family, connection.host, result))
 
-    def _complete_onu_telnet_test(self, host: str, telnet_result: CommandResult, login_result: CommandResult | None = None) -> None:
+    def _complete_onu_telnet_test(self, family: str, host: str, result) -> None:
         self.onu_telnet_test_running = False
         if hasattr(self, "onu_telnet_test_button"):
             self.onu_telnet_test_button.configure(state="normal")
-        self._set_onu_telnet_status(telnet_result.message, COLOR_SUCCESS if telnet_result.ok else COLOR_DANGER)
-        self._log(f"ONU注册 OLT Telnet 测试：{host} - {telnet_result.message}")
-        if not telnet_result.ok:
-            self._set_onu_query_status("Telnet 未连通，未执行 OLT 登录", COLOR_DANGER)
-            return
-        if login_result is None:
-            self._set_onu_query_status("Telnet 已连通，但未执行 OLT 登录", COLOR_WARNING)
-            return
-        self._set_onu_query_status(login_result.message, COLOR_SUCCESS if login_result.ok else COLOR_DANGER)
-        self._log(f"ONU注册 OLT 登录：{host} - {login_result.message}")
+        if hasattr(self, "onu_stop_button"):
+            self.onu_stop_button.configure(state="disabled")
+        self._set_onu_telnet_status(result.message, COLOR_SUCCESS if result.ok else COLOR_DANGER)
+        self._log(f"[ONU注册][{family}] OLT 登录测试：{host} - {result.message}")
 
     def _on_onu_query_unregistered_clicked(self) -> None:
         if self.onu_query_running:
             return
-        host = self.onu_olt_ip_var.get().strip()
-        username = self.onu_username_var.get().strip()
-        password = self.onu_password_var.get()
-        if not host:
-            self._set_onu_query_status("请先输入 OLT IP", COLOR_DANGER)
-            messagebox.showwarning("OLT IP 为空", "请先输入 OLT IP 后再查询未注册 ONU。", parent=self.onu_registration_window)
+        family = self.onu_family_var.get()
+        try:
+            connection = self._current_onu_connection()
+            scope = self._current_onu_discovery_scope() if family == OLT_FAMILY_C600 else OnuDiscoveryScope()
+        except ValueError as exc:
+            self._set_onu_query_status(str(exc), COLOR_DANGER)
+            messagebox.showwarning("查询参数错误", str(exc), parent=self.onu_registration_window)
             return
-        if not username or not password:
-            self._set_onu_query_status("请先输入 OLT 用户名和密码", COLOR_DANGER)
-            messagebox.showwarning("登录信息不完整", "请先输入 OLT 用户名和密码。", parent=self.onu_registration_window)
-            return
+        command_text = (
+            "show gpon onu uncfg"
+            if family == OLT_FAMILY_C300
+            else f"show pon onu uncfg gpon_olt-{scope.shelf}/{scope.slot}/{scope.pon} sn model speed-mode"
+        )
         confirmed = messagebox.askyesno(
             "确认查询未注册 ONU",
-            "将登录 OLT 并执行 show gpon onu uncfg 查询所有 PON 口下的未注册 ONU。\n是否继续？",
+            f"将登录 {family} OLT 并执行只读命令：\n{command_text}\n是否继续？",
             parent=self.onu_registration_window,
         )
         if not confirmed:
             return
 
         self.onu_query_running = True
-        self._set_onu_query_status("正在查询所有 PON 口下的未注册 ONU...", COLOR_WARNING)
+        self.onu_cancel_event = threading.Event()
+        self._set_onu_query_status(f"正在查询 {family} 未注册 ONU...", COLOR_WARNING)
         self._render_unregistered_onu_selection([])
         if hasattr(self, "onu_query_button"):
             self.onu_query_button.configure(state="disabled")
-        thread = threading.Thread(target=self._onu_query_unregistered_worker, args=(host, username, password), daemon=True)
+        if hasattr(self, "onu_stop_button"):
+            self.onu_stop_button.configure(state="normal")
+        thread = threading.Thread(
+            target=self._onu_query_unregistered_worker,
+            args=(family, connection, scope),
+            daemon=True,
+        )
         thread.start()
 
-    def _onu_query_unregistered_worker(self, host: str, username: str, password: str) -> None:
-        result = query_unregistered_onus(host, username, password)
-        self.after(0, lambda: self._complete_onu_query_unregistered(host, result))
+    def _onu_query_unregistered_worker(self, family: str, connection: OltConnection, scope: OnuDiscoveryScope) -> None:
+        result = OnuRegistrationService(logger=self._log).query_unregistered(
+            family, connection, scope, self.onu_cancel_event
+        )
+        self.after(0, lambda: self._complete_onu_query_unregistered(family, connection.host, result))
 
-    def _complete_onu_query_unregistered(self, host: str, result: CommandResult) -> None:
+    def _complete_onu_query_unregistered(self, family: str, host: str, result) -> None:
         self.onu_query_running = False
         if hasattr(self, "onu_query_button"):
             self.onu_query_button.configure(state="normal")
+        if hasattr(self, "onu_stop_button"):
+            self.onu_stop_button.configure(state="disabled")
         if result.ok:
-            onus = parse_unregistered_onus(result.output)
-            message = f"查询到 {len(onus)} 个未注册 ONU，请选择要注册的 ONU" if onus else result.message
+            message = f"查询到 {len(result.onus)} 个未注册 ONU，请选择要注册的 ONU" if result.onus else result.message
             self._set_onu_query_status(message, COLOR_SUCCESS)
-            self._render_unregistered_onu_selection(onus)
+            self._render_unregistered_onu_selection(result.onus)
         else:
             self._set_onu_query_status(result.message, COLOR_DANGER)
             self._render_unregistered_onu_selection([])
-        self._log(f"ONU注册 查询未注册 ONU：{host} - {result.message}")
+        self._log(f"[ONU注册][{family}] 查询未注册 ONU：{host} - {result.message}")
 
     def _on_onu_register_selected_clicked(self) -> None:
         if self.onu_register_running:
             return
-        selected_onus = self._selected_unregistered_onus()
-        if not selected_onus:
-            self._set_onu_query_status("请先勾选要注册的 ONU", COLOR_DANGER)
-            messagebox.showwarning("未选择 ONU", "请先在未注册 ONU 列表中勾选要注册的 ONU。", parent=self.onu_registration_window)
+        try:
+            connection = self._current_onu_connection()
+            requests = self._build_onu_provision_requests()
+            commands = OnuRegistrationService().build_preview(requests)
+        except Exception as exc:
+            self._set_onu_query_status(str(exc), COLOR_DANGER)
+            messagebox.showwarning("注册参数错误", str(exc), parent=self.onu_registration_window)
             return
-        host = self.onu_olt_ip_var.get().strip()
-        username = self.onu_username_var.get().strip()
-        password = self.onu_password_var.get()
-        if not host:
-            self._set_onu_query_status("请先输入 OLT IP", COLOR_DANGER)
-            messagebox.showwarning("OLT IP 为空", "请先输入 OLT IP 后再注册 ONU。", parent=self.onu_registration_window)
-            return
-        if not username or not password:
-            self._set_onu_query_status("请先输入 OLT 用户名和密码", COLOR_DANGER)
-            messagebox.showwarning("登录信息不完整", "请先输入 OLT 用户名和密码。", parent=self.onu_registration_window)
-            return
-        onu_lines = "\n".join(f"- {onu.onu_index}  SN:{onu.serial_number}" for onu in selected_onus)
+        family = self.onu_family_var.get()
+        onu_lines = "\n".join(f"- {request.onu.display_text}" for request in requests)
+        cleanup_enabled = family == OLT_FAMILY_C300 and bool(self.onu_c300_allow_offline_cleanup_var.get())
+        cleanup_text = (
+            "\nC300 危险策略：已允许配置失败后删除离线 ONU 并重试。"
+            if cleanup_enabled
+            else "\n失败处理：遇到第一条 CLI 错误立即停止，不删除 ONU。"
+        )
         confirmed = messagebox.askyesno(
             "确认注册 ONU",
-            f"将登录 OLT 并下发 {len(selected_onus)} 个 ONU 的注册配置，ONU 类型为 SD-41。\n"
-            f"{onu_lines}\n\n如果新增 ONU 业务配置下发失败，软件会自动查找已注册但未在线的旧 ONU，"
-            "优先删除和新 ONU 同 PON 口的不在线 ONU，再删除其它 PON 口不在线 ONU，"
-            "删除后重新注册新 ONU。\n"
-            "该操作会修改 OLT 当前配置，但不会自动保存配置。是否继续？",
+            f"OLT 型号：{family}\n源 IP：{connection.source_ip}\n目标：\n{onu_lines}\n"
+            f"共 {len(commands)} 条配置命令。{cleanup_text}\n"
+            "该操作会修改 OLT 当前运行配置，但不会自动执行 write。是否继续？",
             parent=self.onu_registration_window,
         )
         if not confirmed:
             return
 
         self.onu_register_running = True
-        self._set_onu_query_status(f"正在注册 {len(selected_onus)} 个 ONU...", COLOR_WARNING)
+        self.onu_cancel_event = threading.Event()
+        self._set_onu_query_status(f"正在注册 {len(requests)} 个 {family} ONU...", COLOR_WARNING)
         self._set_onu_registration_action_buttons_state("disabled")
-        thread = threading.Thread(target=self._onu_register_selected_worker, args=(host, username, password, selected_onus), daemon=True)
+        if hasattr(self, "onu_stop_button"):
+            self.onu_stop_button.configure(state="normal")
+        thread = threading.Thread(
+            target=self._onu_register_selected_worker,
+            args=(family, connection, requests, cleanup_enabled),
+            daemon=True,
+        )
         thread.start()
 
-    def _onu_register_selected_worker(self, host: str, username: str, password: str, selected_onus) -> None:
-        result = register_unregistered_onus(host, username, password, selected_onus)
-        self.after(0, lambda: self._complete_onu_register_selected(host, username, password, result))
+    def _onu_register_selected_worker(self, family: str, connection: OltConnection, requests, cleanup_enabled: bool) -> None:
+        result = OnuRegistrationService(logger=self._log).register(
+            connection,
+            requests,
+            allow_c300_offline_cleanup=cleanup_enabled,
+            cancel_event=self.onu_cancel_event,
+        )
+        self.after(0, lambda: self._complete_onu_register_selected(family, connection, result))
 
-    def _complete_onu_register_selected(self, host: str, username: str, password: str, result: CommandResult) -> None:
+    def _complete_onu_register_selected(self, family: str, connection: OltConnection, result) -> None:
         self.onu_register_running = False
         self._set_onu_registration_action_buttons_state("normal" if self.onu_unregistered_selection_vars else "disabled")
         if hasattr(self, "onu_query_button"):
             self.onu_query_button.configure(state="normal")
+        if hasattr(self, "onu_stop_button"):
+            self.onu_stop_button.configure(state="disabled")
         self._set_onu_query_status(result.message, COLOR_SUCCESS if result.ok else COLOR_DANGER)
-        self._log(f"ONU注册 开始注册：{host} - {result.message}")
+        self._log(f"[ONU注册][{family}] 注册结果：{connection.host} - {result.message}")
         if not result.ok:
+            return
+        if family != OLT_FAMILY_C300:
+            messagebox.showinfo(
+                "C600 注册与验证完成",
+                "C600 ONU 注册、业务配置及只读验证已经执行。\n工具未执行 write，请根据现场要求决定是否手工保存。",
+                parent=self.onu_registration_window,
+            )
             return
         confirmed = messagebox.askyesno(
             "保存 OLT 最新配置",
@@ -1931,26 +2230,33 @@ class LineCheckAssistant(Tk):
             parent=self.onu_registration_window,
         )
         if not confirmed:
-            self._log(f"ONU注册 保存 OLT 配置：{host} - 用户选择暂不保存")
+            self._log(f"[ONU注册][{family}] 保存 OLT 配置：{connection.host} - 用户选择暂不保存")
             return
 
         self.onu_save_olt_running = True
         self._set_onu_query_status("正在执行 write 保存 OLT 最新配置...", COLOR_WARNING)
         self._set_onu_registration_action_buttons_state("disabled")
-        thread = threading.Thread(target=self._onu_save_olt_configuration_worker, args=(host, username, password), daemon=True)
+        self.onu_cancel_event = threading.Event()
+        if hasattr(self, "onu_stop_button"):
+            self.onu_stop_button.configure(state="normal")
+        thread = threading.Thread(target=self._onu_save_olt_configuration_worker, args=(family, connection), daemon=True)
         thread.start()
 
-    def _onu_save_olt_configuration_worker(self, host: str, username: str, password: str) -> None:
-        result = save_olt_configuration(host, username, password)
-        self.after(0, lambda: self._complete_onu_save_olt_configuration(host, result))
+    def _onu_save_olt_configuration_worker(self, family: str, connection: OltConnection) -> None:
+        result = OnuRegistrationService(logger=self._log).save_configuration(
+            family, connection, self.onu_cancel_event
+        )
+        self.after(0, lambda: self._complete_onu_save_olt_configuration(family, connection.host, result))
 
-    def _complete_onu_save_olt_configuration(self, host: str, result: CommandResult) -> None:
+    def _complete_onu_save_olt_configuration(self, family: str, host: str, result) -> None:
         self.onu_save_olt_running = False
         self._set_onu_registration_action_buttons_state("normal" if self.onu_unregistered_selection_vars else "disabled")
         if hasattr(self, "onu_query_button"):
             self.onu_query_button.configure(state="normal")
+        if hasattr(self, "onu_stop_button"):
+            self.onu_stop_button.configure(state="disabled")
         self._set_onu_query_status(result.message, COLOR_SUCCESS if result.ok else COLOR_DANGER)
-        self._log(f"ONU注册 保存 OLT 配置：{host} - {result.message}")
+        self._log(f"[ONU注册][{family}] 保存 OLT 配置：{host} - {result.message}")
 
     def _set_onu_telnet_status(self, message: str, foreground: str = COLOR_TEXT) -> None:
         self.onu_telnet_status_var.set(message)
@@ -1982,11 +2288,16 @@ class LineCheckAssistant(Tk):
 
         for onu in onus:
             variable = BooleanVar(value=False)
-            text = f"{onu.onu_index}  SN:{onu.serial_number}  状态:{onu.state}"
+            text = getattr(onu, "display_text", "") or (
+                f"{onu.onu_index}  SN:{onu.serial_number}  状态:{onu.state}"
+            )
             Checkbutton(
                 self.onu_unregistered_list_frame,
                 text=text,
                 variable=variable,
+                command=lambda current_onu=onu, current_var=variable: self._on_onu_selection_toggled(
+                    current_onu, current_var
+                ),
                 anchor="w",
                 background=COLOR_SURFACE_SUBTLE,
                 foreground=COLOR_TEXT,
@@ -2002,6 +2313,8 @@ class LineCheckAssistant(Tk):
             self.onu_clear_selection_button.configure(state=state)
         if hasattr(self, "onu_register_button"):
             self.onu_register_button.configure(state=state)
+        if hasattr(self, "onu_preview_button"):
+            self.onu_preview_button.configure(state=state)
 
     def _set_onu_registration_action_buttons_state(self, state: str) -> None:
         if hasattr(self, "onu_select_all_button"):
@@ -2010,19 +2323,49 @@ class LineCheckAssistant(Tk):
             self.onu_clear_selection_button.configure(state=state)
         if hasattr(self, "onu_register_button"):
             self.onu_register_button.configure(state=state)
+        if hasattr(self, "onu_preview_button"):
+            self.onu_preview_button.configure(state=state)
         if hasattr(self, "onu_query_button"):
             self.onu_query_button.configure(state=state)
+        if hasattr(self, "onu_telnet_test_button"):
+            self.onu_telnet_test_button.configure(state=state)
+        if hasattr(self, "onu_family_combo"):
+            self.onu_family_combo.configure(state="readonly" if state == "normal" else "disabled")
 
     def _selected_unregistered_onus(self):
         return [onu for onu, variable in self.onu_unregistered_selection_vars if variable.get()]
 
     def _select_all_unregistered_onus(self) -> None:
+        if self.onu_family_var.get() == OLT_FAMILY_C600:
+            for index, (onu, variable) in enumerate(self.onu_unregistered_selection_vars):
+                variable.set(index == 0)
+                if index == 0:
+                    self._fill_c600_from_discovered_onu(onu)
+            return
         for _onu, variable in self.onu_unregistered_selection_vars:
             variable.set(True)
 
     def _clear_unregistered_onu_selection(self) -> None:
         for _onu, variable in self.onu_unregistered_selection_vars:
             variable.set(False)
+
+    def _on_onu_selection_toggled(self, onu, variable) -> None:
+        if self.onu_family_var.get() != OLT_FAMILY_C600 or not variable.get():
+            return
+        for other_onu, other_variable in self.onu_unregistered_selection_vars:
+            if other_onu is not onu:
+                other_variable.set(False)
+        self._fill_c600_from_discovered_onu(onu)
+
+    def _fill_c600_from_discovered_onu(self, onu) -> None:
+        if getattr(onu, "model", ""):
+            self.onu_c600_onu_type_var.set(onu.model)
+        if getattr(onu, "speed_mode", ""):
+            self.onu_c600_real_speed_var.set(speed_mode_to_cli(onu.speed_mode))
+        self._set_onu_query_status(
+            f"已选择 {onu.display_text}；请在 C600 参数页核对 ONU ID、模板和业务映射",
+            COLOR_SUCCESS,
+        )
 
     def _toggle_onu_password_visibility(self) -> None:
         self.onu_password_visible = not self.onu_password_visible

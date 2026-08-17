@@ -2,6 +2,26 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-17 - 统一C600显示名称
+
+- 类型：修改 / UI命名 / 文档
+- 背景：项目负责人确认主程序中的`C600/TITAN`统一简称为`C600`，避免操作员将同一台OLT理解为两个型号。
+- 完成内容：① 主界面ONU注册说明和参数区标题统一显示`C600`；② C600驱动显示名称改为“中兴 C600”，内部型号值和C600专属命令路由保持不变；③ 操作说明、验收边界和实施计划同步采用C600名称；④ 增加主界面不再显示`TITAN`及驱动显示名回归断言；原始C600参考工具目录及内部包名不改动。
+- 修改文件：`.claude/plans/unified_zte_onu_registration.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/core/zte_c600_onu.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_onu_registration_service.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行ONU注册service专项、主程序专项、`python scripts/verify_baseline.py`与`git diff --check`。
+- 验证结果：ONU注册service专项13项、主程序专项144项均`OK`；完整基线门禁646项单元测试通过，57个源码文件编译覆盖、134个强制基线测试实际执行，8条MUST_EXIST与1条MUST_NOT_EXIST均通过，最终`ALL CHECKS PASSED`。自动化测试不替代Windows桌面和真实OLT验收。
+- 后续待办：Windows源码版确认ONU注册窗口只显示`C600`，不再出现`C600/TITAN`或`TITAN`别名。
+
+## 2026-08-17 - 统一C300与C600 ONU注册
+
+- 类型：功能
+- 背景：项目负责人将C600注册参考工具合入仓库，要求不复用其独立GUI，而是在`run_line_check_assistant.py`启动的当前主界面“ONU注册”入口同时支持中兴C300与C600；两台OLT业务阶段相近，但查询、接口命名、service-port位置和验证命令格式不同，必须严格隔离。
+- 完成内容：① 新增统一ONU连接、发现结果、注册请求、业务映射和操作结果模型；② 新增必须绑定显式源IP的中兴OLT Telnet核心，支持登录、逐条命令、分页、首条CLI错误停止、取消和失败后安全退出；③ C300与C600分别实现独立driver，C300保留`gpon-olt_`/`gpon-onu_`及SD-41固定模板，C600使用`gpon_olt-`/`gpon_onu-`/`vport-`、按PON发现、ONU ID/SN冲突检查、动态ServiceID/VLAN和三组只读验证；④ 统一service编排查询、预检、下发和验证，C300离线ONU删除重试改为默认关闭的独立危险选项，未授权时首错停止且不下发`no onu`，C600始终不删除、不自动write；⑤ 现有`896x580` ONU窗口改为“连接与发现/C600参数/命令预览”分页，增加OLT型号、源IP、C600完整参数、预览和停止，主程序不导入或启动C600独立GUI；⑥ C300成功后保留独立write确认，C600完成后只提示现场手工决定；⑦ 扩展本机`onu_registration.ini`持久化并让全流程必填状态检查显式源IP；⑧ 新增双driver、锁源、路由、预检、危险删除开关、C600禁止write、UI和持久化回归并纳入强制基线。
+- 修改文件：`.claude/plans/unified_zte_onu_registration.md`、`Cheating_machine_execution_tool/src/models/onu_registration_models.py`、`Cheating_machine_execution_tool/src/models/__init__.py`、`Cheating_machine_execution_tool/src/core/zte_olt_telnet.py`、`Cheating_machine_execution_tool/src/core/zte_c300_onu.py`、`Cheating_machine_execution_tool/src/core/zte_c600_onu.py`、`Cheating_machine_execution_tool/src/services/onu_registration_service.py`、`Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/onu_registration_store.py`、`Cheating_machine_execution_tool/tests/test_onu_registration_service.py`、`Cheating_machine_execution_tool/tests/test_onu_registration_store.py`、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p test_onu_registration_service.py -v`、`python -m unittest discover -s tests -p test_onu_registration_store.py -v`、`python -m unittest discover -s tests -p test_app.py -v`、`python -m unittest discover -s tests -p test_pipeline_orchestrator.py -v`、`python -m unittest discover -s tests -v`、`python scripts/verify_baseline.py`和`git diff --check`。
+- 验证结果：ONU driver/service专项13项、配置持久化5项、主程序144项、全流程状态42项均`OK`；全量646项单元测试通过；完整基线门禁57个源码文件编译覆盖、134个强制基线测试实际执行、8条MUST_EXIST与1条MUST_NOT_EXIST均通过，最终`ALL CHECKS PASSED`。自动化测试不替代Windows桌面和真实C300/C600 OLT验收。
+- 后续待办：Windows源码版确认`896x580`三分页布局、型号切换、C600参数/预览和停止；真实C300确认默认不删除、显式授权删除重试及独立write；真实C600确认按PON发现、冲突预检、完整T-CONT/GEM/VPort/业务配置、三组验证、停止、Access denied及不自动write。现场结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-17 - 增加双频独立射频配置
 
 - 类型：功能

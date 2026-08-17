@@ -72,6 +72,7 @@ def _make_settings(**overrides) -> SampleUpgradeSettings:
 def _make_onu(**overrides) -> OnuRegistrationConfig:
     defaults = dict(
         olt_ip="172.18.18.151",
+        source_ip="172.33.5.35",
         username="admin",
         password="olt-secret",
     )
@@ -196,6 +197,12 @@ class ComputeSubTaskStatusTests(unittest.TestCase):
         status = compute_all_subtask_statuses(ctx)["onu_registration"]
         self.assertFalse(status.ready)
         self.assertIn("OLT IP", status.missing)
+
+    def test_onu_registration_status_requires_bound_source_ip(self) -> None:
+        ctx = _make_context(onu=_make_onu(source_ip=""))
+        status = compute_all_subtask_statuses(ctx)["onu_registration"]
+        self.assertFalse(status.ready)
+        self.assertIn("OLT 源 IP", status.missing)
 
     def test_serial_terminal_status_with_channels(self) -> None:
         ctx = _make_context(channels=[_make_channel()])
