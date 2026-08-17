@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import threading
+import time
 from typing import Callable, Iterable, Optional, Type
 
 from src.core.zte_c300_onu import ZteC300OnuDriver
 from src.core.zte_c600_onu import ZteC600OnuDriver
 from src.core.zte_olt_telnet import (
+    CLI_ERROR_RE,
     OltCommandError,
     OperationCancelled,
     ZteOltTelnetSession,
 )
 from src.models.onu_registration_models import (
+    C300CleanupCandidate,
     OLT_FAMILY_C300,
     OLT_FAMILY_C600,
     OltConnection,
@@ -38,9 +41,13 @@ class OnuRegistrationService:
         self,
         logger: Optional[Callable[[str], None]] = None,
         session_type: Type[ZteOltTelnetSession] = ZteOltTelnetSession,
+        readiness_timeout: float = 60.0,
+        readiness_interval: float = 3.0,
     ) -> None:
         self.logger = logger or (lambda _message: None)
         self.session_type = session_type
+        self.readiness_timeout = max(0.0, readiness_timeout)
+        self.readiness_interval = max(0.1, readiness_interval)
 
     def _log(self, family: str, message: str) -> None:
         self.logger(f"[ONU注册][{family}] {message}")
@@ -106,11 +113,115 @@ class OnuRegistrationService:
             preview.extend(driver.build_provision_commands(request))
         return tuple(preview)
 
+    def query_c300_cleanup_candidates(
+        self,
+        connection: OltConnection,
+        request: OnuProvisionRequest,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> OnuOperationResult:
+        driver = ZteC300OnuDriver()
+        errors = driver.validate_request(request)
+        if errors:
+            return OnuOperationResult(False, "；".join(errors))
+        commands = ["terminal length 0", "show gpon onu state"]
+        outputs: list[str] = []
+        try:
+            self._log(OLT_FAMILY_C300, "查询目标 PON 的离线 ONU 清理候选")
+            with self.session_type(
+                connection,
+                logger=lambda text: self._log(OLT_FAMILY_C300, text),
+                cancel_event=cancel_event,
+            ) as session:
+                outputs = session.execute_many(commands, timeout=30)
+                candidates = driver.cleanup_candidates(request, outputs[1])
+                enriched = []
+                for candidate in candidates:
+                    command = (
+                        f"show gpon onu baseinfo {candidate.pon_interface} {candidate.onu_id}"
+                    )
+                    output = session.execute(command, timeout=20, fail_on_cli_error=False)
+                    commands.append(command)
+                    outputs.append(output)
+                    enriched.append(driver.with_cleanup_identity(candidate, output))
+            message = (
+                f"查询到 {len(enriched)} 个同 PON 离线候选，请明确选择一台"
+                if enriched
+                else "目标 PON 未查询到可选的离线 ONU；不会执行删除"
+            )
+            self._log(OLT_FAMILY_C300, message)
+            return OnuOperationResult(
+                True,
+                message,
+                output="\n\n".join(outputs),
+                cleanup_candidates=tuple(enriched),
+                commands=tuple(commands),
+            )
+        except OperationCancelled as exc:
+            return OnuOperationResult(False, str(exc), output="\n\n".join(outputs), commands=tuple(commands))
+        except Exception as exc:
+            self._log(OLT_FAMILY_C300, f"离线候选查询失败：{exc}")
+            return OnuOperationResult(
+                False,
+                f"C300 离线候选查询失败：{exc}",
+                output="\n\n".join(outputs),
+                commands=tuple(commands),
+            )
+
+    @staticmethod
+    def _execute_precheck(session, driver, commands: Iterable[str]) -> list[str]:
+        outputs: list[str] = []
+        allow_error = getattr(driver, "precheck_allows_cli_error", lambda _command: False)
+        for command in commands:
+            outputs.append(
+                session.execute(
+                    command,
+                    timeout=30,
+                    fail_on_cli_error=not allow_error(command),
+                )
+            )
+        return outputs
+
+    def _wait_until_ready(
+        self,
+        family: str,
+        driver,
+        request: OnuProvisionRequest,
+        session,
+        cancel_event: threading.Event,
+    ) -> tuple[list[str], list[str]]:
+        command = driver.build_readiness_command(request)
+        commands: list[str] = []
+        outputs: list[str] = []
+        deadline = time.monotonic() + self.readiness_timeout
+        attempt = 0
+        last_state = "未查询"
+        while True:
+            attempt += 1
+            output = session.execute(command, timeout=30, fail_on_cli_error=False)
+            if CLI_ERROR_RE.search(output) and not any(
+                marker in output.lower()
+                for marker in ("onu data is null", "no related information to show")
+            ):
+                raise OltCommandError(command, output)
+            commands.append(command)
+            outputs.append(output)
+            ready, last_state = driver.readiness_state(request, output)
+            self._log(family, f"ONU 上线检查第 {attempt} 次：{last_state}")
+            if ready:
+                return commands, outputs
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise RuntimeError(
+                    f"配置已下发，但 ONU 未在 {self.readiness_timeout:.0f} 秒内上线：{last_state}"
+                )
+            if cancel_event.wait(min(self.readiness_interval, remaining)):
+                raise OperationCancelled("操作已停止")
+
     def register(
         self,
         connection: OltConnection,
         requests: Iterable[OnuProvisionRequest],
-        allow_c300_offline_cleanup: bool = False,
+        c300_cleanup_candidate: Optional[C300CleanupCandidate] = None,
         cancel_event: Optional[threading.Event] = None,
     ) -> OnuOperationResult:
         items = tuple(requests)
@@ -120,8 +231,8 @@ class OnuRegistrationService:
         if len(families) != 1:
             return OnuOperationResult(False, "一次操作不能混合 C300 和 C600 ONU")
         family = next(iter(families))
-        if family == OLT_FAMILY_C600 and len(items) != 1:
-            return OnuOperationResult(False, "C600 每次只能配置一个 ONU ID")
+        if len(items) != 1:
+            return OnuOperationResult(False, f"{family} 每次只能注册一台 ONU")
         driver = driver_for_family(family)
         all_commands: list[str] = []
         all_outputs: list[str] = []
@@ -140,7 +251,7 @@ class OnuRegistrationService:
                 target = request.onu.onu_interface or request.onu.pon_interface
                 self._log(family, f"阶段 1/3：下发前检查 {index}/{len(items)} {target}")
                 precheck_commands = driver.build_precheck_commands(request)
-                precheck_outputs = session.execute_many(precheck_commands, timeout=30)
+                precheck_outputs = self._execute_precheck(session, driver, precheck_commands)
                 all_commands.extend(precheck_commands)
                 all_outputs.extend(precheck_outputs)
                 precheck_errors = driver.validate_precheck(request, precheck_outputs)
@@ -152,24 +263,69 @@ class OnuRegistrationService:
                 try:
                     provision_outputs = session.execute_many(provision_commands, timeout=25)
                 except OltCommandError:
-                    if family != OLT_FAMILY_C300 or not allow_c300_offline_cleanup:
+                    if family != OLT_FAMILY_C300 or c300_cleanup_candidate is None:
                         raise
-                    self._log(family, "C300 配置失败，已授权查询并删除离线 ONU 后重试")
+                    self._log(
+                        family,
+                        "C300 配置失败，已授权重新确认并只删除指定离线 ONU："
+                        f"{c300_cleanup_candidate.onu_interface}",
+                    )
                     session.best_effort_end()
                     session.execute("terminal length 0")
                     state_output = session.execute("show gpon onu state", timeout=30)
-                    cleanup_commands = driver.build_cleanup_commands(request, state_output)
+                    identity_command = (
+                        f"show gpon onu baseinfo {c300_cleanup_candidate.pon_interface} "
+                        f"{c300_cleanup_candidate.onu_id}"
+                    )
+                    identity_output = session.execute(
+                        identity_command,
+                        timeout=20,
+                        fail_on_cli_error=False,
+                    )
+                    all_commands.extend(
+                        ["terminal length 0", "show gpon onu state", identity_command]
+                    )
+                    all_outputs.extend([state_output, identity_output])
+                    identities = driver.parse_baseinfo(identity_output)
+                    current_identity = identities[0] if identities else None
+                    if (
+                        not c300_cleanup_candidate.serial_number
+                        or current_identity is None
+                        or current_identity["interface"].lower()
+                        != c300_cleanup_candidate.onu_interface.lower()
+                        or current_identity["serial_number"].upper()
+                        != c300_cleanup_candidate.serial_number.upper()
+                    ):
+                        raise RuntimeError(
+                            "指定 C300 离线 ONU 的 SN 已变化或无法确认，拒绝删除和重试"
+                        )
+                    cleanup_commands = driver.build_cleanup_commands(
+                        request,
+                        state_output,
+                        c300_cleanup_candidate.onu_interface,
+                    )
                     if not cleanup_commands:
-                        raise RuntimeError("未找到可删除的 C300 离线 ONU，无法重试")
+                        raise RuntimeError(
+                            "指定 C300 ONU 已不在目标 PON 离线候选中，拒绝删除和重试"
+                        )
                     cleanup_outputs = session.execute_many(cleanup_commands, timeout=25)
-                    all_commands.extend(["terminal length 0", "show gpon onu state", *cleanup_commands])
-                    all_outputs.extend([state_output, *cleanup_outputs])
+                    all_commands.extend(cleanup_commands)
+                    all_outputs.extend(cleanup_outputs)
                     self._log(family, "C300 离线 ONU 删除完成，重新执行原注册命令")
                     provision_outputs = session.execute_many(provision_commands, timeout=25)
                 all_commands.extend(provision_commands)
                 all_outputs.extend(provision_outputs)
 
-                self._log(family, f"阶段 3/3：下发后只读验证 {index}/{len(items)} {target}")
+                self._log(family, f"阶段 3/3：等待 ONU 上线并执行只读验证 {index}/{len(items)} {target}")
+                readiness_commands, readiness_outputs = self._wait_until_ready(
+                    family,
+                    driver,
+                    request,
+                    session,
+                    cancel_event or threading.Event(),
+                )
+                all_commands.extend(readiness_commands)
+                all_outputs.extend(readiness_outputs)
                 verify_commands = driver.build_verify_commands(request)
                 verify_outputs = session.execute_many(verify_commands, timeout=35)
                 all_commands.extend(verify_commands)
@@ -227,4 +383,3 @@ class OnuRegistrationService:
         except Exception as exc:
             self._log(family, f"保存失败：{exc}")
             return OnuOperationResult(False, f"OLT 配置保存失败：{exc}")
-

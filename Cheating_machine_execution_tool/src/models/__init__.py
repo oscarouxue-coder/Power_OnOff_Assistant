@@ -26,6 +26,7 @@ from .sample_parameter_models import (
     SampleParameterWriteRequest,
 )
 from .onu_registration_models import (
+    C300CleanupCandidate,
     DiscoveredOnu,
     OLT_FAMILIES,
     OLT_FAMILY_C300,
@@ -64,6 +65,7 @@ __all__ = [
     "SampleParameterTarget",
     "SampleParameterWriteRequest",
     "DiscoveredOnu",
+    "C300CleanupCandidate",
     "OLT_FAMILIES",
     "OLT_FAMILY_C300",
     "OLT_FAMILY_C600",

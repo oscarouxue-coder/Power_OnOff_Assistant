@@ -31,6 +31,7 @@ from line_check_assistant.page_upgrade import PageUpgradeItemResult, PageUpgrade
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
 from line_check_assistant.test_item_config_store import TestItemConfigStore
 from src.models import (
+    C300CleanupCandidate,
     DiscoveredOnu,
     DutAdvancedQueryResult,
     DutTr069Settings,
@@ -2227,7 +2228,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
     @patch("line_check_assistant.app.threading.Thread")
     def test_onu_telnet_test_starts_worker_with_input_ip(self, thread_class, askyesno):
         worker = thread_class.return_value
-        connection = OltConnection("172.18.18.151", "172.33.5.35", "zte", "zte123")
+        connection = OltConnection("172.18.18.151", "172.18.18.40", "zte", "zte123")
         context = SimpleNamespace(
             onu_telnet_test_running=False,
             onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C300)),
@@ -2286,7 +2287,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
     @patch("line_check_assistant.app.threading.Thread")
     def test_query_unregistered_onu_starts_worker_with_inputs(self, thread_class, askyesno):
         worker = thread_class.return_value
-        connection = OltConnection("172.18.18.151", "172.33.5.35", "zte", "zte")
+        connection = OltConnection("172.18.18.151", "172.18.18.40", "zte", "zte")
         context = SimpleNamespace(
             onu_query_running=False,
             onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C300)),
@@ -2340,23 +2341,70 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(rendered[0].onu_interface, "gpon-onu_1/2/1:1")
         context._log.assert_called_once_with(f"[ONU注册][C300] 查询未注册 ONU：172.18.18.151 - {result.message}")
 
-    def test_select_and_clear_unregistered_onus_updates_all_variables(self):
+    def test_switching_to_c300_uses_confirmed_olt_and_source_ip_defaults(self):
+        context = SimpleNamespace(
+            onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C300)),
+            onu_olt_ip_var=Mock(get=Mock(return_value="172.18.18.152")),
+            onu_source_ip_var=Mock(get=Mock(return_value="172.33.5.35")),
+            onu_username_var=Mock(get=Mock(return_value="c600-user")),
+            onu_password_var=Mock(get=Mock(return_value="c600-pass")),
+            onu_active_family=OLT_FAMILY_C600,
+            onu_connection_profiles={
+                OLT_FAMILY_C300: {
+                    "olt_ip": "172.18.18.151",
+                    "source_ip": "172.18.18.40",
+                    "username": "zte",
+                    "password": "zte",
+                },
+                OLT_FAMILY_C600: {
+                    "olt_ip": "172.18.18.152",
+                    "source_ip": "172.33.5.35",
+                    "username": "c600-user",
+                    "password": "c600-pass",
+                },
+            },
+            _render_unregistered_onu_selection=Mock(),
+            _invalidate_onu_preview=Mock(),
+            _set_onu_telnet_status=Mock(),
+            _set_onu_query_status=Mock(),
+        )
+        context._remember_onu_connection_profile = (
+            LineCheckAssistant._remember_onu_connection_profile.__get__(context)
+        )
+        context._load_onu_connection_profile = (
+            LineCheckAssistant._load_onu_connection_profile.__get__(context)
+        )
+
+        LineCheckAssistant._on_onu_family_changed(context)
+
+        context.onu_olt_ip_var.set.assert_called_once_with("172.18.18.151")
+        context.onu_source_ip_var.set.assert_called_once_with("172.18.18.40")
+        context.onu_username_var.set.assert_called_once_with("zte")
+        context.onu_password_var.set.assert_called_once_with("zte")
+
+    def test_legacy_select_helper_keeps_only_first_onu_then_clear_removes_it(self):
         first = Mock()
         second = Mock()
         context = SimpleNamespace(
             onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C300)),
             onu_unregistered_selection_vars=[(Mock(), first), (Mock(), second)],
+            onu_c600_selection_var=Mock(),
+            _invalidate_onu_preview=Mock(),
+            _refresh_onu_selection_action_state=Mock(),
         )
 
         LineCheckAssistant._select_all_unregistered_onus(context)
 
         first.set.assert_called_once_with(True)
-        second.set.assert_called_once_with(True)
+        second.set.assert_called_once_with(False)
 
         LineCheckAssistant._clear_unregistered_onu_selection(context)
 
         first.set.assert_has_calls([call(True), call(False)])
-        second.set.assert_has_calls([call(True), call(False)])
+        second.set.assert_has_calls([call(False), call(False)])
+        context.onu_c600_selection_var.set.assert_has_calls([call("0"), call("")])
+        self.assertEqual(context._invalidate_onu_preview.call_count, 2)
+        self.assertEqual(context._refresh_onu_selection_action_state.call_count, 2)
 
     def test_selected_unregistered_onus_returns_only_checked_items(self):
         selected = UnregisteredOnu("gpon-onu_1/2/1:1", "GPONA62D6F48", "unknown")
@@ -2369,6 +2417,66 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         )
 
         self.assertEqual(LineCheckAssistant._selected_unregistered_onus(context), [selected])
+
+    def test_c300_cleanup_selection_resolves_only_explicit_candidate(self):
+        first = C300CleanupCandidate(
+            "gpon-onu_1/2/1:8", "gpon-olt_1/2/1", 8, "DyingGasp", "GPON12345678", "SD-41"
+        )
+        second = C300CleanupCandidate(
+            "gpon-onu_1/2/1:9", "gpon-olt_1/2/1", 9, "LOS", "GPON87654321", "SD-41"
+        )
+        context = SimpleNamespace(
+            onu_c300_cleanup_candidate_var=Mock(get=Mock(return_value=second.display_text)),
+            onu_c300_cleanup_candidates=(first, second),
+        )
+
+        selected = LineCheckAssistant._selected_c300_cleanup_candidate(context)
+
+        self.assertIs(selected, second)
+
+    def test_onu_input_change_clears_stale_c300_cleanup_candidates(self):
+        context = SimpleNamespace(
+            onu_c300_cleanup_candidates=(Mock(),),
+            _schedule_onu_registration_save=Mock(),
+            _clear_c300_cleanup_candidates=Mock(),
+            _invalidate_onu_preview=Mock(),
+        )
+
+        LineCheckAssistant._on_onu_registration_input_changed(context)
+
+        context._schedule_onu_registration_save.assert_called_once_with()
+        context._clear_c300_cleanup_candidates.assert_called_once_with()
+        context._invalidate_onu_preview.assert_called_once_with()
+
+    def test_complete_c300_cleanup_query_lists_same_pon_candidates_without_autoselect(self):
+        candidate = C300CleanupCandidate(
+            "gpon-onu_1/2/1:8", "gpon-olt_1/2/1", 8, "DyingGasp", "GPON12345678", "SD-41"
+        )
+        context = SimpleNamespace(
+            onu_cleanup_query_running=True,
+            onu_c300_cleanup_candidates=(),
+            onu_c300_cleanup_combo=Mock(),
+            onu_c300_cleanup_candidate_var=Mock(),
+            onu_stop_button=Mock(),
+            _set_onu_registration_action_buttons_state=Mock(),
+            _set_onu_query_status=Mock(),
+            _invalidate_onu_preview=Mock(),
+        )
+        result = OnuOperationResult(
+            True,
+            "查询到 1 个同 PON 离线候选，请明确选择一台",
+            cleanup_candidates=(candidate,),
+        )
+
+        LineCheckAssistant._complete_onu_cleanup_candidates(context, result)
+
+        self.assertFalse(context.onu_cleanup_query_running)
+        self.assertEqual(context.onu_c300_cleanup_candidates, (candidate,))
+        context.onu_c300_cleanup_combo.configure.assert_called_once_with(
+            values=(candidate.display_text,),
+            state="readonly",
+        )
+        context.onu_c300_cleanup_candidate_var.set.assert_called_once_with("")
 
     @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
     @patch("line_check_assistant.app.threading.Thread")
@@ -2383,7 +2491,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             state="unknown",
         )
         request = OnuProvisionRequest(family=OLT_FAMILY_C300, onu=selected, onu_type="SD-41")
-        connection = OltConnection("172.18.18.151", "172.33.5.35", "zte", "zte")
+        connection = OltConnection("172.18.18.151", "172.18.18.40", "zte", "zte")
         context = SimpleNamespace(
             onu_register_running=False,
             onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C300)),
@@ -2404,10 +2512,48 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         askyesno.assert_called_once()
         thread_class.assert_called_once_with(
             target=context._onu_register_selected_worker,
-            args=(OLT_FAMILY_C300, connection, [request], False),
+            args=(OLT_FAMILY_C300, connection, [request], None),
             daemon=True,
         )
         worker.start.assert_called_once_with()
+
+    @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_c300_register_passes_only_explicit_cleanup_interface(self, thread_class, _askyesno):
+        candidate = C300CleanupCandidate(
+            "gpon-onu_1/2/1:8", "gpon-olt_1/2/1", 8, "DyingGasp", "GPON12345678", "SD-41"
+        )
+        request = OnuProvisionRequest(
+            family=OLT_FAMILY_C300,
+            onu=DiscoveredOnu(
+                family=OLT_FAMILY_C300,
+                pon_interface="gpon-olt_1/2/1",
+                onu_interface="gpon-onu_1/2/1:3",
+                serial_number="GPONA62D6F78",
+            ),
+            onu_type="SD-41",
+        )
+        connection = OltConnection("172.18.18.151", "172.18.18.40", "zte", "zte")
+        context = SimpleNamespace(
+            onu_register_running=False,
+            onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C300)),
+            onu_c300_allow_offline_cleanup_var=Mock(get=Mock(return_value=True)),
+            onu_registration_window=Mock(),
+            _current_onu_connection=Mock(return_value=connection),
+            _build_onu_provision_requests=Mock(return_value=[request]),
+            _selected_c300_cleanup_candidate=Mock(return_value=candidate),
+            _set_onu_query_status=Mock(),
+            _set_onu_registration_action_buttons_state=Mock(),
+            _onu_register_selected_worker=Mock(),
+        )
+
+        LineCheckAssistant._on_onu_register_selected_clicked(context)
+
+        thread_class.assert_called_once_with(
+            target=context._onu_register_selected_worker,
+            args=(OLT_FAMILY_C300, connection, [request], candidate),
+            daemon=True,
+        )
 
     @patch("line_check_assistant.app.messagebox.showwarning")
     @patch("line_check_assistant.app.threading.Thread")
@@ -2415,7 +2561,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         context = SimpleNamespace(
             onu_register_running=False,
             onu_registration_window=Mock(),
-            _current_onu_connection=Mock(return_value=OltConnection("172.18.18.151", "172.33.5.35", "zte", "zte")),
+            _current_onu_connection=Mock(return_value=OltConnection("172.18.18.151", "172.18.18.40", "zte", "zte")),
             _build_onu_provision_requests=Mock(side_effect=ValueError("请先选择要注册的 ONU")),
             _set_onu_query_status=Mock(),
         )
@@ -2445,7 +2591,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             onu_c600_gemport_id_var=Mock(get=Mock(return_value="1")),
             onu_c600_vport_id_var=Mock(get=Mock(return_value="1")),
             onu_c600_sn_bind_both_var=Mock(get=Mock(return_value=True)),
-            onu_c600_services_text=Mock(get=Mock(return_value="1,170\n2,335")),
+            onu_c600_services_text=Mock(get=Mock(return_value="1,170\n2,335\n6,600")),
         )
 
         requests = LineCheckAssistant._build_onu_provision_requests(context)
@@ -2454,8 +2600,34 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(requests[0].onu_id, 55)
         self.assertEqual(
             requests[0].services,
-            (OnuServiceMapping(1, 170), OnuServiceMapping(2, 335)),
+            (
+                OnuServiceMapping(1, 170),
+                OnuServiceMapping(2, 335),
+                OnuServiceMapping(6, 600),
+            ),
         )
+
+    def test_c300_request_allows_exactly_one_selected_onu(self):
+        selected = DiscoveredOnu(
+            family=OLT_FAMILY_C300,
+            pon_interface="gpon-olt_1/2/1",
+            onu_interface="gpon-onu_1/2/1:3",
+            suggested_onu_id=3,
+            serial_number="GPONA62D6F78",
+        )
+        context = SimpleNamespace(
+            onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C300)),
+            _selected_unregistered_onus=Mock(return_value=[selected]),
+        )
+
+        requests = LineCheckAssistant._build_onu_provision_requests(context)
+
+        self.assertEqual(len(requests), 1)
+        self.assertIs(requests[0].onu, selected)
+
+        context._selected_unregistered_onus.return_value = [selected, selected]
+        with self.assertRaisesRegex(ValueError, "C300 每次只能选择一台"):
+            LineCheckAssistant._build_onu_provision_requests(context)
 
     @patch("line_check_assistant.app.messagebox.askyesno")
     @patch("line_check_assistant.app.messagebox.showinfo")
@@ -2487,10 +2659,117 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         open_source = inspect.getsource(LineCheckAssistant._open_onu_registration_module)
 
         self.assertNotIn("ZteTitanOnuProvisioner", module_source)
-        self.assertIn("C600 参数", open_source)
-        self.assertIn("命令预览", open_source)
+        self.assertIn('text="1. 查询 ONU"', open_source)
+        self.assertIn('text="2. 配置业务"', open_source)
+        self.assertIn('text="3. 确认执行"', open_source)
+        self.assertIn('text="OLT 连接"', open_source)
+        self.assertIn('text="C600 查询范围"', open_source)
+        self.assertIn('text="生成预览并进入下一步"', open_source)
+        self.assertIn("ttk.Radiobutton", module_source)
+        self.assertNotIn('text="全选"', open_source)
+        self.assertLess(open_source.index('text="OLT 连接"'), open_source.index("self.onu_notebook ="))
         self.assertNotIn("TITAN", open_source)
         self.assertIn("OnuRegistrationService", module_source)
+
+    def test_onu_window_reserves_bottom_rows_without_maximizing(self):
+        open_source = inspect.getsource(LineCheckAssistant._open_onu_registration_module)
+
+        self.assertIn('dialog.geometry("1000x800")', open_source)
+        self.assertIn('dialog.minsize(1000, 800)', open_source)
+        self.assertIn('content.rowconfigure(3, weight=1)', open_source)
+        self.assertIn('self.onu_notebook.grid(row=3, column=0, sticky="nsew")', open_source)
+        self.assertIn('height=8', open_source)
+        self.assertIn('warning_label.grid(row=4, column=0', open_source)
+        self.assertIn('self.onu_query_status_label.grid(row=5, column=0', open_source)
+        self.assertIn('bottom_actions.grid(row=6, column=0', open_source)
+        self.assertNotIn('self.onu_notebook.pack(', open_source)
+
+    @patch("line_check_assistant.app.messagebox.showwarning")
+    def test_onu_config_step_requires_selection_then_advances(self, showwarning):
+        context = SimpleNamespace(
+            _selected_unregistered_onus=Mock(return_value=[]),
+            _set_onu_query_status=Mock(),
+            onu_registration_window=Mock(),
+            onu_notebook=Mock(),
+            onu_config_tab=Mock(),
+        )
+
+        LineCheckAssistant._go_to_onu_config_step(context)
+
+        context.onu_notebook.select.assert_not_called()
+        showwarning.assert_called_once()
+
+        context._selected_unregistered_onus.return_value = [Mock()]
+        LineCheckAssistant._go_to_onu_config_step(context)
+
+        context.onu_notebook.select.assert_called_once_with(context.onu_config_tab)
+
+    def test_c600_single_selection_advances_directly_to_configuration(self):
+        context = SimpleNamespace(
+            _on_onu_selection_toggled=Mock(),
+            onu_notebook=Mock(),
+            onu_config_tab=Mock(),
+        )
+        onu = Mock()
+        variable = Mock()
+
+        LineCheckAssistant._on_c600_onu_selected(context, onu, variable)
+
+        variable.set.assert_called_once_with(True)
+        context._on_onu_selection_toggled.assert_called_once_with(onu, variable)
+        context.onu_notebook.select.assert_called_once_with(context.onu_config_tab)
+
+    def test_invalidating_onu_preview_clears_commands_and_disables_registration(self):
+        context = SimpleNamespace(
+            onu_preview_ready=True,
+            onu_confirmation_summary_var=Mock(),
+            onu_command_preview_text=Mock(),
+            onu_register_button=Mock(),
+        )
+
+        LineCheckAssistant._invalidate_onu_preview(context)
+
+        self.assertFalse(context.onu_preview_ready)
+        context.onu_confirmation_summary_var.set.assert_called_once_with(
+            "参数或目标已变化，请重新生成命令预览。"
+        )
+        context.onu_command_preview_text.delete.assert_called_once_with("1.0", "end")
+        context.onu_register_button.configure.assert_called_once_with(state="disabled")
+
+    def test_onu_preview_builds_execution_summary_and_advances_to_confirmation(self):
+        onu = DiscoveredOnu(
+            family=OLT_FAMILY_C300,
+            pon_interface="gpon-olt_1/2/1",
+            onu_interface="gpon-onu_1/2/1:1",
+            suggested_onu_id=1,
+            serial_number="GPON12345678",
+            state="unknown",
+        )
+        request = OnuProvisionRequest(family=OLT_FAMILY_C300, onu=onu, onu_type="SD-41")
+        context = SimpleNamespace(
+            _build_onu_provision_requests=Mock(return_value=[request]),
+            onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C300)),
+            onu_c300_allow_offline_cleanup_var=Mock(get=Mock(return_value=False)),
+            onu_olt_ip_var=Mock(get=Mock(return_value="172.18.18.151")),
+            onu_source_ip_var=Mock(get=Mock(return_value="172.18.18.40")),
+            onu_confirmation_summary_var=Mock(),
+            onu_command_preview_text=Mock(),
+            onu_register_button=Mock(),
+            onu_notebook=Mock(),
+            onu_preview_tab=Mock(),
+            _set_onu_query_status=Mock(),
+            onu_registration_window=Mock(),
+            onu_preview_ready=False,
+        )
+
+        LineCheckAssistant._on_onu_preview_clicked(context)
+
+        self.assertTrue(context.onu_preview_ready)
+        summary = context.onu_confirmation_summary_var.set.call_args.args[0]
+        self.assertIn("OLT：C300 172.18.18.151", summary)
+        self.assertIn("首条 CLI 错误停止且不删除 ONU", summary)
+        context.onu_register_button.configure.assert_called_once_with(state="normal")
+        context.onu_notebook.select.assert_called_once_with(context.onu_preview_tab)
 
     @patch("line_check_assistant.app.messagebox.askyesno", return_value=False)
     def test_complete_onu_register_selected_restores_buttons_and_logs_result(self, askyesno):
@@ -2504,7 +2783,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             onu_registration_window=Mock(),
         )
         result = CommandResult(True, "已下发 1 个 ONU 注册配置（未保存 OLT 配置，请重新查询确认上线）")
-        connection = OltConnection("172.18.18.151", "172.33.5.35", "zte", "zte")
+        connection = OltConnection("172.18.18.151", "172.18.18.40", "zte", "zte")
 
         LineCheckAssistant._complete_onu_register_selected(context, OLT_FAMILY_C300, connection, result)
 
@@ -2536,7 +2815,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             onu_registration_window=Mock(),
         )
         result = CommandResult(True, "注册成功")
-        connection = OltConnection("172.18.18.151", "172.33.5.35", "zte", "zte")
+        connection = OltConnection("172.18.18.151", "172.18.18.40", "zte", "zte")
 
         LineCheckAssistant._complete_onu_register_selected(context, OLT_FAMILY_C300, connection, result)
 
@@ -2631,6 +2910,10 @@ class CurrentChannelSelectionTests(unittest.TestCase):
                 password="secret",
                 olt_family=OLT_FAMILY_C600,
                 source_ip="172.33.5.35",
+                c600_olt_ip="172.18.18.200",
+                c600_source_ip="172.33.5.35",
+                c600_username="admin",
+                c600_password="secret",
                 c600_shelf=1,
                 c600_slot=2,
                 c600_pon=3,

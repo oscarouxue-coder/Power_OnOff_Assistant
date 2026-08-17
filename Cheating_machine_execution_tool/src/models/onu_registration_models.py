@@ -86,6 +86,26 @@ class DiscoveredOnu:
 
 
 @dataclass(frozen=True)
+class C300CleanupCandidate:
+    onu_interface: str
+    pon_interface: str
+    onu_id: int
+    state: str
+    serial_number: str = ""
+    onu_type: str = ""
+
+    @property
+    def display_text(self) -> str:
+        details = [self.onu_interface]
+        if self.onu_type:
+            details.append(f"型号:{self.onu_type}")
+        if self.serial_number:
+            details.append(f"SN:{self.serial_number}")
+        details.append(f"状态:{self.state}")
+        return "  ".join(details)
+
+
+@dataclass(frozen=True)
 class OnuProvisionRequest:
     family: str
     onu: DiscoveredOnu
@@ -106,5 +126,5 @@ class OnuOperationResult:
     message: str
     output: str = ""
     onus: tuple[DiscoveredOnu, ...] = ()
+    cleanup_candidates: tuple[C300CleanupCandidate, ...] = ()
     commands: tuple[str, ...] = ()
-

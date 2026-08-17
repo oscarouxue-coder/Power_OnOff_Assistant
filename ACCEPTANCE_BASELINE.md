@@ -1,6 +1,6 @@
 # Acceptance Baseline
 
-更新：2026-08-17（统一中兴C300/C600 ONU注册）
+更新：2026-08-18（ONU注册现场安全、上线轮询与完整验证）
 
 > 与 `PROJECT_STATUS.md` 的关系：本文按"实现 → 单测 → 真实样机验收"三态罗列验收证据与不变量，作为独立验收基线。`PROJECT_STATUS.md` 保留面向项目的进度叙述；两者冲突时以本文为准。
 >
@@ -219,24 +219,30 @@ python scripts\verify_baseline.py
 
 - **状态**：已实现未验收
 - **核心行为**：
-  - 主界面单一入口和`896x580`默认尺寸不变；窗口通过“连接与发现 / C600参数 / 命令预览”分页支持C300与C600，不导入或启动原独立GUI
-  - 统一service只编排“登录 → 未注册查询 → 下发前预检 → 逐条配置 → 只读验证 → 结果”，C300与C600命令生成、接口格式和解析器由两个独立driver负责，不允许跨型号替换字符串
-  - C300：全局`show gpon onu uncfg`、多选，使用`gpon-olt_` / `gpon-onu_`、SD-41固定业务模板、`pon-onu-mng`和`mvlan 600`；下发前重新确认目标仍未注册，下发后重新查询未注册表和状态表
-  - C600：按PON执行`show pon onu uncfg gpon_olt-... sn model speed-mode`、每次一台，使用`gpon_olt-` / `gpon_onu-` / `vport-`及可编辑ServiceID/VLAN映射；下发前拒绝ONU ID/SN冲突并确认SN仍未注册，下发后执行collection、service-port和detail-info三组只读验证
+  - 主界面单一入口不变；窗口当前默认和最小尺寸均为`1000x800`，通过“1. 查询 ONU / 2. 配置业务 / 3. 确认执行”三步分页支持C300与C600，不导入或启动原独立GUI
+  - OLT型号、OLT IP、源IP、用户名、密码、登录测试和连接状态必须固定显示在分页上方；C600机框/槽位/PON必须位于第一步查询页，不得要求操作员先切到配置页再返回查询
+  - C300与C600发现结果都必须单选且不显示“全选”，service层也必须拒绝同一批次传入多台ONU；C300选中后通过“下一步：配置业务”推进，C600选中后自动进入第二步。第二步按型号显示C300固定模板/危险删除开关或C600完整业务参数；第三步同时显示执行摘要、完整命令预览和唯一的“开始注册”主按钮
+  - 未选择ONU时不得进入配置或生成预览；型号、连接、选择或业务参数变化后旧预览必须失效并禁用注册，重新生成预览后才能执行；查询/执行状态、停止和关闭必须在三个步骤下持续可见
+  - 顶层标题、说明、连接区、Notebook、危险提示、状态栏和底部按钮必须使用固定行布局，只允许Notebook行伸缩；命令预览不得使用Tk Text默认大请求高度，普通`1000x800`窗口下危险提示、状态栏和“关闭/停止”必须完整显示，不得要求最大化
+  - 统一service只编排“登录 → 未注册查询 → 下发前预检 → 逐条配置 → 最长60秒可停止上线轮询 → 只读验证 → 结果”，C300与C600命令生成、接口格式和解析器由两个独立driver负责，不允许跨型号替换字符串；配置记录存在但未进入working不得误报成功
+  - C300：全局`show gpon onu uncfg`查询、每次一台，使用`gpon-olt_` / `gpon-onu_`、SD-41固定业务模板、`pon-onu-mng`和`mvlan 600`；下发前以目标PON的`show gpon onu uncfg`确认目标仍未注册、以`show gpon onu baseinfo ... <ONU ID>`确认ID空闲、以`show gpon onu by sn <SN>`执行整台OLT的SN查重
+  - C300下发后必须按真实C300格式核对：`baseinfo/state/detail-info`中的接口、型号、SN、ready/working/config success/SN Bind；`tcont/gemport/vport`中的1G模板、六个GEM active及1:1映射；`service-port/remote-onu service/remote-onu mvlan`中的六组固定业务、OK/YES及`mvlan 600`。空ID返回`ONU data is null`、空SN返回`No related information to show`时视为可继续，不得误判CLI失败
+  - C600：按PON执行`show pon onu uncfg gpon_olt-... sn model speed-mode`、每次一台，使用`gpon_olt-` / `gpon_onu-` / `vport-`及可编辑ServiceID/VLAN映射；映射中必须包含VLAN 600，并在`pon-onu-mng gpon_onu-...`上下文固定下发`mvlan 600`。下发前必须用精确baseinfo和全OLT SN查询拒绝ONU ID/SN冲突，仅对应只读查询的`ONU data is null`或`No related information to show`可作为空结果；下发后必须实际解析collection、换行service-port、detail-info及`show gpon remote-onu mvlan gpon_onu-...`四组输出，逐项核对身份、T-CONT/GEM/VPort/业务状态、working/config success和`Multicast VLAN: 600`
   - 两种型号遇到第一条CLI错误即停止并尝试退出配置模式；主日志必须记录型号、关键阶段、实际`TX OLT`命令、返回、成功、停止或失败
-  - Telnet必须使用操作员填写的源IP调用`source_address=(bind_ip, 0)`锁定Windows出口；源IP为空/格式错误/不可绑定必须失败，不得回退系统默认网卡
-  - C300离线ONU删除重试是默认关闭的独立危险选项；未勾选时失败不得下发`no onu`，勾选时二次确认必须明确提示会查询并删除可复用离线ONU；C600任何场景都不得自动删除或回滚ONU
+  - Telnet必须使用操作员填写的源IP调用`source_address=(bind_ip, 0)`锁定Windows出口；源IP为空/格式错误/不可绑定必须失败，不得回退系统默认网卡。C300与C600分别保存OLT IP、源IP、用户名和密码，型号切换不得串用另一型号连接资料；已知默认路径为C300 `172.18.18.151`经`172.18.18.40`、C600 `172.18.18.152`经`172.33.5.35`
+  - C300离线ONU删除重试是默认关闭且不持久化的独立危险选项；启用后必须先只读查询目标PON候选并由操作员明确选择一台，配置失败后再次确认其仍为同PON离线候选且接口/SN与查询时一致，才允许只生成一条目标`no onu <ID>`，禁止批量或跨PON删除；C600任何场景都不得自动删除或回滚ONU
   - 注册不自动保存OLT配置；C300成功后单独询问`write`，C600不提供自动`write`并提示操作员按现场要求手工决定
-- **禁止破坏**：C300/C600命令体系隔离；源IP锁定；第一条错误停止；危险删除默认关闭；C600不删除、不自动`write`；窗口默认尺寸896x580；本机凭据和`onu_registration.ini`不入Git
-- **待确认**：Windows分页布局、型号切换/选择/停止/预览；真实C300查询、注册、默认不删除、显式授权删除和`write`；真实C600按PON查询、冲突预检、完整配置、三组验证、停止、`Access denied`及不自动`write`
-- **对应测试**：`tests/test_onu_registration_service.py`（双driver语法、锁源Telnet、预检、错误停止、危险删除开关、C600验证和禁止write）、`tests/test_app.py`（统一UI路由、C600参数、C600成功不询问write）、`tests/test_onu_registration_store.py`、`tests/test_network_ops.py`（历史C300兼容边界）
+- **真实设备命令核查（2026-08-18，不等同注册写入验收）**：已从`172.18.18.40`登录C300 `172.18.18.151`，使用一台已注册在线ONU确认上述ID/SN空记录、注册身份、运行状态、T-CONT/GEM/VPort、service-port、远端业务和MVLAN输出格式；已从`172.33.5.35`登录C600 `172.18.18.152`，确认已注册样本当前无MVLAN数据、`show gpon remote-onu mvlan gpon_onu-...`查询格式以及`pon-onu-mng`上下文的`mvlan <1-4094>`帮助。核查过程未实际下发MVLAN、未删除ONU、未执行`write`
+- **禁止破坏**：C300/C600命令体系与连接资料隔离；两者均一次一台；源IP锁定；第一条错误停止；上线轮询可停止；危险删除默认关闭且不持久化、只允许明确选择的一台同PON离线ONU；C600不删除、不自动`write`；窗口当前默认和最小尺寸`1000x800`；普通窗口底部区域不被裁切；本机凭据和`onu_registration.ini`不入Git
+- **待确认**：Windows`1000x800`普通窗口三步分页布局、分型号连接资料、C300离线候选查询/单选/清空、步骤切换、预览失效、底部危险提示/状态/停止完整显示且无需最大化；真实C300注册写入、冲突拦截、上线轮询、完整下发后验证、默认不删除、显式单台删除和`write`；真实C600按PON查询、精确冲突预检、包含VLAN 600业务及`mvlan 600`的完整配置、上线轮询、四组解析验证、停止、`Access denied`及不自动`write`
+- **对应测试**：`tests/test_onu_registration_service.py`（双driver语法、两型号单台限制、C300真实输出格式预检/完整验证/同PON单候选清理与身份复核、C600精确ID/SN冲突、VLAN/MVLAN 600、上线轮询和四组解析）、`tests/test_app.py`（统一UI路由、两型号单选、显式清理候选、分型号连接资料、C600参数与禁止write）、`tests/test_onu_registration_store.py`、`tests/test_network_ops.py`（历史C300兼容边界）
 
 ### 2.11 输入持久化与启动 / 打包
 
 - **状态**：已确认验收（测试项「恢复默认」清除全部手动命令并加载固定模板，2026-08-07）/ 已实现未验收（其余输入持久化与打包交互）
 - **核心行为**：
   - 升级方式 / 固件路径 / 恢复出厂 / 超级凭据 / 并行数 → `Auto_power_on_off_tool/config/sample_upgrade_settings.ini`
-  - OLT型号 / OLT IP / 源IP / 用户名 / 密码 / C600参数 / C300危险删除选项 → `Auto_power_on_off_tool/config/onu_registration.ini`
+  - OLT型号 / C300与C600各自的OLT IP、源IP、用户名、密码 / C600参数 → `Auto_power_on_off_tool/config/onu_registration.ini`；C300危险删除授权每次打开均恢复关闭，不写成可复用授权
   - 测试项默认模板 → `Auto_power_on_off_tool/config/test_project_config.default.ini`；「测试项」页点击「恢复默认」只恢复 `[order]` 测试命令，确认后先加载到界面、再由操作员点击「保存」写入 `test_project_config.ini`，不得覆盖当前指令重试间隔、Telnet / WiFi / 项目信息
   - 2026-08-07 Windows 桌面确认：先手动增加测试命令，再点击「恢复默认」，手动命令全部消失，界面不再出现旧命令与默认命令混排或重复编号
   - 旧工具顶部其它启动参数由 `Auto_power_on_off_tool/config/config.ini [ui_defaults]` 加载；其中 `serial_num` 必须始终严格等于新工具保存在 `network_card_ip.ini [power_supply] serial_port` 的“程控电源 COM”，新工具 COM 为空或尚未保存时旧工具也必须为空，严禁回退或自动选择其它 COM；成功日志必须显示实际 COM 及来源，配置缺失或校验失败时保留旧界面的回退值并记录错误日志
