@@ -260,6 +260,45 @@ class BuildContextRegressionTests(unittest.TestCase):
         fake._current_sample_upgrade_settings.assert_called_once_with()
         fake._current_onu_registration_config.assert_called_once_with()
 
+    def test_build_context_uses_saved_onu_config_after_services_text_is_destroyed(self) -> None:
+        """关闭ONU窗口后刷新全流程，不得读取已经销毁的Tk Text。"""
+        from line_check_assistant.app import LineCheckAssistant
+        from line_check_assistant.onu_registration_store import OnuRegistrationConfig
+        from line_check_assistant.pipeline_window import PipelineWindow
+        from src.services.pipeline_orchestrator import compute_all_subtask_statuses
+
+        value = lambda text: MagicMock(get=MagicMock(return_value=text))
+        fake = FakeApp()
+        fake.onu_registration_config = OnuRegistrationConfig(c600_services="6,600")
+        fake.onu_c600_services_text = MagicMock()
+        fake.onu_c600_services_text.winfo_exists.return_value = False
+        fake.onu_family_var = value("C600")
+        fake.onu_olt_ip_var = value("172.18.18.152")
+        fake.onu_source_ip_var = value("172.33.5.35")
+        fake.onu_username_var = value("admin")
+        fake.onu_password_var = value("secret")
+        fake.onu_c600_shelf_var = value("1")
+        fake.onu_c600_slot_var = value("1")
+        fake.onu_c600_pon_var = value("5")
+        fake.onu_c600_onu_id_var = value("1")
+        fake.onu_c600_onu_type_var = value("CXP-55")
+        fake.onu_c600_real_speed_var = value("xgspon")
+        fake.onu_c600_tcont_id_var = value("1")
+        fake.onu_c600_tcont_profile_var = value("CXP-55")
+        fake.onu_c600_gemport_id_var = value("1")
+        fake.onu_c600_vport_id_var = value("1")
+        fake.onu_c600_sn_bind_both_var = MagicMock(get=MagicMock(return_value=True))
+        fake._current_onu_registration_config = (
+            LineCheckAssistant._current_onu_registration_config.__get__(fake)
+        )
+
+        context = PipelineWindow._build_context(SimpleNamespace(app=fake))
+        statuses = compute_all_subtask_statuses(context)
+
+        self.assertEqual(context.onu_registration.c600_services, "6,600")
+        self.assertEqual(len(statuses), 7)
+        fake.onu_c600_services_text.get.assert_not_called()
+
     def test_compute_subtask_statuses_succeeds_with_minimal_app(self) -> None:
         """真实 _build_context 路径上 compute_all_subtask_statuses 必须不抛。"""
         from line_check_assistant.onu_registration_store import OnuRegistrationConfig

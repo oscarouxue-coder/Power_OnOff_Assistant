@@ -5,7 +5,7 @@ import re
 import threading
 from datetime import datetime
 from pathlib import Path
-from tkinter import BooleanVar, Button, Canvas, Checkbutton, DoubleVar, END, Frame, IntVar, Label, Listbox, Tk, StringVar, Text, Toplevel, filedialog, messagebox, ttk
+from tkinter import BooleanVar, Button, Canvas, Checkbutton, DoubleVar, END, Frame, IntVar, Label, Listbox, StringVar, TclError, Text, Tk, Toplevel, filedialog, messagebox, ttk
 
 from .config_store import ChannelConfig, ChannelConfigStore, DEFAULT_POWER_SERIAL_PORT, DEFAULT_SUBNET_MASK
 from .legacy_ui_defaults_store import LegacyUiDefaultsStore, TELNET_ENABLE_OPTION
@@ -1631,8 +1631,14 @@ class LineCheckAssistant(Tk):
 
     def _current_onu_registration_config(self) -> OnuRegistrationConfig:
         services = self.onu_registration_config.c600_services or DEFAULT_C600_SERVICES
-        if hasattr(self, "onu_c600_services_text"):
-            services = self.onu_c600_services_text.get("1.0", "end").strip()
+        services_widget = getattr(self, "onu_c600_services_text", None)
+        if services_widget is not None:
+            try:
+                if services_widget.winfo_exists():
+                    services = services_widget.get("1.0", "end").strip()
+            except TclError:
+                # Toplevel 已销毁时 Python 属性仍可能存在；全流程状态刷新应读取最近保存的缓存。
+                pass
 
         def integer_value(variable, fallback: int) -> int:
             try:
@@ -1722,7 +1728,9 @@ class LineCheckAssistant(Tk):
 
     def _save_onu_registration_config(self) -> None:
         self.onu_save_after_id = None
-        self.onu_registration_store.save(self._current_onu_registration_config())
+        config = self._current_onu_registration_config()
+        self.onu_registration_store.save(config)
+        self.onu_registration_config = config
 
     def _bind_sample_upgrade_autosave(self) -> None:
         for variable in (

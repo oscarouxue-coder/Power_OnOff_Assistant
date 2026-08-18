@@ -2,6 +2,16 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-18 - 修复全流程读取已销毁ONU控件
+
+- 类型：BUG 修复
+- 背景：项目负责人现场发现打开并关闭ONU注册窗口后，“全流程执行”7个子任务全部显示`invalid command name ...!text`。根因是Tk `Text`已随ONU窗口销毁，但Python属性仍存在；全流程构建共享上下文时，当前ONU配置读取只判断`hasattr`便调用该失效控件的`get()`，上下文失败后同一异常被显示到全部7行。此前基线测试分别Mock了当前ONU配置方法或始终存活的Text，没有覆盖跨窗口销毁生命周期，属于强制基线覆盖缺口。
+- 完成内容：① 当前ONU配置只在C600业务映射Text仍存活时读取窗口值，控件已销毁或发生Tk生命周期异常时改用最近保存的内存配置；② ONU配置保存成功后同步更新主程序`onu_registration_config`缓存，确保关闭窗口后的全流程读取最新值；③ 增加失效Text单元回归和全流程真实调用主程序配置方法的跨模块回归，并继续计算全部7项状态；④ 两项新回归纳入强制基线，避免再次用整体Mock绕过故障路径。
+- 修改文件：`.claude/plans/pipeline_destroyed_onu_widget.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p test_app.py`、`python -m unittest discover -s tests -p test_pipeline_window.py`、真实Tk销毁控件`winfo_exists()`检查、`python scripts/verify_baseline.py`与`git diff --check`；Windows源码版按“打开ONU注册→关闭→打开全流程→刷新状态”复验7行状态。
+- 验证结果：主程序专项156项、全流程窗口专项29项均`OK`；真实Tk销毁后的Text返回`winfo_exists=0`；完整基线门禁672项单元测试通过，57个源码文件编译覆盖、150个强制基线测试实际执行，8条MUST_EXIST与1条MUST_NOT_EXIST均通过，最终`ALL CHECKS PASSED`。自动化与Tk生命周期检查不替代项目负责人Windows界面复验。
+- 后续待办：项目负责人在当前Windows源码版依次打开并关闭ONU注册窗口，再打开全流程执行或点击“刷新状态”，确认7项分别显示自身真实就绪/缺项状态且不再出现`invalid command name`；现场结论确认后再更新验收状态。
+
 ## 2026-08-18 - 收紧ONU注册现场安全边界
 
 - 类型：优化

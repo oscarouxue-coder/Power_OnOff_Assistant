@@ -2921,6 +2921,35 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             ),
         )
 
+    def test_current_onu_registration_config_ignores_destroyed_services_text(self):
+        destroyed_text = Mock()
+        destroyed_text.winfo_exists.return_value = False
+        context = SimpleNamespace(
+            onu_registration_config=OnuRegistrationConfig(c600_services="6,600"),
+            onu_c600_services_text=destroyed_text,
+            onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C600)),
+            onu_olt_ip_var=Mock(get=Mock(return_value="172.18.18.152")),
+            onu_source_ip_var=Mock(get=Mock(return_value="172.33.5.35")),
+            onu_username_var=Mock(get=Mock(return_value="admin")),
+            onu_password_var=Mock(get=Mock(return_value="secret")),
+            onu_c600_shelf_var=Mock(get=Mock(return_value="1")),
+            onu_c600_slot_var=Mock(get=Mock(return_value="1")),
+            onu_c600_pon_var=Mock(get=Mock(return_value="5")),
+            onu_c600_onu_id_var=Mock(get=Mock(return_value="1")),
+            onu_c600_onu_type_var=Mock(get=Mock(return_value="CXP-55")),
+            onu_c600_real_speed_var=Mock(get=Mock(return_value="xgspon")),
+            onu_c600_tcont_id_var=Mock(get=Mock(return_value="1")),
+            onu_c600_tcont_profile_var=Mock(get=Mock(return_value="CXP-55")),
+            onu_c600_gemport_id_var=Mock(get=Mock(return_value="1")),
+            onu_c600_vport_id_var=Mock(get=Mock(return_value="1")),
+            onu_c600_sn_bind_both_var=Mock(get=Mock(return_value=True)),
+        )
+
+        config = LineCheckAssistant._current_onu_registration_config(context)
+
+        self.assertEqual(config.c600_services, "6,600")
+        destroyed_text.get.assert_not_called()
+
     def test_save_onu_registration_config_writes_current_inputs(self):
         config = OnuRegistrationConfig(olt_ip="172.18.18.200", username="admin", password="secret")
         context = SimpleNamespace(
@@ -2933,6 +2962,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         self.assertIsNone(context.onu_save_after_id)
         context.onu_registration_store.save.assert_called_once_with(config)
+        self.assertIs(context.onu_registration_config, config)
 
     def test_app_close_saves_onu_registration_inputs(self):
         context = SimpleNamespace(

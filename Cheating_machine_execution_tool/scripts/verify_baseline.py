@@ -262,6 +262,8 @@ REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
     "test_app.CurrentChannelSelectionTests.test_c600_success_never_offers_automatic_write",
     "test_app.CurrentChannelSelectionTests.test_c300_register_passes_only_explicit_cleanup_interface",
     "test_app.CurrentChannelSelectionTests.test_onu_input_change_clears_stale_c300_cleanup_candidates",
+    "test_app.CurrentChannelSelectionTests.test_current_onu_registration_config_ignores_destroyed_services_text",
+    "test_pipeline_window.BuildContextRegressionTests.test_build_context_uses_saved_onu_config_after_services_text_is_destroyed",
     "test_onu_registration_store.OnuRegistrationStoreTests.test_save_and_load_preserves_dual_olt_settings",
 )
 
