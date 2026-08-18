@@ -1,6 +1,6 @@
 # Acceptance Baseline
 
-更新：2026-08-18（修复全流程读取已销毁ONU控件）
+更新：2026-08-18（C600真实注册验证与速率命令修复）
 
 > 与 `PROJECT_STATUS.md` 的关系：本文按"实现 → 单测 → 真实样机验收"三态罗列验收证据与不变量，作为独立验收基线。`PROJECT_STATUS.md` 保留面向项目的进度叙述；两者冲突时以本文为准。
 >
@@ -24,8 +24,10 @@ python scripts\verify_baseline.py
 
 - 入口：`Cheating_machine_execution_tool/run_line_check_assistant.py` → `line_check_assistant.app.main()`
 - 依赖以 `requirements.txt` 为准；除主程序原有 `pyserial / tftpy / requests / openpyxl / xlrd` 外，第7项旧业务无 GUI 运行还需 `requests-toolbelt / paramiko / ping3 / pywifi / configobj / psutil`（许可证清单见 `THIRD_PARTY_NOTICES.md`）
-- 打包：`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1` → `dist\LineCheckAssistant.exe`
-- **构建后不在当前 PC 运行 `dist\LineCheckAssistant.exe`**，仅确认打包成功并报告路径
+- 打包：`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1` → 单文件`dist\LineCheckAssistant.exe`、完整目录`dist\LineCheckAssistant_portable\`和可搬运的`dist\LineCheckAssistant_portable.zip`
+- 构建便携版时必须重新生成`Auto_power_on_off_tool/config`，不得复制当前电脑的账号密码、OLT/源IP/ONU ID、钉钉与远程信息、固件/参数表路径、项目身份、网卡、串口或无线网卡绑定；业务命令模板和C600业务映射可保留。ZIP必须包含EXE、脱敏配置、`PORTABLE_README.txt`、第三方声明和EXE SHA256
+- PyInstaller 5.10.1的Tkinter运行时要求EXE解压根目录存在`tcl`和`tk`；构建门禁必须从实际EXE归档命中`tcl\init.tcl`与`tk\tk.tcl`，不得使用会触发`pyi_rth__tkinter`启动失败的`_tcl_data/_tk_data`旧目标名
+- **构建后不在当前 PC 运行任一新生成的 `LineCheckAssistant.exe`**，仅确认打包成功、ZIP结构、脱敏结果和哈希并报告路径
 - 主界面内容区不得重复显示“开关机测试环境搭建助手”和“配置测试通道、完成自动上/下电并检查全部线路”，“执行日志”标题下不得显示“运行步骤、检查结果和异常信息”；管理员权限状态必须位于常用工具栏右侧、视觉上在“刷新串口”左侧，权限就绪/缺失仍分别使用成功/危险样式，刷新串口与刷新网卡顺序不得改变
 - **已确认验收（2026-08-13）**：项目负责人确认各功能入口居中显示需求验收通过。主界面“检查并执行测试”“自动上/下电”“样机升级”“写样机参数”“ONU注册”“串口日志”“DUT配置”和“测试项配置”首次创建必须相对当前主界面实际屏幕坐标居中，主界面位于副屏时不得跳回主屏；DUT和测试项配置必须先居中再执行已验收的客户区尺寸刷新，刷新后位置不得漂移；串口日志无有效历史位置或历史位置为`+0+0`时居中，用户主动移动后的其它有效历史位置仍按原规则恢复
 - **已实现未验收（2026-08-16）**：主界面必须统一监听自身及全部子控件的鼠标按下并调用`lift()`，不得用`focus_force()`抢走刚点击控件的焦点。样机升级、写样机参数、ONU注册、串口日志、DUT配置、测试项配置和全流程执行等持续打开的非模态功能窗口不得设置相对主界面的`transient`所有者关系；点击主界面任意可见位置必须允许主界面升到这些窗口前方且不得关闭或重建二级窗口，再次点击功能入口仍可把原二级窗口升到前方。生成批量参数表、选择程控电源及确认/警告等模态窗口必须继续保留`transient + grab`或等价模态语义，不能为了窗口层级切换绕过必要输入或危险确认
@@ -227,19 +229,20 @@ python scripts\verify_baseline.py
   - 统一service只编排“登录 → 未注册查询 → 下发前预检 → 逐条配置 → 最长60秒可停止上线轮询 → 只读验证 → 结果”，C300与C600命令生成、接口格式和解析器由两个独立driver负责，不允许跨型号替换字符串；配置记录存在但未进入working不得误报成功
   - C300：全局`show gpon onu uncfg`查询、每次一台，使用`gpon-olt_` / `gpon-onu_`、SD-41固定业务模板、`pon-onu-mng`和`mvlan 600`；下发前以目标PON的`show gpon onu uncfg`确认目标仍未注册、以`show gpon onu baseinfo ... <ONU ID>`确认ID空闲、以`show gpon onu by sn <SN>`执行整台OLT的SN查重
   - C300下发后必须按真实C300格式核对：`baseinfo/state/detail-info`中的接口、型号、SN、ready/working/config success/SN Bind；`tcont/gemport/vport`中的1G模板、六个GEM active及1:1映射；`service-port/remote-onu service/remote-onu mvlan`中的六组固定业务、OK/YES及`mvlan 600`。空ID返回`ONU data is null`、空SN返回`No related information to show`时视为可继续，不得误判CLI失败
-  - C600：按PON执行`show pon onu uncfg gpon_olt-... sn model speed-mode`、每次一台，使用`gpon_olt-` / `gpon_onu-` / `vport-`及可编辑ServiceID/VLAN映射；映射中必须包含VLAN 600，并在`pon-onu-mng gpon_onu-...`上下文固定下发`mvlan 600`。下发前必须用精确baseinfo和全OLT SN查询拒绝ONU ID/SN冲突，仅对应只读查询的`ONU data is null`或`No related information to show`可作为空结果；下发后必须实际解析collection、换行service-port、detail-info及`show gpon remote-onu mvlan gpon_onu-...`四组输出，逐项核对身份、T-CONT/GEM/VPort/业务状态、working/config success和`Multicast VLAN: 600`
+  - C600：按PON执行`show pon onu uncfg gpon_olt-... sn model speed-mode`、每次一台，使用`gpon_olt-` / `gpon_onu-` / `vport-`及可编辑ServiceID/VLAN映射；发现结果的Speed Mode不得直接转换成必下发的`real-speed`，选中ONU后默认使用`auto`并省略该命令，只有操作员明确选择xgspon/xgpon/gpon时才作为型号专用覆盖。映射中必须包含VLAN 600，并在`pon-onu-mng gpon_onu-...`上下文固定下发`mvlan 600`。下发前必须用精确baseinfo和全OLT SN查询拒绝ONU ID/SN冲突，仅对应只读查询的`ONU data is null`或`No related information to show`可作为空结果；下发后必须实际解析collection、换行service-port、detail-info及`show gpon remote-onu mvlan gpon_onu-...`四组输出，逐项核对身份、T-CONT/GEM/VPort/业务状态、working/config success和`Multicast VLAN: 600`
   - 两种型号遇到第一条CLI错误即停止并尝试退出配置模式；主日志必须记录型号、关键阶段、实际`TX OLT`命令、返回、成功、停止或失败
   - Telnet必须使用操作员填写的源IP调用`source_address=(bind_ip, 0)`锁定Windows出口；源IP为空/格式错误/不可绑定必须失败，不得回退系统默认网卡。C300与C600分别保存OLT IP、源IP、用户名和密码，型号切换不得串用另一型号连接资料；已知默认路径为C300 `172.18.18.151`经`172.18.18.40`、C600 `172.18.18.152`经`172.33.5.35`
   - C300离线ONU删除重试是默认关闭且不持久化的独立危险选项；启用后必须先只读查询目标PON候选并由操作员明确选择一台，配置失败后再次确认其仍为同PON离线候选且接口/SN与查询时一致，才允许只生成一条目标`no onu <ID>`，禁止批量或跨PON删除；C600任何场景都不得自动删除或回滚ONU
   - 注册不自动保存OLT配置；C300成功后单独询问`write`，C600不提供自动`write`并提示操作员按现场要求手工决定
 - **真实设备命令核查（2026-08-18，不等同注册写入验收）**：已从`172.18.18.40`登录C300 `172.18.18.151`，使用一台已注册在线ONU确认上述ID/SN空记录、注册身份、运行状态、T-CONT/GEM/VPort、service-port、远端业务和MVLAN输出格式；已从`172.33.5.35`登录C600 `172.18.18.152`，确认已注册样本当前无MVLAN数据、`show gpon remote-onu mvlan gpon_onu-...`查询格式以及`pon-onu-mng`上下文的`mvlan <1-4094>`帮助。核查过程未实际下发MVLAN、未删除ONU、未执行`write`
+- **真实C600 service执行验证（2026-08-18，Windows三步UI仍待复验）**：使用一台未注册NP7287XGS首次执行时，ONU注册成功但`real-speed xgspon`返回`%Error 230240: Not support this function.`；该ONU在未配置此命令时会自动进入XGS-PON。修复为发现后默认`auto`后，从未注册状态完整执行精确ID/SN预检、9组业务、SN双重绑定、MVLAN 600、7次状态轮询（OffLine → syncMib → working）和collection/service-port/detail-info/MVLAN四组验证，service返回成功且未执行`write`。随后按项目负责人授权删除唯一测试ONU，确认目标ID返回`ONU data is null`、全OLT SN查询返回`No related information to show`，并在第5次发现查询重新出现于未注册列表；另一台未注册ONU未处理
 - **禁止破坏**：C300/C600命令体系与连接资料隔离；两者均一次一台；源IP锁定；第一条错误停止；上线轮询可停止；危险删除默认关闭且不持久化、只允许明确选择的一台同PON离线ONU；C600不删除、不自动`write`；窗口当前默认和最小尺寸`1000x800`；普通窗口底部区域不被裁切；本机凭据和`onu_registration.ini`不入Git
-- **待确认**：Windows`1000x800`普通窗口三步分页布局、分型号连接资料、C300离线候选查询/单选/清空、步骤切换、预览失效、底部危险提示/状态/停止完整显示且无需最大化；真实C300注册写入、冲突拦截、上线轮询、完整下发后验证、默认不删除、显式单台删除和`write`；真实C600按PON查询、精确冲突预检、包含VLAN 600业务及`mvlan 600`的完整配置、上线轮询、四组解析验证、停止、`Access denied`及不自动`write`
+- **待确认**：Windows`1000x800`普通窗口三步分页布局、分型号连接资料、C300离线候选查询/单选/清空、步骤切换、C600选中后速率设置显示`auto`且预览无`real-speed`、预览失效、底部危险提示/状态/停止完整显示且无需最大化；真实C300注册写入、冲突拦截、上线轮询、完整下发后验证、默认不删除、显式单台删除和`write`；C600 service真实完整注册与清理已通过，仍待Windows UI入口、停止和`Access denied`专项复验
 - **对应测试**：`tests/test_onu_registration_service.py`（双driver语法、两型号单台限制、C300真实输出格式预检/完整验证/同PON单候选清理与身份复核、C600精确ID/SN冲突、VLAN/MVLAN 600、上线轮询和四组解析）、`tests/test_app.py`（统一UI路由、两型号单选、显式清理候选、分型号连接资料、C600参数与禁止write）、`tests/test_onu_registration_store.py`、`tests/test_network_ops.py`（历史C300兼容边界）
 
 ### 2.11 输入持久化与启动 / 打包
 
-- **状态**：已确认验收（测试项「恢复默认」清除全部手动命令并加载固定模板，2026-08-07）/ 已实现未验收（其余输入持久化与打包交互）
+- **状态**：已确认验收（测试项「恢复默认」清除全部手动命令并加载固定模板，2026-08-07；修复后便携ZIP在另一台Windows电脑可正常启动使用，2026-08-18）/ 已实现未验收（其余输入持久化交互）
 - **核心行为**：
   - 升级方式 / 固件路径 / 恢复出厂 / 超级凭据 / 并行数 → `Auto_power_on_off_tool/config/sample_upgrade_settings.ini`
   - OLT型号 / C300与C600各自的OLT IP、源IP、用户名、密码 / C600参数 → `Auto_power_on_off_tool/config/onu_registration.ini`；C300危险删除授权每次打开均恢复关闭，不写成可复用授权
@@ -258,13 +261,14 @@ python scripts\verify_baseline.py
   - 旧工具“电源控制”channel 1～16 的复选框必须严格等于新工具选中配置：`network_card_ip.ini` 中存在且 `enabled=1` 的 `channel_N` 才勾选，其余（不存在或 `enabled=0`）全部取消勾选；同步只读配置，不得改写新工具通道
   - 串口终端窗口位置 + 日志目录 → `~/.aouxue_serial_terminal.json`
   - VS Code `.vscode/launch.json` 中 `LineCheckAssistant` 入口以 `Cheating_machine_execution_tool` 为工作目录；`.venv_serial_upgrade` 配套 `tftpy==0.8.7`
-  - 打包脚本非交互式；`.spec` 落 `line_check_assistant/packaging_specs`
+  - 打包脚本非交互式；`.spec` 落 `line_check_assistant/packaging_specs`；同时生成完整免安装目录与ZIP，脱敏脚本不得覆盖当前运行配置目录，重建输出配置时不得遗留旧文件；生成ZIP前必须检查实际EXE内`tcl\init.tcl`和`tk\tk.tcl`
 - **禁止破坏**：
   - 本机配置文件不入 Git
+  - 免安装发布包不得包含构建电脑的凭据、通知/远程控制资料、本机路径、设备/源IP、ONU ID或硬件绑定；不得只交付无法找到配套配置的孤立EXE
   - INI 转义（含 `%`）不得再触发 `ConfigParser` 内插崩溃
   - 开发使用 `.venv_serial_upgrade`，不污染全局或 `.venv`
-- **对应测试**：`tests/test_sample_upgrade_settings_store.py`、`tests/test_onu_registration_store.py`、`tests/test_legacy_ui_defaults.py`、`tests/test_legacy_ui_defaults_store.py`、`tests/test_test_item_config_store.py`、`tests/test_wifi_interfaces.py`、`tests/test_legacy_power_test_service.py`、`tests/test_app.py`
-- **待确认**：Windows 桌面确认第五个 Tab 只显示四项时间/次数参数，不显示通信方式、Telnet Enable、波特率和默认方案；修改四项并保存/重开确认生效，隐藏三项保持原值；再分别保存 `telnet_default_on=1/0`，确认旧配置镜像及旧工具复选框分别为 `telnet_enable=0/1`；WiFi 页确认 8 项加载/保存、无线网卡刷新及子任务7真实连接结果
+- **对应测试**：`tests/test_sample_upgrade_settings_store.py`、`tests/test_onu_registration_store.py`、`tests/test_legacy_ui_defaults.py`、`tests/test_legacy_ui_defaults_store.py`、`tests/test_test_item_config_store.py`、`tests/test_wifi_interfaces.py`、`tests/test_legacy_power_test_service.py`、`tests/test_app.py`、`tests/test_portable_release.py`
+- **待确认**：修复后便携ZIP已在另一台Windows电脑确认可正常启动使用；该结论不自动覆盖脱敏后首次填写的网卡/串口、业务凭据、配置保存、串口枚举或各真实设备业务入口。当前电脑按约定不启动新EXE。另需桌面确认第五个 Tab 只显示四项时间/次数参数，不显示通信方式、Telnet Enable、波特率和默认方案；修改四项并保存/重开确认生效，隐藏三项保持原值；再分别保存 `telnet_default_on=1/0`，确认旧配置镜像及旧工具复选框分别为 `telnet_enable=0/1`；WiFi 页确认 8 项加载/保存、无线网卡刷新及子任务7真实连接结果
 
 ### 2.12 「全流程执行」子任务编排器（主界面「检查并执行测试」按钮升级）
 

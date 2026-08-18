@@ -2016,11 +2016,11 @@ class LineCheckAssistant(Tk):
 
         c600_field(0, 0, "ONU ID", self.onu_c600_onu_id_var, 8)
         c600_field(0, 2, "ONU 型号", self.onu_c600_onu_type_var, 14)
-        Label(c600_form, text="实际速率", anchor="w").grid(row=0, column=4, sticky="w", padx=(10, 4), pady=5)
+        Label(c600_form, text="速率设置", anchor="w").grid(row=0, column=4, sticky="w", padx=(10, 4), pady=5)
         ttk.Combobox(
             c600_form,
             textvariable=self.onu_c600_real_speed_var,
-            values=("xgspon", "xgpon", "gpon", "auto"),
+            values=("auto", "xgspon", "xgpon", "gpon"),
             state="readonly",
             width=10,
         ).grid(row=0, column=5, sticky="ew", padx=(0, 8), pady=5)

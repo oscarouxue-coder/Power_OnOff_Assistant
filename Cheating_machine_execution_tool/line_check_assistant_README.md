@@ -42,8 +42,8 @@
 - 写样机参数窗口中的「清空参数」「退出老化」使用标准勾选框：选中时显示“✓”，默认不勾选；仅选中时才会在工厂模式二次登录后下发对应命令。
 - 主界面“写样机参数”已默认改走 Telnet 路径，与其他涉及串口的流程（页面升级 / 全包升级 / 串口终端）保持隔离。每台样机以 `ChannelConfig.network_card_ip`（PC 静态 IP）作为 TCP 源 IP、按 `device_manage_ip:23` 连接样机；多张同网段网卡下通过 `socket.create_connection(... source_address=(bind_ip, 0))` 锁定 PC 出口，与全包升级 `Tftp指令` 严格绑定 VLAN IP 同语义。前置阶段先通过本机自写的 UBUS HTTP 客户端（不复用 `SdmcUbusLib`）登录样机的 web 管理，按与 `SdmcUbusLibEnableTelnet.Enable_telnet` 相同的协议打开 `Device.Firewall.<X_SDMC_>Security.AccessCtrl` 下的 LAN-telnet 规则（含 Device.IP.Interface.1 → lan 回退），主程序执行日志依次记录每条规则操作和成功标志。参数表仍以 `VLAN` 列匹配主界面已勾选通道，可并行 1–8 台（默认 1；多台并发易撞 UBUS HTTP / telnet login / NIC，Spinbox 仍允许现场上调）；预检重复/缺失 VLAN、MAC 格式、必填参数和危险字符。通过「选择参数表...」选中的路径会立即写入本机 `sample_upgrade_settings.ini`；关闭再打开写参窗口会显示并自动重新加载该表，全流程子任务 4 也会立即用同一路径刷新状态。写样机参数窗口新增两个 Checkbutton：「清空参数」（默认关闭，勾选后第 6 步下发 `ppctl clear`）、「退出老化」（默认关闭，勾选后第 5 步下发 `ppctl set AGING_STATE=1`）；两个选项关闭时主执行日志分别输出 `清空参数：关闭，跳过` / `退出老化：关闭，跳过`。写参时序按 9 步自然顺序执行：1. 进入工厂模式（`ppctl set FACTORY_MODE=1`）→ 2. `firstboot -yr` → 3. 等待 100 秒 → 4. 工厂模式二次登录 → 5. 退出老化（可选）→ 6. `ppctl clear`（可选）→ 7. 写入并读回校验全部 15 项参数 → 8. 退出工厂模式（`ppctl set FACTORY_MODE=0`）→ 9. `firstboot -yr`（8/9 步在 `finally` 中执行）。每台先登录再按固定工厂模式流程写入 15 项参数并执行 `ppctl get` 读回校验（每项最多 3 次）；单台失败不取消其他样机，取消批次时会停止后续命令并尝试退出工厂模式。按项目约定，账号、密码类值允许在界面、终端和日志中明文显示。源 IP 不可绑时强提示人工检查 `network_card_ip.ini`，不回退 `0.0.0.0`。
 - “写样机参数 → 生成批量参数表...”会按已勾选 VLAN 生成一行一台的 `.xlsx` 表。MAC前6位由操作员输入（默认`020000`），必须是6个十六进制字符，兼容`02:00:00`或`02-00-00`分隔形式；输入非十六进制、长度错误或组播前缀时会拒绝生成。程序为每台追加唯一的后6位随机十六进制字符，输出统一为大写冒号格式。普通SN只使用数字字符：前缀必须为纯数字（默认`12345678`），随机后缀也只生成`0–9`，前缀长度加随机后缀长度不得超过16位，默认配置生成16位，超过上限或前缀含非数字字符时会拒绝生成。XPON SN固定12位：操作员填写固定4位前缀（默认`XPON`），程序追加8位唯一的大写十六进制后缀（仅`0–9/A–F`）；前缀不是4位时会拒绝生成。为兼容既有参数表，XPON SN仍写入`GPON SN`列。2.4G / 5G SSID 后缀自动取本机 MAC 末 4 位十六进制（同一行两个 SSID 共享后缀，便于与本机 MAC 强对应）。生成窗口可统一填写密码、国家码、产品名、用户账号和 IP；保存后自动加载并预检，不会自动写入设备。窗口创建完成后会相对“写样机参数”窗口居中，并在映射后按20/120/360ms执行客户区尺寸刷新，避免Windows首次打开只显示透明窗口。新表使用唯一表头 `VLAN`、`SN`、`GPON SN`、`MAC`、`2.4G SSID`、`2.4G WiFi Password`、`5G SSID`、`5G WiFi Password`、`2.4G Country Code`、`5G Country Code`、`Product Class`、`Superuser Name`、`Superuser Password`、`User Name`、`User Password`、`IP`；导入仍兼容旧表共用 `WiFi Password` / `Country code` 列的格式。
-- 主界面顶部提供统一“ONU注册”入口，窗口当前默认和最小尺寸均为 `1000x800`，按“1. 查询 ONU → 2. 配置业务 → 3. 确认执行”三个步骤统一操作中兴 C300 和 C600。OLT 型号、OLT IP、必须显式绑定的源 IP、用户名、密码、登录测试及连接状态固定显示在分页上方；登录测试只验证指定源 IP 到 OLT 的 Telnet 登录，不进入配置模式。第一步中，C300执行全局`show gpon onu uncfg`，C600填写机框/槽位/PON并执行`show pon onu uncfg gpon_olt-... sn model speed-mode`；两种型号的查询结果都使用单选且一次只允许注册一台，不显示“全选”。C300选中后点击“下一步：配置业务”，C600选中后自动带入型号和速率并进入第二步。第二步按型号切换：C300显示SD-41固定模板摘要和危险删除开关，C600核对ONU ID、型号、实际速率、T-CONT、GEM Port、VPort、SN双重绑定及逐行`ServiceID,VLAN`映射。点击“生成预览并进入下一步”后，第三步同时显示OLT/目标/安全策略摘要、完整命令和唯一的“开始注册”按钮；预览不连接OLT、不混用C300/C600 CLI，也不生成`write`。型号、连接、选择或业务参数变化会使旧预览失效，必须重新生成；顶层只让Notebook区域随窗口伸缩，危险提示、查询/执行状态、停止和关闭会在普通窗口下固定预留空间，无需最大化窗口。
-- 实际注册统一按“重新查询/精确冲突预检 → 逐条下发 → 最长60秒可停止上线轮询 → 型号专属完整只读验证”执行，所有阶段、实际命令、返回、停止和失败均写入主执行日志。C300继续使用 `gpon-olt_` / `gpon-onu_`、SD-41固定业务模板和`mvlan 600`；下发前确认目标仍未注册、ONU ID未占用且SN未在整台OLT注册，下发后核对身份与working状态、T-CONT/GEM/VPort、六组service-port/远端业务及MVLAN。“配置失败时允许删除选中的同PON离线ONU后重试”默认关闭且不会保存；启用后必须先点击“查询同 PON 离线候选”并明确选择一台，执行失败时还会重新核对该ONU仍在目标PON离线列表且接口/SN未变化，才只下发这一台的`no onu`，禁止批量或跨PON删除。C600使用 `gpon_olt-` / `gpon_onu-` / `vport-` 命令体系，精确检查目标ONU ID和全OLT SN；业务映射必须包含VLAN 600，并在`pon-onu-mng gpon_onu-...`上下文固定下发`mvlan 600`，随后解析collection、service-port、detail-info和MVLAN四组回读，配置存在但ONU未进入working不会报成功。C600仍永不自动删除ONU，也不提供自动`write`。C300成功后单独询问是否执行`write`，C600只提示由操作员按现场要求手工决定。C300与C600分别保存OLT IP、锁定源IP、用户名和密码，切换型号不会串用另一型号资料；已知默认分别为C300 `172.18.18.151`经`172.18.18.40`、C600 `172.18.18.152`经`172.33.5.35`。运行配置保存在本机`Auto_power_on_off_tool/config/onu_registration.ini`且不提交Git。2026-08-18已分别使用真实C300和C600核对所需只读输出与C600 `mvlan` CLI帮助，未执行注册、删除或`write`；真实注册写入和Windows界面仍待验收。
+- 主界面顶部提供统一“ONU注册”入口，窗口当前默认和最小尺寸均为 `1000x800`，按“1. 查询 ONU → 2. 配置业务 → 3. 确认执行”三个步骤统一操作中兴 C300 和 C600。OLT 型号、OLT IP、必须显式绑定的源 IP、用户名、密码、登录测试及连接状态固定显示在分页上方；登录测试只验证指定源 IP 到 OLT 的 Telnet 登录，不进入配置模式。第一步中，C300执行全局`show gpon onu uncfg`，C600填写机框/槽位/PON并执行`show pon onu uncfg gpon_olt-... sn model speed-mode`；两种型号的查询结果都使用单选且一次只允许注册一台，不显示“全选”。C300选中后点击“下一步：配置业务”，C600选中后自动带入型号、把速率设置默认为`auto`并进入第二步；发现结果中的Speed Mode只表示当前ONU能力，不代表该型号支持`real-speed`命令。第二步按型号切换：C300显示SD-41固定模板摘要和危险删除开关，C600核对ONU ID、型号、速率设置、T-CONT、GEM Port、VPort、SN双重绑定及逐行`ServiceID,VLAN`映射；`auto`表示不下发`real-speed`，只有操作员明确选择其它值才生成该命令。点击“生成预览并进入下一步”后，第三步同时显示OLT/目标/安全策略摘要、完整命令和唯一的“开始注册”按钮；预览不连接OLT、不混用C300/C600 CLI，也不生成`write`。型号、连接、选择或业务参数变化会使旧预览失效，必须重新生成；顶层只让Notebook区域随窗口伸缩，危险提示、查询/执行状态、停止和关闭会在普通窗口下固定预留空间，无需最大化窗口。
+- 实际注册统一按“重新查询/精确冲突预检 → 逐条下发 → 最长60秒可停止上线轮询 → 型号专属完整只读验证”执行，所有阶段、实际命令、返回、停止和失败均写入主执行日志。C300继续使用 `gpon-olt_` / `gpon-onu_`、SD-41固定业务模板和`mvlan 600`；下发前确认目标仍未注册、ONU ID未占用且SN未在整台OLT注册，下发后核对身份与working状态、T-CONT/GEM/VPort、六组service-port/远端业务及MVLAN。“配置失败时允许删除选中的同PON离线ONU后重试”默认关闭且不会保存；启用后必须先点击“查询同 PON 离线候选”并明确选择一台，执行失败时还会重新核对该ONU仍在目标PON离线列表且接口/SN未变化，才只下发这一台的`no onu`，禁止批量或跨PON删除。C600使用 `gpon_olt-` / `gpon_onu-` / `vport-` 命令体系，精确检查目标ONU ID和全OLT SN；业务映射必须包含VLAN 600，并在`pon-onu-mng gpon_onu-...`上下文固定下发`mvlan 600`，随后解析collection、service-port、detail-info和MVLAN四组回读，配置存在但ONU未进入working不会报成功。C600仍永不自动删除ONU，也不提供自动`write`。C300成功后单独询问是否执行`write`，C600只提示由操作员按现场要求手工决定。C300与C600分别保存OLT IP、锁定源IP、用户名和密码，切换型号不会串用另一型号资料；已知默认分别为C300 `172.18.18.151`经`172.18.18.40`、C600 `172.18.18.152`经`172.33.5.35`。运行配置保存在本机`Auto_power_on_off_tool/config/onu_registration.ini`且不提交Git。2026-08-18已用真实C600 NP7287XGS完成一台ONU的精确预检、9组业务、SN双重绑定、MVLAN 600、OffLine/syncMib至working轮询及四组回读；验证后按项目负责人授权删除该测试ONU，并确认ONU ID/SN释放且重新回到未注册列表，全程未执行`write`。Windows三步界面仍待复验。
 - 为每个通道选择实际接入的 Windows 网卡名称。
 - 网卡列表优先读取 `Get-NetAdapter -IncludeHidden`，可显示禁用、断开和隐藏网卡；界面显示状态，例如 `[Connected]`、`[Disconnected]`。
 - 保存每个通道的 PC 静态 IP、样机管理 IP、子网掩码、启用状态。
@@ -161,17 +161,26 @@ python .\run_line_check_assistant.py
 - `power_operation`（默认 `up`，非法值回退 `up`）—— 全流程执行「自动上/下电」子任务的上/下电选项。
 - `parameter_table_path`（默认空串）—— 全流程执行「写样机参数」子任务的参数表文件路径（`.xlsx`/`.xls`/`.csv`）。
 
-## 打包建议
+## 打包与免安装发布
 
-安装 PyInstaller 后，可在 `开关机执行工具` 目录执行：
+安装 PyInstaller 后，在 `Cheating_machine_execution_tool` 目录执行：
 
 ```powershell
 .\build_line_check_assistant.ps1
 ```
 
-生成的 EXE 位于 `dist\LineCheckAssistant.exe`。
+一次构建会生成三种输出：
+
+- `dist\LineCheckAssistant.exe`：单文件 EXE，仅适合开发侧留档或手工配套配置。
+- `dist\LineCheckAssistant_portable\`：可直接复制的完整免安装目录。
+- `dist\LineCheckAssistant_portable.zip`：推荐复制到另一台电脑的压缩包；必须完整解压后再运行，不能只取出 EXE。
+
+便携目录包含 EXE、`PORTABLE_README.txt`、第三方声明、SHA256 文件和程序所需的 `Auto_power_on_off_tool\config`。构建时只把当前配置当作字段/业务模板，自动清空当前电脑的 OLT/DUT/升级账号密码、OLT/源IP、ONU ID、钉钉和远程控制信息、固件/参数表路径、项目版本，以及网卡、串口和无线网卡绑定；C600业务映射等业务默认模板继续保留。另一台电脑首次运行前必须重新填写网络、测试项、升级/写参和ONU注册配置。
+
+Tkinter资源必须按PyInstaller运行时约定放在EXE内部的`tcl`和`tk`根目录。构建脚本会在生成便携包前检查归档中的`tcl\init.tcl`和`tk\tk.tcl`；缺失时构建直接失败，不能交付。若目标电脑曾解压过旧包，应删除旧解压目录后重新完整解压，避免继续运行旧EXE。
+
 生成的 `.spec` 文件统一保存到 `line_check_assistant\packaging_specs`。
 
-每次重新打包出最新版 EXE 后，不在当前 PC 直接运行 `dist\LineCheckAssistant.exe`；只确认打包成功，并向用户报告输出路径。
+每次重新打包出最新版 EXE 后，不在当前 PC 直接运行 `dist\LineCheckAssistant.exe`或便携目录中的 EXE；只检查构建结果、ZIP清单、配置脱敏和SHA256，并向用户报告输出路径。
 
 打包后程序会从 EXE 所在目录、上级目录中查找 `Auto_power_on_off_tool/config` 文件夹；程控电源协议已内置，不再依赖 `Auto_Power_On_Off_Tool.exe`。

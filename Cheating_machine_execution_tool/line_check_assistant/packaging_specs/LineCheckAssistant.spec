@@ -1,4 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_submodules
+
+hiddenimports = ['requests_toolbelt.adapters.source', 'paramiko', 'ping3', 'pywifi', 'configobj', 'psutil', 'test_case.powe_on_off_telnet', 'test_case.power_on_off_ssh']
+hiddenimports += collect_submodules('tftpy')
+hiddenimports += collect_submodules('openpyxl')
+hiddenimports += collect_submodules('xlrd')
 
 
 block_cipher = None
@@ -6,11 +12,11 @@ block_cipher = None
 
 a = Analysis(
     ['..\\..\\run_line_check_assistant.py'],
-    pathex=[],
+    pathex=['.\\Auto_power_on_off_tool'],
     binaries=[],
     datas=[],
-    hiddenimports=[],
-    hookspath=['F:\\Aouxue\\开关机环境搭建工具\\开关机执行工具\\line_check_assistant\\packaging_hooks'],
+    hiddenimports=hiddenimports,
+    hookspath=['F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool\\line_check_assistant\\packaging_hooks'],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],

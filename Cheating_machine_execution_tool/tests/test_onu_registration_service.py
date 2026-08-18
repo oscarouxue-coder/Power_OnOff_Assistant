@@ -340,12 +340,28 @@ class DriverTests(unittest.TestCase):
         broken[-1] = "Multicast VLAN: 601\nZXAN#"
         self.assertIn("组播 VLAN 600 验证失败", driver.validate_verification(request, broken))
 
-    def test_c600_mapping_and_speed_helpers_match_reference_input(self):
+    def test_c600_mapping_and_discovered_speed_defaults_to_auto(self):
         self.assertEqual(
             parse_service_mappings("1,170\n2:335"),
             [OnuServiceMapping(1, 170), OnuServiceMapping(2, 335)],
         )
-        self.assertEqual(speed_mode_to_cli("XGS-PON"), "xgspon")
+        self.assertEqual(speed_mode_to_cli("XGS-PON"), "auto")
+        self.assertEqual(speed_mode_to_cli("GPON"), "auto")
+
+    def test_c600_auto_speed_omits_real_speed_command_and_verification(self):
+        driver = ZteC600OnuDriver()
+        request = replace(make_c600_request(), real_speed="auto")
+
+        commands = driver.build_provision_commands(request)
+        verification = c600_verify_responses()
+        collection_command = driver.build_verify_commands(request)[0]
+        verification[collection_command] = verification[collection_command].replace(
+            "  real-speed xgspon\n", ""
+        )
+
+        self.assertFalse(any(command.startswith("real-speed ") for command in commands))
+        outputs = [verification[command] for command in driver.build_verify_commands(request)]
+        self.assertEqual(driver.validate_verification(request, outputs), [])
 
     def test_c600_mvlan_verification_requires_fixed_vlan_600(self):
         driver = ZteC600OnuDriver()

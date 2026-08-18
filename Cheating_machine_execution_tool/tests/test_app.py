@@ -2719,6 +2719,25 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         context._on_onu_selection_toggled.assert_called_once_with(onu, variable)
         context.onu_notebook.select.assert_called_once_with(context.onu_config_tab)
 
+    def test_c600_discovery_defaults_speed_command_to_auto(self):
+        onu = DiscoveredOnu(
+            family=OLT_FAMILY_C600,
+            pon_interface="gpon_olt-1/1/5",
+            serial_number="SDMC176D42AA",
+            model="NP7287XGS",
+            speed_mode="XGS-PON",
+        )
+        context = SimpleNamespace(
+            onu_c600_onu_type_var=Mock(),
+            onu_c600_real_speed_var=Mock(),
+            _set_onu_query_status=Mock(),
+        )
+
+        LineCheckAssistant._fill_c600_from_discovered_onu(context, onu)
+
+        context.onu_c600_onu_type_var.set.assert_called_once_with("NP7287XGS")
+        context.onu_c600_real_speed_var.set.assert_called_once_with("auto")
+
     def test_invalidating_onu_preview_clears_commands_and_disables_registration(self):
         context = SimpleNamespace(
             onu_preview_ready=True,
@@ -2914,6 +2933,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
                 c600_source_ip="172.33.5.35",
                 c600_username="admin",
                 c600_password="secret",
+                c600_real_speed="xgspon",
                 c600_shelf=1,
                 c600_slot=2,
                 c600_pon=3,

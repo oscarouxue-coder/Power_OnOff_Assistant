@@ -2,6 +2,46 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-18 - 确认便携版目标机启动
+
+- 类型：真实样机验收 / 状态更新
+- 背景：修复PyInstaller Tcl/Tk资源目录并重新生成便携ZIP后，项目负责人在另一台电脑删除旧目录、重新解压并启动新包，反馈“可以正常使用了”。
+- 完成内容：① 将修复后便携包在目标Windows电脑正常启动和基本使用登记为已确认验收；② `PROJECT_STATUS.md`与`ACCEPTANCE_BASELINE.md §2.11`同步移除该启动复验待办；③ 验收范围仅覆盖完整解压后的程序启动与正常进入使用状态，不扩大为ONU注册、升级、写参、串口或其它真实设备业务的整体验收。
+- 修改文件：`DEVELOPMENT_LOG.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`。
+- 验证方法：项目负责人在目标Windows电脑使用修复后的`LineCheckAssistant_portable.zip`完成现场启动复验；文档更新后在主源码目录执行`python scripts/verify_baseline.py`与`git diff --check`。
+- 验证结果：目标电脑不再出现`pyi_rth__tkinter`/Tcl目录错误，修复后便携版可正常使用；自动化基线仍为679项单元测试、57个源码文件编译覆盖、157个强制基线测试全部通过。
+- 后续待办：各业务入口仍按原状态分别验收；便携发布后续构建继续由EXE归档门禁保护`tcl\init.tcl`和`tk\tk.tcl`。
+
+## 2026-08-18 - 修正免安装版Tk启动失败
+
+- 类型：BUG 修复 / 构建
+- 背景：项目负责人在另一台电脑完整解压并启动首次便携ZIP时，程序在主界面出现前报`Failed to execute script 'pyi_rth__tkinter'`和`Tcl data directory ...\_MEI...\tcl not found`。旧构建只检查PE头、ZIP、哈希与配置脱敏，没有核对PyInstaller内部资源目录，因此未拦住这个启动前故障。
+- 完成内容：① 读取PyInstaller 5.10.1实际`pyi_rth__tkinter`确认运行时固定查找`sys._MEIPASS/tcl`和`sys._MEIPASS/tk`；② 用旧EXE归档清单确认自定义hook错误地把同一批资源放在`_tcl_data/_tk_data`，根因与现场报错一致；③ 自定义hook改为按当前`_tkinter.TCL_VERSION/TK_VERSION`采集，并放入准确的`tcl/tk`根目录，源目录缺失时构建直接失败；④ 构建脚本新增EXE归档门禁，必须实际命中`tcl\init.tcl`和`tk\tk.tcl`才允许生成便携目录/ZIP；⑤ 增加hook目录契约和构建门禁回归并纳入强制基线，重新构建发布包且未在当前电脑启动EXE。
+- 修改文件：`.claude/plans/portable_tkinter_runtime_fix.md`、`Cheating_machine_execution_tool/line_check_assistant/packaging_hooks/hook-_tkinter.py`、`Cheating_machine_execution_tool/build_line_check_assistant.ps1`、`Cheating_machine_execution_tool/tests/test_portable_release.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：用`PyInstaller.utils.cliutils.archive_viewer -l`分别检查旧/新EXE内部目录，执行`python -m unittest discover -s tests -p test_portable_release.py -v`、`python scripts/verify_baseline.py`和`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1`；构建后只读复核归档目录、ZIP清单、PE/哈希和脱敏配置，不运行EXE。
+- 验证结果：旧EXE实际只有`_tcl_data/_tk_data`；修复后归档明确包含`tcl\init.tcl`和`tk\tk.tcl`，旧错误根目录均不存在，构建门禁通过。发布专项5项`OK`；完整门禁679项单元测试、57个源码文件编译覆盖、157个强制基线测试、8条MUST_EXIST和1条MUST_NOT_EXIST全部通过。新ZIP含11个条目与6个脱敏INI，EXE记录哈希一致，SHA256为`636FCA061E2D14A5C988CB5567728EE0CA0C2D24CB26B7C0BF505152C20C30F8`；按项目边界未在当前电脑运行EXE。
+- 后续待办：项目负责人在目标电脑删除旧解压目录，重新复制并完整解压新ZIP，启动确认不再出现`pyi_rth__tkinter`/Tcl目录错误；启动结果确认前保持“目标电脑运行待复验”，不升级为已验收。
+
+## 2026-08-18 - 生成脱敏免安装发布包
+
+- 类型：构建 / 发布优化
+- 背景：项目负责人需要把当前程序带到另一台电脑运行，要求按建议提供完整免安装目录并避免复制本机运行配置。原脚本只生成单文件EXE，程序离开当前目录后缺少`Auto_power_on_off_tool/config`，且直接复制现有配置会泄露凭据、路径和硬件绑定。
+- 完成内容：① 新增独立脱敏脚本，固定生成6个运行INI并整体替换便携配置目录，清空OLT/DUT/升级账号密码、OLT/源IP、ONU ID、钉钉/远程控制/邮件、固件和参数表路径、项目身份、网卡、串口与无线网卡绑定，保留测试命令和C600业务映射；② 构建脚本在原单文件EXE之外生成`LineCheckAssistant_portable`完整目录和同名ZIP，随包放置操作说明、第三方声明和EXE SHA256，并限制递归清理只能位于`dist`；③ 构建原生失败码、预期文件和ZIP存在性都改为显式失败；④ 增加脱敏值不泄漏、当前配置目录不可覆盖、便携结构和构建脚本不得启动EXE的回归并纳入强制基线；⑤ 实际完成最新版构建，未在当前电脑运行任何新EXE。
+- 修改文件：`.claude/plans/portable_release_bundle.md`、`Cheating_machine_execution_tool/build_line_check_assistant.ps1`、`Cheating_machine_execution_tool/scripts/create_portable_config.py`、`Cheating_machine_execution_tool/line_check_assistant/packaging_assets/PORTABLE_README.txt`、`Cheating_machine_execution_tool/line_check_assistant/packaging_specs/LineCheckAssistant.spec`、`Cheating_machine_execution_tool/tests/test_portable_release.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行便携版专项测试、`python scripts/verify_baseline.py`和`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1`；构建后只读检查PE头、目录/ZIP清单、记录哈希与实际SHA256一致性，并将当前运行INI的受保护值与便携INI全文交叉扫描。
+- 验证结果：便携版专项4项`OK`；完整门禁678项单元测试、57个源码文件编译覆盖、156个强制基线测试、8条MUST_EXIST和1条MUST_NOT_EXIST全部通过；EXE为有效`MZ`头，ZIP包含11个条目，6类脱敏检查全部为True，SHA256为`F57567E6A62CD8116B225874E7B1574E7E2A10C75921EBE27A63EBA50974C9D9`。生成`dist/LineCheckAssistant_portable.zip`（62,785,324字节）和完整目录；按项目边界未运行EXE，因此不把构建检查视为另一台Windows电脑的启动或真实业务验收。
+- 后续待办：在目标Windows 10/11电脑完整解压ZIP，以管理员身份启动；按`PORTABLE_README.txt`重新配置网卡/VLAN/源IP、COM、各业务凭据和文件路径，再完成主界面、保存/重开和实际所需业务入口的现场验收。
+
+## 2026-08-18 - 修正C600速率下发并完成实机验证
+
+- 类型：BUG 修复
+- 背景：项目负责人要求直接使用一台未注册ONU走完当前C600注册与业务逻辑并修复现场问题。首次真实执行中，ONU ID/SN预检和注册成功，但NP7287XGS在ONU接口下拒绝自动生成的`real-speed xgspon`，返回`%Error 230240: Not support this function.`；detail-info显示该型号无需此命令便会自动进入XGS-PON。
+- 完成内容：① C600发现结果中的Speed Mode改为能力信息，选中ONU后速率设置统一默认为`auto`，命令预览、配置和验证均省略`real-speed`；操作员仍可明确选择xgspon/xgpon/gpon作为其它型号的手工覆盖；② 新安装/缺省配置的C600速率默认值同步改为`auto`，已有手工值继续保留；③ 增加发现默认auto、auto不生成/不验证real-speed、界面选中回填auto及store缺省回归，两项关键行为加入强制基线；④ 使用同一台真实NP7287XGS从未注册状态再次执行完整service，精确ID/SN预检、9组业务、SN双重绑定、MVLAN 600、7次OffLine/syncMib/working轮询和四组解析全部成功；⑤ 按项目负责人明确授权删除测试ONU，删除前复核身份，删除后确认ID/SN为空且第5次查询重新回到未注册列表；另一台未注册ONU未处理，全程未执行`write`。
+- 修改文件：`.claude/plans/c600_live_registration_validation.md`、`Cheating_machine_execution_tool/src/core/zte_c600_onu.py`、`Cheating_machine_execution_tool/line_check_assistant/onu_registration_store.py`、`Cheating_machine_execution_tool/tests/test_onu_registration_service.py`、`Cheating_machine_execution_tool/tests/test_onu_registration_store.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行ONU service/driver、主程序、配置store专项测试与`python scripts/verify_baseline.py`；真实C600从未注册发现开始执行完整service并核对实际TX/返回，成功后以精确身份保护删除测试ONU，再查询baseinfo、全OLT SN和未注册列表确认清理。
+- 验证结果：ONU service/driver专项27项、主程序专项157项、配置store专项5项均`OK`；真实C600完整service返回`已完成 1 个 C600 ONU 注册配置和只读验证（未执行 write）`，最终清理三项确认全部通过；完整基线门禁674项单元测试通过，57个源码文件编译覆盖、152个强制基线测试实际执行，最终`ALL CHECKS PASSED`。本次证明C600 service与实际命令链，不替代Windows三步UI、停止及Access denied专项验收。
+- 后续待办：项目负责人在Windows源码版查询C600未注册ONU，确认选中NP7287XGS后速率设置为`auto`、预览无`real-speed`，再按现场需要复验UI注册；补充停止和Access denied专项场景。C300真实注册边界保持待验收。
+
 ## 2026-08-18 - 修复全流程读取已销毁ONU控件
 
 - 类型：BUG 修复

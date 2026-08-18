@@ -250,6 +250,7 @@ REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
     "test_onu_registration_service.DriverTests.test_c600_mvlan_verification_requires_fixed_vlan_600",
     "test_onu_registration_service.DriverTests.test_c600_precheck_uses_exact_id_and_global_sn_queries",
     "test_onu_registration_service.DriverTests.test_c600_requires_vlan_600_when_mvlan_is_fixed",
+    "test_onu_registration_service.DriverTests.test_c600_auto_speed_omits_real_speed_command_and_verification",
     "test_onu_registration_service.ServiceTests.test_c600_register_runs_global_precheck_readiness_and_full_verification",
     "test_onu_registration_service.ServiceTests.test_c600_offline_after_config_is_not_reported_success",
     "test_onu_registration_service.ServiceTests.test_both_olt_families_reject_multi_onu_registration",
@@ -261,10 +262,16 @@ REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
     "test_app.CurrentChannelSelectionTests.test_onu_window_reserves_bottom_rows_without_maximizing",
     "test_app.CurrentChannelSelectionTests.test_c600_success_never_offers_automatic_write",
     "test_app.CurrentChannelSelectionTests.test_c300_register_passes_only_explicit_cleanup_interface",
+    "test_app.CurrentChannelSelectionTests.test_c600_discovery_defaults_speed_command_to_auto",
     "test_app.CurrentChannelSelectionTests.test_onu_input_change_clears_stale_c300_cleanup_candidates",
     "test_app.CurrentChannelSelectionTests.test_current_onu_registration_config_ignores_destroyed_services_text",
     "test_pipeline_window.BuildContextRegressionTests.test_build_context_uses_saved_onu_config_after_services_text_is_destroyed",
     "test_onu_registration_store.OnuRegistrationStoreTests.test_save_and_load_preserves_dual_olt_settings",
+    "test_portable_release.PortableReleaseConfigTests.test_portable_config_removes_secrets_and_machine_bindings",
+    "test_portable_release.PortableReleaseConfigTests.test_destination_cannot_replace_live_source_config",
+    "test_portable_release.PortableReleaseConfigTests.test_nonempty_destination_is_refused_without_deleting_existing_files",
+    "test_portable_release.PortableReleaseBuildScriptTests.test_tkinter_hook_uses_runtime_expected_tcl_and_tk_roots",
+    "test_portable_release.PortableReleaseBuildScriptTests.test_build_script_creates_directory_zip_hash_and_never_launches_exe",
 )
 
 # 2. 必须命中(§1.3 / §1.4) - (pattern, 搜索目录组)

@@ -378,5 +378,8 @@ def parse_service_mappings(text: str):
 
 
 def speed_mode_to_cli(speed_mode: str) -> str:
-    normalized = (speed_mode or "").strip().upper().replace("_", "-")
-    return {"XGS-PON": "xgspon", "XG-PON": "xgpon", "GPON": "gpon"}.get(normalized, "auto")
+    # 发现结果中的Speed Mode是当前光模块能力，不代表该ONU型号支持real-speed命令。
+    # 实机NP7287XGS会自动进入XGS-PON，但拒绝`real-speed xgspon`；发现后默认不下发，
+    # 操作员仍可在配置页明确选择xgspon/xgpon/gpon作为型号专用覆盖。
+    _ = speed_mode
+    return "auto"
