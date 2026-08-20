@@ -20,6 +20,7 @@ from src.models.onu_registration_models import (
     OnuDiscoveryScope,
     OnuOperationResult,
     OnuProvisionRequest,
+    RegisteredOnu,
 )
 
 
@@ -383,3 +384,181 @@ class OnuRegistrationService:
         except Exception as exc:
             self._log(family, f"保存失败：{exc}")
             return OnuOperationResult(False, f"OLT 配置保存失败：{exc}")
+
+    def query_registered_candidates(
+        self,
+        family: str,
+        connection: OltConnection,
+        pon_interface: str,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> OnuOperationResult:
+        """只读查询目标 PON 口下已注册 ONU（不区分状态）。"""
+        driver = driver_for_family(family)
+        commands: list[str] = []
+        outputs: list[str] = []
+        try:
+            self._log(family, f"开始查询目标 PON 口已注册 ONU：{pon_interface}")
+            with self.session_type(
+                connection,
+                logger=lambda text: self._log(family, text),
+                cancel_event=cancel_event,
+            ) as session:
+                if family == OLT_FAMILY_C300:
+                    terminal = session.execute("terminal length 0")
+                    commands.append("terminal length 0")
+                    outputs.append(terminal)
+                    query_command = driver.build_registered_query_command(pon_interface)
+                    state_output = session.execute(query_command, timeout=30)
+                    commands.append(query_command)
+                    outputs.append(state_output)
+                    candidates = driver.parse_registered_candidates(pon_interface, state_output)
+                    enriched: list[RegisteredOnu] = []
+                    for candidate in candidates:
+                        identity_command = driver.build_delete_identity_command(candidate)
+                        identity_output = session.execute(
+                            identity_command,
+                            timeout=20,
+                            fail_on_cli_error=False,
+                        )
+                        commands.append(identity_command)
+                        outputs.append(identity_output)
+                        baseinfo = driver.parse_baseinfo(identity_output)
+                        item = baseinfo[0] if baseinfo else None
+                        enriched.append(
+                            RegisteredOnu(
+                                family=candidate.family,
+                                pon_interface=candidate.pon_interface,
+                                onu_interface=candidate.onu_interface,
+                                onu_id=candidate.onu_id,
+                                state=candidate.state,
+                                serial_number=item["serial_number"] if item else "",
+                                onu_type=item["type"] if item else "",
+                            )
+                        )
+                else:
+                    query_command = driver.build_registered_query_command(pon_interface)
+                    config_output = session.execute(query_command, timeout=30)
+                    commands.append(query_command)
+                    outputs.append(config_output)
+                    location = pon_interface.split("-", 1)[1]
+                    enriched = []
+                    for onu_id, onu_type, serial_number in driver.parse_registered_onu_defs(config_output):
+                        state_command = driver.build_onu_state_command(pon_interface, onu_id)
+                        state_output = session.execute(
+                            state_command,
+                            timeout=30,
+                            fail_on_cli_error=False,
+                        )
+                        commands.append(state_command)
+                        outputs.append(state_output)
+                        state_label = driver.parse_onu_state_label(state_output)
+                        enriched.append(
+                            RegisteredOnu(
+                                family=family,
+                                pon_interface=pon_interface,
+                                onu_interface=f"gpon_onu-{location}:{onu_id}",
+                                onu_id=onu_id,
+                                state=state_label,
+                                serial_number=serial_number,
+                                onu_type=onu_type,
+                            )
+                        )
+            message = (
+                f"查询到 {len(enriched)} 个已注册 ONU，请选择要删除的一台"
+                if enriched
+                else "目标 PON 口未查询到已注册 ONU"
+            )
+            self._log(family, message)
+            return OnuOperationResult(
+                True,
+                message,
+                output="\n\n".join(outputs),
+                registered_onus=tuple(enriched),
+                commands=tuple(commands),
+            )
+        except OperationCancelled as exc:
+            self._log(family, str(exc))
+            return OnuOperationResult(False, str(exc), output="\n\n".join(outputs), commands=tuple(commands))
+        except Exception as exc:
+            self._log(family, f"已注册 ONU 查询失败：{exc}")
+            return OnuOperationResult(
+                False,
+                f"已注册 ONU 查询失败：{exc}",
+                output="\n\n".join(outputs),
+                commands=tuple(commands),
+            )
+
+    def delete_registered_onu(
+        self,
+        family: str,
+        connection: OltConnection,
+        candidate: RegisteredOnu,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> OnuOperationResult:
+        """删除明确指定的一台已注册 ONU（任意状态）：删除前身份复核、只删这一台、删除后回读验证。"""
+        driver = driver_for_family(family)
+        if candidate.family != family:
+            return OnuOperationResult(False, f"删除目标型号不匹配：{candidate.family} != {family}")
+        all_commands: list[str] = []
+        all_outputs: list[str] = []
+        session = self.session_type(
+            connection,
+            logger=lambda text: self._log(family, text),
+            cancel_event=cancel_event,
+        )
+        try:
+            session.connect()
+            if family == OLT_FAMILY_C300:
+                terminal = session.execute("terminal length 0")
+                all_commands.append("terminal length 0")
+                all_outputs.append(terminal)
+            self._log(family, f"删除前复核目标 ONU 身份：{candidate.onu_interface}")
+
+            identity_command = driver.build_delete_identity_command(candidate)
+            identity_output = session.execute(identity_command, timeout=20, fail_on_cli_error=False)
+            all_commands.append(identity_command)
+            all_outputs.append(identity_output)
+            baseinfo = driver.parse_baseinfo(identity_output)
+            current = baseinfo[0] if baseinfo else None
+            if current is None:
+                raise RuntimeError("删除前无法确认目标 ONU 身份，拒绝删除")
+            if current["interface"].lower() != candidate.onu_interface.lower():
+                raise RuntimeError("目标 ONU 接口已变化，拒绝删除")
+            if candidate.serial_number and current["serial_number"].upper() != candidate.serial_number.upper():
+                raise RuntimeError("目标 ONU SN 已变化，拒绝删除")
+
+            self._log(family, f"删除目标 ONU：{candidate.onu_interface}（SN {current['serial_number']}）")
+            delete_commands = driver.build_delete_commands(candidate)
+            delete_outputs = session.execute_many(delete_commands, timeout=25)
+            all_commands.extend(delete_commands)
+            all_outputs.extend(delete_outputs)
+
+            verify_command = driver.build_delete_identity_command(candidate)
+            verify_output = session.execute(verify_command, timeout=20, fail_on_cli_error=False)
+            all_commands.append(verify_command)
+            all_outputs.append(verify_output)
+            if not driver.deleted_if_baseinfo_empty(verify_output):
+                raise RuntimeError("删除后回读仍能查询到该 ONU，删除可能未生效")
+
+            self._log(family, f"ONU 删除与回读验证成功：{candidate.onu_interface}")
+            return OnuOperationResult(
+                True,
+                f"已删除 {candidate.onu_interface} 并确认其重新回到未注册状态（未执行 write）",
+                output="\n\n".join(all_outputs),
+                commands=tuple(all_commands),
+            )
+        except OperationCancelled as exc:
+            session.best_effort_end()
+            self._log(family, str(exc))
+            return OnuOperationResult(False, str(exc), output="\n\n".join(all_outputs), commands=tuple(all_commands))
+        except Exception as exc:
+            session.best_effort_end()
+            self._log(family, f"ONU 删除失败：{exc}")
+            return OnuOperationResult(
+                False,
+                f"ONU 删除失败：{exc}",
+                output="\n\n".join(all_outputs),
+                commands=tuple(all_commands),
+            )
+        finally:
+            session.close()

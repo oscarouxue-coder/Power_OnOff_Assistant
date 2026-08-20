@@ -9,12 +9,15 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from line_check_assistant.network_ops import CommandResult
+from src.core.power_supply import POWER_CYCLE_OFF_DELAY_SECONDS, POWER_CYCLE_ON_DELAY_SECONDS
 from src.models import FullPackageUpgradeRequest
 from src.services.serial_upgrade_service import (
     BOOT_PASSWORD,
     BOOT_USERNAME,
     TRANSFER_TFTP_COMMAND,
     TRANSFER_TFTP_PUT,
+    UPGRADE_POWER_OFF_DELAY_SECONDS,
+    UPGRADE_POWER_ON_DELAY_SECONDS,
     SerialUpgradeController,
     UpgradePowerCycleCoordinator,
     prepare_tftp_network,
@@ -134,6 +137,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         power_on_calls = 0
         active = []
         peak_active = []
+        power_cycle_delays = []
         guard = threading.Lock()
         guard_open = threading.Lock()
 
@@ -153,12 +157,20 @@ class SerialUpgradeControllerTests(unittest.TestCase):
             def close(self):
                 self.closed = True
 
-            def power_on_channels(self, channels, *, on_channel_powered=None):
+            def power_on_channels(
+                self,
+                channels,
+                *,
+                on_channel_powered=None,
+                off_delay_seconds=None,
+                on_delay_seconds=None,
+            ):
                 nonlocal power_on_calls
                 with guard:
                     power_on_calls += 1
                     active.append(list(channels))
                     peak_active.append(len(active))
+                    power_cycle_delays.append((off_delay_seconds, on_delay_seconds))
                 time.sleep(0.05)
                 with guard:
                     active.pop()
@@ -172,7 +184,11 @@ class SerialUpgradeControllerTests(unittest.TestCase):
             threading.Thread(
                 target=coordinator.power_on_channel,
                 args=("COM106", channel),
-                kwargs={"wait_seconds": 10},
+                kwargs={
+                    "wait_seconds": 10,
+                    "off_delay_seconds": UPGRADE_POWER_OFF_DELAY_SECONDS,
+                    "on_delay_seconds": UPGRADE_POWER_ON_DELAY_SECONDS,
+                },
             )
             for channel in (1, 2)
         ]
@@ -185,6 +201,13 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         # 锁串行化：同一 COM 任意时刻只允许一次 power_on_channels。
         self.assertEqual(max(peak_active), 1)
         self.assertEqual(power_on_calls, 2)
+        self.assertEqual(
+            power_cycle_delays,
+            [
+                (UPGRADE_POWER_OFF_DELAY_SECONDS, UPGRADE_POWER_ON_DELAY_SECONDS),
+                (UPGRADE_POWER_OFF_DELAY_SECONDS, UPGRADE_POWER_ON_DELAY_SECONDS),
+            ],
+        )
         # supply 在两次调用之间被复用 —— 同一 COM 只 open 一次。
         self.assertEqual(supply_open_count, 1)
         # close 还没发生，由调用方负责；这里 sanity-check supply 仍处于 opened 状态。
@@ -205,7 +228,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
             def close(self):
                 closed.append(self.port)
 
-            def power_on_channels(self, channels, *, on_channel_powered=None):
+            def power_on_channels(self, channels, **_kwargs):
                 return list(channels)
 
         coordinator = UpgradePowerCycleCoordinator(
@@ -657,6 +680,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
             ]
         )
         manager = FakeSessionManager(session)
+        messages = []
         request = FullPackageUpgradeRequest(
             vlan="vlan102",
             server_interface="VLAN102",
@@ -675,7 +699,12 @@ class SerialUpgradeControllerTests(unittest.TestCase):
              patch("src.services.serial_upgrade_service.power_on_selected_channels") as direct_power, \
              patch("src.services.power_on_service.turn_on_selected_channels") as turn_on, \
              patch("src.services.power_on_service.turn_off_selected_channels") as turn_off:
-            result = run_single_full_package_upgrade(request, manager, sleep_fn=lambda _seconds: None)
+            result = run_single_full_package_upgrade(
+                request,
+                manager,
+                sleep_fn=lambda _seconds: None,
+                on_output=messages.append,
+            )
 
         self.assertTrue(result.ok)
         # Tftp Put 必须先调用一次 power_on_selected_channels 完成下电 + 上电;
@@ -685,7 +714,10 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         self.assertEqual(first_call.args[0], request.power_serial_port)
         self.assertEqual(list(first_call.args[1]), [request.power_channel])
         self.assertEqual(first_call.kwargs.get("wait_seconds", 0), 0)
+        self.assertEqual(first_call.kwargs["off_delay_seconds"], UPGRADE_POWER_OFF_DELAY_SECONDS)
+        self.assertEqual(first_call.kwargs["on_delay_seconds"], UPGRADE_POWER_ON_DELAY_SECONDS)
         self.assertTrue(callable(first_call.kwargs["on_output"]))
+        self.assertIn("样机升级上下电时序：断电后等待 1 秒，上电后等待 1 秒。", messages)
         # 分通道间隔开关仍不在 Tftp Put 流程内出现,继续保持纯 cycle 语义。
         turn_on.assert_not_called()
         turn_off.assert_not_called()
@@ -1054,7 +1086,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         self.assertEqual(writes_before_boot_release, [])
         _power_on_selected_channels.assert_called()
 
-    @patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=True)
+    @patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=False)
     @patch("src.services.serial_upgrade_service.TftpServerHandle")
     @patch("src.services.serial_upgrade_service.prepare_tftp_network", return_value=CommandResult(True, "network ready"))
     def test_tftp_command_branch_invokes_programmable_power_supply(
@@ -1099,14 +1131,19 @@ class SerialUpgradeControllerTests(unittest.TestCase):
             result = run_single_full_package_upgrade(request, manager, sleep_fn=lambda _seconds: None)
 
         self.assertTrue(result.ok)
-        # Tftp指令 链路至少调用一次程控电源上电(初始上电,可配 repower)。
-        self.assertGreaterEqual(direct_power.call_count, 1)
-        first_call = direct_power.call_args
+        # 首次进入 boot 使用 1s/1s；未检测到 reset 后的 repower 保留普通默认时序。
+        self.assertEqual(direct_power.call_count, 2)
+        first_call = direct_power.call_args_list[0]
         # 第一次调用应传入本次请求对应的程控电源串口 / 通道号。
         self.assertEqual(first_call.args[0], request.power_serial_port)
         self.assertEqual(list(first_call.args[1]), [request.power_channel])
         self.assertTrue(callable(first_call.kwargs["on_channel_powered"]))
         self.assertTrue(callable(first_call.kwargs["on_output"]))
+        self.assertEqual(first_call.kwargs["off_delay_seconds"], UPGRADE_POWER_OFF_DELAY_SECONDS)
+        self.assertEqual(first_call.kwargs["on_delay_seconds"], UPGRADE_POWER_ON_DELAY_SECONDS)
+        repower_call = direct_power.call_args_list[1]
+        self.assertEqual(repower_call.kwargs["off_delay_seconds"], POWER_CYCLE_OFF_DELAY_SECONDS)
+        self.assertEqual(repower_call.kwargs["on_delay_seconds"], POWER_CYCLE_ON_DELAY_SECONDS)
         # turn_on / turn_off 仍不调用(它们是分通道间隔开关,本次没有需求)。
         turn_on.assert_not_called()
         turn_off.assert_not_called()

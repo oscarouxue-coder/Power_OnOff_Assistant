@@ -4,7 +4,14 @@ import time
 from collections.abc import Callable, Iterable
 
 from line_check_assistant.network_ops import CommandResult
-from src.core.power_supply import POWER_SUPPLY_BAUDRATE, ProgrammablePowerSupply, SerialFactory, channel_power_frame
+from src.core.power_supply import (
+    POWER_CYCLE_OFF_DELAY_SECONDS,
+    POWER_CYCLE_ON_DELAY_SECONDS,
+    POWER_SUPPLY_BAUDRATE,
+    ProgrammablePowerSupply,
+    SerialFactory,
+    channel_power_frame,
+)
 
 
 def _skip_when_power_serial_port_is_empty(
@@ -28,6 +35,8 @@ def power_on_selected_channels(
     serial_factory: SerialFactory | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
     monotonic_fn: Callable[[], float] = time.monotonic,
+    off_delay_seconds: float = POWER_CYCLE_OFF_DELAY_SECONDS,
+    on_delay_seconds: float = POWER_CYCLE_ON_DELAY_SECONDS,
 ) -> CommandResult:
     """仅对指定通道执行断电再上电，不发送全部断电帧。"""
 
@@ -53,7 +62,12 @@ def power_on_selected_channels(
         if serial_factory is not None:
             options["serial_factory"] = serial_factory
         with ProgrammablePowerSupply(serial_port, **options) as supply:
-            selected = supply.power_on_channels(selected_channels, on_channel_powered=on_channel_powered)
+            selected = supply.power_on_channels(
+                selected_channels,
+                on_channel_powered=on_channel_powered,
+                off_delay_seconds=off_delay_seconds,
+                on_delay_seconds=on_delay_seconds,
+            )
         remaining = max(0.0, float(wait_seconds) - (monotonic_fn() - started_at))
         if remaining:
             emit(f"程控电源指令已完成，继续等待样机启动：{remaining:.1f} 秒。")

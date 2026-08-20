@@ -15,6 +15,7 @@ from src.models.onu_registration_models import (
     OnuDiscoveryScope,
     OnuProvisionRequest,
     OnuServiceMapping,
+    RegisteredOnu,
 )
 from src.services.onu_registration_service import OnuRegistrationService, driver_for_family
 
@@ -429,6 +430,115 @@ class DriverTests(unittest.TestCase):
 
         self.assertEqual(parsed, {1: "OK/YES", 2: "OK/YES"})
 
+    def test_c300_registered_query_lists_all_states(self):
+        driver = ZteC300OnuDriver()
+        pon_interface = "gpon-olt_1/2/1"
+
+        self.assertEqual(
+            driver.build_registered_query_command(pon_interface),
+            "show gpon onu state",
+        )
+        state = (
+            "1/2/1:8 enable disable DyingGasp 1(GPON)\n"
+            "1/2/1:9 enable enable working 1(GPON)\n"
+            "1/2/5:7 enable disable LOS 1(GPON)\nZXAN#"
+        )
+        candidates = driver.parse_registered_candidates(pon_interface, state)
+
+        self.assertEqual(
+            [candidate.onu_interface for candidate in candidates],
+            ["gpon-onu_1/2/1:8", "gpon-onu_1/2/1:9"],
+        )
+        self.assertEqual(candidates[0].onu_id, 8)
+        self.assertEqual(candidates[0].state, "DyingGasp")
+        self.assertEqual(candidates[1].state, "working")
+
+    def test_c300_registered_delete_commands_target_one_onu(self):
+        driver = ZteC300OnuDriver()
+        candidate = RegisteredOnu(
+            family=OLT_FAMILY_C300,
+            pon_interface="gpon-olt_1/2/1",
+            onu_interface="gpon-onu_1/2/1:8",
+            onu_id=8,
+            state="DyingGasp",
+            serial_number="GPON12345678",
+            onu_type="SD-41",
+        )
+
+        self.assertEqual(
+            driver.build_delete_identity_command(candidate),
+            "show gpon onu baseinfo gpon-olt_1/2/1 8",
+        )
+        self.assertEqual(
+            driver.build_delete_commands(candidate),
+            [
+                "configure terminal",
+                "interface gpon-olt_1/2/1",
+                "no onu 8",
+                "exit",
+                "end",
+            ],
+        )
+        self.assertTrue(driver.deleted_if_baseinfo_empty("%Code 62331-GPONSRV : ONU data is null.\nZXAN#"))
+        self.assertFalse(driver.deleted_if_baseinfo_empty("gpon-onu_1/2/1:8 SD-41 sn SN:GPON12345678 ready\nZXAN#"))
+
+    def test_c600_registered_query_lists_all_states(self):
+        driver = ZteC600OnuDriver()
+        pon_interface = "gpon_olt-1/1/5"
+
+        self.assertEqual(
+            driver.build_registered_query_command(pon_interface),
+            "show running-config-interface gpon_olt-1/1/5",
+        )
+        self.assertEqual(
+            driver.parse_registered_onu_defs(
+                "interface gpon_olt-1/1/5\n"
+                "onu 55 type CXP-55 sn ZTEG12345678\n"
+                "onu 56 type CXP-55 sn ZTEG99999999\nZXAN#"
+            ),
+            [(55, "CXP-55", "ZTEG12345678"), (56, "CXP-55", "ZTEG99999999")],
+        )
+        self.assertEqual(
+            driver.build_onu_state_command(pon_interface, 55),
+            "show gpon onu state gpon_olt-1/1/5 55",
+        )
+        self.assertEqual(
+            driver.parse_onu_state_label("1/1/5:55 enable disable OffLine N/A\nZXAN#"),
+            "OffLine",
+        )
+        self.assertEqual(
+            driver.parse_onu_state_label("1/1/5:56 enable enable working XGS-PON\nZXAN#"),
+            "working",
+        )
+
+    def test_c600_registered_delete_commands_target_one_onu(self):
+        driver = ZteC600OnuDriver()
+        candidate = RegisteredOnu(
+            family=OLT_FAMILY_C600,
+            pon_interface="gpon_olt-1/1/5",
+            onu_interface="gpon_onu-1/1/5:55",
+            onu_id=55,
+            state="OffLine",
+            serial_number="ZTEG12345678",
+            onu_type="CXP-55",
+        )
+
+        self.assertEqual(
+            driver.build_delete_identity_command(candidate),
+            "show gpon onu baseinfo gpon_olt-1/1/5 55",
+        )
+        self.assertEqual(
+            driver.build_delete_commands(candidate),
+            [
+                "configure terminal",
+                "interface gpon_olt-1/1/5",
+                "no onu 55",
+                "exit",
+                "end",
+            ],
+        )
+        self.assertTrue(driver.deleted_if_baseinfo_empty("%Error 222331: ONU data is null.\nZXAN#"))
+
 
 class ServiceTests(unittest.TestCase):
     def test_c600_query_uses_pon_scoped_command(self):
@@ -630,6 +740,90 @@ class ServiceTests(unittest.TestCase):
 
         self.assertFalse(result.ok)
         self.assertIn("不提供自动 write", result.message)
+
+    def test_query_registered_candidates_lists_all_with_identity(self):
+        responses = {
+            "show running-config-interface gpon_olt-1/1/5": (
+                "interface gpon_olt-1/1/5\n"
+                "onu 55 type CXP-55 sn ZTEG12345678\n"
+                "onu 56 type CXP-55 sn ZTEG99999999\nZXAN#"
+            ),
+            "show gpon onu state gpon_olt-1/1/5 55": (
+                "1/1/5:55 enable disable OffLine N/A\nZXAN#"
+            ),
+            "show gpon onu state gpon_olt-1/1/5 56": (
+                "1/1/5:56 enable enable working XGS-PON\nZXAN#"
+            ),
+        }
+        fake = FakeSession(responses=responses)
+        service = OnuRegistrationService(session_type=fake)
+
+        result = service.query_registered_candidates(
+            OLT_FAMILY_C600,
+            make_connection(),
+            "gpon_olt-1/1/5",
+        )
+
+        self.assertTrue(result.ok, result.message)
+        self.assertEqual(len(result.registered_onus), 2)
+        self.assertEqual(
+            [item.onu_interface for item in result.registered_onus],
+            ["gpon_onu-1/1/5:55", "gpon_onu-1/1/5:56"],
+        )
+        self.assertEqual(result.registered_onus[0].serial_number, "ZTEG12345678")
+        self.assertEqual(result.registered_onus[0].state, "OffLine")
+        self.assertEqual(result.registered_onus[1].state, "working")
+
+    def test_delete_registered_onu_rechecks_identity_and_verifies_after(self):
+        candidate = RegisteredOnu(
+            family=OLT_FAMILY_C600,
+            pon_interface="gpon_olt-1/1/5",
+            onu_interface="gpon_onu-1/1/5:55",
+            onu_id=55,
+            state="working",
+            serial_number="ZTEG12345678",
+            onu_type="CXP-55",
+        )
+        responses = {
+            "show gpon onu baseinfo gpon_olt-1/1/5 55": [
+                "gpon_onu-1/1/5:55 CXP-55 sn SN:ZTEG12345678 ready\nZXAN#",
+                "%Error 222331: ONU data is null.\nZXAN#",
+            ],
+        }
+        fake = FakeSession(responses=responses)
+        service = OnuRegistrationService(session_type=fake)
+
+        result = service.delete_registered_onu(OLT_FAMILY_C600, make_connection(), candidate)
+
+        self.assertTrue(result.ok, result.message)
+        self.assertIn("interface gpon_olt-1/1/5", fake.commands)
+        self.assertEqual(fake.commands.count("no onu 55"), 1)
+        self.assertIn("未执行 write", result.message)
+
+    def test_delete_registered_onu_rejects_when_sn_changed(self):
+        candidate = RegisteredOnu(
+            family=OLT_FAMILY_C600,
+            pon_interface="gpon_olt-1/1/5",
+            onu_interface="gpon_onu-1/1/5:55",
+            onu_id=55,
+            state="OffLine",
+            serial_number="ZTEG12345678",
+            onu_type="CXP-55",
+        )
+        fake = FakeSession(
+            responses={
+                "show gpon onu baseinfo gpon_olt-1/1/5 55": (
+                    "gpon_onu-1/1/5:55 CXP-55 sn SN:ZTEG99999999 ready\nZXAN#"
+                ),
+            }
+        )
+        service = OnuRegistrationService(session_type=fake)
+
+        result = service.delete_registered_onu(OLT_FAMILY_C600, make_connection(), candidate)
+
+        self.assertFalse(result.ok)
+        self.assertIn("SN 已变化", result.message)
+        self.assertNotIn("no onu", "\n".join(fake.commands))
 
 
 class TelnetBindingTests(unittest.TestCase):

@@ -9,6 +9,7 @@ from src.models.onu_registration_models import (
     OLT_FAMILY_C600,
     OnuDiscoveryScope,
     OnuProvisionRequest,
+    RegisteredOnu,
 )
 
 
@@ -361,6 +362,62 @@ class ZteC600OnuDriver:
             raise ValueError(f"C600 PON 接口格式无效：{interface}")
         return OnuDiscoveryScope(*(int(value) for value in match.groups()))
 
+    @staticmethod
+    def build_registered_query_command(pon_interface: str) -> str:
+        """查询目标 PON 口已注册 ONU 列表（`show running-config-interface` 实机确认格式）。"""
+        return f"show running-config-interface {pon_interface}"
+
+    @staticmethod
+    def parse_registered_onu_defs(output: str) -> list[tuple[int, str, str]]:
+        """解析 `show running-config-interface` 输出中的 `onu <ID> type <型号> sn <SN>` 行。"""
+        defs: list[tuple[int, str, str]] = []
+        for raw_line in clean_terminal_text(output or "").splitlines():
+            match = re.match(
+                r"^\s*onu\s+(\d+)\s+type\s+(\S+)\s+sn\s+(\S+)\s*$",
+                raw_line,
+                re.IGNORECASE,
+            )
+            if match:
+                defs.append((int(match.group(1)), match.group(2), match.group(3)))
+        return defs
+
+    @staticmethod
+    def build_onu_state_command(pon_interface: str, onu_id: int) -> str:
+        """查询单台已注册 ONU 的运行状态（真实注册轮询已确认格式）。"""
+        return f"show gpon onu state {pon_interface} {onu_id}"
+
+    @staticmethod
+    def parse_onu_state_label(output: str) -> str:
+        """解析单台 ONU 的运行状态标签（用于展示，不做在线 / 离线过滤）。"""
+        for raw_line in clean_terminal_text(output or "").splitlines():
+            match = _C600_STATE_LINE_RE.match(raw_line.strip())
+            if not match:
+                continue
+            _interface, _admin, _omcc, phase = match.groups()
+            return phase
+        return "未查询到状态"
+
+    @staticmethod
+    def build_delete_identity_command(candidate: RegisteredOnu) -> str:
+        """删除前身份复核：读取该 ONU 的接口、型号与 SN。"""
+        return f"show gpon onu baseinfo {candidate.pon_interface} {candidate.onu_id}"
+
+    @staticmethod
+    def build_delete_commands(candidate: RegisteredOnu) -> list[str]:
+        """在目标 PON 口下删除指定 ONU，仅生成这一台的 `no onu`。"""
+        return [
+            "configure terminal",
+            f"interface {candidate.pon_interface}",
+            f"no onu {candidate.onu_id}",
+            "exit",
+            "end",
+        ]
+
+    @staticmethod
+    def deleted_if_baseinfo_empty(baseinfo_output: str) -> bool:
+        """删除后回读：baseinfo 返回空记录视为该 ONU 已释放。"""
+        return bool(C600_EMPTY_ID_RE.search(baseinfo_output or ""))
+
 
 def parse_service_mappings(text: str):
     from src.models.onu_registration_models import OnuServiceMapping
@@ -383,3 +440,12 @@ def speed_mode_to_cli(speed_mode: str) -> str:
     # 操作员仍可在配置页明确选择xgspon/xgpon/gpon作为型号专用覆盖。
     _ = speed_mode
     return "auto"
+
+
+# ---- 已注册 ONU 管理（查询目标 PON 已注册 ONU → 显式删除离线 / 非 working ONU） ----
+# 与 C600 注册流程「永不自动删除 / 不自动 write」不同，这里提供的是操作员显式
+# 选择一台离线 / 非 working ONU 后的主动删除入口；删除前仍会二次确认与身份复核。
+_C600_STATE_LINE_RE = re.compile(
+    r"^\s*(\d+/\d+/\d+:\d+)\s+(\S+)\s+(\S+)\s+(\S+)(?:\s+.+)?$",
+    re.IGNORECASE,
+)

@@ -10,6 +10,8 @@ import serial
 
 POWER_SUPPLY_BAUDRATE = 19200
 POWER_ON_FRAME_INTERVAL_SECONDS = 1
+POWER_CYCLE_OFF_DELAY_SECONDS = 1.5
+POWER_CYCLE_ON_DELAY_SECONDS = 3.0
 ALL_CHANNELS_OFF_FRAME = bytes((0x55, 0x00, 0xAD, 0x00, 0x00, 0xAD))
 
 
@@ -101,17 +103,19 @@ class ProgrammablePowerSupply:
         channels: Iterable[int],
         *,
         on_channel_powered: ChannelPoweredCallback | None = None,
+        off_delay_seconds: float = POWER_CYCLE_OFF_DELAY_SECONDS,
+        on_delay_seconds: float = POWER_CYCLE_ON_DELAY_SECONDS,
     ) -> list[int]:
+        """逐通道断电再上电；调用方可覆盖两个阶段的等待时间。"""
         selected = _normalize_channels(channels)
         self.open()
         for channel in selected:
             self._write_frame(channel_power_frame(channel, False), f"关闭通道 {channel}")
-            self._sleep(1.5)
+            self._sleep(float(off_delay_seconds))
             self._write_frame(channel_power_frame(channel, True), f"开启通道 {channel}")
             if on_channel_powered:
                 on_channel_powered(channel)
-            # 与旧工具 PowerOnOff.power_on() 的 3 秒稳定等待保持一致。
-            self._sleep(3)
+            self._sleep(float(on_delay_seconds))
         return selected
 
     def turn_on_channels(

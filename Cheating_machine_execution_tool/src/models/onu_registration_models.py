@@ -106,6 +106,29 @@ class C300CleanupCandidate:
 
 
 @dataclass(frozen=True)
+class RegisteredOnu:
+    """目标 PON 口下已注册、且可被操作员显式选择删除的离线 / 非 working ONU。"""
+
+    family: str
+    pon_interface: str
+    onu_interface: str
+    onu_id: int
+    state: str
+    serial_number: str = ""
+    onu_type: str = ""
+
+    @property
+    def display_text(self) -> str:
+        details = [self.onu_interface]
+        if self.onu_type:
+            details.append(f"型号:{self.onu_type}")
+        if self.serial_number:
+            details.append(f"SN:{self.serial_number}")
+        details.append(f"状态:{self.state}")
+        return "  ".join(details)
+
+
+@dataclass(frozen=True)
 class OnuProvisionRequest:
     family: str
     onu: DiscoveredOnu
@@ -127,4 +150,5 @@ class OnuOperationResult:
     output: str = ""
     onus: tuple[DiscoveredOnu, ...] = ()
     cleanup_candidates: tuple[C300CleanupCandidate, ...] = ()
+    registered_onus: tuple[RegisteredOnu, ...] = ()
     commands: tuple[str, ...] = ()

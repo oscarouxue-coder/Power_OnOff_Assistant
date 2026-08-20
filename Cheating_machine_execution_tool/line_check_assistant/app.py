@@ -80,6 +80,7 @@ from src.models import (
     OnuDiscoveryScope,
     OnuProvisionRequest,
     ParameterGenerationTemplate,
+    RegisteredOnu,
     SampleParameterWriteRequest,
 )
 from src.services import (
@@ -263,6 +264,7 @@ COLOR_SUCCESS_BG = "#e8f5ef"
 COLOR_WARNING = "#a16207"
 COLOR_WARNING_BG = "#f8f0dd"
 COLOR_DANGER = "#b42318"
+COLOR_DANGER_DARK = "#8f1c13"
 COLOR_DANGER_BG = "#fbe9e7"
 
 
@@ -377,6 +379,13 @@ class LineCheckAssistant(Tk):
         self.onu_c300_cleanup_candidates = ()
         self.onu_c300_cleanup_candidate_var = StringVar(value="")
         self.onu_cleanup_query_running = False
+        self.onu_manage_shelf_var = StringVar(value="1")
+        self.onu_manage_slot_var = StringVar(value="1")
+        self.onu_manage_pon_var = StringVar(value="1")
+        self.onu_registered_candidates = ()
+        self.onu_registered_candidate_var = StringVar(value="")
+        self.onu_manage_query_running = False
+        self.onu_manage_delete_running = False
         self.onu_preview_ready = False
         self.onu_cancel_event = threading.Event()
         self._bind_onu_registration_autosave()
@@ -641,6 +650,8 @@ class LineCheckAssistant(Tk):
         style.map("Primary.TButton", background=[("active", COLOR_PRIMARY_DARK), ("pressed", COLOR_PRIMARY_DARK)])
         style.configure("Secondary.TButton", background=COLOR_SECONDARY, foreground=COLOR_TEXT)
         style.map("Secondary.TButton", background=[("active", COLOR_SECONDARY_HOVER)])
+        style.configure("Danger.TButton", background=COLOR_DANGER, foreground="#ffffff", padding=(16, 9), font=(FONT_FAMILY, 10, "bold"))
+        style.map("Danger.TButton", background=[("active", COLOR_DANGER_DARK), ("pressed", COLOR_DANGER_DARK)])
         style.configure("Tool.TButton", background=COLOR_SURFACE, foreground=COLOR_TEXT, padding=(12, 8))
         style.map("Tool.TButton", background=[("active", COLOR_PRIMARY_SOFT)], foreground=[("active", COLOR_PRIMARY_DARK)])
         style.configure("TEntry", fieldbackground="#ffffff", bordercolor=COLOR_BORDER, padding=6)
@@ -1902,6 +1913,82 @@ class LineCheckAssistant(Tk):
         self.onu_notebook.add(config_tab, text="2. 配置业务")
         self.onu_notebook.add(preview_tab, text="3. 确认执行")
 
+        manage_tab = Frame(self.onu_notebook, padx=8, pady=8, background=COLOR_BG)
+        self.onu_manage_tab = manage_tab
+        self.onu_notebook.add(manage_tab, text="4. 已注册管理")
+        manage_tab.columnconfigure(0, weight=1)
+        manage_tab.rowconfigure(3, weight=1)
+
+        manage_scope_frame = ttk.LabelFrame(manage_tab, text="目标 PON 口（机框/槽位/PON）")
+        manage_scope_frame.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        for column in (1, 3, 5):
+            manage_scope_frame.columnconfigure(column, weight=1)
+
+        def manage_scope_field(column, label, variable):
+            Label(manage_scope_frame, text=label, anchor="w").grid(
+                row=0, column=column, sticky="w", padx=(10, 4), pady=4
+            )
+            ttk.Entry(manage_scope_frame, textvariable=variable, width=10).grid(
+                row=0, column=column + 1, sticky="ew", padx=(0, 10), pady=4
+            )
+
+        manage_scope_field(0, "机框", self.onu_manage_shelf_var)
+        manage_scope_field(2, "槽位", self.onu_manage_slot_var)
+        manage_scope_field(4, "PON", self.onu_manage_pon_var)
+
+        manage_actions = Frame(manage_tab, background=COLOR_BG)
+        manage_actions.grid(row=1, column=0, sticky="ew", pady=(0, 6))
+        self.onu_manage_query_button = ttk.Button(
+            manage_actions,
+            text="查询已注册 ONU",
+            command=self._on_onu_manage_query_clicked,
+            style="Secondary.TButton",
+        )
+        self.onu_manage_query_button.pack(side="left")
+
+        manage_candidate_row = Frame(manage_tab, background=COLOR_BG)
+        manage_candidate_row.grid(row=2, column=0, sticky="ew", pady=(0, 6))
+        Label(
+            manage_candidate_row,
+            text="选择要删除的已注册 ONU",
+            anchor="w",
+            background=COLOR_BG,
+        ).pack(side="left")
+        self.onu_registered_combo = ttk.Combobox(
+            manage_candidate_row,
+            textvariable=self.onu_registered_candidate_var,
+            values=(),
+            state="disabled",
+            width=62,
+        )
+        self.onu_registered_combo.pack(side="left", fill="x", expand=True, padx=(8, 0))
+        self.onu_registered_combo.bind(
+            "<<ComboboxSelected>>",
+            self._on_registered_candidate_selected,
+        )
+
+        Label(
+            manage_tab,
+            text=(
+                "列出目标 PON 口下所有已注册 ONU（含在线 working）；删除在线 ONU 会立即中断其业务。"
+                "删除前会二次确认并重新核对接口与 SN，只删除明确选择的这一台，"
+                "删除后回读确认其回到未注册状态，且不执行 write。"
+            ),
+            justify="left",
+            anchor="nw",
+            foreground=COLOR_WARNING,
+            background=COLOR_BG,
+        ).grid(row=3, column=0, sticky="nsew", pady=(4, 6))
+
+        self.onu_manage_delete_button = ttk.Button(
+            manage_tab,
+            text="删除选中 ONU（危险）",
+            command=self._on_onu_manage_delete_clicked,
+            style="Danger.TButton",
+            state="disabled",
+        )
+        self.onu_manage_delete_button.grid(row=4, column=0, sticky="ew", pady=(0, 6))
+
         discovery_tab.columnconfigure(0, weight=1)
         discovery_tab.rowconfigure(2, weight=1)
         self.onu_c600_scope_frame = ttk.LabelFrame(discovery_tab, text="C600 查询范围")
@@ -2132,6 +2219,8 @@ class LineCheckAssistant(Tk):
                 or self.onu_cleanup_query_running
                 or self.onu_register_running
                 or self.onu_save_olt_running
+                or self.onu_manage_query_running
+                or self.onu_manage_delete_running
             ):
                 messagebox.showwarning(
                     "ONU 操作正在执行",
@@ -2196,6 +2285,12 @@ class LineCheckAssistant(Tk):
         self._render_unregistered_onu_selection([])
         if hasattr(self, "onu_c300_cleanup_candidate_var"):
             self._clear_c300_cleanup_candidates()
+        if hasattr(self, "onu_registered_candidates"):
+            self._clear_registered_candidates()
+            if family == OLT_FAMILY_C600:
+                self.onu_manage_shelf_var.set(self.onu_c600_shelf_var.get())
+                self.onu_manage_slot_var.set(self.onu_c600_slot_var.get())
+                self.onu_manage_pon_var.set(self.onu_c600_pon_var.get())
         self._invalidate_onu_preview()
         self._set_onu_telnet_status("")
         query_hint = (
@@ -2210,6 +2305,39 @@ class LineCheckAssistant(Tk):
         self.onu_c300_cleanup_candidate_var.set("")
         if hasattr(self, "onu_c300_cleanup_combo"):
             self.onu_c300_cleanup_combo.configure(values=())
+
+    def _clear_registered_candidates(self) -> None:
+        self.onu_registered_candidates = ()
+        self.onu_registered_candidate_var.set("")
+        if hasattr(self, "onu_registered_combo"):
+            self.onu_registered_combo.configure(values=(), state="disabled")
+        if hasattr(self, "onu_manage_delete_button"):
+            self.onu_manage_delete_button.configure(state="disabled")
+
+    def _current_onu_manage_pon_interface(self) -> str:
+        try:
+            shelf = int(self.onu_manage_shelf_var.get().strip())
+            slot = int(self.onu_manage_slot_var.get().strip())
+            pon = int(self.onu_manage_pon_var.get().strip())
+        except ValueError as exc:
+            raise ValueError("已注册管理：机框、槽位和 PON 必须是整数") from exc
+        if not (1 <= shelf <= 64 and 1 <= slot <= 64 and 1 <= pon <= 64):
+            raise ValueError("已注册管理：机框、槽位和 PON 必须在 1-64 之间")
+        family = self.onu_family_var.get()
+        if family == OLT_FAMILY_C600:
+            return f"gpon_olt-{shelf}/{slot}/{pon}"
+        return f"gpon-olt_{shelf}/{slot}/{pon}"
+
+    def _selected_registered_onu(self):
+        selected = self.onu_registered_candidate_var.get()
+        return next(
+            (
+                candidate
+                for candidate in self.onu_registered_candidates
+                if candidate.display_text == selected
+            ),
+            None,
+        )
 
     def _on_c300_cleanup_toggle(self) -> None:
         enabled = (
@@ -2289,6 +2417,135 @@ class LineCheckAssistant(Tk):
         self.onu_c300_cleanup_candidate_var.set("")
         self._set_onu_query_status(result.message, COLOR_SUCCESS if values else COLOR_WARNING)
         self._invalidate_onu_preview()
+
+    def _on_registered_candidate_selected(self, _event=None) -> None:
+        has_selection = self._selected_registered_onu() is not None
+        if hasattr(self, "onu_manage_delete_button"):
+            self.onu_manage_delete_button.configure(
+                state="normal" if has_selection else "disabled"
+            )
+
+    def _on_onu_manage_query_clicked(self) -> None:
+        if self.onu_manage_query_running or self.onu_manage_delete_running:
+            return
+        try:
+            connection = self._current_onu_connection()
+            pon_interface = self._current_onu_manage_pon_interface()
+        except ValueError as exc:
+            self._set_onu_query_status(str(exc), COLOR_DANGER)
+            messagebox.showwarning("已注册管理参数错误", str(exc), parent=self.onu_registration_window)
+            return
+        family = self.onu_family_var.get()
+        command_text = (
+            "show gpon onu state（全局查询，按目标 PON 过滤）"
+            if family == OLT_FAMILY_C300
+            else f"show gpon onu state {pon_interface}"
+        )
+        confirmed = messagebox.askyesno(
+            "确认查询已注册 ONU",
+            f"将登录 {family} OLT 并执行只读命令：\n{command_text}\n是否继续？",
+            parent=self.onu_registration_window,
+        )
+        if not confirmed:
+            return
+        self.onu_manage_query_running = True
+        self.onu_cancel_event = threading.Event()
+        self._clear_registered_candidates()
+        self._set_onu_query_status(f"正在只读查询 {pon_interface} 的已注册 ONU...", COLOR_WARNING)
+        self._set_onu_registration_action_buttons_state("disabled")
+        if hasattr(self, "onu_stop_button"):
+            self.onu_stop_button.configure(state="normal")
+        thread = threading.Thread(
+            target=self._onu_manage_query_worker,
+            args=(family, connection, pon_interface),
+            daemon=True,
+        )
+        thread.start()
+
+    def _onu_manage_query_worker(self, family, connection, pon_interface) -> None:
+        result = OnuRegistrationService(logger=self._log).query_registered_candidates(
+            family, connection, pon_interface, self.onu_cancel_event
+        )
+        self.after(0, lambda: self._complete_onu_manage_query(family, connection.host, result))
+
+    def _complete_onu_manage_query(self, family, host, result) -> None:
+        self.onu_manage_query_running = False
+        self._set_onu_registration_action_buttons_state("normal")
+        if hasattr(self, "onu_stop_button"):
+            self.onu_stop_button.configure(state="disabled")
+        if not result.ok:
+            self._set_onu_query_status(result.message, COLOR_DANGER)
+            self._clear_registered_candidates()
+            return
+        self.onu_registered_candidates = tuple(result.registered_onus)
+        values = tuple(candidate.display_text for candidate in self.onu_registered_candidates)
+        self.onu_registered_combo.configure(
+            values=values,
+            state="readonly" if values else "disabled",
+        )
+        self.onu_registered_candidate_var.set("")
+        if hasattr(self, "onu_manage_delete_button"):
+            self.onu_manage_delete_button.configure(state="disabled")
+        self._set_onu_query_status(result.message, COLOR_SUCCESS if values else COLOR_WARNING)
+        self._log(f"[ONU注册][{family}] 查询已注册 ONU：{host} - {result.message}")
+
+    def _on_onu_manage_delete_clicked(self) -> None:
+        if self.onu_manage_delete_running or self.onu_manage_query_running:
+            return
+        candidate = self._selected_registered_onu()
+        if candidate is None:
+            self._set_onu_query_status("请先查询并明确选择一台要删除的已注册 ONU", COLOR_DANGER)
+            messagebox.showwarning(
+                "未选择删除目标",
+                "请先在候选列表中选择一台已注册 ONU。",
+                parent=self.onu_registration_window,
+            )
+            return
+        try:
+            connection = self._current_onu_connection()
+        except ValueError as exc:
+            self._set_onu_query_status(str(exc), COLOR_DANGER)
+            messagebox.showwarning("连接参数错误", str(exc), parent=self.onu_registration_window)
+            return
+        family = self.onu_family_var.get()
+        confirmed = messagebox.askyesno(
+            "确认删除 ONU（危险）",
+            f"将删除 {candidate.onu_interface}（SN {candidate.serial_number or '未确认'}，状态 {candidate.state}）。\n"
+            "若为在线 working ONU，删除将立即中断其业务。\n"
+            "删除前会再次核对接口与 SN，且只删除这一台，删除后回读确认。\n"
+            "该操作不会执行 write。是否继续？",
+            parent=self.onu_registration_window,
+        )
+        if not confirmed:
+            return
+        self.onu_manage_delete_running = True
+        self.onu_cancel_event = threading.Event()
+        self._set_onu_query_status(f"正在删除 {candidate.onu_interface}...", COLOR_WARNING)
+        self._set_onu_registration_action_buttons_state("disabled")
+        if hasattr(self, "onu_stop_button"):
+            self.onu_stop_button.configure(state="normal")
+        thread = threading.Thread(
+            target=self._onu_manage_delete_worker,
+            args=(family, connection, candidate),
+            daemon=True,
+        )
+        thread.start()
+
+    def _onu_manage_delete_worker(self, family, connection, candidate) -> None:
+        result = OnuRegistrationService(logger=self._log).delete_registered_onu(
+            family, connection, candidate, self.onu_cancel_event
+        )
+        self.after(0, lambda: self._complete_onu_manage_delete(family, connection.host, result))
+
+    def _complete_onu_manage_delete(self, family, host, result) -> None:
+        self.onu_manage_delete_running = False
+        self._set_onu_registration_action_buttons_state("normal")
+        if hasattr(self, "onu_stop_button"):
+            self.onu_stop_button.configure(state="disabled")
+        self._set_onu_query_status(result.message, COLOR_SUCCESS if result.ok else COLOR_DANGER)
+        self._log(f"[ONU注册][{family}] 删除已注册 ONU：{host} - {result.message}")
+        if result.ok:
+            self._clear_registered_candidates()
 
     def _go_to_onu_config_step(self) -> None:
         if not self._selected_unregistered_onus():
@@ -2732,6 +2989,19 @@ class LineCheckAssistant(Tk):
             )
             self.onu_c300_cleanup_combo.configure(
                 state="readonly" if cleanup_selectable else "disabled"
+            )
+        if hasattr(self, "onu_manage_query_button"):
+            self.onu_manage_query_button.configure(state=state)
+        if hasattr(self, "onu_registered_combo"):
+            self.onu_registered_combo.configure(
+                state="readonly"
+                if state == "normal" and self.onu_registered_candidates
+                else "disabled"
+            )
+        if hasattr(self, "onu_manage_delete_button"):
+            delete_enabled = state == "normal" and self._selected_registered_onu() is not None
+            self.onu_manage_delete_button.configure(
+                state="normal" if delete_enabled else "disabled"
             )
 
     def _selected_unregistered_onus(self):

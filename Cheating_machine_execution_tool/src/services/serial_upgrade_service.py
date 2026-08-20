@@ -11,7 +11,11 @@ from typing import Callable, Iterable
 from line_check_assistant.network_ops import CommandResult, prepare_network_for_sample
 from src.config import DEFAULT_LOG_DIR
 from src.core import SerialSessionManager, TftpServerHandle, upload_firmware, vlan_to_serial_port, wait_for_bindable_ip
-from src.core.power_supply import ProgrammablePowerSupply
+from src.core.power_supply import (
+    POWER_CYCLE_OFF_DELAY_SECONDS,
+    POWER_CYCLE_ON_DELAY_SECONDS,
+    ProgrammablePowerSupply,
+)
 from src.models import FullPackageUpgradeRequest, SerialSettings
 from .power_on_service import power_on_selected_channels
 
@@ -22,6 +26,8 @@ TFTP_PUT_DEVICE_IP = "192.168.1.1"
 POWER_ON_WAIT_SECONDS = 10
 POWER_RECYCLE_AFTER_UPGRADE_SECONDS = 90
 POWER_ON_SETTLE_SECONDS = 120
+UPGRADE_POWER_OFF_DELAY_SECONDS = 1.0
+UPGRADE_POWER_ON_DELAY_SECONDS = 1.0
 BOOT_LOGIN_TIMEOUT_SECONDS = 600
 # Tftp指令 单次尝试超时:5 分钟内应能看到 done+write 或 ARP 失败 + U-Boot>；
 # 超过 5 分钟视为异常等待，由下次重试或上层决定。
@@ -111,6 +117,8 @@ class UpgradePowerCycleCoordinator:
         wait_seconds: float,
         on_output: Callable[[str], None] | None = None,
         on_channel_powered: Callable[[int], None] | None = None,
+        off_delay_seconds: float = POWER_CYCLE_OFF_DELAY_SECONDS,
+        on_delay_seconds: float = POWER_CYCLE_ON_DELAY_SECONDS,
     ) -> CommandResult:
         port = serial_port.strip().upper()
         if not port:
@@ -125,7 +133,12 @@ class UpgradePowerCycleCoordinator:
             command_started = self._monotonic()
             try:
                 supply = self._get_or_open_supply(port, on_output)
-                supply.power_on_channels([channel], on_channel_powered=on_channel_powered)
+                supply.power_on_channels(
+                    [channel],
+                    on_channel_powered=on_channel_powered,
+                    off_delay_seconds=off_delay_seconds,
+                    on_delay_seconds=on_delay_seconds,
+                )
                 result = CommandResult(True, f"程控电源已直接上电：{port}，通道 {channel}。")
             except Exception as exc:
                 result = CommandResult(False, f"程控电源直接上电失败：{exc}")
@@ -528,12 +541,19 @@ def _power_cycle_current_channel(
     power_cycle_coordinator: UpgradePowerCycleCoordinator | None = None,
     wait_seconds: float = 0,
     on_channel_powered: Callable[[int], None] | None = None,
+    off_delay_seconds: float = POWER_CYCLE_OFF_DELAY_SECONDS,
+    on_delay_seconds: float = POWER_CYCLE_ON_DELAY_SECONDS,
 ) -> CommandResult:
     """对当前请求对应的程控电源通道执行一次下电 + 上电。
 
     并行模式下走 UpgradePowerCycleCoordinator 串行化电源 COM 口;
-    串行模式下走 power_on_selected_channels(内部已封装关闭 + 开启 + 1.5s/3s 缓冲)。
+    串行模式下走 power_on_selected_channels；调用方可分别指定入 boot 与 repower 时序。
     """
+    if (request.power_serial_port or "").strip():
+        emit(
+            f"样机升级上下电时序：断电后等待 {off_delay_seconds:g} 秒，"
+            f"上电后等待 {on_delay_seconds:g} 秒。"
+        )
     if power_cycle_coordinator is not None:
         return power_cycle_coordinator.power_on_channel(
             request.power_serial_port,
@@ -541,6 +561,8 @@ def _power_cycle_current_channel(
             wait_seconds=wait_seconds,
             on_output=emit,
             on_channel_powered=on_channel_powered,
+            off_delay_seconds=off_delay_seconds,
+            on_delay_seconds=on_delay_seconds,
         )
     return power_on_selected_channels(
         request.power_serial_port,
@@ -549,6 +571,8 @@ def _power_cycle_current_channel(
         on_output=emit,
         on_channel_powered=on_channel_powered,
         sleep_fn=sleep_fn,
+        off_delay_seconds=off_delay_seconds,
+        on_delay_seconds=on_delay_seconds,
     )
 
 
@@ -594,7 +618,12 @@ def _run_tftp_command_with_power_supply(
         if channel == request.power_channel:
             emit("程控电源已写入上电帧，等待电源动作完成后开始串口回车进入 boot。")
 
-    def power_on_current_channel(on_powered: Callable[[int], None] | None = None) -> CommandResult:
+    def power_on_current_channel(
+        on_powered: Callable[[int], None] | None = None,
+        *,
+        off_delay_seconds: float = POWER_CYCLE_OFF_DELAY_SECONDS,
+        on_delay_seconds: float = POWER_CYCLE_ON_DELAY_SECONDS,
+    ) -> CommandResult:
         return _power_cycle_current_channel(
             request=request,
             emit=emit,
@@ -602,9 +631,15 @@ def _run_tftp_command_with_power_supply(
             power_cycle_coordinator=power_cycle_coordinator,
             wait_seconds=POWER_ON_WAIT_SECONDS,
             on_channel_powered=on_powered,
+            off_delay_seconds=off_delay_seconds,
+            on_delay_seconds=on_delay_seconds,
         )
 
-    power = power_on_current_channel(on_channel_powered)
+    power = power_on_current_channel(
+        on_channel_powered,
+        off_delay_seconds=UPGRADE_POWER_OFF_DELAY_SECONDS,
+        on_delay_seconds=UPGRADE_POWER_ON_DELAY_SECONDS,
+    )
     if not power.ok:
         controller.cancel()
         return power
@@ -725,6 +760,8 @@ def run_single_full_package_upgrade(
             sleep_fn=sleep_fn,
             power_cycle_coordinator=power_cycle_coordinator,
             wait_seconds=0,
+            off_delay_seconds=UPGRADE_POWER_OFF_DELAY_SECONDS,
+            on_delay_seconds=UPGRADE_POWER_ON_DELAY_SECONDS,
         )
         if not power_cycle.ok:
             return power_cycle

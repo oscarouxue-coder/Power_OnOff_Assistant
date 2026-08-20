@@ -36,6 +36,7 @@ from .onu_registration_models import (
     OnuOperationResult,
     OnuProvisionRequest,
     OnuServiceMapping,
+    RegisteredOnu,
 )
 
 __all__ = [
@@ -66,6 +67,7 @@ __all__ = [
     "SampleParameterWriteRequest",
     "DiscoveredOnu",
     "C300CleanupCandidate",
+    "RegisteredOnu",
     "OLT_FAMILIES",
     "OLT_FAMILY_C300",
     "OLT_FAMILY_C600",

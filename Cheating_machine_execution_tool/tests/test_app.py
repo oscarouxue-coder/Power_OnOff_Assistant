@@ -50,6 +50,7 @@ from src.models import (
     OnuOperationResult,
     OnuProvisionRequest,
     OnuServiceMapping,
+    RegisteredOnu,
 )
 from src.services.dut_advanced_config_service import (
     VOICE_SIP_MODE_OPTIONS,
@@ -2683,6 +2684,177 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn('self.onu_query_status_label.grid(row=5, column=0', open_source)
         self.assertIn('bottom_actions.grid(row=6, column=0', open_source)
         self.assertNotIn('self.onu_notebook.pack(', open_source)
+
+    def test_onu_registered_manage_tab_and_danger_button_present(self):
+        open_source = inspect.getsource(LineCheckAssistant._open_onu_registration_module)
+
+        self.assertIn('text="4. 已注册管理"', open_source)
+        self.assertIn('text="查询已注册 ONU"', open_source)
+        self.assertIn('text="删除选中 ONU（危险）"', open_source)
+        self.assertIn('style="Danger.TButton"', open_source)
+
+    def test_current_onu_manage_pon_interface_builds_family_specific_path(self):
+        def context_for(family, shelf="1", slot="2", pon="3"):
+            return SimpleNamespace(
+                onu_family_var=Mock(get=Mock(return_value=family)),
+                onu_manage_shelf_var=Mock(get=Mock(return_value=shelf)),
+                onu_manage_slot_var=Mock(get=Mock(return_value=slot)),
+                onu_manage_pon_var=Mock(get=Mock(return_value=pon)),
+            )
+
+        self.assertEqual(
+            LineCheckAssistant._current_onu_manage_pon_interface(context_for(OLT_FAMILY_C300)),
+            "gpon-olt_1/2/3",
+        )
+        self.assertEqual(
+            LineCheckAssistant._current_onu_manage_pon_interface(context_for(OLT_FAMILY_C600)),
+            "gpon_olt-1/2/3",
+        )
+        with self.assertRaisesRegex(ValueError, "整数"):
+            LineCheckAssistant._current_onu_manage_pon_interface(context_for(OLT_FAMILY_C300, shelf="x"))
+        with self.assertRaisesRegex(ValueError, "1-64"):
+            LineCheckAssistant._current_onu_manage_pon_interface(context_for(OLT_FAMILY_C300, pon="99"))
+
+    def test_selected_registered_onu_resolves_only_explicit_candidate(self):
+        candidate = RegisteredOnu(
+            family=OLT_FAMILY_C600,
+            pon_interface="gpon_olt-1/1/5",
+            onu_interface="gpon_onu-1/1/5:55",
+            onu_id=55,
+            state="OffLine",
+            serial_number="ZTEG12345678",
+            onu_type="CXP-55",
+        )
+        context = SimpleNamespace(
+            onu_registered_candidates=(candidate,),
+            onu_registered_candidate_var=Mock(get=Mock(return_value=candidate.display_text)),
+        )
+
+        self.assertIs(LineCheckAssistant._selected_registered_onu(context), candidate)
+        context.onu_registered_candidate_var.get.return_value = "其它"
+        self.assertIsNone(LineCheckAssistant._selected_registered_onu(context))
+
+    @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_onu_manage_query_clicked_starts_worker(self, thread_class, askyesno):
+        worker = thread_class.return_value
+        connection = OltConnection("172.18.18.152", "172.33.5.35", "zte", "zte")
+        context = SimpleNamespace(
+            onu_manage_query_running=False,
+            onu_manage_delete_running=False,
+            onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C600)),
+            onu_registration_window=Mock(),
+            _current_onu_connection=Mock(return_value=connection),
+            _current_onu_manage_pon_interface=Mock(return_value="gpon_olt-1/1/5"),
+            _clear_registered_candidates=Mock(),
+            _set_onu_query_status=Mock(),
+            _set_onu_registration_action_buttons_state=Mock(),
+            _onu_manage_query_worker=Mock(),
+        )
+
+        LineCheckAssistant._on_onu_manage_query_clicked(context)
+
+        self.assertTrue(context.onu_manage_query_running)
+        context._clear_registered_candidates.assert_called_once_with()
+        context._set_onu_registration_action_buttons_state.assert_called_once_with("disabled")
+        thread_class.assert_called_once_with(
+            target=context._onu_manage_query_worker,
+            args=(OLT_FAMILY_C600, connection, "gpon_olt-1/1/5"),
+            daemon=True,
+        )
+        worker.start.assert_called_once_with()
+
+    def test_complete_onu_manage_query_lists_candidates_without_autoselect(self):
+        candidate = RegisteredOnu(
+            family=OLT_FAMILY_C600,
+            pon_interface="gpon_olt-1/1/5",
+            onu_interface="gpon_onu-1/1/5:55",
+            onu_id=55,
+            state="OffLine",
+            serial_number="ZTEG12345678",
+            onu_type="CXP-55",
+        )
+        context = SimpleNamespace(
+            onu_manage_query_running=True,
+            onu_registered_candidates=(),
+            onu_registered_combo=Mock(),
+            onu_registered_candidate_var=Mock(),
+            onu_manage_delete_button=Mock(),
+            onu_stop_button=Mock(),
+            _set_onu_registration_action_buttons_state=Mock(),
+            _set_onu_query_status=Mock(),
+            _log=Mock(),
+        )
+        result = OnuOperationResult(
+            True,
+            "查询到 1 个离线/非 working 的已注册 ONU，请选择要删除的一台",
+            registered_onus=(candidate,),
+        )
+
+        LineCheckAssistant._complete_onu_manage_query(context, OLT_FAMILY_C600, "172.18.18.152", result)
+
+        self.assertFalse(context.onu_manage_query_running)
+        self.assertEqual(context.onu_registered_candidates, (candidate,))
+        context.onu_registered_combo.configure.assert_called_once_with(
+            values=(candidate.display_text,),
+            state="readonly",
+        )
+        context.onu_registered_candidate_var.set.assert_called_once_with("")
+        context.onu_manage_delete_button.configure.assert_called_once_with(state="disabled")
+
+    @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_onu_manage_delete_clicked_confirms_and_starts_worker(self, thread_class, askyesno):
+        worker = thread_class.return_value
+        candidate = RegisteredOnu(
+            family=OLT_FAMILY_C600,
+            pon_interface="gpon_olt-1/1/5",
+            onu_interface="gpon_onu-1/1/5:55",
+            onu_id=55,
+            state="OffLine",
+            serial_number="ZTEG12345678",
+            onu_type="CXP-55",
+        )
+        connection = OltConnection("172.18.18.152", "172.33.5.35", "zte", "zte")
+        context = SimpleNamespace(
+            onu_manage_delete_running=False,
+            onu_manage_query_running=False,
+            onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C600)),
+            onu_registration_window=Mock(),
+            _selected_registered_onu=Mock(return_value=candidate),
+            _current_onu_connection=Mock(return_value=connection),
+            _set_onu_query_status=Mock(),
+            _set_onu_registration_action_buttons_state=Mock(),
+            _onu_manage_delete_worker=Mock(),
+        )
+
+        LineCheckAssistant._on_onu_manage_delete_clicked(context)
+
+        self.assertTrue(context.onu_manage_delete_running)
+        askyesno.assert_called_once()
+        thread_class.assert_called_once_with(
+            target=context._onu_manage_delete_worker,
+            args=(OLT_FAMILY_C600, connection, candidate),
+            daemon=True,
+        )
+        worker.start.assert_called_once_with()
+
+    def test_complete_onu_manage_delete_clears_candidates_on_success(self):
+        context = SimpleNamespace(
+            onu_manage_delete_running=True,
+            onu_stop_button=Mock(),
+            _set_onu_registration_action_buttons_state=Mock(),
+            _set_onu_query_status=Mock(),
+            _log=Mock(),
+            _clear_registered_candidates=Mock(),
+        )
+        result = OnuOperationResult(True, "已删除 gpon_onu-1/1/5:55 并确认其重新回到未注册状态（未执行 write）")
+
+        LineCheckAssistant._complete_onu_manage_delete(context, OLT_FAMILY_C600, "172.18.18.152", result)
+
+        self.assertFalse(context.onu_manage_delete_running)
+        context._clear_registered_candidates.assert_called_once_with()
+        context._set_onu_query_status.assert_called_once()
 
     @patch("line_check_assistant.app.messagebox.showwarning")
     def test_onu_config_step_requires_selection_then_advances(self, showwarning):

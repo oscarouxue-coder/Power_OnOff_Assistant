@@ -127,6 +127,27 @@ class PowerSupplyTests(unittest.TestCase):
         self.assertEqual(fake_serial.writes[-1], channel_power_frame(2, True))
         self.assertTrue(fake_serial.closed)
 
+    def test_service_allows_upgrade_specific_one_second_power_cycle_delays(self):
+        fake_serial = FakeSerial()
+        clock = FakeClock()
+
+        result = power_on_selected_channels(
+            "COM106",
+            [2],
+            serial_factory=lambda **_kwargs: fake_serial,
+            sleep_fn=clock.sleep,
+            monotonic_fn=clock.monotonic,
+            off_delay_seconds=1.0,
+            on_delay_seconds=1.0,
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(clock.sleeps, [1.0, 1.0])
+        self.assertEqual(
+            fake_serial.writes,
+            [channel_power_frame(2, False), channel_power_frame(2, True)],
+        )
+
     def test_service_rejects_invalid_channel_without_opening_serial_port(self):
         opened = []
         result = power_on_selected_channels(

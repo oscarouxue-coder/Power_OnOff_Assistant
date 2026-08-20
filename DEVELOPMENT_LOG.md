@@ -2,6 +2,46 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-19 - 调整升级入 boot 上下电时序
+
+- 类型：修改
+- 背景：项目负责人要求将样机全包升级进入 boot 前的程控电源“断电后等待 1.5 秒、上电后等待 3 秒”均调整为 1 秒。本次范围仅限进入 boot 的首次上下电，不改变普通自动上/下电或 `Tftp指令` 传输后备用 repower 的默认时序。
+- 完成内容：① `ProgrammablePowerSupply.power_on_channels` 与 `power_on_selected_channels` 增加可选的断电/上电等待参数，默认值仍为 1.5 秒/3 秒；② `Tftp指令` 和 `Tftp Put` 在进入 boot 前显式传入 1 秒/1 秒，串行与并行 coordinator 一致；③ 主执行日志新增当次上下电时序提示；④ 回归保护默认电源时序、升级专用 1 秒/1 秒、并行传递以及传输后 repower 仍使用普通默认值；⑤ 同步操作员说明、验收基线和项目状态。
+- 修改文件：`src/core/power_supply.py`、`src/services/power_on_service.py`、`src/services/serial_upgrade_service.py`、`tests/test_power_supply.py`、`tests/test_serial_upgrade_service.py`、`line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m py_compile src/core/power_supply.py src/services/power_on_service.py src/services/serial_upgrade_service.py tests/test_power_supply.py tests/test_serial_upgrade_service.py`；`python -m unittest discover -s tests -p test_power_supply.py -v`；`python -m unittest discover -s tests -p test_serial_upgrade_service.py -v`；`python scripts\verify_baseline.py`。
+- 验证结果：电源专项 10 项、串口升级专项 38 项全部通过；完整基线门禁全绿，57 个当前主程序源码文件编译覆盖、694 项单元测试、164 个强制基线测试均实际执行，`ALL CHECKS PASSED`。
+- 后续待办：真实样机分别用 `Tftp指令` 和 `Tftp Put` 确认 1 秒/1 秒时序仍能稳定进入 boot；现场结论由项目负责人提供后再更新验收状态。
+
+## 2026-08-18 - 已注册管理改为可删除任意状态 ONU
+
+- 类型：优化 / 需求调整
+- 背景：项目负责人要求「已注册管理」从「只允许删除离线/非 working ONU」改为「可删除任意状态的已注册 ONU（含在线 working）」。
+- 完成内容：① C300 `parse_registered_candidates` 不再过滤 non-working，列出目标 PON 下全部已注册 ONU；② C600 `parse_onu_state_non_working` 改为 `parse_onu_state_label`，只取状态标签、不做在线/离线过滤；③ service 查询列出全部已注册 ONU，删除流程移除「非 working 状态复核」，仅保留 baseinfo 接口/SN 身份复核 + 删除后回读；④ UI 提示与删除确认弹窗改为明示「含在线 working、删除在线 ONU 会中断业务」，加强危险警示；⑤ 同步更新 driver/service/UI 测试与强制基线、文档（`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、操作员说明）。
+- 修改文件：`src/core/zte_c300_onu.py`、`src/core/zte_c600_onu.py`、`src/services/onu_registration_service.py`、`line_check_assistant/app.py`、`tests/test_onu_registration_service.py`、`scripts/verify_baseline.py`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`line_check_assistant_README.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：相关文件 `py_compile`、`python -m unittest discover -s tests -p test_onu_registration_service.py -v`、`python scripts/verify_baseline.py`。
+- 验证结果：ONU service 专项 34 项通过（移除 1 项「在线 ONU 拒绝删除」，删除在线 ONU 已由「删除并回读验证」用例覆盖）。
+- 后续待办：真实样机确认 C300/C600 `no onu` 删除命令格式；现场复验删除在线 working ONU 的二次确认与中断业务提示。
+
+## 2026-08-18 - 修正已注册管理查询命令（改用 OLT 已确认命令）
+
+- 类型：BUG 修复
+- 背景：项目负责人现场执行 C300「已注册管理」查询，`show gpon onu state gpon-olt_1/1/1`（按 PON 不带 ONU ID）返回 `%Error 20202: Invalid input detected at '^' marker.Invalid parameter`，确认 C300 不支持按 PON 过滤的 state 查询格式。项目负责人要求：以后先确认 OLT 实际支持的命令再做对应改动，不凭空假设命令格式。
+- 完成内容：① C300 已注册查询改用已确认的全局 `show gpon onu state`（不带参数），解析时再按目标 PON 过滤，与既有 `query_c300_cleanup_candidates` 一致；② C600 查询同样修正：改用参考工具 `ZteTitanOnuProvisioner` 已实机确认的 `show running-config-interface <pon>` 查已注册列表，再逐台用真实注册轮询已确认的 `show gpon onu state <pon> <id>` 判定离线/非 working；③ service 的查询与删除前状态复核分型号走对应已确认命令；④ UI 确认弹窗的命令文本同步修正；⑤ 更新 driver/service/测试与 `ACCEPTANCE_BASELINE.md` 待确认项。
+- 修改文件：`src/core/zte_c300_onu.py`、`src/core/zte_c600_onu.py`、`src/services/onu_registration_service.py`、`line_check_assistant/app.py`、`tests/test_onu_registration_service.py`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：相关文件 `py_compile`、`python -m unittest discover -s tests -p test_onu_registration_service.py -v`。
+- 验证结果：ONU service 专项 35 项全部通过。
+- 后续待办：真实样机确认 C300/C600 的 `no onu` 删除命令格式（两型号删除均为「已实现未验收」，未确认真实输出）；现场复验 C300 全局 state 查询与 C600 running-config-interface 查询、逐台 state 判定的实际输出。
+
+## 2026-08-18 - 新增 ONU 已注册管理（查询已注册 ONU 并显式删除离线/非 working ONU）
+
+- 类型：功能
+- 背景：项目负责人要求在 ONU 注册模块增加「查询目标 PON 口已注册的 ONU，然后可以选择删除指定 ONU」。经确认，范围定为 C300 与 C600 均支持、只允许删除离线/非 working 的 ONU、采用独立入口。这放宽了 C600 原有的「永不删除」验收边界，改为「不自动删除，仅操作员在已注册管理入口显式选择一台离线/非 working ONU 后允许删除」。
+- 完成内容：① 新增 `RegisteredOnu` 模型与 `OnuOperationResult.registered_onus` 字段；② C300/C600 各自新增 `build_registered_query_command`（`show gpon onu state <pon>`）、`parse_registered_candidates`（仅保留目标 PON 下离线/非 working 项）、`build_delete_identity_command`（删除前 baseinfo 身份复核）、`build_delete_commands`（仅一条 `no onu`）与 `deleted_if_baseinfo_empty`（删除后回读）；③ service 新增 `query_registered_candidates`（只读查询 + 逐候选补 SN/型号）与 `delete_registered_onu`（删除前状态/接口/SN 三重复核 → 只删这一台 → 删除后回读确认，全程逐条错误停止、可停止、不写 write）；④ ONU 窗口新增第 4 个分页「已注册管理」，含目标机框/槽位/PON、查询按钮、单选下拉、红色危险删除按钮与二次确认，型号切换联动 C600 scope 并清空旧候选；⑤ 新增 driver/service/UI 回归并纳入强制基线；⑥ 同步 `ACCEPTANCE_BASELINE.md §2.10`（C600 删除边界、四步分页、待确认命令格式）、`PROJECT_STATUS.md`、操作员说明。
+- 修改文件：`src/models/onu_registration_models.py`、`src/models/__init__.py`、`src/core/zte_c300_onu.py`、`src/core/zte_c600_onu.py`、`src/services/onu_registration_service.py`、`line_check_assistant/app.py`、`tests/test_onu_registration_service.py`、`tests/test_app.py`、`scripts/verify_baseline.py`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`line_check_assistant_README.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行相关文件 `py_compile`、`python -m unittest discover -s tests -p test_onu_registration_service.py -v`、`python -m unittest discover -s tests -p test_app.py`，随后执行 `python scripts/verify_baseline.py` 全绿。
+- 验证结果：ONU service 专项 35 项、主程序专项 164 项均通过；完整基线门禁预期全绿（含新增 8 条强制基线测试）。
+- 后续待办：真实样机确认 `show gpon onu state <pon>`（不带 ONU ID 的按 PON 查询格式）与 C600 `no onu` 删除命令的实际输出格式，并分别复验 C300/C600 已注册管理的查询、单选、二次确认、身份复核、删除与回读；Windows 四步分页布局待桌面目视确认。现场结论由项目负责人提供后再更新验收状态。
+
 ## 2026-08-18 - 确认便携版目标机启动
 
 - 类型：真实样机验收 / 状态更新

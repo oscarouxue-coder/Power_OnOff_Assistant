@@ -9,6 +9,7 @@ from src.models.onu_registration_models import (
     OLT_FAMILY_C300,
     OnuDiscoveryScope,
     OnuProvisionRequest,
+    RegisteredOnu,
 )
 
 
@@ -516,3 +517,57 @@ class ZteC300OnuDriver:
             "exit",
             "end",
         ]
+
+    # ---- 已注册 ONU 管理（查询目标 PON 已注册 ONU → 显式删除离线 / 非 working ONU） ----
+
+    @staticmethod
+    def build_registered_query_command(pon_interface: str) -> str:
+        """查询目标 PON 口下已注册 ONU 的运行状态。
+
+        C300 仅确认支持全局 `show gpon onu state`（不带参数），不支持按 PON
+        过滤的 `show gpon onu state <pon>`；解析时再按目标 PON 过滤。
+        """
+        return "show gpon onu state"
+
+    def parse_registered_candidates(
+        self,
+        pon_interface: str,
+        state_output: str,
+    ) -> list[RegisteredOnu]:
+        """从 state 输出中提取目标 PON 下全部已注册 ONU（不区分在线 / 离线状态）。"""
+        target_pon = pon_interface.rsplit("_", 1)[-1]
+        candidates: list[RegisteredOnu] = []
+        for item in self.parse_registered_states(state_output):
+            if item["pon"] != target_pon:
+                continue
+            candidates.append(
+                RegisteredOnu(
+                    family=self.family,
+                    pon_interface=pon_interface,
+                    onu_interface=item["interface"],
+                    onu_id=int(item["onu_id"]),
+                    state=item["phase"],
+                )
+            )
+        return candidates
+
+    @staticmethod
+    def build_delete_identity_command(candidate: RegisteredOnu) -> str:
+        """删除前身份复核：读取该 ONU 的接口、型号与 SN。"""
+        return f"show gpon onu baseinfo {candidate.pon_interface} {candidate.onu_id}"
+
+    @staticmethod
+    def build_delete_commands(candidate: RegisteredOnu) -> list[str]:
+        """在目标 PON 口下删除指定 ONU，仅生成这一台的 `no onu`。"""
+        return [
+            "configure terminal",
+            f"interface {candidate.pon_interface}",
+            f"no onu {candidate.onu_id}",
+            "exit",
+            "end",
+        ]
+
+    @staticmethod
+    def deleted_if_baseinfo_empty(baseinfo_output: str) -> bool:
+        """删除后回读：baseinfo 返回空记录视为该 ONU 已释放。"""
+        return bool(NO_ONU_DATA_RE.search(baseinfo_output or ""))
