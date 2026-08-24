@@ -104,7 +104,7 @@ class C300CleanupCandidate:
     def display_text(self) -> str:
         details = [self.onu_interface]
         if self.onu_type:
-            details.append(f"型号:{self.onu_type}")
+            details.append(f"类型模板:{self.onu_type}")
         if self.serial_number:
             details.append(f"SN:{self.serial_number}")
         details.append(f"状态:{self.state}")
@@ -127,7 +127,7 @@ class RegisteredOnu:
     def display_text(self) -> str:
         details = [self.onu_interface]
         if self.onu_type:
-            details.append(f"型号:{self.onu_type}")
+            details.append(f"类型模板:{self.onu_type}")
         if self.serial_number:
             details.append(f"SN:{self.serial_number}")
         details.append(f"状态:{self.state}")

@@ -355,6 +355,14 @@ class DriverTests(unittest.TestCase):
             errors,
         )
 
+        invalid_template_errors = ZteC600OnuDriver().validate_request(
+            replace(make_c600_request(), onu_type="OSCAR XGS")
+        )
+        self.assertIn(
+            "ONU 类型模板名称只能包含字母、数字、点、下划线和连字符",
+            invalid_template_errors,
+        )
+
     def test_c300_and_c600_parse_their_own_discovery_formats(self):
         c300 = ZteC300OnuDriver().parse_discovery(
             "gpon-onu_1/2/1:3 GPONA62D6F78 unknown\n"
@@ -606,6 +614,18 @@ class DriverTests(unittest.TestCase):
                 "onu 56 type CXP-55 sn ZTEG99999999\nZXAN#"
             ),
             [(55, "CXP-55", "ZTEG12345678"), (56, "CXP-55", "ZTEG99999999")],
+        )
+        self.assertEqual(
+            RegisteredOnu(
+                family=OLT_FAMILY_C600,
+                pon_interface=pon_interface,
+                onu_interface="gpon_onu-1/1/5:55",
+                onu_id=55,
+                state="OffLine",
+                serial_number="ZTEG12345678",
+                onu_type="OSCAR_XGS",
+            ).display_text,
+            "gpon_onu-1/1/5:55  类型模板:OSCAR_XGS  SN:ZTEG12345678  状态:OffLine",
         )
         self.assertEqual(
             driver.build_onu_state_command(pon_interface, 55),

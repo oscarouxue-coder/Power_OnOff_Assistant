@@ -82,7 +82,7 @@ class ZteC600OnuDriver:
         if request.onu_id is None or not 1 <= request.onu_id <= 1024:
             errors.append("ONU ID 必须在 1-1024 之间")
         if not SAFE_NAME_RE.fullmatch(request.onu_type or ""):
-            errors.append("ONU 型号只能包含字母、数字、点、下划线和连字符")
+            errors.append("ONU 类型模板名称只能包含字母、数字、点、下划线和连字符")
         if not SN_RE.fullmatch(request.onu.serial_number or ""):
             errors.append("SN 必须为 4-32 位 ASCII 字母、数字、下划线或连字符")
         if request.real_speed not in {"xgspon", "xgpon", "gpon", "auto"}:
@@ -293,7 +293,7 @@ class ZteC600OnuDriver:
             if item["interface"].lower() != onu_interface.lower():
                 errors.append(f"C600 ONU 接口不一致：{item['interface']}")
             if item["type"].upper() != request.onu_type.upper():
-                errors.append(f"C600 ONU 型号不一致：{item['type']}")
+                errors.append(f"C600 ONU 类型模板不一致：{item['type']}")
             if item["serial_number"].upper() != request.onu.serial_number.upper():
                 errors.append(f"C600 ONU SN 不一致：{item['serial_number']}")
             if item["mode"].lower() != "sn" or item["state"].lower() != "ready":
@@ -478,7 +478,7 @@ class ZteC600OnuDriver:
 
     @staticmethod
     def parse_registered_onu_defs(output: str) -> list[tuple[int, str, str]]:
-        """解析 `show running-config-interface` 输出中的 `onu <ID> type <型号> sn <SN>` 行。"""
+        """解析 `show running-config-interface` 输出中的 `onu <ID> type <类型模板> sn <SN>` 行。"""
         defs: list[tuple[int, str, str]] = []
         for raw_line in clean_terminal_text(output or "").splitlines():
             match = re.match(
@@ -508,7 +508,7 @@ class ZteC600OnuDriver:
 
     @staticmethod
     def build_delete_identity_command(candidate: RegisteredOnu) -> str:
-        """删除前身份复核：读取该 ONU 的接口、型号与 SN。"""
+        """删除前身份复核：读取该 ONU 的接口、类型模板与 SN。"""
         return f"show gpon onu baseinfo {candidate.pon_interface} {candidate.onu_id}"
 
     @staticmethod

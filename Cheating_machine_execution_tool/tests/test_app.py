@@ -2697,6 +2697,12 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn('text="C600 查询范围"', open_source)
         self.assertIn('text="生成预览并进入下一步"', open_source)
         self.assertIn('text="完整验证成功后执行 write（危险，仅本次有效）"', open_source)
+        self.assertIn('"ONU 类型模板"', open_source)
+        self.assertIn(
+            '"ONU 类型模板是 OLT 中的 onu-type 模板名称；默认带入查询到的 ONU 型号，可按实际兼容模板修改。"',
+            open_source,
+        )
+        self.assertNotIn('"ONU 型号"', open_source)
         self.assertIn('"上网VPort"', open_source)
         self.assertIn('"TR069 50→4。GEM与VPort必须1:1对应。"', open_source)
         self.assertIn("self.onu_c600_write_after_success_var.set(False)", open_source)
@@ -2709,8 +2715,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
     def test_onu_window_reserves_bottom_rows_without_maximizing(self):
         open_source = inspect.getsource(LineCheckAssistant._open_onu_registration_module)
 
-        self.assertIn('dialog.geometry("1000x800")', open_source)
-        self.assertIn('dialog.minsize(1000, 800)', open_source)
+        self.assertIn('dialog.geometry("1200x1000")', open_source)
+        self.assertIn('dialog.minsize(1200, 1000)', open_source)
         self.assertIn('content.rowconfigure(3, weight=1)', open_source)
         self.assertIn('self.onu_notebook.grid(row=3, column=0, sticky="nsew")', open_source)
         self.assertIn('height=8', open_source)

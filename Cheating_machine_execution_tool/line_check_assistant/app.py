@@ -1820,8 +1820,8 @@ class LineCheckAssistant(Tk):
         dialog = Toplevel(self)
         self.onu_registration_window = dialog
         dialog.title("ONU注册")
-        dialog.geometry("1000x800")
-        dialog.minsize(1000, 800)
+        dialog.geometry("1200x1000")
+        dialog.minsize(1200, 1000)
         dialog.configure(background=COLOR_BG)
 
         content = Frame(dialog, padx=20, pady=18, background=COLOR_BG)
@@ -2113,7 +2113,7 @@ class LineCheckAssistant(Tk):
             return entry
 
         c600_field(0, 0, "ONU ID", self.onu_c600_onu_id_var, 8)
-        c600_field(0, 2, "ONU 型号", self.onu_c600_onu_type_var, 14)
+        c600_field(0, 2, "ONU 类型模板", self.onu_c600_onu_type_var, 14)
         Label(c600_form, text="速率设置", anchor="w").grid(row=0, column=4, sticky="w", padx=(10, 4), pady=5)
         ttk.Combobox(
             c600_form,
@@ -2137,6 +2137,11 @@ class LineCheckAssistant(Tk):
             highlightthickness=0,
             borderwidth=0,
         ).grid(row=1, column=6, columnspan=2, sticky="w", padx=10, pady=5)
+        ttk.Label(
+            c600_form,
+            text="ONU 类型模板是 OLT 中的 onu-type 模板名称；默认带入查询到的 ONU 型号，可按实际兼容模板修改。",
+            style="Muted.TLabel",
+        ).grid(row=2, column=0, columnspan=8, sticky="w", padx=10, pady=(2, 0))
         Checkbutton(
             c600_form,
             text="完整验证成功后执行 write（危险，仅本次有效）",
@@ -2148,7 +2153,7 @@ class LineCheckAssistant(Tk):
             foreground=COLOR_TEXT,
             highlightthickness=0,
             borderwidth=0,
-        ).grid(row=2, column=0, columnspan=8, sticky="w", padx=10, pady=(2, 6))
+        ).grid(row=3, column=0, columnspan=8, sticky="w", padx=10, pady=(2, 6))
 
         mapping_frame = ttk.LabelFrame(self.onu_c600_config_frame, text="业务映射（每行 ServiceID,VLAN）")
         mapping_frame.pack(fill="both", expand=True, pady=(8, 0))

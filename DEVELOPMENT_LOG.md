@@ -2,6 +2,26 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-25 - 调整ONU注册窗口尺寸
+
+- 类型：修改
+- 背景：项目负责人要求将ONU注册窗口的宽高从`1000x800`调整为`1200x1000`，以增加四步分页及业务参数区域的可视空间。
+- 完成内容：① 将ONU注册窗口默认尺寸和最小尺寸统一调整为`1200x1000`；② 同步更新窗口布局回归断言；③ 同步操作员说明、验收基线和当前项目状态；④ 保持窗口布局结构、ONU配置、注册、验证、write及清理逻辑不变。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在`Cheating_machine_execution_tool`执行`python -m unittest discover -s tests -p "test_app.py"`及`python scripts\verify_baseline.py`；完整门禁因TFTP测试需临时绑定本机UDP 69在沙箱外执行。
+- 验证结果：主界面166项通过；完整门禁`ALL CHECKS PASSED`，57个当前源码文件编译覆盖、698项单元测试及169个强制基线测试全部通过，协议不变量检查全绿。本轮未构建或运行EXE。
+- 后续待办：在Windows源码版打开ONU注册窗口，目视确认默认/最小尺寸为`1200x1000`，四步分页及底部危险提示、状态和操作按钮显示完整。
+
+## 2026-08-25 - 明确区分ONU型号与类型模板
+
+- 类型：界面文案优化 / 语义修复
+- 背景：ONU注册“配置业务”页原字段显示为“ONU 型号”，但该值实际用于C600命令`onu <ID> type <模板> sn <SN>`，语义应为OLT中的ONU类型模板；同时查询未注册ONU得到的`model`才是设备发现型号。
+- 完成内容：① C600配置字段改为“ONU 类型模板”，增加说明：默认带入查询到的ONU型号、可按OLT实际兼容模板修改；② 未注册查询结果继续显示“型号”，已注册与清理候选改为显示“类型模板”；③ 模板名称校验和回读不一致错误同步使用“ONU 类型模板”措辞；④ 保留内部`onu_type/c600_onu_type`配置键、INI兼容、自动带入、命令生成、注册/write/清理流程不变；⑤ 补充界面、校验和候选显示回归，并同步操作说明、验收不变量与交接状态。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/src/core/zte_c600_onu.py`、`Cheating_machine_execution_tool/src/models/onu_registration_models.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_onu_registration_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在`Cheating_machine_execution_tool`执行`python -m unittest discover -s tests -p "test_onu_registration_service.py"`、`python -m unittest discover -s tests -p "test_app.py"`及`python scripts\verify_baseline.py`；完整门禁因TFTP测试需临时绑定本机UDP 69在沙箱外执行。
+- 验证结果：ONU注册36项、主界面166项均通过；完整门禁`ALL CHECKS PASSED`，57个当前源码文件编译覆盖、698项单元测试及169个强制基线测试全部通过，协议不变量检查全绿。本轮未登录或修改OLT/ONU，未构建或运行EXE。
+- 后续待办：在Windows源码版打开ONU注册页，确认查询结果仍显示物理“型号”，配置页显示“ONU 类型模板”及说明，已注册/清理候选显示“类型模板”，且`1000x800`窗口无文字裁切。
+
 ## 2026-08-25 - 优化C300未注册ONU展示与预检查
 
 - 类型：优化 / BUG 修复
