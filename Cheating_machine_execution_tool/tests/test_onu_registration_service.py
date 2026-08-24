@@ -72,7 +72,7 @@ def make_c600_request():
 
 def c300_precheck_responses():
     return {
-        "show gpon onu uncfg gpon-olt_1/2/1": (
+        "show gpon onu uncfg": (
             "gpon-onu_1/2/1:3 GPONA62D6F78 unknown\nZXAN#"
         ),
         "show gpon onu baseinfo gpon-olt_1/2/1 3": (
@@ -365,8 +365,19 @@ class DriverTests(unittest.TestCase):
 
         self.assertEqual(c300[0].onu_interface, "gpon-onu_1/2/1:3")
         self.assertEqual(c300[0].suggested_onu_id, 3)
+        self.assertEqual(c300[0].registration_type, "SD-41（配置模板）")
+        self.assertEqual(c300[0].pon_type, "GPON（根据接口推断）")
+        self.assertEqual(
+            c300[0].display_text,
+            "gpon-onu_1/2/1:3  注册类型:SD-41（配置模板）  "
+            "SN:GPONA62D6F78  PON类型:GPON（根据接口推断）  状态:unknown",
+        )
         self.assertEqual(c600[0].pon_interface, "gpon_olt-1/1/5")
         self.assertEqual(c600[0].model, "CXP-55")
+        self.assertEqual(
+            c600[0].display_text,
+            "gpon_olt-1/1/5  型号:CXP-55  SN:ZTEG12345678  速率:XGS-PON",
+        )
 
     def test_c300_precheck_uses_targeted_id_and_global_sn_queries(self):
         driver = ZteC300OnuDriver()
@@ -382,7 +393,7 @@ class DriverTests(unittest.TestCase):
 
         self.assertEqual(commands, [
             "terminal length 0",
-            "show gpon onu uncfg gpon-olt_1/2/1",
+            "show gpon onu uncfg",
             "show gpon onu baseinfo gpon-olt_1/2/1 3",
             "show gpon onu by sn GPONA62D6F78",
         ])

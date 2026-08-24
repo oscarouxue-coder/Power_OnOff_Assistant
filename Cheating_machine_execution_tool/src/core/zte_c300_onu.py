@@ -14,6 +14,7 @@ from src.models.onu_registration_models import (
 
 
 C300_ONU_TYPE = "SD-41"
+C300_INFERRED_PON_TYPE = "GPON（根据接口推断）"
 C300_SERVICE_PORTS = (
     (1, 1, 200, "Internet"),
     (2, 2, 46, "TR069"),
@@ -63,6 +64,8 @@ class ZteC300OnuDriver:
                     pon_interface=f"gpon-olt_{match.group('pon')}",
                     onu_interface=match.group(1),
                     suggested_onu_id=int(match.group("id")),
+                    registration_type=f"{C300_ONU_TYPE}（配置模板）",
+                    pon_type=C300_INFERRED_PON_TYPE,
                     serial_number=match.group(4),
                     state=match.group(5),
                 )
@@ -96,7 +99,7 @@ class ZteC300OnuDriver:
         _pon_path, onu_id, olt_interface, _onu_interface = self._target_parts(request)
         return [
             "terminal length 0",
-            f"show gpon onu uncfg {olt_interface}",
+            "show gpon onu uncfg",
             f"show gpon onu baseinfo {olt_interface} {onu_id}",
             f"show gpon onu by sn {request.onu.serial_number}",
         ]

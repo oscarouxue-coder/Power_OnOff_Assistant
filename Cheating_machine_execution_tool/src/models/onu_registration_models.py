@@ -67,6 +67,8 @@ class DiscoveredOnu:
     serial_number: str
     onu_interface: str = ""
     suggested_onu_id: Optional[int] = None
+    registration_type: str = ""
+    pon_type: str = ""
     model: str = ""
     speed_mode: str = ""
     state: str = ""
@@ -75,9 +77,13 @@ class DiscoveredOnu:
     def display_text(self) -> str:
         interface = self.onu_interface or self.pon_interface
         details = [interface]
+        if self.registration_type:
+            details.append(f"注册类型:{self.registration_type}")
         if self.model:
             details.append(f"型号:{self.model}")
         details.append(f"SN:{self.serial_number}")
+        if self.pon_type:
+            details.append(f"PON类型:{self.pon_type}")
         if self.speed_mode:
             details.append(f"速率:{self.speed_mode}")
         if self.state:

@@ -2,6 +2,26 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-25 - 优化C300未注册ONU展示与预检查
+
+- 类型：优化 / BUG 修复
+- 背景：C300全局`show gpon onu uncfg`实机只返回`OnuIndex / Sn / State`，导致列表无法像C600一样展示辅助信息；同时只读核查确认原指定PON预检查命令`show gpon onu uncfg gpon-olt_1/2/1`返回`%Error 20202: Invalid input ... Invalid parameter`。
+- 完成内容：① C300发现结果增加`注册类型:SD-41（配置模板）`与`PON类型:GPON（根据接口推断）`，明确区分配置值/接口推断与OLT真实探测值；② 注册前未注册复核改用实机支持的全局查询，继续按目标ONU接口与SN精确匹配，其余ID/SN冲突检查、注册、清理及write边界不变；③ 补充C300显示字段、C600原显示不变和新预检查命令的回归断言；④ 同步操作员说明、验收不变量和当前交接状态。
+- 修改文件：`Cheating_machine_execution_tool/src/models/onu_registration_models.py`、`Cheating_machine_execution_tool/src/core/zte_c300_onu.py`、`Cheating_machine_execution_tool/tests/test_onu_registration_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在`Cheating_machine_execution_tool`执行`python -m unittest discover -s tests -p test_onu_registration_service.py -v`、`python -m unittest discover -s tests -p test_app.py -v`、`python -m unittest discover -s tests -p test_tftp_transport.py -v`及`python scripts\verify_baseline.py`；TFTP专项与完整门禁因需临时绑定本机UDP 69在沙箱外执行。
+- 验证结果：ONU注册36项、主界面166项、TFTP 9项均通过；完整门禁`ALL CHECKS PASSED`，57个当前源码文件编译覆盖、698项单元测试及169个强制基线测试全部通过，协议不变量检查全绿。实机只读查询已确认C300原始字段及无效指定PON命令，本轮未进入配置模式、未注册/删除ONU、未执行`write`。
+- 后续待办：Windows源码版目视确认C300列表文字完整显示；按既有待办完成C300真实注册、冲突拦截、上线轮询、完整回读、显式删除和`write`验收。
+
+## 2026-08-24 - 补充渐进式模块化开发规则
+
+- 类型：文档 / 优化
+- 背景：`line_check_assistant/app.py` 已承载较多窗口与状态，但项目已有多项 Windows 和真实样机验收结论。项目负责人担心一次性拆分会影响已验收功能，要求先优化开发规则，后续按“新增功能从独立模块开始、既有功能小步整理”的方式执行。
+- 完成内容：① 在 `AGENTS.md` 增加已验收功能默认结构冻结、新功能独立分层、结构调整与业务行为分轮、小步可回退四条硬规则；② 在 `line-check-dev` 工作流补充渐进式模块化实施边界，禁止仅为减行主动搬迁已验收代码，并要求跨模块拆分前取得用户确认、先补特征测试；③ 在 `PROJECT_STATUS.md` 交接规则登记后续开发入口，明确 `app.py` 只保留入口装配和 UI 回调。
+- 修改文件：`AGENTS.md`、`.claude/skills/line-check-dev/SKILL.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：执行 `git diff --check`，并核对四份文档中的规则表述、职责边界和文档同步范围。
+- 验证结果：`git diff --check` 通过；差异仅包含4份规则/交接文档共27行新增，未修改业务代码、测试、验收标签或操作员行为，未构建或运行 EXE。
+- 后续待办：后续新增功能按独立模块落位；现有已验收代码仅在明确需求触发时按单一功能边界小步整理，大范围拆分仍需项目负责人另行确认。
+
 ## 2026-08-24 - 统一ONU选中态为标准勾号
 
 - 类型：BUG 修复 / 界面规范
