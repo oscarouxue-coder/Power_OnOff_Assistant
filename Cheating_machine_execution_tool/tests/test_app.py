@@ -2715,8 +2715,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
     def test_onu_window_reserves_bottom_rows_without_maximizing(self):
         open_source = inspect.getsource(LineCheckAssistant._open_onu_registration_module)
 
-        self.assertIn('dialog.geometry("1200x1000")', open_source)
-        self.assertIn('dialog.minsize(1200, 1000)', open_source)
+        self.assertIn('dialog.geometry("1000x900")', open_source)
+        self.assertIn('dialog.minsize(1000, 900)', open_source)
         self.assertIn('content.rowconfigure(3, weight=1)', open_source)
         self.assertIn('self.onu_notebook.grid(row=3, column=0, sticky="nsew")', open_source)
         self.assertIn('height=8', open_source)

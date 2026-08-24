@@ -1820,8 +1820,8 @@ class LineCheckAssistant(Tk):
         dialog = Toplevel(self)
         self.onu_registration_window = dialog
         dialog.title("ONU注册")
-        dialog.geometry("1200x1000")
-        dialog.minsize(1200, 1000)
+        dialog.geometry("1000x900")
+        dialog.minsize(1000, 900)
         dialog.configure(background=COLOR_BG)
 
         content = Frame(dialog, padx=20, pady=18, background=COLOR_BG)

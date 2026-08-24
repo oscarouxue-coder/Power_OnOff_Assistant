@@ -5,12 +5,12 @@
 ## 2026-08-25 - 调整ONU注册窗口尺寸
 
 - 类型：修改
-- 背景：项目负责人要求将ONU注册窗口的宽高从`1000x800`调整为`1200x1000`，以增加四步分页及业务参数区域的可视空间。
-- 完成内容：① 将ONU注册窗口默认尺寸和最小尺寸统一调整为`1200x1000`；② 同步更新窗口布局回归断言；③ 同步操作员说明、验收基线和当前项目状态；④ 保持窗口布局结构、ONU配置、注册、验证、write及清理逻辑不变。
+- 背景：项目负责人先将ONU注册窗口调整为`1200x1000`，随后根据实际显示效果确定最终宽高为`1000x900`，要求同步所有关联文件。
+- 完成内容：① 将ONU注册窗口最终默认尺寸和最小尺寸统一为`1000x900`；② 同步更新窗口布局回归断言；③ 同步操作员说明、验收基线和当前项目状态；④ 保持窗口布局结构、ONU配置、注册、验证、write及清理逻辑不变。
 - 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
 - 验证方法：在`Cheating_machine_execution_tool`执行`python -m unittest discover -s tests -p "test_app.py"`及`python scripts\verify_baseline.py`；完整门禁因TFTP测试需临时绑定本机UDP 69在沙箱外执行。
 - 验证结果：主界面166项通过；完整门禁`ALL CHECKS PASSED`，57个当前源码文件编译覆盖、698项单元测试及169个强制基线测试全部通过，协议不变量检查全绿。本轮未构建或运行EXE。
-- 后续待办：在Windows源码版打开ONU注册窗口，目视确认默认/最小尺寸为`1200x1000`，四步分页及底部危险提示、状态和操作按钮显示完整。
+- 后续待办：在Windows源码版打开ONU注册窗口，目视确认默认/最小尺寸为`1000x900`，四步分页及底部危险提示、状态和操作按钮显示完整。
 
 ## 2026-08-25 - 明确区分ONU型号与类型模板
 
