@@ -2,6 +2,36 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-24 - 统一ONU选中态为标准勾号
+
+- 类型：BUG 修复 / 界面规范
+- 背景：项目负责人在ONU注册页勾选“启用 SN 双重绑定”和“完整验证成功后执行 write”时，Clam主题把选中态显示为叉号，要求修复并把今后所有选中态统一为标准“✔”。
+- 完成内容：① 将ONU页剩余的3个`ttk.Checkbutton`（C300危险删除、C600 SN双重绑定、C600 write）替换为Windows原生`Checkbutton`，统一白色选中底色和标准勾号；② 保留原BooleanVar、默认值、write仅本次授权、危险删除回调和预览失效语义；③ 新增回归同时核对3个ONU控件，并扫描`src/`与`line_check_assistant/`全部Python源码，禁止再次引入`ttk.Checkbutton`；④ 将“所有新增或修改的布尔选择控件均显示标准勾号”写入项目开发规则、操作员说明和验收基线。
+- 修改文件：`AGENTS.md`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行`python -m unittest discover -s tests -p test_app.py -v`和`python scripts/verify_baseline.py`；完整基线在允许绑定本机UDP 69端口的环境运行。
+- 验证结果：主程序166项全部`OK`；完整基线57个源码文件编译覆盖、698项单元测试、169项强制测试全部通过，最终`ALL CHECKS PASSED`；活动业务源码扫描未发现`ttk.Checkbutton(`。
+- 后续待办：在Windows源码版打开ONU注册页，目视确认上述3个选项未选为空框、选中显示标准勾号且文字和底色无错位。本轮未构建或运行EXE。
+
+## 2026-08-24 - 对齐C600业务VPort并补齐IGMP
+
+- 类型：BUG 修复 / 真实样机验收 / 状态更新
+- 背景：项目负责人在NP7287XGS创建Internet 171、TR069 50、Voice 335和IPTV 600四条WAN后，只有Internet取得地址。只读登录C600确认ONU为working/config success、相关VLAN均存在并在上联放通，但旧代码虽然把业务拆到GEM 1/2/3/4，却把全部service-port配置在VPort 1；实机`show gpon onu vport`显示VPort N与GEM N为1:1，因此只有GEM1路径匹配。旧完整验证只检查service-port为OK/YES，没有核对VPort列，也没有配置IPTV IGMP receive-port。
+- 完成内容：① C600业务计划同时派生VLAN→GEM与VLAN→VPort，上网使用可编辑且必须相等的GEM/VPort，语音335固定2、组播600固定3、TR069 50固定4，并拒绝上网资源与固定ID冲突；② 配置命令按VPort分组进入四个`interface vport-...:<ID>`上下文，VLAN 600补齐`igmp fast-leave enable`、`igmp version v2`和`igmp mvlan 600 / receive-port`；③ 完整回读新增service-port实际VPort校验及IGMP配置校验，旧式“全部VPort 1”即使状态OK/YES也会失败；④ UI把字段明确为“上网VPort”并显示GEM/VPort 1:1及IPTV IGMP提示；⑤ 新回归加入强制基线；⑥ 项目负责人授权精确删除并重注册`SDMC176D42AA`，全程未执行write。
+- 修改文件：`.claude/plans/c600_vport_gem_alignment.md`、`Cheating_machine_execution_tool/src/core/zte_c600_onu.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_onu_registration_service.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：执行ONU service专项、主程序专项、相关文件`py_compile`和`python scripts\verify_baseline.py`；真实C600先查询并唯一匹配`gpon_onu-1/1/5:1 / SDMC176D42AA`，删除前再次回读身份，删除后确认baseinfo为空及第2次未注册查询发现目标，再用修正版完成注册、上线、collection/service-port/detail-info/MVLAN回读和四个业务VLAN的MAC表查询。
+- 验证结果：ONU service 36项、主程序165项均`OK`；完整基线57个源码文件编译、697项单测、168项强制测试全部通过，`ALL CHECKS PASSED`。真实ONU第4次轮询进入XGS-PON working，9条service-port分别位于VPort 1/2/3/4且全部OK/YES，VPort 3的IGMP receive-port回读成功；WAN MAC `A2:C3:B4:66:1C:BB/BD/BE/BC`分别在VLAN 171/335/600/50的VPort 1/2/3/4动态学习，证明OLT二层路径已对齐。ONU保持在线，本轮未执行write；该结果不替代ONU页面语音/TR069实际DHCP地址和IPTV节目验收。
+- 后续待办：项目负责人刷新ONU WAN页面，确认Voice 335与TR069 50是否取得预期地址；根据现场IPTV设计确认VLAN 600是路由DHCP还是纯组播桥接并验证节目。确认后再决定是否在C600执行write保存当前运行配置；Windows源码版复验四VPort/IGMP预览和write选项。
+
+## 2026-08-24 - 优化C600业务分层并验证write
+
+- 类型：优化 / BUG 修复 / 真实样机验收
+- 背景：项目负责人要求把C600的多业务从单一T-CONT/GEM改为上网、语音、组播和TR069分层，上网DBA模板改为`WT-10G`，并增加由操作员决定是否执行的`write`选项；同时授权注册一台未注册ONU完成真实写入验证，验证后清理现场并保存清理结果。
+- 完成内容：① C600按VLAN生成四层资源：上网使用可编辑主资源（默认T-CONT 1/GEM 1/`WT-10G`），语音335固定T-CONT 2/GEM 2/`DBA_FONE`，组播600固定T-CONT 3/GEM 3/`DBA_IPTV`，TR069 50固定T-CONT 4/GEM 4/`DBA_TR069`；只创建实际用到的资源并拒绝上网ID与固定2/3/4冲突；② 配置和完整回读校验均按VLAN核对对应GEM，不再把9组业务全部放入GEM 1；③ C600界面增加“完整验证成功后执行 write（危险，仅本次有效）”，默认关闭且每次重开窗口复位，预览、最终确认和日志明确显示本次选择；④ 选择write时，只在ONU进入working且完整只读验证成功后启动独立保存会话；⑤ 修复C600保存会话发送无效`end`以及30秒不足以等待进度点的问题，改为在ZXAN#直接执行`write`并最长等待120秒；⑥ 同步操作员说明、验收基线、项目状态、强制基线测试和实施计划。
+- 修改文件：`.claude/plans/c600_layered_business_and_write.md`、`Cheating_machine_execution_tool/src/core/zte_c600_onu.py`、`Cheating_machine_execution_tool/src/services/onu_registration_service.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/onu_registration_store.py`、`Cheating_machine_execution_tool/tests/test_onu_registration_service.py`、`Cheating_machine_execution_tool/tests/test_onu_registration_store.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/scripts/verify_baseline.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在主源码目录执行ONU service、ONU配置store、主程序三组专项单元测试；执行`python scripts\verify_baseline.py`；真实C600经`172.33.5.35 → 172.18.18.152`发现未注册ONU、精确ID/SN预检、注册NP7287XGS、上线轮询、四组配置回读、write、身份复核后删除、ID/SN释放确认、再次write和重新发现确认。
+- 验证结果：ONU service 35项、配置store 5项、主程序165项均`OK`；完整基线门禁57个源码文件编译覆盖、696项单元测试、167个强制基线测试全部通过，最终`ALL CHECKS PASSED`。真实ONU `SDMC176D42AA`使用ONU ID 1在第5次轮询进入XGS-PON working，四个T-CONT/GEM、9组service、全部service-port OK/YES、config success和MVLAN 600均回读一致。首次write持续输出进度点并超过旧30秒等待，结果不可判定；修复后最终清理状态write约41秒返回`............[OK].`。测试ONU已精确删除，ID/SN为空并重新出现在未注册列表；另一台未注册ONU及既有ONU均未处理，现场清理结果已保存。
+- 后续待办：在Windows源码版目视复验C600分层预览、write默认关闭、关闭重开复位、勾选后确认文案和执行日志；补充C600停止/Access denied专项以及C300真实注册、删除和write验收。本轮未构建或运行EXE。
+
 ## 2026-08-19 - 调整升级入 boot 上下电时序
 
 - 类型：修改

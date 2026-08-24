@@ -54,12 +54,18 @@ def make_c600_request():
         onu=onu,
         onu_id=55,
         onu_type="CXP-55",
-        real_speed="xgspon",
-        tcont_profile="CXP-55",
+        real_speed="auto",
+        tcont_profile="WT-10G",
         services=(
             OnuServiceMapping(1, 170),
-            OnuServiceMapping(2, 335),
+            OnuServiceMapping(2, 171),
+            OnuServiceMapping(3, 172),
+            OnuServiceMapping(4, 173),
+            OnuServiceMapping(5, 335),
             OnuServiceMapping(6, 600),
+            OnuServiceMapping(7, 50),
+            OnuServiceMapping(8, 151),
+            OnuServiceMapping(9, 150),
         ),
     )
 
@@ -152,26 +158,59 @@ def c600_precheck_responses():
 
 
 def c600_verify_responses():
+    services = (
+        (1, 1, 170),
+        (2, 1, 171),
+        (3, 1, 172),
+        (4, 1, 173),
+        (5, 2, 335),
+        (6, 3, 600),
+        (7, 4, 50),
+        (8, 1, 151),
+        (9, 1, 150),
+    )
     collection = (
         "gpon_onu-1/1/5:55 CXP-55 sn SN:ZTEG12345678 ready\n"
         "interface gpon_onu-1/1/5:55\n"
-        "  real-speed xgspon\n  tcont 1 profile CXP-55\n"
-        "  sn-bind enable both\n  gemport 1 tcont 1\n"
+        "  tcont 1 profile WT-10G\n"
+        "  tcont 2 profile DBA_FONE\n"
+        "  tcont 3 profile DBA_IPTV\n"
+        "  tcont 4 profile DBA_TR069\n"
+        "  sn-bind enable both\n"
+        "  gemport 1 tcont 1\n"
+        "  gemport 2 tcont 2\n"
+        "  gemport 3 tcont 3\n"
+        "  gemport 4 tcont 4\n"
         "pon-onu-mng gpon_onu-1/1/5:55\n"
-        "  service 1 gemport 1 vlan 170\n"
-        "  service 2 gemport 1 vlan 335\n"
-        "  service 6 gemport 1 vlan 600\n"
-        "  mvlan 600\n"
-        "interface vport-1/1/5.55:1\n"
-        "  service-port 1 user-vlan 170 vlan 170\n"
-        "  service-port 2 user-vlan 335 vlan 335\n"
-        "  service-port 6 user-vlan 600 vlan 600\nZXAN#"
+        + "".join(
+            f"  service {service_id} gemport {gemport_id} vlan {vlan}\n"
+            for service_id, gemport_id, vlan in services
+        )
+        + "  mvlan 600\n"
+        + "interface vport-1/1/5.55:1\n"
+        + "".join(
+            f"  service-port {service_id} user-vlan {vlan} vlan {vlan}\n"
+            for service_id, gemport_id, vlan in services
+            if gemport_id == 1
+        )
+        + "interface vport-1/1/5.55:2\n"
+        + "  service-port 5 user-vlan 335 vlan 335\n"
+        + "interface vport-1/1/5.55:3\n"
+        + "  service-port 6 user-vlan 600 vlan 600\n"
+        + "  igmp fast-leave enable\n"
+        + "  igmp version v2\n"
+        + "interface vport-1/1/5.55:4\n"
+        + "  service-port 7 user-vlan 50 vlan 50\n"
+        + "igmp mvlan 600\n"
+        + "  receive-port vport-1/1/5.55:3\n"
+        + "ZXAN#"
     )
-    service_ports = (
-        "1 1 449 -- 170 170 -- -- -- -- 170 -- -- -- -- -- -- -- -- -- -- OK YES --\n"
-        "2 1 450 -- 335 335 -- -- -- -- 335 -- -- -- -- -- -- -- -- -- -- OK YES --\n"
-        "6 1 454 -- 600 600 -- -- -- -- 600 -- -- -- -- -- -- -- -- -- -- OK YES --\n"
-        "Sport total number:\n3\nZXAN#"
+    service_ports = "".join(
+        f"{service_id} {gemport_id} {448 + service_id} -- {vlan} {vlan} -- -- -- -- {vlan} "
+        "-- -- -- -- -- -- -- -- -- -- OK YES --\n"
+        for service_id, gemport_id, vlan in services
+    ) + (
+        f"Sport total number:\n{len(services)}\nZXAN#"
     )
     detail = (
         "ONU interface: gpon_onu-1/1/5:55\nType: CXP-55\n"
@@ -270,12 +309,51 @@ class DriverTests(unittest.TestCase):
         self.assertIn("interface gpon_olt-1/1/5", commands)
         self.assertIn("interface gpon_onu-1/1/5:55", commands)
         self.assertIn("interface vport-1/1/5.55:1", commands)
-        self.assertIn("service 2 gemport 1 vlan 335", commands)
+        self.assertIn("interface vport-1/1/5.55:2", commands)
+        self.assertIn("interface vport-1/1/5.55:3", commands)
+        self.assertIn("interface vport-1/1/5.55:4", commands)
+        self.assertIn("tcont 1 profile WT-10G", commands)
+        self.assertIn("tcont 2 profile DBA_FONE", commands)
+        self.assertIn("tcont 3 profile DBA_IPTV", commands)
+        self.assertIn("tcont 4 profile DBA_TR069", commands)
+        self.assertIn("service 5 gemport 2 vlan 335", commands)
+        self.assertIn("service 6 gemport 3 vlan 600", commands)
+        self.assertIn("service 7 gemport 4 vlan 50", commands)
+        self.assertIn("service 9 gemport 1 vlan 150", commands)
         self.assertIn("mvlan 600", commands)
-        self.assertIn("service-port 2 user-vlan 335 vlan 335", commands)
+        self.assertIn("service-port 5 user-vlan 335 vlan 335", commands)
+        self.assertIn("igmp fast-leave enable", commands)
+        self.assertIn("igmp version v2", commands)
+        self.assertIn("igmp mvlan 600", commands)
+        self.assertIn("receive-port vport-1/1/5.55:3", commands)
+        self.assertLess(
+            commands.index("interface vport-1/1/5.55:2"),
+            commands.index("service-port 5 user-vlan 335 vlan 335"),
+        )
+        self.assertLess(
+            commands.index("interface vport-1/1/5.55:3"),
+            commands.index("service-port 6 user-vlan 600 vlan 600"),
+        )
+        self.assertLess(
+            commands.index("interface vport-1/1/5.55:4"),
+            commands.index("service-port 7 user-vlan 50 vlan 50"),
+        )
         self.assertLess(commands.index("mvlan 600"), commands.index("interface vport-1/1/5.55:1"))
         self.assertFalse(any("gpon-olt_" in command for command in commands))
         self.assertNotIn("write", commands)
+
+    def test_c600_rejects_internet_resource_ids_that_collide_with_fixed_layers(self):
+        request = replace(make_c600_request(), tcont_id=2, gemport_id=4, vport_id=3)
+
+        errors = ZteC600OnuDriver().validate_request(request)
+
+        self.assertIn("上网 T-CONT ID 2 与语音/组播/TR069 固定业务冲突", errors)
+        self.assertIn("上网 GEM Port 4 与语音/组播/TR069 固定业务冲突", errors)
+        self.assertIn("上网 VPort ID 3 与语音/组播/TR069 固定业务冲突", errors)
+        self.assertIn(
+            "上网 VPort ID 必须与上网 GEM Port ID 一致（C600 gemport模式为1:1映射）",
+            errors,
+        )
 
     def test_c300_and_c600_parse_their_own_discovery_formats(self):
         c300 = ZteC300OnuDriver().parse_discovery(
@@ -375,6 +453,24 @@ class DriverTests(unittest.TestCase):
         outputs[-1] = "Multicast VLAN: no related data.\nZXAN#"
         self.assertIn("C600 组播 VLAN 600 验证失败", driver.validate_verification(request, outputs))
 
+    def test_c600_verification_rejects_wrong_vport_and_missing_igmp_receive_port(self):
+        driver = ZteC600OnuDriver()
+        request = make_c600_request()
+        commands = driver.build_verify_commands(request)
+        responses = c600_verify_responses()
+        outputs = [responses[command] for command in commands]
+        outputs[0] = outputs[0].replace(
+            "  receive-port vport-1/1/5.55:3\n", ""
+        )
+        outputs[1] = outputs[1].replace(
+            "5 2 453 --", "5 1 453 --"
+        )
+
+        errors = driver.validate_verification(request, outputs)
+
+        self.assertTrue(any("receive-port" in error for error in errors))
+        self.assertIn("C600 service-port 5 VPort异常：期望2，实际1", errors)
+
     def test_c600_precheck_uses_exact_id_and_global_sn_queries(self):
         driver = ZteC600OnuDriver()
         request = make_c600_request()
@@ -427,8 +523,10 @@ class DriverTests(unittest.TestCase):
         )
 
         parsed = ZteC600OnuDriver.parse_service_port_statuses(output)
+        details = ZteC600OnuDriver.parse_service_port_details(output)
 
         self.assertEqual(parsed, {1: "OK/YES", 2: "OK/YES"})
+        self.assertEqual(details, {1: (1, "OK/YES"), 2: (1, "OK/YES")})
 
     def test_c300_registered_query_lists_all_states(self):
         driver = ZteC300OnuDriver()
@@ -734,12 +832,14 @@ class ServiceTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("C300 每次只能注册一台 ONU", result.message)
 
-    def test_c600_never_allows_write(self):
-        service = OnuRegistrationService(session_type=FakeSession())
+    def test_c600_allows_explicit_independent_write(self):
+        fake = FakeSession()
+        service = OnuRegistrationService(session_type=fake)
         result = service.save_configuration(OLT_FAMILY_C600, make_connection())
 
-        self.assertFalse(result.ok)
-        self.assertIn("不提供自动 write", result.message)
+        self.assertTrue(result.ok)
+        self.assertEqual(fake.commands, ["write"])
+        self.assertIn("已写入启动配置", result.message)
 
     def test_query_registered_candidates_lists_all_with_identity(self):
         responses = {

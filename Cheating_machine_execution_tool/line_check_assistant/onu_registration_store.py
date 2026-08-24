@@ -38,7 +38,7 @@ class OnuRegistrationConfig:
     c600_onu_type: str = "CXP-55"
     c600_real_speed: str = "auto"
     c600_tcont_id: int = 1
-    c600_tcont_profile: str = "CXP-55"
+    c600_tcont_profile: str = "WT-10G"
     c600_gemport_id: int = 1
     c600_vport_id: int = 1
     c600_sn_bind_both: bool = True
@@ -123,7 +123,7 @@ class OnuRegistrationStore:
             c600_onu_type=parser.get(ONU_REGISTRATION_SECTION, "c600_onu_type", fallback="CXP-55"),
             c600_real_speed=parser.get(ONU_REGISTRATION_SECTION, "c600_real_speed", fallback="auto"),
             c600_tcont_id=read_int("c600_tcont_id", 1),
-            c600_tcont_profile=parser.get(ONU_REGISTRATION_SECTION, "c600_tcont_profile", fallback="CXP-55"),
+            c600_tcont_profile=parser.get(ONU_REGISTRATION_SECTION, "c600_tcont_profile", fallback="WT-10G"),
             c600_gemport_id=read_int("c600_gemport_id", 1),
             c600_vport_id=read_int("c600_vport_id", 1),
             c600_sn_bind_both=read_bool("c600_sn_bind_both", True),

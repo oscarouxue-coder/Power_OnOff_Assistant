@@ -55,6 +55,7 @@
 12. 每个新增功能点都必须在主程序执行日志输出关键阶段、实际命令下发、成功、跳过或失败提示，便于操作员核对真实执行结果。
 13. **提交代码前必须在主源码目录运行 `python scripts/verify_baseline.py` 且全部通过** —— 这是拦截破坏已验收功能（`ACCEPTANCE_BASELINE §0 / §1.3 / §1.4`）的最低门禁。脚本封装 6 类检查：① 编译清单全量 py_compile ② 新增 `src/` / `line_check_assistant/` 源码必须纳入编译清单 ③ 全量 unittest（解析 `Ran N tests`）④ 已验收关键行为的指定测试 ID 必须实际执行 ⑤ §1.3 必须命中不变量 grep ⑥ §1.3 / §1.4 必须不出现模式 grep。任一失败 exit 1，不可绕开；首次开发环境运行 `powershell -ExecutionPolicy Bypass -File scripts\install_git_hooks.ps1`，使本地 `git commit` 自动执行该门禁。
 14. 详细工作流（改动分类 → 文档同步矩阵、真实样机验收流程、完成一次改动标准动作清单）见 `.claude/skills/line-check-dev/SKILL.md`。
+15. 所有新增或修改的布尔选择控件必须使用 Windows 原生 `Checkbutton`，选中态显示标准勾号“✔”、未选为空框；禁止使用会在 Clam 主题下显示叉号的 `ttk.Checkbutton`。调整样式时不得改变选项默认值、持久化、确认或执行语义。
 
 ## 验收不变量（来自 `ACCEPTANCE_BASELINE.md §1.3 / §1.4`，不可破坏）
 

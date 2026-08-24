@@ -26,6 +26,7 @@ class OnuRegistrationStoreTests(unittest.TestCase):
             self.assertEqual(config.username, "")
             self.assertEqual(config.password, "")
             self.assertEqual(config.c600_real_speed, "auto")
+            self.assertEqual(config.c600_tcont_profile, "WT-10G")
 
     def test_save_and_load_preserves_last_closed_inputs(self):
         with tempfile.TemporaryDirectory() as temp_dir:

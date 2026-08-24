@@ -1,6 +1,6 @@
 # Acceptance Baseline
 
-更新：2026-08-19（样机升级进入 boot 上下电时序调整为 1 秒/1 秒）
+更新：2026-08-24（C600 ONU 四层VPort/GEM对齐与IGMP完成实机验证）
 
 > 与 `PROJECT_STATUS.md` 的关系：本文按"实现 → 单测 → 真实样机验收"三态罗列验收证据与不变量，作为独立验收基线。`PROJECT_STATUS.md` 保留面向项目的进度叙述；两者冲突时以本文为准。
 >
@@ -221,7 +221,7 @@ python scripts\verify_baseline.py
 
 ### 2.10 ZTE OLT ONU 注册
 
-- **状态**：已实现未验收
+- **状态**：已确认验收（C600四VPort OLT配置、MAC学习、write与清理，2026-08-24）/ 已实现未验收（ONU侧语音/TR069地址与IPTV节目、Windows界面交互及C300）
 - **核心行为**：
   - 主界面单一入口不变；窗口当前默认和最小尺寸均为`1000x800`，通过“1. 查询 ONU / 2. 配置业务 / 3. 确认执行 / 4. 已注册管理”四步分页支持C300与C600，不导入或启动原独立GUI
   - OLT型号、OLT IP、源IP、用户名、密码、登录测试和连接状态必须固定显示在分页上方；C600机框/槽位/PON必须位于第一步查询页，不得要求操作员先切到配置页再返回查询
@@ -231,17 +231,20 @@ python scripts\verify_baseline.py
   - 统一service只编排“登录 → 未注册查询 → 下发前预检 → 逐条配置 → 最长60秒可停止上线轮询 → 只读验证 → 结果”，C300与C600命令生成、接口格式和解析器由两个独立driver负责，不允许跨型号替换字符串；配置记录存在但未进入working不得误报成功
   - C300：全局`show gpon onu uncfg`查询、每次一台，使用`gpon-olt_` / `gpon-onu_`、SD-41固定业务模板、`pon-onu-mng`和`mvlan 600`；下发前以目标PON的`show gpon onu uncfg`确认目标仍未注册、以`show gpon onu baseinfo ... <ONU ID>`确认ID空闲、以`show gpon onu by sn <SN>`执行整台OLT的SN查重
   - C300下发后必须按真实C300格式核对：`baseinfo/state/detail-info`中的接口、型号、SN、ready/working/config success/SN Bind；`tcont/gemport/vport`中的1G模板、六个GEM active及1:1映射；`service-port/remote-onu service/remote-onu mvlan`中的六组固定业务、OK/YES及`mvlan 600`。空ID返回`ONU data is null`、空SN返回`No related information to show`时视为可继续，不得误判CLI失败
-  - C600：按PON执行`show pon onu uncfg gpon_olt-... sn model speed-mode`、每次一台，使用`gpon_olt-` / `gpon_onu-` / `vport-`及可编辑ServiceID/VLAN映射；发现结果的Speed Mode不得直接转换成必下发的`real-speed`，选中ONU后默认使用`auto`并省略该命令，只有操作员明确选择xgspon/xgpon/gpon时才作为型号专用覆盖。映射中必须包含VLAN 600，并在`pon-onu-mng gpon_onu-...`上下文固定下发`mvlan 600`。下发前必须用精确baseinfo和全OLT SN查询拒绝ONU ID/SN冲突，仅对应只读查询的`ONU data is null`或`No related information to show`可作为空结果；下发后必须实际解析collection、换行service-port、detail-info及`show gpon remote-onu mvlan gpon_onu-...`四组输出，逐项核对身份、T-CONT/GEM/VPort/业务状态、working/config success和`Multicast VLAN: 600`
+  - C600：按PON执行`show pon onu uncfg gpon_olt-... sn model speed-mode`、每次一台，使用`gpon_olt-` / `gpon_onu-` / `vport-`及可编辑ServiceID/VLAN映射；发现结果的Speed Mode不得直接转换成必下发的`real-speed`，选中ONU后默认使用`auto`并省略该命令。上网170/171/172/173/151/150及未定义普通数据VLAN使用可编辑主资源（默认T-CONT 1/GEM 1/VPort 1/`WT-10G`），语音335固定T-CONT 2/GEM 2/VPort 2/`DBA_FONE`，组播600固定T-CONT 3/GEM 3/VPort 3/`DBA_IPTV`，TR069 50固定T-CONT 4/GEM 4/VPort 4/`DBA_TR069`；gemport模式下GEM与VPort必须1:1，只创建实际出现的业务资源，并拒绝上网ID与固定资源冲突。映射必须包含VLAN 600并下发ONU侧`mvlan 600`及OLT侧`igmp fast-leave enable`、`igmp version v2`、`igmp mvlan 600 receive-port`。下发前精确拒绝ID/SN冲突；下发后必须解析collection、换行service-port、detail-info及MVLAN四组输出，逐项核对四层T-CONT/GEM/VPort、9组业务实际VPort与OK/YES、IGMP receive-port、working/config success和`Multicast VLAN: 600`
   - 两种型号遇到第一条CLI错误即停止并尝试退出配置模式；主日志必须记录型号、关键阶段、实际`TX OLT`命令、返回、成功、停止或失败
   - Telnet必须使用操作员填写的源IP调用`source_address=(bind_ip, 0)`锁定Windows出口；源IP为空/格式错误/不可绑定必须失败，不得回退系统默认网卡。C300与C600分别保存OLT IP、源IP、用户名和密码，型号切换不得串用另一型号连接资料；已知默认路径为C300 `172.18.18.151`经`172.18.18.40`、C600 `172.18.18.152`经`172.33.5.35`
   - C300离线ONU删除重试是默认关闭且不持久化的独立危险选项；启用后必须先只读查询目标PON候选并由操作员明确选择一台，配置失败后再次确认其仍为同PON离线候选且接口/SN与查询时一致，才允许只生成一条目标`no onu <ID>`，禁止批量或跨PON删除；C600任何场景都不得自动删除或回滚ONU
+  - C300危险删除、C600 SN双重绑定和C600 write必须使用Windows原生`Checkbutton`，选中显示标准“✔”、未选为空框，不得使用Clam主题下显示叉号的`ttk.Checkbutton`；控件替换不得改变默认值、持久化、确认或执行语义。此规则同样适用于以后新增或修改的布尔选择控件
   - 独立的“已注册管理”分页允许操作员主动查询目标 PON 口下已注册 ONU，列出全部已注册 ONU（含在线 working）供单选删除；C300 用全局`show gpon onu state`后按目标 PON 过滤（`show gpon onu state <pon>` 按 PON 不带 ID 的格式 OLT 已确认不支持）、C600 用`show running-config-interface <pon>`查已注册列表再逐台`show gpon onu state <pon> <id>`取状态标签，删除前必须二次确认并重新核对接口与 SN，只删除明确选择的这一台，删除后回读 baseinfo 确认其回到未注册状态，且不执行 write。该入口对 C300 与 C600 均可用，允许删除任意状态（含在线 working，删除在线 ONU 会立即中断业务）；C600 仍不自动删除、不自动 write，仅此显式选择路径允许删除
-  - 注册不自动保存OLT配置；C300成功后单独询问`write`，C600不提供自动`write`并提示操作员按现场要求手工决定
+  - 注册默认不保存OLT配置；C300成功后单独询问`write`。C600提供“完整验证成功后执行write”本次选项，默认关闭、不持久化，摘要和最终确认必须明确显示；只有working与完整回读成功后才用独立新会话执行，最长等待120秒并记录真实返回
 - **真实设备命令核查（2026-08-18，不等同注册写入验收）**：已从`172.18.18.40`登录C300 `172.18.18.151`，使用一台已注册在线ONU确认上述ID/SN空记录、注册身份、运行状态、T-CONT/GEM/VPort、service-port、远端业务和MVLAN输出格式；已从`172.33.5.35`登录C600 `172.18.18.152`，确认已注册样本当前无MVLAN数据、`show gpon remote-onu mvlan gpon_onu-...`查询格式以及`pon-onu-mng`上下文的`mvlan <1-4094>`帮助。核查过程未实际下发MVLAN、未删除ONU、未执行`write`
 - **真实C600 service执行验证（2026-08-18，Windows三步UI仍待复验）**：使用一台未注册NP7287XGS首次执行时，ONU注册成功但`real-speed xgspon`返回`%Error 230240: Not support this function.`；该ONU在未配置此命令时会自动进入XGS-PON。修复为发现后默认`auto`后，从未注册状态完整执行精确ID/SN预检、9组业务、SN双重绑定、MVLAN 600、7次状态轮询（OffLine → syncMib → working）和collection/service-port/detail-info/MVLAN四组验证，service返回成功且未执行`write`。随后按项目负责人授权删除唯一测试ONU，确认目标ID返回`ONU data is null`、全OLT SN查询返回`No related information to show`，并在第5次发现查询重新出现于未注册列表；另一台未注册ONU未处理
-- **禁止破坏**：C300/C600命令体系与连接资料隔离；两者均一次一台；源IP锁定；第一条错误停止；上线轮询可停止；危险删除默认关闭且不持久化、只允许明确选择的一台同PON离线ONU；C600不自动删除、不自动`write`（仅“已注册管理”入口允许操作员显式选择一台已注册 ONU 后删除，任意状态）；窗口当前默认和最小尺寸`1000x800`；普通窗口底部区域不被裁切；本机凭据和`onu_registration.ini`不入Git
-- **待确认**：Windows`1000x800`普通窗口四步分页布局、分型号连接资料、C300离线候选查询/单选/清空、步骤切换、C600选中后速率设置显示`auto`且预览无`real-speed`、预览失效、底部危险提示/状态/停止完整显示且无需最大化；真实C300注册写入、冲突拦截、上线轮询、完整下发后验证、默认不删除、显式单台删除和`write`；C600 service真实完整注册与清理已通过，仍待Windows UI入口、停止和`Access denied`专项复验；“已注册管理”的 C300/C600 `no onu` 删除命令格式待真实样机确认（C300 全局`show gpon onu state`、C600 `show running-config-interface` 与单台`show gpon onu state <pon> <id>` 均为已确认只读命令）
-- **对应测试**：`tests/test_onu_registration_service.py`（双driver语法、两型号单台限制、C300真实输出格式预检/完整验证/同PON单候选清理与身份复核、C600精确ID/SN冲突、VLAN/MVLAN 600、上线轮询、四组解析、两型号已注册候选列出与删除命令、删除前身份复核与删除后回读）、`tests/test_app.py`（统一UI路由、两型号单选、显式清理候选、分型号连接资料、C600参数与禁止write、已注册管理分页与危险确认）、`tests/test_onu_registration_store.py`、`tests/test_network_ops.py`（历史C300兼容边界）
+- **真实C600四层业务/write验证（2026-08-24）**：项目负责人授权使用未注册NP7287XGS `SDMC176D42AA`和ONU ID 1执行写入及清理。精确ID/SN预检通过后，下发`WT-10G`、`DBA_FONE`、`DBA_IPTV`、`DBA_TR069`四个T-CONT及1:1 GEM，9组业务按上网/语音/组播/TR069分层；第5次轮询进入working，collection逐项返回四组T-CONT/GEM和9组service，全部service-port为OK/YES，detail-info为XGS-PON/working/config success，MVLAN为600。首次write持续输出进度点并超过旧30秒客户端等待，暴露超时不足；改为独立exec会话直接执行、最长120秒后，清理状态write约41秒返回`............[OK].`。测试ONU随后按接口/ID/SN复核后精确删除，baseinfo为`ONU data is null`、全OLT SN为`No related information to show`，清理后write成功且目标第一次查询即重新未注册；另一台未注册ONU及所有既有ONU未处理
+- **真实C600 VPort/GEM修复验证（2026-08-24）**：项目负责人发现同一ONU只有Internet VLAN 171获取地址，授权再次精确删除并注册`SDMC176D42AA`。只读诊断确认ONU为working/config success、四组T-CONT/GEM存在且相关VLAN均在上联放通，但9条service-port全部位于VPort 1；实机`show gpon onu vport`明确为VPort 1/2/3/4与GEM 1/2/3/4的1:1映射，旧验证只检查service-port OK/YES而未检查VPort编号。修正后删除前再次核对接口/ID/SN，删除后第2次查询重新发现目标；重注册全部命令被OLT接受，第4次轮询进入XGS-PON working，collection确认VPort 1承载上网、VPort 2承载335、VPort 3承载600及IGMP receive-port、VPort 4承载50，9条service-port均OK/YES。`show mac vlan`进一步确认ONU四个WAN MAC分别在VLAN 171的VPort 1、VLAN 335的VPort 2、VLAN 600的VPort 3和VLAN 50的VPort 4动态学习成功。重注册未执行write，ONU保留在线；该证据确认OLT二层路径，不替代ONU页面语音/TR069 DHCP地址和IPTV实际节目验收
+- **禁止破坏**：C300/C600命令体系与连接资料隔离；两者均一次一台；源IP锁定；第一条错误停止；上线轮询可停止；危险删除默认关闭且不持久化、只允许明确选择的一台；C600不自动删除或回滚，write必须默认关闭且只在本次明确选择、完整验证成功后执行；窗口当前默认和最小尺寸`1000x800`；普通窗口底部区域不被裁切；本机凭据和`onu_registration.ini`不入Git
+- **待确认**：ONU页面刷新后语音335与TR069 50是否取得预期DHCP地址、IPTV 600按现场设计是路由获取地址还是纯组播桥接及实际节目是否正常；Windows`1000x800`普通窗口四步分页布局、分型号连接资料、C300离线候选查询/单选/清空及标准勾号、步骤切换、C600四VPort/IGMP预览与SN双重绑定/write标准勾号、write默认关闭/关闭重开复位/摘要、底部危险提示/状态/停止完整显示且无需最大化；真实C300注册写入、冲突拦截、上线轮询、完整下发后验证、默认不删除、显式单台删除和`write`；C600停止和`Access denied`专项复验；C300 `no onu`删除命令格式仍待真实样机确认
+- **对应测试**：`tests/test_onu_registration_service.py`（双driver语法、两型号单台限制、C300边界、C600四层T-CONT/GEM/VPort、GEM/VPort冲突、错误VPort及缺失IGMP拒绝、精确ID/SN预检、VLAN/MVLAN 600、上线与四组解析、显式write、已注册查询/删除）、`tests/test_app.py`（统一UI、单选、四VPort提示、分型号连接、ONU原生勾选框及全源码禁止`ttk.Checkbutton`、C600 write默认不执行与选中后启动独立保存、已注册管理危险确认）、`tests/test_onu_registration_store.py`、`tests/test_network_ops.py`（历史C300兼容边界）
 
 ### 2.11 输入持久化与启动 / 打包
 

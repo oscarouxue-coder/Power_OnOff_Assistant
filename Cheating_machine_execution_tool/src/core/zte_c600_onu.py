@@ -9,6 +9,7 @@ from src.models.onu_registration_models import (
     OLT_FAMILY_C600,
     OnuDiscoveryScope,
     OnuProvisionRequest,
+    OnuServiceMapping,
     RegisteredOnu,
 )
 
@@ -28,11 +29,19 @@ C600_ONU_INTERFACE_RE = re.compile(r"gpon_onu-\d+/\d+/\d+:\d+", re.IGNORECASE)
 C600_EMPTY_ID_RE = re.compile(r"ONU data is null", re.IGNORECASE)
 C600_EMPTY_SN_RE = re.compile(r"No related information to show", re.IGNORECASE)
 
+# C600 业务分层按现场 VLAN 语义固定资源。未列出的 VLAN 继续归入可编辑的
+# 主上网 T-CONT/GEM，兼容临时增加普通数据 VLAN 的场景。
+C600_FIXED_BUSINESS_LAYERS = {
+    335: ("语音", 2, "DBA_FONE", 2),
+    600: ("组播", 3, "DBA_IPTV", 3),
+    50: ("TR069", 4, "DBA_TR069", 4),
+}
+
 
 class ZteC600OnuDriver:
     family = OLT_FAMILY_C600
     display_name = "中兴 C600"
-    supports_write = False
+    supports_write = True
     supports_offline_cleanup = False
 
     def build_discovery_command(self, scope: OnuDiscoveryScope) -> str:
@@ -102,12 +111,72 @@ class ZteC600OnuDriver:
                 errors.append(f"Service ID {item.service_id} 超出 1-4095")
             if not 1 <= item.vlan <= 4094:
                 errors.append(f"VLAN {item.vlan} 超出 1-4094")
+        has_internet_service = any(
+            item.vlan not in C600_FIXED_BUSINESS_LAYERS for item in request.services
+        )
+        active_fixed_layers = {
+            C600_FIXED_BUSINESS_LAYERS[item.vlan]
+            for item in request.services
+            if item.vlan in C600_FIXED_BUSINESS_LAYERS
+        }
+        if has_internet_service:
+            fixed_tcont_ids = {layer[1] for layer in active_fixed_layers}
+            fixed_gemport_ids = {layer[3] for layer in active_fixed_layers}
+            fixed_vport_ids = {layer[3] for layer in active_fixed_layers}
+            if request.tcont_id in fixed_tcont_ids:
+                errors.append(
+                    f"上网 T-CONT ID {request.tcont_id} 与语音/组播/TR069 固定业务冲突"
+                )
+            if request.gemport_id in fixed_gemport_ids:
+                errors.append(
+                    f"上网 GEM Port {request.gemport_id} 与语音/组播/TR069 固定业务冲突"
+                )
+            if request.vport_id in fixed_vport_ids:
+                errors.append(
+                    f"上网 VPort ID {request.vport_id} 与语音/组播/TR069 固定业务冲突"
+                )
+            if request.vport_id != request.gemport_id:
+                errors.append(
+                    "上网 VPort ID 必须与上网 GEM Port ID 一致（C600 gemport模式为1:1映射）"
+                )
         return errors
+
+    @staticmethod
+    def _business_plan(
+        request: OnuProvisionRequest,
+    ) -> tuple[list[tuple[int, str, int]], dict[int, int], dict[int, int]]:
+        """返回资源以及VLAN到GEM/VPort的1:1映射。"""
+        resources: list[tuple[int, str, int]] = []
+        vlan_to_gemport: dict[int, int] = {}
+        vlan_to_vport: dict[int, int] = {}
+
+        if any(item.vlan not in C600_FIXED_BUSINESS_LAYERS for item in request.services):
+            resources.append((request.tcont_id, request.tcont_profile, request.gemport_id))
+
+        for item in request.services:
+            layer = C600_FIXED_BUSINESS_LAYERS.get(item.vlan)
+            if layer is None:
+                vlan_to_gemport[item.vlan] = request.gemport_id
+                vlan_to_vport[item.vlan] = request.vport_id
+                continue
+            _name, tcont_id, profile, gemport_id = layer
+            vlan_to_gemport[item.vlan] = gemport_id
+            # 实机 `show gpon onu vport` 已确认gemport模式下VPort N与GEM N为1:1。
+            vlan_to_vport[item.vlan] = gemport_id
+            resource = (tcont_id, profile, gemport_id)
+            if resource not in resources:
+                resources.append(resource)
+        return resources, vlan_to_gemport, vlan_to_vport
+
+    @staticmethod
+    def _vport_interface(request: OnuProvisionRequest, vport_id: int) -> str:
+        location = request.onu.pon_interface.split("-", 1)[1]
+        return f"vport-{location}.{request.onu_id}:{vport_id}"
 
     def _interfaces(self, request: OnuProvisionRequest) -> tuple[str, str, str]:
         location = request.onu.pon_interface.split("-", 1)[1]
         onu_interface = f"gpon_onu-{location}:{request.onu_id}"
-        vport_interface = f"vport-{location}.{request.onu_id}:{request.vport_id}"
+        vport_interface = self._vport_interface(request, request.vport_id)
         return request.onu.pon_interface, onu_interface, vport_interface
 
     def build_precheck_commands(self, request: OnuProvisionRequest) -> list[str]:
@@ -156,7 +225,7 @@ class ZteC600OnuDriver:
         errors = self.validate_request(request)
         if errors:
             raise ValueError("；".join(errors))
-        olt_interface, onu_interface, vport_interface = self._interfaces(request)
+        olt_interface, onu_interface, _vport_interface = self._interfaces(request)
         commands = [
             "configure terminal",
             f"interface {olt_interface}",
@@ -166,26 +235,39 @@ class ZteC600OnuDriver:
         ]
         if request.real_speed != "auto":
             commands.append(f"real-speed {request.real_speed}")
-        commands.append(f"tcont {request.tcont_id} profile {request.tcont_profile}")
+        resources, vlan_to_gemport, vlan_to_vport = self._business_plan(request)
+        commands.extend(
+            f"tcont {tcont_id} profile {profile}"
+            for tcont_id, profile, _gemport_id in resources
+        )
         if request.sn_bind_both:
             commands.append("sn-bind enable both")
         commands.extend(
-            [
-                f"gemport {request.gemport_id} tcont {request.tcont_id}",
-                "exit",
-                f"pon-onu-mng {onu_interface}",
-            ]
+            f"gemport {gemport_id} tcont {tcont_id}"
+            for tcont_id, _profile, gemport_id in resources
         )
+        commands.extend(["exit", f"pon-onu-mng {onu_interface}"])
         commands.extend(
-            f"service {item.service_id} gemport {request.gemport_id} vlan {item.vlan}"
+            f"service {item.service_id} gemport {vlan_to_gemport[item.vlan]} vlan {item.vlan}"
             for item in request.services
         )
-        commands.extend(["mvlan 600", "exit", f"interface {vport_interface}"])
-        commands.extend(
-            f"service-port {item.service_id} user-vlan {item.vlan} vlan {item.vlan}"
-            for item in request.services
-        )
-        commands.extend(["exit", "end"])
+        commands.extend(["mvlan 600", "exit"])
+
+        services_by_vport: dict[int, list[OnuServiceMapping]] = {}
+        for item in request.services:
+            services_by_vport.setdefault(vlan_to_vport[item.vlan], []).append(item)
+        for vport_id, services in services_by_vport.items():
+            commands.append(f"interface {self._vport_interface(request, vport_id)}")
+            commands.extend(
+                f"service-port {item.service_id} user-vlan {item.vlan} vlan {item.vlan}"
+                for item in services
+            )
+            if any(item.vlan == 600 for item in services):
+                commands.extend(["igmp fast-leave enable", "igmp version v2"])
+            commands.append("exit")
+
+        iptv_vport = self._vport_interface(request, vlan_to_vport[600])
+        commands.extend(["igmp mvlan 600", f"receive-port {iptv_vport}", "exit", "end"])
         return commands
 
     def build_verify_commands(self, request: OnuProvisionRequest) -> list[str]:
@@ -219,11 +301,22 @@ class ZteC600OnuDriver:
                     f"C600 ONU 基本状态异常：mode={item['mode']} state={item['state']}"
                 )
 
+        resources, vlan_to_gemport, vlan_to_vport = self._business_plan(request)
+        iptv_vport = self._vport_interface(request, vlan_to_vport[600])
         expected_collection_patterns = [
-            rf"^\s*tcont\s+{request.tcont_id}\s+profile\s+{re.escape(request.tcont_profile)}\s*$",
-            rf"^\s*gemport\s+{request.gemport_id}\s+tcont\s+{request.tcont_id}\s*$",
             r"^\s*mvlan\s+600\s*$",
+            r"^\s*igmp\s+fast-leave\s+enable\s*$",
+            r"^\s*igmp\s+version\s+v2\s*$",
+            r"^\s*igmp\s+mvlan\s+600\s*$",
+            rf"^\s*receive-port\s+{re.escape(iptv_vport)}\s*$",
         ]
+        for tcont_id, profile, gemport_id in resources:
+            expected_collection_patterns.extend(
+                [
+                    rf"^\s*tcont\s+{tcont_id}\s+profile\s+{re.escape(profile)}\s*$",
+                    rf"^\s*gemport\s+{gemport_id}\s+tcont\s+{tcont_id}\s*$",
+                ]
+            )
         if request.real_speed != "auto":
             expected_collection_patterns.append(
                 rf"^\s*real-speed\s+{re.escape(request.real_speed)}\s*$"
@@ -235,7 +328,7 @@ class ZteC600OnuDriver:
                 errors.append(f"C600 collection 缺少配置：{pattern}")
         for item in request.services:
             service_pattern = (
-                rf"^\s*service\s+{item.service_id}\s+gemport\s+{request.gemport_id}\s+"
+                rf"^\s*service\s+{item.service_id}\s+gemport\s+{vlan_to_gemport[item.vlan]}\s+"
                 rf"vlan\s+{item.vlan}\s*$"
             )
             port_pattern = (
@@ -247,9 +340,15 @@ class ZteC600OnuDriver:
             if not re.search(port_pattern, collection, re.I | re.M):
                 errors.append(f"C600 缺少 service-port {item.service_id}/VLAN {item.vlan}")
 
-        runtime_ports = self.parse_service_port_statuses(values[1] if len(values) > 1 else "")
+        runtime_ports = self.parse_service_port_details(values[1] if len(values) > 1 else "")
         for item in request.services:
-            status = runtime_ports.get(item.service_id, "")
+            actual_vport, status = runtime_ports.get(item.service_id, (None, ""))
+            expected_vport = vlan_to_vport[item.vlan]
+            if actual_vport != expected_vport:
+                errors.append(
+                    f"C600 service-port {item.service_id} VPort异常："
+                    f"期望{expected_vport}，实际{actual_vport or '<缺失>'}"
+                )
             if status != "OK/YES":
                 errors.append(
                     f"C600 service-port {item.service_id} 运行状态异常：{status or '<缺失>'}"
@@ -335,24 +434,34 @@ class ZteC600OnuDriver:
 
     @staticmethod
     def parse_service_port_statuses(output: str) -> dict[int, str]:
-        rows: dict[int, list[str]] = {}
+        return {
+            service_id: status
+            for service_id, (_vport_id, status) in ZteC600OnuDriver.parse_service_port_details(
+                output
+            ).items()
+        }
+
+    @staticmethod
+    def parse_service_port_details(output: str) -> dict[int, tuple[int, str]]:
+        rows: dict[int, tuple[int, list[str]]] = {}
         current_id: int | None = None
         for raw_line in clean_terminal_text(output or "").splitlines():
-            row_match = re.match(r"^\s*(\d+)\s+\d+\s+\d+\s+--\s+", raw_line)
+            row_match = re.match(r"^\s*(\d+)\s+(\d+)\s+\d+\s+--\s+", raw_line)
             if row_match:
                 current_id = int(row_match.group(1))
-                rows[current_id] = [raw_line]
+                rows[current_id] = (int(row_match.group(2)), [raw_line])
             elif current_id is not None and not raw_line.strip().lower().startswith("sport total"):
-                rows[current_id].append(raw_line)
-        result: dict[int, str] = {}
-        for service_id, lines in rows.items():
+                rows[current_id][1].append(raw_line)
+        result: dict[int, tuple[int, str]] = {}
+        for service_id, (vport_id, lines) in rows.items():
             normalized = " ".join(" ".join(lines).split())
             if re.search(r"\bOK\s+YES\b", normalized, re.I):
-                result[service_id] = "OK/YES"
+                status = "OK/YES"
             elif re.search(r"\bFAIL\s+(?:YES|NO)\b", normalized, re.I):
-                result[service_id] = "FAIL"
+                status = "FAIL"
             else:
-                result[service_id] = "UNKNOWN"
+                status = "UNKNOWN"
+            result[service_id] = (vport_id, status)
         return result
 
     @staticmethod

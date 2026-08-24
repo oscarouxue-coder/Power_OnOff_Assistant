@@ -368,6 +368,7 @@ class LineCheckAssistant(Tk):
         self.onu_c600_gemport_id_var = StringVar(value=str(self.onu_registration_config.c600_gemport_id))
         self.onu_c600_vport_id_var = StringVar(value=str(self.onu_registration_config.c600_vport_id))
         self.onu_c600_sn_bind_both_var = BooleanVar(value=self.onu_registration_config.c600_sn_bind_both)
+        self.onu_c600_write_after_success_var = BooleanVar(value=False)
         self.onu_c300_allow_offline_cleanup_var = BooleanVar(
             value=self.onu_registration_config.c300_allow_offline_cleanup
         )
@@ -1814,6 +1815,8 @@ class LineCheckAssistant(Tk):
             self.onu_registration_window.focus_force()
             return
 
+        # write 是整台 OLT 的持久化操作，只允许本次窗口明确授权，关闭后不保留。
+        self.onu_c600_write_after_success_var.set(False)
         dialog = Toplevel(self)
         self.onu_registration_window = dialog
         dialog.title("ONU注册")
@@ -2056,11 +2059,19 @@ class LineCheckAssistant(Tk):
             ),
             justify="left",
         ).pack(anchor="w", padx=10, pady=(10, 8))
-        self.onu_c300_cleanup_check = ttk.Checkbutton(
+        # ttk 的 clam 主题会把选中态绘制为叉号；布尔选项统一使用原生
+        # Checkbutton，让选中态显示标准勾号，同时保留原有变量与命令语义。
+        self.onu_c300_cleanup_check = Checkbutton(
             self.onu_c300_config_frame,
             text="C300 配置失败时，允许删除明确选择的一台同 PON 离线 ONU 后重试（危险）",
             variable=self.onu_c300_allow_offline_cleanup_var,
             command=self._on_c300_cleanup_toggle,
+            selectcolor="#ffffff",
+            background=COLOR_SURFACE,
+            activebackground=COLOR_SURFACE,
+            foreground=COLOR_TEXT,
+            highlightthickness=0,
+            borderwidth=0,
         )
         self.onu_c300_cleanup_check.pack(anchor="w", padx=10, pady=(0, 6))
         cleanup_row = Frame(self.onu_c300_config_frame, background=COLOR_BG)
@@ -2111,15 +2122,33 @@ class LineCheckAssistant(Tk):
             state="readonly",
             width=10,
         ).grid(row=0, column=5, sticky="ew", padx=(0, 8), pady=5)
-        c600_field(0, 6, "T-CONT ID", self.onu_c600_tcont_id_var, 8)
-        c600_field(1, 0, "T-CONT模板", self.onu_c600_tcont_profile_var, 12)
-        c600_field(1, 2, "GEM Port", self.onu_c600_gemport_id_var, 8)
-        c600_field(1, 4, "VPort", self.onu_c600_vport_id_var, 8)
-        ttk.Checkbutton(
+        c600_field(0, 6, "上网T-CONT", self.onu_c600_tcont_id_var, 8)
+        c600_field(1, 0, "上网DBA模板", self.onu_c600_tcont_profile_var, 12)
+        c600_field(1, 2, "上网GEM Port", self.onu_c600_gemport_id_var, 8)
+        c600_field(1, 4, "上网VPort", self.onu_c600_vport_id_var, 8)
+        Checkbutton(
             c600_form,
             text="启用 SN 双重绑定",
             variable=self.onu_c600_sn_bind_both_var,
+            selectcolor="#ffffff",
+            background=COLOR_SURFACE,
+            activebackground=COLOR_SURFACE,
+            foreground=COLOR_TEXT,
+            highlightthickness=0,
+            borderwidth=0,
         ).grid(row=1, column=6, columnspan=2, sticky="w", padx=10, pady=5)
+        Checkbutton(
+            c600_form,
+            text="完整验证成功后执行 write（危险，仅本次有效）",
+            variable=self.onu_c600_write_after_success_var,
+            command=self._invalidate_onu_preview,
+            selectcolor="#ffffff",
+            background=COLOR_SURFACE,
+            activebackground=COLOR_SURFACE,
+            foreground=COLOR_TEXT,
+            highlightthickness=0,
+            borderwidth=0,
+        ).grid(row=2, column=0, columnspan=8, sticky="w", padx=10, pady=(2, 6))
 
         mapping_frame = ttk.LabelFrame(self.onu_c600_config_frame, text="业务映射（每行 ServiceID,VLAN）")
         mapping_frame.pack(fill="both", expand=True, pady=(8, 0))
@@ -2130,7 +2159,10 @@ class LineCheckAssistant(Tk):
         self.onu_c600_services_text.bind("<<Modified>>", self._on_onu_services_text_modified)
         ttk.Label(
             mapping_frame,
-            text="C600 每次只配置一台 ONU；型号和速率会从查询结果自动带入，请核对后再生成预览。",
+            text=(
+                "业务分层：上网→GEM/VPort 1；语音335→2；组播600→3（含IGMP）；"
+                "TR069 50→4。GEM与VPort必须1:1对应。"
+            ),
         ).pack(anchor="w", padx=8, pady=(0, 8))
 
         config_actions = Frame(config_tab, background=COLOR_BG)
@@ -2637,7 +2669,12 @@ class LineCheckAssistant(Tk):
                 else "首条 CLI 错误停止且不删除 ONU；成功后单独询问 write"
             )
         else:
-            safety_text = "首条 CLI 错误停止；不自动删除 ONU，不自动执行 write"
+            write_after_success = bool(self.onu_c600_write_after_success_var.get())
+            safety_text = (
+                "首条 CLI 错误停止；不自动删除 ONU；完整验证成功后执行 write"
+                if write_after_success
+                else "首条 CLI 错误停止；不自动删除 ONU；本次不执行 write"
+            )
         self.onu_confirmation_summary_var.set(
             f"OLT：{family} {self.onu_olt_ip_var.get().strip() or '未填写'}　"
             f"源 IP：{self.onu_source_ip_var.get().strip() or '未填写'}\n"
@@ -2645,7 +2682,10 @@ class LineCheckAssistant(Tk):
         )
         self.onu_command_preview_text.configure(state="normal")
         self.onu_command_preview_text.delete("1.0", "end")
-        self.onu_command_preview_text.insert("1.0", "\n".join(commands))
+        preview_commands = list(commands)
+        if family == OLT_FAMILY_C600 and self.onu_c600_write_after_success_var.get():
+            preview_commands.extend(["# 完整上线与只读验证成功后执行（独立会话）", "write"])
+        self.onu_command_preview_text.insert("1.0", "\n".join(preview_commands))
         self.onu_command_preview_text.configure(state="disabled")
         self.onu_preview_ready = True
         self.onu_register_button.configure(state="normal")
@@ -2777,6 +2817,12 @@ class LineCheckAssistant(Tk):
             messagebox.showwarning("注册参数错误", str(exc), parent=self.onu_registration_window)
             return
         family = self.onu_family_var.get()
+        write_var = getattr(self, "onu_c600_write_after_success_var", None)
+        write_after_success = (
+            family == OLT_FAMILY_C600
+            and write_var is not None
+            and bool(write_var.get())
+        )
         onu_lines = "\n".join(f"- {request.onu.display_text}" for request in requests)
         cleanup_candidate = (
             self._selected_c300_cleanup_candidate()
@@ -2797,8 +2843,12 @@ class LineCheckAssistant(Tk):
         confirmed = messagebox.askyesno(
             "确认注册 ONU",
             f"OLT 型号：{family}\n源 IP：{connection.source_ip}\n目标：\n{onu_lines}\n"
-            f"共 {len(commands)} 条配置命令。{cleanup_text}\n"
-            "该操作会修改 OLT 当前运行配置，但不会自动执行 write。是否继续？",
+            f"共 {len(commands)} 条注册配置命令。{cleanup_text}\n"
+            + (
+                "完整上线与只读验证成功后还会执行 write，保存整台 OLT 当前运行配置。是否继续？"
+                if write_after_success
+                else "该操作会修改 OLT 当前运行配置，本次不会执行 write。是否继续？"
+            ),
             parent=self.onu_registration_window,
         )
         if not confirmed:
@@ -2817,6 +2867,7 @@ class LineCheckAssistant(Tk):
                 connection,
                 requests,
                 cleanup_candidate,
+                write_after_success,
             ),
             daemon=True,
         )
@@ -2828,6 +2879,7 @@ class LineCheckAssistant(Tk):
         connection: OltConnection,
         requests,
         cleanup_candidate,
+        write_after_success: bool,
     ) -> None:
         result = OnuRegistrationService(logger=self._log).register(
             connection,
@@ -2835,9 +2887,20 @@ class LineCheckAssistant(Tk):
             c300_cleanup_candidate=cleanup_candidate,
             cancel_event=self.onu_cancel_event,
         )
-        self.after(0, lambda: self._complete_onu_register_selected(family, connection, result))
+        self.after(
+            0,
+            lambda: self._complete_onu_register_selected(
+                family, connection, result, write_after_success
+            ),
+        )
 
-    def _complete_onu_register_selected(self, family: str, connection: OltConnection, result) -> None:
+    def _complete_onu_register_selected(
+        self,
+        family: str,
+        connection: OltConnection,
+        result,
+        write_after_success: bool = False,
+    ) -> None:
         self.onu_register_running = False
         self._set_onu_registration_action_buttons_state("normal" if self.onu_unregistered_selection_vars else "disabled")
         if hasattr(self, "onu_query_button"):
@@ -2848,18 +2911,21 @@ class LineCheckAssistant(Tk):
         self._log(f"[ONU注册][{family}] 注册结果：{connection.host} - {result.message}")
         if not result.ok:
             return
-        if family != OLT_FAMILY_C300:
-            messagebox.showinfo(
-                "C600 注册与验证完成",
-                "C600 ONU 注册、业务配置及只读验证已经执行。\n工具未执行 write，请根据现场要求决定是否手工保存。",
+        if family == OLT_FAMILY_C600:
+            if not write_after_success:
+                messagebox.showinfo(
+                    "C600 注册与验证完成",
+                    "C600 ONU 注册、业务配置及只读验证已经执行。\n本次未选择 write，当前运行配置尚未写入启动配置。",
+                    parent=self.onu_registration_window,
+                )
+                return
+            confirmed = True
+        else:
+            confirmed = messagebox.askyesno(
+                "保存 OLT 最新配置",
+                "ONU 注册配置已下发到 OLT 当前运行配置。\n是否执行 write，将最新配置写入启动配置？",
                 parent=self.onu_registration_window,
             )
-            return
-        confirmed = messagebox.askyesno(
-            "保存 OLT 最新配置",
-            "ONU 注册配置已下发到 OLT 当前运行配置。\n是否执行 write，将最新配置写入启动配置？",
-            parent=self.onu_registration_window,
-        )
         if not confirmed:
             self._log(f"[ONU注册][{family}] 保存 OLT 配置：{connection.host} - 用户选择暂不保存")
             return

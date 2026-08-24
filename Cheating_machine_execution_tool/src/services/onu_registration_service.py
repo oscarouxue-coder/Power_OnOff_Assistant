@@ -374,10 +374,12 @@ class OnuRegistrationService:
                 logger=lambda text: self._log(family, text),
                 cancel_event=cancel_event,
             ) as session:
-                session.execute("end", timeout=5, fail_on_cli_error=False)
-                output = session.execute("write", timeout=30)
+                # save_configuration 使用全新 exec 会话，登录后已位于 ZXAN#，无需发送
+                # 在该模式下会被 C600 拒绝的 end。C600 write 实机保存会持续输出进度点，
+                # 30 秒不足以等到最终提示符，预留 120 秒等待完整结果。
+                output = session.execute("write", timeout=120)
             self._log(family, "OLT 最新配置已写入启动配置")
-            return OnuOperationResult(True, "OLT 最新配置已写入启动配置", output=output, commands=("end", "write"))
+            return OnuOperationResult(True, "OLT 最新配置已写入启动配置", output=output, commands=("write",))
         except OperationCancelled as exc:
             self._log(family, str(exc))
             return OnuOperationResult(False, str(exc))

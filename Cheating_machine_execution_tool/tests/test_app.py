@@ -2513,7 +2513,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         askyesno.assert_called_once()
         thread_class.assert_called_once_with(
             target=context._onu_register_selected_worker,
-            args=(OLT_FAMILY_C300, connection, [request], None),
+            args=(OLT_FAMILY_C300, connection, [request], None, False),
             daemon=True,
         )
         worker.start.assert_called_once_with()
@@ -2552,7 +2552,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         thread_class.assert_called_once_with(
             target=context._onu_register_selected_worker,
-            args=(OLT_FAMILY_C300, connection, [request], candidate),
+            args=(OLT_FAMILY_C300, connection, [request], candidate, False),
             daemon=True,
         )
 
@@ -2632,7 +2632,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
     @patch("line_check_assistant.app.messagebox.askyesno")
     @patch("line_check_assistant.app.messagebox.showinfo")
-    def test_c600_success_never_offers_automatic_write(self, showinfo, askyesno):
+    def test_c600_success_without_write_selection_does_not_save(self, showinfo, askyesno):
         context = SimpleNamespace(
             onu_register_running=True,
             onu_unregistered_selection_vars=[(Mock(), Mock())],
@@ -2655,6 +2655,36 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             "[ONU注册][C600] 注册结果：172.18.18.152 - C600 注册与验证成功"
         )
 
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_c600_success_with_write_selection_starts_save_worker(self, thread_class):
+        worker = thread_class.return_value
+        context = SimpleNamespace(
+            onu_register_running=True,
+            onu_save_olt_running=False,
+            onu_unregistered_selection_vars=[(Mock(), Mock())],
+            onu_query_button=Mock(),
+            onu_stop_button=Mock(),
+            _set_onu_registration_action_buttons_state=Mock(),
+            _set_onu_query_status=Mock(),
+            _log=Mock(),
+            _onu_save_olt_configuration_worker=Mock(),
+            onu_registration_window=Mock(),
+        )
+        connection = OltConnection("172.18.18.152", "172.33.5.35", "zte", "secret")
+        result = OnuOperationResult(True, "C600 注册与验证成功")
+
+        LineCheckAssistant._complete_onu_register_selected(
+            context, OLT_FAMILY_C600, connection, result, True
+        )
+
+        self.assertTrue(context.onu_save_olt_running)
+        thread_class.assert_called_once_with(
+            target=context._onu_save_olt_configuration_worker,
+            args=(OLT_FAMILY_C600, connection),
+            daemon=True,
+        )
+        worker.start.assert_called_once_with()
+
     def test_main_onu_ui_uses_service_without_importing_standalone_c600_gui(self):
         module_source = inspect.getsource(sys.modules["line_check_assistant.app"])
         open_source = inspect.getsource(LineCheckAssistant._open_onu_registration_module)
@@ -2666,6 +2696,10 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn('text="OLT 连接"', open_source)
         self.assertIn('text="C600 查询范围"', open_source)
         self.assertIn('text="生成预览并进入下一步"', open_source)
+        self.assertIn('text="完整验证成功后执行 write（危险，仅本次有效）"', open_source)
+        self.assertIn('"上网VPort"', open_source)
+        self.assertIn('"TR069 50→4。GEM与VPort必须1:1对应。"', open_source)
+        self.assertIn("self.onu_c600_write_after_success_var.set(False)", open_source)
         self.assertIn("ttk.Radiobutton", module_source)
         self.assertNotIn('text="全选"', open_source)
         self.assertLess(open_source.index('text="OLT 连接"'), open_source.index("self.onu_notebook ="))
@@ -3106,6 +3140,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
                 c600_username="admin",
                 c600_password="secret",
                 c600_real_speed="xgspon",
+                c600_tcont_profile="CXP-55",
                 c600_shelf=1,
                 c600_slot=2,
                 c600_pon=3,
@@ -3292,6 +3327,29 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(source.count("Checkbutton("), 2)
         self.assertNotIn("ttk.Checkbutton(option_row", source)
         self.assertIn('selectcolor="#ffffff"', source)
+
+    def test_onu_options_and_active_ui_use_native_checkmark_indicator(self):
+        """ONU及今后新增的布尔选项都不得使用会显示叉号的ttk控件。"""
+        import line_check_assistant.app as app_module
+
+        source = inspect.getsource(app_module.LineCheckAssistant._open_onu_registration_module)
+        self.assertNotIn("ttk.Checkbutton(", source)
+        self.assertEqual(source.count("Checkbutton("), 3)
+        self.assertEqual(source.count('selectcolor="#ffffff"'), 3)
+        for label in (
+            "C300 配置失败时，允许删除明确选择的一台同 PON 离线 ONU 后重试（危险）",
+            "启用 SN 双重绑定",
+            "完整验证成功后执行 write（危险，仅本次有效）",
+        ):
+            self.assertIn(label, source)
+
+        project_root = Path(__file__).resolve().parents[1]
+        offenders = []
+        for source_dir in ("line_check_assistant", "src"):
+            for source_path in (project_root / source_dir).rglob("*.py"):
+                if "ttk.Checkbutton(" in source_path.read_text(encoding="utf-8"):
+                    offenders.append(str(source_path.relative_to(project_root)))
+        self.assertEqual(offenders, [], f"应改用原生 Checkbutton 的文件：{offenders}")
 
     def test_pipeline_subtask_wait_returns_only_after_completion_result(self):
         """异步升级/写参只有完成回调通知后，管道才能执行下一项。"""
