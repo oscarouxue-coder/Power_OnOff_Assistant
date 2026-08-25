@@ -2,6 +2,19 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-25 - 修复C300未注册ONU点击选择
+
+- 类型：BUG 修复
+- 背景：C300 查询到未注册 ONU 后，操作员点击列表项，后续步骤仍判定为未选择，无法继续配置或预览。
+- 完成内容：① 在共享 ONU 选择回调中同步设置被点击行的选择变量；② 保持单选、C600 自动回填和既有按钮刷新逻辑不变；③ 新增 C300 点击选择回归用例。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：`python -m unittest discover -s tests -p test_app.py -v`；`python scripts\verify_baseline.py`。
+- 验证结果：主程序专项 `Ran 167 tests ... OK`；完整基线在提升权限后通过，57 个源码文件编译、699 项单元测试、169 个强制基线测试均通过，`ALL CHECKS PASSED`。普通权限环境不能绑定 UDP 69，导致两项既有 TFTP 用例报 `WinError 10013`，不影响提升权限下的完整门禁结论。
+- 后续待办：在 Windows 源码版复验 C300 查询结果点击后可进入配置业务与命令预览；真实 C300 注册验收仍按既有计划单独进行。
+
 ## 2026-08-25 - 调整ONU注册窗口尺寸
 
 - 类型：修改

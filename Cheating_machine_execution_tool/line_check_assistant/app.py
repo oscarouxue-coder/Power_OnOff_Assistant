@@ -3101,6 +3101,9 @@ class LineCheckAssistant(Tk):
         self.onu_notebook.select(self.onu_config_tab)
 
     def _on_onu_selection_toggled(self, onu, variable) -> None:
+        # C300/C600 都使用单选展示；C300 的 Radiobutton 绑定的是共享显示变量，
+        # 必须同步更新本行 BooleanVar，后续选中校验和操作按钮才会感知到点击。
+        variable.set(True)
         if variable.get():
             for other_onu, other_variable in self.onu_unregistered_selection_vars:
                 if other_onu is not onu:

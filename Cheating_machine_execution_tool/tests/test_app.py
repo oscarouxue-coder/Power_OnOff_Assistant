@@ -2419,6 +2419,26 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         self.assertEqual(LineCheckAssistant._selected_unregistered_onus(context), [selected])
 
+    def test_c300_onu_click_marks_clicked_item_selected(self):
+        clicked = Mock(get=Mock(return_value=True))
+        other = Mock()
+        selected_onu = Mock()
+        context = SimpleNamespace(
+            onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C300)),
+            onu_unregistered_selection_vars=[(selected_onu, clicked), (Mock(), other)],
+            _clear_c300_cleanup_candidates=Mock(),
+            _invalidate_onu_preview=Mock(),
+            _refresh_onu_selection_action_state=Mock(),
+        )
+
+        LineCheckAssistant._on_onu_selection_toggled(context, selected_onu, clicked)
+
+        clicked.set.assert_called_once_with(True)
+        other.set.assert_called_once_with(False)
+        context._clear_c300_cleanup_candidates.assert_called_once_with()
+        context._invalidate_onu_preview.assert_called_once_with()
+        context._refresh_onu_selection_action_state.assert_called_once_with()
+
     def test_c300_cleanup_selection_resolves_only_explicit_candidate(self):
         first = C300CleanupCandidate(
             "gpon-onu_1/2/1:8", "gpon-olt_1/2/1", 8, "DyingGasp", "GPON12345678", "SD-41"
