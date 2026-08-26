@@ -23,6 +23,7 @@ C300_SERVICE_PORTS = (
     (5, 5, 171, "Internet2"),
     (6, 6, 172, "Internet3"),
 )
+C300_SERVICE_NAMES = ("Internet", "TR069", "VOICE", "IPTV", "Internet2", "Internet3")
 NO_ONU_DATA_RE = re.compile(
     r"ONU data is null|No related information to show",
     re.IGNORECASE,
@@ -80,6 +81,16 @@ class ZteC300OnuDriver:
             errors.append("C300 ONU 接口格式无效")
         if not C300_SN_RE.fullmatch(request.onu.serial_number.strip()):
             errors.append("C300 ONU SN 必须为4位厂商标识加8位十六进制字符")
+        if request.onu_id is not None and request.onu_id < 1:
+            errors.append("C300 ONU ID 必须为正整数")
+        if request.tcont_id < 1:
+            errors.append("C300 T-CONT 必须为正整数")
+        if not (request.tcont_profile or "1G").strip():
+            errors.append("C300 DBA 模板不能为空")
+        try:
+            self._service_ports(request)
+        except ValueError as exc:
+            errors.append(str(exc))
         return errors
 
     @staticmethod
@@ -92,8 +103,31 @@ class ZteC300OnuDriver:
         if not match:
             raise ValueError("C300 ONU 接口格式无效")
         pon_path = match.group("pon")
-        onu_id = int(match.group("onu_id"))
+        onu_id = request.onu_id if request.onu_id is not None else int(match.group("onu_id"))
         return pon_path, onu_id, f"gpon-olt_{pon_path}", f"gpon-onu_{pon_path}:{onu_id}"
+
+    @staticmethod
+    def _service_ports(request: OnuProvisionRequest) -> tuple[tuple[int, int, int, str], ...]:
+        if not request.services:
+            return C300_SERVICE_PORTS
+        if len(request.services) != len(C300_SERVICE_NAMES):
+            raise ValueError("C300 必须保留六项标准业务映射")
+        service_ids = [item.service_id for item in request.services]
+        vlans = [item.vlan for item in request.services]
+        if any(item < 1 for item in service_ids):
+            raise ValueError("C300 Service ID 必须为正整数")
+        if len(set(service_ids)) != len(service_ids):
+            raise ValueError("C300 Service ID 不能重复")
+        if any(not 1 <= item <= 4094 for item in vlans):
+            raise ValueError("C300 VLAN 必须在 1-4094 之间")
+        if len(set(vlans)) != len(vlans):
+            raise ValueError("C300 VLAN 不能重复")
+        if 600 not in vlans:
+            raise ValueError("C300 标准业务必须保留组播 VLAN 600")
+        return tuple(
+            (item.service_id, item.service_id, item.vlan, C300_SERVICE_NAMES[index])
+            for index, item in enumerate(request.services)
+        )
 
     def build_precheck_commands(self, request: OnuProvisionRequest) -> list[str]:
         _pon_path, onu_id, olt_interface, _onu_interface = self._target_parts(request)
@@ -130,7 +164,7 @@ class ZteC300OnuDriver:
             errors.append("无法确认 C300 目标 SN 是否已注册，SN 查询返回格式不符合预期")
 
         if not any(
-            item.onu_interface.lower() == request.onu.onu_interface.lower()
+            item.pon_interface.lower() == request.onu.pon_interface.lower()
             and item.serial_number.upper() == request.onu.serial_number.upper()
             for item in discovered
         ):
@@ -141,17 +175,11 @@ class ZteC300OnuDriver:
         errors = self.validate_request(request)
         if errors:
             raise ValueError("；".join(errors))
-        match = re.fullmatch(
-            r"gpon-onu_(?P<pon>\d+/\d+/\d+):(?P<onu_id>\d+)",
-            request.onu.onu_interface,
-            re.IGNORECASE,
-        )
-        if not match:
-            raise ValueError("C300 ONU 接口格式无效")
-        pon_path = match.group("pon")
-        onu_id = match.group("onu_id")
-        onu_interface = f"gpon-onu_{pon_path}:{onu_id}"
+        pon_path, onu_id, _olt_interface, onu_interface = self._target_parts(request)
         onu_type = request.onu_type.strip() or C300_ONU_TYPE
+        tcont_id = request.tcont_id
+        tcont_profile = request.tcont_profile.strip() or "1G"
+        service_ports = self._service_ports(request)
         commands = [
             "configure terminal",
             f"interface gpon-olt_{pon_path}",
@@ -159,17 +187,17 @@ class ZteC300OnuDriver:
             "exit",
             f"interface {onu_interface}",
             "sn-bind enable sn",
-            "tcont 1 profile 1G",
+            f"tcont {tcont_id} profile {tcont_profile}",
         ]
-        commands.extend(f"gemport {gemport} tcont 1" for gemport, _vport, _vlan, _service in C300_SERVICE_PORTS)
+        commands.extend(f"gemport {gemport} tcont {tcont_id}" for gemport, _vport, _vlan, _service in service_ports)
         commands.extend(
             f"service-port {gemport} vport {vport} user-vlan {vlan} vlan {vlan}"
-            for gemport, vport, vlan, _service in C300_SERVICE_PORTS
+            for gemport, vport, vlan, _service in service_ports
         )
         commands.extend(["exit", f"pon-onu-mng {onu_interface}"])
         commands.extend(
             f"service {service} gemport {gemport} vlan {vlan}"
-            for gemport, _vport, vlan, service in C300_SERVICE_PORTS
+            for gemport, _vport, vlan, service in service_ports
         )
         commands.extend(["mvlan 600", "exit", "end"])
         return commands
@@ -196,7 +224,7 @@ class ZteC300OnuDriver:
         expected_type = request.onu_type.strip() or C300_ONU_TYPE
         expected_services = {
             gemport: (vport, vlan, service)
-            for gemport, vport, vlan, service in C300_SERVICE_PORTS
+            for gemport, vport, vlan, service in self._service_ports(request)
         }
 
         baseinfo = self.parse_baseinfo(values[1] if len(values) > 1 else "")
@@ -257,17 +285,19 @@ class ZteC300OnuDriver:
         tcont_output = values[4] if len(values) > 4 else ""
         tcont_match = re.search(r"^T-CONT:\s+(\d+)\s*$", tcont_output, re.I | re.M)
         profile_match = re.search(r"^\s*Profile name:\s+(\S+)\s*$", tcont_output, re.I | re.M)
-        if not tcont_match or tcont_match.group(1) != "1":
-            errors.append("T-CONT 1 验证失败")
-        if not profile_match or profile_match.group(1).upper() != "1G":
-            errors.append("T-CONT 模板 1G 验证失败")
+        expected_tcont = request.tcont_id
+        expected_profile = request.tcont_profile.strip() or "1G"
+        if not tcont_match or int(tcont_match.group(1)) != expected_tcont:
+            errors.append(f"T-CONT {expected_tcont} 验证失败")
+        if not profile_match or profile_match.group(1).upper() != expected_profile.upper():
+            errors.append(f"T-CONT 模板 {expected_profile} 验证失败")
 
         gemports = self.parse_gemports(values[5] if len(values) > 5 else "")
         for gemport in expected_services:
             item = gemports.get(gemport)
             if not item:
                 errors.append(f"缺少 GEM Port {gemport}")
-            elif item["tcont"] != 1 or item["status"].lower() != "active":
+            elif item["tcont"] != expected_tcont or item["status"].lower() != "active":
                 errors.append(
                     f"GEM Port {gemport} 状态异常：T-CONT={item['tcont']} status={item['status']}"
                 )

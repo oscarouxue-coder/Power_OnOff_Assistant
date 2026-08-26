@@ -2,6 +2,36 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-25 - 验证C300默认业务注册
+
+- 类型：真实样机验收 / 状态更新
+- 背景：项目负责人授权在 C300 `1/2/1` 注册一台查询到的未注册ONU，验证默认SD-41六业务模板是否可行。
+- 完成内容：① 只读发现`gpon-onu_1/2/1:3 / GPONA62D6F48`；② 预检空ONU ID与SN后注册默认模板；③ 第8次上线轮询进入working；④ 回读身份、状态、T-CONT、6个GEM/VPort、6条service-port、远端业务和MVLAN 600，均匹配；⑤ 未执行write，ONU保留在线。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`、`PROJECT_STATUS.md`。
+- 验证方法：显式源IP `172.18.18.40` 连接 C300 `172.18.18.151`，执行全局未注册查询、ID/SN预检、默认注册、最长60秒上线轮询和全部只读回读。
+- 验证结果：真实OLT默认模板注册与回读通过；未执行write。完整基线提升权限后通过，57个源码文件编译、702项单元测试、169项强制基线测试全部通过，`ALL CHECKS PASSED`。本轮未构建或运行EXE。
+- 后续待办：在Windows源码版确认分类提示、参数页和执行日志；继续确认语音/TR069地址、IPTV节目及参数化组合，write须另行确认。
+
+## 2026-08-25 - 修正C300查询PON范围传递
+
+- 类型：BUG 修复
+- 背景：C300 查询页填写`1/2/1`，主执行日志却显示按默认`gpon-olt_1/1/1`筛选。
+- 完成内容：查询线程改为 C300/C600 均传递当前界面构造的 `OnuDiscoveryScope`，不再让 C300 回退默认范围；新增 `1/2/1` 传参回归用例。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python -m unittest discover -s tests -p test_app.py -v`；`python scripts\verify_baseline.py`。
+- 验证结果：主界面专项 `Ran 169 tests ... OK`；完整基线提升权限后通过，57个源码文件编译、702项单元测试、169项强制基线测试全部通过，`ALL CHECKS PASSED`。
+- 后续待办：Windows源码版确认 C300 查询日志显示 `gpon-olt_1/2/1`；真实注册验收不在本次范围。
+
+## 2026-08-25 - 参数化C300按PON注册流程
+
+- 类型：功能 / 优化
+- 背景：需要让 C300 的查询和配置业务体验与 C600 四步流程对齐，同时保持两类 OLT 的命令体系隔离。
+- 完成内容：① C300 全局未注册查询后按机框/槽位/PON筛选；② 配置页支持 ONU ID、类型模板、T-CONT/DBA、六项业务映射；③ 每项业务的 Service ID 派生同号 GEM/VPort，默认六业务、危险删除、write及停止边界不变；④ 预检和只读回读按输入参数动态核验。
+- 修改文件：`src/core/zte_c300_onu.py`、`src/services/onu_registration_service.py`、`line_check_assistant/app.py`、`line_check_assistant/onu_registration_store.py`、相关测试与本文档。
+- 验证方法：`python -m unittest discover -s tests -p test_app.py -v`；`python -m unittest discover -s tests -p test_onu_registration_service.py -v`；`python scripts\verify_baseline.py`。
+- 验证结果：主界面专项168项、ONU service专项37项、ONU配置存储专项5项均通过；完整基线提升权限后通过，57个源码文件编译、701项单元测试、169项强制基线测试全部通过，`ALL CHECKS PASSED`。
+- 后续待办：Windows源码版核对C300参数页和PON筛选；在测试ONU/维护窗口内先做可变参数的只读命令确认，再由项目负责人决定是否执行真实注册验收。
+
 ## 2026-08-25 - 修复C300未注册ONU点击选择
 
 - 类型：BUG 修复

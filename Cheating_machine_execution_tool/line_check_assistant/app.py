@@ -20,6 +20,7 @@ from .network_ops import (
     factory_device_host_for,
 )
 from .onu_registration_store import (
+    DEFAULT_C300_SERVICES,
     DEFAULT_C600_SERVICES,
     OnuRegistrationConfig,
     OnuRegistrationStore,
@@ -368,6 +369,13 @@ class LineCheckAssistant(Tk):
         self.onu_c600_gemport_id_var = StringVar(value=str(self.onu_registration_config.c600_gemport_id))
         self.onu_c600_vport_id_var = StringVar(value=str(self.onu_registration_config.c600_vport_id))
         self.onu_c600_sn_bind_both_var = BooleanVar(value=self.onu_registration_config.c600_sn_bind_both)
+        self.onu_c300_shelf_var = StringVar(value=str(self.onu_registration_config.c300_shelf))
+        self.onu_c300_slot_var = StringVar(value=str(self.onu_registration_config.c300_slot))
+        self.onu_c300_pon_var = StringVar(value=str(self.onu_registration_config.c300_pon))
+        self.onu_c300_onu_id_var = StringVar(value=str(self.onu_registration_config.c300_onu_id))
+        self.onu_c300_onu_type_var = StringVar(value=self.onu_registration_config.c300_onu_type)
+        self.onu_c300_tcont_id_var = StringVar(value=str(self.onu_registration_config.c300_tcont_id))
+        self.onu_c300_tcont_profile_var = StringVar(value=self.onu_registration_config.c300_tcont_profile)
         self.onu_c600_write_after_success_var = BooleanVar(value=False)
         self.onu_c300_allow_offline_cleanup_var = BooleanVar(
             value=self.onu_registration_config.c300_allow_offline_cleanup
@@ -1613,6 +1621,13 @@ class LineCheckAssistant(Tk):
             self.onu_c600_gemport_id_var,
             self.onu_c600_vport_id_var,
             self.onu_c600_sn_bind_both_var,
+            self.onu_c300_shelf_var,
+            self.onu_c300_slot_var,
+            self.onu_c300_pon_var,
+            self.onu_c300_onu_id_var,
+            self.onu_c300_onu_type_var,
+            self.onu_c300_tcont_id_var,
+            self.onu_c300_tcont_profile_var,
             self.onu_c300_allow_offline_cleanup_var,
         ):
             variable.trace_add("write", lambda *_args: self._on_onu_registration_input_changed())
@@ -1623,10 +1638,11 @@ class LineCheckAssistant(Tk):
             self._clear_c300_cleanup_candidates()
         self._invalidate_onu_preview()
 
-    def _on_onu_services_text_modified(self, _event=None) -> None:
-        if not self.onu_c600_services_text.edit_modified():
+    def _on_onu_services_text_modified(self, event=None) -> None:
+        widget = event.widget if event is not None else self.onu_c600_services_text
+        if not widget.edit_modified():
             return
-        self.onu_c600_services_text.edit_modified(False)
+        widget.edit_modified(False)
         self._schedule_onu_registration_save()
         self._invalidate_onu_preview()
 
@@ -1643,6 +1659,7 @@ class LineCheckAssistant(Tk):
 
     def _current_onu_registration_config(self) -> OnuRegistrationConfig:
         services = self.onu_registration_config.c600_services or DEFAULT_C600_SERVICES
+        c300_services = self.onu_registration_config.c300_services or DEFAULT_C300_SERVICES
         services_widget = getattr(self, "onu_c600_services_text", None)
         if services_widget is not None:
             try:
@@ -1651,9 +1668,18 @@ class LineCheckAssistant(Tk):
             except TclError:
                 # Toplevel 已销毁时 Python 属性仍可能存在；全流程状态刷新应读取最近保存的缓存。
                 pass
+        c300_services_widget = getattr(self, "onu_c300_services_text", None)
+        if c300_services_widget is not None:
+            try:
+                if c300_services_widget.winfo_exists():
+                    c300_services = c300_services_widget.get("1.0", "end").strip()
+            except TclError:
+                pass
 
         def integer_value(variable, fallback: int) -> int:
             try:
+                if variable is None:
+                    return fallback
                 return int(variable.get().strip())
             except (TypeError, ValueError):
                 return fallback
@@ -1710,6 +1736,14 @@ class LineCheckAssistant(Tk):
             c600_vport_id=integer_value(self.onu_c600_vport_id_var, 1),
             c600_sn_bind_both=bool(self.onu_c600_sn_bind_both_var.get()),
             c600_services=services,
+            c300_shelf=integer_value(getattr(self, "onu_c300_shelf_var", None), 1),
+            c300_slot=integer_value(getattr(self, "onu_c300_slot_var", None), 2),
+            c300_pon=integer_value(getattr(self, "onu_c300_pon_var", None), 1),
+            c300_onu_id=integer_value(getattr(self, "onu_c300_onu_id_var", None), 1),
+            c300_onu_type=getattr(self, "onu_c300_onu_type_var", None).get() if hasattr(self, "onu_c300_onu_type_var") else "SD-41",
+            c300_tcont_id=integer_value(getattr(self, "onu_c300_tcont_id_var", None), 1),
+            c300_tcont_profile=getattr(self, "onu_c300_tcont_profile_var", None).get() if hasattr(self, "onu_c300_tcont_profile_var") else "1G",
+            c300_services=c300_services,
             c300_allow_offline_cleanup=False,
         )
 
@@ -1994,6 +2028,23 @@ class LineCheckAssistant(Tk):
 
         discovery_tab.columnconfigure(0, weight=1)
         discovery_tab.rowconfigure(2, weight=1)
+        self.onu_c300_scope_frame = ttk.LabelFrame(discovery_tab, text="C300 查询范围")
+        self.onu_c300_scope_frame.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        for column in (1, 3, 5):
+            self.onu_c300_scope_frame.columnconfigure(column, weight=1)
+
+        def c300_scope_field(column, label, variable):
+            Label(self.onu_c300_scope_frame, text=label, anchor="w").grid(
+                row=0, column=column, sticky="w", padx=(10, 4), pady=4
+            )
+            ttk.Entry(self.onu_c300_scope_frame, textvariable=variable, width=10).grid(
+                row=0, column=column + 1, sticky="ew", padx=(0, 10), pady=4
+            )
+
+        c300_scope_field(0, "机框", self.onu_c300_shelf_var)
+        c300_scope_field(2, "槽位", self.onu_c300_slot_var)
+        c300_scope_field(4, "PON", self.onu_c300_pon_var)
+
         self.onu_c600_scope_frame = ttk.LabelFrame(discovery_tab, text="C600 查询范围")
         self.onu_c600_scope_frame.grid(row=0, column=0, sticky="ew", pady=(0, 6))
         for column in (1, 3, 5):
@@ -2049,16 +2100,41 @@ class LineCheckAssistant(Tk):
 
         config_tab.columnconfigure(0, weight=1)
         config_tab.rowconfigure(0, weight=1)
-        self.onu_c300_config_frame = ttk.LabelFrame(config_tab, text="C300 固定业务配置")
+        self.onu_c300_config_frame = Frame(config_tab, background=COLOR_BG)
         self.onu_c300_config_frame.grid(row=0, column=0, sticky="nsew")
+        c300_form = ttk.LabelFrame(self.onu_c300_config_frame, text="C300 注册参数")
+        c300_form.pack(fill="x")
+        for column in (1, 3, 5, 7):
+            c300_form.columnconfigure(column, weight=1)
+
+        def c300_field(row, column, label, variable, width=10):
+            Label(c300_form, text=label, anchor="w").grid(row=row, column=column, sticky="w", padx=(10, 4), pady=5)
+            ttk.Entry(c300_form, textvariable=variable, width=width).grid(row=row, column=column + 1, sticky="ew", padx=(0, 8), pady=5)
+
+        c300_field(0, 0, "ONU ID", self.onu_c300_onu_id_var, 8)
+        c300_field(0, 2, "ONU 类型模板", self.onu_c300_onu_type_var, 14)
+        c300_field(0, 4, "T-CONT", self.onu_c300_tcont_id_var, 8)
+        c300_field(0, 6, "DBA模板", self.onu_c300_tcont_profile_var, 12)
         ttk.Label(
-            self.onu_c300_config_frame,
+            c300_form,
             text=(
-                "C300 将使用 SD-41 固定业务模板，包含 gpon-olt_ / gpon-onu_、"
-                "pon-onu-mng 和 mvlan 600。\n请确认已在上一步选择需要注册的 ONU。"
+                "业务表固定保留六项标准业务；每行 Service ID 同时作为 GEM Port 与 VPort，必须保留组播 VLAN 600。"
             ),
             justify="left",
-        ).pack(anchor="w", padx=10, pady=(10, 8))
+            style="Muted.TLabel",
+        ).grid(row=1, column=0, columnspan=8, sticky="w", padx=10, pady=(2, 6))
+        c300_mapping_frame = ttk.LabelFrame(self.onu_c300_config_frame, text="业务分类映射（每行 ServiceID,VLAN）")
+        c300_mapping_frame.pack(fill="both", expand=True, pady=(8, 0))
+        self.onu_c300_services_text = Text(c300_mapping_frame, height=6, font=("Consolas", 10), wrap="none")
+        self.onu_c300_services_text.insert("1.0", self.onu_registration_config.c300_services or DEFAULT_C300_SERVICES)
+        self.onu_c300_services_text.pack(fill="both", expand=True, padx=8, pady=8)
+        self.onu_c300_services_text.edit_modified(False)
+        self.onu_c300_services_text.bind("<<Modified>>", self._on_onu_services_text_modified)
+        ttk.Label(
+            c300_mapping_frame,
+            text="上网：第1/5/6行（Internet/Internet2/Internet3）；TR069：第2行；语音：第3行；IPTV：第4行。C300仍为每项独立 GEM/VPort。",
+            style="Muted.TLabel",
+        ).pack(anchor="w", padx=8, pady=(0, 8))
         # ttk 的 clam 主题会把选中态绘制为叉号；布尔选项统一使用原生
         # Checkbutton，让选中态显示标准勾号，同时保留原有变量与命令语义。
         self.onu_c300_cleanup_check = Checkbutton(
@@ -2306,6 +2382,11 @@ class LineCheckAssistant(Tk):
                 self.onu_c600_scope_frame.grid()
             else:
                 self.onu_c600_scope_frame.grid_remove()
+        if hasattr(self, "onu_c300_scope_frame"):
+            if family == OLT_FAMILY_C300:
+                self.onu_c300_scope_frame.grid()
+            else:
+                self.onu_c300_scope_frame.grid_remove()
         if hasattr(self, "onu_c300_config_frame") and hasattr(self, "onu_c600_config_frame"):
             if family == OLT_FAMILY_C600:
                 self.onu_c300_config_frame.grid_remove()
@@ -2331,7 +2412,7 @@ class LineCheckAssistant(Tk):
         self._invalidate_onu_preview()
         self._set_onu_telnet_status("")
         query_hint = (
-            "C300 将查询所有 PON 口"
+            "C300 将执行全局未注册查询，并按上方机框、槽位、PON 筛选结果"
             if family == OLT_FAMILY_C300
             else "请填写上方机框、槽位和 PON，再查询 C600 未注册 ONU"
         )
@@ -2605,14 +2686,18 @@ class LineCheckAssistant(Tk):
         return connection
 
     def _current_onu_discovery_scope(self) -> OnuDiscoveryScope:
+        family = self.onu_family_var.get()
+        shelf_var = self.onu_c300_shelf_var if family == OLT_FAMILY_C300 else self.onu_c600_shelf_var
+        slot_var = self.onu_c300_slot_var if family == OLT_FAMILY_C300 else self.onu_c600_slot_var
+        pon_var = self.onu_c300_pon_var if family == OLT_FAMILY_C300 else self.onu_c600_pon_var
         try:
             scope = OnuDiscoveryScope(
-                int(self.onu_c600_shelf_var.get().strip()),
-                int(self.onu_c600_slot_var.get().strip()),
-                int(self.onu_c600_pon_var.get().strip()),
+                int(shelf_var.get().strip()),
+                int(slot_var.get().strip()),
+                int(pon_var.get().strip()),
             )
         except ValueError as exc:
-            raise ValueError("C600 机框、槽位和 PON 必须是整数") from exc
+            raise ValueError(f"{family} 机框、槽位和 PON 必须是整数") from exc
         errors = scope.validate()
         if errors:
             raise ValueError("；".join(errors))
@@ -2626,7 +2711,21 @@ class LineCheckAssistant(Tk):
         if len(selected_onus) != 1:
             raise ValueError(f"{family} 每次只能选择一台未注册 ONU")
         if family == OLT_FAMILY_C300:
-            return [OnuProvisionRequest(family=family, onu=selected_onus[0], onu_type="SD-41")]
+            if not hasattr(self, "onu_c300_services_text"):
+                return [OnuProvisionRequest(family=family, onu=selected_onus[0], onu_type="SD-41")]
+            try:
+                services = parse_service_mappings(self.onu_c300_services_text.get("1.0", "end"))
+                return [OnuProvisionRequest(
+                    family=family,
+                    onu=selected_onus[0],
+                    onu_id=int(self.onu_c300_onu_id_var.get().strip()),
+                    onu_type=self.onu_c300_onu_type_var.get().strip(),
+                    tcont_id=int(self.onu_c300_tcont_id_var.get().strip()),
+                    tcont_profile=self.onu_c300_tcont_profile_var.get().strip(),
+                    services=tuple(services),
+                )]
+            except ValueError as exc:
+                raise ValueError(f"C300 参数错误：{exc}") from exc
         try:
             request = OnuProvisionRequest(
                 family=family,
@@ -2751,7 +2850,7 @@ class LineCheckAssistant(Tk):
         family = self.onu_family_var.get()
         try:
             connection = self._current_onu_connection()
-            scope = self._current_onu_discovery_scope() if family == OLT_FAMILY_C600 else OnuDiscoveryScope()
+            scope = self._current_onu_discovery_scope()
         except ValueError as exc:
             self._set_onu_query_status(str(exc), COLOR_DANGER)
             messagebox.showwarning("查询参数错误", str(exc), parent=self.onu_registration_window)
@@ -3111,6 +3210,8 @@ class LineCheckAssistant(Tk):
             if self.onu_family_var.get() == OLT_FAMILY_C600:
                 self._fill_c600_from_discovered_onu(onu)
             else:
+                if getattr(onu, "suggested_onu_id", None) and hasattr(self, "onu_c300_onu_id_var"):
+                    self.onu_c300_onu_id_var.set(str(onu.suggested_onu_id))
                 self._clear_c300_cleanup_candidates()
         self._invalidate_onu_preview()
         self._refresh_onu_selection_action_state()

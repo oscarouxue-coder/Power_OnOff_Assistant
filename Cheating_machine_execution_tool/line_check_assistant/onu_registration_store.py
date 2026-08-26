@@ -13,6 +13,7 @@ DEFAULT_C600_SOURCE_IP = "172.33.5.35"
 DEFAULT_OLT_IP = DEFAULT_C300_OLT_IP
 DEFAULT_OLT_SOURCE_IP = DEFAULT_C300_SOURCE_IP
 DEFAULT_C600_SERVICES = "1,170\n2,171\n3,172\n4,173\n5,335\n6,600\n7,50\n8,151\n9,150"
+DEFAULT_C300_SERVICES = "1,200\n2,46\n3,335\n4,600\n5,171\n6,172"
 ONU_REGISTRATION_SECTION = "onu_registration"
 
 
@@ -43,6 +44,14 @@ class OnuRegistrationConfig:
     c600_vport_id: int = 1
     c600_sn_bind_both: bool = True
     c600_services: str = DEFAULT_C600_SERVICES
+    c300_shelf: int = 1
+    c300_slot: int = 2
+    c300_pon: int = 1
+    c300_onu_id: int = 1
+    c300_onu_type: str = "SD-41"
+    c300_tcont_id: int = 1
+    c300_tcont_profile: str = "1G"
+    c300_services: str = DEFAULT_C300_SERVICES
     c300_allow_offline_cleanup: bool = False
 
 
@@ -128,6 +137,14 @@ class OnuRegistrationStore:
             c600_vport_id=read_int("c600_vport_id", 1),
             c600_sn_bind_both=read_bool("c600_sn_bind_both", True),
             c600_services=parser.get(ONU_REGISTRATION_SECTION, "c600_services", fallback=DEFAULT_C600_SERVICES),
+            c300_shelf=read_int("c300_shelf", 1),
+            c300_slot=read_int("c300_slot", 2),
+            c300_pon=read_int("c300_pon", 1),
+            c300_onu_id=read_int("c300_onu_id", 1),
+            c300_onu_type=parser.get(ONU_REGISTRATION_SECTION, "c300_onu_type", fallback="SD-41"),
+            c300_tcont_id=read_int("c300_tcont_id", 1),
+            c300_tcont_profile=parser.get(ONU_REGISTRATION_SECTION, "c300_tcont_profile", fallback="1G"),
+            c300_services=parser.get(ONU_REGISTRATION_SECTION, "c300_services", fallback=DEFAULT_C300_SERVICES),
             # 危险删除授权不跨窗口、不跨程序启动持久化。
             c300_allow_offline_cleanup=False,
         )
@@ -182,6 +199,14 @@ class OnuRegistrationStore:
             "c600_vport_id": str(config.c600_vport_id),
             "c600_sn_bind_both": "true" if config.c600_sn_bind_both else "false",
             "c600_services": config.c600_services,
+            "c300_shelf": str(config.c300_shelf),
+            "c300_slot": str(config.c300_slot),
+            "c300_pon": str(config.c300_pon),
+            "c300_onu_id": str(config.c300_onu_id),
+            "c300_onu_type": config.c300_onu_type,
+            "c300_tcont_id": str(config.c300_tcont_id),
+            "c300_tcont_profile": config.c300_tcont_profile,
+            "c300_services": config.c300_services,
             "c300_allow_offline_cleanup": "false",
         }
 

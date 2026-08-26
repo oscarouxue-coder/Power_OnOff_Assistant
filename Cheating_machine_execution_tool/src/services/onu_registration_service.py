@@ -94,6 +94,10 @@ class OnuRegistrationService:
                     session.execute("terminal length 0")
                 output = session.execute(command, timeout=30)
             onus = tuple(driver.parse_discovery(output))
+            if family == OLT_FAMILY_C300 and scope is not None:
+                target_pon = f"gpon-olt_{query_scope.shelf}/{query_scope.slot}/{query_scope.pon}"
+                onus = tuple(item for item in onus if item.pon_interface.lower() == target_pon.lower())
+                self._log(family, f"全局查询完成，已按目标 PON {target_pon} 筛选")
             message = f"查询到 {len(onus)} 个未注册 ONU" if onus else "未查询到未注册 ONU"
             self._log(family, message)
             return OnuOperationResult(True, message, output=output, onus=onus, commands=(command,))

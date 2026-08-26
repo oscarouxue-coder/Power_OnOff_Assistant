@@ -2293,6 +2293,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             onu_query_running=False,
             onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C300)),
             _current_onu_connection=Mock(return_value=connection),
+            _current_onu_discovery_scope=Mock(return_value=OnuDiscoveryScope()),
             onu_query_button=Mock(),
             _set_onu_query_status=Mock(),
             _render_unregistered_onu_selection=Mock(),
@@ -2650,6 +2651,27 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "C300 每次只能选择一台"):
             LineCheckAssistant._build_onu_provision_requests(context)
 
+    def test_c300_request_reads_parameterized_business_inputs(self):
+        selected = DiscoveredOnu(
+            family=OLT_FAMILY_C300, pon_interface="gpon-olt_1/2/1",
+            onu_interface="gpon-onu_1/2/1:3", suggested_onu_id=3,
+            serial_number="GPONA62D6F78",
+        )
+        context = SimpleNamespace(
+            onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C300)),
+            _selected_unregistered_onus=Mock(return_value=[selected]),
+            onu_c300_onu_id_var=Mock(get=Mock(return_value="8")),
+            onu_c300_onu_type_var=Mock(get=Mock(return_value="SD-41")),
+            onu_c300_tcont_id_var=Mock(get=Mock(return_value="2")),
+            onu_c300_tcont_profile_var=Mock(get=Mock(return_value="1G-CUSTOM")),
+            onu_c300_services_text=Mock(get=Mock(return_value="11,200\n12,46\n13,335\n14,600\n15,171\n16,172")),
+        )
+
+        request = LineCheckAssistant._build_onu_provision_requests(context)[0]
+
+        self.assertEqual((request.onu_id, request.tcont_id, request.tcont_profile), (8, 2, "1G-CUSTOM"))
+        self.assertEqual(request.services[-1], OnuServiceMapping(16, 172))
+
     @patch("line_check_assistant.app.messagebox.askyesno")
     @patch("line_check_assistant.app.messagebox.showinfo")
     def test_c600_success_without_write_selection_does_not_save(self, showinfo, askyesno):
@@ -2701,6 +2723,34 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         thread_class.assert_called_once_with(
             target=context._onu_save_olt_configuration_worker,
             args=(OLT_FAMILY_C600, connection),
+            daemon=True,
+        )
+        worker.start.assert_called_once_with()
+
+    @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_c300_query_preserves_current_pon_scope(self, thread_class, _askyesno):
+        worker = thread_class.return_value
+        connection = OltConnection("172.18.18.151", "172.18.18.40", "zte", "zte")
+        scope = OnuDiscoveryScope(1, 2, 1)
+        context = SimpleNamespace(
+            onu_query_running=False,
+            onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C300)),
+            _current_onu_connection=Mock(return_value=connection),
+            _current_onu_discovery_scope=Mock(return_value=scope),
+            onu_query_button=Mock(),
+            _set_onu_query_status=Mock(),
+            _render_unregistered_onu_selection=Mock(),
+            _onu_query_unregistered_worker=Mock(),
+            onu_registration_window=Mock(),
+        )
+
+        LineCheckAssistant._on_onu_query_unregistered_clicked(context)
+
+        context._current_onu_discovery_scope.assert_called_once_with()
+        thread_class.assert_called_once_with(
+            target=context._onu_query_unregistered_worker,
+            args=(OLT_FAMILY_C300, connection, scope),
             daemon=True,
         )
         worker.start.assert_called_once_with()

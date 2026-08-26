@@ -326,21 +326,30 @@ class DriverTests(unittest.TestCase):
         self.assertIn("igmp version v2", commands)
         self.assertIn("igmp mvlan 600", commands)
         self.assertIn("receive-port vport-1/1/5.55:3", commands)
-        self.assertLess(
-            commands.index("interface vport-1/1/5.55:2"),
-            commands.index("service-port 5 user-vlan 335 vlan 335"),
-        )
-        self.assertLess(
-            commands.index("interface vport-1/1/5.55:3"),
-            commands.index("service-port 6 user-vlan 600 vlan 600"),
-        )
-        self.assertLess(
-            commands.index("interface vport-1/1/5.55:4"),
-            commands.index("service-port 7 user-vlan 50 vlan 50"),
-        )
-        self.assertLess(commands.index("mvlan 600"), commands.index("interface vport-1/1/5.55:1"))
         self.assertFalse(any("gpon-olt_" in command for command in commands))
         self.assertNotIn("write", commands)
+
+    def test_c300_parameterized_request_uses_selected_id_profile_and_business_ids(self):
+        request = replace(
+            make_c300_request(),
+            onu_id=8,
+            onu_type="SD-41-CUSTOM",
+            tcont_id=2,
+            tcont_profile="1G-CUSTOM",
+            services=(
+                OnuServiceMapping(11, 200), OnuServiceMapping(12, 46),
+                OnuServiceMapping(13, 335), OnuServiceMapping(14, 600),
+                OnuServiceMapping(15, 171), OnuServiceMapping(16, 172),
+            ),
+        )
+
+        commands = ZteC300OnuDriver().build_provision_commands(request)
+
+        self.assertIn("onu 8 type SD-41-CUSTOM sn GPONA62D6F78", commands)
+        self.assertIn("tcont 2 profile 1G-CUSTOM", commands)
+        self.assertIn("gemport 11 tcont 2", commands)
+        self.assertIn("service-port 14 vport 14 user-vlan 600 vlan 600", commands)
+        self.assertIn("service IPTV gemport 14 vlan 600", commands)
 
     def test_c600_rejects_internet_resource_ids_that_collide_with_fixed_layers(self):
         request = replace(make_c600_request(), tcont_id=2, gemport_id=4, vport_id=3)

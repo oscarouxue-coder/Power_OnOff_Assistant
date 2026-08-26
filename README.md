@@ -36,3 +36,11 @@
 - `build/`、`dist/`、日志和测试结果是生成物，不提交 Git。
 - 打包后不得在当前 PC 运行 `dist/LineCheckAssistant.exe`；只确认打包成功并报告输出路径。
 - 发现 webhook、密码或其他凭据时，不要复制到文档、日志或提交内容；配置模板化与凭据轮换应作为单独任务处理。
+
+中兴C300 ONU类型模板:
+SD-41(4GE,1POTS)
+OSCAR_GPON(5GE,2POTS)
+
+中兴C600 ONU类型模板:
+NP7287XGS(4GE,1POTS)
+OSCAR_XGS(5GE,2POTS)
