@@ -1,6 +1,6 @@
 # Acceptance Baseline
 
-更新：2026-08-24（C600 ONU 四层VPort/GEM对齐与IGMP完成实机验证）
+更新：2026-08-29（补充主界面、ONU、DUT、测试项、全流程及串口终端的Windows桌面验收）
 
 > 与 `PROJECT_STATUS.md` 的关系：本文按"实现 → 单测 → 真实样机验收"三态罗列验收证据与不变量，作为独立验收基线。`PROJECT_STATUS.md` 保留面向项目的进度叙述；两者冲突时以本文为准。
 >
@@ -30,7 +30,7 @@ python scripts\verify_baseline.py
 - **构建后不在当前 PC 运行任一新生成的 `LineCheckAssistant.exe`**，仅确认打包成功、ZIP结构、脱敏结果和哈希并报告路径
 - 主界面内容区不得重复显示“开关机测试环境搭建助手”和“配置测试通道、完成自动上/下电并检查全部线路”，“执行日志”标题下不得显示“运行步骤、检查结果和异常信息”；管理员权限状态必须位于常用工具栏右侧、视觉上在“刷新串口”左侧，权限就绪/缺失仍分别使用成功/危险样式，刷新串口与刷新网卡顺序不得改变
 - **已确认验收（2026-08-13）**：项目负责人确认各功能入口居中显示需求验收通过。主界面“检查并执行测试”“自动上/下电”“样机升级”“写样机参数”“ONU注册”“串口日志”“DUT配置”和“测试项配置”首次创建必须相对当前主界面实际屏幕坐标居中，主界面位于副屏时不得跳回主屏；DUT和测试项配置必须先居中再执行已验收的客户区尺寸刷新，刷新后位置不得漂移；串口日志无有效历史位置或历史位置为`+0+0`时居中，用户主动移动后的其它有效历史位置仍按原规则恢复
-- **已实现未验收（2026-08-16）**：主界面必须统一监听自身及全部子控件的鼠标按下并调用`lift()`，不得用`focus_force()`抢走刚点击控件的焦点。样机升级、写样机参数、ONU注册、串口日志、DUT配置、测试项配置和全流程执行等持续打开的非模态功能窗口不得设置相对主界面的`transient`所有者关系；点击主界面任意可见位置必须允许主界面升到这些窗口前方且不得关闭或重建二级窗口，再次点击功能入口仍可把原二级窗口升到前方。生成批量参数表、选择程控电源及确认/警告等模态窗口必须继续保留`transient + grab`或等价模态语义，不能为了窗口层级切换绕过必要输入或危险确认
+- **已确认验收（2026-08-29）**：主界面统一监听自身及全部子控件的鼠标按下并调用`lift()`，不使用`focus_force()`抢走刚点击控件的焦点。已打开的非模态二级窗口与主界面可相互点击升到前台，主界面升层不会关闭或重建二级窗口；再次点击功能入口仍可把原二级窗口升到前方。生成批量参数表、选择程控电源及确认/警告等模态窗口继续保留`transient + grab`或等价模态语义，不因窗口层级切换绕过必要输入或危险确认
 
 ### 1.2 测试与目录基线
 
@@ -100,7 +100,7 @@ python scripts\verify_baseline.py
 
 ### 2.3 串口日志 / 多 VLAN 终端
 
-- **状态**：已确认验收（命令输入框回车发送，2026-07-15）/ 已实现未验收（其余）
+- **状态**：已确认验收（命令输入框回车发送，2026-07-15；3路以上高频WiFi日志滚动下按钮持续可操作、日志文件名及逐行时间戳，2026-08-29）/ 已实现未验收（其余）
 - **核心验收行为**：
   - 命令输入框 Enter 发送 — 非空等价「发送」+ 自动清空；空字符串等价「回车」；自动升级占用与危险命令（`reboot` / `reset` / `firstboot` / `tftp` / `upgrade`）二次确认仍生效
   - 多 Tab按通道显式COM打开；历史配置无`serial_port`时兼容`vlan{N} -> COM{N-100}`；按 VLAN 合并后只渲染当前 Tab，33ms 节流渲染
@@ -111,7 +111,7 @@ python scripts\verify_baseline.py
   - 串口终端落盘日志的每一行必须以 `YYYY-MM-DD_HH:MM:SS` 开头，方向字段紧随其后，例如 `2026-08-08_19:12:10 RX 打印内容`；RX 多行同包必须逐行加时间戳，半行跨读取块必须先拼接，关闭前末尾残留不得丢失。时间戳不得写入串口原始历史、界面事件文本或升级标记判断
 - **禁止破坏**：自动升级占用的 Tab 手动发送（含 Enter）被锁定；危险命令二次确认；原始终端文件由后台串口线程完整写入磁盘
 - **已确认验收（2026-08-13）**：通道显式选择COM后，串口日志按用户实际选择打开，Tab/串口映射符合现场预期；历史配置缺字段时的VLAN兼容回退继续保留。
-- **待确认**：3 路以上高频 WiFi 日志压测；现场观察高频滚动下按钮是否持续可点
+- **已确认验收（2026-08-29）**：同时滚动3路以上高频WiFi日志时，终端按钮仍可操作；日志文件名和每个落盘行的时间戳符合既定规则。
 - **对应测试**：`tests/test_serial_terminal.py`
 
 ### 2.4 全包升级 - `Tftp指令`（设备拉取固件）
@@ -161,7 +161,7 @@ python scripts\verify_baseline.py
 - **业务时序**：UBUS 启用 telnet → `TelnetSession`（未登录） → 首次登录 → 1. 进入工厂模式（`ppctl set FACTORY_MODE=1`）→ 2. `firstboot -yr` → 3. 等待 100 秒 → 4. 工厂模式二次登录 → 5.（可选 `ppctl set AGING_STATE=1`）→ 6.（可选 `ppctl clear`）→ 7. 15 项 `ppctl set/get` 读回校验 → 8. 退出工厂模式（`ppctl set FACTORY_MODE=0`）→ 9. `firstboot -yr`（`finally` 中执行第 8/9 步）
 
   写参前置采用「查询并按需准备对应通道网卡 + `wait_for_bindable_ip` 等 15 秒」：已启用且 `channel.network_card_ip`/前缀完全匹配时跳过重复设置，部分不满足只修复对应项，状态读取失败回退完整启用和静态 IP 设置；任何一步失败抛 `RuntimeError` → worker 标记 `telnet 写参启动失败`，单台放弃不影响其它通道。该步骤位于 `make_telnet_factory` 内 UBUS 启用 telnet 之前；100 秒工厂模式网段切换继续由 `make_factory_session_swap` 处理并使用相同预检规则，PC 端从 `192.168.1.x` 切到 `192.168.29.x`、主机位保持不变。`factory_bind_ip` / `factory_device_host` 未配置时按 `factory_bind_ip_for(network_card_ip)` / `factory_device_host_for(device_manage_ip)` 自动派生（第 3 段 → 29，主机位不变）；手动填值优先级最高。
-- **并行与取消**：并行 1-8 台（默认 1；2026-07-19 用户要求默认串行更稳，多台并发易撞 UBUS HTTP / telnet login / NIC；Spinbox 仍允许 1–8 现场上调；升级窗口的 `parallel_count` 默认仍为 2，互不影响）；取消时停止后续命令并尝试退出工厂模式
+- **并行与取消**：并行 1-8 台（默认 1；2026-07-19 用户要求默认串行更稳，多台并发易撞 UBUS HTTP / telnet login / NIC；Spinbox 仍允许 1–8 现场上调，关闭写参窗口或主程序后保存本次有效值并在下次打开时恢复；升级窗口的 `parallel_count` 默认仍为 2，互不影响）；取消时停止后续命令并尝试退出工厂模式
 - **节奏常量（2026-07-18 P2 缓解）**：默认 `src/services/sample_parameter_service.py` 顶部 7 个常量，按现场经验统一调整；`_login` prompt/password_prompt 用 `PARAMETER_LOGIN_PROMPT_TIMEOUT_SECONDS=10.0`、password_result 用 `PARAMETER_LOGIN_PASSWORD_TIMEOUT_SECONDS=20.0`；`_write_and_verify` set 后 sleep `PARAMETER_SETTLE_AFTER_SET_SECONDS=1.5`、get 等 marker 用 `PARAMETER_GET_RESPONSE_TIMEOUT_SECONDS=10.0`、mismatch/marker=None 后退避 `PARAMETER_RETRY_BACKOFF_SECONDS=1.5`、成功/失败末尾 BETWEEN_PARAMS=`0.5`；并行 worker 错峰 `PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS=0.6`。若 8 台并行仍偶发失败，优先上调 `PARAMETER_GET_RESPONSE_TIMEOUT_SECONDS=15.0` 与 `PARAMETER_RETRY_BACKOFF_SECONDS=2.5`。
 - **前置 UBUS 协议**：经自写 `UbusHttpClient` 按 `SdmcUbusLibEnableTelnet.Enable_telnet` 协议开 LAN-telnet 规则 — ① 总开关 `Device.Firewall.<X_SDMC_>Security.AccessCtrl.Enable` 若非 `"1"` 则 `set Enable=1`（用对象路径 `...AccessCtrl.`，非参数路径，避免 fault 9005 `EnableEnable`）；② 查 `AccessCtrl.Rule.{}.` 既有 telnet 规则（`SourceInterface ∈ {lan, both, Device.IP.Interface.1}`）— 已启用返回 `already_present`，否则 `set Enable=1` 返回 `reused`；③ 若无合适规则则 `add {SourceInterface: Device.IP.Interface.1, IPVersion:4, SourceIP:0.0.0.0, Application:telnet}` 返回 `added_iface`；失败回退 `add SourceInterface=lan` 返回 `added_lan_fallback`。每步校验 `results[*].data == "1"`，末尾固定 `sleep_fn(ENABLE_TELNET_FINAL_SLEEP_SECONDS=1.0)` 给防火墙 reload 留缓冲。
 - **核心验收行为（2026-07-19 6 台独立 VLAN110–VLAN115 真实样机并行验收通过，含可选项化 + 默认并行 1）**：
@@ -187,7 +187,7 @@ python scripts\verify_baseline.py
   - 串口路径保留作 transport 配置回退入口；其他功能（页面升级 / 全包升级 / 串口终端）不受影响
   - UBUS HTTP 客户端不复用 `SdmcUbusLib`（其会话静态、不允许多并发）— 如要替换须保证同等并发与源 IP 锁源语义
   - 工厂模式网段约定 29（第 3 段替换）必须保持稳定；变更前需通知所有现场并同步升级 `network_ops.py` 常量
-- **待确认**：网卡配置完全匹配时用户模式与工厂模式切网分别跳过重复操作且仍完成可绑定确认；2 / 8 台端点独立 VLAN 真实样机并行验收（VLAN/MAC 对应、`set/get` 读回校验、取消清理、退出工厂模式后的重启、明文凭据核对、UBUS 启用 telnet 与 telnet 登录衔接时序；2026-07-19 已用 6 台覆盖了 2 / 4 / 8 区间中段代表性场景）
+- **待确认**：Windows 源码版修改写参并行数后关闭并重开窗口，确认恢复上次有效值且不改变升级并行数；网卡配置完全匹配时用户模式与工厂模式切网分别跳过重复操作且仍完成可绑定确认；2 / 8 台端点独立 VLAN 真实样机并行验收（VLAN/MAC 对应、`set/get` 读回校验、取消清理、退出工厂模式后的重启、明文凭据核对、UBUS 启用 telnet 与 telnet 登录衔接时序；2026-07-19 已用 6 台覆盖了 2 / 4 / 8 区间中段代表性场景）
 - **对应测试**：`tests/test_sample_parameter_service.py`、`tests/test_telnet_transport.py`、`tests/test_ubus_http_client.py`、`tests/test_ubus_enable_telnet.py`、`tests/test_sample_parameter_table.py`、`tests/test_sample_parameter_app.py`、`tests/test_channel_config.py`、`tests/test_regression_sleep_fn.py`、`tests/test_network_ops.py`
 
 ### 2.8 随机参数表生成（`.xlsx`）
@@ -221,7 +221,7 @@ python scripts\verify_baseline.py
 
 ### 2.10 ZTE OLT ONU 注册
 
-- **状态**：已确认验收（C600四VPort OLT配置、MAC学习、write与清理，2026-08-24；C300默认SD-41六业务模板单台注册/回读，2026-08-25）/ 已实现未验收（ONU侧语音/TR069地址与IPTV节目、Windows界面交互、C300参数化组合及write）
+- **状态**：已确认验收（C600四VPort OLT配置、MAC学习、write与清理，2026-08-24；C300默认SD-41六业务模板单台注册/回读，2026-08-25；Windows四步窗口布局、原生勾号及C300/C600文案和切换，2026-08-29）/ 已实现未验收（ONU侧语音/TR069地址与IPTV节目、C300参数化组合及write）
 - **本轮实现（2026-08-25）**：C300 查询页增加机框/槽位/PON，仍执行全局未注册查询并在客户端按目标 PON 过滤；配置页支持 ONU ID、类型模板、T-CONT/DBA和六项 ServiceID/VLAN 参数，Service ID 派生同号 GEM/VPort。默认参数保持旧六业务模板，C300 自定义参数路径仅完成代码与单元测试，未进行真实写入验收。
 - **核心行为**：
   - 主界面单一入口不变；窗口当前默认和最小尺寸均为`1000x900`，通过“1. 查询 ONU / 2. 配置业务 / 3. 确认执行 / 4. 已注册管理”四步分页支持C300与C600，不导入或启动原独立GUI
@@ -246,13 +246,14 @@ python scripts\verify_baseline.py
 - **真实C300只读命令核查（2026-08-24，不等同注册写入验收）**：从配置的显式源IP登录C300后确认全局`show gpon onu uncfg`原始表头只有`OnuIndex / Sn / State`，不提供C600式`model / speed-mode`字段；命令帮助也没有型号或速率选项。进一步确认`show gpon onu uncfg gpon-olt_1/2/1`返回`%Error 20202: Invalid input ... Invalid parameter`，因此下发前未注册复核改用全局查询后按目标接口与SN精确匹配。本轮只执行只读查询，未进入配置模式、未注册或删除ONU、未执行`write`
 - **真实C300默认模板注册验证（2026-08-25）**：经项目负责人确认，使用`gpon-onu_1/2/1:3 / GPONA62D6F48`注册`SD-41`。预检确认目标仍未注册、ONU ID 3 空闲、SN 未占用；下发默认T-CONT 1/`1G`、六个GEM/VPort及200/46/335/600/171/172六项业务后，第8次轮询进入working。`baseinfo/state/detail-info`回读为ready/working/config success/SN Bind；六个GEM均active、六个VPort均为1:1、六条service-port均OK/YES，远端六项业务和`mvlan 600`全部一致。未执行`write`，ONU保留在线；此结论不覆盖Windows界面、语音/TR069地址、IPTV节目、参数化组合或write。
 - **项目负责人验收确认（2026-08-26）**：项目负责人明确确认「中兴C300注册流程验收OK」。据此，C300默认SD-41单台注册流程（按PON发现/选择、ID/SN预检、默认六业务下发、上线轮询、完整只读回读、默认不write）状态为已确认验收；此前及后续「待确认」中涉及C300的条目仅限参数化组合、write、删除命令、Windows界面及终端业务效果。
+- **项目负责人验收确认（2026-08-29）**：ONU注册窗口在普通`1000x900`尺寸下四步布局完整、底部按钮不裁切；相关布尔选项显示Windows原生标准勾号；C300/C600文案与型号切换符合预期。
 - **禁止破坏**：C300/C600命令体系与连接资料隔离；两者均一次一台；源IP锁定；第一条错误停止；上线轮询可停止；危险删除默认关闭且不持久化、只允许明确选择的一台；C600不自动删除或回滚，write必须默认关闭且只在本次明确选择、完整验证成功后执行；窗口当前默认和最小尺寸`1000x900`；普通窗口底部区域不被裁切；本机凭据和`onu_registration.ini`不入Git
-- **待确认**：ONU页面刷新后语音335与TR069 50是否取得预期DHCP地址、IPTV 600按现场设计是路由获取地址还是纯组播桥接及实际节目是否正常；Windows`1000x900`普通窗口四步分页布局、发现结果“型号”与配置/候选“类型模板”文案、分型号连接资料、C300离线候选查询/单选/清空及标准勾号、步骤切换、C600四VPort/IGMP预览与SN双重绑定/write标准勾号、write默认关闭/关闭重开复位/摘要、底部危险提示/状态/停止完整显示且无需最大化；真实C300注册写入、冲突拦截、上线轮询、完整下发后验证、默认不删除、显式单台删除和`write`；C600停止和`Access denied`专项复验；C300 `no onu`删除命令格式仍待真实样机确认
+- **待确认**：ONU页面刷新后语音335与TR069 50是否取得预期DHCP地址、IPTV 600按现场设计是路由获取地址还是纯组播桥接及实际节目是否正常；C300离线候选查询/单选/清空、C600四VPort/IGMP预览与SN双重绑定/write默认关闭/关闭重开复位/摘要，以及停止行为仍待专项复验；真实C300参数化注册、冲突拦截、显式单台删除和`write`；C600停止和`Access denied`专项复验；C300 `no onu`删除命令格式仍待真实样机确认
 - **对应测试**：`tests/test_onu_registration_service.py`（双driver语法、发现型号/类型模板显示语义、两型号单台限制、C300边界、C600四层T-CONT/GEM/VPort、GEM/VPort冲突、错误VPort及缺失IGMP拒绝、精确ID/SN预检、VLAN/MVLAN 600、上线与四组解析、显式write、已注册查询/删除）、`tests/test_app.py`（统一UI、ONU类型模板字段及说明、单选、四VPort提示、分型号连接、ONU原生勾选框及全源码禁止`ttk.Checkbutton`、C600 write默认不执行与选中后启动独立保存、已注册管理危险确认）、`tests/test_onu_registration_store.py`、`tests/test_network_ops.py`（历史C300兼容边界）
 
 ### 2.11 输入持久化与启动 / 打包
 
-- **状态**：已确认验收（测试项「恢复默认」清除全部手动命令并加载固定模板，2026-08-07；修复后便携ZIP在另一台Windows电脑可正常启动使用，2026-08-18）/ 已实现未验收（其余输入持久化交互）
+- **状态**：已确认验收（测试项「恢复默认」清除全部手动命令并加载固定模板，2026-08-07；修复后便携ZIP在另一台Windows电脑可正常启动使用，2026-08-18；测试项加载提速体感及第五Tab四项参数保存重开，2026-08-29）/ 已实现未验收（其余输入持久化交互）
 - **核心行为**：
   - 升级方式 / 固件路径 / 恢复出厂 / 超级凭据 / 并行数 → `Auto_power_on_off_tool/config/sample_upgrade_settings.ini`
   - OLT型号 / C300与C600各自的OLT IP、源IP、用户名、密码 / C600参数 → `Auto_power_on_off_tool/config/onu_registration.ini`；C300危险删除授权每次打开均恢复关闭，不写成可复用授权
@@ -267,7 +268,7 @@ python scripts\verify_baseline.py
   - WiFi 页必须完整映射旧 WiFi 参数窗口并保存到当前测试方案 `[connect_wifi]`：`enable`（主控）、`test_2g_enable`、`test_5g_enable`、`product_solution`、`auth_mode`、`cipher`、`choose_wireless_card`、`wireless_card_name`；老配置缺新增键时必须兼容回退为“2.4G/5G 开启、WPA2-PSK、AES、不指定网卡”。“刷新无线网卡”只枚举当前 pywifi 接口，不执行连接
   - 全流程子任务7必须把上述 8 项映射到无 GUI `OnuCongfig`，不得继续把频段、认证、加密或网卡选择写死；主控关闭时明确记录跳过日志。指定网卡开启但名称为空时启动前失败，运行电脑不存在所选网卡时子进程明确失败，不得静默回退其它网卡
   - 点击「测试项配置」后，首次创建必须使用与样机升级、写参和ONU注册一致的标准`Toplevel`自然映射，禁止执行`withdraw()`隐藏构建、`after(0)`强制恢复或嵌套`update()`；复用已有窗口只执行标准`deiconify → lift → focus_force`，不得依赖移动鼠标或其它额外输入才完成客户区绘制
-  - **已确认验收（2026-08-12）**：映射后120ms/360ms执行可恢复的1像素宽度脉冲，可触发Windows`WM_SIZE/WM_PAINT`整树刷新；项目负责人确认“测试项配置”打开后客户区直接完整显示、无需移动鼠标。刷新前后窗口尺寸与位置保持不变。2026-08-13增加的20ms快速刷新和固定尺寸无阻塞居中只属于加载提速，原两次验收刷新继续保留
+  - **已确认验收（2026-08-12 / 2026-08-29）**：映射后120ms/360ms执行可恢复的1像素宽度脉冲，可触发Windows`WM_SIZE/WM_PAINT`整树刷新；项目负责人确认“测试项配置”打开后客户区直接完整显示、无需移动鼠标。2026-08-29确认20ms快速刷新与固定尺寸无阻塞居中的加载提速体感符合预期；刷新前后窗口尺寸与位置保持不变
   - 旧工具“电源控制”channel 1～16 的复选框必须严格等于新工具选中配置：`network_card_ip.ini` 中存在且 `enabled=1` 的 `channel_N` 才勾选，其余（不存在或 `enabled=0`）全部取消勾选；同步只读配置，不得改写新工具通道
   - 串口终端窗口位置 + 日志目录 → `~/.aouxue_serial_terminal.json`
   - VS Code `.vscode/launch.json` 中 `LineCheckAssistant` 入口以 `Cheating_machine_execution_tool` 为工作目录；`.venv_serial_upgrade` 配套 `tftpy==0.8.7`
@@ -278,11 +279,11 @@ python scripts\verify_baseline.py
   - INI 转义（含 `%`）不得再触发 `ConfigParser` 内插崩溃
   - 开发使用 `.venv_serial_upgrade`，不污染全局或 `.venv`
 - **对应测试**：`tests/test_sample_upgrade_settings_store.py`、`tests/test_onu_registration_store.py`、`tests/test_legacy_ui_defaults.py`、`tests/test_legacy_ui_defaults_store.py`、`tests/test_test_item_config_store.py`、`tests/test_wifi_interfaces.py`、`tests/test_legacy_power_test_service.py`、`tests/test_app.py`、`tests/test_portable_release.py`
-- **待确认**：修复后便携ZIP已在另一台Windows电脑确认可正常启动使用；该结论不自动覆盖脱敏后首次填写的网卡/串口、业务凭据、配置保存、串口枚举或各真实设备业务入口。当前电脑按约定不启动新EXE。另需桌面确认第五个 Tab 只显示四项时间/次数参数，不显示通信方式、Telnet Enable、波特率和默认方案；修改四项并保存/重开确认生效，隐藏三项保持原值；再分别保存 `telnet_default_on=1/0`，确认旧配置镜像及旧工具复选框分别为 `telnet_enable=0/1`；WiFi 页确认 8 项加载/保存、无线网卡刷新及子任务7真实连接结果
+- **待确认**：修复后便携ZIP已在另一台Windows电脑确认可正常启动使用；该结论不自动覆盖脱敏后首次填写的网卡/串口、业务凭据、配置保存、串口枚举或各真实设备业务入口。当前电脑按约定不启动新EXE。已确认第五个Tab只显示四项运行参数，修改后保存并重开仍生效；隐藏字段未纳入本轮验收。另需分别保存 `telnet_default_on=1/0`，确认旧配置镜像及旧工具复选框分别为 `telnet_enable=0/1`；WiFi 页确认 8 项加载/保存、无线网卡刷新及子任务7真实连接结果
 
 ### 2.12 「全流程执行」子任务编排器（主界面「检查并执行测试」按钮升级）
 
-- **状态**：已实现未验收
+- **状态**：已确认验收（Windows桌面交互：首次7项全不勾选、状态刷新、确认框、主界面状态徽标和进度条，2026-08-29）/ 已实现未验收（真实样机7子任务端到端及异常路径）
 - **核心行为**：
   - 主界面「检查并执行测试」按钮按下后弹出「全流程执行」窗口（替代旧实现的「直接跑 ping 检查」）
   - **7 个子任务（界面保留 1→7 行布局；勾选串口日志时在全流程开始预启动，其余任务保持 1→7 相对顺序）**：
@@ -322,8 +323,8 @@ python scripts\verify_baseline.py
   - 子任务 2 调既有 `network_ops.run_line_check()`，不绕过主程序的网络准备流程
   - `0.0.0.0` 不出现在 telnet / tftp 路径（与 §1.4 一致）
   - 子任务7不得启动旧 GUI / EXE，不得 import 或实例化 `Auto_Power_On_Off_Tool.py` 的 `UiCase`；只允许无 GUI service 子进程复用旧 `test_case/common/clients` 业务类。子任务7之外的主程序路径继续与旧业务隔离
+- **已确认验收（2026-08-29）**：首次打开窗口7个子任务均为空框；状态刷新、确认框、主界面状态徽标及开关机测试进度条交互符合预期。
 - **待确认**：
-  - Windows 桌面真实交互：首次打开窗口确认 7 个子任务全部为空框；并核对手动勾选、二次确认、必填项状态刷新，以及子任务7运行时进度条与“当前/总轮次”同步变化
   - 真实样机端到端跑通 7 子任务全流程：串口日志预启动 → 上下电 → 环境检查 → 升级 → 写参 → ONU 注册 → 无 GUI Start All 开关机测试；重点确认全断电危险提示、当前勾选通道映射、旧 Logs 转发、停止行为和最终成功/失败判据
   - 异常场景：3/4/5 异步子任务失败传播（当前靠主程序 worker 异常冒泡 + 用户观察主执行日志；是否需要 polling + 状态轮询机制待定）
 - **对应测试**：
@@ -335,7 +336,7 @@ python scripts\verify_baseline.py
 
 ### 2.13 DUT 配置 - UBUS 批量配置
 
-- **状态**：已确认验收（2026-08-13 DUT配置窗口布局、连续查询与session注销、DUT网卡按需复用、WAN配置；2026-08-14单台2.4G WiFi连续两次配置、60秒稳定等待及回读、仅2.4G WiFi五类下拉按DUT实际能力动态加载）/ 已实现未验收（DUT窗口独立目标选择及按选择过滤配置/查询、2.4G/5G WiFi SSID递增及多台递增批次统一等待一次60秒后逐台回读、双频合一两套独立Radio参数及公共发射功率、5G WiFi动态能力、语音DTMF/SIP/编码动态能力、TR069实际字段约束、WiFi能力字段缺失兜底与目标变化清理、2.4G其它参数组合、5G/语音/TR069实际配置、Telnet状态准确性、1/8台并行及异常隔离）
+- **状态**：已确认验收（2026-08-13 DUT配置窗口布局、连续查询与session注销、DUT网卡按需复用、WAN配置；2026-08-14单台2.4G WiFi连续两次配置、60秒稳定等待及回读、仅2.4G WiFi五类下拉按DUT实际能力动态加载；2026-08-29独立目标选择、“全选/清除”、SSID递增和双频区域显隐）/ 已实现未验收（按选择过滤配置/查询的真实设备路径、SSID多台递增批次统一等待后逐台回读、双频两套Radio实际下发/回读及公共发射功率、5G WiFi动态能力、语音DTMF/SIP/编码动态能力、TR069实际字段约束、WiFi能力字段缺失兜底与目标变化清理、2.4G其它参数组合、5G/语音/TR069实际配置、Telnet状态准确性、1/8台并行及异常隔离）
 - **核心行为**：
   - 主界面“串口日志”右侧固定显示“DUT配置”按钮；窗口采用 Notebook，包含“Telnet配置”“WAN配置”“2.4G WiFi配置”“5G WiFi配置”“语音配置”“TR069配置”六个独立 Tab；协议在 core、批量流程在 service，UI 只收集输入和显示结果
   - 六个 Tab 的字段名称必须在各自标签单元格内统一左对齐；公共 `_field()` 创建的 WAN、WiFi、语音、TR069 标签及单独创建的“现有连接名/索引”不得恢复为右对齐，Telnet 页标签继续从左侧排列
@@ -369,11 +370,12 @@ python scripts\verify_baseline.py
   - **已确认验收（2026-08-13，WAN配置）**：项目负责人确认现有WAN只读查询下拉和完整表单回填、新增/修改/明确连接删除、IPoE/PPPoE字段及MTU联动、IPv4/IPv6/双栈动态与静态组合、路由/桥接、NAT、LAN1–LAN8端口绑定、IPTV组播VLAN、多台共同WAN及状态展示均通过现场验收。
   - **已确认验收（2026-08-14，2.4G WiFi连续配置）**：项目负责人确认同一真实DUT连续两次修改2.4G WiFi配置均成功；每次下发后等待60秒再回读，第二轮不再在`Device.WiFi.Radio.`读取时报`timed out`。本结论只覆盖单台连续两次配置时序，不代表5G、2.4G其它参数组合、开放网络、隐藏SSID、双频合一或多台并行已经验收。
   - **已确认验收（2026-08-14，仅2.4G WiFi动态能力下拉）**：项目负责人确认2.4G页的认证/加密模式、信道、信道带宽、WiFi协议类型和发射功率五类下拉会按真实DUT实际支持能力动态加载，工具不再展示该DUT不支持的固定候选；其中认证/加密模式与DUT管理页面一致，仅显示`None`、`WPA2-Personal`和`WPA3-Personal-Transition`。本结论不包含5G，也不扩大为设备缺少能力字段时的兜底、目标变化后的旧能力清理或WiFi实际配置组合验收。
+  - **已确认验收（2026-08-29，Windows桌面交互）**：DUT窗口独立目标选择、全选/清除、SSID递增以及双频合一时另一频段射频区域的显隐均符合预期；未扩大为真实设备下发、统一稳定等待或双频回读结论。
   - WAN/WiFi/语音/TR069 复用主界面通道和 Telnet 页 UBUS 凭据/并行数；同一时间只允许一个 DUT 配置批次。每台均执行“准备网络 → 等源 IP 可绑 → 每台独立 UBUS 登录 → 功能配置 → 回读/结果校验 → 关闭 client”，登录失败最多重试3次，功能下发不自动重试，避免 WAN 重复创建
   - 五个新增 Tab 的主执行日志必须包含功能阶段、明文登录、实际 UBUS method/path/input、成功/跳过/失败和批次汇总；表格只显示简短逐台结果
   - WAN的LAN1–LAN8端口绑定和“启用 NAT”、两个WiFi页的“启用WiFi/隐藏WiFi/启用双频合一/启用WMM/SSID递增”、语音“启用 SIP 账号”、TR069“启用周期 Inform / 启用 HTTP 连接请求 / 启用证书 / 配置后手动 Inform”必须使用 Windows 原生 `Checkbutton`：选中显示标准“✓”，未选为空框，不得继续使用 Clam 主题下显示叉号的 `ttk.Checkbutton`；各 BooleanVar 默认值和配置语义保持不变
 - **禁止破坏**：不得复制第二份 AccessCtrl 协议；Telnet 必须继续复用 `enable_telnet_via_ubus`；每台功能必须使用独立 UBUS client 并绑定对应 VLAN 源 IP，结束时必须释放设备端session；网卡状态、目标 IPv4 或前缀任一不满足时不得错误复用，状态读取失败不得绕过原准备流程，任何复用路径不得跳过 `wait_for_bindable_ip`；不得直接导入使用共享静态 Session 的 `SdmcUbusLib`；WAN 删除不得自动扩大为删除全部或模糊匹配其它连接；不得重新向IPoE展示PPPoE凭据、向PPPoE提供静态地址或允许不受协议封装支持的双栈混合静态组合；不得把查询失败、仅部分DUT存在或同索引不同名称的WAN放入批量修改/删除下拉列表；WiFi不得绕过Mapping直接假定Radio/AP/SSID实例相同，双频合一不得拿当前Tab的信道、带宽或协议覆盖另一频段，必须使用另一频段独立输入和能力校验
-- **待确认**：Windows桌面确认六页独立目标选择列、逐台切换和“全选/清除”同步；主界面同时勾选vlan112/vlan113，DUT窗口仅选vlan112后分别确认配置与各项查询均不访问vlan113。Windows桌面确认2.4G/5G“SSID递增”默认关闭且互不影响；真实DUT以`Aouxue_001`对多台已选目标执行，核对确认框、主日志、实际下发与回读依次为001/002/003，且仅最后一台出现一次“等待 WiFi 参数生效并稳定：60 秒”、等待后每台均完成回读；再复验统一等待期间停止、单台下发/回读失败隔离、非法尾缀和32字节超限均不误报成功或产生错误写操作。Windows桌面勾选双频合一后确认另一频段射频区域正确显隐且底部状态/目标/按钮不被挤压；真实DUT分别从2.4G页和5G页执行双频配置，核对两套信道/带宽/协议按各自候选下发、公共功率写入两个Radio并完成双频回读，取消双频时不修改另一Radio。测试项配置窗口的20ms加载提速体感；Telnet查询准确显示AccessCtrl/规则/TCP23且不修改设备；WiFi设备缺少能力字段时正确兜底、目标变化后旧能力不残留；5G五类下拉与真实DUT能力一致，2.4G其它参数组合及5G真实Mapping、各字段查询回填/下发/回读、开放网络和隐藏SSID；语音DTMF/SIP/编码动态候选与真实DUT一致及实际下发/回读；TR069缺失字段正确禁用且不下发、查询参数准确性与一致参数回填；多台状态或能力不一致不覆盖表单、TR069查询不勾选手动Inform；真实样机覆盖主动触发Access denied、1/8台并行、停止和单台失败隔离。
+- **待确认**：主界面同时勾选vlan112/vlan113，DUT窗口仅选vlan112后分别确认配置与各项查询均不访问vlan113；真实DUT以`Aouxue_001`对多台已选目标执行，核对确认框、主日志、实际下发与回读依次为001/002/003，且仅最后一台出现一次“等待 WiFi 参数生效并稳定：60 秒”、等待后每台均完成回读；再复验统一等待期间停止、单台下发/回读失败隔离、非法尾缀和32字节超限均不误报成功或产生错误写操作。真实DUT分别从2.4G页和5G页执行双频配置，核对两套信道/带宽/协议按各自候选下发、公共功率写入两个Radio并完成双频回读，取消双频时不修改另一Radio。Telnet查询准确显示AccessCtrl/规则/TCP23且不修改设备；WiFi设备缺少能力字段时正确兜底、目标变化后旧能力不残留；5G五类下拉与真实DUT能力一致，2.4G其它参数组合及5G真实Mapping、各字段查询回填/下发/回读、开放网络和隐藏SSID；语音DTMF/SIP/编码动态候选与真实DUT一致及实际下发/回读；TR069缺失字段正确禁用且不下发、查询参数准确性与一致参数回填；多台状态或能力不一致不覆盖表单、TR069查询不勾选手动Inform；真实样机覆盖主动触发Access denied、1/8台并行、停止和单台失败隔离。
 - **对应测试**：`tests/test_network_ops.py`、`tests/test_dut_config_service.py`、`tests/test_dut_advanced_config_service.py`、`tests/test_dut_wan_query_service.py`、`tests/test_dut_status_query_service.py`、`tests/test_dut_ubus_config.py`、`tests/test_dut_wifi_config.py`、`tests/test_ubus_http_client.py`、`tests/test_telnet_transport.py`、`tests/test_ubus_enable_telnet.py`、`tests/test_app.py`
 
 ---

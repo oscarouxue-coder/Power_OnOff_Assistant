@@ -14,6 +14,7 @@ from line_check_assistant.sample_upgrade_settings_store import (
     MAX_PARALLEL_UPGRADES,
     SampleUpgradeSettings,
     SampleUpgradeSettingsStore,
+    clamp_parameter_parallel_count,
     clamp_parallel_count,
 )
 
@@ -34,6 +35,7 @@ class SampleUpgradeSettingsStoreTests(unittest.TestCase):
             self.assertEqual(settings.firmware_path, "")
             self.assertEqual(settings.parameter_initial_username, "")
             self.assertEqual(settings.parameter_initial_password, "")
+            self.assertEqual(settings.parameter_parallel_count, DEFAULT_PARAMETER_PARALLEL_COUNT)
 
     def test_save_and_load_preserves_last_closed_inputs(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -131,6 +133,27 @@ class SampleUpgradeSettingsStoreTests(unittest.TestCase):
                 (None, DEFAULT_PARALLEL_COUNT),
             ):
                 self.assertEqual(clamp_parallel_count(raw), expected, f"raw={raw!r}")
+
+    def test_parameter_parallel_count_round_trip_and_legacy_fallback(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "sample_upgrade_settings.ini"
+            store = SampleUpgradeSettingsStore(config_path)
+
+            store.save(SampleUpgradeSettings(parameter_parallel_count=6))
+            self.assertEqual(store.load().parameter_parallel_count, 6)
+
+            config_path.write_text("[sample_upgrade]\n", encoding="utf-8")
+            self.assertEqual(
+                store.load().parameter_parallel_count,
+                DEFAULT_PARAMETER_PARALLEL_COUNT,
+            )
+
+        self.assertEqual(clamp_parameter_parallel_count(0), 1)
+        self.assertEqual(clamp_parameter_parallel_count(99), MAX_PARALLEL_UPGRADES)
+        self.assertEqual(
+            clamp_parameter_parallel_count("invalid"),
+            DEFAULT_PARAMETER_PARALLEL_COUNT,
+        )
 
     def test_save_and_load_preserves_parameter_clear_and_exit_aging(self):
         # 2026-07-19:写样机参数流水线新增 clear_parameters / exit_aging 两个 bool,

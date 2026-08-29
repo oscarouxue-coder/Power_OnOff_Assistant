@@ -2,6 +2,26 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-29 - 保存写参并行数
+
+- 类型：BUG 修复
+- 背景：写样机参数窗口每次打开都会重新创建并行数变量并固定为默认值 1，操作员关闭窗口后无法恢复上次使用的并行数。
+- 完成内容：① 在 `sample_upgrade_settings.ini` 的 `[sample_upgrade]` 段新增独立 `parameter_parallel_count`；② 写参窗口改用主程序实例级变量，恢复旧配置时缺键回退默认 1，非法值钳制到 1–8；③ 修改数值后自动保存，关闭写参窗口及关闭主程序时再次保存；④ 全包升级的 `parallel_count` 保持独立且不受影响。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/sample_upgrade_settings_store.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_sample_upgrade_settings_store.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行写参配置存储、主程序专项测试与 `python scripts\verify_baseline.py`。
+- 验证结果：`python -m unittest discover -s tests -p test_sample_upgrade_settings_store.py -v` 为 `Ran 14 tests ... OK`；`python -m unittest discover -s tests -p test_app.py -v` 为 `Ran 169 tests ... OK`；本机权限下 `python scripts\verify_baseline.py` 通过，57 个源码文件编译、703 项单元测试、169 项强制基线测试均通过，`ALL CHECKS PASSED`。普通受限环境的两项既有 TFTP UDP 69 绑定测试会因 `WinError 10013` 失败，非本轮改动导致。
+- 后续待办：Windows 源码版打开“写样机参数”，修改并行数后关闭再打开，确认恢复上次有效值；不涉及真实设备写入。
+
+## 2026-08-29 - 补充Windows桌面验收结论
+
+- 类型：Windows桌面验收 / 状态更新
+- 背景：项目负责人确认主界面与二级窗口层级、ONU注册窗口、DUT配置、测试项配置、全流程窗口和串口终端的本轮指定交互均验收通过。
+- 完成内容：① 主界面与已打开二级窗口可互相点击升到前台；② ONU注册普通`1000x900`四步布局、底部按钮、Windows原生勾号、C300/C600文案与切换；③ DUT独立目标选择、“全选/清除”、SSID递增和双频区域显隐；④ 测试项配置加载提速体感及第五页四项运行参数保存重开；⑤ 全流程首次7项全不勾选、状态刷新、确认框、主界面状态徽标和进度条；⑥ 3路以上高频WiFi串口日志滚动时按钮可操作，日志文件名和逐行时间戳。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：依据项目负责人2026-08-29提供的Windows桌面验收结果。
+- 验证结果：上述指定Windows桌面交互已确认验收；未扩大为未覆盖的真实DUT下发、ONU业务、全流程端到端、停止或异常路径结论。
+- 后续待办：按`ACCEPTANCE_BASELINE.md §2.3 / §2.10 / §2.12 / §2.13`保留的真实设备、端到端、停止和异常场景继续验收。
+
 ## 2026-08-26 - 确认C300注册流程验收
 
 - 类型：真实样机验收 / 状态更新

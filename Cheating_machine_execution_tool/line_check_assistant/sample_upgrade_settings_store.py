@@ -33,6 +33,19 @@ def clamp_parallel_count(value: int | str | None) -> int:
     return parsed
 
 
+def clamp_parameter_parallel_count(value: int | str | None) -> int:
+    """把写样机参数并行数钳到合法区间；非法输入回退写参默认值。"""
+    try:
+        parsed = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return DEFAULT_PARAMETER_PARALLEL_COUNT
+    if parsed < 1:
+        return 1
+    if parsed > MAX_PARALLEL_UPGRADES:
+        return MAX_PARALLEL_UPGRADES
+    return parsed
+
+
 @dataclass
 class SampleUpgradeSettings:
     upgrade_mode: str = DEFAULT_UPGRADE_MODE
@@ -46,6 +59,8 @@ class SampleUpgradeSettings:
     # 写样机参数窗口的「首次登录账号 / 密码」,独立于升级超级凭据,但落到同一 ini 文件,方便现场单点维护。
     parameter_initial_username: str = ""
     parameter_initial_password: str = ""
+    # 写样机参数并行数与全包升级 parallel_count 独立保存，避免两个窗口互相覆盖。
+    parameter_parallel_count: int = DEFAULT_PARAMETER_PARALLEL_COUNT
     # 写样机参数流水线两个可选行为(2026-07-19),与 parameter_initial_* 同级存到 ini。
     # 默认关闭:clear_parameters / exit_aging 都需要操作员在写样机参数窗口勾选才生效。
     parameter_clear_parameters: bool = False
@@ -79,6 +94,13 @@ class SampleUpgradeSettingsStore:
             firmware_path=parser.get(SAMPLE_UPGRADE_SECTION, "firmware_path", fallback=""),
             parameter_initial_username=parser.get(SAMPLE_UPGRADE_SECTION, "parameter_initial_username", fallback=""),
             parameter_initial_password=parser.get(SAMPLE_UPGRADE_SECTION, "parameter_initial_password", fallback=""),
+            parameter_parallel_count=clamp_parameter_parallel_count(
+                parser.get(
+                    SAMPLE_UPGRADE_SECTION,
+                    "parameter_parallel_count",
+                    fallback=DEFAULT_PARAMETER_PARALLEL_COUNT,
+                )
+            ),
             parameter_clear_parameters=parser.getboolean(SAMPLE_UPGRADE_SECTION, "parameter_clear_parameters", fallback=False),
             parameter_exit_aging=parser.getboolean(SAMPLE_UPGRADE_SECTION, "parameter_exit_aging", fallback=False),
             power_operation=parser.get(
@@ -107,6 +129,9 @@ class SampleUpgradeSettingsStore:
             "firmware_path": settings.firmware_path or "",
             "parameter_initial_username": settings.parameter_initial_username or "",
             "parameter_initial_password": settings.parameter_initial_password or "",
+            "parameter_parallel_count": str(
+                clamp_parameter_parallel_count(settings.parameter_parallel_count)
+            ),
             "parameter_clear_parameters": "1" if settings.parameter_clear_parameters else "0",
             "parameter_exit_aging": "1" if settings.parameter_exit_aging else "0",
             # 2026-07-20:全流程执行管道用的两个新字段。power_operation 仅接受 "up"/"down",

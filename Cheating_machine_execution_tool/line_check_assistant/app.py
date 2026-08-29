@@ -36,6 +36,7 @@ from .sample_upgrade_settings_store import (
     MAX_PARALLEL_UPGRADES,
     SampleUpgradeSettings,
     SampleUpgradeSettingsStore,
+    clamp_parameter_parallel_count,
     clamp_parallel_count,
 )
 from .serial_ports import list_prolific_ports, port_from_display
@@ -425,6 +426,11 @@ class LineCheckAssistant(Tk):
         # 与升级超级凭据分两个独立 key;作为主程序实例变量持久存在,值变更通过 trace_add 自动写盘。
         self.parameter_initial_username_var = StringVar(value=self.sample_upgrade_settings.parameter_initial_username)
         self.parameter_initial_password_var = StringVar(value=self.sample_upgrade_settings.parameter_initial_password)
+        self.parameter_parallel_count_var = IntVar(
+            value=clamp_parameter_parallel_count(
+                self.sample_upgrade_settings.parameter_parallel_count
+            )
+        )
         # 写样机参数流水线两个可选行为(2026-07-19):清空参数 / 退出老化,
         # 默认关闭,操作员勾选后下次写参时下发对应命令。
         self.parameter_clear_parameters_var = BooleanVar(value=self.sample_upgrade_settings.parameter_clear_parameters)
@@ -912,8 +918,8 @@ class LineCheckAssistant(Tk):
         # 写样机参数窗口的「首次登录账号 / 密码」直接复用主程序实例级 StringVar,
         # 由 ``__init__`` 阶段从 sample_upgrade_settings.ini 加载,值变更经 trace_add 自动写盘。
         # 写样机参数默认并行 1(2026-07-19 用户要求):多台并发容易撞 UBUS HTTP / telnet login / NIC,
-        # 默认串行更稳;Spinbox 仍允许 1–8 现场上调。升级窗口的 parallel_count 仍走 DEFAULT_PARALLEL_COUNT=2。
-        self.parameter_parallel_count_var = IntVar(value=DEFAULT_PARAMETER_PARALLEL_COUNT)
+        # 默认串行更稳;Spinbox 仍允许 1–8 现场上调。该实例级变量会恢复上次保存值,
+        # 升级窗口的 parallel_count 仍走 DEFAULT_PARALLEL_COUNT=2。
         self.parameter_status_var = StringVar(value="请选择或生成参数表。")
 
         container = ttk.Frame(dialog, padding=14)
@@ -978,6 +984,7 @@ class LineCheckAssistant(Tk):
             if self.parameter_write_running:
                 messagebox.showwarning("写参进行中", "请先停止写参批次并等待串口清理完成。", parent=dialog)
                 return
+            self._save_sample_upgrade_settings()
             dialog.destroy()
 
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
@@ -1789,6 +1796,7 @@ class LineCheckAssistant(Tk):
             self.upgrade_firmware_var,
             self.parameter_initial_username_var,
             self.parameter_initial_password_var,
+            self.parameter_parallel_count_var,
             self.parameter_clear_parameters_var,
             self.parameter_exit_aging_var,
             # 2026-07-20:全流程执行管道用的两个新字段,加入 autosave 链。
@@ -1821,6 +1829,9 @@ class LineCheckAssistant(Tk):
             firmware_path=self.upgrade_firmware_var.get(),
             parameter_initial_username=self.parameter_initial_username_var.get(),
             parameter_initial_password=self.parameter_initial_password_var.get(),
+            parameter_parallel_count=clamp_parameter_parallel_count(
+                self.parameter_parallel_count_var.get()
+            ),
             parameter_clear_parameters=bool(self.parameter_clear_parameters_var.get()),
             parameter_exit_aging=bool(self.parameter_exit_aging_var.get()),
             # 2026-07-20:全流程执行管道用的两个新字段,透传到 ``SampleUpgradeSettings``。

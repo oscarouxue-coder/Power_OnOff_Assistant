@@ -28,7 +28,10 @@ from line_check_assistant.config_store import ChannelConfig
 from line_check_assistant.network_ops import CommandResult, UnregisteredOnu
 from line_check_assistant.onu_registration_store import OnuRegistrationConfig
 from line_check_assistant.page_upgrade import PageUpgradeItemResult, PageUpgradeRequest
-from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
+from line_check_assistant.sample_upgrade_settings_store import (
+    DEFAULT_PARAMETER_PARALLEL_COUNT,
+    SampleUpgradeSettings,
+)
 from line_check_assistant.test_item_config_store import TestItemConfigStore
 from src.models import (
     C300CleanupCandidate,
@@ -3310,6 +3313,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\tclinux_allinone")),
             parameter_initial_username_var=Mock(get=Mock(return_value="param-root")),
             parameter_initial_password_var=Mock(get=Mock(return_value="param-secret")),
+            parameter_parallel_count_var=Mock(get=Mock(return_value=6)),
             parameter_clear_parameters_var=Mock(get=Mock(return_value=True)),
             parameter_exit_aging_var=Mock(get=Mock(return_value=False)),
             # 2026-07-20:全流程执行管道用的两个新字段
@@ -3332,6 +3336,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
                 firmware_path=r"F:\firmware\tclinux_allinone",
                 parameter_initial_username="param-root",
                 parameter_initial_password="param-secret",
+                parameter_parallel_count=6,
                 parameter_clear_parameters=True,
                 parameter_exit_aging=False,
                 power_operation="down",
@@ -3351,6 +3356,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\tclinux_allinone")),
             parameter_initial_username_var=Mock(get=Mock(return_value="")),
             parameter_initial_password_var=Mock(get=Mock(return_value="")),
+            parameter_parallel_count_var=Mock(get=Mock(return_value="invalid")),
             parameter_clear_parameters_var=Mock(get=Mock(return_value=False)),
             parameter_exit_aging_var=Mock(get=Mock(return_value=False)),
             # 2026-07-20:全流程执行管道默认字段
@@ -3364,6 +3370,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(settings.execution_mode, "串行")
         self.assertEqual(settings.power_operation, "up")
         self.assertEqual(settings.parameter_table_path, "")
+        self.assertEqual(settings.parameter_parallel_count, DEFAULT_PARAMETER_PARALLEL_COUNT)
 
     def test_loading_parameter_table_updates_persisted_pipeline_path(self):
         """写参窗口选表后，全流程子任务 4 必须立刻读到同一条路径。"""
