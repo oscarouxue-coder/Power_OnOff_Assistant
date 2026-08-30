@@ -43,6 +43,24 @@ class BuildContextRegressionTests(unittest.TestCase):
         self.assertEqual(PipelineWindow._selection_mark(True), "✓")
         self.assertEqual(PipelineWindow._selection_mark(False), "")
 
+    def test_unattended_execution_is_opt_in_and_limited_to_upgrade_and_parameter_write(self) -> None:
+        import inspect
+        import line_check_assistant.pipeline_window as pw_mod
+
+        init_source = inspect.getsource(pw_mod.PipelineWindow.__init__)
+        build_source = inspect.getsource(pw_mod.PipelineWindow._build)
+        start_source = inspect.getsource(pw_mod.PipelineWindow._on_start)
+        summary_source = inspect.getsource(pw_mod.PipelineWindow._unattended_confirmation_note)
+
+        self.assertIn("BooleanVar(value=False)", init_source)
+        self.assertIn("Checkbutton(", build_source)
+        self.assertIn("unattended_execution", build_source)
+        self.assertIn("unattended_execution", start_source)
+        self.assertIn("unattended_execution=unattended_execution", start_source)
+        self.assertIn('"sample_upgrade" in selected', summary_source)
+        self.assertIn('"sample_parameter_write" in selected', summary_source)
+        self.assertNotIn('"onu_registration" in selected', summary_source)
+
     def test_pipeline_confirmation_contains_manual_reboot_guard_for_empty_com(self) -> None:
         """空 COM 的全流程执行必须在启动后台线程前要求操作员确认手动重启。"""
         import inspect

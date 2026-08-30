@@ -4180,6 +4180,125 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         context.channel_list.selection_set.assert_called_once_with(0)
         context._load_current_channel.assert_called_once_with()
 
+    @patch("line_check_assistant.app.messagebox.askyesno")
+    @patch("line_check_assistant.app.Path.is_file", return_value=True)
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_serial_full_package_skips_confirmation_when_pipeline_authorized(
+        self, thread_class, _is_file, askyesno
+    ):
+        channel = ChannelConfig(
+            section="channel_1", vlan_name="VLAN101", serial_port="COM1", enabled=True
+        )
+        context = SimpleNamespace(
+            upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\tclinux_allinone")),
+            upgrade_username_var=Mock(get=Mock(return_value="root")),
+            upgrade_password_var=Mock(get=Mock(return_value="secret")),
+            upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
+            upgrade_transfer_var=Mock(get=Mock(return_value="Tftp Put")),
+            upgrade_execution_var=Mock(get=Mock(return_value="串行")),
+            upgrade_parallel_count_var=Mock(get=Mock(return_value=1)),
+            upgrade_window=Mock(),
+            _selected_tftp_copy_upgrade_channels=Mock(return_value=[channel]),
+            _tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
+            _selected_power_serial_port=Mock(return_value="COM106"),
+            _set_upgrade_status=Mock(),
+            _serial_tftp_copy_upgrade_worker=Mock(),
+            _log=Mock(),
+        )
+
+        started = LineCheckAssistant._start_serial_tftp_copy_upgrade(
+            context, skip_confirmation=True
+        )
+
+        self.assertTrue(started)
+        askyesno.assert_not_called()
+        context._log.assert_called_once()
+        thread_class.return_value.start.assert_called_once_with()
+
+    @patch("line_check_assistant.app.messagebox.askyesno")
+    @patch("line_check_assistant.app.Path.is_file", return_value=True)
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_page_upgrade_skips_confirmation_when_pipeline_authorized(
+        self, thread_class, _is_file, askyesno
+    ):
+        channel = ChannelConfig(
+            section="channel_1",
+            vlan_name="VLAN101",
+            network_card_ip="192.168.1.101",
+            device_manage_ip="192.168.1.1",
+            enabled=True,
+        )
+        context = SimpleNamespace(
+            upgrade_firmware_var=Mock(get=Mock(return_value=r"F:\firmware\sdmc.bin")),
+            upgrade_username_var=Mock(get=Mock(return_value="sdmc")),
+            upgrade_password_var=Mock(get=Mock(return_value="secret")),
+            upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
+            upgrade_window=Mock(),
+            device_ip_var=Mock(get=Mock(return_value="192.168.1.1")),
+            _selected_page_upgrade_channels=Mock(return_value=[channel]),
+            _tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
+            _set_upgrade_status=Mock(),
+            _page_upgrade_worker=Mock(),
+            _log=Mock(),
+        )
+
+        started = LineCheckAssistant._start_page_upgrade(
+            context, skip_confirmation=True
+        )
+
+        self.assertTrue(started)
+        askyesno.assert_not_called()
+        context._log.assert_called_once()
+        thread_class.return_value.start.assert_called_once_with()
+
+    def test_pipeline_upgrade_bridge_forwards_unattended_authorization(self):
+        page_context = SimpleNamespace(
+            _open_upgrade_module=Mock(),
+            _capture_current_channel=Mock(),
+            _validate_upgrade_required_fields=Mock(return_value=True),
+            upgrade_transfer_var=Mock(get=Mock(return_value="Tftp Put")),
+            upgrade_mode_var=Mock(get=Mock(return_value="页面升级")),
+            _start_page_upgrade=Mock(return_value=True),
+        )
+        serial_context = SimpleNamespace(
+            _open_upgrade_module=Mock(),
+            _capture_current_channel=Mock(),
+            _validate_upgrade_required_fields=Mock(return_value=True),
+            upgrade_transfer_var=Mock(get=Mock(return_value="Tftp Put")),
+            upgrade_mode_var=Mock(get=Mock(return_value="全包升级")),
+            _start_serial_tftp_copy_upgrade=Mock(return_value=True),
+        )
+
+        self.assertTrue(
+            LineCheckAssistant._start_pipeline_sample_upgrade_on_ui(
+                page_context, skip_confirmation=True
+            )
+        )
+        self.assertTrue(
+            LineCheckAssistant._start_pipeline_sample_upgrade_on_ui(
+                serial_context, skip_confirmation=True
+            )
+        )
+
+        page_context._start_page_upgrade.assert_called_once_with(skip_confirmation=True)
+        serial_context._start_serial_tftp_copy_upgrade.assert_called_once_with(
+            skip_confirmation=True
+        )
+
+    def test_pipeline_parameter_bridge_forwards_unattended_authorization(self):
+        context = SimpleNamespace(
+            _open_sample_parameter_writer=Mock(),
+            _start_sample_parameter_write=Mock(return_value=True),
+        )
+
+        self.assertTrue(
+            LineCheckAssistant._start_pipeline_sample_parameter_write_on_ui(
+                context, skip_confirmation=True
+            )
+        )
+
+        context._start_sample_parameter_write.assert_called_once_with(skip_confirmation=True)
+
 
 if __name__ == "__main__":
     unittest.main()

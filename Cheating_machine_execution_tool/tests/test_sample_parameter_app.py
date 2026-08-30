@@ -569,6 +569,35 @@ class SampleParameterAppBindConflictPreflightTests(unittest.TestCase):
             title = mock_messagebox.showerror.call_args.args[0]
             self.assertNotIn("样机 IP 配置冲突", title, f"unexpected error: {title}")
 
+    @patch("line_check_assistant.app.threading.Thread")
+    @patch("line_check_assistant.app.messagebox")
+    def test_start_skips_only_parameter_confirmation_when_pipeline_authorized(
+        self, mock_messagebox, thread_class
+    ):
+        fake_app = Mock()
+        fake_app.parameter_write_running = False
+        fake_app.parameter_initial_username_var.get.return_value = "root"
+        fake_app.parameter_initial_password_var.get.return_value = "x"
+        fake_app.parameter_parallel_count_var.get.return_value = 2
+        fake_app.parameter_writer_window = Mock()
+        fake_app.parameter_preflight = self._make_preflight_with_targets(
+            [self._make_target("vlan114", "02:00:00:00:01:14")]
+        )
+        fake_app._bind_ip_for_vlan.return_value = "192.168.1.114"
+        fake_app._device_host_for_vlan.return_value = "192.168.1.1"
+        fake_app._factory_bind_ip_for_vlan.return_value = "192.168.29.114"
+        fake_app._factory_device_host_for_vlan.return_value = "192.168.29.1"
+        fake_app._refresh_parameter_preflight = Mock()
+
+        started = LineCheckAssistant._start_sample_parameter_write(
+            fake_app, skip_confirmation=True
+        )
+
+        self.assertTrue(started)
+        mock_messagebox.askyesno.assert_not_called()
+        fake_app._log.assert_called_once()
+        thread_class.return_value.start.assert_called_once_with()
+
 
 if __name__ == "__main__":
     unittest.main()

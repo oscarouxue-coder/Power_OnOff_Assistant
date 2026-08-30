@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 import threading
-from tkinter import BooleanVar, Canvas, Frame, Label, StringVar, Toplevel, messagebox, ttk
+from tkinter import BooleanVar, Canvas, Checkbutton, Frame, Label, StringVar, Toplevel, messagebox, ttk
 from typing import Any, Callable, Dict, List, Set
 
 from src.services.pipeline_orchestrator import (
@@ -56,9 +56,9 @@ class PipelineWindow:
         self.app = app
         self.window: Toplevel = Toplevel(app)
         self.window.title("全流程执行")
-        # 7 行选择框 + 必填项状态 + 底部按钮需要至少 ~730px 高度。
-        self.window.geometry("920x750")
-        self.window.minsize(880, 730)
+        # 7 行选择框、无人值守授权和底部按钮需要至少 ~780px 高度。
+        self.window.geometry("920x800")
+        self.window.minsize(880, 780)
         self.window.configure(background=COLOR_BG)
         # 状态变量
         self._check_vars: Dict[str, BooleanVar] = {}
@@ -69,6 +69,8 @@ class PipelineWindow:
         self._orchestrator: PipelineOrchestrator | None = None
         self._running_thread: threading.Thread | None = None
         self._stop_requested = False
+        # 仅当前窗口、本次启动有效；关闭窗口或流程结束后不会持久化此授权。
+        self._unattended_execution_var = BooleanVar(value=False)
 
         self._build()
         self._refresh_statuses()
@@ -110,6 +112,24 @@ class PipelineWindow:
         rows.pack(fill="both", expand=True)
         for index, code in enumerate(SUBTASK_CODES):
             self._build_row(rows, code, index)
+
+        unattended_row = Frame(content, background=COLOR_BG)
+        unattended_row.pack(fill="x", pady=(2, 0))
+        Checkbutton(
+            unattended_row,
+            text="本次无人值守（总确认后跳过样机升级、写参的子任务确认）",
+            variable=self._unattended_execution_var,
+            selectcolor="#ffffff",
+            background=COLOR_BG,
+            activebackground=COLOR_BG,
+            foreground=COLOR_TEXT,
+        ).pack(side="left")
+        Label(
+            unattended_row,
+            text="不包含 ONU 注册；预检、失败和停止仍会终止后续致命任务。",
+            background=COLOR_BG,
+            foreground=COLOR_MUTED,
+        ).pack(side="left", padx=(10, 0))
 
         # 底部按钮
         button_bar = Frame(content, background=COLOR_BG)
@@ -271,7 +291,7 @@ class PipelineWindow:
         else:
             self._status_missing_vars[code].set("")
 
-    def _build_context(self) -> PipelineContext:
+    def _build_context(self, unattended_execution: bool = False) -> PipelineContext:
         """构造 PipelineContext，并优先读取各配置窗口中的当前输入。"""
         app = self.app
         channels = _get_attr(app, "channels", [])
@@ -296,6 +316,7 @@ class PipelineWindow:
             onu_registration=onu,
             serial_log_dir=_get_attr(app, "_serial_log_directory", lambda: None)(),
             legacy_tool_root=_app_module.APP_DIR / "Auto_power_on_off_tool",
+            unattended_execution=unattended_execution,
         )
 
     # -- 开始 / 停止 -----------------------------------------------------
@@ -308,7 +329,8 @@ class PipelineWindow:
             messagebox.showwarning("未选择子任务", "请至少勾选一个子任务后再开始执行。", parent=self.window)
             return
         # 校验就绪
-        ctx = self._build_context()
+        unattended_execution = bool(self._unattended_execution_var.get())
+        ctx = self._build_context(unattended_execution=unattended_execution)
         statuses = compute_all_subtask_statuses(ctx)
         not_ready = [code for code in selected if not statuses[code].ready]
         if not_ready:
@@ -317,6 +339,14 @@ class PipelineWindow:
                 missing_lines.append(
                     f"  - {SUBTASK_LABELS[code]}:缺 {', '.join(statuses[code].missing)}"
                 )
+            if unattended_execution:
+                messagebox.showwarning(
+                    "无人值守不可用",
+                    "以下已勾选子任务存在必填项缺失。无人值守不会在启动后等待人工处理，请先完成配置：\n"
+                    + "\n".join(missing_lines),
+                    parent=self.window,
+                )
+                return
             proceed = messagebox.askyesno(
                 "必填项未就绪",
                 "以下子任务必填项未就绪,继续执行可能失败:\n"
@@ -342,6 +372,14 @@ class PipelineWindow:
         )
         manual_reboot_note = ""
         if requires_manual_reboot and not power_serial_port:
+            if unattended_execution:
+                messagebox.showwarning(
+                    "无人值守不可用",
+                    "全包升级未选择程控电源 COM 口，需要操作员手动重启样机。"
+                    "请配置程控电源后再启用本次无人值守。",
+                    parent=self.window,
+                )
+                return
             manual_reboot_note = (
                 "\n\n未选择程控电源 COM 口。请先手动重启样机，"
                 "确认样机已重启后再点击“是”继续；程序不会向任何 COM 口下发上下电指令。"
@@ -352,6 +390,9 @@ class PipelineWindow:
                 "\n\n危险操作提示：子任务7会复用旧 Start All 业务；初始化时先向程控电源"
                 "下发全通道断电指令，再启动新工具当前勾选的通道。"
             )
+        unattended_note = self._unattended_confirmation_note(
+            ctx, selected, unattended_execution
+        )
         proceed = messagebox.askyesno(
             "确认全流程执行",
             "将按以下实际顺序执行勾选的子任务:\n"
@@ -359,6 +400,7 @@ class PipelineWindow:
             + power_to_next_wait_note
             + manual_reboot_note
             + legacy_power_note
+            + unattended_note
             + "\n\n是否继续?",
             parent=self.window,
         )
@@ -372,7 +414,7 @@ class PipelineWindow:
         # 启动后台线程
         self._running_thread = threading.Thread(
             target=self._run_pipeline_thread,
-            args=(selected,),
+            args=(selected, unattended_execution),
             daemon=True,
             name="pipeline-orchestrator",
         )
@@ -380,11 +422,12 @@ class PipelineWindow:
         self.window.withdraw()
         self._emit_to_main_log(
             "[全流程] 已开始后台执行，全流程配置窗口已自动隐藏；请在主界面查看状态或停止。"
+            + (" 本次无人值守已授权升级和写参跳过子任务确认。" if unattended_execution else "")
         )
 
-    def _run_pipeline_thread(self, selected: Set[str]) -> None:
+    def _run_pipeline_thread(self, selected: Set[str], unattended_execution: bool = False) -> None:
         try:
-            ctx = self._build_context()
+            ctx = self._build_context(unattended_execution=unattended_execution)
             orchestrator = PipelineOrchestrator(ctx, self._emit_to_main_log)
             self._orchestrator = orchestrator
             if self._stop_requested:
@@ -405,6 +448,39 @@ class PipelineWindow:
             )
         finally:
             self._orchestrator = None
+
+    @staticmethod
+    def _unattended_confirmation_note(
+        ctx: PipelineContext, selected: Set[str], unattended_execution: bool
+    ) -> str:
+        """返回一次性无人值守授权的完整风险摘要。"""
+        if not unattended_execution:
+            return ""
+        details: List[str] = [
+            "\n\n本次无人值守授权：仅跳过下列已勾选子任务的二次确认；预检、失败、停止不会自动继续。"
+        ]
+        settings = ctx.sample_upgrade_settings
+        if "sample_upgrade" in selected:
+            transfer = (
+                f" / {settings.transfer_method}"
+                if settings.upgrade_mode == "全包升级"
+                else ""
+            )
+            details.append(
+                "- 样机升级："
+                f"{settings.upgrade_mode}{transfer}，固件 {settings.firmware_path or '未填写'}，"
+                f"并行数 {settings.parallel_count}，恢复出厂 "
+                f"{'开启' if settings.restore_factory else '关闭'}。"
+            )
+        if "sample_parameter_write" in selected:
+            details.append(
+                "- 写样机参数："
+                f"参数表 {settings.parameter_table_path or '未填写'}，"
+                f"并行数 {settings.parameter_parallel_count}，清空参数 "
+                f"{'开启' if settings.parameter_clear_parameters else '关闭'}，退出老化 "
+                f"{'开启' if settings.parameter_exit_aging else '关闭'}。"
+            )
+        return "\n".join(details)
 
     def _invoke_on_main_thread(self, action) -> None:
         """通过主程序既有 UI 队列执行 Tk 回调，兼容不带队列的最小测试替身。"""

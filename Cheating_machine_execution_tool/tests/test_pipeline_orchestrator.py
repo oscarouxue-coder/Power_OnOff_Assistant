@@ -540,6 +540,27 @@ class SampleUpgradeDispatchTests(unittest.TestCase):
         run_upgrade.assert_called_once_with()
         run_parameter_write.assert_called_once_with()
 
+    def test_unattended_execution_forwards_one_time_confirmation_authorization(self) -> None:
+        ctx = _make_context()
+        ctx.unattended_execution = True
+        run_upgrade = MagicMock()
+        run_parameter_write = MagicMock()
+        ctx.app = type(
+            "PipelineApp",
+            (),
+            {
+                "_run_pipeline_sample_upgrade": run_upgrade,
+                "_run_pipeline_sample_parameter_write": run_parameter_write,
+            },
+        )()
+
+        orchestrator = PipelineOrchestrator(ctx, lambda _line: None)
+        orchestrator._run_sample_upgrade()
+        orchestrator._run_sample_parameter_write()
+
+        run_upgrade.assert_called_once_with(skip_confirmation=True)
+        run_parameter_write.assert_called_once_with(skip_confirmation=True)
+
 
 class LegacyPowerTestDispatchTests(unittest.TestCase):
     @patch("src.services.legacy_power_test_service.run_legacy_power_test")

@@ -117,6 +117,8 @@ class PipelineContext:
     legacy_tool_root: Optional[Path] = None
     # 运行控制
     stop_event: threading.Event = field(default_factory=threading.Event)
+    # 仅本次全流程有效：总确认后允许升级/写参跳过各自确认框，不写入本机配置。
+    unattended_execution: bool = False
 
     @property
     def enabled_channels(self) -> List[ChannelConfig]:
@@ -580,8 +582,12 @@ class PipelineOrchestrator:
         app = self.ctx.app
         pipeline_method = _get_attr(app, "_run_pipeline_sample_upgrade", None)
         if callable(pipeline_method):
-            self.emit("全流程样机升级：等待操作员确认及升级完成。")
-            pipeline_method()
+            if self.ctx.unattended_execution:
+                self.emit("全流程样机升级：已获本次无人值守授权，跳过子任务确认。")
+                pipeline_method(skip_confirmation=True)
+            else:
+                self.emit("全流程样机升级：等待操作员确认及升级完成。")
+                pipeline_method()
             self.emit("全流程样机升级已完成。")
             return
 
@@ -591,8 +597,12 @@ class PipelineOrchestrator:
             start_method = _get_attr(app, "_start_page_upgrade", None)
             if not callable(start_method):
                 raise RuntimeError("主程序未实现 _start_page_upgrade")
-            self.emit("已启动页面升级(请在弹窗确认);后续进度见主执行日志。")
-            start_method()
+            if self.ctx.unattended_execution:
+                self.emit("已启动页面升级（无人值守授权，跳过子任务确认）；后续进度见主执行日志。")
+                start_method(skip_confirmation=True)
+            else:
+                self.emit("已启动页面升级(请在弹窗确认);后续进度见主执行日志。")
+                start_method()
         elif settings.upgrade_mode == "全包升级":
             # 主程序目前由同一入口读取 upgrade_transfer_var 后，继续分流到
             # Tftp指令 / Tftp Put 两条独立链路；不能再调用历史上未实现的
@@ -600,10 +610,16 @@ class PipelineOrchestrator:
             start_method = _get_attr(app, "_start_serial_tftp_copy_upgrade", None)
             if not callable(start_method):
                 raise RuntimeError("主程序未实现 _start_serial_tftp_copy_upgrade")
-            self.emit(
-                f"已启动全包升级（{settings.transfer_method}，请在弹窗确认）；后续进度见主执行日志。"
-            )
-            start_method()
+            if self.ctx.unattended_execution:
+                self.emit(
+                    f"已启动全包升级（{settings.transfer_method}，无人值守授权，跳过子任务确认）；后续进度见主执行日志。"
+                )
+                start_method(skip_confirmation=True)
+            else:
+                self.emit(
+                    f"已启动全包升级（{settings.transfer_method}，请在弹窗确认）；后续进度见主执行日志。"
+                )
+                start_method()
         else:
             raise RuntimeError(f"未配置升级方式: {settings.upgrade_mode!r}")
 
@@ -612,8 +628,12 @@ class PipelineOrchestrator:
         app = self.ctx.app
         pipeline_method = _get_attr(app, "_run_pipeline_sample_parameter_write", None)
         if callable(pipeline_method):
-            self.emit("全流程写样机参数：等待操作员确认及写参完成。")
-            pipeline_method()
+            if self.ctx.unattended_execution:
+                self.emit("全流程写样机参数：已获本次无人值守授权，跳过子任务确认。")
+                pipeline_method(skip_confirmation=True)
+            else:
+                self.emit("全流程写样机参数：等待操作员确认及写参完成。")
+                pipeline_method()
             self.emit("全流程写样机参数已完成。")
             return
 
@@ -621,8 +641,12 @@ class PipelineOrchestrator:
         start_method = _get_attr(app, "_start_sample_parameter_write", None)
         if not callable(start_method):
             raise RuntimeError("主程序未实现 _start_sample_parameter_write")
-        self.emit("已启动写样机参数(请在弹窗确认);后续进度见主执行日志。")
-        start_method()
+        if self.ctx.unattended_execution:
+            self.emit("已启动写样机参数（无人值守授权，跳过子任务确认）；后续进度见主执行日志。")
+            start_method(skip_confirmation=True)
+        else:
+            self.emit("已启动写样机参数(请在弹窗确认);后续进度见主执行日志。")
+            start_method()
 
     def _run_onu_registration(self) -> None:
         """4. ONU 注册:自动查询 + 自动注册(异步,弹确认框)。"""

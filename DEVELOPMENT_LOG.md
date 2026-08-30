@@ -2,6 +2,16 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-29 - 全流程升级和写参的本次无人值守授权
+
+- 类型：流程优化 / 安全确认优化
+- 背景：全流程执行时，样机升级和写样机参数会分别弹出确认框，必须人工点击后才会继续，无法在已复核全部风险后无人值守执行。
+- 完成内容：① 全流程窗口新增默认关闭的 Windows 原生“本次无人值守”勾选框，不写入 INI；② 总确认框在启用时列出当前升级方式、传输方式、固件、并行数、恢复出厂，以及参数表、参数并行数、清空参数和退出老化；③ 仅将一次性授权传给样机升级和写参入口，跳过这两项的二次确认；ONU 注册及其它子任务继续保持原确认语义；④ 无人值守下发现已选任务缺项，或全包升级未配置程控电源 COM 口，均在启动前拒绝，失败、停止和既有重试逻辑不变；⑤ 主执行日志记录授权和实际跳过的确认。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`、`Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`、`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_pipeline_window.py`、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`、`Cheating_machine_execution_tool/tests/test_sample_parameter_app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行编排器、全流程窗口、写参入口和主程序专项测试，并执行 `python scripts\verify_baseline.py` 完整门禁。
+- 验证结果：专项回归已通过：编排器 43 项、全流程窗口 30 项、写参入口 17 项、主程序 173 项；提升权限后完整门禁通过，57 个源码文件编译、710 项单元测试、169 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。本轮未连接或写入样机，未构建或运行 EXE。
+- 后续待办：Windows源码版核对勾选框默认值、总确认摘要、仅第3/4项跳过确认、缺项/无COM拦截和关闭后不保留；在测试样机上再确认无人值守升级、写参成功和失败后的终止边界。
+
 ## 2026-08-29 - 保存写参并行数
 
 - 类型：BUG 修复

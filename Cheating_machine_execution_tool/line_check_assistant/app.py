@@ -601,15 +601,17 @@ class LineCheckAssistant(Tk):
         if not ok:
             raise RuntimeError(detail)
 
-    def _run_pipeline_sample_upgrade(self) -> None:
-        """供后台编排器调用：主线程确认并启动升级，完成后才允许下一子任务。"""
+    def _run_pipeline_sample_upgrade(self, skip_confirmation: bool = False) -> None:
+        """供后台编排器调用：主线程启动升级，完成后才允许下一子任务。"""
         self._begin_pipeline_subtask("sample_upgrade")
-        started = self._invoke_pipeline_ui_action(self._start_pipeline_sample_upgrade_on_ui)
+        started = self._invoke_pipeline_ui_action(
+            lambda: self._start_pipeline_sample_upgrade_on_ui(skip_confirmation)
+        )
         if not started:
             self._finish_pipeline_subtask("sample_upgrade", False, "样机升级未启动：操作员取消或配置未通过")
         self._wait_pipeline_subtask("sample_upgrade")
 
-    def _start_pipeline_sample_upgrade_on_ui(self) -> bool:
+    def _start_pipeline_sample_upgrade_on_ui(self, skip_confirmation: bool = False) -> bool:
         # 去配置窗口可能已被操作员关闭；管道重新创建/拉起有效窗口，
         # 使确认框不再引用已销毁的 Toplevel。
         self._open_upgrade_module()
@@ -618,23 +620,25 @@ class LineCheckAssistant(Tk):
             return False
         transfer_method = LineCheckAssistant._normalize_upgrade_transfer_method(self.upgrade_transfer_var.get())
         if self.upgrade_mode_var.get() == "页面升级":
-            return self._start_page_upgrade()
+            return self._start_page_upgrade(skip_confirmation=skip_confirmation)
         if self.upgrade_mode_var.get() == "全包升级" and transfer_method in SERIAL_FULL_PACKAGE_TRANSFERS:
-            return self._start_serial_tftp_copy_upgrade()
+            return self._start_serial_tftp_copy_upgrade(skip_confirmation=skip_confirmation)
         messagebox.showwarning("升级方式不支持", "请在样机升级窗口选择页面升级、Tftp指令或 Tftp Put。", parent=self.upgrade_window)
         return False
 
-    def _run_pipeline_sample_parameter_write(self) -> None:
+    def _run_pipeline_sample_parameter_write(self, skip_confirmation: bool = False) -> None:
         """供后台编排器调用：重新打开写参窗口，完成后才允许下一子任务。"""
         self._begin_pipeline_subtask("sample_parameter_write")
-        started = self._invoke_pipeline_ui_action(self._start_pipeline_sample_parameter_write_on_ui)
+        started = self._invoke_pipeline_ui_action(
+            lambda: self._start_pipeline_sample_parameter_write_on_ui(skip_confirmation)
+        )
         if not started:
             self._finish_pipeline_subtask("sample_parameter_write", False, "写样机参数未启动：操作员取消或预检未通过")
         self._wait_pipeline_subtask("sample_parameter_write")
 
-    def _start_pipeline_sample_parameter_write_on_ui(self) -> bool:
+    def _start_pipeline_sample_parameter_write_on_ui(self, skip_confirmation: bool = False) -> bool:
         self._open_sample_parameter_writer()
-        return self._start_sample_parameter_write()
+        return self._start_sample_parameter_write(skip_confirmation=skip_confirmation)
 
     def _configure_theme(self) -> None:
         style = ttk.Style(self)
@@ -1123,7 +1127,7 @@ class LineCheckAssistant(Tk):
         self.parameter_preview_text.insert(END, "\n".join(lines))
         self.parameter_preview_text.configure(state="disabled")
 
-    def _start_sample_parameter_write(self) -> bool:
+    def _start_sample_parameter_write(self, skip_confirmation: bool = False) -> bool:
         if self.parameter_write_running:
             return False
         self._refresh_parameter_preflight()
@@ -1213,13 +1217,16 @@ class LineCheckAssistant(Tk):
             "9. firstboot -yr",
         ])
         action_summary = "\n".join(action_lines)
-        if not messagebox.askyesno(
-            "确认批量写样机参数",
-            f"将并行写入 {len(preflight.targets)} 台样机（最多 {parallel_count} 台）：\n{target_text}\n\n"
-            f"每台会依次：\n{action_summary}\n\n是否继续？",
-            parent=self.parameter_writer_window,
-        ):
-            return False
+        if not skip_confirmation:
+            if not messagebox.askyesno(
+                "确认批量写样机参数",
+                f"将并行写入 {len(preflight.targets)} 台样机（最多 {parallel_count} 台）：\n{target_text}\n\n"
+                f"每台会依次：\n{action_summary}\n\n是否继续？",
+                parent=self.parameter_writer_window,
+            ):
+                return False
+        else:
+            self._log("[全流程][无人值守] 已使用总确认授权，跳过写样机参数子任务确认。")
         requests = [
             SampleParameterWriteRequest(
                 vlan=target.vlan,
@@ -3500,7 +3507,7 @@ class LineCheckAssistant(Tk):
         self._set_upgrade_status("", f"已打开 {len(vlans)} 个内置串口监控，未下发升级命令", 0)
         messagebox.showinfo("串口日志已启动", "已打开内置串口监控，当前未下发升级命令。", parent=self.upgrade_window)
 
-    def _start_page_upgrade(self) -> bool:
+    def _start_page_upgrade(self, skip_confirmation: bool = False) -> bool:
         channels = self._selected_page_upgrade_channels()
         if not channels:
             return False
@@ -3543,13 +3550,16 @@ class LineCheckAssistant(Tk):
             if bool(self.upgrade_restore_factory_var.get())
             else "关闭，不会执行恢复出厂"
         )
-        if not messagebox.askyesno(
-            "确认页面升级",
-            f"将通过 UBUS 页面升级并行升级 {len(requests)} 台样机：{target_text}\n\n"
-            f"该操作会上传固件、触发升级并等待设备重启上线。\n恢复出厂：{restore_factory_text}\n\n是否继续？",
-            parent=self.upgrade_window,
-        ):
-            return False
+        if not skip_confirmation:
+            if not messagebox.askyesno(
+                "确认页面升级",
+                f"将通过 UBUS 页面升级并行升级 {len(requests)} 台样机：{target_text}\n\n"
+                f"该操作会上传固件、触发升级并等待设备重启上线。\n恢复出厂：{restore_factory_text}\n\n是否继续？",
+                parent=self.upgrade_window,
+            ):
+                return False
+        else:
+            self._log("[全流程][无人值守] 已使用总确认授权，跳过页面升级子任务确认。")
 
         self._set_upgrade_status("", f"准备页面升级 {len(requests)} 台样机", 0)
         thread = threading.Thread(target=self._page_upgrade_worker, args=(requests,), daemon=True)
@@ -3616,7 +3626,7 @@ class LineCheckAssistant(Tk):
             return False
         return True
 
-    def _start_serial_tftp_copy_upgrade(self) -> bool:
+    def _start_serial_tftp_copy_upgrade(self, skip_confirmation: bool = False) -> bool:
         channels = self._selected_tftp_copy_upgrade_channels()
         if not channels:
             return False
@@ -3676,14 +3686,17 @@ class LineCheckAssistant(Tk):
             else "未选择程控电源 COM 口。请先手动重启样机，确认样机已重启后再点击“是”继续；随后将进入 boot、"
         )
         post_transfer_instruction = "并复位/重新上电。" if power_serial_port else "及后续升级流程。"
-        if not messagebox.askyesno(
-            "确认样机升级",
-            f"将升级 {len(upgrade_items)} 台样机：{target_text}\n执行方式：{execution_text}\n\n"
-            f"升级过程不会改写 network_card_ip.ini；{power_instruction}{transfer_action}{post_transfer_instruction}\n"
-            f"恢复出厂：{restore_factory_text}\n\n是否继续？",
-            parent=self.upgrade_window,
-        ):
-            return False
+        if not skip_confirmation:
+            if not messagebox.askyesno(
+                "确认样机升级",
+                f"将升级 {len(upgrade_items)} 台样机：{target_text}\n执行方式：{execution_text}\n\n"
+                f"升级过程不会改写 network_card_ip.ini；{power_instruction}{transfer_action}{post_transfer_instruction}\n"
+                f"恢复出厂：{restore_factory_text}\n\n是否继续？",
+                parent=self.upgrade_window,
+            ):
+                return False
+        else:
+            self._log("[全流程][无人值守] 已使用总确认授权，跳过全包升级子任务确认。")
 
         terminal = getattr(self, "serial_terminal", None)
         if terminal is not None:
