@@ -2,6 +2,41 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-30 - 统一全流程子任务间隔
+
+- 类型：优化
+- 背景：原全流程仅在子任务1“自动上/下电”后等待120秒；用户要求每个已选子任务完成后均等待120秒，再开始下一项。
+- 完成内容：① 将等待约束扩展到每一对相邻已选子任务，串口日志预启动同样纳入实际执行顺序；② 最后一项后不等待；③ 120秒等待继续复用停止事件，点击“停止测试”会立即跳过后续任务；④ 总确认摘要、操作员说明、项目状态和验收基线同步更新。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/tests/test_pipeline_window.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行全流程编排和窗口专项测试，再执行 `python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：全流程编排与窗口专项 `Ran 74 tests ... OK`；以正常主机权限运行完整门禁，57 个源码文件编译、713 项单元测试、169 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。未构建或运行 EXE，未执行真实样机流程。
+- 后续待办：Windows源码版按至少3项已选子任务核对每一段等待提示、120秒间隔和停止行为；真实样机全流程端到端验收仍待项目负责人确认。
+
+## 2026-08-30 - 移除无人值守升级完成阻塞
+
+- 类型：BUG 修复
+- 背景：全流程已勾选“本次无人值守”并完成总确认后，样机升级仍在完成回调无条件弹出“样机升级完成”提示框，导致成功的升级结果无法自动进入下一子任务。
+- 完成内容：① 将全流程一次性无人值守授权延续至页面升级、`Tftp指令`、`Tftp Put` 的完成回调；② 无人值守时把成功、部分失败或启动失败结果写入主执行日志，不显示中间升级结果提示框；③ 成功后立即回传完成事件继续下一子任务，失败仍以原结果回传终止全流程；④ 普通单独样机升级的完成/失败弹窗保持不变。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行 `python -m unittest discover -s tests -p test_app.py -v`，再执行 `python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：专项回归 `Ran 174 tests ... OK`；以正常主机权限运行完整门禁，57 个源码文件编译、712 项单元测试、169 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。未构建或运行 EXE，未执行真实样机升级。
+- 后续待办：Windows源码版勾选“本次无人值守”执行全包升级，确认完成日志出现且不弹“样机升级完成”，随后子任务继续；真实样机全流程端到端验收仍待项目负责人确认。
+
 ## 2026-08-30 - 同步八项真实验收结论
 
 - 类型：真实样机验收 / 文档同步

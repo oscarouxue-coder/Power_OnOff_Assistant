@@ -21,7 +21,7 @@
 
 不变量:
 - 任一子任务抛异常 → 整个全流程停止(串口日志除外,因不致命)。
-- 只要勾选子任务 1 且后面还有任意已勾选子任务，子任务 1 成功结束后等待 120 秒再启动下一个子任务；等待可被停止事件中断。
+- 每个已选子任务结束后，若仍有下一项则等待 120 秒再启动下一子任务；等待可被停止事件中断。
 - 1/2/6/7 同步执行,操作员看到的「实时主日志」就是编排器的 ``emit`` 输出。
 - 3/4/5 异步执行,操作员看到的「实时主日志」来自 app 既有 worker 的 ``log_queue``。
 - 编排器本身不发任何危险操作命令(无 telnet / 串口 / UBUS);只调度既有方法。
@@ -395,8 +395,8 @@ class PipelineOrchestrator:
     POLL_INTERVAL_SECONDS = 0.5
     # 单个被编排子任务最大等待时间(秒);超时强制往下走
     MAX_SUBTASK_WAIT_SECONDS = 60.0 * 60.0    # 1 小时(给升级 / 写参留足时间)
-    # 子任务 1 自动上/下电与任意后续子任务之间的设备稳定等待。
-    POWER_TO_NEXT_WAIT_SECONDS = 120.0
+    # 每个已选子任务与下一子任务之间的设备稳定等待。
+    SUBTASK_TO_NEXT_WAIT_SECONDS = 120.0
 
     def __init__(self, ctx: PipelineContext, emit: Output) -> None:
         self.ctx = ctx
@@ -424,7 +424,6 @@ class PipelineOrchestrator:
             if code in PIPELINE_PRESTART_SUBTASKS:
                 self.emit(f"=== 全流程预启动子任务 {SUBTASK_LABELS[code]} ===")
             self.emit(f"=== 开始子任务 {SUBTASK_LABELS[code]} ===")
-            succeeded = False
             try:
                 self._run_subtask(code)
             except Exception as exc:  # noqa: BLE001 - 编排器统一捕获
@@ -434,17 +433,12 @@ class PipelineOrchestrator:
                     self.emit("=== 全流程执行因失败提前终止 ===")
                     raise PipelineError(f"子任务 {code} 失败:{exc}") from exc
                 # 非致命:继续下一个
-                continue
             else:
                 self._results.append(SubTaskResult(code=code, ok=True))
-                succeeded = True
             finally:
                 self.emit(f"=== 结束子任务 {SUBTASK_LABELS[code]} ===")
-            if (
-                succeeded
-                and code == "power_cycle"
-                and index + 1 < len(execution_order)
-                and not self._wait_after_power_cycle_before_next(execution_order[index + 1])
+            if index + 1 < len(execution_order) and not self._wait_between_subtasks(
+                code, execution_order[index + 1]
             ):
                 self.emit(
                     f"[全流程] 等待期间收到停止请求,跳过后续子任务 {SUBTASK_LABELS[execution_order[index + 1]]}"
@@ -453,16 +447,19 @@ class PipelineOrchestrator:
         self.emit("=== 全流程执行结束 ===")
         return self._results
 
-    def _wait_after_power_cycle_before_next(self, next_code: str) -> bool:
-        """等待设备在子任务 1 后稳定；返回 False 表示操作员已请求停止。"""
-        seconds = self.POWER_TO_NEXT_WAIT_SECONDS
+    def _wait_between_subtasks(self, completed_code: str, next_code: str) -> bool:
+        """等待相邻子任务间隔；返回 False 表示操作员已请求停止。"""
+        seconds = self.SUBTASK_TO_NEXT_WAIT_SECONDS
         self.emit(
-            f"[子任务约束] 子任务1“自动上/下电”已完成，等待 {seconds:.0f} 秒后再开始后续子任务“{SUBTASK_LABELS[next_code]}”。"
+            f"[子任务间隔] 子任务“{SUBTASK_LABELS[completed_code]}”已结束，"
+            f"等待 {seconds:.0f} 秒后再开始子任务“{SUBTASK_LABELS[next_code]}”。"
         )
         if self.ctx.stop_event.wait(seconds):
-            self.emit(f"[子任务约束] {seconds:.0f} 秒等待期间已请求停止。")
+            self.emit(f"[子任务间隔] {seconds:.0f} 秒等待期间已请求停止。")
             return False
-        self.emit(f"[子任务约束] {seconds:.0f} 秒等待完成，开始后续子任务“{SUBTASK_LABELS[next_code]}”。")
+        self.emit(
+            f"[子任务间隔] {seconds:.0f} 秒等待完成，开始子任务“{SUBTASK_LABELS[next_code]}”。"
+        )
         return True
 
     # -- 子任务入口 -----------------------------------------------------

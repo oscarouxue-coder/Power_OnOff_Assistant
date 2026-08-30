@@ -302,7 +302,7 @@ class PipelineRunOrderTests(unittest.TestCase):
         method_mocks = {code: MagicMock() for code in SUBTASK_CODES}
         stack = ExitStack()
         stack.enter_context(
-            patch.object(PipelineOrchestrator, "POWER_TO_NEXT_WAIT_SECONDS", 0)
+            patch.object(PipelineOrchestrator, "SUBTASK_TO_NEXT_WAIT_SECONDS", 0)
         )
         for code, mock_obj in method_mocks.items():
             stack.enter_context(
@@ -347,7 +347,7 @@ class PipelineRunOrderTests(unittest.TestCase):
             ("power_cycle", "env_check", "legacy_power_test"),
         )
 
-    def test_power_selected_waits_120_seconds_before_any_next_task(self) -> None:
+    def test_each_completed_subtask_waits_120_seconds_before_the_next_task(self) -> None:
         ctx = _make_context()
         ctx.stop_event = MagicMock()
         ctx.stop_event.is_set.return_value = False
@@ -367,8 +367,26 @@ class PipelineRunOrderTests(unittest.TestCase):
 
         ctx.stop_event.wait.assert_called_once_with(120.0)
         self.assertLess(events.index("power_cycle"), events.index("env_check"))
-        self.assertIn("等待 120 秒后再开始后续子任务", "".join(events))
+        self.assertIn("等待 120 秒后再开始子任务", "".join(events))
         self.assertIn("120 秒等待完成", "".join(events))
+
+    def test_all_subtask_boundaries_wait_120_seconds(self) -> None:
+        ctx = _make_context()
+        ctx.stop_event = MagicMock()
+        ctx.stop_event.is_set.return_value = False
+        ctx.stop_event.wait.return_value = False
+
+        with patch.object(PipelineOrchestrator, "_run_serial_terminal"), patch.object(
+            PipelineOrchestrator, "_run_env_check"
+        ), patch.object(PipelineOrchestrator, "_run_sample_upgrade"):
+            PipelineOrchestrator(ctx, lambda _message: None).run(
+                {"serial_terminal", "env_check", "sample_upgrade"}
+            )
+
+        self.assertEqual(ctx.stop_event.wait.call_count, 2)
+        self.assertEqual(
+            [call.args for call in ctx.stop_event.wait.call_args_list], [(120.0,), (120.0,)]
+        )
 
     def test_power_only_does_not_wait_after_pipeline_finishes(self) -> None:
         ctx = _make_context()
@@ -380,7 +398,7 @@ class PipelineRunOrderTests(unittest.TestCase):
 
         ctx.stop_event.wait.assert_not_called()
 
-    def test_power_to_next_wait_can_be_stopped(self) -> None:
+    def test_wait_between_subtasks_can_be_stopped(self) -> None:
         ctx = _make_context()
         ctx.stop_event = MagicMock()
         ctx.stop_event.is_set.return_value = False

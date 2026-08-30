@@ -225,14 +225,14 @@ class BuildContextRegressionTests(unittest.TestCase):
         self.assertIn("for code in actual_order:", source)
         self.assertIn("全流程开始时提前启动", source)
 
-    def test_pipeline_confirmation_shows_power_to_next_wait_constraint(self) -> None:
-        """勾选子任务 1 且有后续子任务时，确认框必须提示中间等待 120 秒。"""
+    def test_pipeline_confirmation_shows_every_subtask_interval_constraint(self) -> None:
+        """有多个子任务时，确认框必须提示每个间隔等待 120 秒。"""
         import inspect
         import line_check_assistant.pipeline_window as pw_mod
 
         source = inspect.getsource(pw_mod.PipelineWindow._on_start)
-        self.assertIn('"power_cycle" in actual_order', source)
-        self.assertIn("子任务1完成后等待 120 秒，再开始后续已勾选子任务", source)
+        self.assertIn("len(actual_order) > 1", source)
+        self.assertIn("每个已选子任务结束后等待 120 秒，再开始下一个已选子任务", source)
 
     def test_pipeline_confirmation_does_not_call_numbered_items_pipelines(self) -> None:
         """面向操作员的编号项统一称为子任务，不再显示管道1/后续管道。"""
@@ -242,8 +242,8 @@ class BuildContextRegressionTests(unittest.TestCase):
         source = inspect.getsource(pw_mod.PipelineWindow._on_start)
         self.assertNotIn("管道1", source)
         self.assertNotIn("后续已勾选管道", source)
-        self.assertIn("子任务1", source)
-        self.assertIn("后续已勾选子任务", source)
+        self.assertIn("每个已选子任务", source)
+        self.assertIn("下一个已选子任务", source)
 
     def test_build_context_does_not_load_test_item_order_config(self) -> None:
         """移除 `[order]` 子任务后，全流程上下文不得再读取测试项目配置。"""

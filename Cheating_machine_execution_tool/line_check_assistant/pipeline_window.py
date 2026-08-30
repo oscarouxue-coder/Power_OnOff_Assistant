@@ -362,9 +362,9 @@ class PipelineWindow:
         for code in actual_order:
             suffix = "（全流程开始时提前启动）" if code == "serial_terminal" else ""
             confirm_lines.append(f"  ✓ {SUBTASK_LABELS[code]}{suffix}")
-        power_to_next_wait_note = ""
-        if "power_cycle" in actual_order and actual_order.index("power_cycle") + 1 < len(actual_order):
-            power_to_next_wait_note = "\n\n执行约束：子任务1完成后等待 120 秒，再开始后续已勾选子任务。"
+        subtask_interval_note = ""
+        if len(actual_order) > 1:
+            subtask_interval_note = "\n\n执行约束：每个已选子任务结束后等待 120 秒，再开始下一个已选子任务。"
         power_var = _get_attr(ctx.app, "power_serial_var", None)
         power_serial_port = power_var.get().strip() if power_var is not None and hasattr(power_var, "get") else ""
         requires_manual_reboot = "power_cycle" in selected or (
@@ -397,7 +397,7 @@ class PipelineWindow:
             "确认全流程执行",
             "将按以下实际顺序执行勾选的子任务:\n"
             + "\n".join(confirm_lines)
-            + power_to_next_wait_note
+            + subtask_interval_note
             + manual_reboot_note
             + legacy_power_note
             + unattended_note

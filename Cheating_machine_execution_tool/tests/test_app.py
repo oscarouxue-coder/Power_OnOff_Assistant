@@ -4261,6 +4261,36 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             skip_confirmation=True
         )
 
+    @patch("line_check_assistant.app.messagebox.showinfo")
+    @patch("line_check_assistant.app.messagebox.showwarning")
+    @patch("line_check_assistant.app.messagebox.showerror")
+    def test_unattended_pipeline_tftp_completion_is_logged_without_a_dialog(
+        self, showerror, showwarning, showinfo
+    ):
+        item = SimpleNamespace(
+            request=SimpleNamespace(vlan="vlan139"),
+            result=CommandResult(True, "vlan139 全包升级流程完成。"),
+        )
+        context = SimpleNamespace(
+            _pipeline_sample_upgrade_completion_dialog_suppressed=True,
+            _set_upgrade_status=Mock(),
+            _log=Mock(),
+            upgrade_window=Mock(),
+            _finish_pipeline_subtask=Mock(),
+        )
+
+        LineCheckAssistant._complete_parallel_tftp_command_upgrade(context, 1, [item])
+
+        showinfo.assert_not_called()
+        showwarning.assert_not_called()
+        showerror.assert_not_called()
+        context._log.assert_called_once()
+        self.assertIn("不显示完成提示框", context._log.call_args.args[0])
+        self.assertFalse(context._pipeline_sample_upgrade_completion_dialog_suppressed)
+        context._finish_pipeline_subtask.assert_called_once_with(
+            "sample_upgrade", True, "并行 Tftp指令 升级完成：成功 1/1 台。"
+        )
+
     def test_pipeline_parameter_bridge_forwards_unattended_authorization(self):
         context = SimpleNamespace(
             _open_sample_parameter_writer=Mock(),

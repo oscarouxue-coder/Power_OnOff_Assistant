@@ -123,7 +123,7 @@ REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
     "test_sample_parameter_service.SampleParameterPipelineOptionTests.test_clear_parameters_default_off_does_not_send_ppctl_clear",
     "test_sample_parameter_service.SampleParameterPipelineOptionTests.test_both_options_off_skips_both_commands",
     "test_pipeline_orchestrator.PipelineRunOrderTests.test_run_all_seven_subtasks_in_order",
-    "test_pipeline_orchestrator.PipelineRunOrderTests.test_power_selected_waits_120_seconds_before_any_next_task",
+    "test_pipeline_orchestrator.PipelineRunOrderTests.test_all_subtask_boundaries_wait_120_seconds",
     "test_pipeline_window.BuildContextRegressionTests.test_pipeline_defaults_to_no_selected_subtasks",
     "test_app.CurrentChannelSelectionTests.test_power_test_progress_uses_configured_total_and_clamps_value",
     "test_legacy_power_test_service.LegacyPowerTestServiceTests.test_cycle_progress_uses_slowest_selected_channel",

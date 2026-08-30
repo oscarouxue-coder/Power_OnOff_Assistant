@@ -606,17 +606,25 @@ class LineCheckAssistant(Tk):
     def _start_pipeline_sample_upgrade_on_ui(self, skip_confirmation: bool = False) -> bool:
         # 去配置窗口可能已被操作员关闭；管道重新创建/拉起有效窗口，
         # 使确认框不再引用已销毁的 Toplevel。
+        # 此标记只由全流程的一次性无人值守授权设置；升级 worker 完成后会
+        # 清除。普通“样机升级”窗口仍保留原来的完成/失败提示框。
+        self._pipeline_sample_upgrade_completion_dialog_suppressed = skip_confirmation
         self._open_upgrade_module()
         self._capture_current_channel()
         if not self._validate_upgrade_required_fields():
+            self._pipeline_sample_upgrade_completion_dialog_suppressed = False
             return False
         transfer_method = LineCheckAssistant._normalize_upgrade_transfer_method(self.upgrade_transfer_var.get())
         if self.upgrade_mode_var.get() == "页面升级":
-            return self._start_page_upgrade(skip_confirmation=skip_confirmation)
-        if self.upgrade_mode_var.get() == "全包升级" and transfer_method in SERIAL_FULL_PACKAGE_TRANSFERS:
-            return self._start_full_package_upgrade(skip_confirmation=skip_confirmation)
-        messagebox.showwarning("升级方式不支持", "请在样机升级窗口选择页面升级、Tftp指令或 Tftp Put。", parent=self.upgrade_window)
-        return False
+            started = self._start_page_upgrade(skip_confirmation=skip_confirmation)
+        elif self.upgrade_mode_var.get() == "全包升级" and transfer_method in SERIAL_FULL_PACKAGE_TRANSFERS:
+            started = self._start_full_package_upgrade(skip_confirmation=skip_confirmation)
+        else:
+            messagebox.showwarning("升级方式不支持", "请在样机升级窗口选择页面升级、Tftp指令或 Tftp Put。", parent=self.upgrade_window)
+            started = False
+        if not started:
+            self._pipeline_sample_upgrade_completion_dialog_suppressed = False
+        return started
 
     def _run_pipeline_sample_parameter_write(self, skip_confirmation: bool = False) -> None:
         """供后台编排器调用：重新打开写参窗口，完成后才允许下一子任务。"""
@@ -3561,14 +3569,39 @@ class LineCheckAssistant(Tk):
         success_count = sum(1 for item in results if item.result.ok)
         if success_count == total:
             self._set_upgrade_status("", f"页面升级完成：{success_count}/{total} 台", 100)
-            messagebox.showinfo("样机升级完成", f"页面升级完成：{success_count}/{total} 台样机已升级。", parent=self.upgrade_window)
+            LineCheckAssistant._report_sample_upgrade_completion(
+                self,
+                "样机升级完成",
+                f"页面升级完成：{success_count}/{total} 台样机已升级。",
+                "info",
+            )
             _finish_pipeline_subtask_if_waiting(self, "sample_upgrade", True, f"页面升级完成：{success_count}/{total} 台成功。")
             return
         failed_messages = [item.result.message for item in results if not item.result.ok]
         progress = (success_count / total) * 100 if total else 0
         self._set_upgrade_status("", f"页面升级完成：{success_count}/{total} 台成功", progress)
-        messagebox.showerror("样机升级失败", "\n".join(failed_messages), parent=self.upgrade_window)
+        LineCheckAssistant._report_sample_upgrade_completion(
+            self, "样机升级失败", "\n".join(failed_messages), "error"
+        )
         _finish_pipeline_subtask_if_waiting(self, "sample_upgrade", False, f"页面升级完成：{success_count}/{total} 台成功。")
+
+    def _report_sample_upgrade_completion(self, title: str, detail: str, dialog_kind: str) -> None:
+        """报告升级结果；本次全流程无人值守时不以中间弹窗阻塞编排器。"""
+        suppress_dialog = bool(
+            getattr(self, "_pipeline_sample_upgrade_completion_dialog_suppressed", False)
+        )
+        self._pipeline_sample_upgrade_completion_dialog_suppressed = False
+        if suppress_dialog:
+            self._log(
+                f"[全流程][无人值守] {title}：{detail}；已写入执行日志，不显示完成提示框。"
+            )
+            return
+        if dialog_kind == "info":
+            messagebox.showinfo(title, detail, parent=self.upgrade_window)
+        elif dialog_kind == "warning":
+            messagebox.showwarning(title, detail, parent=self.upgrade_window)
+        else:
+            messagebox.showerror(title, detail, parent=self.upgrade_window)
 
     def _validate_upgrade_required_fields(self) -> bool:
         required_fields = [
@@ -3834,7 +3867,9 @@ class LineCheckAssistant(Tk):
         if orchestration_error:
             self._set_upgrade_status("", "并行升级启动失败", 0)
             self._log(orchestration_error)
-            messagebox.showerror("并行升级失败", orchestration_error, parent=self.upgrade_window)
+            LineCheckAssistant._report_sample_upgrade_completion(
+                self, "并行升级失败", orchestration_error, "error"
+            )
             _finish_pipeline_subtask_if_waiting(self, "sample_upgrade", False, orchestration_error)
             return
         succeeded = [item for item in results if item.result.ok]
@@ -3844,10 +3879,9 @@ class LineCheckAssistant(Tk):
             f"{'成功' if item.result.ok else '失败'} {item.request.vlan}：{item.result.message}"
             for item in results
         )
-        if failed:
-            messagebox.showwarning("样机升级完成", detail, parent=self.upgrade_window)
-        else:
-            messagebox.showinfo("样机升级完成", detail, parent=self.upgrade_window)
+        LineCheckAssistant._report_sample_upgrade_completion(
+            self, "样机升级完成", detail, "warning" if failed else "info"
+        )
         _finish_pipeline_subtask_if_waiting(
             self, "sample_upgrade", not failed, f"并行 Tftp指令 升级完成：成功 {len(succeeded)}/{total} 台。"
         )
@@ -3856,7 +3890,9 @@ class LineCheckAssistant(Tk):
         if orchestration_error:
             self._set_upgrade_status("", "并行升级启动失败", 0)
             self._log(orchestration_error)
-            messagebox.showerror("并行升级失败", orchestration_error, parent=self.upgrade_window)
+            LineCheckAssistant._report_sample_upgrade_completion(
+                self, "并行升级失败", orchestration_error, "error"
+            )
             _finish_pipeline_subtask_if_waiting(self, "sample_upgrade", False, orchestration_error)
             return
         succeeded = [item for item in results if item.result.ok]
@@ -3866,10 +3902,9 @@ class LineCheckAssistant(Tk):
             f"{'成功' if item.result.ok else '失败'} {item.request.vlan}：{item.result.message}"
             for item in results
         )
-        if failed:
-            messagebox.showwarning("样机升级完成", detail, parent=self.upgrade_window)
-        else:
-            messagebox.showinfo("样机升级完成", detail, parent=self.upgrade_window)
+        LineCheckAssistant._report_sample_upgrade_completion(
+            self, "样机升级完成", detail, "warning" if failed else "info"
+        )
         _finish_pipeline_subtask_if_waiting(
             self, "sample_upgrade", not failed, f"并行 Tftp Put 升级完成：成功 {len(succeeded)}/{total} 台。"
         )
