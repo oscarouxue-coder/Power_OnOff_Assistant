@@ -18,8 +18,8 @@ from .legacy_ui_defaults_store import LegacyUiDefaultsStore
 TELNET_SECTION = "telnet"
 ORDER_SECTION = "order"
 CONNECT_WIFI_SECTION = "connect_wifi"
-# ``[project_info]`` 段(Q1=A:仅做编辑器,不被主程序消费);包含项目名称 / 软件版本 /
-# ONU 软件编译时间等参考信息,操作员肉眼对照样机实际值。
+# ``[project_info]`` 段包含项目名称 / 软件版本 / ONU 软件编译时间等参考信息。
+# 项目信息 Tab 可通过只读 Telnet 查询回填版本字段，仍由操作员点击保存后写入配置。
 PROJECT_INFO_SECTION = "project_info"
 LEGACY_UI_CONFIG_FILENAME = "config.ini"
 
@@ -112,13 +112,13 @@ class ConnectWifiSettings:
 
 @dataclass
 class ProjectInfoSettings:
-    """``[project_info]`` 段(Q1=A:仅做编辑器,不被主程序消费)。
+    """``[project_info]`` 段。
 
     字段含义:
         project_name: 项目名称。
         software_version: 软件版本(对外版本号)。
         internal_software_version: 内部软件版本(内部构建号,可与对外版本号不同)。
-        onu_compile_time: ONU 软件编译时间(自由文本,不强制 ISO 格式)。
+        onu_compile_time: ONU 软件编译时间(自由文本,可由 /proc/version 查询回填)。
     """
 
     project_name: str = ""

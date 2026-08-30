@@ -2,6 +2,81 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-30 - 跳过无人值守写参完成提示
+
+- 类型：BUG 修复
+- 背景：用户现场执行全流程无人值守时，子任务4“写样机参数”虽然跳过了启动确认，但完成后仍弹出“批量写参完成”提示框，阻塞后续子任务。
+- 完成内容：① 全流程无人值守启动写参时设置仅本次有效的完成提示抑制标记；② 批量写参完成后，无人值守路径把成功或失败汇总写入主执行日志，不显示中间完成/失败提示框，再通知编排器继续或按失败终止；③ 手动写参保持原有完成提示；④ 写参未启动或完成后均清除该标记，避免影响后续手动操作；⑤ README、项目状态、验收基线和强制回归测试同步更新。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行主程序、全流程编排和窗口专项测试，再执行 `python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：主程序专项 `Ran 177 tests ... OK`、全流程编排与窗口专项 `Ran 74 tests ... OK`；以正常主机权限运行完整门禁，58 个源码文件编译、718 项单元测试、171 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。未构建或运行 EXE，未执行真实样机流程。
+- 后续待办：Windows源码版以无人值守勾选子任务4及后续子任务，确认写参结束不弹“批量写参完成”、日志保留结果且能继续；真实样机全流程端到端验收仍待项目负责人确认。
+
+## 2026-08-30 - 跳过环境检查后的任务等待
+
+- 类型：优化
+- 背景：用户补充要求：全流程子任务2“环境线路检查”执行完成后不需要等待120秒，应直接开始下一项。
+- 完成内容：① 将环境线路检查加入子任务间隔例外，成功后直接进入下一项；② 串口日志预启动例外保持不变；③ 自动上/下电及其余非例外子任务之间仍固定等待120秒，末项仍不等待，停止事件仍可中断等待；④ 总确认文案、操作员说明、项目状态、验收基线和强制回归用例同步更新。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/tests/test_pipeline_window.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行全流程编排与窗口专项测试，再执行 `python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：全流程编排与窗口专项 `Ran 74 tests ... OK`；以正常主机权限运行完整门禁，58 个源码文件编译、717 项单元测试、170 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。未构建或运行 EXE，未执行真实样机流程。
+- 后续待办：Windows源码版选择“环境线路检查”和至少一个后续任务，确认环境检查成功后直接开始下一项；真实样机全流程端到端验收仍待项目负责人确认。
+
+## 2026-08-30 - 新增样机版本只读查询
+
+- 类型：功能
+- 背景：用户要求在“测试项配置 → 项目信息”保留既有输入框，并通过 Telnet 获取样机的软件版本、内部软件版本和 ONU 软件编译时间后覆写对应输入框。
+- 完成内容：① 新增锁源 Telnet 只读查询 service，登录后只下发 `cat /etc/config/deviceinfo` 与 `cat /proc/version`；② 从 `software_version`、`inner_sw_version` 和 `/proc/version` 中解析并回填三项输入框；③ 查询使用主界面当前选中通道的 PC 静态 IP / 样机管理 IP 和 Telnet 页当前参数，不自动保存、不下发配置、重启或升级命令；④ 主执行日志记录连接、登录、实际只读命令、成功或失败。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/services/device_project_info_service.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_device_project_info_service.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行样机版本查询和主程序专项测试，再执行 `python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：样机版本查询专项 `Ran 2 tests ... OK`、主程序专项 `Ran 176 tests ... OK`；以正常主机权限运行完整门禁，58 个源码文件编译、717 项单元测试、170 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。未连接样机，未构建或运行 EXE。
+- 后续待办：Windows源码版用当前通道连接测试样机，核对三项输入框回填、日志、失败提示和保存/重开；真实样机只读查询结论待项目负责人确认。
+
+## 2026-08-30 - 跳过串口预启动等待
+
+- 类型：优化
+- 背景：用户明确要求全流程子任务间隔中的“6. 串口日志（全流程期间持续记录）”仅预启动，不应在完成预启动后额外等待120秒。
+- 完成内容：① 串口日志预启动结束后立即开始下一子任务；② 其余相邻已选子任务仍固定等待120秒，最后一项后不等待；③ 总确认摘要、强制基线用例、操作员说明和验收基线同步为该例外。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/tests/test_pipeline_window.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行全流程编排和窗口专项测试，再执行 `python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：全流程编排与窗口专项 `Ran 74 tests ... OK`；以正常主机权限运行完整门禁，57 个源码文件编译、713 项单元测试、169 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。未构建或运行 EXE，未执行真实样机流程。
+- 后续待办：Windows源码版勾选串口日志及至少两项后续任务，确认串口打开后立即进入下一任务、后续任务之间仍等待120秒；真实样机全流程端到端验收仍待项目负责人确认。
+
 ## 2026-08-30 - 统一全流程子任务间隔
 
 - 类型：优化

@@ -21,7 +21,7 @@
 
 不变量:
 - 任一子任务抛异常 → 整个全流程停止(串口日志除外,因不致命)。
-- 每个已选子任务结束后，若仍有下一项则等待 120 秒再启动下一子任务；等待可被停止事件中断。
+- 串口日志只在流程开始预启动、环境线路检查完成后均不等待；其余每个已选子任务结束后，若仍有下一项则等待 120 秒再启动下一子任务；等待可被停止事件中断。
 - 1/2/6/7 同步执行,操作员看到的「实时主日志」就是编排器的 ``emit`` 输出。
 - 3/4/5 异步执行,操作员看到的「实时主日志」来自 app 既有 worker 的 ``log_queue``。
 - 编排器本身不发任何危险操作命令(无 telnet / 串口 / UBUS);只调度既有方法。
@@ -80,6 +80,12 @@ NON_FATAL_SUBTASKS: frozenset[str] = frozenset({"serial_terminal"})
 # 保留主界面 1→7 行布局，但已勾选的辅助日志任务必须在其它任务前预启动，
 # 才能记录上下电、升级和写参阶段的串口输出。
 PIPELINE_PRESTART_SUBTASKS: Tuple[str, ...] = ("serial_terminal",)
+
+# 这些任务完成后不增加设备稳定等待：串口日志仅为预启动辅助任务；
+# 环境线路检查已在本任务内完成网卡准备和 Ping，成功后可直接进入下一任务。
+SUBTASKS_SKIP_NEXT_WAIT: frozenset[str] = frozenset(
+    {"serial_terminal", "env_check"}
+)
 
 
 def execution_order_for(selected: set[str]) -> Tuple[str, ...]:
@@ -395,7 +401,7 @@ class PipelineOrchestrator:
     POLL_INTERVAL_SECONDS = 0.5
     # 单个被编排子任务最大等待时间(秒);超时强制往下走
     MAX_SUBTASK_WAIT_SECONDS = 60.0 * 60.0    # 1 小时(给升级 / 写参留足时间)
-    # 每个已选子任务与下一子任务之间的设备稳定等待。
+    # 除串口预启动和环境线路检查外，每个已选子任务与下一子任务之间的设备稳定等待。
     SUBTASK_TO_NEXT_WAIT_SECONDS = 120.0
 
     def __init__(self, ctx: PipelineContext, emit: Output) -> None:
@@ -437,8 +443,12 @@ class PipelineOrchestrator:
                 self._results.append(SubTaskResult(code=code, ok=True))
             finally:
                 self.emit(f"=== 结束子任务 {SUBTASK_LABELS[code]} ===")
-            if index + 1 < len(execution_order) and not self._wait_between_subtasks(
-                code, execution_order[index + 1]
+            if (
+                code not in SUBTASKS_SKIP_NEXT_WAIT
+                and index + 1 < len(execution_order)
+                and not self._wait_between_subtasks(
+                    code, execution_order[index + 1]
+                )
             ):
                 self.emit(
                     f"[全流程] 等待期间收到停止请求,跳过后续子任务 {SUBTASK_LABELS[execution_order[index + 1]]}"

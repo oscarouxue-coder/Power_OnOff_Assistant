@@ -364,7 +364,7 @@ class PipelineWindow:
             confirm_lines.append(f"  ✓ {SUBTASK_LABELS[code]}{suffix}")
         subtask_interval_note = ""
         if len(actual_order) > 1:
-            subtask_interval_note = "\n\n执行约束：每个已选子任务结束后等待 120 秒，再开始下一个已选子任务。"
+            subtask_interval_note = "\n\n执行约束：串口日志预启动和环境线路检查完成后不等待；其余每个已选子任务结束后等待 120 秒，再开始下一个已选子任务。"
         power_var = _get_attr(ctx.app, "power_serial_var", None)
         power_serial_port = power_var.get().strip() if power_var is not None and hasattr(power_var, "get") else ""
         requires_manual_reboot = "power_cycle" in selected or (

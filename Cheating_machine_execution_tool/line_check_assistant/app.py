@@ -110,6 +110,11 @@ from src.services import (
     validate_dut_advanced_request,
 )
 from src.services.onu_registration_service import OnuRegistrationService
+from src.services.device_project_info_service import (
+    DeviceProjectInfo,
+    DeviceProjectInfoQueryRequest,
+    query_device_project_info,
+)
 from src.ui import DutConfigWindow, SerialTerminalWindow
 from src.ui.window_paint import (
     center_toplevel_on_parent,
@@ -637,8 +642,14 @@ class LineCheckAssistant(Tk):
         self._wait_pipeline_subtask("sample_parameter_write")
 
     def _start_pipeline_sample_parameter_write_on_ui(self, skip_confirmation: bool = False) -> bool:
+        # 此标记只由全流程的一次性无人值守授权设置；写参 worker 完成后会
+        # 清除。普通“写样机参数”窗口仍保留原来的完成/失败提示框。
+        self._pipeline_sample_parameter_completion_dialog_suppressed = skip_confirmation
         self._open_sample_parameter_writer()
-        return self._start_sample_parameter_write(skip_confirmation=skip_confirmation)
+        started = self._start_sample_parameter_write(skip_confirmation=skip_confirmation)
+        if not started:
+            self._pipeline_sample_parameter_completion_dialog_suppressed = False
+        return started
 
     def _configure_theme(self) -> None:
         style = ttk.Style(self)
@@ -1496,7 +1507,16 @@ class LineCheckAssistant(Tk):
         self._log(f"批量写样机参数结束：{success_count}/{len(results)} 台成功。")
         if self.parameter_writer_window is not None and self.parameter_writer_window.winfo_exists():
             self.parameter_status_var.set(f"批量写参完成：{success_count}/{len(results)} 台成功。")
-        if success_count == len(results):
+        suppress_dialog = bool(
+            getattr(self, "_pipeline_sample_parameter_completion_dialog_suppressed", False)
+        )
+        self._pipeline_sample_parameter_completion_dialog_suppressed = False
+        if suppress_dialog:
+            self._log(
+                "[全流程][无人值守] 批量写参完成："
+                f"成功 {success_count}/{len(results)} 台；已写入执行日志，不显示完成提示框。"
+            )
+        elif success_count == len(results):
             messagebox.showinfo("批量写参完成", f"全部 {success_count} 台样机写参并读回校验成功。", parent=self.parameter_writer_window)
         else:
             messagebox.showerror("批量写参存在失败", f"成功 {success_count}/{len(results)} 台。\n\n{summary}", parent=self.parameter_writer_window)
@@ -3976,10 +3996,7 @@ class LineCheckAssistant(Tk):
             self.upgrade_status_var.set(stage or "尚未开始升级")
 
     def _open_test_item_config(self) -> None:
-        """打开「测试项配置」窗口(Q1=A):加载并允许编辑 test_project_config.ini。
-
-        仅做编辑器,不会驱动任何 telnet / 上下电 / 测试项执行流程。
-        """
+        """打开「测试项配置」窗口：编辑配置，并允许只读查询项目信息。"""
         if self.test_item_config_window is not None and self.test_item_config_window.winfo_exists():
             self.test_item_config_window.deiconify()
             self.test_item_config_window.lift()
@@ -4006,8 +4023,8 @@ class LineCheckAssistant(Tk):
         Label(
             content,
             text=(
-                "编辑测试项 ini（Telnet / 测试项命令 / WiFi / 项目信息）及旧工具参数。当前仅提供编辑入口，"
-                "不会改变主程序的执行流程。"
+                "编辑测试项 ini（Telnet / 测试项命令 / WiFi / 项目信息）及旧工具参数。"
+                "项目信息页可对当前通道样机执行只读版本查询，不会下发配置或改变主程序测试流程。"
             ),
             foreground=COLOR_MUTED,
             background=COLOR_BG,
@@ -4046,7 +4063,12 @@ class LineCheckAssistant(Tk):
             TEST_ITEM_DEFAULT_CONFIG_PATH,
         )
         wifi_vars = self._build_test_item_wifi_tab(notebook, config.connect_wifi, mark_dirty)
-        project_info_vars = self._build_test_item_project_info_tab(notebook, config.project_info, mark_dirty)
+        project_info_vars = self._build_test_item_project_info_tab(
+            notebook,
+            config.project_info,
+            mark_dirty,
+            telnet_supplier=telnet_vars["capture"],
+        )
         legacy_defaults_control = self._build_test_item_ui_defaults_tab(
             notebook,
             legacy_defaults,
@@ -4894,8 +4916,9 @@ class LineCheckAssistant(Tk):
         notebook: ttk.Notebook,
         info: ProjectInfoSettings,
         mark_dirty,
+        telnet_supplier,
     ) -> dict:
-        """构建 [project_info] 段 Tab(Q1=A:仅做编辑器,不被主程序消费)。返回 ``{"capture": Callable, "load": Callable}``。"""
+        """构建 [project_info] 段 Tab，并提供只读样机版本查询。"""
         frame = ttk.Frame(notebook, style="App.TFrame", padding=(16, 14))
         notebook.add(frame, text="项目信息")
 
@@ -4933,18 +4956,46 @@ class LineCheckAssistant(Tk):
         text_field(3, "内部软件版本", internal_software_version_var)
         text_field(4, "ONU 软件编译时间", onu_compile_time_var)
 
+        query_status_var = StringVar(
+            value="查询将使用主界面当前选中通道，以及 Telnet 页当前填写的连接参数。"
+        )
+
+        def apply_query_result(result: DeviceProjectInfo) -> None:
+            software_version_var.set(result.software_version)
+            internal_software_version_var.set(result.internal_software_version)
+            onu_compile_time_var.set(result.onu_compile_time)
+            query_status_var.set("查询成功，已回填输入框；请点击窗口底部“保存”写入 INI。")
+            mark_dirty()
+
+        ttk.Button(
+            frame,
+            text="查询当前样机版本",
+            command=lambda: self._start_project_info_query(
+                telnet_supplier(), apply_query_result
+            ),
+            style="Secondary.TButton",
+        ).grid(row=5, column=1, sticky="w", pady=(10, 4))
+
         Label(
             frame,
             text=(
-                "本段仅做编辑器，不被主程序消费（Q1=A）。"
-                "编译时间为自由文本，不强制 ISO 格式；"
-                "操作员可在执行测试时肉眼对照样机输出的版本/编译时间。"
+                "查询只读取 cat /etc/config/deviceinfo 与 cat /proc/version，不下发配置、重启或升级命令。"
+                "软件版本、内部软件版本和编译时间查询成功后覆写对应输入框；"
+                "仍需点击窗口底部“保存”才写入 INI。"
             ),
             foreground=COLOR_MUTED,
             background=COLOR_BG,
             wraplength=560,
             justify="left",
-        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        Label(
+            frame,
+            textvariable=query_status_var,
+            foreground=COLOR_MUTED,
+            background=COLOR_BG,
+            wraplength=560,
+            justify="left",
+        ).grid(row=7, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
         frame.columnconfigure(1, weight=1)
 
@@ -4963,6 +5014,50 @@ class LineCheckAssistant(Tk):
             onu_compile_time_var.set(new_info.onu_compile_time or "")
 
         return {"capture": capture, "load": load}
+
+    def _start_project_info_query(self, telnet: TelnetSettings, on_success) -> None:
+        """以主界面当前通道执行只读 Telnet 版本查询，并在主线程回填结果。"""
+        self._capture_current_channel()
+        if not 0 <= self.current_index < len(self.channels):
+            messagebox.showwarning(
+                "未选择通道", "请先在主界面选择要查询的样机通道。", parent=self.test_item_config_window
+            )
+            return
+        channel = self.channels[self.current_index]
+        bind_ip = (channel.network_card_ip or "").strip()
+        device_host = (channel.device_manage_ip or "").strip()
+        if not bind_ip or not device_host:
+            messagebox.showwarning(
+                "通道信息不完整",
+                "当前通道缺少 PC 静态 IP 或样机管理 IP，请先在主界面完成通道配置。",
+                parent=self.test_item_config_window,
+            )
+            return
+        request = DeviceProjectInfoQueryRequest(
+            bind_ip=bind_ip, device_host=device_host, telnet=telnet
+        )
+        self._log(
+            f"[项目信息] 开始查询当前通道 {channel.section}（{channel.vlan_name or channel.adapter_alias}）："
+            f"PC {bind_ip} → 样机 {device_host}。"
+        )
+
+        def worker() -> None:
+            try:
+                result = query_device_project_info(
+                    request, emit=lambda line: self.log_queue.put(line)
+                )
+            except Exception as exc:  # noqa: BLE001 - 网络/登录/解析错误均需反馈到主线程
+                self.after(
+                    0,
+                    lambda: messagebox.showerror(
+                        "查询样机版本失败", str(exc), parent=self.test_item_config_window
+                    ),
+                )
+                self.log_queue.put(f"[项目信息] 查询失败：{exc}")
+                return
+            self.after(0, lambda: on_success(result))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _serial_log_directory(self) -> Path:
         return DEFAULT_LOG_DIR

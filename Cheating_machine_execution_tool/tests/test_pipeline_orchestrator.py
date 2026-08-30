@@ -370,23 +370,23 @@ class PipelineRunOrderTests(unittest.TestCase):
         self.assertIn("等待 120 秒后再开始子任务", "".join(events))
         self.assertIn("120 秒等待完成", "".join(events))
 
-    def test_all_subtask_boundaries_wait_120_seconds(self) -> None:
+    def test_serial_prestart_and_env_check_completion_skip_120_second_wait(self) -> None:
         ctx = _make_context()
         ctx.stop_event = MagicMock()
         ctx.stop_event.is_set.return_value = False
         ctx.stop_event.wait.return_value = False
+        messages: List[str] = []
 
         with patch.object(PipelineOrchestrator, "_run_serial_terminal"), patch.object(
             PipelineOrchestrator, "_run_env_check"
         ), patch.object(PipelineOrchestrator, "_run_sample_upgrade"):
-            PipelineOrchestrator(ctx, lambda _message: None).run(
+            PipelineOrchestrator(ctx, messages.append).run(
                 {"serial_terminal", "env_check", "sample_upgrade"}
             )
 
-        self.assertEqual(ctx.stop_event.wait.call_count, 2)
-        self.assertEqual(
-            [call.args for call in ctx.stop_event.wait.call_args_list], [(120.0,), (120.0,)]
-        )
+        ctx.stop_event.wait.assert_not_called()
+        interval_messages = [line for line in messages if "[子任务间隔]" in line]
+        self.assertEqual(interval_messages, [])
 
     def test_power_only_does_not_wait_after_pipeline_finishes(self) -> None:
         ctx = _make_context()

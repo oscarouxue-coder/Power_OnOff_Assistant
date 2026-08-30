@@ -32,7 +32,7 @@ from line_check_assistant.sample_upgrade_settings_store import (
     DEFAULT_PARAMETER_PARALLEL_COUNT,
     SampleUpgradeSettings,
 )
-from line_check_assistant.test_item_config_store import TestItemConfigStore
+from line_check_assistant.test_item_config_store import TelnetSettings, TestItemConfigStore
 from src.models import (
     C300CleanupCandidate,
     DiscoveredOnu,
@@ -4304,6 +4304,98 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         )
 
         context._start_sample_parameter_write.assert_called_once_with(skip_confirmation=True)
+        self.assertTrue(context._pipeline_sample_parameter_completion_dialog_suppressed)
+
+    @patch("line_check_assistant.app.messagebox.showinfo")
+    @patch("line_check_assistant.app.messagebox.showwarning")
+    @patch("line_check_assistant.app.messagebox.showerror")
+    def test_unattended_pipeline_parameter_completion_is_logged_without_a_dialog(
+        self, showerror, showwarning, showinfo
+    ):
+        result = SimpleNamespace(
+            ok=True,
+            request=SimpleNamespace(vlan="vlan139"),
+            message="vlan139 写参并读回校验成功。",
+        )
+        context = SimpleNamespace(
+            parameter_write_running=True,
+            parameter_cancel_event=Mock(),
+            parameter_writer_window=Mock(),
+            parameter_write_button=Mock(),
+            parameter_cancel_button=Mock(),
+            serial_terminal=Mock(),
+            parameter_status_var=Mock(),
+            _pipeline_sample_parameter_completion_dialog_suppressed=True,
+            _log=Mock(),
+            _finish_pipeline_subtask=Mock(),
+        )
+        context.parameter_writer_window.winfo_exists.return_value = True
+
+        LineCheckAssistant._complete_sample_parameter_write(context, [result])
+
+        showinfo.assert_not_called()
+        showwarning.assert_not_called()
+        showerror.assert_not_called()
+        self.assertFalse(context._pipeline_sample_parameter_completion_dialog_suppressed)
+        self.assertTrue(
+            any(
+                "不显示完成提示框" in call.args[0]
+                for call in context._log.call_args_list
+            )
+        )
+        context._finish_pipeline_subtask.assert_called_once_with(
+            "sample_parameter_write", True, "写样机参数完成：1/1 台成功。"
+        )
+
+    @patch("line_check_assistant.app.query_device_project_info")
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_project_info_query_uses_current_channel_and_returns_to_ui_thread(
+        self, thread_class, query_project_info
+    ):
+        result = SimpleNamespace(
+            software_version="S13.58.01.001",
+            internal_software_version="T13.58.01.003",
+            onu_compile_time="Mon Jun 8 10:16:25 UTC 2026",
+        )
+        query_project_info.return_value = result
+        context = SimpleNamespace(
+            _capture_current_channel=Mock(),
+            current_index=0,
+            channels=[
+                ChannelConfig(
+                    section="channel_1",
+                    vlan_name="VLAN139",
+                    network_card_ip="192.168.1.139",
+                    device_manage_ip="192.168.1.1",
+                )
+            ],
+            _log=Mock(),
+            log_queue=Mock(),
+            after=Mock(side_effect=lambda _delay, callback: callback()),
+            test_item_config_window=Mock(),
+        )
+        applied: list[object] = []
+
+        LineCheckAssistant._start_project_info_query(
+            context, TelnetSettings(user="root", password="secret"), applied.append
+        )
+        worker = thread_class.call_args.kwargs["target"]
+        worker()
+
+        request = query_project_info.call_args.args[0]
+        self.assertEqual(request.bind_ip, "192.168.1.139")
+        self.assertEqual(request.device_host, "192.168.1.1")
+        self.assertEqual(request.telnet.user, "root")
+        self.assertEqual(applied, [result])
+
+    def test_project_info_tab_has_read_only_version_query_button(self):
+        import inspect
+
+        source = inspect.getsource(LineCheckAssistant._build_test_item_project_info_tab)
+
+        self.assertIn("查询当前样机版本", source)
+        self.assertIn("cat /etc/config/deviceinfo", source)
+        self.assertIn("cat /proc/version", source)
 
 
 if __name__ == "__main__":
