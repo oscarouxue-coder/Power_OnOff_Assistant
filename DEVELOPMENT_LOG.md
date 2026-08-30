@@ -2,6 +2,87 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-31 - 开关机测试启动前逐台版本预检
+
+- 类型：功能 / 安全预检 / 测试 / 文档
+- 背景：项目负责人要求执行全流程子任务7“执行开关机测试”前，先核对全部已勾选通道的实际软件版本、内部软件版本和 ONU 软件编译时间，只有全部与“项目信息”手动填写的基准一致才允许开始。
+- 完成内容：① 复用锁源 Telnet 只读查询，对实际选中测试方案的 `[project_info]` 三项手动基准逐台比对；② 三项基准任一为空时直接拦截，不查询、不执行；③ 任一通道查询失败或任一字段不一致时，主执行日志列出通道与期望/实际差异，并作为致命失败终止全流程；④ 只有全部通道三项一致后，才调用旧 Start All；版本预检失败路径绝不下发全通道断电帧或启动旧业务；⑤ 增加三项字段差异、全部已勾选通道逐台核对、差异拦截与空基准拦截回归。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/services/device_project_info_service.py`
+  - `Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/src/services/__init__.py`
+  - `Cheating_machine_execution_tool/tests/test_device_project_info_service.py`
+  - `Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行版本查询、全流程编排专项测试，再执行 `python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：版本查询专项 `Ran 3 tests ... OK`、全流程编排专项 `Ran 47 tests ... OK`、旧 Start All 专项 `Ran 13 tests ... OK`；以本机权限运行完整门禁，58 个源码文件编译、724 项单元测试、171 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。未构建或运行 EXE，未连接真实样机。
+- 后续待办：Windows源码版勾选多台、仅选择子任务7，分别确认全匹配后才出现旧 Start All 启动日志，以及字段不一致/查询失败/基准为空时只显示版本预检失败且没有电源帧；真实样机结论待项目负责人确认。
+
+## 2026-08-31 - 更新主界面工具名称
+
+- 类型：界面文案 / 文档 / 测试
+- 背景：项目负责人将本工具名称调整为“openWRT老化测试环境搭建助手”。
+- 完成内容：主界面 Windows 标题栏及操作员说明已统一为新名称；内容区仍不重复显示应用名称，既有功能、配置和执行语义均不变。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行主程序专项测试、`python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：主程序专项 `Ran 179 tests ... OK`；以本机权限运行完整门禁，58 个源码文件编译、724 项单元测试、171 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。未构建或运行 EXE，未连接或操作真实设备。
+- 后续待办：Windows源码版确认标题栏显示新名称；无需执行真实设备命令。
+
+## 2026-08-30 - 项目信息查询结果支持鼠标复制
+
+- 类型：交互优化 / 测试 / 文档
+- 背景：项目负责人需要将“查询当前样机版本”得到的软件版本、内部软件版本和 ONU 软件编译时间直接复制，用于其它工具或记录。
+- 完成内容：① 查询结果由不可编辑的只读文本框显示，手动输入框仍独立保留；② 结果文本可用鼠标拖拽选择后按 Ctrl+C 复制；③ 每项结果右键提供“复制全部”，直接复制该字段完整内容到系统剪贴板；④ 复制不改变查询结果、手动配置、保存状态或 INI。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行主程序专项测试，再执行 `python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：主程序专项 `Ran 178 tests ... OK`；以本机权限运行完整门禁，58 个源码文件编译、719 项单元测试、171 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。未构建或运行 EXE，未连接真实样机。
+- 后续待办：Windows源码版确认三项只读文本可拖拽选择、右键“复制全部”准确写入剪贴板，且不能编辑或影响上方手动输入框；真实样机只读查询结论待项目负责人确认。
+
+## 2026-08-30 - 项目信息查询结果与手动版本字段分离
+
+- 类型：交互优化 / 测试 / 文档
+- 背景：项目负责人要求“查询当前样机版本”得到的软件版本、内部软件版本和 ONU 软件编译时间必须独立展示，不允许手动修改，并保留原有三项手动输入框；查询不能覆写手动配置。
+- 完成内容：① “项目信息”页保留项目名称及三项版本信息的可手动编辑输入框和既有保存语义；② 新增“当前样机查询结果（只读）”区域，展示三项 Telnet 查询结果；③ 查询成功只更新该只读区域，不再标记配置为待保存，也不覆写或写入手动输入框；④ 查询仍只下发 `cat /etc/config/deviceinfo`、`cat /proc/version`，不改变设备；⑤ 操作员说明、项目状态与验收不变量同步为独立只读展示边界。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行主程序专项测试，再执行 `python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：主程序专项 `Ran 178 tests ... OK`；以本机权限运行完整门禁，58 个源码文件编译、719 项单元测试、171 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。初次沙箱全量测试因 UDP 69 绑定被拒绝出现既有两项 TFTP `WinError 10013`，以本机权限重跑通过；未构建或运行 EXE，未连接真实样机。
+- 后续待办：Windows源码版用当前通道连接测试样机，核对三项查询值仅出现在只读区域，手动输入框内容和保存结果均不变；真实样机只读查询结论待项目负责人确认。
+
+## 2026-08-30 - 加宽主界面测试通道列表
+
+- 类型：优化
+- 背景：主界面左侧“选择测试通道”列表宽度不足，已启用通道的 VLAN / COM 信息尾部被截断，操作员无法完整核对目标。
+- 完成内容：① 将主界面通道列表由 26 个字符宽度扩大为 34 个字符宽度；② 保持通道勾选、双击切换、当前行选择、配置保存和执行目标语义不变；③ 增加布局回归测试，并同步操作员说明和验收基线。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行主程序专项测试，再执行 `python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：主程序专项 `Ran 178 tests ... OK`；以正常主机权限运行完整门禁，58 个源码文件编译、719 项单元测试、171 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。未构建或运行 EXE，未执行真实设备命令。
+- 后续待办：Windows源码版核对 `channel_N  VLANxxx / COMxx` 在主界面列表中完整显示；不需要重新执行真实设备命令。
+
 ## 2026-08-30 - 跳过无人值守写参完成提示
 
 - 类型：BUG 修复

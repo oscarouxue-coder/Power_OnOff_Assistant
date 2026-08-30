@@ -28,7 +28,7 @@ python scripts\verify_baseline.py
 - 构建便携版时必须重新生成`Auto_power_on_off_tool/config`，不得复制当前电脑的账号密码、OLT/源IP/ONU ID、钉钉与远程信息、固件/参数表路径、项目身份、网卡、串口或无线网卡绑定；业务命令模板和C600业务映射可保留。ZIP必须包含EXE、脱敏配置、`PORTABLE_README.txt`、第三方声明和EXE SHA256
 - PyInstaller 5.10.1的Tkinter运行时要求EXE解压根目录存在`tcl`和`tk`；构建门禁必须从实际EXE归档命中`tcl\init.tcl`与`tk\tk.tcl`，不得使用会触发`pyi_rth__tkinter`启动失败的`_tcl_data/_tk_data`旧目标名
 - **构建后不在当前 PC 运行任一新生成的 `LineCheckAssistant.exe`**，仅确认打包成功、ZIP结构、脱敏结果和哈希并报告路径
-- 主界面内容区不得重复显示“开关机测试环境搭建助手”和“配置测试通道、完成自动上/下电并检查全部线路”，“执行日志”标题下不得显示“运行步骤、检查结果和异常信息”；管理员权限状态必须位于常用工具栏右侧、视觉上在“刷新串口”左侧，权限就绪/缺失仍分别使用成功/危险样式，刷新串口与刷新网卡顺序不得改变
+- 主界面内容区不得重复显示“openWRT老化测试环境搭建助手”和“配置测试通道、完成自动上/下电并检查全部线路”，“执行日志”标题下不得显示“运行步骤、检查结果和异常信息”；管理员权限状态必须位于常用工具栏右侧、视觉上在“刷新串口”左侧，权限就绪/缺失仍分别使用成功/危险样式，刷新串口与刷新网卡顺序不得改变
 - **已确认验收（2026-08-13）**：项目负责人确认各功能入口居中显示需求验收通过。主界面“检查并执行测试”“自动上/下电”“样机升级”“写样机参数”“ONU注册”“串口日志”“DUT配置”和“测试项配置”首次创建必须相对当前主界面实际屏幕坐标居中，主界面位于副屏时不得跳回主屏；DUT和测试项配置必须先居中再执行已验收的客户区尺寸刷新，刷新后位置不得漂移；串口日志无有效历史位置或历史位置为`+0+0`时居中，用户主动移动后的其它有效历史位置仍按原规则恢复
 - **已确认验收（2026-08-29）**：主界面统一监听自身及全部子控件的鼠标按下并调用`lift()`，不使用`focus_force()`抢走刚点击控件的焦点。已打开的非模态二级窗口与主界面可相互点击升到前台，主界面升层不会关闭或重建二级窗口；再次点击功能入口仍可把原二级窗口升到前方。生成批量参数表、选择程控电源及确认/警告等模态窗口继续保留`transient + grab`或等价模态语义，不因窗口层级切换绕过必要输入或危险确认
 
@@ -76,6 +76,7 @@ python scripts\verify_baseline.py
 - **已确认验收行为（2026-07-23）**：切换程控电源 `COM101` 时 VLAN 下拉候选仅显示 `VLAN101`–`VLAN108`；切换 `COM102` 时仅显示 `VLAN109`–`VLAN116`；切换不会自动改写已保存通道配置。
 - **已确认验收行为（2026-07-24）**：程控电源 COM 为空时，VLAN 下拉候选展示所有已识别网卡；空值可保存到 `network_card_ip.ini`，不会被读取逻辑回填为 `COM101`。
 - **已确认验收（2026-08-13）**：主界面通道表“通道对应 COM口”只读下拉、分组候选和保存通过现场验收；`COM101`候选仅`COM1`–`COM8`，`COM102`仅`COM9`–`COM16`，后续每组8口顺延，程控电源为空时展示`COM1`–`COM48`。切换程控电源只改变候选，不清空或改写已保存通道VLAN/COM；选择后实时保存。
+- **布局不变量（2026-08-30）**：主界面“选择测试通道”列表宽度必须能完整显示启用通道的 `channel_N  VLANxxx / COMxx` 文本；扩大列表宽度不得改变通道勾选、双击切换、当前行选择、配置保存或执行目标语义。
 - **边界与异常**：写网卡静态 IP 需管理员权限；源 IP 不可绑时**强提示人工检查 ini**，不回退 `0.0.0.0`
 - **禁止破坏**：配置写入位置唯一（不可再新建 `Cheating_machine_execution_tool/config/`）
 - **已确认验收（2026-08-30）**：线路 Ping 在网卡已启用且静态 IP/前缀完全匹配时，不重复启用或设置静态 IP；网卡/IP 不满足时按需修复后可正常 Ping。
@@ -269,7 +270,7 @@ python scripts\verify_baseline.py
     - 强制基线测试：`test_test_item_config_store.TestItemConfigStoreTests.test_save_writes_retry_interval_only_to_legacy_other_config`
   - 「测试项配置」第五个 Tab 固定命名“开关机运行参数”，只展示 `startup_time`、`interval_time`、`number_of_tests`、`wait_command_done` 对应的四项中文名称；左侧必须使用黑色中文名称，不得显示原始键名或右侧灰色说明列；`communication_method`、`baud_rate`、`selected_profile`、`telnet_enable` 均不得显示，保存时前三项必须保持原值，`telnet_enable` 必须由 Telnet 页反向计算并自动写入
   - 「测试项配置」Telnet 与 WiFi 页所有字段标签必须显示中文含义，不得直接显示 `request_url`、`input_user_flag`、`product_solution` 等 INI 原始键名
-  - 「项目信息」页保留现有四个输入框，并提供“查询当前样机版本”按钮：仅使用当前通道的 PC 静态 IP / 样机管理 IP 与 Telnet 页当前连接参数锁源登录；只下发 `cat /etc/config/deviceinfo`、`cat /proc/version`，成功后分别覆写软件版本、内部软件版本、ONU 软件编译时间输入框，不自动保存、不下发配置/重启/升级命令
+  - 「项目信息」页保留现有四个可手动编辑输入框，并提供“查询当前样机版本”按钮：仅使用当前通道的 PC 静态 IP / 样机管理 IP 与 Telnet 页当前连接参数锁源登录；只下发 `cat /etc/config/deviceinfo`、`cat /proc/version`，成功后在独立只读文本框显示软件版本、内部软件版本、ONU 软件编译时间，不支持手动修改、不覆写输入框、不自动保存、不下发配置/重启/升级命令；文本框支持鼠标选择，右键“复制全部”可复制当前字段
   - WiFi 页必须完整映射旧 WiFi 参数窗口并保存到当前测试方案 `[connect_wifi]`：`enable`（主控）、`test_2g_enable`、`test_5g_enable`、`product_solution`、`auth_mode`、`cipher`、`choose_wireless_card`、`wireless_card_name`；老配置缺新增键时必须兼容回退为“2.4G/5G 开启、WPA2-PSK、AES、不指定网卡”。“刷新无线网卡”只枚举当前 pywifi 接口，不执行连接
   - 全流程子任务7必须把上述 8 项映射到无 GUI `OnuCongfig`，不得继续把频段、认证、加密或网卡选择写死；主控关闭时明确记录跳过日志。指定网卡开启但名称为空时启动前失败，运行电脑不存在所选网卡时子进程明确失败，不得静默回退其它网卡
   - 点击「测试项配置」后，首次创建必须使用与样机升级、写参和ONU注册一致的标准`Toplevel`自然映射，禁止执行`withdraw()`隐藏构建、`after(0)`强制恢复或嵌套`update()`；复用已有窗口只执行标准`deiconify → lift → focus_force`，不得依赖移动鼠标或其它额外输入才完成客户区绘制
@@ -299,7 +300,7 @@ python scripts\verify_baseline.py
     4. **写样机参数**（默认不勾）—— 调主程序既有 `_start_sample_parameter_write`（异步起线程 + 弹确认框）；必填项：参数表路径（`sample_upgrade_settings.ini` 新增 `parameter_table_path`）+ 写参首次登录账号 / 密码。仅在本次勾选“无人值守”且已完成总确认时跳过本项确认框
     5. **ONU 注册**（默认不勾）—— 调主程序既有 `_on_onu_query_clicked` + `_on_onu_register_clicked`（异步起线程 + 弹确认框）；必填项：OLT IP / 用户名 / 密码
     6. **串口日志（管道期间持续记录）**（默认不勾）—— 界面仍保留第 6 行；勾选时在其它子任务前预启动，通过 Tk 主线程调全流程专用 `_open_pipeline_serial_logs`，先显示 `SerialTerminalWindow`，再执行窗口同一套 `open_all()` 动作打开当前全部 VLAN/COM；全部打开动作返回后才进入后续上下电、环境检查、升级、写参和开关机测试；**非致命**（任一串口打开失败需记录失败结果，但不阻塞后续）
-    7. **执行开关机测试**（默认不勾）—— 通过 `legacy_power_test_service` 在独立无 GUI 子进程直接复用旧工具 `PowerOnOffTelnet` / `PowerOnOffSsh`、程控电源和 Start All 通道业务；严格读取当前 `config.ini [ui_defaults]`、当前方案、`network_card_ip.ini [power_supply] serial_port` 和新工具已勾选通道。初始化会先下发旧 Start All 的全通道断电帧 `55 00 AD 00 00 AD`，因此二次确认必须显示危险操作提示；之后仅启动新工具当前勾选通道。旧业务 `show_signal/show_signal_warning/show_signal_error` 操作员日志继续转发；logger 的 WARNING / ERROR 全部保留，INFO 只保留登录、连接、Ping、WiFi、重试、测试完成等关键结果；2 秒内同级同文日志只显示一次，同级同文旧日志连续出现时无论间隔多久也只显示第一条，出现其它可见旧日志或执行阶段日志后才允许再次显示；`<IP>登录成功` 在单次开关机测试运行期间必须按 IP 去重，即使多个 IP 交替输出，同一 IP 也只显示第一次，不同 IP 各保留一条，下一次重新启动测试后重新计数；旧英文 `The network card with IP <源IP> has been pinged` 必须按当前通信方式从当前方案 `request_url` 提取实际 Ping 目标，并在新工具显示为 `[旧工具Logs][INFO] Ping 成功：源网卡 <源IP> → 目标样机 <目标IP>`，不得写死目标地址或重复透传英文原文；实际电源帧必须以十六进制记录，最终结论不得过滤；`[旧工具Logs][INFO] *******通道 【N】 开始第M次测试*******` 正文必须在新工具执行日志中显示为绿色；旧工具真实结果路径 `test_results/device_N/device_N_command_results_*.log` 中形如 `2026-08-08 15:37:41.904434: 通道9下挂的设备在第1次测试时正常` 的完整行必须实时桥接为新工具 `[旧工具Logs][INFO]`，且不得改变旧结果文件字节内容。全部通道结束才判定子任务完成，任一通道失败为致命失败
+    7. **执行开关机测试**（默认不勾）—— 通过 `legacy_power_test_service` 在独立无 GUI 子进程直接复用旧工具 `PowerOnOffTelnet` / `PowerOnOffSsh`、程控电源和 Start All 通道业务；严格读取当前 `config.ini [ui_defaults]`、当前方案、`network_card_ip.ini [power_supply] serial_port` 和新工具已勾选通道。启动旧业务前，必须以当前方案 `[project_info]` 中手动保存的软件版本、内部软件版本、ONU 软件编译时间为基准，逐台对全部已勾选通道锁源 Telnet 只读查询 `software_version`、`inner_sw_version`、`/proc/version` 编译时间并严格比对；三项基准值任一为空、任一通道查询失败或任一字段不一致，必须记录通道和差异并作为致命失败返回，**不得下发全通道断电帧或启动旧 Start All**。仅全部通道三项一致后才继续。初始化会先下发旧 Start All 的全通道断电帧 `55 00 AD 00 00 AD`，因此二次确认必须显示危险操作提示；之后仅启动新工具当前勾选通道。旧业务 `show_signal/show_signal_warning/show_signal_error` 操作员日志继续转发；logger 的 WARNING / ERROR 全部保留，INFO 只保留登录、连接、Ping、WiFi、重试、测试完成等关键结果；2 秒内同级同文日志只显示一次，同级同文旧日志连续出现时无论间隔多久也只显示第一条，出现其它可见旧日志或执行阶段日志后才允许再次显示；`<IP>登录成功` 在单次开关机测试运行期间必须按 IP 去重，即使多个 IP 交替输出，同一 IP 也只显示第一次，不同 IP 各保留一条，下一次重新启动测试后重新计数；旧英文 `The network card with IP <源IP> has been pinged` 必须按当前通信方式从当前方案 `request_url` 提取实际 Ping 目标，并在新工具显示为 `[旧工具Logs][INFO] Ping 成功：源网卡 <源IP> → 目标样机 <目标IP>`，不得写死目标地址或重复透传英文原文；实际电源帧必须以十六进制记录，最终结论不得过滤；`[旧工具Logs][INFO] *******通道 【N】 开始第M次测试*******` 正文必须在新工具执行日志中显示为绿色；旧工具真实结果路径 `test_results/device_N/device_N_command_results_*.log` 中形如 `2026-08-08 15:37:41.904434: 通道9下挂的设备在第1次测试时正常` 的完整行必须实时桥接为新工具 `[旧工具Logs][INFO]`，且不得改变旧结果文件字节内容。全部通道结束才判定子任务完成，任一通道失败为致命失败
   - “测试项配置（[order] 执行）”不得出现在全流程子任务列表、状态计算、确认顺序或执行分发中；主界面的“测试项配置”编辑器继续保留，仅用于编辑配置。
   - 全流程窗口首次打开时 7 个子任务必须全部不勾选，不得自动选择环境线路检查或其它子任务；每行任务标题左侧为勾选框：选中时白底黑边小方框内显示“✓”、未选时保持空框，点击小方框或任务标题可切换；右侧实时显示「必填项当前状态」（绿色就绪 / 红色「缺: 字段1, 字段2」），「去配置」按钮跳到主程序对应子窗口或方法（「环境线路检查」去配置调 `_open_network_config()`：隐藏全流程窗口 + 把主界面拉到前台 + 主执行日志提示操作员去顶部「网络配置」卡片编辑）
   - 底部「刷新状态」只重算当前必填项状态，不下发设备或电源操作；用于去配置后主动核对状态

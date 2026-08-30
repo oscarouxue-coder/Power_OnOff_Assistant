@@ -5,7 +5,7 @@ import re
 import threading
 from datetime import datetime
 from pathlib import Path
-from tkinter import BooleanVar, Button, Canvas, Checkbutton, DoubleVar, END, Frame, IntVar, Label, Listbox, StringVar, TclError, Text, Tk, Toplevel, filedialog, messagebox, ttk
+from tkinter import BooleanVar, Button, Canvas, Checkbutton, DoubleVar, END, Frame, IntVar, Label, Listbox, Menu, StringVar, TclError, Text, Tk, Toplevel, filedialog, messagebox, ttk
 
 from .config_store import ChannelConfig, ChannelConfigStore, DEFAULT_POWER_SERIAL_PORT, DEFAULT_SUBNET_MASK
 from .legacy_ui_defaults_store import LegacyUiDefaultsStore, TELNET_ENABLE_OPTION
@@ -281,7 +281,7 @@ def _finish_pipeline_subtask_if_waiting(app, code: str, ok: bool, detail: str) -
 class LineCheckAssistant(Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("开关机测试环境搭建助手")
+        self.title("openWRT老化测试环境搭建助手")
         self.geometry("1200x780")
         self.minsize(1040, 700)
         self.configure(background=COLOR_BG)
@@ -723,7 +723,7 @@ class LineCheckAssistant(Tk):
         ttk.Label(left, text="点击方框或双击可切换启用状态", style="CardHint.TLabel").pack(anchor="w", pady=(3, 10))
         self.channel_list = Listbox(
             left,
-            width=26,
+            width=34,
             height=16,
             exportselection=False,
             font=CHANNEL_LIST_FONT,
@@ -4926,6 +4926,9 @@ class LineCheckAssistant(Tk):
         software_version_var = StringVar(value=info.software_version or "")
         internal_software_version_var = StringVar(value=info.internal_software_version or "")
         onu_compile_time_var = StringVar(value=info.onu_compile_time or "")
+        queried_software_version_var = StringVar(value="未查询")
+        queried_internal_software_version_var = StringVar(value="未查询")
+        queried_onu_compile_time_var = StringVar(value="未查询")
 
         for var in (
             project_name_var,
@@ -4956,16 +4959,59 @@ class LineCheckAssistant(Tk):
         text_field(3, "内部软件版本", internal_software_version_var)
         text_field(4, "ONU 软件编译时间", onu_compile_time_var)
 
+        ttk.Separator(frame, orient="horizontal").grid(
+            row=5, column=0, columnspan=2, sticky="we", pady=(10, 8)
+        )
+        Label(
+            frame,
+            text="当前样机查询结果（只读）",
+            font=(FONT_FAMILY, 10, "bold"),
+            foreground=COLOR_TEXT,
+            background=COLOR_BG,
+        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(0, 2))
+
+        copy_target = [queried_software_version_var]
+        copy_menu = Menu(frame, tearoff=0)
+
+        def copy_query_result() -> None:
+            self.clipboard_clear()
+            self.clipboard_append(copy_target[0].get())
+            query_status_var.set("已复制查询结果到剪贴板。")
+
+        copy_menu.add_command(label="复制全部", command=copy_query_result)
+
+        def show_copy_menu(event, var: StringVar) -> str:
+            copy_target[0] = var
+            copy_menu.tk_popup(event.x_root, event.y_root)
+            copy_menu.grab_release()
+            return "break"
+
+        def read_only_result_field(row: int, label: str, var: StringVar) -> None:
+            Label(frame, text=label, width=20, anchor="w", background=COLOR_BG).grid(
+                row=row, column=0, sticky="nw", padx=(0, 12), pady=4
+            )
+            field = ttk.Entry(
+                frame,
+                textvariable=var,
+                width=50,
+                state="readonly",
+            )
+            field.grid(row=row, column=1, sticky="we", pady=4)
+            field.bind("<Button-3>", lambda event: show_copy_menu(event, var))
+
+        read_only_result_field(7, "软件版本", queried_software_version_var)
+        read_only_result_field(8, "内部软件版本", queried_internal_software_version_var)
+        read_only_result_field(9, "ONU 软件编译时间", queried_onu_compile_time_var)
+
         query_status_var = StringVar(
             value="查询将使用主界面当前选中通道，以及 Telnet 页当前填写的连接参数。"
         )
 
         def apply_query_result(result: DeviceProjectInfo) -> None:
-            software_version_var.set(result.software_version)
-            internal_software_version_var.set(result.internal_software_version)
-            onu_compile_time_var.set(result.onu_compile_time)
-            query_status_var.set("查询成功，已回填输入框；请点击窗口底部“保存”写入 INI。")
-            mark_dirty()
+            queried_software_version_var.set(result.software_version)
+            queried_internal_software_version_var.set(result.internal_software_version)
+            queried_onu_compile_time_var.set(result.onu_compile_time)
+            query_status_var.set("查询成功，结果仅供查看，不会覆盖手动输入或写入 INI。")
 
         ttk.Button(
             frame,
@@ -4974,20 +5020,20 @@ class LineCheckAssistant(Tk):
                 telnet_supplier(), apply_query_result
             ),
             style="Secondary.TButton",
-        ).grid(row=5, column=1, sticky="w", pady=(10, 4))
+        ).grid(row=10, column=1, sticky="w", pady=(10, 4))
 
         Label(
             frame,
             text=(
                 "查询只读取 cat /etc/config/deviceinfo 与 cat /proc/version，不下发配置、重启或升级命令。"
-                "软件版本、内部软件版本和编译时间查询成功后覆写对应输入框；"
-                "仍需点击窗口底部“保存”才写入 INI。"
+                "查询结果独立只读显示，不会覆写上方可手动编辑的版本输入框，也不会写入 INI；"
+                "可拖拽选择后按 Ctrl+C，或右键选择“复制全部”。"
             ),
             foreground=COLOR_MUTED,
             background=COLOR_BG,
             wraplength=560,
             justify="left",
-        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        ).grid(row=11, column=0, columnspan=2, sticky="w", pady=(6, 0))
         Label(
             frame,
             textvariable=query_status_var,
@@ -4995,7 +5041,7 @@ class LineCheckAssistant(Tk):
             background=COLOR_BG,
             wraplength=560,
             justify="left",
-        ).grid(row=7, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        ).grid(row=12, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
         frame.columnconfigure(1, weight=1)
 

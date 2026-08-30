@@ -211,6 +211,15 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("_on_row_serial_changed", table_source)
         self.assertIn('row_vars["serial_port"]', capture_source)
 
+    def test_channel_selection_list_is_wide_enough_for_vlan_and_com_text(self):
+        """主界面通道列表必须完整显示启用通道的 VLAN / COM 信息。"""
+        import inspect
+
+        source = inspect.getsource(LineCheckAssistant._build_ui)
+
+        self.assertIn("self.channel_list = Listbox(", source)
+        self.assertIn("width=34", source)
+
     def test_parameter_and_serial_log_targets_use_saved_channel_com_selection(self):
         channels = [
             ChannelConfig(
@@ -319,7 +328,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         import inspect
 
         source = inspect.getsource(LineCheckAssistant._build_ui)
-        self.assertNotIn('text="开关机测试环境搭建助手"', source)
+        self.assertNotIn('text="openWRT老化测试环境搭建助手"', source)
         self.assertNotIn('text="配置测试通道、完成自动上/下电并检查全部线路"', source)
         self.assertNotIn('text="运行步骤、检查结果和异常信息"', source)
         self.assertNotIn("title_area", source)
@@ -329,6 +338,14 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertLess(source.index(refresh_adapter), source.index(refresh_serial))
         self.assertLess(source.index(refresh_serial), source.index(admin_status))
         self.assertIn('style="Success.TLabel" if admin_ok else "Danger.TLabel"', source)
+
+    def test_main_window_title_uses_openwrt_aging_environment_name(self):
+        """Windows 标题栏必须使用当前工具名称。"""
+        import inspect
+
+        source = inspect.getsource(LineCheckAssistant.__init__)
+
+        self.assertIn('self.title("openWRT老化测试环境搭建助手")', source)
 
     def test_main_card_shows_power_test_status_and_stop_button(self):
         """主界面空白区显示状态，并承接从全流程窗口移出的停止按钮。"""
@@ -4388,12 +4405,23 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(request.telnet.user, "root")
         self.assertEqual(applied, [result])
 
-    def test_project_info_tab_has_read_only_version_query_button(self):
+    def test_project_info_tab_keeps_manual_versions_separate_from_read_only_query_results(self):
         import inspect
 
         source = inspect.getsource(LineCheckAssistant._build_test_item_project_info_tab)
 
         self.assertIn("查询当前样机版本", source)
+        self.assertIn("当前样机查询结果（只读）", source)
+        self.assertIn("queried_software_version_var", source)
+        self.assertIn("结果仅供查看，不会覆盖手动输入或写入 INI", source)
+        self.assertIn('state="readonly"', source)
+        self.assertIn('"<Button-3>"', source)
+        self.assertIn('label="复制全部"', source)
+        self.assertNotIn("\n    software_version_var.set(result.software_version)", source)
+        self.assertNotIn(
+            "\n    internal_software_version_var.set(result.internal_software_version)", source
+        )
+        self.assertNotIn("\n    onu_compile_time_var.set(result.onu_compile_time)", source)
         self.assertIn("cat /etc/config/deviceinfo", source)
         self.assertIn("cat /proc/version", source)
 

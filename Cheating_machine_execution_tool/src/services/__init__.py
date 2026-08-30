@@ -50,6 +50,12 @@ from .legacy_power_test_service import (
     prepare_legacy_power_test_request,
     run_legacy_power_test,
 )
+from .device_project_info_service import (
+    DeviceProjectInfo,
+    DeviceProjectInfoQueryRequest,
+    project_info_mismatches,
+    query_device_project_info,
+)
 from .power_on_service import power_on_selected_channels, turn_off_selected_channels, turn_on_selected_channels
 from .sample_parameter_service import (
     PARAMETER_MAX_PARALLEL,
@@ -85,6 +91,8 @@ from .test_item_execution_service import (
 __all__ = [
     "LOGIN_INTER_STEP_SLEEP_SECONDS",
     "DEFAULT_DUT_PARALLEL_COUNT",
+    "DeviceProjectInfo",
+    "DeviceProjectInfoQueryRequest",
     "MAX_DUT_PARALLEL_COUNT",
     "LOGIN_PASSWORD_PROMPT_TIMEOUT_SECONDS",
     "LOGIN_SUCCESS_TIMEOUT_SECONDS",
@@ -127,6 +135,8 @@ __all__ = [
     "power_on_selected_channels",
     "prepare_legacy_power_test_request",
     "preflight_parameter_targets",
+    "project_info_mismatches",
+    "query_device_project_info",
     "run_parallel_sample_parameter_writes",
     "run_parallel_tftp_command_upgrades",
     "run_parallel_tftp_put_upgrades",

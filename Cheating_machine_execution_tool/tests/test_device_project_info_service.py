@@ -4,11 +4,13 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from line_check_assistant.test_item_config_store import TelnetSettings
+from line_check_assistant.test_item_config_store import ProjectInfoSettings, TelnetSettings
 from src.services.device_project_info_service import (
     DEVICEINFO_COMMAND,
     PROC_VERSION_COMMAND,
+    DeviceProjectInfo,
     DeviceProjectInfoQueryRequest,
+    project_info_mismatches,
     query_device_project_info,
 )
 
@@ -81,3 +83,22 @@ class DeviceProjectInfoQueryServiceTests(unittest.TestCase):
                     telnet=TelnetSettings(user="root", password="secret"),
                 )
             )
+
+    def test_project_info_mismatches_reports_only_different_fields(self) -> None:
+        mismatches = project_info_mismatches(
+            ProjectInfoSettings(
+                software_version="S13.58.01.001",
+                internal_software_version="T13.58.01.003",
+                onu_compile_time="Mon Jun 8 10:16:25 UTC 2026",
+            ),
+            DeviceProjectInfo(
+                software_version="S13.58.01.001",
+                internal_software_version="T13.58.01.004",
+                onu_compile_time="Mon Jun 8 10:16:25 UTC 2026",
+            ),
+        )
+
+        self.assertEqual(
+            mismatches,
+            ("内部软件版本：期望 T13.58.01.003，实际 T13.58.01.004",),
+        )

@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
-from line_check_assistant.test_item_config_store import TelnetSettings
+from line_check_assistant.test_item_config_store import ProjectInfoSettings, TelnetSettings
 from src.core.telnet_transport import TelnetSession
 
 
@@ -43,6 +43,26 @@ class DeviceProjectInfo:
     software_version: str
     internal_software_version: str
     onu_compile_time: str
+
+
+def project_info_mismatches(
+    expected: ProjectInfoSettings, actual: DeviceProjectInfo
+) -> tuple[str, ...]:
+    """返回样机版本与项目基准值不一致的字段详情，比较前去除首尾空白。"""
+    fields = (
+        ("软件版本", expected.software_version, actual.software_version),
+        (
+            "内部软件版本",
+            expected.internal_software_version,
+            actual.internal_software_version,
+        ),
+        ("ONU 软件编译时间", expected.onu_compile_time, actual.onu_compile_time),
+    )
+    return tuple(
+        f"{label}：期望 {expected_value.strip()}，实际 {actual_value.strip()}"
+        for label, expected_value, actual_value in fields
+        if expected_value.strip() != actual_value.strip()
+    )
 
 
 def _option_value(deviceinfo_output: str, key: str) -> str:
@@ -149,3 +169,13 @@ def query_device_project_info(
         return result
     finally:
         session.close()
+
+
+__all__ = [
+    "DEVICEINFO_COMMAND",
+    "PROC_VERSION_COMMAND",
+    "DeviceProjectInfo",
+    "DeviceProjectInfoQueryRequest",
+    "project_info_mismatches",
+    "query_device_project_info",
+]

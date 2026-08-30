@@ -22,6 +22,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from line_check_assistant.config_store import ChannelConfig
 from line_check_assistant.onu_registration_store import OnuRegistrationConfig
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
+from line_check_assistant.test_item_config_store import (
+    ProjectInfoSettings,
+    TelnetSettings,
+)
+from src.services.device_project_info_service import DeviceProjectInfo
 from src.services.pipeline_orchestrator import (
     NON_FATAL_SUBTASKS,
     SUBTASK_CODES,
@@ -580,17 +585,39 @@ class SampleUpgradeDispatchTests(unittest.TestCase):
 
 
 class LegacyPowerTestDispatchTests(unittest.TestCase):
+    @patch("src.services.pipeline_orchestrator.query_device_project_info")
+    @patch("src.services.pipeline_orchestrator.TestItemConfigStore")
     @patch("src.services.legacy_power_test_service.run_legacy_power_test")
     @patch("src.services.legacy_power_test_service.prepare_legacy_power_test_request")
     def test_legacy_power_test_delegates_to_headless_service(
         self,
         prepare_request,
         run_power_test,
+        project_config_store,
+        query_project_info,
     ) -> None:
         prepared = MagicMock()
+        prepared.tool_root = Path("legacy-tool")
+        prepared.profile_filename = "test_project_config.ini"
         prepare_request.return_value = prepared
         run_power_test.return_value = MagicMock(ok=True, detail="完成")
-        ctx = _make_context(legacy_tool_root=Path("legacy-tool"))
+        project_config_store.return_value.load.return_value = MagicMock(
+            telnet=TelnetSettings(user="root", password="secret"),
+            project_info=ProjectInfoSettings(
+                software_version="S13.58.01.001",
+                internal_software_version="T13.58.01.003",
+                onu_compile_time="Mon Jun 8 10:16:25 UTC 2026",
+            ),
+        )
+        query_project_info.return_value = DeviceProjectInfo(
+            software_version="S13.58.01.001",
+            internal_software_version="T13.58.01.003",
+            onu_compile_time="Mon Jun 8 10:16:25 UTC 2026",
+        )
+        ctx = _make_context(
+            legacy_tool_root=Path("legacy-tool"),
+            channels=[_make_channel("channel_2"), _make_channel("channel_3")],
+        )
         ctx.app._invoke_pipeline_ui_action.side_effect = lambda action: action()
         emitted: List[str] = []
 
@@ -599,7 +626,11 @@ class LegacyPowerTestDispatchTests(unittest.TestCase):
         prepare_request.assert_called_once()
         channels = tuple(prepare_request.call_args.args[1])
         self.assertEqual(channels[0].number, 2)
+        self.assertEqual(channels[1].number, 3)
         self.assertEqual(channels[0].network_card_ip, "192.168.1.110")
+        self.assertEqual(query_project_info.call_count, 2)
+        self.assertEqual(query_project_info.call_args.args[0].bind_ip, "192.168.1.110")
+        self.assertEqual(query_project_info.call_args.args[0].device_host, "192.168.1.1")
         run_power_test.assert_called_once()
         args = run_power_test.call_args.args
         self.assertEqual(args, (prepared, emitted.append, ctx.stop_event))
@@ -607,6 +638,99 @@ class LegacyPowerTestDispatchTests(unittest.TestCase):
         progress_callback(12, 500)
         ctx.app._set_power_test_progress.assert_called_once_with(12, 500)
         ctx.app._invoke_pipeline_ui_action.assert_called_once()
+
+    @patch("src.services.pipeline_orchestrator.query_device_project_info")
+    @patch("src.services.pipeline_orchestrator.TestItemConfigStore")
+    @patch("src.services.legacy_power_test_service.run_legacy_power_test")
+    @patch("src.services.legacy_power_test_service.prepare_legacy_power_test_request")
+    def test_legacy_power_test_does_not_start_when_any_version_differs(
+        self,
+        prepare_request,
+        run_power_test,
+        project_config_store,
+        query_project_info,
+    ) -> None:
+        prepared = MagicMock()
+        prepared.tool_root = Path("legacy-tool")
+        prepared.profile_filename = "test_project_config.ini"
+        prepare_request.return_value = prepared
+        project_config_store.return_value.load.return_value = MagicMock(
+            telnet=TelnetSettings(user="root", password="secret"),
+            project_info=ProjectInfoSettings(
+                software_version="S13.58.01.001",
+                internal_software_version="T13.58.01.003",
+                onu_compile_time="Mon Jun 8 10:16:25 UTC 2026",
+            ),
+        )
+        query_project_info.return_value = DeviceProjectInfo(
+            software_version="S13.58.01.001",
+            internal_software_version="T13.58.01.004",
+            onu_compile_time="Mon Jun 8 10:16:25 UTC 2026",
+        )
+        ctx = _make_context(legacy_tool_root=Path("legacy-tool"))
+
+        with self.assertRaisesRegex(RuntimeError, "开关机版本预检不通过"):
+            PipelineOrchestrator(ctx, lambda _line: None)._run_legacy_power_test()
+
+        run_power_test.assert_not_called()
+
+    @patch("src.services.pipeline_orchestrator.query_device_project_info")
+    @patch("src.services.pipeline_orchestrator.TestItemConfigStore")
+    @patch("src.services.legacy_power_test_service.run_legacy_power_test")
+    @patch("src.services.legacy_power_test_service.prepare_legacy_power_test_request")
+    def test_legacy_power_test_does_not_start_when_version_query_fails(
+        self,
+        prepare_request,
+        run_power_test,
+        project_config_store,
+        query_project_info,
+    ) -> None:
+        prepared = MagicMock()
+        prepared.tool_root = Path("legacy-tool")
+        prepared.profile_filename = "test_project_config.ini"
+        prepare_request.return_value = prepared
+        project_config_store.return_value.load.return_value = MagicMock(
+            telnet=TelnetSettings(user="root", password="secret"),
+            project_info=ProjectInfoSettings(
+                software_version="S13.58.01.001",
+                internal_software_version="T13.58.01.003",
+                onu_compile_time="Mon Jun 8 10:16:25 UTC 2026",
+            ),
+        )
+        query_project_info.side_effect = RuntimeError("Telnet 登录超时")
+        ctx = _make_context(legacy_tool_root=Path("legacy-tool"))
+
+        with self.assertRaisesRegex(RuntimeError, "查询失败"):
+            PipelineOrchestrator(ctx, lambda _line: None)._run_legacy_power_test()
+
+        run_power_test.assert_not_called()
+
+    @patch("src.services.pipeline_orchestrator.query_device_project_info")
+    @patch("src.services.pipeline_orchestrator.TestItemConfigStore")
+    @patch("src.services.legacy_power_test_service.run_legacy_power_test")
+    @patch("src.services.legacy_power_test_service.prepare_legacy_power_test_request")
+    def test_legacy_power_test_requires_all_three_project_info_baselines(
+        self,
+        prepare_request,
+        run_power_test,
+        project_config_store,
+        query_project_info,
+    ) -> None:
+        prepared = MagicMock()
+        prepared.tool_root = Path("legacy-tool")
+        prepared.profile_filename = "test_project_config.ini"
+        prepare_request.return_value = prepared
+        project_config_store.return_value.load.return_value = MagicMock(
+            telnet=TelnetSettings(user="root", password="secret"),
+            project_info=ProjectInfoSettings(software_version="S13.58.01.001"),
+        )
+        ctx = _make_context(legacy_tool_root=Path("legacy-tool"))
+
+        with self.assertRaisesRegex(RuntimeError, "项目信息基准值未填写"):
+            PipelineOrchestrator(ctx, lambda _line: None)._run_legacy_power_test()
+
+        query_project_info.assert_not_called()
+        run_power_test.assert_not_called()
 
 
 class SubTaskResultTests(unittest.TestCase):
