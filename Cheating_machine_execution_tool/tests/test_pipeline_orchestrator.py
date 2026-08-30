@@ -52,7 +52,6 @@ def _make_settings(**overrides) -> SampleUpgradeSettings:
     defaults = dict(
         upgrade_mode="全包升级",
         transfer_method="Tftp Put",
-        execution_mode="串行",
         parallel_count=2,
         restore_factory=False,
         username="root",
@@ -501,22 +500,22 @@ class PipelineRunOrderTests(unittest.TestCase):
 
 
 class SampleUpgradeDispatchTests(unittest.TestCase):
-    def test_full_package_upgrade_uses_main_program_unified_serial_entry(self) -> None:
-        """Tftp指令 / Tftp Put 必须共用当前存在的主程序入口，再由其内部独立分流。"""
+    def test_full_package_upgrade_uses_main_program_unified_parallel_entry(self) -> None:
+        """Tftp指令 / Tftp Put 必须共用当前存在的主程序并行入口，再由其内部独立分流。"""
         for transfer_method in ("Tftp指令", "Tftp Put"):
             with self.subTest(transfer_method=transfer_method):
                 ctx = _make_context(settings=_make_settings(transfer_method=transfer_method))
-                start_serial_upgrade = MagicMock()
+                start_full_package_upgrade = MagicMock()
                 ctx.app = type(
                     "UpgradeApp",
                     (),
-                    {"_start_serial_tftp_copy_upgrade": start_serial_upgrade},
+                    {"_start_full_package_upgrade": start_full_package_upgrade},
                 )()
                 messages: List[str] = []
 
                 PipelineOrchestrator(ctx, messages.append)._run_sample_upgrade()
 
-                start_serial_upgrade.assert_called_once_with()
+                start_full_package_upgrade.assert_called_once_with()
                 self.assertIn(transfer_method, "".join(messages))
 
     def test_async_subtasks_use_main_program_completion_bridges(self) -> None:

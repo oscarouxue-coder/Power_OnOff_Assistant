@@ -607,9 +607,9 @@ class PipelineOrchestrator:
             # 主程序目前由同一入口读取 upgrade_transfer_var 后，继续分流到
             # Tftp指令 / Tftp Put 两条独立链路；不能再调用历史上未实现的
             # _start_tftp_command_upgrade / _start_tftp_put_upgrade 名称。
-            start_method = _get_attr(app, "_start_serial_tftp_copy_upgrade", None)
+            start_method = _get_attr(app, "_start_full_package_upgrade", None)
             if not callable(start_method):
-                raise RuntimeError("主程序未实现 _start_serial_tftp_copy_upgrade")
+                raise RuntimeError("主程序未实现 _start_full_package_upgrade")
             if self.ctx.unattended_execution:
                 self.emit(
                     f"已启动全包升级（{settings.transfer_method}，无人值守授权，跳过子任务确认）；后续进度见主执行日志。"

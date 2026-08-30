@@ -7,7 +7,6 @@ from pathlib import Path
 
 DEFAULT_UPGRADE_MODE = "全包升级"
 DEFAULT_UPGRADE_TRANSFER = "Tftp Put"
-DEFAULT_UPGRADE_EXECUTION_MODE = "串行"
 SAMPLE_UPGRADE_SECTION = "sample_upgrade"
 
 # 全包升级并行上限：UI、coordinator 校验、tests 都引用此常量。
@@ -50,7 +49,6 @@ def clamp_parameter_parallel_count(value: int | str | None) -> int:
 class SampleUpgradeSettings:
     upgrade_mode: str = DEFAULT_UPGRADE_MODE
     transfer_method: str = DEFAULT_UPGRADE_TRANSFER
-    execution_mode: str = DEFAULT_UPGRADE_EXECUTION_MODE
     parallel_count: int = DEFAULT_PARALLEL_COUNT
     restore_factory: bool = False
     username: str = ""
@@ -84,7 +82,6 @@ class SampleUpgradeSettingsStore:
         return SampleUpgradeSettings(
             upgrade_mode=parser.get(SAMPLE_UPGRADE_SECTION, "upgrade_mode", fallback=DEFAULT_UPGRADE_MODE),
             transfer_method=parser.get(SAMPLE_UPGRADE_SECTION, "transfer_method", fallback=DEFAULT_UPGRADE_TRANSFER),
-            execution_mode=parser.get(SAMPLE_UPGRADE_SECTION, "execution_mode", fallback=DEFAULT_UPGRADE_EXECUTION_MODE),
             parallel_count=clamp_parallel_count(
                 parser.get(SAMPLE_UPGRADE_SECTION, "parallel_count", fallback=DEFAULT_PARALLEL_COUNT)
             ),
@@ -121,7 +118,6 @@ class SampleUpgradeSettingsStore:
         parser[SAMPLE_UPGRADE_SECTION] = {
             "upgrade_mode": settings.upgrade_mode or DEFAULT_UPGRADE_MODE,
             "transfer_method": settings.transfer_method or DEFAULT_UPGRADE_TRANSFER,
-            "execution_mode": settings.execution_mode or DEFAULT_UPGRADE_EXECUTION_MODE,
             "parallel_count": str(clamp_parallel_count(settings.parallel_count)),
             "restore_factory": "1" if settings.restore_factory else "0",
             "username": settings.username or "",

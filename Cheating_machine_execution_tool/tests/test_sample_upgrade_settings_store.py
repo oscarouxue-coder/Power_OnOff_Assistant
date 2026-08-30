@@ -8,7 +8,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from line_check_assistant.sample_upgrade_settings_store import (
     DEFAULT_PARAMETER_PARALLEL_COUNT,
     DEFAULT_PARALLEL_COUNT,
-    DEFAULT_UPGRADE_EXECUTION_MODE,
     DEFAULT_UPGRADE_MODE,
     DEFAULT_UPGRADE_TRANSFER,
     MAX_PARALLEL_UPGRADES,
@@ -28,7 +27,6 @@ class SampleUpgradeSettingsStoreTests(unittest.TestCase):
 
             self.assertEqual(settings.upgrade_mode, DEFAULT_UPGRADE_MODE)
             self.assertEqual(settings.transfer_method, DEFAULT_UPGRADE_TRANSFER)
-            self.assertEqual(settings.execution_mode, DEFAULT_UPGRADE_EXECUTION_MODE)
             self.assertFalse(settings.restore_factory)
             self.assertEqual(settings.username, "")
             self.assertEqual(settings.password, "")
@@ -43,7 +41,6 @@ class SampleUpgradeSettingsStoreTests(unittest.TestCase):
             saved = SampleUpgradeSettings(
                 upgrade_mode="页面升级",
                 transfer_method="web打开网关",
-                execution_mode="并行（最多 2 台）",
                 restore_factory=True,
                 username="root",
                 password="secret",
@@ -111,6 +108,21 @@ class SampleUpgradeSettingsStoreTests(unittest.TestCase):
 
             self.assertEqual(loaded.password, "abc%123")
             self.assertEqual(loaded.firmware_path, r"F:\firmware\100%\tclinux_allinone")
+
+    def test_legacy_execution_mode_is_ignored_and_removed_on_save(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "sample_upgrade_settings.ini"
+            config_path.write_text(
+                "[sample_upgrade]\nexecution_mode = 串行\nparallel_count = 4\n",
+                encoding="utf-8",
+            )
+            store = SampleUpgradeSettingsStore(config_path)
+
+            settings = store.load()
+            self.assertEqual(settings.parallel_count, 4)
+            store.save(settings)
+
+            self.assertNotIn("execution_mode", config_path.read_text(encoding="utf-8"))
 
     def test_parallel_count_round_trip(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -2,6 +2,26 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-30 - 同步八项真实验收结论
+
+- 类型：真实样机验收 / 文档同步
+- 背景：项目负责人确认通道 Ping、两条全包升级、页面升级、批量写参、ONU终端业务与注册专项、测试项配置以及DUT独立目标隔离均已按指定范围完成现场验收。
+- 完成内容：① 通道 Ping 在网卡已满足时不重复启用或设置静态 IP，不满足时可按需修复后正常 Ping；② `Tftp指令`与`Tftp Put`各实测一次，网卡复用正常，进入 boot 前断电/上电均为1秒且稳定；③ 页面升级网卡按需复用、勾选恢复出厂后的实际命令、重启及日志通过；④ 批量写参用户/工厂模式网卡预检复用通过；⑤ ONU 语音VLAN335、TR069 VLAN50 DHCP地址和IPTV VLAN600现场业务/节目通过；⑥ C300参数化/冲突/删除/`no onu`/`write`、C600停止/`Access denied`/按PON查询/冲突预检及两型号Windows专项通过；⑦ `telnet_default_on`反向镜像、WiFi八项、网卡刷新和子任务7真实连接通过；⑧ 主界面选择`vlan112/vlan113`而DUT窗口仅选`vlan112`时，查询和配置不访问`vlan113`。
+- 修改文件：`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：依据项目负责人于2026-08-30提供的真实样机与Windows现场验收结果；本轮未修改业务代码、未构建或运行EXE。
+- 验证结果：上述指定范围均标记为已确认验收；全包升级和写参的4/8台并行仅保留为按现场需要补验收，未由本轮单次实测扩大覆盖面。
+- 后续待办：继续按`ACCEPTANCE_BASELINE.md`处理全流程7子任务端到端及各章节未列入本轮的多台、异常和新型号场景。
+
+## 2026-08-30 - 固定样机升级并行调度
+
+- 类型：优化
+- 背景：用户要求样机升级不再提供串行执行方式，也不保留执行方式设置框，只显示并行数设置。
+- 完成内容：① 删除升级窗口的“执行方式”下拉框和串行分支；② `Tftp指令` 与 `Tftp Put` 均按保存的并行数（1–8，默认2）完成即补位执行；③ 不再读写旧 `execution_mode` 配置项，已有 INI 中该字段会被忽略并在下次保存时移除；④ 确认框、README、状态与验收边界同步为仅显示并行数。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/line_check_assistant/sample_upgrade_settings_store.py`、`Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/tests/test_sample_upgrade_settings_store.py`、`Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行升级设置存储、主程序专项测试及 `python scripts\verify_baseline.py`。
+- 验证结果：升级设置存储专项 15 项、主程序专项 173 项、全流程编排专项 43 项均通过；在可绑定 TFTP UDP 69 的环境执行完整门禁通过，57 个源码文件编译、711 项单元测试、169 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。未连接或写入样机，未构建或运行 EXE。
+- 后续待办：Windows源码版确认升级窗口仅显示并行数；按现场需要复验两条全包升级链路的 2 / 4 / 8 台并行边界。
+
 ## 2026-08-30 - 全包升级固定使用 192.168.1.0/24
 
 - 类型：流程修复
@@ -9,8 +29,8 @@
 - 完成内容：① `Tftp指令` 与 `Tftp Put` 共用全包升级专用地址计算，忽略主界面样机管理 IP 和已保存 PC 静态 IP；② 固定将每条 VLAN 网卡准备为 `192.168.1.<VLAN尾号>`，例如 `VLAN139 -> 192.168.1.139`；③ 确认框和主执行日志逐台显示 `PC 固定地址 → 样机 192.168.1.1`；④ 页面升级、写参和线路 Ping 的地址策略不变，运行时仍不改写 `network_card_ip.ini`。
 - 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
 - 验证方法：运行主程序专项测试及 `python scripts\verify_baseline.py`；需在测试样机上分别验证 `Tftp指令` 和 `Tftp Put`。
-- 验证结果：主程序专项 `tests/test_app.py` 为 174 项通过；提升权限后完整门禁通过，57 个源码文件编译、711 项单元测试、169 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。未连接或写入样机，未构建或运行 EXE。
-- 后续待办：主界面或通道配置填写非 `.1` 地址后，分别执行 `Tftp指令` / `Tftp Put`，核对网卡实际切到 `192.168.1.<VLAN尾号>`、样机固定为 `192.168.1.1` 且传输成功。
+- 验证结果：主程序专项 `tests/test_app.py` 为 174 项通过；提升权限后完整门禁通过，57 个源码文件编译、711 项单元测试、169 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。项目负责人于2026-08-30确认：主界面/通道配置为非 `.1` 网段时，全包升级固定切换到 `192.168.1.<VLAN尾号> → 192.168.1.1` 并可正常完成升级。未构建或运行 EXE。
+- 后续待办：网卡按需复用细节及 4 / 8 台并行仍按现场需要继续验收。
 
 ## 2026-08-29 - 全流程升级和写参的本次无人值守授权
 
