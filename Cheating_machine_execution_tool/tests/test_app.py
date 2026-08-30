@@ -3768,11 +3768,12 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_parallel_count_var=Mock(get=Mock(return_value=2)),
             upgrade_window=Mock(),
             _selected_tftp_copy_upgrade_channels=Mock(return_value=channels),
-            _tftp_server_ip_for_channel=Mock(side_effect=["192.168.1.102", "192.168.1.101"]),
+            _full_package_tftp_server_ip_for_channel=Mock(side_effect=["192.168.1.102", "192.168.1.101"]),
             _selected_power_serial_port=Mock(return_value="COM106"),
             _set_upgrade_status=Mock(),
             _serial_tftp_copy_upgrade_worker=Mock(),
             _parallel_tftp_command_upgrade_worker=Mock(),
+            _log=Mock(),
         )
 
         LineCheckAssistant._start_serial_tftp_copy_upgrade(context)
@@ -3787,6 +3788,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertTrue(all(request.final_username == "root" for request in requests))
         self.assertTrue(all(request.final_password == "secret" for request in requests))
         self.assertTrue(all(request.transfer_method == "Tftp Put" for request in requests))
+        self.assertIn("PC 192.168.1.102 → 样机 192.168.1.1", askyesno.call_args.args[1])
         self.assertIn("恢复出厂：关闭，不会执行恢复出厂", askyesno.call_args.args[1])
         self.assertIn("不会改写 network_card_ip.ini", askyesno.call_args.args[1])
 
@@ -3805,11 +3807,12 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_parallel_count_var=Mock(get=Mock(return_value=1)),
             upgrade_window=Mock(),
             _selected_tftp_copy_upgrade_channels=Mock(return_value=[channel]),
-            _tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
+            _full_package_tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
             _selected_power_serial_port=Mock(return_value=""),
             _set_upgrade_status=Mock(),
             _serial_tftp_copy_upgrade_worker=Mock(),
             _parallel_tftp_command_upgrade_worker=Mock(),
+            _log=Mock(),
         )
 
         LineCheckAssistant._start_serial_tftp_copy_upgrade(context)
@@ -3833,11 +3836,12 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_parallel_count_var=Mock(get=Mock(return_value=4)),
             upgrade_window=Mock(),
             _selected_tftp_copy_upgrade_channels=Mock(return_value=[channel]),
-            _tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
+            _full_package_tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
             _selected_power_serial_port=Mock(return_value="COM106"),
             _set_upgrade_status=Mock(),
             _serial_tftp_copy_upgrade_worker=Mock(),
             _parallel_tftp_command_upgrade_worker=Mock(),
+            _log=Mock(),
         )
 
         LineCheckAssistant._start_serial_tftp_copy_upgrade(context)
@@ -3864,12 +3868,13 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_parallel_count_var=Mock(get=Mock(return_value=4)),
             upgrade_window=Mock(),
             _selected_tftp_copy_upgrade_channels=Mock(return_value=[channel]),
-            _tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
+            _full_package_tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
             _selected_power_serial_port=Mock(return_value="COM106"),
             _set_upgrade_status=Mock(),
             _serial_tftp_copy_upgrade_worker=Mock(),
             _parallel_tftp_command_upgrade_worker=Mock(),
             _parallel_tftp_put_upgrade_worker=Mock(),
+            _log=Mock(),
         )
 
         LineCheckAssistant._start_serial_tftp_copy_upgrade(context)
@@ -3990,6 +3995,19 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         context = SimpleNamespace(device_ip_var=Mock(get=Mock(return_value="")))
 
         self.assertEqual(LineCheckAssistant._tftp_server_ip_for_channel(context, channel), "192.168.1.148")
+
+    def test_full_package_tftp_server_ip_ignores_channel_and_management_networks(self):
+        channel = ChannelConfig(
+            section="channel_1",
+            vlan_name="VLAN148",
+            network_card_ip="192.168.29.148",
+            device_manage_ip="192.168.29.1",
+        )
+
+        self.assertEqual(
+            LineCheckAssistant._full_package_tftp_server_ip_for_channel(channel),
+            "192.168.1.148",
+        )
 
     def test_password_eye_toggles_plain_text_display(self):
         context = SimpleNamespace(
@@ -4199,7 +4217,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_parallel_count_var=Mock(get=Mock(return_value=1)),
             upgrade_window=Mock(),
             _selected_tftp_copy_upgrade_channels=Mock(return_value=[channel]),
-            _tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
+            _full_package_tftp_server_ip_for_channel=Mock(return_value="192.168.1.101"),
             _selected_power_serial_port=Mock(return_value="COM106"),
             _set_upgrade_status=Mock(),
             _serial_tftp_copy_upgrade_worker=Mock(),
@@ -4212,7 +4230,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         self.assertTrue(started)
         askyesno.assert_not_called()
-        context._log.assert_called_once()
+        self.assertEqual(context._log.call_count, 2)
         thread_class.return_value.start.assert_called_once_with()
 
     @patch("line_check_assistant.app.messagebox.askyesno")

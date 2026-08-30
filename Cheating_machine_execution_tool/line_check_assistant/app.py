@@ -240,6 +240,7 @@ CHANNEL_TABLE_ROWS_PER_GROUP = 4
 UPGRADE_MODE_OPTIONS = ("页面升级", DEFAULT_UPGRADE_MODE)
 TFTP_COMMAND_TRANSFER = TRANSFER_TFTP_COMMAND
 TFTP_PUT_TRANSFER = TRANSFER_TFTP_PUT
+FULL_PACKAGE_DEVICE_IP = "192.168.1.1"
 LEGACY_TFTP_COPY_TRANSFER = "Tftp拷贝命令"
 UPGRADE_TRANSFER_OPTIONS = (DEFAULT_UPGRADE_TRANSFER, TFTP_COMMAND_TRANSFER, "web打开网关")
 SERIAL_FULL_PACKAGE_TRANSFERS = {TFTP_COMMAND_TRANSFER, TFTP_PUT_TRANSFER}
@@ -3640,7 +3641,7 @@ class LineCheckAssistant(Tk):
         transfer_method = LineCheckAssistant._selected_upgrade_transfer_method(self)
         for channel in channels:
             try:
-                tftp_server_ip = self._tftp_server_ip_for_channel(channel)
+                tftp_server_ip = self._full_package_tftp_server_ip_for_channel(channel)
             except ValueError as exc:
                 messagebox.showwarning("VLAN IP 不正确", str(exc), parent=self.upgrade_window)
                 return False
@@ -3667,6 +3668,7 @@ class LineCheckAssistant(Tk):
 
         target_text = "、".join(
             f"{request.vlan}/{request.serial_port or '(未配置COM)'}"
+            f"（PC {request.tftp_server_ip} → 样机 {FULL_PACKAGE_DEVICE_IP}）"
             for _channel, request in upgrade_items
         )
         transfer_action = "执行 Tftp Put" if transfer_method == TFTP_PUT_TRANSFER else "下发 Tftp指令"
@@ -3690,6 +3692,7 @@ class LineCheckAssistant(Tk):
             if not messagebox.askyesno(
                 "确认样机升级",
                 f"将升级 {len(upgrade_items)} 台样机：{target_text}\n执行方式：{execution_text}\n\n"
+                f"全包升级固定将目标 VLAN 网卡准备为 192.168.1.<VLAN尾号>，样机固定为 {FULL_PACKAGE_DEVICE_IP}。\n"
                 f"升级过程不会改写 network_card_ip.ini；{power_instruction}{transfer_action}{post_transfer_instruction}\n"
                 f"恢复出厂：{restore_factory_text}\n\n是否继续？",
                 parent=self.upgrade_window,
@@ -3697,6 +3700,14 @@ class LineCheckAssistant(Tk):
                 return False
         else:
             self._log("[全流程][无人值守] 已使用总确认授权，跳过全包升级子任务确认。")
+
+        self._log(
+            "[全包升级] 固定网络："
+            + "，".join(
+                f"{request.vlan} PC {request.tftp_server_ip} → 样机 {FULL_PACKAGE_DEVICE_IP}"
+                for _channel, request in upgrade_items
+            )
+        )
 
         terminal = getattr(self, "serial_terminal", None)
         if terminal is not None:
@@ -3742,6 +3753,18 @@ class LineCheckAssistant(Tk):
         digits = "".join(char for char in vlan if char.isdigit())
         if not digits:
             raise ValueError(f"无法从 VLAN 名称确定 IP：{vlan or '未选择'}")
+        host_number = int(digits)
+        if not 1 <= host_number <= 254:
+            raise ValueError(f"VLAN 主机号必须在 1-254 之间：{host_number}")
+        return f"192.168.1.{host_number}"
+
+    @staticmethod
+    def _full_package_tftp_server_ip_for_channel(channel: ChannelConfig) -> str:
+        """全包升级固定走 192.168.1.0/24，不读取主界面样机管理 IP。"""
+        vlan = adapter_alias_from_display(channel.vlan_name or channel.adapter_alias)
+        digits = "".join(char for char in vlan if char.isdigit())
+        if not digits:
+            raise ValueError(f"无法从 VLAN 名称确定全包升级 IP：{vlan or '未选择'}")
         host_number = int(digits)
         if not 1 <= host_number <= 254:
             raise ValueError(f"VLAN 主机号必须在 1-254 之间：{host_number}")

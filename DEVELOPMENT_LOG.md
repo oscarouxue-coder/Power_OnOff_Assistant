@@ -2,6 +2,16 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-30 - 全包升级固定使用 192.168.1.0/24
+
+- 类型：流程修复
+- 背景：主界面“样机管理 IP”或通道已保存的 PC 静态 IP 使用非 `.1` 网段时，全包升级可能将 TFTP 网卡准备到错误网段，无法与固定 `192.168.1.1` 的 boot/TFTP 端点完成传输。
+- 完成内容：① `Tftp指令` 与 `Tftp Put` 共用全包升级专用地址计算，忽略主界面样机管理 IP 和已保存 PC 静态 IP；② 固定将每条 VLAN 网卡准备为 `192.168.1.<VLAN尾号>`，例如 `VLAN139 -> 192.168.1.139`；③ 确认框和主执行日志逐台显示 `PC 固定地址 → 样机 192.168.1.1`；④ 页面升级、写参和线路 Ping 的地址策略不变，运行时仍不改写 `network_card_ip.ini`。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行主程序专项测试及 `python scripts\verify_baseline.py`；需在测试样机上分别验证 `Tftp指令` 和 `Tftp Put`。
+- 验证结果：主程序专项 `tests/test_app.py` 为 174 项通过；提升权限后完整门禁通过，57 个源码文件编译、711 项单元测试、169 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。未连接或写入样机，未构建或运行 EXE。
+- 后续待办：主界面或通道配置填写非 `.1` 地址后，分别执行 `Tftp指令` / `Tftp Put`，核对网卡实际切到 `192.168.1.<VLAN尾号>`、样机固定为 `192.168.1.1` 且传输成功。
+
 ## 2026-08-29 - 全流程升级和写参的本次无人值守授权
 
 - 类型：流程优化 / 安全确认优化
