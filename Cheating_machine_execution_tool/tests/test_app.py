@@ -415,7 +415,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("textvariable=self.power_test_status_var", source)
         self.assertIn("textvariable=self.power_test_progress_text_var", source)
         self.assertIn("self.power_test_channel_overview", source)
-        self.assertIn("text=\"收起\"", source)
+        self.assertIn("text=\"通道概览（收起）\"", source)
+        self.assertIn('style="OverviewToggle.TButton"', source)
         self.assertIn("command=self._toggle_power_test_channel_overview", source)
         self.assertIn('mode="determinate", maximum=1, value=0', source)
         self.assertIn('style="PowerStatusIdle.TLabel"', source)
@@ -4528,6 +4529,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         self.assertIn("第 {current_cycle} 轮：已完成", source)
         self.assertIn("关注：", source)
+        self.assertIn("self.power_test_channel_attention_label.pack_forget()", source)
+        self.assertIn("if attention_text:", source)
         self.assertIn("通道 {number}  {completed}/{total}", source)
         self.assertIn("self._show_power_test_channel_detail", source)
         self.assertIn("foreground=COLOR_TEXT", color_source)

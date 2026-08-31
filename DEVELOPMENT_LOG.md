@@ -2,6 +2,32 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-31 - 收紧通道概览空白间距
+
+- 类型：优化
+- 背景：项目负责人确认通道概览没有落后或异常通道时，空白“关注”标签仍占用一行，造成摘要和通道小卡之间出现无意义留白。
+- 完成内容：无关注内容时直接隐藏该标签，并重新排列通道小卡和详情；出现落后、重试或失败项时才显示“关注”行，展开/收起和状态语义不变。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行主界面专项测试、`python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：主界面专项 `Ran 186 tests ... OK`；以本机权限运行完整门禁，59 个源码文件编译、737 项单元测试、172 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`；`git diff --check` 无空白错误。未构建或运行 EXE，未连接真实设备。
+- 后续待办：Windows源码版确认正常、落后和失败三种状态下概览卡片的垂直间距。
+
+## 2026-08-31 - 合并通道概览折叠入口
+
+- 类型：优化
+- 背景：项目负责人确认通道概览标题与右侧独立“收起/展开”按钮分离后视觉不够紧凑。
+- 完成内容：将标题和折叠操作合并为左侧无边框入口“通道概览（收起/展开）”，保留原有点击折叠语义、状态文字和通道概览内容。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行主界面专项测试、`python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：主界面专项 `Ran 186 tests ... OK`；以本机权限运行完整门禁，59 个源码文件编译、737 项单元测试、172 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`；`git diff --check` 无空白错误。未构建或运行 EXE，未连接真实设备。
+- 后续待办：Windows源码版确认折叠入口在不同显示缩放下的对齐和可点击性。
+
 ## 2026-08-31 - 增加开关机通道概览
 
 - 类型：功能

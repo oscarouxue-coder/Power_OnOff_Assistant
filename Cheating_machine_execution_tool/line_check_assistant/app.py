@@ -690,6 +690,15 @@ class LineCheckAssistant(Tk):
         style.configure("PowerChannelRetry.TLabel", background=COLOR_WARNING_BG, foreground=COLOR_WARNING, **power_channel_style)
         style.configure("PowerChannelFailed.TLabel", background=COLOR_DANGER_BG, foreground=COLOR_DANGER, **power_channel_style)
         style.configure("PowerChannelCompleted.TLabel", background=COLOR_SUCCESS_BG, foreground=COLOR_SUCCESS, **power_channel_style)
+        style.configure(
+            "OverviewToggle.TButton",
+            background=COLOR_SURFACE,
+            foreground=COLOR_TEXT,
+            borderwidth=0,
+            padding=(0, 2),
+            font=(FONT_FAMILY, 9, "bold"),
+        )
+        style.map("OverviewToggle.TButton", foreground=[("active", COLOR_PRIMARY_DARK)])
         style.configure("TButton", padding=(12, 7), font=(FONT_FAMILY, 9))
         style.configure("Primary.TButton", background=COLOR_PRIMARY, foreground="#ffffff", padding=(16, 9), font=(FONT_FAMILY, 10, "bold"))
         style.map("Primary.TButton", background=[("active", COLOR_PRIMARY_DARK), ("pressed", COLOR_PRIMARY_DARK)])
@@ -847,16 +856,13 @@ class LineCheckAssistant(Tk):
         self.progress = ttk.Progressbar(run_copy, mode="determinate", maximum=1, value=0)
         self.progress.pack(fill="x")
         self.power_test_channel_overview = ttk.Frame(run_copy, style="Surface.TFrame")
-        overview_header = ttk.Frame(self.power_test_channel_overview, style="Surface.TFrame")
-        overview_header.pack(fill="x", pady=(8, 2))
-        ttk.Label(overview_header, text="通道概览", style="CardHint.TLabel").pack(side="left")
         self.power_test_channel_overview_toggle = ttk.Button(
-            overview_header,
-            text="收起",
+            self.power_test_channel_overview,
+            text="通道概览（收起）",
             command=self._toggle_power_test_channel_overview,
-            style="Secondary.TButton",
+            style="OverviewToggle.TButton",
         )
-        self.power_test_channel_overview_toggle.pack(side="right")
+        self.power_test_channel_overview_toggle.pack(anchor="w", pady=(8, 2))
         ttk.Label(
             self.power_test_channel_overview,
             textvariable=self.power_test_channel_summary_var,
@@ -6561,15 +6567,20 @@ class LineCheckAssistant(Tk):
                 attention.append(
                     f"通道 {number} {completed}/{total} {state_text}：{detail or stage}"
                 )
-        self.power_test_channel_attention_var.set(
-            f"关注：{'；'.join(attention[:2])}" if attention else ""
-        )
+        attention_text = f"关注：{'；'.join(attention[:2])}" if attention else ""
+        self.power_test_channel_attention_var.set(attention_text)
+        # 空文本 Label 仍会占据一行高度；没有异常/落后通道时不显示该行。
+        self.power_test_channel_grid.pack_forget()
+        self.power_test_channel_detail_label.pack_forget()
+        self.power_test_channel_attention_label.pack_forget()
+        if attention_text:
+            self.power_test_channel_attention_label.pack(anchor="w", pady=(0, 4))
 
         expanded = getattr(self, "power_test_channel_overview_expanded", True)
-        self.power_test_channel_overview_toggle.configure(text="收起" if expanded else "展开")
+        self.power_test_channel_overview_toggle.configure(
+            text="通道概览（收起）" if expanded else "通道概览（展开）"
+        )
         if not expanded:
-            self.power_test_channel_grid.pack_forget()
-            self.power_test_channel_detail_label.pack_forget()
             return
         self.power_test_channel_grid.pack(fill="x")
         self.power_test_channel_detail_label.pack(anchor="w", pady=(4, 0))
