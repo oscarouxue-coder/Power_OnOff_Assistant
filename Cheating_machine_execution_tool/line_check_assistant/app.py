@@ -314,6 +314,11 @@ class LineCheckAssistant(Tk):
         self.power_on_running = False
         self.power_test_channel_states: dict[int, tuple[str, str]] = {}
         self.power_test_channel_progresses: dict[int, tuple[int, int, str]] = {}
+        self.power_test_channel_histories: dict[int, list[tuple[int, str, str]]] = {}
+        self.power_test_channel_selected_number: int | None = None
+        self.power_test_channel_history_window = None
+        self.power_test_channel_history_text = None
+        self.power_test_channel_history_title_var = StringVar(value="")
         self.power_test_channel_overview_expanded = True
         self.power_test_channel_overview_shown = False
         self.power_test_channel_summary_var = StringVar(value="")
@@ -883,7 +888,6 @@ class LineCheckAssistant(Tk):
             self.power_test_channel_overview,
             textvariable=self.power_test_channel_detail_var,
             style="CardHint.TLabel",
-            wraplength=620,
         )
         self.power_test_channel_detail_label.pack(anchor="w", pady=(4, 0))
         run_actions = ttk.Frame(run_card, style="Surface.TFrame")
@@ -6460,12 +6464,41 @@ class LineCheckAssistant(Tk):
         for channel_number in channel_numbers:
             self.power_test_channel_states.pop(channel_number, None)
             self.power_test_channel_progresses.pop(channel_number, None)
+            self.power_test_channel_histories.pop(channel_number, None)
         for index, channel in enumerate(self.channels):
             if power_channel_from_section(channel.section) in channel_numbers:
                 self._apply_power_test_channel_color(index)
         detail_var = getattr(self, "power_test_channel_detail_var", None)
         if detail_var is not None:
             detail_var.set("")
+        self.power_test_channel_selected_number = None
+        close_history_window = getattr(self, "_close_power_test_channel_history_window", None)
+        if callable(close_history_window):
+            close_history_window()
+        renderer = getattr(self, "_render_power_test_channel_overview", None)
+        if callable(renderer):
+            renderer()
+
+    def _record_power_test_channel_history(
+        self,
+        channel_number: int,
+        cycle: int,
+        status: str,
+        detail: str,
+    ) -> None:
+        """保留本次开关机测试中单通道的重试和失败事件。"""
+        if status not in {"retry", "failed", "success"}:
+            return
+        if status == "success" and "重试" not in detail:
+            return
+        try:
+            normalized_cycle = max(1, int(cycle))
+        except (TypeError, ValueError):
+            normalized_cycle = 1
+        normalized_channel = int(channel_number)
+        self.power_test_channel_histories.setdefault(normalized_channel, []).append(
+            (normalized_cycle, status, str(detail).strip())
+        )
         renderer = getattr(self, "_render_power_test_channel_overview", None)
         if callable(renderer):
             renderer()
@@ -6610,17 +6643,26 @@ class LineCheckAssistant(Tk):
             tile.grid(row=index // 4, column=index % 4, sticky="ew", padx=(0, 5), pady=2)
             tile.bind(
                 "<Button-1>",
-                lambda _event, selected=number: self._show_power_test_channel_detail(selected),
+                lambda _event, selected=number: self._show_power_test_channel_detail(
+                    selected, open_history=True
+                ),
             )
-        if not self.power_test_channel_detail_var.get():
-            first_channel = channel_numbers[0]
-            self._show_power_test_channel_detail(first_channel)
+        selected_channel = getattr(self, "power_test_channel_selected_number", None)
+        if selected_channel not in channel_numbers:
+            selected_channel = channel_numbers[0]
+        self._show_power_test_channel_detail(selected_channel, open_history=False)
 
-    def _show_power_test_channel_detail(self, channel_number: int) -> None:
-        """显示用户点击的小卡详情，不改变通道选择或测试状态。"""
+    def _show_power_test_channel_detail(
+        self,
+        channel_number: int,
+        *,
+        open_history: bool = False,
+    ) -> None:
+        """显示当前摘要；用户点击时打开本次独立的重试/失败历史窗口。"""
         progress = self.power_test_channel_progresses.get(int(channel_number))
         if progress is None:
             return
+        self.power_test_channel_selected_number = int(channel_number)
         completed, total, stage = progress
         status, detail = self.power_test_channel_states.get(int(channel_number), ("running", ""))
         status_text = {
@@ -6631,6 +6673,117 @@ class LineCheckAssistant(Tk):
         self.power_test_channel_detail_var.set(
             f"通道 {channel_number}：{completed}/{total}，{status_text}，{detail or stage}"
         )
+        if open_history:
+            self._open_power_test_channel_history_window(int(channel_number))
+        else:
+            self._refresh_power_test_channel_history_window()
+
+    def _open_power_test_channel_history_window(self, channel_number: int) -> None:
+        """复用一个非模态窗口显示当前通道的本次重试/失败历史。"""
+        self.power_test_channel_selected_number = int(channel_number)
+        window = getattr(self, "power_test_channel_history_window", None)
+        if window is not None and window.winfo_exists():
+            window.deiconify()
+            window.lift()
+            window.focus_force()
+            self._refresh_power_test_channel_history_window()
+            return
+
+        window = Toplevel(self)
+        self.power_test_channel_history_window = window
+        window.minsize(560, 300)
+        window.geometry("760x440")
+        window.protocol("WM_DELETE_WINDOW", self._close_power_test_channel_history_window)
+
+        container = ttk.Frame(window, style="Surface.TFrame", padding=12)
+        container.pack(fill="both", expand=True)
+        ttk.Label(
+            container,
+            textvariable=self.power_test_channel_history_title_var,
+            style="CardTitle.TLabel",
+        ).pack(anchor="w", pady=(0, 8))
+        history_body = ttk.Frame(container, style="Surface.TFrame")
+        history_body.pack(fill="both", expand=True)
+        history_text = Text(
+            history_body,
+            wrap="word",
+            font=("Consolas", 10),
+            background=COLOR_LOG_BG,
+            foreground=COLOR_TEXT,
+            insertbackground=COLOR_TEXT,
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=1,
+            highlightbackground=COLOR_BORDER,
+            padx=10,
+            pady=8,
+            state="disabled",
+        )
+        self.power_test_channel_history_text = history_text
+        history_scrollbar = ttk.Scrollbar(
+            history_body,
+            orient="vertical",
+            command=history_text.yview,
+        )
+        history_text.configure(yscrollcommand=history_scrollbar.set)
+        history_text.pack(side="left", fill="both", expand=True)
+        history_scrollbar.pack(side="right", fill="y")
+        ttk.Button(
+            container,
+            text="关闭",
+            command=self._close_power_test_channel_history_window,
+            style="Secondary.TButton",
+        ).pack(anchor="e", pady=(10, 0))
+        center_toplevel_on_parent(window, self, window_width=760, window_height=440)
+        schedule_toplevel_client_refresh(window)
+        self._refresh_power_test_channel_history_window()
+
+    def _close_power_test_channel_history_window(self) -> None:
+        """销毁历史窗口并清理失效 Tk 控件引用。"""
+        window = getattr(self, "power_test_channel_history_window", None)
+        self.power_test_channel_history_window = None
+        self.power_test_channel_history_text = None
+        if window is not None and window.winfo_exists():
+            window.destroy()
+
+    def _refresh_power_test_channel_history_window(self) -> None:
+        """在窗口打开期间随当前通道的新事件刷新滚动历史。"""
+        window = getattr(self, "power_test_channel_history_window", None)
+        history_text = getattr(self, "power_test_channel_history_text", None)
+        history_title = getattr(self, "power_test_channel_history_title_var", None)
+        channel_number = getattr(self, "power_test_channel_selected_number", None)
+        if (
+            window is None
+            or history_text is None
+            or history_title is None
+            or channel_number is None
+        ):
+            return
+        if not window.winfo_exists():
+            self.power_test_channel_history_window = None
+            self.power_test_channel_history_text = None
+            return
+        entries = self.power_test_channel_histories.get(int(channel_number), [])
+        history_title.set(f"通道 {channel_number} 本次重试/失败历史（{len(entries)} 条）")
+        window.title(f"通道 {channel_number} 重试/失败历史")
+        lines = []
+        status_labels = {
+            "retry": "重试",
+            "failed": "失败",
+            "success": "重试后成功",
+        }
+        for event_cycle, event_status, event_detail in entries:
+            lines.append(
+                f"第 {event_cycle} 轮｜{status_labels.get(event_status, event_status)}："
+                f"{event_detail}"
+            )
+        if not lines:
+            lines.append("本次未发生重试或失败。")
+        history_text.configure(state="normal")
+        history_text.delete("1.0", END)
+        history_text.insert("1.0", "\n".join(lines))
+        history_text.configure(state="disabled")
+        history_text.yview_moveto(1.0)
 
     def _power_test_channel_result_summary(self) -> str:
         """返回本次开关机测试的最终逐通道结论，供结束弹窗直接展示。"""

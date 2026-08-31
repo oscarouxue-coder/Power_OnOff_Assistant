@@ -121,6 +121,7 @@ Output = Callable[[str], None]
 ProgressOutput = Callable[[int, int], None]
 ChannelProgressOutput = Callable[[int, int, int, str], None]
 ChannelStatusOutput = Callable[[int, str, str], None]
+ChannelHistoryOutput = Callable[[int, int, str, str], None]
 
 
 def _format_power_frame(payload) -> str:
@@ -362,6 +363,7 @@ def run_legacy_power_test(
     on_progress: ProgressOutput | None = None,
     on_channel_progress: ChannelProgressOutput | None = None,
     on_channel_status: ChannelStatusOutput | None = None,
+    on_channel_history: ChannelHistoryOutput | None = None,
 ) -> LegacyPowerTestResult:
     """在独立无 GUI 子进程运行旧 ``Start All``，同步等待最终结果。"""
     context = process_context or multiprocessing.get_context("spawn")
@@ -442,6 +444,17 @@ def run_legacy_power_test(
             if channel_status is not None:
                 channel_number, status, detail = channel_status
                 channel_details[channel_number] = detail
+                # 重试过程和最终失败必须在主日志精简/去重之前单独上报；
+                # "重试后成功"也属于本次重试历史的一部分，不能因状态恢复而丢失。
+                if on_channel_history is not None and (
+                    status in {"retry", "failed"}
+                    or (status == "success" and "重试" in detail)
+                ):
+                    completed_cycle = completed_by_channel.get(channel_number, 0)
+                    current_cycle = min(
+                        max(completed_cycle + 1, 1), request.number_of_tests
+                    )
+                    on_channel_history(channel_number, current_cycle, status, detail)
                 if on_channel_status is not None:
                     on_channel_status(channel_number, status, detail)
             channel_progress = _legacy_channel_progress_from_log(

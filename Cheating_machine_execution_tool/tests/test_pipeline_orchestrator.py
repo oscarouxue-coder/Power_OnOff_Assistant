@@ -653,7 +653,12 @@ class LegacyPowerTestDispatchTests(unittest.TestCase):
         ctx.app._set_power_test_channel_progress.assert_called_once_with(
             2, 11, 500, "第12轮执行中"
         )
-        self.assertEqual(ctx.app._invoke_pipeline_ui_action.call_count, 4)
+        channel_history_callback = run_power_test.call_args.kwargs["on_channel_history"]
+        channel_history_callback(2, 12, "retry", "\u51c6\u5907\u7b2c2/3\u6b21\u9a8c\u8bc1")
+        ctx.app._record_power_test_channel_history.assert_called_once_with(
+            2, 12, "retry", "\u51c6\u5907\u7b2c2/3\u6b21\u9a8c\u8bc1"
+        )
+        self.assertEqual(ctx.app._invoke_pipeline_ui_action.call_count, 5)
 
     @patch("src.services.pipeline_orchestrator.query_device_project_info")
     @patch("src.services.pipeline_orchestrator.TestItemConfigStore")

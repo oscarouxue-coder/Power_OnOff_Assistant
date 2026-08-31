@@ -2,6 +2,42 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-31 - 通道历史改为独立滚动窗口
+
+- 类型：界面优化
+- 背景：通道重试/失败历史嵌入主界面会挤压通道概览，且当前状态摘要被固定宽度换行。
+- 完成内容：点击通道小卡改为复用一个非模态、可滚动的独立历史窗口；窗口仅显示当前点击通道的本次历史，并在打开期间随新事件刷新。主界面不再嵌入历史文本框，只保留不换行的当前摘要。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行 `python -m unittest discover -s tests -p test_app.py -v`、`python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：主界面专项 `test_app.py` 189 项通过；`python scripts/verify_baseline.py` 已通过，`git diff --check` 无空白错误。未构建或运行 EXE，未连接真实设备。
+- 后续待办：Windows 源码版确认独立窗口首次显示、滚动、关闭后重开和主界面摘要单行显示。
+
+## 2026-08-31 - 保留通道重试与失败历史
+
+- 类型：功能
+- 背景：操作员需要在主界面通道概览中点击任一通道，查看本次开关机测试完整且独立的重试/失败明细，不能因后续重试成功或主日志精简而丢失。
+- 完成内容：旧工具原始日志在精简和去重前提取通道重试、重试后成功和最终失败事件，并随所属测试轮次安全投递到 Tk 主线程；主界面按通道仅在内存中保存本次历史，点击小卡后以下方可滚动区域按发生顺序显示。重新启动测试只清空本次选中通道的历史，不改变重试策略、设备命令、确认、停止、旧结果日志或持久化配置。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行三个专项 unittest、`python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：专项 `test_legacy_power_test_service.py` 16 项、`test_pipeline_orchestrator.py` 47 项、`test_app.py` 188 项均通过；`python scripts/verify_baseline.py` 已通过，`git diff --check` 无空白错误。未构建或运行 EXE，未连接真实设备；Windows 源码版/真实样机异常路径仍待确认。
+- 后续待办：Windows 源码版确认小卡点击后的滚动历史布局，以及真实样机确认多通道重试、重试后成功和最终失败三种事件。
+
 ## 2026-08-31 - 收紧通道概览空白间距
 
 - 类型：优化

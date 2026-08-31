@@ -4533,6 +4533,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("if attention_text:", source)
         self.assertIn("通道 {number}  {completed}/{total}", source)
         self.assertIn("self._show_power_test_channel_detail", source)
+        self.assertIn("open_history=True", source)
+        self.assertNotIn("power_test_channel_history_frame", source)
         self.assertIn("foreground=COLOR_TEXT", color_source)
         self.assertNotIn("COLOR_WARNING", color_source)
         self.assertNotIn("COLOR_DANGER", color_source)
@@ -4556,6 +4558,85 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             context.power_test_channel_progresses,
             {3: (6, 20, "第7轮执行中")},
         )
+        render.assert_called_once_with()
+
+
+    def test_power_test_channel_history_is_isolated_and_keeps_retry_success(self):
+        render = Mock()
+        context = SimpleNamespace(
+            power_test_channel_histories={},
+            _render_power_test_channel_overview=render,
+        )
+
+        LineCheckAssistant._record_power_test_channel_history(
+            context, 2, 3, "retry", "\u51c6\u5907\u7b2c2/3\u6b21\u9a8c\u8bc1"
+        )
+        LineCheckAssistant._record_power_test_channel_history(
+            context, 7, 1, "failed", "\u5df2\u9a8c\u8bc13\u6b21\u5931\u8d25"
+        )
+        LineCheckAssistant._record_power_test_channel_history(
+            context, 2, 3, "success", "\u91cd\u8bd5 1 \u6b21\u540e\u9a8c\u8bc1\u6210\u529f"
+        )
+        LineCheckAssistant._record_power_test_channel_history(
+            context, 2, 3, "success", "\u6240\u6709\u6d4b\u8bd5\u9879\u9a8c\u8bc1\u6210\u529f"
+        )
+
+        self.assertEqual(
+            context.power_test_channel_histories,
+            {
+                2: [
+                    (3, "retry", "\u51c6\u5907\u7b2c2/3\u6b21\u9a8c\u8bc1"),
+                    (3, "success", "\u91cd\u8bd5 1 \u6b21\u540e\u9a8c\u8bc1\u6210\u529f"),
+                ],
+                7: [(1, "failed", "\u5df2\u9a8c\u8bc13\u6b21\u5931\u8d25")],
+            },
+        )
+        self.assertEqual(render.call_count, 3)
+
+    def test_power_test_channel_click_opens_separate_history_window(self):
+        detail_var = Mock()
+        open_history_window = Mock()
+        refresh_history_window = Mock()
+        context = SimpleNamespace(
+            power_test_channel_progresses={2: (3, 5, "running")},
+            power_test_channel_states={2: ("retry", "retry detail")},
+            power_test_channel_detail_var=detail_var,
+            _open_power_test_channel_history_window=open_history_window,
+            _refresh_power_test_channel_history_window=refresh_history_window,
+        )
+
+        LineCheckAssistant._show_power_test_channel_detail(
+            context, 2, open_history=True
+        )
+
+        self.assertEqual(context.power_test_channel_selected_number, 2)
+        detail_var.set.assert_called_once()
+        open_history_window.assert_called_once_with(2)
+        refresh_history_window.assert_not_called()
+
+    def test_power_test_channel_reset_clears_only_current_run_history(self):
+        render = Mock()
+        detail_var = Mock()
+        context = SimpleNamespace(
+            channels=[ChannelConfig(section="channel_2"), ChannelConfig(section="channel_7")],
+            power_test_channel_states={2: ("retry", "retry"), 7: ("failed", "failed")},
+            power_test_channel_progresses={2: (1, 3, "running"), 7: (1, 3, "running")},
+            power_test_channel_histories={2: [(1, "retry", "retry")], 7: [(1, "failed", "failed")]},
+            power_test_channel_detail_var=detail_var,
+            power_test_channel_selected_number=2,
+            _render_power_test_channel_overview=render,
+            channel_list=Mock(),
+        )
+        context._apply_power_test_channel_color = (
+            LineCheckAssistant._apply_power_test_channel_color.__get__(context)
+        )
+
+        LineCheckAssistant._reset_power_test_channel_states(context, [2])
+
+        self.assertNotIn(2, context.power_test_channel_histories)
+        self.assertEqual(context.power_test_channel_histories[7], [(1, "failed", "failed")])
+        self.assertIsNone(context.power_test_channel_selected_number)
+        detail_var.set.assert_called_once_with("")
         render.assert_called_once_with()
 
 

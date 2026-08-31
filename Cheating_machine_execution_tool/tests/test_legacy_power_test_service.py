@@ -187,6 +187,33 @@ class _FakeProcessContext:
         return _CompletedProcess(**kwargs)
 
 
+class _HistoryCompletedProcess:
+    def __init__(self, *, args, **_kwargs) -> None:
+        self.args = args
+        self.exitcode = 0
+        self._alive = True
+
+    def start(self) -> None:
+        message_queue = self.args[1]
+        message_queue.put({"type": "log", "level": "info", "message": "*******\u901a\u9053 \u30105\u3011 \u5f00\u59cb\u7b2c 2 \u6b21\u6d4b\u8bd5*******", "source": "signal"})
+        message_queue.put({"type": "log", "level": "warning", "message": "\u901a\u9053 5 \u6267\u884c\u6307\u4ee4\uff1a/userfs/bin/ponmgr gpon get info\uff0c\u5728\u7b2c 1 \u6b21\u65f6\u51fa\u73b0\u9519\u8bef\uff1b\u51c6\u5907\u7b2c 2/3 \u6b21\u9a8c\u8bc1", "source": "signal"})
+        message_queue.put({"type": "log", "level": "info", "message": "\u901a\u9053 5 \u53d1\u9001\u6307\u4ee4 /userfs/bin/ponmgr gpon get info \u91cd\u8bd5\u4e86 1\u6b21\u4e4b\u540e\uff0c\u6267\u884c\u6210\u529f", "source": "signal"})
+        message_queue.put({"type": "log", "level": "error", "message": "\u901a\u9053 5 \u5c1d\u8bd5\u6267\u884c\u6307\u4ee4\uff1a/userfs/bin/ponmgr gpon get info 3\u6b21\u8fdb\u884c\u9a8c\u8bc1\uff0c\u9a8c\u8bc1\u5931\u8d25", "source": "signal"})
+        message_queue.put({"type": "result", "ok": False, "detail": "\u901a\u9053 5 \u9a8c\u8bc1\u5931\u8d25"})
+        self._alive = False
+
+    def is_alive(self) -> bool:
+        return self._alive
+
+    def join(self, timeout=None) -> None:
+        return
+
+
+class _HistoryProcessContext(_FakeProcessContext):
+    def Process(self, **kwargs):
+        return _HistoryCompletedProcess(**kwargs)
+
+
 class LegacyPowerTestServiceTests(unittest.TestCase):
     def test_power_frame_is_rendered_in_execution_log_format(self) -> None:
         self.assertEqual(
@@ -484,6 +511,52 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
             channel_progress,
             [(5, 0, 1, "等待第1轮"), (5, 1, 1, "第1轮完成")],
         )
+
+    def test_parent_reports_complete_per_channel_retry_and_failure_history(self) -> None:
+        request = LegacyPowerTestRequest(
+            tool_root=Path("legacy"),
+            communication_method="telnet",
+            serial_port="COM105",
+            baud_rate="19200",
+            selected_profile="TEST_PROJECT",
+            profile_filename="test_project_config.ini",
+            startup_time=180,
+            interval_time=20,
+            number_of_tests=3,
+            wait_command_done=20,
+            telnet_enable=False,
+            emails="",
+            connect_wifi_enable=False,
+            product_solution="openwrt",
+            wifi_test_2g_enable=True,
+            wifi_test_5g_enable=True,
+            wifi_auth_mode="WPA2-PSK",
+            wifi_cipher="AES",
+            wifi_choose_wireless_card=False,
+            wifi_wireless_card_name="",
+            channels=(LegacyPowerChannel(5, "192.168.1.105"),),
+            ping_target_ip="192.168.1.1",
+        )
+        history = []
+
+        result = run_legacy_power_test(
+            request,
+            lambda _line: None,
+            _FakeEvent(),
+            process_context=_HistoryProcessContext(),
+            on_channel_history=lambda channel, cycle, status, detail: history.append(
+                (channel, cycle, status, detail)
+            ),
+        )
+
+        self.assertFalse(result.ok)
+        self.assertEqual(
+            [item[:3] for item in history],
+            [(5, 2, "retry"), (5, 2, "success"), (5, 2, "failed")],
+        )
+        self.assertIn("\u51c6\u5907\u7b2c2/3\u6b21\u9a8c\u8bc1", history[0][3])
+        self.assertIn("\u91cd\u8bd51\u6b21\u540e\u9a8c\u8bc1\u6210\u529f", history[1][3])
+        self.assertIn("3\u6b21\u9a8c\u8bc1\u5931\u8d25", history[2][3])
 
     def test_result_file_success_line_is_forwarded_without_changing_file(self) -> None:
         expected_line = "2026-08-08 15:37:41.904434: 通道9下挂的设备在第1次测试时正常"

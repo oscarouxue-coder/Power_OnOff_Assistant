@@ -802,6 +802,7 @@ class PipelineOrchestrator:
             on_progress=self._report_legacy_power_progress,
             on_channel_progress=self._report_legacy_power_channel_progress,
             on_channel_status=self._report_legacy_power_channel_status,
+            on_channel_history=self._report_legacy_power_channel_history,
         )
         if not result.ok:
             raise RuntimeError(result.detail)
@@ -837,6 +838,29 @@ class PipelineOrchestrator:
 
         def update_on_ui() -> bool:
             setter(channel_number, status, detail)
+            return True
+
+        invoke_on_ui = _get_attr(app, "_invoke_pipeline_ui_action", None)
+        if callable(invoke_on_ui):
+            invoke_on_ui(update_on_ui)
+        else:
+            update_on_ui()
+
+    def _report_legacy_power_channel_history(
+        self,
+        channel_number: int,
+        cycle: int,
+        status: str,
+        detail: str,
+    ) -> None:
+        """将本次通道重试/失败事件安全投递到 Tk 主线程。"""
+        app = self.ctx.app
+        recorder = _get_attr(app, "_record_power_test_channel_history", None)
+        if not callable(recorder):
+            return
+
+        def update_on_ui() -> bool:
+            recorder(channel_number, cycle, status, detail)
             return True
 
         invoke_on_ui = _get_attr(app, "_invoke_pipeline_ui_action", None)
