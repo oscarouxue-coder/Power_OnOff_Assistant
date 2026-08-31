@@ -23,7 +23,6 @@ from .power_on_service import power_on_selected_channels
 TRANSFER_TFTP_COMMAND = "Tftp指令"
 TRANSFER_TFTP_PUT = "Tftp Put"
 TFTP_PUT_DEVICE_IP = "192.168.1.1"
-POWER_ON_WAIT_SECONDS = 10
 POWER_RECYCLE_AFTER_UPGRADE_SECONDS = 90
 POWER_ON_SETTLE_SECONDS = 120
 UPGRADE_POWER_OFF_DELAY_SECONDS = 1.0
@@ -629,7 +628,9 @@ def _run_tftp_command_with_power_supply(
             emit=emit,
             sleep_fn=sleep_fn,
             power_cycle_coordinator=power_cycle_coordinator,
-            wait_seconds=POWER_ON_WAIT_SECONDS,
+            # power_on_channels() 已在开启帧后执行本次升级专用的 1 秒稳定等待。
+            # 不再补足旧的 10 秒启动等待，返回后立即放行 boot 串口线程。
+            wait_seconds=0,
             on_channel_powered=on_powered,
             off_delay_seconds=off_delay_seconds,
             on_delay_seconds=on_delay_seconds,
@@ -643,11 +644,11 @@ def _run_tftp_command_with_power_supply(
     if not power.ok:
         controller.cancel()
         return power
-    # 程控电源动作完成后间隔 1 秒再触发 worker 发送首帧 \r;
-    # 现场需求:先让上电状态稳定,再开始串口交互,避免首帧 \r 与上电瞬态信号叠加。
+    # power_on_channels() 返回时，本次升级专用的上电后 1 秒稳定等待已经结束。
+    # 此处立即放行 worker，避免再额外等待而错过 boot 进入窗口。
     if power_enabled:
-        sleep_fn(1.0)
-    # 在电源函数返回且稳定等待结束后才放行 worker，避免 on_channel_powered 回调过早启动登录。
+        emit("程控电源上电稳定 1 秒完成，开始串口循环回车进入 boot。")
+    # 必须等电源函数返回，不能在 on_channel_powered 回调中提前启动登录。
     power_started.set()
     worker.join(timeout=BOOT_LOGIN_TIMEOUT_SECONDS + 5)
     if not boot_result:
@@ -766,11 +767,13 @@ def run_single_full_package_upgrade(
         if not power_cycle.ok:
             return power_cycle
         emit(f"程控电源下电 + 上电完成:{power_cycle.message}" if power_enabled else power_cycle.message)
-        emit(f"串口 {port} 已开启，准备等待 UserName 提示符进入 boot。")
-
-        # 电源动作结束后先留出 1 秒稳定窗口，再开始循环回车等待 UserName。
         if power_enabled:
-            sleep_fn(1.0)
+            emit(f"程控电源上电稳定 1 秒完成，串口 {port} 开始循环回车等待 UserName 提示符进入 boot。")
+        else:
+            emit(f"串口 {port} 已开启，准备等待 UserName 提示符进入 boot。")
+
+        # _power_cycle_current_channel 返回时，开启帧后的升级专用 1 秒稳定窗口已经完成。
+        # 立即开始循环回车，不再叠加第二个 1 秒等待。
         username_prompt = controller.wait_for_tftp_put_boot_username()
         if not username_prompt.ok:
             return username_prompt

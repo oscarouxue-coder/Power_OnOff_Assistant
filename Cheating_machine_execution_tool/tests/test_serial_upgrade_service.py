@@ -541,14 +541,14 @@ class SerialUpgradeControllerTests(unittest.TestCase):
     @patch("src.services.serial_upgrade_service.upload_firmware")
     @patch("src.services.serial_upgrade_service.prepare_tftp_network", return_value=CommandResult(True, "network ready"))
     @patch("src.services.serial_upgrade_service.power_on_selected_channels", return_value=CommandResult(True, "powered on"))
-    def test_tftp_put_waits_for_username_before_starting_boot_login(
+    def test_tftp_put_starts_waiting_for_username_immediately_after_power_cycle_returns(
         self,
         _power_on_selected_channels,
         _prepare_network,
         _upload_firmware,
         _monitor_post_tftp,
     ):
-        """Tftp Put 前必须等待 1 秒、发送回车并确认 UserName，再提交 boot 凭据。"""
+        """Tftp Put 的开启帧后 1 秒稳定由电源调用完成，返回后立即发送回车。"""
         events = []
         sleeps = []
 
@@ -586,7 +586,9 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         )
 
         self.assertTrue(result.ok)
-        self.assertEqual(sleeps[0], 1.0)
+        # power_on_selected_channels 已模拟完成开启帧后的 1 秒稳定；流程不应再额外 sleep 1 秒。
+        # 第一笔等待来自提交 boot 用户名后的既有 0.3 秒间隔。
+        self.assertEqual(sleeps[0], 0.3)
         self.assertEqual(session.writes[:2], [(b"\r", False), (b"telecomadmin\r", False)])
         prompt_index = next(
             index
@@ -1027,18 +1029,14 @@ class SerialUpgradeControllerTests(unittest.TestCase):
     @patch("src.services.serial_upgrade_service.TftpServerHandle")
     @patch("src.services.serial_upgrade_service.prepare_tftp_network", return_value=CommandResult(True, "network ready"))
     @patch("src.services.serial_upgrade_service.power_on_selected_channels", return_value=CommandResult(True, "powered"))
-    def test_tftp_command_branch_waits_one_second_after_power_supply_before_first_carriage_return(
+    def test_tftp_command_branch_releases_boot_worker_immediately_after_power_cycle_returns(
         self,
         _power_on_selected_channels,
         _prepare_network,
         _tftp_server_handle,
         _monitor_post_tftp,
     ):
-        """回归:程控电源动作完成后应等待 1 秒再启动 worker,确保上电瞬态稳定。
-
-        现场需求:power_on_selected_channels 完成后间隔 1 秒发送第一帧 \r,
-        避免上电瞬态被误判为 boot 提示符。
-        """
+        """回归：开启帧后的 1 秒稳定在电源调用内完成，返回后不再补等 10 秒或 1 秒。"""
         sleeps: list[float] = []
         writes_before_boot_release: list[tuple[bytes, bool]] = []
         # wait_for_any 调用顺序:
@@ -1053,7 +1051,8 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         manager = FakeSessionManager(session)
 
         def fake_power_on(*_args, on_channel_powered=None, **_kwargs):
-            # 回调在电源函数尚未返回时触发，不能因此提前放行 boot 登录线程。
+            # 模拟电源调用在回调后完成自身的 1 秒稳定窗口才返回。
+            # worker 不能在回调期间提前启动，但返回后必须立即放行。
             on_channel_powered(1)
             return CommandResult(True, "powered")
 
@@ -1080,10 +1079,11 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         )
 
         self.assertTrue(result.ok)
-        # 第一笔 sleep 必须是程控电源完成后的 1.0 秒缓冲。
+        self.assertEqual(_power_on_selected_channels.call_args.kwargs["wait_seconds"], 0)
+        # 不再有电源返回后的额外等待；第一次 sleep 前，worker 已经发出回车和用户名。
         self.assertGreaterEqual(len(sleeps), 1)
         self.assertEqual(sleeps[0], 1.0)
-        self.assertEqual(writes_before_boot_release, [])
+        self.assertEqual(writes_before_boot_release, [(b"\r", False), (BOOT_USERNAME.encode("utf-8"), False)])
         _power_on_selected_channels.assert_called()
 
     @patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=False)

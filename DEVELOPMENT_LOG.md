@@ -3103,3 +3103,18 @@
 - 完成内容：重写 `PROJECT_STATUS.md`，仅保留项目目标与实现进度、关键文件、已完成与待验收项、技术限制，以及运行/测试/继续开发命令；同步当前全量测试基线为 154 项。
 - 修改文件：`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
 - 验证结果：已核对源码入口、升级服务、串口/TFTP 核心文件与当前测试基线；未改动业务代码。
+## 2026-08-31 - 调整全包升级上电后 boot 回车时序
+
+- 类型：优化 / 串口时序 / 测试 / 文档
+- 背景：现场日志显示 `Tftp指令` 在上电帧下发后仍补足 10 秒启动等待，`Tftp Put` 也在电源动作返回后叠加了第二个 1 秒等待。项目负责人要求两条全包升级链路统一为上电帧后稳定 1 秒即开始串口循环回车进入 boot。
+- 完成内容：① `Tftp指令` 不再传入 10 秒补足启动等待，电源层完成开启帧后的升级专用 1 秒稳定后立即放行 boot 登录线程；② `Tftp Put` 同样移除电源返回后的额外 1 秒，立即循环回车等待 `UserName:`；③ 两条链路新增“上电稳定 1 秒完成，开始串口循环回车进入 boot”主执行日志，保留断电 1 秒、上电 1 秒、账号/密码登录、传输和收尾语义；④ 补强两条链路的回归断言，并同步操作员说明、项目状态和验收边界。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`
+  - `Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行 `python -m unittest discover -s tests -p test_serial_upgrade_service.py -v`、`python scripts/verify_baseline.py` 和 `git diff --check`。
+- 验证结果：串口升级专项 `Ran 38 tests ... OK`；完整基线以本机权限执行，59 个源码文件编译、741 项单元测试、172 项强制基线测试和协议不变量均通过，输出 `ALL CHECKS PASSED`。未构建或运行 EXE，未连接真实样机。
+- 后续待办：分别在 Windows 源码版和真实样机验证 `Tftp指令`、`Tftp Put` 的“上电帧后稳定 1 秒 → 首个回车 → UserName → boot 登录 → 传输”日志和稳定性；在项目负责人提供现场结果前，不升级本项验收状态。
