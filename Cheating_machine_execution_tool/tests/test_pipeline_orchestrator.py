@@ -15,6 +15,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from typing import List
 from unittest.mock import MagicMock, patch
 
@@ -599,6 +600,10 @@ class LegacyPowerTestDispatchTests(unittest.TestCase):
         prepared = MagicMock()
         prepared.tool_root = Path("legacy-tool")
         prepared.profile_filename = "test_project_config.ini"
+        prepared.channels = (
+            SimpleNamespace(number=2),
+            SimpleNamespace(number=3),
+        )
         prepare_request.return_value = prepared
         run_power_test.return_value = MagicMock(ok=True, detail="完成")
         project_config_store.return_value.load.return_value = MagicMock(
@@ -634,10 +639,21 @@ class LegacyPowerTestDispatchTests(unittest.TestCase):
         run_power_test.assert_called_once()
         args = run_power_test.call_args.args
         self.assertEqual(args, (prepared, emitted.append, ctx.stop_event))
+        ctx.app._reset_power_test_channel_states.assert_called_once_with([2, 3])
         progress_callback = run_power_test.call_args.kwargs["on_progress"]
         progress_callback(12, 500)
         ctx.app._set_power_test_progress.assert_called_once_with(12, 500)
-        ctx.app._invoke_pipeline_ui_action.assert_called_once()
+        channel_status_callback = run_power_test.call_args.kwargs["on_channel_status"]
+        channel_status_callback(2, "success", "所有测试项验证成功")
+        ctx.app._set_power_test_channel_state.assert_called_once_with(
+            2, "success", "所有测试项验证成功"
+        )
+        channel_progress_callback = run_power_test.call_args.kwargs["on_channel_progress"]
+        channel_progress_callback(2, 11, 500, "第12轮执行中")
+        ctx.app._set_power_test_channel_progress.assert_called_once_with(
+            2, 11, 500, "第12轮执行中"
+        )
+        self.assertEqual(ctx.app._invoke_pipeline_ui_action.call_count, 4)
 
     @patch("src.services.pipeline_orchestrator.query_device_project_info")
     @patch("src.services.pipeline_orchestrator.TestItemConfigStore")

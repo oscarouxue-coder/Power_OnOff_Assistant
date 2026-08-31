@@ -43,7 +43,7 @@ class TelnetClient():
     username = None
     password = None
 
-    def __init__(self, source, host, port, logger, config_file_path):
+    def __init__(self, source, host, port, logger, config_file_path, on_retry=None):
         """
         :param source: 网卡IP
         :param host: 网关IP
@@ -60,6 +60,7 @@ class TelnetClient():
         self.logger = logger
         self.config_file_path = config_file_path
         self.dingtalk = DingTalk()
+        self.on_retry = on_retry
 
     def selected_scheme_path(self):
         # self.input_user_flag = self.cf.read_ini('telnet', 'input_user_flag',
@@ -323,6 +324,8 @@ class TelnetClient():
             f.write(f'\n{timestamp} ：第{times}次执行 {command} 指令 ===============================》\n\n'.encode())
             response = self.execute_some_command_iwconfig(f, command, wait_time, power_num, value)
             if response is False:
+                if times < execute_times and callable(self.on_retry):
+                    self.on_retry(command, times, execute_times)
                 times += 1
                 # 指令执行失败之后等待10s再去执行下一次
                 if self.sleep_time(power_num, self.command_execute_fail_interval_time, ):
@@ -333,6 +336,8 @@ class TelnetClient():
                     flag = 1
                     break
                 else:
+                    if times < execute_times and callable(self.on_retry):
+                        self.on_retry(command, times, execute_times)
                     if times == 1:
                         # 发送钉钉消息到 2025.0104
                         dingtalk_result = self.dingtalk.webhook_send_message(device_type,

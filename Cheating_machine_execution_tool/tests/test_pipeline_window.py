@@ -566,6 +566,36 @@ class StartAllChecksRegressionTests(unittest.TestCase):
         fake_app.pipeline_window.window.winfo_exists.assert_not_called()
         fake_app.pipeline_window.window.deiconify.assert_not_called()
 
+    def test_legacy_power_failure_dialog_uses_per_channel_results(self) -> None:
+        from line_check_assistant.pipeline_window import PipelineWindow
+
+        app = SimpleNamespace(
+            _power_test_channel_result_summary=MagicMock(
+                return_value="通道7执行 ponmgr 验证失败\n通道2所有测试项验证成功"
+            )
+        )
+        context = SimpleNamespace(
+            app=app,
+            _stop_requested=False,
+            _set_running_ui=MagicMock(),
+            _update_main_power_test_status=MagicMock(),
+            _refresh_statuses=MagicMock(),
+        )
+        with patch("line_check_assistant.pipeline_window.messagebox.showwarning") as showwarning, patch(
+            "line_check_assistant.pipeline_window.messagebox.showerror"
+        ) as showerror:
+            PipelineWindow._on_pipeline_failed(
+                context, RuntimeError("子任务 legacy_power_test 失败：失败通道：[7]")
+            )
+
+        showwarning.assert_called_once_with(
+            "开关机测试完成（存在失败）",
+            "通道7执行 ponmgr 验证失败\n通道2所有测试项验证成功",
+            parent=app,
+        )
+        showerror.assert_not_called()
+        context._refresh_statuses.assert_called_once_with()
+
 
 if __name__ == "__main__":
     unittest.main()

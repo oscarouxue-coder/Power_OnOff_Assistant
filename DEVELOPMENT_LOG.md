@@ -2,6 +2,57 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-08-31 - 增加开关机通道概览
+
+- 类型：功能
+- 背景：多通道开关机测试的轮次可能不一致；原先把重试/失败状态着色在左侧配置列表会干扰通道配置与选择。项目负责人确认将运行态集中显示在主界面测试卡。
+- 完成内容：① 旧 Start All 日志桥接新增每个已选通道的独立完成轮次与当前阶段回传，编排器继续在 Tk 主线程更新界面；② 主界面测试卡新增可折叠“通道概览”、当前轮完成数量、运行/重试/失败汇总、仅含落后/异常项的关注行，以及可点击的通道详情小卡；③ 左侧通道列表恢复为配置、勾选和结果日志入口，不再以运行态着色；④ 总进度继续按最慢通道的已完成轮次计算，停止、失败和最终逐通道结论保持原有语义。
+- 修改文件：
+  - `.claude/plans/power-test-channel-overview.md`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行开关机 service、全流程编排与主界面专项单测，再执行 `python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：开关机 service 专项 `Ran 15 tests ... OK`、全流程编排专项 `Ran 47 tests ... OK`、主界面专项 `Ran 186 tests ... OK`；以本机权限运行完整门禁，59 个源码文件编译、737 项单元测试、172 项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`；`git diff --check` 无空白错误。未构建或运行 EXE，未连接真实设备。
+- 后续待办：Windows源码版以不同进度的多通道测试，确认概览展开/收起、关注行、点击详情、左侧列表不变色及停止/失败后的保留显示；真实样机结论由项目负责人提供后更新验收状态。
+
+## 2026-08-31 - 开关机测试逐通道重试状态与结束汇总
+
+- 类型：交互优化 / 旧 Start All 日志桥接 / 测试 / 文档。
+- 完成内容：① 旧 Telnet/SSH 指令的每次可继续验证失败会回传“通道、指令、当前次数、总次数”，主执行日志显示黄色，左侧对应通道改为黄色；② 重试后该指令验证成功会即时改为绿色并记录重试成功；③ 重试耗尽会保留完整指令和验证次数、以红色日志和红色通道显示；④ 旧业务每个通道完成都会回传最终成功/失败，全部通道结束后的提示逐行显示实际结论，不再只显示失败通道编号；⑤ 保持失败通道隔离、其余通道继续、危险全断电确认和全流程致命失败边界不变。
+- 修改文件：`Auto_power_on_off_tool/clients/telnet_client.py`、`Auto_power_on_off_tool/clients/ssh.py`、`Auto_power_on_off_tool/test_case/powe_on_off_telnet.py`、`Auto_power_on_off_tool/test_case/power_on_off_ssh.py`、`src/services/legacy_power_test_service.py`、`src/services/pipeline_orchestrator.py`、`line_check_assistant/app.py`、`line_check_assistant/pipeline_window.py`、相关单元测试及本轮状态文档。
+- 验证方法：在 `Cheating_machine_execution_tool` 执行开关机 service、全流程编排、全流程窗口和主界面专项单测，再执行 `python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：`py_compile` 通过；开关机 service 专项 `Ran 14 tests ... OK`、全流程编排专项 `Ran 47 tests ... OK`、全流程窗口专项 `Ran 31 tests ... OK`、主界面专项 `Ran 184 tests ... OK`；`git diff --check` 无空白错误。完整基线已执行：59 个源码文件编译、编译清单和全部协议不变量通过；全量 734 项单测仅 2 项既有 TFTP 绑定用例因当前环境禁止绑定 UDP 69（`WinError 10013`）报错，非本轮开关机改动路径，故未将完整基线误报为全绿；未构建或运行 EXE，未连接真实样机。
+- 后续待办：Windows 源码版选择多通道并人为触发“重试后成功”和“重试耗尽”各一次，确认左侧黄/绿/红切换、日志字体颜色和逐通道结束提示；真实样机结论由项目负责人提供后更新验收状态。
+
+## 2026-08-31 - 打开选中通道的开关机日志
+
+- 类型：功能 / 测试 / 文档
+- 背景：项目负责人需要在主界面左侧选中通道后，通过右键直接查看该通道本次最新的开关机运行日志，例如通道2的`device_2_command_results_20260831002652.log`。
+- 完成内容：① 新增独立service，仅在`Auto_power_on_off_tool/test_results/device_N/`匹配当前通道的`device_N_command_results_*.log`，按文件名时间戳选择最新文件；② 左侧通道列表右键先同步鼠标所在行，再提供“打开本次开关机运行日志”；③ 仅调用Windows关联程序打开既有文件，不读取后改写、重命名或清理结果日志，不触发电源/设备/全流程操作；④ 成功、未找到、定位失败和打开失败均写入主执行日志；⑤ 新增通道隔离、时间戳排序、非法编号、菜单入口和打开/未找到反馈回归，并加入编译清单和强制基线测试。
+- 修改文件：
+  - `.claude/plans/open-selected-power-test-log.md`
+  - `Cheating_machine_execution_tool/src/services/power_test_log_service.py`
+  - `Cheating_machine_execution_tool/src/services/__init__.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_log_service.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在`Cheating_machine_execution_tool`执行`python -m unittest discover -s tests -p test_power_test_log_service.py -v`、`python -m unittest discover -s tests -p test_app.py -v`、`python scripts/verify_baseline.py`与`git diff --check`。
+- 验证结果：新增日志定位专项`Ran 3 tests ... OK`；主界面专项`Ran 183 tests ... OK`；以本机权限运行完整门禁，59个源码文件编译、731项单元测试、172项强制基线测试及协议不变量均通过，`ALL CHECKS PASSED`。初次沙箱执行受UDP 69端口权限限制导致两项既有TFTP测试无法绑定，并出现一项既有Telnet首包并发竞争；以本机权限重跑全绿。未构建或运行EXE，未连接真实设备。
+- 后续待办：Windows源码版右键通道2，确认只打开该通道最新日志、没有日志时提示明确，且不开启设备或电源操作；无需真实设备命令。
+
 ## 2026-08-31 - 开关机测试启动前逐台版本预检
 
 - 类型：功能 / 安全预检 / 测试 / 文档

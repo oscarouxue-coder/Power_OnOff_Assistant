@@ -784,11 +784,24 @@ class PipelineOrchestrator:
             f"[开关机版本预检] 通过：{len(channels)}/{len(channels)} 台三项版本全部一致，"
             "开始执行开关机测试。"
         )
+        reset_channel_statuses = _get_attr(
+            self.ctx.app, "_reset_power_test_channel_states", None
+        )
+        if callable(reset_channel_statuses):
+            channel_numbers = [channel.number for channel in request.channels]
+            invoke_on_ui = _get_attr(self.ctx.app, "_invoke_pipeline_ui_action", None)
+            if callable(invoke_on_ui):
+                invoke_on_ui(lambda: reset_channel_statuses(channel_numbers))
+            else:
+                reset_channel_statuses(channel_numbers)
+
         result = run_legacy_power_test(
             request,
             self.emit,
             self.ctx.stop_event,
             on_progress=self._report_legacy_power_progress,
+            on_channel_progress=self._report_legacy_power_channel_progress,
+            on_channel_status=self._report_legacy_power_channel_status,
         )
         if not result.ok:
             raise RuntimeError(result.detail)
@@ -802,6 +815,51 @@ class PipelineOrchestrator:
 
         def update_on_ui() -> bool:
             setter(completed, total)
+            return True
+
+        invoke_on_ui = _get_attr(app, "_invoke_pipeline_ui_action", None)
+        if callable(invoke_on_ui):
+            invoke_on_ui(update_on_ui)
+        else:
+            update_on_ui()
+
+    def _report_legacy_power_channel_status(
+        self,
+        channel_number: int,
+        status: str,
+        detail: str,
+    ) -> None:
+        """把旧 Start All 的逐通道状态安全投递到 Tk 主线程。"""
+        app = self.ctx.app
+        setter = _get_attr(app, "_set_power_test_channel_state", None)
+        if not callable(setter):
+            return
+
+        def update_on_ui() -> bool:
+            setter(channel_number, status, detail)
+            return True
+
+        invoke_on_ui = _get_attr(app, "_invoke_pipeline_ui_action", None)
+        if callable(invoke_on_ui):
+            invoke_on_ui(update_on_ui)
+        else:
+            update_on_ui()
+
+    def _report_legacy_power_channel_progress(
+        self,
+        channel_number: int,
+        completed: int,
+        total: int,
+        stage: str,
+    ) -> None:
+        """把旧 Start All 的逐通道轮次安全投递到 Tk 主线程。"""
+        app = self.ctx.app
+        setter = _get_attr(app, "_set_power_test_channel_progress", None)
+        if not callable(setter):
+            return
+
+        def update_on_ui() -> bool:
+            setter(channel_number, completed, total, stage)
             return True
 
         invoke_on_ui = _get_attr(app, "_invoke_pipeline_ui_action", None)

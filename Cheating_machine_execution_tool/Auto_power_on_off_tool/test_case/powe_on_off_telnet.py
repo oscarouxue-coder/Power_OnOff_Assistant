@@ -605,8 +605,17 @@ class PowerOnOffTelnet(QThread):
                             self.logger.info(order_)
                             f.write(f'\n\n测试指令集order:{order_}\n'.encode())
 
-                            tel = TelnetClient(network_card_ip, gateway_ip, self.port, self.logger,
-                                               self.config_file_path)
+                            tel = TelnetClient(
+                                network_card_ip,
+                                gateway_ip,
+                                self.port,
+                                self.logger,
+                                self.config_file_path,
+                                on_retry=lambda command, attempt, total: self.show_signal_warning[str].emit(
+                                    f'通道 {power_num} 执行指令：{command}，在第{attempt}次时出现错误；'
+                                    f'准备第{attempt + 1}/{total}次验证'
+                                ),
+                            )
                             # self.logger.info(f'通道 {power_num} enable telnet success')
                             # f.write(f'通道 {power_num} enable telnet success\n'.encode())
                             # 20231120 打开telnet后给延迟，等待进程起来
@@ -742,7 +751,7 @@ class PowerOnOffTelnet(QThread):
                                                                       1,
                                                                       power_num, network_card_ip)
 
-                                            self.check_status_code(power_num, key, f)
+                                            self.check_status_code(power_num, key, f, execute_times)
                                             now_time = datetime.datetime.now()
                                             f.write(
                                                 f'{str(now_time)}: 通道{power_num}下挂的设备在第{times}次测试时失败\n'.encode())
@@ -917,7 +926,7 @@ class PowerOnOffTelnet(QThread):
                         self.show_signal_error[str].emit(f'dingTalk 发送消息失败 ：{dingtalk_result}\n')
                     return False
 
-    def check_status_code(self, power_num, code, f):
+    def check_status_code(self, power_num, code, f, attempts=1):
         """
 
         :param power_num: 电源通道
@@ -952,7 +961,9 @@ class PowerOnOffTelnet(QThread):
 
         self.write_to_file(f'通道 {power_num} 执行 {code} 错误')
         self.logger.error(f'通道 {power_num} 发送 {code}  error 信号')
-        self.show_signal_error[str].emit(f'通道 {power_num} 执行 {code} 错误\n')
+        self.show_signal_error[str].emit(
+            f'通道 {power_num} 尝试执行指令：{code} {attempts}次进行验证，验证失败\n'
+        )
         self.send_email.send_email_without_attachments(f'通道 {power_num} 发送 {code} error 信号',
                                                        self.recv_email)
         f.write(f'通道 {power_num} 执行 {code} 错误\n'.encode())

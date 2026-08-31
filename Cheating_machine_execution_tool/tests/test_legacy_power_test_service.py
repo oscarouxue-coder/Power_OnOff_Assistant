@@ -346,6 +346,40 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
                 "signal",
             )
         )
+
+    def test_channel_progress_parser_keeps_independent_round_and_stage(self) -> None:
+        self.assertEqual(
+            service_module._legacy_channel_progress_from_log(
+                "*******通道 【7】 开始第 4 次测试*******",
+                20,
+            ),
+            (7, 3, "第4轮执行中"),
+        )
+        self.assertEqual(
+            service_module._legacy_channel_progress_from_log(
+                "2026-08-08 15:37:41.904434: 通道7下挂的设备在第4次测试时正常",
+                20,
+            ),
+            (7, 4, "第4轮完成"),
+        )
+
+    def test_command_retry_failure_and_retry_success_logs_report_channel_states(self) -> None:
+        retry = service_module._legacy_channel_status_from_log(
+            "通道 7 执行指令：/userfs/bin/ponmgr gpon get info，在第1次时出现错误；准备第2/3次验证"
+        )
+        retry_success = service_module._legacy_channel_status_from_log(
+            "通道 7 发送指令 /userfs/bin/ponmgr gpon get info 重试了 1次之后，执行成功"
+        )
+        failure = service_module._legacy_channel_status_from_log(
+            "通道 7 尝试执行指令：/userfs/bin/ponmgr gpon get info 3次进行验证，验证失败"
+        )
+
+        self.assertEqual(retry[0:2], (7, "retry"))
+        self.assertIn("第1次", retry[2])
+        self.assertEqual(retry_success[0:2], (7, "success"))
+        self.assertIn("重试1次后验证成功", retry_success[2])
+        self.assertEqual(failure[0:2], (7, "failed"))
+        self.assertIn("3次验证失败", failure[2])
         self.assertTrue(
             service_module._should_forward_legacy_log(
                 "info",
@@ -395,6 +429,7 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
         )
         emitted = []
         progress = []
+        channel_progress = []
 
         original_dedup_seconds = service_module.LEGACY_LOG_DEDUP_SECONDS
         service_module.LEGACY_LOG_DEDUP_SECONDS = 0.0
@@ -405,6 +440,9 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
                 _FakeEvent(),
                 process_context=_FakeProcessContext(),
                 on_progress=lambda completed, total: progress.append((completed, total)),
+                on_channel_progress=lambda channel, completed, total, stage: channel_progress.append(
+                    (channel, completed, total, stage)
+                ),
             )
         finally:
             service_module.LEGACY_LOG_DEDUP_SECONDS = original_dedup_seconds
@@ -442,6 +480,10 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
         )
         self.assertIn("成功：1 个通道全部完成", emitted[-1])
         self.assertEqual(progress, [(0, 1), (1, 1)])
+        self.assertEqual(
+            channel_progress,
+            [(5, 0, 1, "等待第1轮"), (5, 1, 1, "第1轮完成")],
+        )
 
     def test_result_file_success_line_is_forwarded_without_changing_file(self) -> None:
         expected_line = "2026-08-08 15:37:41.904434: 通道9下挂的设备在第1次测试时正常"

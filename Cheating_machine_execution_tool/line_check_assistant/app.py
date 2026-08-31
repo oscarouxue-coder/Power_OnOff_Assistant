@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import queue
 import re
 import threading
@@ -104,6 +105,7 @@ from src.services import (
     run_parallel_tftp_put_upgrades,
     run_parallel_sample_parameter_writes,
     run_single_sample_parameter_write,
+    latest_power_test_result_log,
     turn_off_selected_channels,
     turn_on_selected_channels,
     validate_dut_telnet_request,
@@ -310,6 +312,13 @@ class LineCheckAssistant(Tk):
         self._pipeline_subtask_results: dict[str, tuple[bool, str]] = {}
         self.running = False
         self.power_on_running = False
+        self.power_test_channel_states: dict[int, tuple[str, str]] = {}
+        self.power_test_channel_progresses: dict[int, tuple[int, int, str]] = {}
+        self.power_test_channel_overview_expanded = True
+        self.power_test_channel_overview_shown = False
+        self.power_test_channel_summary_var = StringVar(value="")
+        self.power_test_channel_attention_var = StringVar(value="")
+        self.power_test_channel_detail_var = StringVar(value="")
         self.upgrade_window = None
         self.parameter_writer_window = None
         self.parameter_write_running = False
@@ -675,6 +684,12 @@ class LineCheckAssistant(Tk):
         style.configure("PowerStatusCompleted.TLabel", background=COLOR_SUCCESS_BG, foreground=COLOR_SUCCESS, **power_status_style)
         style.configure("PowerStatusStopped.TLabel", background=COLOR_SECONDARY, foreground=COLOR_TEXT, **power_status_style)
         style.configure("PowerStatusFailed.TLabel", background=COLOR_DANGER_BG, foreground=COLOR_DANGER, **power_status_style)
+        power_channel_style = {"padding": (8, 5), "font": (FONT_FAMILY, 9, "bold")}
+        style.configure("PowerChannelRunning.TLabel", background=COLOR_PRIMARY_SOFT, foreground=COLOR_PRIMARY_DARK, **power_channel_style)
+        style.configure("PowerChannelWaiting.TLabel", background=COLOR_SECONDARY, foreground=COLOR_MUTED, **power_channel_style)
+        style.configure("PowerChannelRetry.TLabel", background=COLOR_WARNING_BG, foreground=COLOR_WARNING, **power_channel_style)
+        style.configure("PowerChannelFailed.TLabel", background=COLOR_DANGER_BG, foreground=COLOR_DANGER, **power_channel_style)
+        style.configure("PowerChannelCompleted.TLabel", background=COLOR_SUCCESS_BG, foreground=COLOR_SUCCESS, **power_channel_style)
         style.configure("TButton", padding=(12, 7), font=(FONT_FAMILY, 9))
         style.configure("Primary.TButton", background=COLOR_PRIMARY, foreground="#ffffff", padding=(16, 9), font=(FONT_FAMILY, 10, "bold"))
         style.map("Primary.TButton", background=[("active", COLOR_PRIMARY_DARK), ("pressed", COLOR_PRIMARY_DARK)])
@@ -741,8 +756,14 @@ class LineCheckAssistant(Tk):
         self.channel_list.pack(fill="both", expand=True, pady=(0, 10))
         self.channel_list.bind("<<ListboxSelect>>", self._on_channel_selected)
         self.channel_list.bind("<ButtonRelease-1>", self._on_channel_list_click)
+        self.channel_list.bind("<Button-3>", self._on_channel_list_context_menu)
         self.channel_list.bind("<space>", self._toggle_selected_channel_enabled)
         self.channel_list.bind("<Double-Button-1>", self._toggle_selected_channel_enabled)
+        self.channel_context_menu = Menu(self, tearoff=0)
+        self.channel_context_menu.add_command(
+            label="打开本次开关机运行日志",
+            command=self._open_selected_power_test_log,
+        )
         for channel in self.channels:
             self.channel_list.insert(END, self._channel_list_label(channel))
         if self.current_index >= 0:
@@ -825,6 +846,40 @@ class LineCheckAssistant(Tk):
         ).pack(side="right", padx=(12, 0))
         self.progress = ttk.Progressbar(run_copy, mode="determinate", maximum=1, value=0)
         self.progress.pack(fill="x")
+        self.power_test_channel_overview = ttk.Frame(run_copy, style="Surface.TFrame")
+        overview_header = ttk.Frame(self.power_test_channel_overview, style="Surface.TFrame")
+        overview_header.pack(fill="x", pady=(8, 2))
+        ttk.Label(overview_header, text="通道概览", style="CardHint.TLabel").pack(side="left")
+        self.power_test_channel_overview_toggle = ttk.Button(
+            overview_header,
+            text="收起",
+            command=self._toggle_power_test_channel_overview,
+            style="Secondary.TButton",
+        )
+        self.power_test_channel_overview_toggle.pack(side="right")
+        ttk.Label(
+            self.power_test_channel_overview,
+            textvariable=self.power_test_channel_summary_var,
+            style="Surface.TLabel",
+        ).pack(anchor="w", pady=(0, 2))
+        self.power_test_channel_attention_label = ttk.Label(
+            self.power_test_channel_overview,
+            textvariable=self.power_test_channel_attention_var,
+            style="CardHint.TLabel",
+        )
+        self.power_test_channel_attention_label.pack(anchor="w", pady=(0, 4))
+        self.power_test_channel_grid = ttk.Frame(
+            self.power_test_channel_overview,
+            style="Surface.TFrame",
+        )
+        self.power_test_channel_grid.pack(fill="x")
+        self.power_test_channel_detail_label = ttk.Label(
+            self.power_test_channel_overview,
+            textvariable=self.power_test_channel_detail_var,
+            style="CardHint.TLabel",
+            wraplength=620,
+        )
+        self.power_test_channel_detail_label.pack(anchor="w", pady=(4, 0))
         run_actions = ttk.Frame(run_card, style="Surface.TFrame")
         run_actions.pack(side="right", padx=(20, 0))
         ttk.Button(
@@ -6384,8 +6439,198 @@ class LineCheckAssistant(Tk):
         selected = index in self.channel_list.curselection()
         self.channel_list.delete(index)
         self.channel_list.insert(index, self._channel_list_label(self.channels[index]))
+        self._apply_power_test_channel_color(index)
         if selected:
             self.channel_list.selection_set(index)
+
+    def _apply_power_test_channel_color(self, index: int) -> None:
+        """左侧通道列表仅用于配置，运行态统一显示在测试卡的通道概览。"""
+        if index < 0 or index >= len(self.channels):
+            return
+        self.channel_list.itemconfig(index, foreground=COLOR_TEXT)
+
+    def _reset_power_test_channel_states(self, channel_numbers: list[int]) -> None:
+        """仅清空本次选中通道的旧结论和运行概览。"""
+        for channel_number in channel_numbers:
+            self.power_test_channel_states.pop(channel_number, None)
+            self.power_test_channel_progresses.pop(channel_number, None)
+        for index, channel in enumerate(self.channels):
+            if power_channel_from_section(channel.section) in channel_numbers:
+                self._apply_power_test_channel_color(index)
+        detail_var = getattr(self, "power_test_channel_detail_var", None)
+        if detail_var is not None:
+            detail_var.set("")
+        renderer = getattr(self, "_render_power_test_channel_overview", None)
+        if callable(renderer):
+            renderer()
+
+    def _set_power_test_channel_state(
+        self,
+        channel_number: int,
+        status: str,
+        detail: str,
+    ) -> None:
+        """更新一条旧 Start All 通道的重试、失败或完成结果。"""
+        if status not in {"retry", "failed", "success"}:
+            return
+        self.power_test_channel_states[int(channel_number)] = (status, detail)
+        renderer = getattr(self, "_render_power_test_channel_overview", None)
+        if callable(renderer):
+            renderer()
+
+    def _set_power_test_channel_progress(
+        self,
+        channel_number: int,
+        completed: int,
+        total: int,
+        stage: str,
+    ) -> None:
+        """更新一条通道的独立轮次与阶段；调用方必须位于 Tk 主线程。"""
+        try:
+            completed_cycles = int(completed)
+            total_cycles = int(total)
+        except (TypeError, ValueError):
+            return
+        if total_cycles <= 0:
+            return
+        channel_number = int(channel_number)
+        self.power_test_channel_progresses[channel_number] = (
+            max(0, min(completed_cycles, total_cycles)),
+            total_cycles,
+            str(stage).strip() or "等待状态更新",
+        )
+        self._render_power_test_channel_overview()
+
+    def _toggle_power_test_channel_overview(self) -> None:
+        """折叠或展开测试卡内的通道小卡，不影响后台测试。"""
+        self.power_test_channel_overview_expanded = not self.power_test_channel_overview_expanded
+        self._render_power_test_channel_overview()
+
+    def _render_power_test_channel_overview(self) -> None:
+        """根据独立轮次刷新测试卡，避免把运行态混入左侧配置列表。"""
+        overview = getattr(self, "power_test_channel_overview", None)
+        progresses = getattr(self, "power_test_channel_progresses", {})
+        if overview is None:
+            return
+        if not progresses:
+            overview.pack_forget()
+            self.power_test_channel_overview_shown = False
+            return
+        if not getattr(self, "power_test_channel_overview_shown", False):
+            overview.pack(fill="x", pady=(8, 0))
+            self.power_test_channel_overview_shown = True
+
+        channel_numbers = sorted(progresses)
+        completed_values = [progresses[number][0] for number in channel_numbers]
+        total_cycles = max(progresses[number][1] for number in channel_numbers)
+        minimum_completed = min(completed_values)
+        states = getattr(self, "power_test_channel_states", {})
+        state_by_channel = {
+            number: states.get(number, ("running", ""))[0]
+            for number in channel_numbers
+        }
+        retries = sum(state == "retry" for state in state_by_channel.values())
+        failures = sum(state == "failed" for state in state_by_channel.values())
+        if minimum_completed >= total_cycles:
+            summary = f"全部通道已完成：{len(channel_numbers)}/{len(channel_numbers)}"
+        else:
+            current_cycle = minimum_completed + 1
+            current_finished = sum(value >= current_cycle for value in completed_values)
+            running = sum(
+                value < total and state not in {"retry", "failed"}
+                for value, total, state in (
+                    (progresses[number][0], progresses[number][1], state_by_channel[number])
+                    for number in channel_numbers
+                )
+            )
+            summary = (
+                f"第 {current_cycle} 轮：已完成 {current_finished}/{len(channel_numbers)}"
+                f" ｜运行中 {running} ｜重试 {retries} ｜失败 {failures}"
+            )
+        self.power_test_channel_summary_var.set(summary)
+
+        maximum_completed = max(completed_values)
+        attention: list[str] = []
+        for number in channel_numbers:
+            completed, total, stage = progresses[number]
+            state, detail = states.get(number, ("running", ""))
+            if state in {"retry", "failed"} or (
+                completed == minimum_completed and completed < maximum_completed
+            ):
+                state_text = {"retry": "重试", "failed": "失败"}.get(state, "落后")
+                attention.append(
+                    f"通道 {number} {completed}/{total} {state_text}：{detail or stage}"
+                )
+        self.power_test_channel_attention_var.set(
+            f"关注：{'；'.join(attention[:2])}" if attention else ""
+        )
+
+        expanded = getattr(self, "power_test_channel_overview_expanded", True)
+        self.power_test_channel_overview_toggle.configure(text="收起" if expanded else "展开")
+        if not expanded:
+            self.power_test_channel_grid.pack_forget()
+            self.power_test_channel_detail_label.pack_forget()
+            return
+        self.power_test_channel_grid.pack(fill="x")
+        self.power_test_channel_detail_label.pack(anchor="w", pady=(4, 0))
+        for child in self.power_test_channel_grid.winfo_children():
+            child.destroy()
+        for column in range(4):
+            self.power_test_channel_grid.columnconfigure(column, weight=1)
+        for index, number in enumerate(channel_numbers):
+            completed, total, stage = progresses[number]
+            state, detail = states.get(number, ("running", ""))
+            if state == "failed":
+                state_text, style = "失败", "PowerChannelFailed.TLabel"
+            elif state == "retry":
+                state_text, style = "重试", "PowerChannelRetry.TLabel"
+            elif state == "success" and completed >= total:
+                state_text, style = "已完成", "PowerChannelCompleted.TLabel"
+            elif completed == 0:
+                state_text, style = "等待", "PowerChannelWaiting.TLabel"
+            else:
+                state_text, style = "运行", "PowerChannelRunning.TLabel"
+            tile = ttk.Label(
+                self.power_test_channel_grid,
+                text=f"通道 {number}  {completed}/{total}  {state_text}",
+                style=style,
+                anchor="w",
+            )
+            tile.grid(row=index // 4, column=index % 4, sticky="ew", padx=(0, 5), pady=2)
+            tile.bind(
+                "<Button-1>",
+                lambda _event, selected=number: self._show_power_test_channel_detail(selected),
+            )
+        if not self.power_test_channel_detail_var.get():
+            first_channel = channel_numbers[0]
+            self._show_power_test_channel_detail(first_channel)
+
+    def _show_power_test_channel_detail(self, channel_number: int) -> None:
+        """显示用户点击的小卡详情，不改变通道选择或测试状态。"""
+        progress = self.power_test_channel_progresses.get(int(channel_number))
+        if progress is None:
+            return
+        completed, total, stage = progress
+        status, detail = self.power_test_channel_states.get(int(channel_number), ("running", ""))
+        status_text = {
+            "retry": "重试中",
+            "failed": "失败",
+            "success": "已完成" if completed >= total else "验证正常",
+        }.get(status, "运行中")
+        self.power_test_channel_detail_var.set(
+            f"通道 {channel_number}：{completed}/{total}，{status_text}，{detail or stage}"
+        )
+
+    def _power_test_channel_result_summary(self) -> str:
+        """返回本次开关机测试的最终逐通道结论，供结束弹窗直接展示。"""
+        lines: list[str] = []
+        for channel_number in sorted(self.power_test_channel_states):
+            status, detail = self.power_test_channel_states[channel_number]
+            if status == "success":
+                lines.append(f"通道{channel_number}所有测试项验证成功")
+            elif status == "failed":
+                lines.append(f"通道{channel_number}{detail}")
+        return "\n".join(lines)
 
     def _on_channel_list_click(self, event) -> None:
         index = self.channel_list.nearest(event.y)
@@ -6394,6 +6639,66 @@ class LineCheckAssistant(Tk):
         # The checkbox marker is at the beginning of each row.
         if event.x <= 28:
             self._toggle_channel_enabled(index)
+
+    def _on_channel_list_context_menu(self, event) -> str:
+        """右键先选中鼠标所在通道，再显示与该通道相关的只读操作。"""
+        index = self.channel_list.nearest(event.y)
+        row_box = self.channel_list.bbox(index)
+        if (
+            index < 0
+            or index >= len(self.channels)
+            or row_box is None
+            or not row_box[1] <= event.y < row_box[1] + row_box[3]
+        ):
+            return "break"
+        self._select_channel_index(index)
+        try:
+            self.channel_context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.channel_context_menu.grab_release()
+        return "break"
+
+    def _open_selected_power_test_log(self) -> None:
+        """打开当前行对应的最新旧开关机结果日志，不读取或改写结果文件。"""
+        if not 0 <= self.current_index < len(self.channels):
+            messagebox.showwarning("未选择通道", "请先在左侧选择要查看日志的测试通道。", parent=self)
+            self._log("[开关机运行日志] 未选择有效通道，未打开日志。")
+            return
+
+        channel = self.channels[self.current_index]
+        channel_number = power_channel_from_section(channel.section)
+        if not channel_number:
+            messagebox.showwarning("通道不正确", f"无法识别通道：{channel.section}", parent=self)
+            self._log(f"[开关机运行日志] 无法识别通道：{channel.section}。")
+            return
+
+        try:
+            log_path = latest_power_test_result_log(
+                APP_DIR / "Auto_power_on_off_tool", channel_number
+            )
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("查找开关机运行日志失败", str(exc), parent=self)
+            self._log(f"[开关机运行日志] 通道 {channel_number} 查找失败：{exc}")
+            return
+        if log_path is None:
+            result_dir = APP_DIR / "Auto_power_on_off_tool" / "test_results" / f"device_{channel_number}"
+            messagebox.showinfo(
+                "未找到开关机运行日志",
+                f"通道 {channel_number} 暂无可打开的运行日志。\n\n结果目录：{result_dir}",
+                parent=self,
+            )
+            self._log(
+                f"[开关机运行日志] 通道 {channel_number} 未找到结果文件：{result_dir}"
+            )
+            return
+
+        try:
+            os.startfile(str(log_path))
+        except OSError as exc:
+            messagebox.showerror("打开开关机运行日志失败", f"{log_path}\n\n{exc}", parent=self)
+            self._log(f"[开关机运行日志] 通道 {channel_number} 打开失败：{log_path}；{exc}")
+            return
+        self._log(f"[开关机运行日志] 已打开通道 {channel_number} 最新日志：{log_path}")
 
     def _toggle_selected_channel_enabled(self, _event=None) -> str:
         selection = self.channel_list.curselection()
@@ -6862,10 +7167,12 @@ class LineCheckAssistant(Tk):
     def _log_tag_for(self, message: str) -> str:
         if LEGACY_CHANNEL_TEST_START_PATTERN.search(message):
             return "success"
+        if "验证失败" in message or "失败" in message or "异常" in message:
+            return "error"
+        if "准备第" in message and "次验证" in message:
+            return "warning"
         if message.startswith("[通过]") or "成功" in message or "完成" in message:
             return "success"
-        if message.startswith("[失败]") or "失败" in message or "异常" in message:
-            return "error"
         if "未" in message or "请" in message:
             return "warning"
         if message.startswith("  "):

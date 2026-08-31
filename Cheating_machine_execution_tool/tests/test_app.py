@@ -220,6 +220,66 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("self.channel_list = Listbox(", source)
         self.assertIn("width=34", source)
 
+    def test_channel_list_right_click_menu_opens_selected_power_test_log(self):
+        source = inspect.getsource(LineCheckAssistant._build_ui)
+
+        self.assertIn('self.channel_list.bind("<Button-3>", self._on_channel_list_context_menu)', source)
+        self.assertIn('label="打开本次开关机运行日志"', source)
+
+    def test_channel_list_right_click_selects_the_clicked_row_before_showing_menu(self):
+        context = SimpleNamespace(
+            channels=[ChannelConfig(section="channel_1"), ChannelConfig(section="channel_2")],
+            channel_list=Mock(),
+            _select_channel_index=Mock(),
+            channel_context_menu=Mock(),
+        )
+        context.channel_list.nearest.return_value = 1
+        context.channel_list.bbox.return_value = (0, 20, 200, 18)
+        event = SimpleNamespace(y=25, x_root=300, y_root=400)
+
+        result = LineCheckAssistant._on_channel_list_context_menu(context, event)
+
+        self.assertEqual(result, "break")
+        context._select_channel_index.assert_called_once_with(1)
+        context.channel_context_menu.tk_popup.assert_called_once_with(300, 400)
+        context.channel_context_menu.grab_release.assert_called_once_with()
+
+    @patch("line_check_assistant.app.os.startfile")
+    @patch("line_check_assistant.app.latest_power_test_result_log")
+    def test_open_selected_power_test_log_opens_latest_log_for_current_channel(
+        self, latest_power_test_result_log, startfile
+    ):
+        result_path = Path(r"F:\\Power\\Auto_power_on_off_tool\\test_results\\device_2\\device_2_command_results_20260831002652.log")
+        latest_power_test_result_log.return_value = result_path
+        context = SimpleNamespace(
+            current_index=1,
+            channels=[ChannelConfig(section="channel_1"), ChannelConfig(section="channel_2")],
+            _log=Mock(),
+        )
+
+        LineCheckAssistant._open_selected_power_test_log(context)
+
+        latest_power_test_result_log.assert_called_once()
+        self.assertEqual(latest_power_test_result_log.call_args.args[1], 2)
+        startfile.assert_called_once_with(str(result_path))
+        self.assertIn("已打开通道 2 最新日志", context._log.call_args.args[0])
+
+    @patch("line_check_assistant.app.messagebox.showinfo")
+    @patch("line_check_assistant.app.latest_power_test_result_log", return_value=None)
+    def test_open_selected_power_test_log_reports_when_current_channel_has_no_result(
+        self, _latest_power_test_result_log, showinfo
+    ):
+        context = SimpleNamespace(
+            current_index=1,
+            channels=[ChannelConfig(section="channel_1"), ChannelConfig(section="channel_2")],
+            _log=Mock(),
+        )
+
+        LineCheckAssistant._open_selected_power_test_log(context)
+
+        showinfo.assert_called_once()
+        self.assertIn("通道 2 未找到结果文件", context._log.call_args.args[0])
+
     def test_parameter_and_serial_log_targets_use_saved_channel_com_selection(self):
         channels = [
             ChannelConfig(
@@ -354,6 +414,9 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         source = inspect.getsource(LineCheckAssistant._build_ui)
         self.assertIn("textvariable=self.power_test_status_var", source)
         self.assertIn("textvariable=self.power_test_progress_text_var", source)
+        self.assertIn("self.power_test_channel_overview", source)
+        self.assertIn("text=\"收起\"", source)
+        self.assertIn("command=self._toggle_power_test_channel_overview", source)
         self.assertIn('mode="determinate", maximum=1, value=0', source)
         self.assertIn('style="PowerStatusIdle.TLabel"', source)
         self.assertIn('text="停止测试"', source)
@@ -4424,6 +4487,73 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertNotIn("\n    onu_compile_time_var.set(result.onu_compile_time)", source)
         self.assertIn("cat /etc/config/deviceinfo", source)
         self.assertIn("cat /proc/version", source)
+
+    def test_power_test_channel_states_stay_in_overview_and_summarize_final_results(self):
+        channels = [
+            ChannelConfig(section="channel_2", enabled=True),
+            ChannelConfig(section="channel_7", enabled=True),
+            ChannelConfig(section="channel_8", enabled=True),
+        ]
+        context = SimpleNamespace(
+            channels=channels,
+            power_test_channel_states={},
+            power_test_channel_progresses={},
+            channel_list=Mock(),
+        )
+        context._apply_power_test_channel_color = (
+            LineCheckAssistant._apply_power_test_channel_color.__get__(context)
+        )
+
+        LineCheckAssistant._set_power_test_channel_state(context, 7, "retry", "retry")
+        context.channel_list.itemconfig.assert_not_called()
+        LineCheckAssistant._set_power_test_channel_state(context, 7, "success", "retry success")
+        context.channel_list.itemconfig.assert_not_called()
+        LineCheckAssistant._set_power_test_channel_state(context, 7, "failed", "ponmgr failed")
+        LineCheckAssistant._set_power_test_channel_state(context, 2, "success", "all passed")
+        LineCheckAssistant._set_power_test_channel_state(context, 8, "success", "all passed")
+
+        self.assertEqual(
+            LineCheckAssistant._power_test_channel_result_summary(context),
+            "\u901a\u90532\u6240\u6709\u6d4b\u8bd5\u9879\u9a8c\u8bc1\u6210\u529f\n"
+            "\u901a\u90537ponmgr failed\n"
+            "\u901a\u90538\u6240\u6709\u6d4b\u8bd5\u9879\u9a8c\u8bc1\u6210\u529f",
+        )
+        context.channel_list.itemconfig.assert_not_called()
+
+    def test_power_test_channel_progress_keeps_left_list_plain_and_renders_card_overview(self):
+        import inspect
+
+        source = inspect.getsource(LineCheckAssistant._render_power_test_channel_overview)
+        color_source = inspect.getsource(LineCheckAssistant._apply_power_test_channel_color)
+
+        self.assertIn("第 {current_cycle} 轮：已完成", source)
+        self.assertIn("关注：", source)
+        self.assertIn("通道 {number}  {completed}/{total}", source)
+        self.assertIn("self._show_power_test_channel_detail", source)
+        self.assertIn("foreground=COLOR_TEXT", color_source)
+        self.assertNotIn("COLOR_WARNING", color_source)
+        self.assertNotIn("COLOR_DANGER", color_source)
+
+    def test_power_test_channel_progress_updates_independent_round_before_rendering(self):
+        render = Mock()
+        context = SimpleNamespace(
+            power_test_channel_progresses={},
+            _render_power_test_channel_overview=render,
+        )
+
+        LineCheckAssistant._set_power_test_channel_progress(
+            context,
+            3,
+            6,
+            20,
+            "第7轮执行中",
+        )
+
+        self.assertEqual(
+            context.power_test_channel_progresses,
+            {3: (6, 20, "第7轮执行中")},
+        )
+        render.assert_called_once_with()
 
 
 if __name__ == "__main__":

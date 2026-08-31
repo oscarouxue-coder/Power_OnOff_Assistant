@@ -13,6 +13,8 @@ __pycache__/
 Cheating_machine_execution_tool/Auto_power_on_off_tool/config/onu_registration.ini
 Cheating_machine_execution_tool/Auto_power_on_off_tool/config/sample_upgrade_settings.ini
 Cheating_machine_execution_tool/Auto_power_on_off_tool/config/network_card_ip.ini
+Cheating_machine_execution_tool/Auto_power_on_off_tool/config/config.ini
+
 
 # Current LineCheckAssistant build and runtime outputs
 Cheating_machine_execution_tool/build/

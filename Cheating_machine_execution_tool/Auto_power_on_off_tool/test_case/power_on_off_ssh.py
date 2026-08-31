@@ -252,8 +252,20 @@ class PowerOnOffSsh(QThread):
                             timestamp = time.strftime('%Y_%m_%d %H:%M:%S ', time.localtime(time.time()))
                             file.write(f'\n\n{timestamp}测试指令集order:{order_}\n'.encode())
                             print(self.password)
-                            ssh = SSHClient(self.url, self.username, self.password, network_card_ip, self.port,
-                                            timeout=50, logger=self.logger, file=file)
+                            ssh = SSHClient(
+                                self.url,
+                                self.username,
+                                self.password,
+                                network_card_ip,
+                                self.port,
+                                timeout=50,
+                                logger=self.logger,
+                                file=file,
+                                on_retry=lambda command, attempt, total: self.show_signal_warning[str].emit(
+                                    f'通道 {power_num} 执行指令：{command}，在第{attempt}次时出现错误；'
+                                    f'准备第{attempt + 1}/{total}次验证'
+                                ),
+                            )
                             result = ssh.connect_ssh()
                             if not result:
                                 self.ping_status_list[power_num - 1] = 1
@@ -326,7 +338,7 @@ class PowerOnOffSsh(QThread):
                                         # 指令执行失败之后执行 ps 查看一下进程
                                         ssh.exec_ShellCommand_all(f, 'ps', '', timeout,
                                                                   1)
-                                        self.check_status_code(power_num, key)
+                                        self.check_status_code(power_num, key, execute_times)
                                         now_time = datetime.datetime.now()
                                         f.write(
                                             f'{str(now_time)}: 通道{power_num}下挂的设备在第{times}次测试时失败\n'.encode())
@@ -389,7 +401,7 @@ class PowerOnOffSsh(QThread):
                     file.write(f'通道 {power_num} 程序运行异常：{e}\n'.encode())
                     return False
 
-    def check_status_code(self, power_num, code):
+    def check_status_code(self, power_num, code, attempts=1):
         """
         发送失败是的status code
         """
@@ -420,7 +432,9 @@ class PowerOnOffSsh(QThread):
 
         self.write_to_file(f'通道 {power_num} 执行 {code} 错误')
         self.logger.error(f'通道 {power_num} 发送 {code}  error 信号')
-        self.show_signal_error[str].emit(f'通道 {power_num} 执行 {code} 错误\n')
+        self.show_signal_error[str].emit(
+            f'通道 {power_num} 尝试执行指令：{code} {attempts}次进行验证，验证失败\n'
+        )
 
         # 发送钉钉消息到 2025.0104
         dingtalk_result = self.dingtalk.webhook_send_message(self.device_type,

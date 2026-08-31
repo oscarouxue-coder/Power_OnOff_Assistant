@@ -17,7 +17,18 @@ from config.config_driver import OperationConfig
 class SSHClient():
     ssh_client = None
 
-    def __init__(self, ip, username, password, source='', port=1288, timeout=50, logger='', file=''):
+    def __init__(
+        self,
+        ip,
+        username,
+        password,
+        source='',
+        port=1288,
+        timeout=50,
+        logger='',
+        file='',
+        on_retry=None,
+    ):
         """
 
         :param ip: 设备网关IP 192.168.1.1
@@ -37,6 +48,7 @@ class SSHClient():
         self.source = source
         self.logger = logger
         self.file = file
+        self.on_retry = on_retry
         self.cf = OperationConfig()
         # self.logger.info('设置banner_timeout')
         # transport = paramiko.Transport((self.ip, self.port))
@@ -159,6 +171,8 @@ class SSHClient():
             f.write(f'\n{timestamp}：第{times}次执行 {command} 指令 ===============================》\n\n'.encode())
             response = self.exec_ShellCommand(f, command, timeout)
             if response is False:
+                if times < execute_times and callable(self.on_retry):
+                    self.on_retry(command, times, execute_times)
                 times += 1
                 time.sleep(self.command_execute_fail_interval_time)
             else:
@@ -166,6 +180,8 @@ class SSHClient():
                     flag = 1
                     break
                 else:
+                    if times < execute_times and callable(self.on_retry):
+                        self.on_retry(command, times, execute_times)
                     times += 1
                     time.sleep(self.command_execute_fail_interval_time)
 

@@ -521,6 +521,17 @@ class PipelineWindow:
         self._update_main_power_test_status(
             "stopped" if self._stop_requested else "failed"
         )
+        if "legacy_power_test" in str(exc):
+            summary_builder = getattr(self.app, "_power_test_channel_result_summary", None)
+            summary = summary_builder() if callable(summary_builder) else ""
+            if summary:
+                messagebox.showwarning(
+                    "开关机测试完成（存在失败）",
+                    summary,
+                    parent=self.app,
+                )
+                self._refresh_statuses()
+                return
         messagebox.showerror(
             "全流程执行失败",
             f"全流程异常终止:{exc}",
