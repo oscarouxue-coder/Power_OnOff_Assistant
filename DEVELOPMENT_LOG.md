@@ -2,6 +2,26 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-09-01 - 未恢复出厂的全包升级改为 3 秒传输后收尾
+
+- 类型：全包升级流程调整 / 测试 / 文档
+- 背景：项目负责人要求两条全包升级路径在未勾选“恢复出厂”时，不再等待最终系统启动或登录；传输后完成 `reset` 或后备重新上电后，短暂等待即可结束当前通道。
+- 完成内容：`Tftp指令` 与 `Tftp Put` 均在传输后继续观察 90 秒 `Boot/Bood`；识别到时仍延迟 1 秒发送 `reset`，未识别到时仍对当前通道执行后备下电再上电。未勾选恢复出厂时，两种动作后均只等待 3 秒，记录“跳过最终系统登录”并将当前通道标记成功；勾选恢复出厂时保持原 120 秒等待、最终系统登录和恢复出厂时序。后备上下电默认时序、首轮入 boot 的 1 秒/1 秒时序、TFTP 传输方式和并行边界均未改动。
+- 修改文件：`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行 `tests/test_serial_upgrade_service.py` 专项测试、`python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：`tests/test_serial_upgrade_service.py` 专项 39 项通过；以本机端口绑定权限运行 `python scripts/verify_baseline.py` 全绿，59 个源码文件编译、742 项单元测试、172 项强制基线测试及协议不变量均通过。未运行 EXE，未连接真实样机。
+- 后续待办：在 Windows 源码版及真实样机分别确认两条路径的 `reset` / 后备重新上电后 3 秒结束、无最终系统登录，以及勾选恢复出厂后的原收尾链路。
+
+## 2026-09-01 - Tftp Put 传输后未自动复位时改为后备重新上电
+
+- 类型：全包升级流程调整 / 程控电源 / 测试 / 文档
+- 背景：`Tftp Put` 上传完成后未在串口观察到 `Boot/Bood` 时，原逻辑只等待 120 秒再登录最终系统；项目负责人要求与 `Tftp指令` 的传输后复位逻辑一致。
+- 完成内容：`Tftp Put` 保持既有本机 TFTPy Client 上传、源 IP 绑定、首次进入 boot 的 1 秒/1 秒上下电时序和并行机制不变。上传后观察 90 秒：检测到 `Boot/Bood` 仍延迟 1 秒下发 `reset` 并等待 120 秒；未检测到时，已配置程控电源则仅对当前通道执行一次后备下电再上电、等待 120 秒后再登录最终系统。后备上下电刻意保持普通默认时序，不复用首轮进入 boot 的 1 秒/1 秒专用时序；未配置程控电源时记录跳过后备上电。
+- 修改文件：`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行 `tests/test_serial_upgrade_service.py` 专项测试、`python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：`tests/test_serial_upgrade_service.py` 专项 39 项通过；以本机端口绑定权限运行 `python scripts/verify_baseline.py` 全绿，59 个源码文件编译、742 项单元测试、172 项强制基线测试及协议不变量均通过。受限环境直接运行全量测试时，两个既有 TFTP 监听测试因 UDP 69 `WinError 10013` 报错；以本机权限复跑后通过。未运行 EXE，未连接真实样机。
+- 后续待办：在 Windows 源码版及真实样机分别确认 Tftp Put 未出现 `Boot/Bood` 时的当前通道后备上下电、120 秒等待和最终系统登录；自动化通过不替代现场验收。
+
 ## 2026-08-31 - 通道历史改为独立滚动窗口
 
 - 类型：界面优化

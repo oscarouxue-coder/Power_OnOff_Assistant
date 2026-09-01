@@ -464,7 +464,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         _upload_firmware,
         _monitor_post_tftp,
     ):
-        """Tftp Put 升级流程在前置下电 + 上电后，看到 UserName 即登录 boot 并使用 TFTPy。"""
+        """勾选恢复出厂时，Tftp Put 保留 120 秒等待及最终系统登录。"""
         # wait_for_any 调用顺序:
         #   1. wait_for_tftp_put_boot_username:username:
         #   2. login_tftp_put_boot_after_username:password / #
@@ -485,15 +485,62 @@ class SerialUpgradeControllerTests(unittest.TestCase):
             power_serial_port="COM106",
             final_username="root",
             final_password="secret",
+            restore_factory=True,
             transfer_method=TRANSFER_TFTP_PUT,
             power_channel=2,
             serial_port="COM8",
         )
 
-        result = run_single_full_package_upgrade(request, manager, sleep_fn=lambda _seconds: None)
+        sleeps = []
+        result = run_single_full_package_upgrade(request, manager, sleep_fn=sleeps.append)
 
         self.assertTrue(result.ok)
         self.assertEqual(manager.acquired[0].port, "COM8")
+        self.assertIn(120, sleeps)
+        decoded = [item[0].decode("utf-8", "ignore").rstrip("\r") for item in session.writes]
+        self.assertIn("root", decoded)
+        self.assertIn("firstboot -y;reboot", decoded)
+
+    @patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=True)
+    @patch("src.services.serial_upgrade_service.upload_firmware")
+    @patch("src.services.serial_upgrade_service.prepare_tftp_network", return_value=CommandResult(True, "network ready"))
+    @patch("src.services.serial_upgrade_service.power_on_selected_channels", return_value=CommandResult(True, "powered on"))
+    def test_tftp_put_post_tftp_reset_does_not_repeat_power_cycle(
+        self,
+        power_on_selected_channels,
+        _prepare_network,
+        _upload_firmware,
+        _monitor_post_tftp,
+    ):
+        """检测到自动 reset 时，Tftp Put 保持单次首轮上下电。"""
+        session = FakeSession(
+            any_results=["username:", "password:", "#", "login", "password", "#"]
+        )
+        request = FullPackageUpgradeRequest(
+            vlan="vlan102",
+            server_interface="VLAN102",
+            tftp_server_ip="192.168.1.102",
+            firmware_path=Path(r"F:\firmware\tclinux_allinone"),
+            power_serial_port="COM106",
+            final_username="root",
+            final_password="secret",
+            transfer_method=TRANSFER_TFTP_PUT,
+            power_channel=2,
+            serial_port="COM8",
+        )
+        sleeps = []
+
+        with patch.object(SerialUpgradeController, "login_final_system") as final_login:
+            result = run_single_full_package_upgrade(
+                request,
+                FakeSessionManager(session),
+                sleep_fn=sleeps.append,
+            )
+
+        self.assertTrue(result.ok)
+        power_on_selected_channels.assert_called_once()
+        final_login.assert_not_called()
+        self.assertEqual(sleeps[-1], 3)
 
     @patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=True)
     @patch("src.services.serial_upgrade_service.upload_firmware")
@@ -672,8 +719,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         self.assertEqual(session.shell_wait_cursors, [1])
 
     def test_full_package_upgrade_tftp_put_power_cycles_before_existing_flow(self):
-        """回归保护:Tftp Put 在现有 reboot → boot → TFTP 流程之前,
-        必须由程控电源对当前通道执行一次下电 + 上电。"""
+        """回归保护:Tftp Put 首轮与传输后未自动 reset 时均复用当前通道上下电。"""
         session = FakeSession(
             any_results=[
                 "username:",
@@ -695,31 +741,47 @@ class SerialUpgradeControllerTests(unittest.TestCase):
             power_channel=2,
         )
 
+        sleeps = []
         with patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=False), \
              patch("src.services.serial_upgrade_service.upload_firmware"), \
              patch("src.services.serial_upgrade_service.prepare_tftp_network", return_value=CommandResult(True, "network ready")), \
-             patch("src.services.serial_upgrade_service.power_on_selected_channels") as direct_power, \
+             patch(
+                 "src.services.serial_upgrade_service.power_on_selected_channels",
+                 side_effect=[
+                     CommandResult(True, "首次上下电完成"),
+                     CommandResult(True, "后备上下电完成"),
+                 ],
+             ) as direct_power, \
              patch("src.services.power_on_service.turn_on_selected_channels") as turn_on, \
-             patch("src.services.power_on_service.turn_off_selected_channels") as turn_off:
+             patch("src.services.power_on_service.turn_off_selected_channels") as turn_off, \
+             patch.object(SerialUpgradeController, "login_final_system") as final_login:
             result = run_single_full_package_upgrade(
                 request,
                 manager,
-                sleep_fn=lambda _seconds: None,
+                sleep_fn=sleeps.append,
                 on_output=messages.append,
             )
 
         self.assertTrue(result.ok)
-        # Tftp Put 必须先调用一次 power_on_selected_channels 完成下电 + 上电;
-        # 参数必须精确指向本次请求对应的程控电源串口和通道。
-        direct_power.assert_called_once()
-        first_call = direct_power.call_args
+        # 首轮入 boot 使用 1 秒 / 1 秒；传输后未检测到自动 reset 时，
+        # 必须再对同一通道执行一次默认时序的后备上下电。
+        self.assertEqual(direct_power.call_count, 2)
+        first_call, fallback_call = direct_power.call_args_list
         self.assertEqual(first_call.args[0], request.power_serial_port)
         self.assertEqual(list(first_call.args[1]), [request.power_channel])
         self.assertEqual(first_call.kwargs.get("wait_seconds", 0), 0)
         self.assertEqual(first_call.kwargs["off_delay_seconds"], UPGRADE_POWER_OFF_DELAY_SECONDS)
         self.assertEqual(first_call.kwargs["on_delay_seconds"], UPGRADE_POWER_ON_DELAY_SECONDS)
         self.assertTrue(callable(first_call.kwargs["on_output"]))
+        self.assertEqual(fallback_call.args[0], request.power_serial_port)
+        self.assertEqual(list(fallback_call.args[1]), [request.power_channel])
+        self.assertEqual(fallback_call.kwargs.get("wait_seconds", 0), 0)
+        self.assertEqual(fallback_call.kwargs["off_delay_seconds"], POWER_CYCLE_OFF_DELAY_SECONDS)
+        self.assertEqual(fallback_call.kwargs["on_delay_seconds"], POWER_CYCLE_ON_DELAY_SECONDS)
         self.assertIn("样机升级上下电时序：断电后等待 1 秒，上电后等待 1 秒。", messages)
+        self.assertIn("未检测到 boot reset，开始重新上电。", messages)
+        final_login.assert_not_called()
+        self.assertEqual(sleeps[-1], 3)
         # 分通道间隔开关仍不在 Tftp Put 流程内出现,继续保持纯 cycle 语义。
         turn_on.assert_not_called()
         turn_off.assert_not_called()
@@ -1074,9 +1136,10 @@ class SerialUpgradeControllerTests(unittest.TestCase):
             power_channel=1,
         )
 
-        result = run_single_full_package_upgrade(
-            request, manager, sleep_fn=record_sleep, on_output=lambda _line: None
-        )
+        with patch.object(SerialUpgradeController, "login_final_system") as final_login:
+            result = run_single_full_package_upgrade(
+                request, manager, sleep_fn=record_sleep, on_output=lambda _line: None
+            )
 
         self.assertTrue(result.ok)
         self.assertEqual(_power_on_selected_channels.call_args.kwargs["wait_seconds"], 0)
@@ -1085,6 +1148,8 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         self.assertEqual(sleeps[0], 1.0)
         self.assertEqual(writes_before_boot_release, [(b"\r", False), (BOOT_USERNAME.encode("utf-8"), False)])
         _power_on_selected_channels.assert_called()
+        final_login.assert_not_called()
+        self.assertEqual(sleeps[-1], 3)
 
     @patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=False)
     @patch("src.services.serial_upgrade_service.TftpServerHandle")
@@ -1122,13 +1187,15 @@ class SerialUpgradeControllerTests(unittest.TestCase):
             power_channel=1,
         )
 
+        sleeps = []
         with patch(
             "src.services.serial_upgrade_service.power_on_selected_channels",
             return_value=CommandResult(True, "powered on"),
         ) as direct_power, \
              patch("src.services.power_on_service.turn_on_selected_channels") as turn_on, \
-             patch("src.services.power_on_service.turn_off_selected_channels") as turn_off:
-            result = run_single_full_package_upgrade(request, manager, sleep_fn=lambda _seconds: None)
+             patch("src.services.power_on_service.turn_off_selected_channels") as turn_off, \
+             patch.object(SerialUpgradeController, "login_final_system") as final_login:
+            result = run_single_full_package_upgrade(request, manager, sleep_fn=sleeps.append)
 
         self.assertTrue(result.ok)
         # 首次进入 boot 使用 1s/1s；未检测到 reset 后的 repower 保留普通默认时序。
@@ -1148,6 +1215,8 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         turn_on.assert_not_called()
         turn_off.assert_not_called()
         self.assertEqual(len(manager.released), 1)
+        final_login.assert_not_called()
+        self.assertEqual(sleeps[-1], 3)
 
     def test_tftp_command_does_not_retry_on_first_attempt_success(self):
         """首次尝试即检测到 done + write 时只发一条命令,不打印重试日志。"""

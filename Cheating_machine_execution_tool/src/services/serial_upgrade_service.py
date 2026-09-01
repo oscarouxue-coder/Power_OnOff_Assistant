@@ -25,6 +25,7 @@ TRANSFER_TFTP_PUT = "Tftp Put"
 TFTP_PUT_DEVICE_IP = "192.168.1.1"
 POWER_RECYCLE_AFTER_UPGRADE_SECONDS = 90
 POWER_ON_SETTLE_SECONDS = 120
+POST_TFTP_NO_FACTORY_SETTLE_SECONDS = 3
 UPGRADE_POWER_OFF_DELAY_SECONDS = 1.0
 UPGRADE_POWER_ON_DELAY_SECONDS = 1.0
 BOOT_LOGIN_TIMEOUT_SECONDS = 600
@@ -681,16 +682,31 @@ def _run_tftp_command_with_power_supply(
 
     emit("TFTP 传输完成，开始观察 boot 重启标记。")
     reset_sent = controller.monitor_post_tftp()
+    post_transfer_wait_seconds = (
+        POWER_ON_SETTLE_SECONDS if request.restore_factory else POST_TFTP_NO_FACTORY_SETTLE_SECONDS
+    )
     if reset_sent:
-        emit("检测到 Boot/Bood，已发送 reset，等待 120 秒。")
-        sleep_fn(POWER_ON_SETTLE_SECONDS)
+        emit(
+            "检测到 Boot/Bood，已发送 reset，等待 120 秒。"
+            if request.restore_factory
+            else "检测到 Boot/Bood，已发送 reset，等待 3 秒后结束当前通道升级。"
+        )
+        sleep_fn(post_transfer_wait_seconds)
     else:
         emit("未检测到 boot reset，开始重新上电。" if power_enabled else "未检测到 boot reset；未配置程控电源，跳过重新上电。")
         repower = power_on_current_channel()
         if not repower.ok:
             return repower
-        if power_enabled:
-            sleep_fn(POWER_ON_SETTLE_SECONDS)
+        if power_enabled or not request.restore_factory:
+            emit(
+                "后备重新上电完成，等待 120 秒。"
+                if request.restore_factory
+                else "后备重新上电完成，等待 3 秒后结束当前通道升级。"
+            )
+            sleep_fn(post_transfer_wait_seconds)
+    if not request.restore_factory:
+        emit("恢复出厂：关闭，跳过最终系统登录，当前通道升级流程完成。")
+        return CommandResult(True, f"{request.vlan} 全包升级流程完成（未恢复出厂）。")
     final = controller.login_final_system(request.final_username, request.final_password)
     if not final.ok:
         return final
@@ -797,13 +813,44 @@ def run_single_full_package_upgrade(
 
         emit("TFTP 传输完成，开始观察 boot 重启标记。")
         reset_sent = controller.monitor_post_tftp()
+        post_transfer_wait_seconds = (
+            POWER_ON_SETTLE_SECONDS if request.restore_factory else POST_TFTP_NO_FACTORY_SETTLE_SECONDS
+        )
         if reset_sent:
-            emit("检测到 Boot/Bood，已发递 reset，等待 120 秒。")
+            emit(
+                "检测到 Boot/Bood，已发送 reset，等待 120 秒。"
+                if request.restore_factory
+                else "检测到 Boot/Bood，已发送 reset，等待 3 秒后结束当前通道升级。"
+            )
+            sleep_fn(post_transfer_wait_seconds)
         else:
-            # Tftp Put 流程不再操作程控电源,等待 120 秒后继续登录最终系统;
-            # 若设备未自动重启,后续 login_final_system 会报错,由用户手动介入。
-            emit("未检测到 boot reset，等待 120 秒后继续登录最终系统。")
-        sleep_fn(POWER_ON_SETTLE_SECONDS)
+            # 与 Tftp指令一致：传输后未观察到自动 reset 时，使用当前通道的
+            # 后备下电 + 上电复位。该后备时序保持普通电源默认值，不能套用首轮
+            # 入 boot 专用的 1 秒 / 1 秒时序。
+            emit(
+                "未检测到 boot reset，开始重新上电。"
+                if power_enabled
+                else "未检测到 boot reset；未配置程控电源，跳过重新上电。"
+            )
+            repower = _power_cycle_current_channel(
+                request=request,
+                emit=emit,
+                sleep_fn=sleep_fn,
+                power_cycle_coordinator=power_cycle_coordinator,
+                wait_seconds=0,
+            )
+            if not repower.ok:
+                return repower
+            if power_enabled or not request.restore_factory:
+                emit(
+                    "后备重新上电完成，等待 120 秒。"
+                    if request.restore_factory
+                    else "后备重新上电完成，等待 3 秒后结束当前通道升级。"
+                )
+                sleep_fn(post_transfer_wait_seconds)
+        if not request.restore_factory:
+            emit("恢复出厂：关闭，跳过最终系统登录，当前通道升级流程完成。")
+            return CommandResult(True, f"{request.vlan} 全包升级流程完成（未恢复出厂）。")
         final = controller.login_final_system(request.final_username, request.final_password)
         if not final.ok:
             return final
