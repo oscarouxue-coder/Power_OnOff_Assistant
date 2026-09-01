@@ -2,6 +2,16 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-09-01 - 修复错误最终密码回显触发恢复出厂
+
+- 类型：严重 Bug 修复 / 最终登录判据 / 测试 / 文档
+- 背景：现场串口日志显示错误的最终系统密码被设备回显；旧逻辑以任意 `#` / `>` 子串判定 shell 登录成功，因而会把密码中的字符误判为成功并继续下发 `firstboot -y;reboot`。
+- 完成内容：最终系统登录改为轮询本次接收数据，优先识别 `Login incorrect` / `incorrect` 失败回显；只有独立的 shell 提示符行（例如 `root@OpenWrt:/#`）才判定成功，完整密码回显行会被排除。命中密码回显中的 `#` / `>` 后会推进观察游标继续等候，避免重复命中形成忙循环。最终登录失败继续返回失败，不执行恢复出厂。
+- 修改文件：`Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`、`Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：运行 `tests/test_serial_upgrade_service.py` 专项测试、`python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：`tests/test_serial_upgrade_service.py` 专项 41 项通过；以本机端口绑定权限运行 `python scripts/verify_baseline.py` 全绿，59 个源码文件编译、744 项单元测试、172 项强制基线测试及协议不变量均通过。未运行 EXE，未连接真实样机。
+- 后续待办：使用密码中含 `#` 或 `>` 的错误最终登录凭据，在 Windows 源码版及真实样机确认不会下发恢复出厂；再用正确凭据确认独立 shell 提示符仍可继续恢复出厂。
+
 ## 2026-09-01 - 未恢复出厂的全包升级改为 3 秒传输后收尾
 
 - 类型：全包升级流程调整 / 测试 / 文档

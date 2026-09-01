@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 import time
 import uuid
+import re
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from pathlib import Path
@@ -447,6 +448,54 @@ class SerialUpgradeController:
                 return CommandResult(False, f"boot 登录异常:{exc}")
         return CommandResult(False, "boot 登录失败。")
 
+    @staticmethod
+    def _contains_final_system_shell_prompt(output: str, password: str) -> bool:
+        """只接受独立 shell 提示符行，不能把密码回显中的 # / > 当作登录成功。"""
+        password_text = password.strip().casefold()
+        for raw_line in re.split(r"[\r\n]+", output):
+            line = raw_line.strip()
+            if not line or line.casefold() == password_text:
+                continue
+            if line in ("#", ">"):
+                return True
+            if re.fullmatch(r"\S+[>#]", line):
+                return True
+        return False
+
+    def _wait_for_final_system_login_result(
+        self,
+        cursor: int,
+        password: str,
+        timeout_seconds: float,
+    ) -> str | None:
+        """返回 success / failure / None，并过滤密码回显中的 shell 字符。"""
+        deadline = self._monotonic_fn() + timeout_seconds
+        wait_cursor = cursor
+        markers = ("login incorrect", "incorrect", "#", ">")
+        while self._monotonic_fn() < deadline and not self._cancel.is_set():
+            recent_text = self.session.peek_since(cursor)
+            lowered = recent_text.casefold()
+            if "login incorrect" in lowered or "incorrect" in lowered:
+                return "failure"
+            if self._contains_final_system_shell_prompt(recent_text, password):
+                return "success"
+
+            remaining = deadline - self._monotonic_fn()
+            if remaining <= 0:
+                break
+            marker = self.session.wait_for_any(markers, min(1.0, remaining), wait_cursor)
+            if marker in ("login incorrect", "incorrect"):
+                return "failure"
+
+            # wait_for_any 可能命中密码回显中的 #。推进观察游标后继续等待新数据，
+            # 防止同一字符被反复命中形成忙循环。
+            next_cursor = self.session.cursor()
+            if next_cursor == wait_cursor and not recent_text and marker in ("#", ">"):
+                # 兼容仅提供 marker 的旧测试替身；真实 SerialSession 总能提供接收历史。
+                return "success"
+            wait_cursor = next_cursor
+        return None
+
     def login_final_system(self, username: str, password: str) -> CommandResult:
         cursor = self.session.cursor()
         for attempt in range(1, 6):
@@ -458,8 +507,8 @@ class SerialUpgradeController:
             if self.session.wait_for_any(("password", "passvord"), 60, cursor) is None:
                 continue
             self.session.send_line(password, sensitive=True)
-            result = self.session.wait_for_any(("#", ">", "login incorrect", "incorrect"), 60, cursor)
-            if result in ("#", ">"):
+            result = self._wait_for_final_system_login_result(cursor, password, 60)
+            if result == "success":
                 return CommandResult(True, "最终系统登录完成。")
             if attempt < 5:
                 self.sleep(2)

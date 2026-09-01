@@ -453,6 +453,60 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         self.assertEqual(execution_log, ["TX firstboot -y;reboot"])
         self.assertEqual(session.writes, [(b"firstboot -y;reboot", False), (b"\r", False)])
 
+    def test_final_system_shell_prompt_ignores_password_echo_with_hash(self):
+        password = "wrong#password"
+
+        self.assertFalse(
+            SerialUpgradeController._contains_final_system_shell_prompt(f"{password}\r\n", password)
+        )
+        self.assertTrue(
+            SerialUpgradeController._contains_final_system_shell_prompt(
+                "root@OpenWrt:/# ", password
+            )
+        )
+
+    def test_final_login_does_not_accept_hash_inside_wrong_password_echo(self):
+        """密码回显内含 # 时，必须等待真实结果，不能误判后继续恢复出厂。"""
+
+        class PasswordEchoSession(FakeSession):
+            def __init__(self):
+                super().__init__()
+                self.history = bytearray()
+                self.result_waits = 0
+
+            def cursor(self):
+                return len(self.history)
+
+            def peek_since(self, cursor):
+                return bytes(self.history[cursor:]).decode("utf-8", "replace")
+
+            def write(self, data, sensitive=False):
+                super().write(data, sensitive)
+                if data == b"\r":
+                    self.history.extend(b"OpenWrt login:\r\n")
+
+            def send_line(self, text, sensitive=False):
+                super().send_line(text, sensitive)
+                if sensitive:
+                    self.history.extend(text.encode("utf-8") + b"\r\n")
+
+            def wait_for_any(self, markers, _timeout, _cursor):
+                marker_set = tuple(markers)
+                if marker_set == ("login",):
+                    return "login"
+                if marker_set == ("password", "passvord"):
+                    return "password"
+                self.result_waits += 1
+                return "#" if self.result_waits == 1 else "login incorrect"
+
+        session = PasswordEchoSession()
+        controller = SerialUpgradeController(session, sleep_fn=lambda _seconds: None)
+
+        result = controller.login_final_system("root", "wrong#password")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.message, "最终系统登录失败。")
+
     @patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=False)
     @patch("src.services.serial_upgrade_service.upload_firmware")
     @patch("src.services.serial_upgrade_service.prepare_tftp_network", return_value=CommandResult(True, "network ready"))
