@@ -76,6 +76,7 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/ui/serial_terminal.py",
     "src/ui/dut_config_window.py",
     "src/ui/window_paint.py",
+    "src/ui/window_size_state.py",
     "src/services/pipeline_orchestrator.py",
     "src/services/dut_config_service.py",
     "src/services/dut_advanced_config_service.py",

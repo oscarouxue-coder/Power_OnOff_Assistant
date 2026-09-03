@@ -2,6 +2,46 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-09-03 - 下调样机升级窗口最小高度
+
+- 类型：界面优化 / 测试 / 文档。
+- 背景：操作员要求保留样机升级窗口默认 820×720 的首次显示尺寸，同时将可拖拽的最小高度下调为 620。
+- 完成内容：样机升级窗口最小尺寸调整为 820×620；默认宽高继续为 820×720，历史高度仅在低于 620 时收敛，其它窗口和升级业务行为不变。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_window_size_state.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在 `Cheating_machine_execution_tool` 执行 `python -m unittest discover -s tests -p test_window_size_state.py -v`、`python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：窗口状态专项 4 项通过；`python scripts/verify_baseline.py` 全绿（60 个源码文件编译、754 项单元测试、172 项强制基线测试及协议不变量均通过）。未构建或运行 EXE，未连接真实设备。
+- 后续待办：在 Windows 源码版将样机升级窗口缩小到最小高度，确认高度为 620 且关闭重开后正常恢复。
+
+## 2026-09-03 - 调整样机升级窗口最小尺寸
+
+- 类型：界面优化 / 测试 / 文档。
+- 背景：操作员要求“样机升级”窗口不得小于 820×720，避免高度不足影响配置与状态阅读。
+- 完成内容：将样机升级的默认尺寸、最小尺寸和历史尺寸恢复下限统一为 820×720，保证首次打开、已有历史尺寸恢复和居中计算一致；其它功能窗口、升级配置、确认和执行流程不变。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/tests/test_window_size_state.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在 `Cheating_machine_execution_tool` 执行 `python -m unittest discover -s tests -p test_window_size_state.py -v`、`python -m unittest discover -s tests -p test_app.py -v`、`python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：窗口状态专项 4 项通过；`python scripts/verify_baseline.py` 全绿（60 个源码文件编译、754 项单元测试、172 项强制基线测试及协议不变量均通过）。未构建或运行 EXE，未连接真实设备。
+- 后续待办：在 Windows 源码版拖小样机升级窗口，确认最小宽高为 820×720，关闭重开后历史尺寸仍可恢复。
+
+## 2026-09-03 - 记住主功能窗口关闭前宽高
+
+- 类型：界面优化 / 测试 / 文档。
+- 背景：操作员希望样机升级、写样机参数、ONU 注册等功能模块按各自上次关闭前的宽高重新打开，避免每次都手工调整；串口日志和 DUT 配置已有独立恢复逻辑，本轮不迁移。
+- 完成内容：新增独立 UI 状态模块，将样机升级、写样机参数、ONU 注册、测试项配置和全流程执行按模块键保存到用户目录 JSON；首次打开或状态无效时保持原默认尺寸。恢复时按当前屏幕与各窗口原有最小尺寸收敛，随后仍相对主界面居中；只记录宽高、不记录位置。仅在既有关闭保护允许真正销毁窗口后写入，写参/ONU/全流程运行中关闭被拦截、测试项配置取消“放弃修改”确认时均不覆盖历史记录。串口日志和 DUT 配置保持原有机制及行为不变。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/window_size_state.py`
+  - `Cheating_machine_execution_tool/src/ui/__init__.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/tests/test_window_size_state.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在 `Cheating_machine_execution_tool` 执行 `python -m unittest discover -s tests -p test_window_size_state.py -v`、`python -m unittest discover -s tests -p test_pipeline_window.py -v`、`python -m unittest discover -s tests -p test_app.py -v`、`python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：窗口状态专项 3 项、全流程窗口专项 31 项、主界面专项 190 项均通过；`python scripts/verify_baseline.py` 全绿（60 个源码文件编译、753 项单元测试、172 项强制基线测试及协议不变量均通过）。未构建或运行 EXE，未连接真实设备。
+- 后续待办：在 Windows 源码版拖拽调整上述五个窗口，依次正常关闭、重开和切换显示器后确认宽高恢复、居中及既有关闭保护提示。
+
 ## 2026-09-03 - C300/C600 ONU模板查询与整机未注册ONU查询
 
 - 类型：ONU注册功能 / 只读OLT验证 / 测试 / 文档。

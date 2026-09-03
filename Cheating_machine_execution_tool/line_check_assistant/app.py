@@ -117,7 +117,13 @@ from src.services.device_project_info_service import (
     DeviceProjectInfoQueryRequest,
     query_device_project_info,
 )
-from src.ui import DutConfigWindow, SerialTerminalWindow
+from src.ui import (
+    MODULE_WINDOW_SIZE_STATE_PATH,
+    DutConfigWindow,
+    SerialTerminalWindow,
+    load_module_window_size,
+    save_module_window_size,
+)
 from src.ui.window_paint import (
     center_toplevel_on_parent,
     schedule_toplevel_client_refresh,
@@ -156,6 +162,13 @@ TEST_ITEM_HIDDEN_UI_DEFAULT_OPTIONS = frozenset(
         "selected_profile",
     }
 )
+MODULE_WINDOW_SIZE_SPECS = {
+    "sample_parameter_writer": (980, 690, 860, 590),
+    "onu_registration": (1000, 900, 1000, 900),
+    "sample_upgrade": (820, 720, 820, 620),
+    "test_item_config": (960, 940, 960, 940),
+    "pipeline": (920, 800, 880, 780),
+}
 
 
 def _clear_test_item_rows(row_widgets: list[dict]) -> None:
@@ -294,6 +307,7 @@ class LineCheckAssistant(Tk):
         self.onu_registration_config = self.onu_registration_store.load()
         self.sample_upgrade_settings_store = SampleUpgradeSettingsStore(SAMPLE_UPGRADE_SETTINGS_PATH)
         self.sample_upgrade_settings = self.sample_upgrade_settings_store.load()
+        self._module_window_size_state_path = MODULE_WINDOW_SIZE_STATE_PATH
         self.channels = self.store.load()
         self.power_serial_port = self.store.load_power_serial_port()
         self.adapters = list_adapter_display_names()
@@ -979,6 +993,42 @@ class LineCheckAssistant(Tk):
             "完成后再次点击「检查并执行测试」重开全流程执行窗口。"
         )
 
+    def _restore_module_window_size(self, window, module_key: str) -> tuple[int, int]:
+        """恢复功能模块窗口宽高；首次打开保持既有默认值。"""
+        default_width, default_height, min_width, min_height = MODULE_WINDOW_SIZE_SPECS[module_key]
+        width, height = load_module_window_size(
+            self._module_window_size_state_path,
+            module_key,
+            default_width=default_width,
+            default_height=default_height,
+            min_width=min_width,
+            min_height=min_height,
+            screen_width=window.winfo_screenwidth(),
+            screen_height=window.winfo_screenheight(),
+        )
+        window.geometry(f"{width}x{height}")
+        return width, height
+
+    def _remember_module_window_size(self, window, module_key: str) -> bool:
+        """在窗口确认关闭后记录当前宽高；失败不阻止正常关闭。"""
+        default_width, default_height, min_width, min_height = MODULE_WINDOW_SIZE_SPECS[module_key]
+        try:
+            window.update_idletasks()
+            width = window.winfo_width()
+            height = window.winfo_height()
+        except (AttributeError, TclError):
+            return False
+        return save_module_window_size(
+            self._module_window_size_state_path,
+            module_key,
+            width,
+            height,
+            default_width=default_width,
+            default_height=default_height,
+            min_width=min_width,
+            min_height=min_height,
+        )
+
     def _open_sample_parameter_writer(self) -> None:
         if self.parameter_writer_window is not None and self.parameter_writer_window.winfo_exists():
             self.parameter_writer_window.deiconify()
@@ -990,7 +1040,9 @@ class LineCheckAssistant(Tk):
         dialog = Toplevel(self)
         self.parameter_writer_window = dialog
         dialog.title("写样机参数")
-        dialog.geometry("980x690")
+        window_width, window_height = self._restore_module_window_size(
+            dialog, "sample_parameter_writer"
+        )
         dialog.minsize(860, 590)
 
         # 参数表路径是全流程子任务 4 的必填项，必须直接复用实例级持久变量；
@@ -1065,11 +1117,14 @@ class LineCheckAssistant(Tk):
             if self.parameter_write_running:
                 messagebox.showwarning("写参进行中", "请先停止写参批次并等待串口清理完成。", parent=dialog)
                 return
+            self._remember_module_window_size(dialog, "sample_parameter_writer")
             self._save_sample_upgrade_settings()
             dialog.destroy()
 
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
-        center_toplevel_on_parent(dialog, self)
+        center_toplevel_on_parent(
+            dialog, self, window_width=window_width, window_height=window_height
+        )
         # 程序重开后内存记录为空，但路径已由 sample_upgrade_settings.ini 恢复；
         # 自动重新加载，使窗口预检和全流程状态都基于同一份已选参数表。
         saved_table_path = self.parameter_table_path_var.get().strip()
@@ -1956,7 +2011,9 @@ class LineCheckAssistant(Tk):
         dialog = Toplevel(self)
         self.onu_registration_window = dialog
         dialog.title("ONU注册")
-        dialog.geometry("1000x900")
+        window_width, window_height = self._restore_module_window_size(
+            dialog, "onu_registration"
+        )
         dialog.minsize(1000, 900)
         dialog.configure(background=COLOR_BG)
 
@@ -2487,6 +2544,7 @@ class LineCheckAssistant(Tk):
             except Exception:
                 pass
             finally:
+                self._remember_module_window_size(dialog, "onu_registration")
                 dialog.destroy()
                 self.onu_registration_window = None
 
@@ -2505,7 +2563,9 @@ class LineCheckAssistant(Tk):
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
         self.onu_preview_ready = False
         self._on_onu_family_changed()
-        center_toplevel_on_parent(dialog, self)
+        center_toplevel_on_parent(
+            dialog, self, window_width=window_width, window_height=window_height
+        )
 
     def _on_onu_family_changed(self, _event=None) -> None:
         family = self.onu_family_var.get()
@@ -3459,8 +3519,10 @@ class LineCheckAssistant(Tk):
         dialog = Toplevel(self)
         self.upgrade_window = dialog
         dialog.title("样机升级")
-        dialog.geometry("820x580")
-        dialog.minsize(760, 530)
+        window_width, window_height = self._restore_module_window_size(
+            dialog, "sample_upgrade"
+        )
+        dialog.minsize(820, 620)
         dialog.configure(background=COLOR_BG)
 
         content = Frame(dialog, padx=20, pady=18, background=COLOR_BG)
@@ -3590,6 +3652,7 @@ class LineCheckAssistant(Tk):
             except Exception:
                 pass
             finally:
+                self._remember_module_window_size(dialog, "sample_upgrade")
                 dialog.destroy()
                 self.upgrade_window = None
 
@@ -3598,7 +3661,9 @@ class LineCheckAssistant(Tk):
         ttk.Button(buttons, text="关闭", width=12, command=close_dialog, style="Secondary.TButton").pack(side="right")
         ttk.Button(buttons, text="开始升级", width=12, command=self._on_upgrade_start_clicked, style="Primary.TButton").pack(side="right", padx=(0, 8))
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
-        center_toplevel_on_parent(dialog, self)
+        center_toplevel_on_parent(
+            dialog, self, window_width=window_width, window_height=window_height
+        )
 
     def _toggle_upgrade_restore_factory(self, _event=None) -> str:
         self.upgrade_restore_factory_var.set(not self.upgrade_restore_factory_var.get())
@@ -4182,7 +4247,9 @@ class LineCheckAssistant(Tk):
         dialog = Toplevel(self)
         self.test_item_config_window = dialog
         dialog.title("测试项配置")
-        dialog.geometry("960x940")
+        window_width, window_height = self._restore_module_window_size(
+            dialog, "test_item_config"
+        )
         dialog.minsize(960, 940)
         dialog.configure(background=COLOR_BG)
 
@@ -4347,6 +4414,7 @@ class LineCheckAssistant(Tk):
                     parent=dialog,
                 ):
                     return
+            self._remember_module_window_size(dialog, "test_item_config")
             dialog.destroy()
             self.test_item_config_window = None
 
@@ -4358,8 +4426,8 @@ class LineCheckAssistant(Tk):
         center_toplevel_on_parent(
             dialog,
             self,
-            window_width=960,
-            window_height=940,
+            window_width=window_width,
+            window_height=window_height,
         )
         schedule_toplevel_client_refresh(
             dialog,

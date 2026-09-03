@@ -2081,21 +2081,20 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             LineCheckAssistant._open_sample_parameter_writer,
             LineCheckAssistant._open_upgrade_module,
             LineCheckAssistant._open_onu_registration_module,
-            LineCheckAssistant._select_power_com_port,
         )
         for method in app_methods:
-            self.assertIn(
-                "center_toplevel_on_parent(dialog, self)",
-                inspect.getsource(method),
-            )
+            source = inspect.getsource(method)
+            self.assertIn("center_toplevel_on_parent(", source)
+            self.assertIn("window_width=window_width", source)
+            self.assertIn("window_height=window_height", source)
         test_item_source = inspect.getsource(
             LineCheckAssistant._open_test_item_config
         )
         self.assertIn("center_toplevel_on_parent(", test_item_source)
-        self.assertIn("window_width=960", test_item_source)
-        self.assertIn("window_height=940", test_item_source)
+        self.assertIn("window_width=window_width", test_item_source)
+        self.assertIn("window_height=window_height", test_item_source)
         self.assertIn(
-            "center_toplevel_on_parent(self.window, app)",
+            "window_width=window_width",
             inspect.getsource(PipelineWindow.__init__),
         )
         dut_source = inspect.getsource(DutConfigWindow.__init__)
@@ -2109,6 +2108,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             "center_toplevel_on_parent(self.window, self.master)", serial_source
         )
         selector_source = inspect.getsource(LineCheckAssistant._select_power_com_port)
+        self.assertIn("center_toplevel_on_parent(dialog, self)", selector_source)
         self.assertNotIn("self.winfo_width() - 460", selector_source)
         self.assertNotIn("self.winfo_height() - 215", selector_source)
 
@@ -2880,7 +2880,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
     def test_onu_window_reserves_bottom_rows_without_maximizing(self):
         open_source = inspect.getsource(LineCheckAssistant._open_onu_registration_module)
 
-        self.assertIn('dialog.geometry("1000x900")', open_source)
+        self.assertIn('self._restore_module_window_size(', open_source)
+        self.assertIn('dialog, "onu_registration"', open_source)
         self.assertIn('dialog.minsize(1000, 900)', open_source)
         self.assertIn('content.rowconfigure(3, weight=1)', open_source)
         self.assertIn('self.onu_notebook.grid(row=3, column=0, sticky="nsew")', open_source)

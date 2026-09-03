@@ -57,7 +57,9 @@ class PipelineWindow:
         self.window: Toplevel = Toplevel(app)
         self.window.title("全流程执行")
         # 7 行选择框、无人值守授权和底部按钮需要至少 ~780px 高度。
-        self.window.geometry("920x800")
+        window_width, window_height = app._restore_module_window_size(
+            self.window, "pipeline"
+        )
         self.window.minsize(880, 780)
         self.window.configure(background=COLOR_BG)
         # 状态变量
@@ -78,7 +80,9 @@ class PipelineWindow:
         self.window.bind("<FocusIn>", self._on_focus_in)
         # 操作员关闭窗口时若正在跑,提示
         self.window.protocol("WM_DELETE_WINDOW", self._on_close)
-        center_toplevel_on_parent(self.window, app)
+        center_toplevel_on_parent(
+            self.window, app, window_width=window_width, window_height=window_height
+        )
 
     # -- UI 构建 --------------------------------------------------------
 
@@ -564,6 +568,7 @@ class PipelineWindow:
             self.request_stop()
         if hasattr(self.app, "pipeline_window"):
             self.app.pipeline_window = None
+        self.app._remember_module_window_size(self.window, "pipeline")
         self.window.destroy()
 
     # -- 辅助 -----------------------------------------------------------
