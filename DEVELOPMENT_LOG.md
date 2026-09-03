@@ -2,6 +2,26 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-09-03 - 确认 ONU 模板查询显示验收
+
+- 类型：真实样机验收 / 状态更新 / 文档。
+- 背景：项目负责人确认 C300/C600 的 ONU 类型模板、DBA 模板查询结果显示验收通过。
+- 验收范围：下拉项显示为“模板名（值）”，不显示“PON类型：”或“速率：”标签；仅覆盖该显示调整，不覆盖整台 OLT 未注册 ONU 查询、注册、删除或 `write`。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：项目负责人现场确认 C300/C600 两类模板查询下拉项显示。
+- 验证结果：通过。
+- 后续待办：整台 OLT 未注册 ONU 查询继续按原范围单独验收。
+
+## 2026-09-03 - 精简 ONU 模板查询结果标签
+
+- 类型：界面优化 / 测试 / 文档。
+- 背景：操作员要求 C300 和 C600 查询到的 ONU 类型模板、DBA 模板结果不显示“PON类型：”和“速率：”字样，其他查询、选择和保存行为保持现状。
+- 完成内容：统一模板显示文本为“模板名（值）”；ONU 类型模板保留 PON 类型值，DBA 模板保留速率值。查询命令、解析字段、下发时仅取模板名以及手工输入兼容逻辑均未修改。
+- 修改文件：`Cheating_machine_execution_tool/src/models/onu_registration_models.py`、`Cheating_machine_execution_tool/tests/test_onu_registration_service.py`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在 `Cheating_machine_execution_tool` 执行 `python -m unittest discover -s tests -p test_onu_registration_service.py -v`、`python scripts/verify_baseline.py` 和 `git diff --check`。
+- 验证结果：ONU 注册专项 `Ran 42 tests ... OK`；`python scripts/verify_baseline.py` 全绿（60 个源码文件编译、754 项单元测试、172 项强制基线测试和协议不变量均通过）。未构建或运行 EXE，未连接真实 OLT。
+- 后续待办：在 Windows 源码版分别查询 C300/C600 的 ONU 类型模板和 DBA 模板，确认下拉项显示为“模板名（值）”。
+
 ## 2026-09-03 - 下调样机升级窗口最小高度
 
 - 类型：界面优化 / 测试 / 文档。

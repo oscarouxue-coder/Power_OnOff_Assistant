@@ -111,8 +111,8 @@ class OnuTemplate:
     @property
     def display_text(self) -> str:
         if self.kind == "onu_type":
-            return f"{self.name}（PON类型：{self.pon_type or '未知'}）"
-        return f"{self.name}（速率：{self.rate_label or '未知'}）"
+            return f"{self.name}（{self.pon_type or '未知'}）"
+        return f"{self.name}（{self.rate_label or '未知'}）"
 
 
 @dataclass(frozen=True)

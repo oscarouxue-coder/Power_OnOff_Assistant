@@ -302,8 +302,10 @@ class DriverTests(unittest.TestCase):
 
         self.assertEqual(c300_types, [OnuTemplate("SD-41", "onu_type", pon_type="GPON")])
         self.assertEqual(c600_types, [OnuTemplate("OSCAR_XGS", "onu_type", pon_type="XGS-PON")])
-        self.assertEqual(c300_dba[0].display_text, "1G（速率：1G）")
-        self.assertEqual(c600_dba[0].display_text, "WT-10G（速率：10G）")
+        self.assertEqual(c300_types[0].display_text, "SD-41（GPON）")
+        self.assertEqual(c600_types[0].display_text, "OSCAR_XGS（XGS-PON）")
+        self.assertEqual(c300_dba[0].display_text, "1G（1G）")
+        self.assertEqual(c600_dba[0].display_text, "WT-10G（10G）")
 
     def test_all_zero_scope_is_only_valid_for_whole_olt_discovery(self):
         all_olt = OnuDiscoveryScope(0, 0, 0)
@@ -727,7 +729,7 @@ class ServiceTests(unittest.TestCase):
         )
 
         self.assertTrue(result.ok)
-        self.assertEqual(result.templates[0].display_text, "OSCAR_XGS（PON类型：XGS-PON）")
+        self.assertEqual(result.templates[0].display_text, "OSCAR_XGS（XGS-PON）")
         self.assertEqual(fake.commands, ["terminal length 0", "show onu-type"])
 
     def test_c300_whole_olt_query_does_not_filter_global_results(self):
