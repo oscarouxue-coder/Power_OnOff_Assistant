@@ -2,6 +2,26 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-09-03 - 在便携包附带版本说明
+
+- 类型：构建 / 文档。
+- 背景：操作员要求以后每次交付 EXE 时，便携包内都要有清晰的版本号与本版变更说明。
+- 完成内容：新增 `VERSION_INFO.txt`，本次标记为 `V1.1.1`，说明 C300/C600 ONU 类型模板和 DBA 模板查询显示调整及其验收边界；构建脚本缺少该文件即失败，成功时固定复制到便携目录和 ZIP。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/packaging_assets/VERSION_INFO.txt`、`Cheating_machine_execution_tool/build_line_check_assistant.ps1`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在 `Cheating_machine_execution_tool` 执行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\\build_line_check_assistant.ps1`、核对 ZIP 的 `VERSION_INFO.txt` 与 `python scripts\\verify_baseline.py`。
+- 验证结果：重新构建成功；便携 ZIP 共 12 个条目，包含 `VERSION_INFO.txt`，其版本为 `V1.1.1`。EXE SHA-256 为 `D52DB7FA5423C4C93E7C814170842EB85C3A0A546C03480FD9914370931ADD84` 且与同包校验文件一致；冻结包包含 `pyi_rth__tkinter`、`tcl\\init.tcl` 和 `tk\\tk.tcl`。`python scripts\\verify_baseline.py` 全绿（60 个源码文件编译、754 项单元测试、172 项强制基线测试及协议不变量均通过）。未在本机运行 EXE，未连接真实设备。
+- 后续待办：后续每次发布前按实际改动更新 `VERSION_INFO.txt` 中的版本号、日期和变更说明，再执行打包。
+
+## 2026-09-03 - 构建便携版 LineCheckAssistant
+
+- 类型：构建 / 测试。
+- 背景：操作员需要可在其它 Windows 电脑上运行的便携版 EXE。
+- 完成内容：执行现有便携版构建脚本，生成单文件 EXE、便携目录及 ZIP；构建脚本已校验冻结包内 `tcl\\init.tcl` 与 `tk\\tk.tcl`。
+- 修改文件：`DEVELOPMENT_LOG.md`；构建产物位于 `Cheating_machine_execution_tool/dist/`（不纳入 Git）。
+- 验证方法：在 `Cheating_machine_execution_tool` 执行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\\build_line_check_assistant.ps1`、`python -m PyInstaller.utils.cliutils.archive_viewer -l .\\dist\\LineCheckAssistant.exe`、`python scripts\\verify_baseline.py`；核对 ZIP 条目、SHA-256 与 Authenticode 状态。
+- 验证结果：构建成功；便携 ZIP 共 11 个条目，EXE SHA-256 为 `950A1ED054D85E628E46B94763D96B88723E10AF3D526131D9E1106F66307164`，签名状态为 `NotSigned`；冻结包包含 `pyi_rth__tkinter`、`tcl\\init.tcl` 和 `tk\\tk.tcl`。基线全绿（60 个源码文件编译、754 项单元测试、172 项强制基线测试及协议不变量均通过）。未在本机运行 EXE，未连接真实设备。
+- 后续待办：在目标 Windows 电脑解压 `LineCheckAssistant_portable.zip` 后运行其中的 EXE，确认启动与所需业务范围。
+
 ## 2026-09-03 - 确认 ONU 模板查询显示验收
 
 - 类型：真实样机验收 / 状态更新 / 文档。

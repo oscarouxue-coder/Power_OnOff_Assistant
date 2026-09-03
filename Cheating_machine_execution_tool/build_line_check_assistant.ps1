@@ -8,6 +8,7 @@ $distDir = Join-Path $projectRoot "dist"
 $thirdPartyNotice = Join-Path $projectRoot "THIRD_PARTY_NOTICES.md"
 $portableConfigScript = Join-Path $projectRoot "scripts\create_portable_config.py"
 $portableReadme = Join-Path $projectRoot "line_check_assistant\packaging_assets\PORTABLE_README.txt"
+$versionInfo = Join-Path $projectRoot "line_check_assistant\packaging_assets\VERSION_INFO.txt"
 $runtimeConfigDir = Join-Path $projectRoot "Auto_power_on_off_tool\config"
 $exePath = Join-Path $distDir "LineCheckAssistant.exe"
 $portableDir = Join-Path $distDir "LineCheckAssistant_portable"
@@ -84,6 +85,10 @@ try {
     New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
     Copy-Item -LiteralPath $exePath -Destination (Join-Path $portableDir "LineCheckAssistant.exe") -Force
     Copy-Item -LiteralPath $portableReadme -Destination (Join-Path $portableDir "PORTABLE_README.txt") -Force
+    if (-not (Test-Path -LiteralPath $versionInfo -PathType Leaf)) {
+        throw "Portable version information is missing: $versionInfo"
+    }
+    Copy-Item -LiteralPath $versionInfo -Destination (Join-Path $portableDir "VERSION_INFO.txt") -Force
     if (Test-Path -LiteralPath $thirdPartyNotice) {
         Copy-Item -LiteralPath $thirdPartyNotice -Destination (Join-Path $portableDir "THIRD_PARTY_NOTICES.md") -Force
     }

@@ -186,7 +186,7 @@ python .\run_line_check_assistant.py
 - `dist\LineCheckAssistant_portable\`：可直接复制的完整免安装目录。
 - `dist\LineCheckAssistant_portable.zip`：推荐复制到另一台电脑的压缩包；必须完整解压后再运行，不能只取出 EXE。
 
-便携目录包含 EXE、`PORTABLE_README.txt`、第三方声明、SHA256 文件和程序所需的 `Auto_power_on_off_tool\config`。构建时只把当前配置当作字段/业务模板，自动清空当前电脑的 OLT/DUT/升级账号密码、OLT/源IP、ONU ID、钉钉和远程控制信息、固件/参数表路径、项目版本，以及网卡、串口和无线网卡绑定；C600业务映射等业务默认模板继续保留。另一台电脑首次运行前必须重新填写网络、测试项、升级/写参和ONU注册配置。
+便携目录包含 EXE、`PORTABLE_README.txt`、`VERSION_INFO.txt`（版本号与本版变更说明）、第三方声明、SHA256 文件和程序所需的 `Auto_power_on_off_tool\config`。构建时只把当前配置当作字段/业务模板，自动清空当前电脑的 OLT/DUT/升级账号密码、OLT/源IP、ONU ID、钉钉和远程控制信息、固件/参数表路径、项目版本，以及网卡、串口和无线网卡绑定；C600业务映射等业务默认模板继续保留。另一台电脑首次运行前必须重新填写网络、测试项、升级/写参和ONU注册配置。
 
 Tkinter资源必须按PyInstaller运行时约定放在EXE内部的`tcl`和`tk`根目录。构建脚本会在生成便携包前检查归档中的`tcl\init.tcl`和`tk\tk.tcl`；缺失时构建直接失败，不能交付。若目标电脑曾解压过旧包，应删除旧解压目录后重新完整解压，避免继续运行旧EXE。
 
