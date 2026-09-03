@@ -9,6 +9,7 @@ from src.models.onu_registration_models import (
     OLT_FAMILY_C300,
     OnuDiscoveryScope,
     OnuProvisionRequest,
+    OnuTemplate,
     RegisteredOnu,
 )
 
@@ -35,6 +36,27 @@ BASEINFO_RE = re.compile(
 )
 ONU_INTERFACE_RE = re.compile(r"gpon-onu_\d+/\d+/\d+:\d+", re.IGNORECASE)
 C300_SN_RE = re.compile(r"^[A-Za-z0-9]{4}[0-9A-Fa-f]{8}$")
+ONU_TYPE_BLOCK_RE = re.compile(
+    r"ONU type name:\s*(?P<name>\S+)(?P<body>.*?)(?=ONU type name:|\Z)",
+    re.IGNORECASE | re.DOTALL,
+)
+PON_TYPE_RE = re.compile(r"^\s*PON type:\s*(?P<value>\S+)", re.IGNORECASE | re.MULTILINE)
+TCONT_PROFILE_BLOCK_RE = re.compile(
+    r"Profile name\s*:\s*(?P<name>\S+)(?P<body>.*?)(?=Profile name\s*:|\Z)",
+    re.IGNORECASE | re.DOTALL,
+)
+TCONT_RATE_RE = re.compile(
+    r"^\s*\d+\s+(?P<fbw>\d+)\s+(?P<abw>\d+)\s+(?P<mbw>\d+)",
+    re.MULTILINE,
+)
+
+
+def _c300_rate_label(rate_kbps: int) -> str:
+    if rate_kbps >= 1_000_000:
+        return "1G"
+    if rate_kbps >= 1_000:
+        return f"{rate_kbps // 1000}M"
+    return f"{rate_kbps}K" if rate_kbps else ""
 
 
 class ZteC300OnuDriver:
@@ -45,6 +67,42 @@ class ZteC300OnuDriver:
 
     def build_discovery_command(self, _scope: OnuDiscoveryScope) -> str:
         return "show gpon onu uncfg"
+
+    @staticmethod
+    def build_template_query_command(kind: str) -> str:
+        if kind == "onu_type":
+            return "show onu-type"
+        if kind == "dba":
+            return "show gpon profile tcont"
+        raise ValueError(f"不支持的 C300 模板查询类型：{kind}")
+
+    @staticmethod
+    def parse_templates(kind: str, output: str) -> list[OnuTemplate]:
+        if kind == "onu_type":
+            templates = []
+            for match in ONU_TYPE_BLOCK_RE.finditer(output or ""):
+                pon_match = PON_TYPE_RE.search(match.group("body"))
+                pon_type = pon_match.group("value").upper() if pon_match else ""
+                templates.append(OnuTemplate(match.group("name"), kind, pon_type=pon_type))
+            return templates
+        if kind == "dba":
+            templates = []
+            for match in TCONT_PROFILE_BLOCK_RE.finditer(output or ""):
+                rate_match = TCONT_RATE_RE.search(match.group("body"))
+                rate_kbps = (
+                    max(int(rate_match.group(name)) for name in ("fbw", "abw", "mbw"))
+                    if rate_match else 0
+                )
+                templates.append(
+                    OnuTemplate(
+                        match.group("name"),
+                        kind,
+                        rate_label=_c300_rate_label(rate_kbps),
+                        max_rate_kbps=rate_kbps,
+                    )
+                )
+            return templates
+        raise ValueError(f"不支持的 C300 模板解析类型：{kind}")
 
     def parse_discovery(self, output: str) -> list[DiscoveredOnu]:
         onus: list[DiscoveredOnu] = []

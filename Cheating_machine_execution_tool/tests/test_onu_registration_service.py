@@ -15,6 +15,7 @@ from src.models.onu_registration_models import (
     OnuDiscoveryScope,
     OnuProvisionRequest,
     OnuServiceMapping,
+    OnuTemplate,
     RegisteredOnu,
 )
 from src.services.onu_registration_service import OnuRegistrationService, driver_for_family
@@ -281,6 +282,40 @@ class FakeSession:
 
 
 class DriverTests(unittest.TestCase):
+    def test_template_parsers_keep_pon_type_and_bandwidth_rate(self):
+        c300_types = ZteC300OnuDriver().parse_templates(
+            "onu_type",
+            "ONU type name:          SD-41\nPON type:               gpon\nDescription: 4_eth_1_pots\n",
+        )
+        c600_types = ZteC600OnuDriver().parse_templates(
+            "onu_type",
+            "ONU type name:          OSCAR_XGS\nPON type:               gpon\nSpeed mode:             XGS-PON\n",
+        )
+        c300_dba = ZteC300OnuDriver().parse_templates(
+            "dba",
+            "Profile name :1G\n Type FBW(kbps) ABW(kbps) MBW(kbps)\n 4 0 0 1024000\n",
+        )
+        c600_dba = ZteC600OnuDriver().parse_templates(
+            "dba",
+            "Profile name :WT-10G\n Current used counter :5\n Type FBW(kbps) ABW(kbps) MBW(kbps)\n 4 0 0 9216000\n",
+        )
+
+        self.assertEqual(c300_types, [OnuTemplate("SD-41", "onu_type", pon_type="GPON")])
+        self.assertEqual(c600_types, [OnuTemplate("OSCAR_XGS", "onu_type", pon_type="XGS-PON")])
+        self.assertEqual(c300_dba[0].display_text, "1G（速率：1G）")
+        self.assertEqual(c600_dba[0].display_text, "WT-10G（速率：10G）")
+
+    def test_all_zero_scope_is_only_valid_for_whole_olt_discovery(self):
+        all_olt = OnuDiscoveryScope(0, 0, 0)
+
+        self.assertTrue(all_olt.is_all_olt)
+        self.assertEqual(all_olt.validate(), [])
+        self.assertTrue(OnuDiscoveryScope(0, 1, 1).validate())
+        self.assertEqual(
+            ZteC600OnuDriver().build_discovery_command(all_olt),
+            "show pon onu uncfg sn model speed-mode",
+        )
+
     def test_driver_selection_keeps_c300_and_c600_separate(self):
         self.assertIsInstance(driver_for_family(OLT_FAMILY_C300), ZteC300OnuDriver)
         self.assertIsInstance(driver_for_family(OLT_FAMILY_C600), ZteC600OnuDriver)
@@ -679,6 +714,48 @@ class DriverTests(unittest.TestCase):
 
 
 class ServiceTests(unittest.TestCase):
+    def test_template_query_runs_only_the_verified_read_only_command(self):
+        output = (
+            "ONU type name:          OSCAR_XGS\n"
+            "PON type:               gpon\n"
+            "Speed mode:             XGS-PON\nZXAN#"
+        )
+        fake = FakeSession(responses={"show onu-type": output})
+
+        result = OnuRegistrationService(session_type=fake).query_templates(
+            OLT_FAMILY_C600, make_connection(), "onu_type"
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.templates[0].display_text, "OSCAR_XGS（PON类型：XGS-PON）")
+        self.assertEqual(fake.commands, ["terminal length 0", "show onu-type"])
+
+    def test_c300_whole_olt_query_does_not_filter_global_results(self):
+        output = (
+            "gpon-onu_1/2/1:3 GPONA62D6F78 unknown\n"
+            "gpon-onu_1/2/2:5 GPONA62D6F79 unknown\nZXAN#"
+        )
+        fake = FakeSession(responses={"show gpon onu uncfg": output})
+
+        result = OnuRegistrationService(session_type=fake).query_unregistered(
+            OLT_FAMILY_C300, make_connection(), OnuDiscoveryScope(0, 0, 0)
+        )
+
+        self.assertTrue(result.ok)
+        self.assertEqual(len(result.onus), 2)
+        self.assertEqual(fake.commands, ["terminal length 0", "show gpon onu uncfg"])
+
+    def test_partial_zero_scope_is_rejected_before_any_olt_command(self):
+        fake = FakeSession()
+
+        result = OnuRegistrationService(session_type=fake).query_unregistered(
+            OLT_FAMILY_C300, make_connection(), OnuDiscoveryScope(0, 1, 1)
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("同时为 0", result.message)
+        self.assertEqual(fake.commands, [])
+
     def test_c600_query_uses_pon_scoped_command(self):
         command = "show pon onu uncfg gpon_olt-1/1/5 sn model speed-mode"
         fake = FakeSession(

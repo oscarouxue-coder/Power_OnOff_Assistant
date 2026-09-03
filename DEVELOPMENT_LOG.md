@@ -2,6 +2,16 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-09-03 - C300/C600 ONU模板查询与整机未注册ONU查询
+
+- 类型：ONU注册功能 / 只读OLT验证 / 测试 / 文档。
+- 完成内容：C300/C600的“ONU 类型模板”和“DBA模板”输入框均改为可手工输入的下拉输入框，旁边增加只读查询按钮。`show onu-type`结果显示模板对应PON类型（例如GPON、XGS-PON）；`show gpon profile tcont`结果按FBW/ABW/MBW最大值显示对应速率档位（例如1G、10G）。选择带说明的下拉项时，注册命令和本机保存值只使用模板名称，既有手工输入保持兼容。
+- 未注册ONU范围：机框、槽位、PON同时为`0`才代表整台OLT；C300执行既有全局`show gpon onu uncfg`且不再本地过滤，C600执行全局`show pon onu uncfg sn model speed-mode`。任一字段单独为0仍被拒绝，避免混合范围误查。
+- 现场只读验证：已分别登录当前C300/C600，以显式源IP执行`show onu-type`、`show gpon profile tcont`和未注册ONU命令帮助/查询，确认两种模板输出及C600全局未注册语法。没有执行配置、ONU注册、删除、`write`或其它清理动作；本次未创建现场测试对象。
+- 修改文件：`src/models/onu_registration_models.py`、`src/models/__init__.py`、`src/core/zte_c300_onu.py`、`src/core/zte_c600_onu.py`、`src/services/onu_registration_service.py`、`line_check_assistant/app.py`、两个ONU专项测试、操作员说明与项目状态。
+- 验证方法：`python -m unittest discover -s tests -p test_onu_registration_service.py -v`、`python -m unittest discover -s tests -p test_app.py -v`、`python scripts/verify_baseline.py`和`git diff --check`。专项测试已通过；Windows源码版的下拉交互及现场整机查询结果待后续验收。
+- 后续界面修复：范围说明不再放入查询范围框的额外网格行，避免挤掉原有“查询未注册ONU/清除选择/下一步”操作行并使空结果框异常撑高；改为查询按钮文字`查询未注册 ONU（全0=整机）`，查询确认框仍明确显示整机范围。复跑`test_app.py`与完整基线均通过。
+
 ## 2026-09-01 - 修复错误最终密码回显触发恢复出厂
 
 - 类型：严重 Bug 修复 / 最终登录判据 / 测试 / 文档

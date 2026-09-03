@@ -2811,6 +2811,17 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         )
         worker.start.assert_called_once_with()
 
+    def test_template_choice_uses_name_for_commands_but_keeps_manual_input(self):
+        self.assertEqual(
+            LineCheckAssistant._template_name_from_input("OSCAR_XGS（PON类型：XGS-PON）"),
+            "OSCAR_XGS",
+        )
+        self.assertEqual(
+            LineCheckAssistant._template_name_from_input("WT-10G（速率：10G）"),
+            "WT-10G",
+        )
+        self.assertEqual(LineCheckAssistant._template_name_from_input("CUSTOM-TEMPLATE"), "CUSTOM-TEMPLATE")
+
     @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
     @patch("line_check_assistant.app.threading.Thread")
     def test_c300_query_preserves_current_pon_scope(self, thread_class, _askyesno):

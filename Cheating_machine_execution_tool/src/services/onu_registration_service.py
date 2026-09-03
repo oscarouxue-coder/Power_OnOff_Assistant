@@ -82,6 +82,11 @@ class OnuRegistrationService:
     ) -> OnuOperationResult:
         driver = driver_for_family(family)
         query_scope = scope or OnuDiscoveryScope()
+        scope_errors = query_scope.validate()
+        if scope_errors:
+            message = "；".join(scope_errors)
+            self._log(family, message)
+            return OnuOperationResult(False, message)
         try:
             command = driver.build_discovery_command(query_scope)
             self._log(family, "开始查询未注册 ONU")
@@ -94,7 +99,7 @@ class OnuRegistrationService:
                     session.execute("terminal length 0")
                 output = session.execute(command, timeout=30)
             onus = tuple(driver.parse_discovery(output))
-            if family == OLT_FAMILY_C300 and scope is not None:
+            if family == OLT_FAMILY_C300 and scope is not None and not query_scope.is_all_olt:
                 target_pon = f"gpon-olt_{query_scope.shelf}/{query_scope.slot}/{query_scope.pon}"
                 onus = tuple(item for item in onus if item.pon_interface.lower() == target_pon.lower())
                 self._log(family, f"全局查询完成，已按目标 PON {target_pon} 筛选")
@@ -107,6 +112,36 @@ class OnuRegistrationService:
         except Exception as exc:
             self._log(family, f"查询失败：{exc}")
             return OnuOperationResult(False, f"查询未注册 ONU 失败：{exc}")
+
+    def query_templates(
+        self,
+        family: str,
+        connection: OltConnection,
+        kind: str,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> OnuOperationResult:
+        driver = driver_for_family(family)
+        try:
+            command = driver.build_template_query_command(kind)
+            kind_name = "ONU 类型模板" if kind == "onu_type" else "DBA 带宽模板"
+            self._log(family, f"开始查询{kind_name}")
+            with self.session_type(
+                connection,
+                logger=lambda text: self._log(family, text),
+                cancel_event=cancel_event,
+            ) as session:
+                session.execute("terminal length 0")
+                output = session.execute(command, timeout=30)
+            templates = tuple(driver.parse_templates(kind, output))
+            message = f"查询到 {len(templates)} 个{kind_name}" if templates else f"未查询到{kind_name}"
+            self._log(family, message)
+            return OnuOperationResult(True, message, output=output, templates=templates, commands=(command,))
+        except OperationCancelled as exc:
+            self._log(family, str(exc))
+            return OnuOperationResult(False, str(exc))
+        except Exception as exc:
+            self._log(family, f"模板查询失败：{exc}")
+            return OnuOperationResult(False, f"模板查询失败：{exc}")
 
     def build_preview(self, requests: Iterable[OnuProvisionRequest]) -> tuple[str, ...]:
         preview: list[str] = []

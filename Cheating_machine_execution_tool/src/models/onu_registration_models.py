@@ -46,11 +46,18 @@ class OnuDiscoveryScope:
     slot: int = 1
     pon: int = 1
 
+    @property
+    def is_all_olt(self) -> bool:
+        """Whether the operator explicitly requested an OLT-wide discovery."""
+        return self.shelf == self.slot == self.pon == 0
+
     def validate(self) -> list[str]:
+        if self.is_all_olt:
+            return []
         errors: list[str] = []
         for label, value in (("机框", self.shelf), ("槽位", self.slot), ("PON 口", self.pon)):
             if not 1 <= value <= 64:
-                errors.append(f"{label}必须在 1-64 之间")
+                errors.append(f"{label}必须在 1-64 之间；仅允许机框、槽位、PON 同时为 0 查询整台 OLT")
         return errors
 
 
@@ -89,6 +96,23 @@ class DiscoveredOnu:
         if self.state:
             details.append(f"状态:{self.state}")
         return "  ".join(details)
+
+
+@dataclass(frozen=True)
+class OnuTemplate:
+    """A read-only OLT ONU-type or T-CONT/DBA template choice."""
+
+    name: str
+    kind: str
+    pon_type: str = ""
+    rate_label: str = ""
+    max_rate_kbps: int = 0
+
+    @property
+    def display_text(self) -> str:
+        if self.kind == "onu_type":
+            return f"{self.name}（PON类型：{self.pon_type or '未知'}）"
+        return f"{self.name}（速率：{self.rate_label or '未知'}）"
 
 
 @dataclass(frozen=True)
@@ -155,6 +179,7 @@ class OnuOperationResult:
     message: str
     output: str = ""
     onus: tuple[DiscoveredOnu, ...] = ()
+    templates: tuple[OnuTemplate, ...] = ()
     cleanup_candidates: tuple[C300CleanupCandidate, ...] = ()
     registered_onus: tuple[RegisteredOnu, ...] = ()
     commands: tuple[str, ...] = ()

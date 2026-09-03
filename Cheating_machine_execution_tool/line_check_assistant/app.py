@@ -348,6 +348,7 @@ class LineCheckAssistant(Tk):
         self.onu_registration_window = None
         self.onu_telnet_test_running = False
         self.onu_query_running = False
+        self.onu_template_query_running = False
         self.onu_register_running = False
         self.onu_save_olt_running = False
         self.onu_save_after_id = None
@@ -1827,10 +1828,10 @@ class LineCheckAssistant(Tk):
             c600_slot=integer_value(self.onu_c600_slot_var, 1),
             c600_pon=integer_value(self.onu_c600_pon_var, 5),
             c600_onu_id=integer_value(self.onu_c600_onu_id_var, 1),
-            c600_onu_type=self.onu_c600_onu_type_var.get(),
+            c600_onu_type=LineCheckAssistant._template_name_from_input(self.onu_c600_onu_type_var.get()),
             c600_real_speed=self.onu_c600_real_speed_var.get(),
             c600_tcont_id=integer_value(self.onu_c600_tcont_id_var, 1),
-            c600_tcont_profile=self.onu_c600_tcont_profile_var.get(),
+            c600_tcont_profile=LineCheckAssistant._template_name_from_input(self.onu_c600_tcont_profile_var.get()),
             c600_gemport_id=integer_value(self.onu_c600_gemport_id_var, 1),
             c600_vport_id=integer_value(self.onu_c600_vport_id_var, 1),
             c600_sn_bind_both=bool(self.onu_c600_sn_bind_both_var.get()),
@@ -1839,9 +1840,15 @@ class LineCheckAssistant(Tk):
             c300_slot=integer_value(getattr(self, "onu_c300_slot_var", None), 2),
             c300_pon=integer_value(getattr(self, "onu_c300_pon_var", None), 1),
             c300_onu_id=integer_value(getattr(self, "onu_c300_onu_id_var", None), 1),
-            c300_onu_type=getattr(self, "onu_c300_onu_type_var", None).get() if hasattr(self, "onu_c300_onu_type_var") else "SD-41",
+            c300_onu_type=(
+                LineCheckAssistant._template_name_from_input(self.onu_c300_onu_type_var.get())
+                if hasattr(self, "onu_c300_onu_type_var") else "SD-41"
+            ),
             c300_tcont_id=integer_value(getattr(self, "onu_c300_tcont_id_var", None), 1),
-            c300_tcont_profile=getattr(self, "onu_c300_tcont_profile_var", None).get() if hasattr(self, "onu_c300_tcont_profile_var") else "1G",
+            c300_tcont_profile=(
+                LineCheckAssistant._template_name_from_input(self.onu_c300_tcont_profile_var.get())
+                if hasattr(self, "onu_c300_tcont_profile_var") else "1G"
+            ),
             c300_services=c300_services,
             c300_allow_offline_cleanup=False,
         )
@@ -2161,7 +2168,7 @@ class LineCheckAssistant(Tk):
         query_actions.grid(row=1, column=0, sticky="ew", pady=(0, 6))
         self.onu_query_button = ttk.Button(
             query_actions,
-            text="查询未注册 ONU",
+            text="查询未注册 ONU（全0=整机）",
             command=self._on_onu_query_unregistered_clicked,
             style="Secondary.TButton",
         )
@@ -2206,10 +2213,28 @@ class LineCheckAssistant(Tk):
             Label(c300_form, text=label, anchor="w").grid(row=row, column=column, sticky="w", padx=(10, 4), pady=5)
             ttk.Entry(c300_form, textvariable=variable, width=width).grid(row=row, column=column + 1, sticky="ew", padx=(0, 8), pady=5)
 
+        def c300_template_field(row, column, label, variable, kind, width=12):
+            Label(c300_form, text=label, anchor="w").grid(row=row, column=column, sticky="w", padx=(10, 4), pady=5)
+            container = Frame(c300_form, background=COLOR_SURFACE)
+            container.grid(row=row, column=column + 1, sticky="ew", padx=(0, 8), pady=5)
+            combo = ttk.Combobox(container, textvariable=variable, values=(), state="normal", width=width)
+            combo.pack(side="left", fill="x", expand=True)
+            combo.bind("<<ComboboxSelected>>", lambda _event: self._invalidate_onu_preview())
+            button = ttk.Button(
+                container,
+                text="查询",
+                command=lambda: self._on_onu_template_query_clicked(kind),
+                style="Secondary.TButton",
+                width=5,
+            )
+            button.pack(side="left", padx=(4, 0))
+            setattr(self, f"onu_c300_{kind}_combo", combo)
+            setattr(self, f"onu_c300_{kind}_query_button", button)
+
         c300_field(0, 0, "ONU ID", self.onu_c300_onu_id_var, 8)
-        c300_field(0, 2, "ONU 类型模板", self.onu_c300_onu_type_var, 14)
+        c300_template_field(0, 2, "ONU 类型模板", self.onu_c300_onu_type_var, "onu_type", 14)
         c300_field(0, 4, "T-CONT", self.onu_c300_tcont_id_var, 8)
-        c300_field(0, 6, "DBA模板", self.onu_c300_tcont_profile_var, 12)
+        c300_template_field(0, 6, "DBA模板", self.onu_c300_tcont_profile_var, "dba", 12)
         ttk.Label(
             c300_form,
             text=(
@@ -2283,8 +2308,28 @@ class LineCheckAssistant(Tk):
             entry.grid(row=row, column=column + 1, sticky="ew", padx=(0, 8), pady=5)
             return entry
 
+        def c600_template_field(row, column, label, variable, kind, width=12):
+            Label(c600_form, text=label, anchor="w").grid(
+                row=row, column=column, sticky="w", padx=(10, 4), pady=5
+            )
+            container = Frame(c600_form, background=COLOR_SURFACE)
+            container.grid(row=row, column=column + 1, sticky="ew", padx=(0, 8), pady=5)
+            combo = ttk.Combobox(container, textvariable=variable, values=(), state="normal", width=width)
+            combo.pack(side="left", fill="x", expand=True)
+            combo.bind("<<ComboboxSelected>>", lambda _event: self._invalidate_onu_preview())
+            button = ttk.Button(
+                container,
+                text="查询",
+                command=lambda: self._on_onu_template_query_clicked(kind),
+                style="Secondary.TButton",
+                width=5,
+            )
+            button.pack(side="left", padx=(4, 0))
+            setattr(self, f"onu_c600_{kind}_combo", combo)
+            setattr(self, f"onu_c600_{kind}_query_button", button)
+
         c600_field(0, 0, "ONU ID", self.onu_c600_onu_id_var, 8)
-        c600_field(0, 2, "ONU 类型模板", self.onu_c600_onu_type_var, 14)
+        c600_template_field(0, 2, "ONU 类型模板", self.onu_c600_onu_type_var, "onu_type", 14)
         Label(c600_form, text="速率设置", anchor="w").grid(row=0, column=4, sticky="w", padx=(10, 4), pady=5)
         ttk.Combobox(
             c600_form,
@@ -2294,7 +2339,7 @@ class LineCheckAssistant(Tk):
             width=10,
         ).grid(row=0, column=5, sticky="ew", padx=(0, 8), pady=5)
         c600_field(0, 6, "上网T-CONT", self.onu_c600_tcont_id_var, 8)
-        c600_field(1, 0, "上网DBA模板", self.onu_c600_tcont_profile_var, 12)
+        c600_template_field(1, 0, "上网DBA模板", self.onu_c600_tcont_profile_var, "dba", 12)
         c600_field(1, 2, "上网GEM Port", self.onu_c600_gemport_id_var, 8)
         c600_field(1, 4, "上网VPort", self.onu_c600_vport_id_var, 8)
         Checkbutton(
@@ -2798,6 +2843,11 @@ class LineCheckAssistant(Tk):
             raise ValueError("；".join(errors))
         return scope
 
+    @staticmethod
+    def _template_name_from_input(value: str) -> str:
+        """Strip the read-only dropdown annotation while preserving manual input."""
+        return (value or "").split("（", 1)[0].strip()
+
     def _build_onu_provision_requests(self):
         selected_onus = self._selected_unregistered_onus()
         if not selected_onus:
@@ -2814,9 +2864,9 @@ class LineCheckAssistant(Tk):
                     family=family,
                     onu=selected_onus[0],
                     onu_id=int(self.onu_c300_onu_id_var.get().strip()),
-                    onu_type=self.onu_c300_onu_type_var.get().strip(),
+                    onu_type=LineCheckAssistant._template_name_from_input(self.onu_c300_onu_type_var.get()),
                     tcont_id=int(self.onu_c300_tcont_id_var.get().strip()),
-                    tcont_profile=self.onu_c300_tcont_profile_var.get().strip(),
+                    tcont_profile=LineCheckAssistant._template_name_from_input(self.onu_c300_tcont_profile_var.get()),
                     services=tuple(services),
                 )]
             except ValueError as exc:
@@ -2826,10 +2876,10 @@ class LineCheckAssistant(Tk):
                 family=family,
                 onu=selected_onus[0],
                 onu_id=int(self.onu_c600_onu_id_var.get().strip()),
-                onu_type=self.onu_c600_onu_type_var.get().strip(),
+                onu_type=LineCheckAssistant._template_name_from_input(self.onu_c600_onu_type_var.get()),
                 real_speed=self.onu_c600_real_speed_var.get().strip(),
                 tcont_id=int(self.onu_c600_tcont_id_var.get().strip()),
-                tcont_profile=self.onu_c600_tcont_profile_var.get().strip(),
+                tcont_profile=LineCheckAssistant._template_name_from_input(self.onu_c600_tcont_profile_var.get()),
                 gemport_id=int(self.onu_c600_gemport_id_var.get().strip()),
                 vport_id=int(self.onu_c600_vport_id_var.get().strip()),
                 sn_bind_both=bool(self.onu_c600_sn_bind_both_var.get()),
@@ -2939,6 +2989,59 @@ class LineCheckAssistant(Tk):
         self._set_onu_telnet_status(result.message, COLOR_SUCCESS if result.ok else COLOR_DANGER)
         self._log(f"[ONU注册][{family}] OLT 登录测试：{host} - {result.message}")
 
+    def _on_onu_template_query_clicked(self, kind: str) -> None:
+        if self.onu_template_query_running:
+            return
+        family = self.onu_family_var.get()
+        try:
+            connection = self._current_onu_connection()
+        except ValueError as exc:
+            self._set_onu_query_status(str(exc), COLOR_DANGER)
+            messagebox.showwarning("查询参数错误", str(exc), parent=self.onu_registration_window)
+            return
+        kind_name = "ONU 类型模板" if kind == "onu_type" else "DBA 带宽模板"
+        command = "show onu-type" if kind == "onu_type" else "show gpon profile tcont"
+        confirmed = messagebox.askyesno(
+            f"确认查询{kind_name}",
+            f"将登录 {family} OLT 并执行只读命令：\n{command}\n是否继续？",
+            parent=self.onu_registration_window,
+        )
+        if not confirmed:
+            return
+        self.onu_template_query_running = True
+        self.onu_cancel_event = threading.Event()
+        self._set_onu_query_status(f"正在查询 {family} {kind_name}...", COLOR_WARNING)
+        self._set_onu_registration_action_buttons_state("disabled")
+        if hasattr(self, "onu_stop_button"):
+            self.onu_stop_button.configure(state="normal")
+        thread = threading.Thread(
+            target=self._onu_template_query_worker,
+            args=(family, connection, kind),
+            daemon=True,
+        )
+        thread.start()
+
+    def _onu_template_query_worker(self, family: str, connection: OltConnection, kind: str) -> None:
+        result = OnuRegistrationService(logger=self._log).query_templates(
+            family, connection, kind, self.onu_cancel_event
+        )
+        self.after(0, lambda: self._complete_onu_template_query(family, connection.host, kind, result))
+
+    def _complete_onu_template_query(self, family: str, host: str, kind: str, result) -> None:
+        self.onu_template_query_running = False
+        self._set_onu_registration_action_buttons_state("normal")
+        if hasattr(self, "onu_stop_button"):
+            self.onu_stop_button.configure(state="disabled")
+        kind_name = "ONU 类型模板" if kind == "onu_type" else "DBA 带宽模板"
+        if result.ok:
+            combo = getattr(self, f"onu_{family.lower()}_{kind}_combo", None)
+            if combo is not None:
+                combo.configure(values=tuple(template.display_text for template in result.templates))
+            self._set_onu_query_status(result.message, COLOR_SUCCESS if result.templates else COLOR_WARNING)
+        else:
+            self._set_onu_query_status(result.message, COLOR_DANGER)
+        self._log(f"[ONU注册][{family}] 查询{kind_name}：{host} - {result.message}")
+
     def _on_onu_query_unregistered_clicked(self) -> None:
         if self.onu_query_running:
             return
@@ -2950,14 +3053,16 @@ class LineCheckAssistant(Tk):
             self._set_onu_query_status(str(exc), COLOR_DANGER)
             messagebox.showwarning("查询参数错误", str(exc), parent=self.onu_registration_window)
             return
-        command_text = (
-            "show gpon onu uncfg"
-            if family == OLT_FAMILY_C300
-            else f"show pon onu uncfg gpon_olt-{scope.shelf}/{scope.slot}/{scope.pon} sn model speed-mode"
-        )
+        if family == OLT_FAMILY_C300:
+            command_text = "show gpon onu uncfg"
+        elif scope.is_all_olt:
+            command_text = "show pon onu uncfg sn model speed-mode"
+        else:
+            command_text = f"show pon onu uncfg gpon_olt-{scope.shelf}/{scope.slot}/{scope.pon} sn model speed-mode"
+        scope_text = "整台 OLT" if scope.is_all_olt else f"机框 {scope.shelf} / 槽位 {scope.slot} / PON {scope.pon}"
         confirmed = messagebox.askyesno(
             "确认查询未注册 ONU",
-            f"将登录 {family} OLT 并执行只读命令：\n{command_text}\n是否继续？",
+            f"范围：{scope_text}\n将登录 {family} OLT 并执行只读命令：\n{command_text}\n是否继续？",
             parent=self.onu_registration_window,
         )
         if not confirmed:
@@ -3235,6 +3340,11 @@ class LineCheckAssistant(Tk):
             self.onu_query_button.configure(state=state)
         if hasattr(self, "onu_telnet_test_button"):
             self.onu_telnet_test_button.configure(state=state)
+        for family in ("c300", "c600"):
+            for kind in ("onu_type", "dba"):
+                button = getattr(self, f"onu_{family}_{kind}_query_button", None)
+                if button is not None:
+                    button.configure(state=state)
         if hasattr(self, "onu_family_combo"):
             self.onu_family_combo.configure(state="readonly" if state == "normal" else "disabled")
         if hasattr(self, "onu_c300_cleanup_query_button"):

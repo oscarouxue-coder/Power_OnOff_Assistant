@@ -36,6 +36,7 @@ from .onu_registration_models import (
     OnuOperationResult,
     OnuProvisionRequest,
     OnuServiceMapping,
+    OnuTemplate,
     RegisteredOnu,
 )
 
@@ -76,4 +77,5 @@ __all__ = [
     "OnuOperationResult",
     "OnuProvisionRequest",
     "OnuServiceMapping",
+    "OnuTemplate",
 ]
