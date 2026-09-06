@@ -1,6 +1,7 @@
 import inspect
 import os
 import queue
+import re
 import sys
 import tempfile
 import threading
@@ -17,6 +18,8 @@ from line_check_assistant.app import (
     COLOR_WARNING,
     LineCheckAssistant,
     MAIN_LOG_EVENTS_PER_TICK,
+    MAIN_WINDOW_TITLE,
+    RELEASE_VERSION,
     TEST_ITEM_DEFAULT_CONFIG_PATH,
     TEST_ITEM_COMMAND_GROUP_SPACING,
     TEST_ITEM_HIDDEN_UI_DEFAULT_OPTIONS,
@@ -399,13 +402,23 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertLess(source.index(refresh_serial), source.index(admin_status))
         self.assertIn('style="Success.TLabel" if admin_ok else "Danger.TLabel"', source)
 
-    def test_main_window_title_uses_openwrt_aging_environment_name(self):
-        """Windows 标题栏必须使用当前工具名称。"""
+    def test_main_window_title_includes_the_current_release_version(self):
+        """Windows 标题栏必须显示工具名称及当前发布版本。"""
         import inspect
 
         source = inspect.getsource(LineCheckAssistant.__init__)
 
-        self.assertIn('self.title("openWRT老化测试环境搭建助手")', source)
+        version_info_path = (
+            Path(__file__).resolve().parents[1]
+            / "line_check_assistant"
+            / "packaging_assets"
+            / "VERSION_INFO.txt"
+        )
+        match = re.search(r"^版本：\s*(\S+)", version_info_path.read_text(encoding="utf-8"), re.MULTILINE)
+        self.assertIsNotNone(match)
+        self.assertEqual(RELEASE_VERSION, match.group(1))
+        self.assertEqual(MAIN_WINDOW_TITLE, f"openWRT老化测试环境搭建助手 {RELEASE_VERSION}")
+        self.assertIn("self.title(MAIN_WINDOW_TITLE)", source)
 
     def test_main_card_shows_power_test_status_and_stop_button(self):
         """主界面空白区显示状态，并承接从全流程窗口移出的停止按钮。"""
@@ -2468,7 +2481,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         context.onu_username_var.set.assert_called_once_with("zte")
         context.onu_password_var.set.assert_called_once_with("zte")
 
-    def test_legacy_select_helper_keeps_only_first_onu_then_clear_removes_it(self):
+    def test_select_all_helper_marks_every_onu_then_clear_removes_all(self):
         first = Mock()
         second = Mock()
         context = SimpleNamespace(
@@ -2482,13 +2495,13 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         LineCheckAssistant._select_all_unregistered_onus(context)
 
         first.set.assert_called_once_with(True)
-        second.set.assert_called_once_with(False)
+        second.set.assert_called_once_with(True)
 
         LineCheckAssistant._clear_unregistered_onu_selection(context)
 
         first.set.assert_has_calls([call(True), call(False)])
-        second.set.assert_has_calls([call(False), call(False)])
-        context.onu_c600_selection_var.set.assert_has_calls([call("0"), call("")])
+        second.set.assert_has_calls([call(True), call(False)])
+        context.onu_c600_selection_var.set.assert_called_once_with("")
         self.assertEqual(context._invalidate_onu_preview.call_count, 2)
         self.assertEqual(context._refresh_onu_selection_action_state.call_count, 2)
 
@@ -2518,8 +2531,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         LineCheckAssistant._on_onu_selection_toggled(context, selected_onu, clicked)
 
-        clicked.set.assert_called_once_with(True)
-        other.set.assert_called_once_with(False)
+        clicked.set.assert_not_called()
+        other.set.assert_not_called()
         context._clear_c300_cleanup_candidates.assert_called_once_with()
         context._invalidate_onu_preview.assert_called_once_with()
         context._refresh_onu_selection_action_state.assert_called_once_with()
@@ -2713,7 +2726,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             ),
         )
 
-    def test_c300_request_allows_exactly_one_selected_onu(self):
+    def test_c300_request_builds_batch_with_distinct_per_pon_ids(self):
         selected = DiscoveredOnu(
             family=OLT_FAMILY_C300,
             pon_interface="gpon-olt_1/2/1",
@@ -2731,9 +2744,16 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(len(requests), 1)
         self.assertIs(requests[0].onu, selected)
 
-        context._selected_unregistered_onus.return_value = [selected, selected]
-        with self.assertRaisesRegex(ValueError, "C300 每次只能选择一台"):
-            LineCheckAssistant._build_onu_provision_requests(context)
+        second = DiscoveredOnu(
+            family=OLT_FAMILY_C300,
+            pon_interface="gpon-olt_1/2/1",
+            onu_interface="gpon-onu_1/2/1:4",
+            suggested_onu_id=4,
+            serial_number="GPONA62D6F79",
+        )
+        context._selected_unregistered_onus.return_value = [selected, second]
+        requests = LineCheckAssistant._build_onu_provision_requests(context)
+        self.assertEqual([request.onu_id for request in requests], [3, 4])
 
     def test_c300_request_reads_parameterized_business_inputs(self):
         selected = DiscoveredOnu(
@@ -3093,7 +3113,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         LineCheckAssistant._on_c600_onu_selected(context, onu, variable)
 
-        variable.set.assert_called_once_with(True)
+        variable.set.assert_not_called()
         context._on_onu_selection_toggled.assert_called_once_with(onu, variable)
         context.onu_notebook.select.assert_called_once_with(context.onu_config_tab)
 

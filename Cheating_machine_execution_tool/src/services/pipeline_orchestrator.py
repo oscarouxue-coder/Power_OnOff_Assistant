@@ -272,7 +272,7 @@ def _summarize_sample_parameter_write(ctx: PipelineContext) -> SubTaskStatus:
 
 
 def _summarize_onu_registration(ctx: PipelineContext) -> SubTaskStatus:
-    """ONU 注册必填项：OLT 型号 / OLT IP / 源 IP / 用户名 / 密码。"""
+    """ONU 注册必填项：OLT 连接 + 已预选且已预览的本批目标。"""
     cfg = ctx.onu_registration
     family = (getattr(cfg, "olt_family", "C300") or "C300").strip()
     ip = (cfg.olt_ip or "").strip()
@@ -288,7 +288,16 @@ def _summarize_onu_registration(ctx: PipelineContext) -> SubTaskStatus:
         missing_list.append("OLT 用户名")
     if not password:
         missing_list.append("OLT 密码")
-    summary = f"OLT={family} {ip or '(未填)'} / 源IP={source_ip or '(未填)'} / 用户={username or '(空)'}"
+    selected_onus = _get_attr(ctx.app, "_selected_unregistered_onus", None)
+    targets = selected_onus() if callable(selected_onus) else ()
+    if not targets:
+        missing_list.append("已预选 ONU 目标")
+    if not bool(_get_attr(ctx.app, "onu_preview_ready", False)):
+        missing_list.append("ONU 命令预览")
+    summary = (
+        f"OLT={family} {ip or '(未填)'} / 源IP={source_ip or '(未填)'} / "
+        f"用户={username or '(空)'} / 目标={len(targets)} 台"
+    )
     return SubTaskStatus(
         code="onu_registration",
         ready=not missing_list,
@@ -662,20 +671,14 @@ class PipelineOrchestrator:
             start_method()
 
     def _run_onu_registration(self) -> None:
-        """4. ONU 注册:自动查询 + 自动注册(异步,弹确认框)。"""
+        """5. ONU 注册：提交预先审核的批次并等待最终验证结果。"""
         app = self.ctx.app
-        # 先查,再注册
-        query_method = _get_attr(app, "_on_onu_query_clicked", None)
-        register_method = _get_attr(app, "_on_onu_register_clicked", None)
-        if not callable(query_method) or not callable(register_method):
-            raise RuntimeError("主程序未实现 _on_onu_query_clicked / _on_onu_register_clicked")
-        self.emit("已启动 ONU 查询;查询完成后弹注册确认框,确认后自动注册。")
-        query_method()
-        # 不在这里同步阻塞——主程序走后台线程;用户确认后自动注册。
-        # 失败传播靠 ONT_ONU 的运行标志或操作员主动停止。
-        # 当前实现:把 register_method 也调起来(若操作员在查询结果中已勾选 ONU)。
-        # 但 register_method 自身有「未选择 ONU」校验,所以可能 noop;先 emit 提示。
-        self.emit("ONU 注册由操作员在主程序查询结果中勾选后点击「开始注册」;全流程不强制。")
+        pipeline_method = _get_attr(app, "_run_pipeline_onu_registration", None)
+        if not callable(pipeline_method):
+            raise RuntimeError("主程序未实现 _run_pipeline_onu_registration")
+        self.emit("全流程 ONU 注册：等待操作员确认已预览的批量目标，并等待逐台验证完成。")
+        pipeline_method()
+        self.emit("全流程 ONU 批量注册已完成。")
 
     def _run_serial_terminal(self) -> None:
         """串口日志：在 Tk 主线程显示终端并打开全部串口，管道期间保持开启。"""

@@ -271,8 +271,10 @@ class OnuRegistrationService:
         if len(families) != 1:
             return OnuOperationResult(False, "一次操作不能混合 C300 和 C600 ONU")
         family = next(iter(families))
-        if len(items) != 1:
-            return OnuOperationResult(False, f"{family} 每次只能注册一台 ONU")
+        if len(items) > 1 and c300_cleanup_candidate is not None:
+            return OnuOperationResult(
+                False, "批量注册不允许 C300 离线 ONU 清理重试，请改为单台处理"
+            )
         driver = driver_for_family(family)
         all_commands: list[str] = []
         all_outputs: list[str] = []
@@ -282,11 +284,25 @@ class OnuRegistrationService:
             cancel_event=cancel_event,
         )
         try:
+            seen_serials: set[str] = set()
+            seen_pon_ids: set[tuple[str, int]] = set()
             for request in items:
                 errors = driver.validate_request(request)
                 if errors:
                     raise ValueError("；".join(errors))
+                serial = request.onu.serial_number.strip().upper()
+                target_key = (request.onu.pon_interface.lower(), int(request.onu_id or 0))
+                if serial in seen_serials:
+                    raise ValueError(f"批量目标 SN 重复：{serial}")
+                if target_key in seen_pon_ids:
+                    raise ValueError(
+                        f"批量目标 ONU ID 重复：{request.onu.pon_interface} / {request.onu_id}"
+                    )
+                seen_serials.add(serial)
+                seen_pon_ids.add(target_key)
             session.connect()
+
+            # 全部目标先完成只读预检，任一冲突时还没有下发配置命令。
             for index, request in enumerate(items, 1):
                 target = request.onu.onu_interface or request.onu.pon_interface
                 self._log(family, f"阶段 1/3：下发前检查 {index}/{len(items)} {target}")
@@ -298,6 +314,9 @@ class OnuRegistrationService:
                 if precheck_errors:
                     raise RuntimeError("；".join(precheck_errors))
 
+            # 预检全部通过后，才按固定顺序逐台配置、等待上线并回读。
+            for index, request in enumerate(items, 1):
+                target = request.onu.onu_interface or request.onu.pon_interface
                 provision_commands = driver.build_provision_commands(request)
                 self._log(family, f"阶段 2/3：注册与业务配置 {index}/{len(items)} {target}")
                 try:

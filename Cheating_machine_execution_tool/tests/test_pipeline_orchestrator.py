@@ -524,6 +524,17 @@ class PipelineRunOrderTests(unittest.TestCase):
 
 
 class SampleUpgradeDispatchTests(unittest.TestCase):
+    def test_onu_registration_uses_completion_waiting_bridge(self) -> None:
+        run_onu = MagicMock()
+        ctx = _make_context()
+        ctx.app = type("PipelineApp", (), {"_run_pipeline_onu_registration": run_onu})()
+        messages: List[str] = []
+
+        PipelineOrchestrator(ctx, messages.append)._run_onu_registration()
+
+        run_onu.assert_called_once_with()
+        self.assertIn("等待逐台验证完成", "".join(messages))
+
     def test_full_package_upgrade_uses_main_program_unified_parallel_entry(self) -> None:
         """Tftp指令 / Tftp Put 必须共用当前存在的主程序并行入口，再由其内部独立分流。"""
         for transfer_method in ("Tftp指令", "Tftp Put"):

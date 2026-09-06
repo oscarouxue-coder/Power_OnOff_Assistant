@@ -943,13 +943,61 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(candidate.onu_interface, "gpon-onu_1/2/1:8")
         self.assertEqual(candidate.serial_number, "GPON12345678")
 
-    def test_both_olt_families_reject_multi_onu_registration(self):
+    def test_batch_rejects_duplicate_target_before_any_olt_command(self):
         service = OnuRegistrationService(session_type=FakeSession())
 
         result = service.register(make_connection(), [make_c300_request(), make_c300_request()])
 
         self.assertFalse(result.ok)
-        self.assertIn("C300 每次只能注册一台 ONU", result.message)
+        self.assertIn("批量目标 SN 重复", result.message)
+
+    @patch("src.services.onu_registration_service.driver_for_family")
+    def test_batch_completes_all_prechecks_before_first_provision_command(self, driver_for_family):
+        first = replace(make_c300_request(), onu_id=3)
+        second = replace(
+            first,
+            onu=replace(
+                first.onu,
+                onu_interface="gpon-onu_1/2/1:4",
+                suggested_onu_id=4,
+                serial_number="GPONA62D6F79",
+            ),
+            onu_id=4,
+        )
+        driver = MagicMock()
+        driver.validate_request.return_value = []
+        driver.build_precheck_commands.side_effect = lambda request: [f"precheck {request.onu_id}"]
+        driver.precheck_allows_cli_error.return_value = False
+        driver.validate_precheck.return_value = []
+        driver.build_provision_commands.side_effect = lambda request: [f"provision {request.onu_id}"]
+        driver.build_readiness_command.side_effect = lambda request: f"ready {request.onu_id}"
+        driver.readiness_state.return_value = (True, "working")
+        driver.build_verify_commands.side_effect = lambda request: [f"verify {request.onu_id}"]
+        driver.validate_verification.return_value = []
+        driver_for_family.return_value = driver
+        session = MagicMock()
+        session.execute.return_value = "ZXAN#"
+        session.execute_many.return_value = ["ZXAN#"]
+        timeline = MagicMock()
+        timeline.attach_mock(session.execute, "execute")
+        timeline.attach_mock(session.execute_many, "execute_many")
+        service = OnuRegistrationService(session_type=lambda *_args, **_kwargs: session)
+
+        result = service.register(make_connection(), [first, second])
+
+        self.assertTrue(result.ok, result.message)
+        names_and_commands = [
+            (
+                call[0],
+                call.args[0][0] if call[0] == "execute_many" else call.args[0],
+            )
+            for call in timeline.mock_calls
+            if call[0] in {"execute", "execute_many"}
+        ]
+        self.assertEqual(
+            names_and_commands[:3],
+            [("execute", "precheck 3"), ("execute", "precheck 4"), ("execute_many", "provision 3")],
+        )
 
     def test_c600_allows_explicit_independent_write(self):
         fake = FakeSession()

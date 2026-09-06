@@ -204,7 +204,18 @@ class PortableReleaseBuildScriptTests(unittest.TestCase):
 
     def test_build_script_creates_directory_zip_hash_and_never_launches_exe(self):
         script = (PROJECT_ROOT / "build_line_check_assistant.ps1").read_text(encoding="utf-8")
+        icon_path = (
+            PROJECT_ROOT
+            / "assets"
+            / "icons"
+            / "line_check_assistant_network_topology_v1.ico"
+        )
 
+        self.assertTrue(icon_path.is_file())
+        self.assertEqual(icon_path.read_bytes()[:4], b"\x00\x00\x01\x00")
+        self.assertIn("line_check_assistant_network_topology_v1.ico", script)
+        self.assertIn("--icon $applicationIcon", script)
+        self.assertIn('--add-data "$versionInfo;."', script)
         self.assertIn("LineCheckAssistant_portable", script)
         self.assertIn("create_portable_config.py", script)
         self.assertIn("Compress-Archive", script)

@@ -2,6 +2,50 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-09-05 - 实现全流程批量 ONU 注册
+
+- 类型：功能 / 测试 / 文档。
+- 背景：全流程 ONU 子任务此前仅启动查询并依赖人工继续，service层限制每次一台，无法可靠处理多台目标或等待最终注册结果。
+- 完成内容：① 未注册列表改为Windows原生多选框，预览逐台显示SN、PON和ONU ID；② 新增批量请求构建模块，按PON独立分配不重复ID，拒绝重复SN；③ 统一注册service先完成整批只读预检，全部通过后才按固定顺序逐台配置、上线轮询和回读，一台失败或停止不再启动后续目标；④ 批量禁用C300离线ONU清理重试且不自动`write`；⑤ 全流程要求操作员预先勾选并生成预览，仍保留注册确认，并等待批次成功、失败或停止后才进入下一项。
+- 修改文件：
+  - `.claude/plans/batch-onu-registration-pipeline.md`
+  - `Cheating_machine_execution_tool/src/services/onu_batch_registration_service.py`
+  - `Cheating_machine_execution_tool/src/services/onu_registration_service.py`
+  - `Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_batch_registration_service.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_registration_service.py`
+  - `Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在`Cheating_machine_execution_tool`执行ONU批量、ONU注册、主程序与全流程编排专项测试，以及`python scripts\verify_baseline.py`和`git diff --check`。
+- 验证结果：批量请求2项、ONU注册43项、主程序190项、全流程48项专项测试均通过；`python scripts\verify_baseline.py`全绿（61个源码文件编译、758项单元测试、173项强制基线测试及协议不变量）。未构建或运行EXE，未连接真实OLT。
+- 后续待办：在Windows源码版和C300/C600真实OLT分别验证多台同PON/跨PON、ID冲突、缺失目标、逐台失败、停止与全流程等待边界；现场结论不得由自动化测试替代。
+
+## 2026-09-05 - 显示主界面发布版本
+
+- 类型：界面优化 / 文档。
+- 背景：操作员需要在 Windows 主窗口左上角标题栏直接识别当前发布版本。
+- 完成内容：标题栏显示“openWRT老化测试环境搭建助手 V1.1.1”；版本值从 `line_check_assistant/packaging_assets/VERSION_INFO.txt` 读取。打包时同一文件会嵌入 EXE，因此后续只更新发布说明即可同步标题版本。
+- 修改文件：`Cheating_machine_execution_tool/line_check_assistant/app.py`、`Cheating_machine_execution_tool/build_line_check_assistant.ps1`、`Cheating_machine_execution_tool/tests/test_app.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：在 `Cheating_machine_execution_tool` 执行 `python -m unittest discover -s tests -p test_app.py -v`、`python scripts/verify_baseline.py` 与 `git diff --check`。
+- 验证结果：主界面专项 `Ran 190 tests ... OK`；PowerShell 构建脚本语法检查通过；`python scripts\verify_baseline.py` 全绿（60 个源码文件编译、754 项单元测试、172 项强制基线测试及协议不变量均通过）。未构建或运行 EXE，未连接真实设备。
+- 后续待办：下次发布时更新 `VERSION_INFO.txt` 后再打包；本轮不构建或运行 EXE。
+
+## 2026-09-05 - 采用网络拓扑诊断应用图标
+
+- 类型：视觉素材 / Windows 发布配置。
+- 背景：项目负责人从候选中选定“拓扑核心 + 三终端 + 诊断波形”的网络通信产品方向。
+- 完成内容：新增透明底 PNG 和含 16、32、48、256 px PNG 帧的 ICO；构建脚本显式校验 ICO 存在，并通过 PyInstaller `--icon` 写入 `LineCheckAssistant.exe`。包内 `VERSION_INFO.txt` 更新为 `V1.1.2`（2026-09-05），记录本次图标变更；未修改设备业务、配置或运行逻辑。
+- 构建修正：版本说明随 EXE 嵌入时改用已计算的绝对路径，避免 PyInstaller 按 `.spec` 输出目录解释相对路径而找不到 `VERSION_INFO.txt`。
+- 修改文件：`Cheating_machine_execution_tool/assets/icons/line_check_assistant_network_topology_v1.png`、`Cheating_machine_execution_tool/assets/icons/line_check_assistant_network_topology_v1.ico`、`Cheating_machine_execution_tool/build_line_check_assistant.ps1`、`Cheating_machine_execution_tool/tests/test_portable_release.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：检查 ICO 容器及各尺寸帧；执行 `python -m unittest discover -s tests -p test_portable_release.py -v`、`python scripts/verify_baseline.py`，随后执行构建脚本并只读核验 EXE 图标资源及便携 ZIP。
+- 验证结果：ICO 为标准 type=1 容器，包含 16、32、48、256 px 的 32-bit PNG 帧；发布专项 5 项通过，完整基线通过（60 个源码文件编译、754 项单元测试、172 项强制基线测试及协议不变量）。构建成功，PyInstaller 日志确认写入 4 个图标资源；冻结包包含 `tcl\\init.tcl`、`tk\\tk.tcl` 和 `VERSION_INFO.txt`。便携 ZIP 含 12 个条目、EXE/版本说明/6 个脱敏配置文件，SHA-256 一致，Authenticode 状态为 `NotSigned`。未在当前 PC 运行 EXE，未连接真实设备。
+- 后续待办：按项目约定不在当前 PC 启动新 EXE；如需确认真实 Windows 图标显示，请在目标电脑完整解压便携 ZIP 后单独验收。
+
 ## 2026-09-03 - 在便携包附带版本说明
 
 - 类型：构建 / 文档。
@@ -3238,3 +3282,11 @@
 - 验证方法：在 `Cheating_machine_execution_tool` 执行 `python -m unittest discover -s tests -p test_serial_upgrade_service.py -v`、`python scripts/verify_baseline.py` 和 `git diff --check`。
 - 验证结果：串口升级专项 `Ran 38 tests ... OK`；完整基线以本机权限执行，59 个源码文件编译、741 项单元测试、172 项强制基线测试和协议不变量均通过，输出 `ALL CHECKS PASSED`。未构建或运行 EXE，未连接真实样机。
 - 后续待办：分别在 Windows 源码版和真实样机验证 `Tftp指令`、`Tftp Put` 的“上电帧后稳定 1 秒 → 首个回车 → UserName → boot 登录 → 传输”日志和稳定性；在项目负责人提供现场结果前，不升级本项验收状态。
+
+## 2026-09-05 - 简约专业的 Windows 应用图标素材
+
+- 类型：视觉素材。
+- 完成内容：新增深蓝圆角底、青蓝电源符号与三通道短条的无文字图标，表达多通道电源控制与测试；未改动程序逻辑、打包脚本或 EXE。
+- 新增文件：`Cheating_machine_execution_tool/assets/icons/line_check_assistant_power_control_v1.png`、`Cheating_machine_execution_tool/assets/icons/line_check_assistant_power_control_v1.ico`。
+- 验证结果：ICO 容器头校验为标准图标（type=1），包含 16、32、48、256 px 四个 PNG 帧；可由 Windows `System.Drawing.Icon` 正常解码。
+- 后续待办：用户确认采用后，再在打包脚本中引用该 ICO 并执行一次仅打包完成性检查；按项目约定不在本机运行新 EXE。

@@ -9,6 +9,7 @@ $thirdPartyNotice = Join-Path $projectRoot "THIRD_PARTY_NOTICES.md"
 $portableConfigScript = Join-Path $projectRoot "scripts\create_portable_config.py"
 $portableReadme = Join-Path $projectRoot "line_check_assistant\packaging_assets\PORTABLE_README.txt"
 $versionInfo = Join-Path $projectRoot "line_check_assistant\packaging_assets\VERSION_INFO.txt"
+$applicationIcon = Join-Path $projectRoot "assets\icons\line_check_assistant_network_topology_v1.ico"
 $runtimeConfigDir = Join-Path $projectRoot "Auto_power_on_off_tool\config"
 $exePath = Join-Path $distDir "LineCheckAssistant.exe"
 $portableDir = Join-Path $distDir "LineCheckAssistant_portable"
@@ -19,11 +20,16 @@ New-Item -ItemType Directory -Force -Path $specDir | Out-Null
 
 Push-Location $projectRoot
 try {
+    if (-not (Test-Path -LiteralPath $applicationIcon -PathType Leaf)) {
+        throw "Application icon is missing: $applicationIcon"
+    }
+
     python -m PyInstaller `
         --onefile `
         --windowed `
         --noconfirm `
         --name LineCheckAssistant `
+        --icon $applicationIcon `
         --specpath $specDir `
         --additional-hooks-dir $hookDir `
         --paths .\Auto_power_on_off_tool `
@@ -36,6 +42,7 @@ try {
         --hidden-import pywifi `
         --hidden-import configobj `
         --hidden-import psutil `
+        --add-data "$versionInfo;." `
         --hidden-import test_case.powe_on_off_telnet `
         --hidden-import test_case.power_on_off_ssh `
         .\run_line_check_assistant.py

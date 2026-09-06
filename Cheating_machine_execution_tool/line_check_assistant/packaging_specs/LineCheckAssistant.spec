@@ -14,7 +14,7 @@ a = Analysis(
     ['..\\..\\run_line_check_assistant.py'],
     pathex=['.\\Auto_power_on_off_tool'],
     binaries=[],
-    datas=[],
+    datas=[('F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool\\line_check_assistant\\packaging_assets\\VERSION_INFO.txt', '.')],
     hiddenimports=hiddenimports,
     hookspath=['F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool\\line_check_assistant\\packaging_hooks'],
     hooksconfig={},
@@ -47,4 +47,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool\\assets\\icons\\line_check_assistant_network_topology_v1.ico'],
 )

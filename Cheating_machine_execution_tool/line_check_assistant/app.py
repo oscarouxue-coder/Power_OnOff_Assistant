@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import queue
 import re
+import sys
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -112,6 +113,7 @@ from src.services import (
     validate_dut_advanced_request,
 )
 from src.services.onu_registration_service import OnuRegistrationService
+from src.services.onu_batch_registration_service import build_batch_requests
 from src.services.device_project_info_service import (
     DeviceProjectInfo,
     DeviceProjectInfoQueryRequest,
@@ -284,6 +286,35 @@ COLOR_WARNING_BG = "#f8f0dd"
 COLOR_DANGER = "#b42318"
 COLOR_DANGER_DARK = "#8f1c13"
 COLOR_DANGER_BG = "#fbe9e7"
+APPLICATION_NAME = "openWRT老化测试环境搭建助手"
+VERSION_INFO_FILENAME = "VERSION_INFO.txt"
+
+
+def _load_release_version() -> str:
+    """从随发布包提供的版本说明中读取当前发布版本。"""
+    if getattr(sys, "frozen", False):
+        version_info_paths = [Path(sys._MEIPASS) / VERSION_INFO_FILENAME]
+    else:
+        version_info_paths = [
+            Path(__file__).resolve().parent / "packaging_assets" / VERSION_INFO_FILENAME
+        ]
+
+    for version_info_path in version_info_paths:
+        try:
+            match = re.search(
+                r"^版本：\s*(\S+)",
+                version_info_path.read_text(encoding="utf-8"),
+                flags=re.MULTILINE,
+            )
+        except OSError:
+            continue
+        if match:
+            return match.group(1)
+    return "未标注版本"
+
+
+RELEASE_VERSION = _load_release_version()
+MAIN_WINDOW_TITLE = f"{APPLICATION_NAME} {RELEASE_VERSION}"
 
 
 def _finish_pipeline_subtask_if_waiting(app, code: str, ok: bool, detail: str) -> None:
@@ -296,7 +327,7 @@ def _finish_pipeline_subtask_if_waiting(app, code: str, ok: bool, detail: str) -
 class LineCheckAssistant(Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("openWRT老化测试环境搭建助手")
+        self.title(MAIN_WINDOW_TITLE)
         self.geometry("1200x780")
         self.minsize(1040, 700)
         self.configure(background=COLOR_BG)
@@ -679,6 +710,30 @@ class LineCheckAssistant(Tk):
         if not started:
             self._pipeline_sample_parameter_completion_dialog_suppressed = False
         return started
+
+    def _run_pipeline_onu_registration(self) -> None:
+        """Submit the pre-reviewed ONU batch on Tk, then wait for its final result."""
+        self._begin_pipeline_subtask("onu_registration")
+        started = self._invoke_pipeline_ui_action(
+            self._start_pipeline_onu_registration_on_ui
+        )
+        if not started:
+            self._finish_pipeline_subtask(
+                "onu_registration", False, "ONU 注册未启动：请先查询、勾选目标并生成预览"
+            )
+        self._wait_pipeline_subtask("onu_registration")
+
+    def _start_pipeline_onu_registration_on_ui(self) -> bool:
+        """ONU remains explicitly confirmed; pipeline only owns completion waiting."""
+        if not self._selected_unregistered_onus() or not self.onu_preview_ready:
+            self._open_onu_registration_module()
+            messagebox.showwarning(
+                "ONU 批量注册未就绪",
+                "请先查询未注册 ONU，勾选本批目标并生成命令预览；全流程不会按查询顺序猜测目标。",
+                parent=self.onu_registration_window,
+            )
+            return False
+        return bool(self._on_onu_register_selected_clicked())
 
     def _configure_theme(self) -> None:
         style = ttk.Style(self)
@@ -2913,14 +2968,15 @@ class LineCheckAssistant(Tk):
         if not selected_onus:
             raise ValueError("请先选择要注册的 ONU")
         family = self.onu_family_var.get()
-        if len(selected_onus) != 1:
-            raise ValueError(f"{family} 每次只能选择一台未注册 ONU")
         if family == OLT_FAMILY_C300:
             if not hasattr(self, "onu_c300_services_text"):
-                return [OnuProvisionRequest(family=family, onu=selected_onus[0], onu_type="SD-41")]
+                return build_batch_requests(
+                    selected_onus,
+                    OnuProvisionRequest(family=family, onu=selected_onus[0], onu_type="SD-41"),
+                )
             try:
                 services = parse_service_mappings(self.onu_c300_services_text.get("1.0", "end"))
-                return [OnuProvisionRequest(
+                base_request = OnuProvisionRequest(
                     family=family,
                     onu=selected_onus[0],
                     onu_id=int(self.onu_c300_onu_id_var.get().strip()),
@@ -2928,11 +2984,12 @@ class LineCheckAssistant(Tk):
                     tcont_id=int(self.onu_c300_tcont_id_var.get().strip()),
                     tcont_profile=LineCheckAssistant._template_name_from_input(self.onu_c300_tcont_profile_var.get()),
                     services=tuple(services),
-                )]
+                )
+                return build_batch_requests(selected_onus, base_request)
             except ValueError as exc:
                 raise ValueError(f"C300 参数错误：{exc}") from exc
         try:
-            request = OnuProvisionRequest(
+            base_request = OnuProvisionRequest(
                 family=family,
                 onu=selected_onus[0],
                 onu_id=int(self.onu_c600_onu_id_var.get().strip()),
@@ -2947,7 +3004,7 @@ class LineCheckAssistant(Tk):
             )
         except ValueError as exc:
             raise ValueError(f"C600 参数错误：{exc}") from exc
-        return [request]
+        return build_batch_requests(selected_onus, base_request)
 
     def _on_onu_preview_clicked(self) -> None:
         try:
@@ -2958,7 +3015,10 @@ class LineCheckAssistant(Tk):
             messagebox.showwarning("无法生成命令预览", str(exc), parent=self.onu_registration_window)
             return
         family = self.onu_family_var.get()
-        target_lines = "；".join(request.onu.display_text for request in requests)
+        target_lines = "；".join(
+            f"{request.onu.display_text} → ONU ID {request.onu_id}"
+            for request in requests
+        )
         if family == OLT_FAMILY_C300:
             cleanup_candidate = None
             if self.onu_c300_allow_offline_cleanup_var.get():
@@ -2999,7 +3059,8 @@ class LineCheckAssistant(Tk):
         self.onu_preview_ready = True
         self.onu_register_button.configure(state="normal")
         self.onu_notebook.select(self.onu_preview_tab)
-        self._set_onu_query_status(f"已生成 {len(commands)} 条命令；尚未连接 OLT", COLOR_SUCCESS)
+        batch_note = "；批量将先完成全体预检再逐台下发" if len(requests) > 1 else ""
+        self._set_onu_query_status(f"已生成 {len(commands)} 条命令；尚未连接 OLT{batch_note}", COLOR_SUCCESS)
 
     def _on_onu_stop_clicked(self) -> None:
         self.onu_cancel_event.set()
@@ -3164,14 +3225,14 @@ class LineCheckAssistant(Tk):
             self._render_unregistered_onu_selection([])
         self._log(f"[ONU注册][{family}] 查询未注册 ONU：{host} - {result.message}")
 
-    def _on_onu_register_selected_clicked(self) -> None:
+    def _on_onu_register_selected_clicked(self) -> bool:
         if self.onu_register_running:
-            return
+            return False
         if hasattr(self, "onu_preview_ready") and not self.onu_preview_ready:
             message = "参数或目标已变化，请重新生成命令预览后再开始注册"
             self._set_onu_query_status(message, COLOR_DANGER)
             messagebox.showwarning("预览已失效", message, parent=self.onu_registration_window)
-            return
+            return False
         try:
             connection = self._current_onu_connection()
             requests = self._build_onu_provision_requests()
@@ -3179,7 +3240,7 @@ class LineCheckAssistant(Tk):
         except Exception as exc:
             self._set_onu_query_status(str(exc), COLOR_DANGER)
             messagebox.showwarning("注册参数错误", str(exc), parent=self.onu_registration_window)
-            return
+            return False
         family = self.onu_family_var.get()
         write_var = getattr(self, "onu_c600_write_after_success_var", None)
         write_after_success = (
@@ -3187,7 +3248,10 @@ class LineCheckAssistant(Tk):
             and write_var is not None
             and bool(write_var.get())
         )
-        onu_lines = "\n".join(f"- {request.onu.display_text}" for request in requests)
+        onu_lines = "\n".join(
+            f"- {request.onu.display_text} → ONU ID {request.onu_id}"
+            for request in requests
+        )
         cleanup_candidate = (
             self._selected_c300_cleanup_candidate()
             if family == OLT_FAMILY_C300 and bool(self.onu_c300_allow_offline_cleanup_var.get())
@@ -3197,7 +3261,12 @@ class LineCheckAssistant(Tk):
             message = "危险清理已启用，但未明确选择同 PON 离线 ONU"
             self._set_onu_query_status(message, COLOR_DANGER)
             messagebox.showwarning("未选择清理目标", message, parent=self.onu_registration_window)
-            return
+            return False
+        if family == OLT_FAMILY_C300 and len(requests) > 1 and cleanup_candidate is not None:
+            message = "批量注册不允许离线 ONU 清理重试；请关闭危险清理或改为单台注册"
+            self._set_onu_query_status(message, COLOR_DANGER)
+            messagebox.showwarning("批量注册安全限制", message, parent=self.onu_registration_window)
+            return False
         cleanup_text = (
             "\nC300 危险策略：仅当配置失败且状态复核仍为离线时，删除 "
             f"{cleanup_candidate.display_text} 后重试。"
@@ -3216,7 +3285,7 @@ class LineCheckAssistant(Tk):
             parent=self.onu_registration_window,
         )
         if not confirmed:
-            return
+            return False
 
         self.onu_register_running = True
         self.onu_cancel_event = threading.Event()
@@ -3236,6 +3305,7 @@ class LineCheckAssistant(Tk):
             daemon=True,
         )
         thread.start()
+        return True
 
     def _onu_register_selected_worker(
         self,
@@ -3274,6 +3344,7 @@ class LineCheckAssistant(Tk):
         self._set_onu_query_status(result.message, COLOR_SUCCESS if result.ok else COLOR_DANGER)
         self._log(f"[ONU注册][{family}] 注册结果：{connection.host} - {result.message}")
         if not result.ok:
+            _finish_pipeline_subtask_if_waiting(self, "onu_registration", False, result.message)
             return
         if family == OLT_FAMILY_C600:
             if not write_after_success:
@@ -3282,6 +3353,7 @@ class LineCheckAssistant(Tk):
                     "C600 ONU 注册、业务配置及只读验证已经执行。\n本次未选择 write，当前运行配置尚未写入启动配置。",
                     parent=self.onu_registration_window,
                 )
+                _finish_pipeline_subtask_if_waiting(self, "onu_registration", True, result.message)
                 return
             confirmed = True
         else:
@@ -3292,6 +3364,7 @@ class LineCheckAssistant(Tk):
             )
         if not confirmed:
             self._log(f"[ONU注册][{family}] 保存 OLT 配置：{connection.host} - 用户选择暂不保存")
+            _finish_pipeline_subtask_if_waiting(self, "onu_registration", True, result.message)
             return
 
         self.onu_save_olt_running = True
@@ -3318,6 +3391,7 @@ class LineCheckAssistant(Tk):
             self.onu_stop_button.configure(state="disabled")
         self._set_onu_query_status(result.message, COLOR_SUCCESS if result.ok else COLOR_DANGER)
         self._log(f"[ONU注册][{family}] 保存 OLT 配置：{host} - {result.message}")
+        _finish_pipeline_subtask_if_waiting(self, "onu_registration", result.ok, result.message)
 
     def _set_onu_telnet_status(self, message: str, foreground: str = COLOR_TEXT) -> None:
         self.onu_telnet_status_var.set(message)
@@ -3363,12 +3437,15 @@ class LineCheckAssistant(Tk):
                 command = lambda current_onu=onu, current_var=variable: self._on_onu_selection_toggled(
                     current_onu, current_var
                 )
-            ttk.Radiobutton(
+            Checkbutton(
                 self.onu_unregistered_list_frame,
                 text=text,
-                variable=self.onu_c600_selection_var,
-                value=str(index),
+                variable=variable,
                 command=command,
+                background=COLOR_SURFACE_SUBTLE,
+                activebackground=COLOR_SURFACE_SUBTLE,
+                selectcolor="#ffffff",
+                anchor="w",
             ).pack(fill="x", anchor="w")
             self.onu_unregistered_selection_vars.append((onu, variable))
         self._set_unregistered_onu_selection_buttons_state("normal")
@@ -3444,11 +3521,9 @@ class LineCheckAssistant(Tk):
 
     def _select_all_unregistered_onus(self) -> None:
         for index, (onu, variable) in enumerate(self.onu_unregistered_selection_vars):
-            variable.set(index == 0)
-            if index == 0:
-                self.onu_c600_selection_var.set("0")
-                if self.onu_family_var.get() == OLT_FAMILY_C600:
-                    self._fill_c600_from_discovered_onu(onu)
+            variable.set(True)
+            if index == 0 and self.onu_family_var.get() == OLT_FAMILY_C600:
+                self._fill_c600_from_discovered_onu(onu)
         self._invalidate_onu_preview()
         self._refresh_onu_selection_action_state()
 
@@ -3460,18 +3535,12 @@ class LineCheckAssistant(Tk):
         self._refresh_onu_selection_action_state()
 
     def _on_c600_onu_selected(self, onu, variable) -> None:
-        variable.set(True)
         self._on_onu_selection_toggled(onu, variable)
         self.onu_notebook.select(self.onu_config_tab)
 
     def _on_onu_selection_toggled(self, onu, variable) -> None:
-        # C300/C600 都使用单选展示；C300 的 Radiobutton 绑定的是共享显示变量，
-        # 必须同步更新本行 BooleanVar，后续选中校验和操作按钮才会感知到点击。
-        variable.set(True)
+        # 原生 Checkbutton 支持一批目标；配置页仍使用同一业务模板。
         if variable.get():
-            for other_onu, other_variable in self.onu_unregistered_selection_vars:
-                if other_onu is not onu:
-                    other_variable.set(False)
             if self.onu_family_var.get() == OLT_FAMILY_C600:
                 self._fill_c600_from_discovered_onu(onu)
             else:
