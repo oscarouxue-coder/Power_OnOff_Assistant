@@ -2,6 +2,35 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-09-06 - 确认批量ONU目标ID修复验收
+
+- 类型：状态更新。
+- 背景：项目负责人在批量ONU目标ID修复交付后反馈“验收通过”。
+- 完成内容：将本次C600两台分别填写3、4、确认执行保持3、4的修复标为已确认验收，同步项目状态及验收基线§2.10与§3第9项；其余型号、跨PON、异常组合及全流程端到端保持待确认。
+- 修改文件：`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：依据项目负责人本轮验收反馈，核对三份文档范围一致，并运行`git diff --check`。
+- 验证结果：本次问题验收通过；本轮仅同步文档，未重跑代码测试，上一轮768项完整回归结果保持历史记录；未构建或运行EXE，未连接设备。
+- 后续待办：其它批量注册场景按原范围继续验收；未补充逐条TX与OLT回读明细、EXE发布、删除或write的独立验收结论。
+
+## 2026-09-06 - 修复批量ONU手填ID被覆盖
+
+- 类型：BUG 修复。
+- 背景：项目负责人反馈批量注册填写目标 ONU ID 为 3、4，确认弹窗却显示 4、5。原 UI 仅保留共用输入框最后值，并将 4 作为整批起始 ID，未按目标保存先前输入。
+- 完成内容：① 切换目标或生成请求前收集该 ONU 修改过的 ID，切回时恢复；② 批量构建器优先采用各目标显式 ID，同 PON 手填重复 ID 拒绝自动改号，未单独编辑的目标保留原自动分配；③ 重新查询清空本次目标输入，未勾选目标不进入请求；④ 同步操作说明与批量待复验边界，不改设备命令、确认、停止或 write 流程。
+- 修改文件：
+  - `.claude/plans/fix-batch-onu-target-ids.md`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/src/services/onu_batch_registration_service.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_batch_registration_service.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录运行 `python -m unittest discover -s tests -p test_onu_batch_registration_service.py -v`、`python -m unittest discover -s tests -p test_app.py -q` 和 `python scripts/verify_baseline.py`；使用内存加载 HEAD 原 UI 方法运行新增的 3/4 回归，确认旧实现确实生成 4/5；执行 `git diff --check`。
+- 验证结果：旧方法在 3/4 命令断言处如预期失败；修复后预览、确认弹窗和 worker 请求中的 SN/ID 对应一致。完整基线全绿（61 个源码文件编译、768 项单元测试、173 项强制基线测试及协议不变量通过）；较本轮开始 758 项新增 10 项（批量构建器 5 项、主程序 5 项）。未构建或运行 EXE，未连接真实 OLT；Tcl 变量与模拟线程测试不替代 Windows 完整窗口或真实设备验收。
+- 后续待办：Windows源码版逐台填写3/4并切回核对，确认预览/弹窗/主日志TX/OLT回读均对应正确SN与ID；C300/C600多台现场验收继续待项目负责人确认。
+
 ## 2026-09-05 - 实现全流程批量 ONU 注册
 
 - 类型：功能 / 测试 / 文档。

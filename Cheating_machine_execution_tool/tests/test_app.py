@@ -2691,6 +2691,100 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         showwarning.assert_called_once()
         thread_class.assert_not_called()
 
+    def _onu_batch_id_context(self, family=OLT_FAMILY_C600):
+        from tkinter import BooleanVar, StringVar, Tcl
+
+        interpreter = Tcl()
+        def text_var(value):
+            return StringVar(master=interpreter, value=value)
+
+        pon = "gpon_olt-1/1/5" if family == OLT_FAMILY_C600 else "gpon-olt_1/2/1"
+        targets = [DiscoveredOnu(family=family, pon_interface=pon, serial_number=sn)
+                   for sn in ("SDMC176D42AA", "SDMC126C7707")]
+        context = SimpleNamespace(
+            onu_family_var=text_var(family), onu_active_id_target=None, onu_target_id_inputs={},
+            onu_unregistered_selection_vars=[(onu, BooleanVar(master=interpreter, value=True)) for onu in targets],
+            onu_c600_selection_var=text_var(""),
+            _fill_c600_from_discovered_onu=Mock(), _clear_c300_cleanup_candidates=Mock(),
+            _invalidate_onu_preview=Mock(), _refresh_onu_selection_action_state=Mock(),
+        )
+        for prefix in ("onu_c300", "onu_c600"):
+            for key, value in {"onu_id": "1", "onu_type": "SD-41" if prefix.endswith("c300") else "NP7287XGS",
+                               "tcont_id": "1", "tcont_profile": "1G", "real_speed": "auto",
+                               "gemport_id": "1", "vport_id": "1"}.items():
+                setattr(context, f"{prefix}_{key}_var", text_var(value))
+            setattr(context, f"{prefix}_services_text", Mock(get=Mock(return_value="1,170\n6,600")))
+        context.onu_c600_sn_bind_both_var = BooleanVar(master=interpreter, value=False)
+        context._selected_unregistered_onus = lambda: LineCheckAssistant._selected_unregistered_onus(context)
+        context._build_onu_provision_requests = lambda: LineCheckAssistant._build_onu_provision_requests(context)
+        return context, targets
+
+    @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_batch_onu_ids_match_entries_preview_confirmation_and_worker(self, thread_class, askyesno):
+        context, targets = self._onu_batch_id_context()
+        for (onu, selected), onu_id in zip(context.onu_unregistered_selection_vars, ("3", "4")):
+            LineCheckAssistant._on_onu_selection_toggled(context, onu, selected)
+            context.onu_c600_onu_id_var.set(onu_id)
+        context.onu_register_running = False
+        context.onu_preview_ready = False
+        context.onu_c600_write_after_success_var = Mock(get=Mock(return_value=False))
+        context.onu_olt_ip_var = Mock(get=Mock(return_value="172.18.18.152"))
+        context.onu_source_ip_var = Mock(get=Mock(return_value="172.33.5.35"))
+        for name in ("onu_confirmation_summary_var", "onu_command_preview_text", "onu_register_button",
+                     "onu_notebook", "onu_preview_tab", "_set_onu_query_status", "onu_registration_window",
+                     "_set_onu_registration_action_buttons_state", "_onu_register_selected_worker"):
+            setattr(context, name, Mock())
+        context._current_onu_connection = Mock(return_value=OltConnection(
+            "172.18.18.152", "172.33.5.35", "zte", "test-password"))
+
+        LineCheckAssistant._on_onu_preview_clicked(context)
+        self.assertTrue(context.onu_preview_ready)
+        preview = context.onu_command_preview_text.insert.call_args.args[1]
+        for onu, onu_id in zip(targets, (3, 4)):
+            self.assertIn(f"onu {onu_id} type NP7287XGS sn {onu.serial_number}", preview)
+        self.assertTrue(LineCheckAssistant._on_onu_register_selected_clicked(context))
+        confirmation = askyesno.call_args.args[1]
+        requests = thread_class.call_args.kwargs["args"][2]
+        self.assertEqual([(r.onu, r.onu_id) for r in requests], list(zip(targets, (3, 4))))
+        for onu, onu_id in zip(targets, (3, 4)):
+            self.assertIn(f"{onu.display_text} → ONU ID {onu_id}", confirmation)
+
+    def test_switching_onu_restores_each_entered_id_for_both_families(self):
+        for family in (OLT_FAMILY_C300, OLT_FAMILY_C600):
+            with self.subTest(family=family):
+                context, targets = self._onu_batch_id_context(family)
+                id_var = getattr(context, f"onu_{family.lower()}_onu_id_var")
+                for (onu, selected), onu_id in zip(context.onu_unregistered_selection_vars, ("3", "4")):
+                    LineCheckAssistant._on_onu_selection_toggled(context, onu, selected)
+                    id_var.set(onu_id)
+                for index, expected in ((0, "3"), (1, "4")):
+                    onu, selected = context.onu_unregistered_selection_vars[index]
+                    LineCheckAssistant._on_onu_selection_toggled(context, onu, selected)
+                    self.assertEqual(id_var.get(), expected)
+                self.assertEqual([r.onu_id for r in context._build_onu_provision_requests()], [3, 4])
+
+    def test_new_onu_query_discards_previous_target_id_inputs(self):
+        context, targets = self._onu_batch_id_context()
+        context.onu_target_id_inputs = {targets[0]: "3"}
+        context.onu_active_id_target = targets[0]
+        LineCheckAssistant._render_unregistered_onu_selection(context, [])
+        self.assertEqual(context.onu_target_id_inputs, {})
+        self.assertIsNone(context.onu_active_id_target)
+
+    def test_select_all_onus_still_allocates_from_entered_starting_id(self):
+        context, _targets = self._onu_batch_id_context()
+        LineCheckAssistant._select_all_unregistered_onus(context)
+        context.onu_c600_onu_id_var.set("3")
+        self.assertEqual([r.onu_id for r in context._build_onu_provision_requests()], [3, 4])
+
+    def test_selecting_onus_without_editing_id_keeps_automatic_assignment(self):
+        context, _targets = self._onu_batch_id_context()
+        context.onu_c600_onu_id_var.set("3")
+        for onu, selected in context.onu_unregistered_selection_vars:
+            LineCheckAssistant._on_onu_selection_toggled(context, onu, selected)
+        self.assertEqual([r.onu_id for r in context._build_onu_provision_requests()], [3, 4])
+
     def test_c600_request_uses_current_parameters_and_service_mapping(self):
         selected = DiscoveredOnu(
             family=OLT_FAMILY_C600,

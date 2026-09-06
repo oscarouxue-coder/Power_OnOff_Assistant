@@ -447,6 +447,8 @@ class LineCheckAssistant(Tk):
         self.onu_query_status_var = StringVar(value="")
         self.onu_c600_selection_var = StringVar(value="")
         self.onu_unregistered_selection_vars = []
+        self.onu_target_id_inputs = {}
+        self.onu_active_id_target = None
         self.onu_c300_cleanup_candidates = ()
         self.onu_c300_cleanup_candidate_var = StringVar(value="")
         self.onu_cleanup_query_running = False
@@ -2964,6 +2966,8 @@ class LineCheckAssistant(Tk):
         return (value or "").split("（", 1)[0].strip()
 
     def _build_onu_provision_requests(self):
+        LineCheckAssistant._capture_onu_target_id(self)
+        target_ids = getattr(self, "onu_target_id_inputs", {})
         selected_onus = self._selected_unregistered_onus()
         if not selected_onus:
             raise ValueError("请先选择要注册的 ONU")
@@ -2973,6 +2977,7 @@ class LineCheckAssistant(Tk):
                 return build_batch_requests(
                     selected_onus,
                     OnuProvisionRequest(family=family, onu=selected_onus[0], onu_type="SD-41"),
+                    target_ids=target_ids,
                 )
             try:
                 services = parse_service_mappings(self.onu_c300_services_text.get("1.0", "end"))
@@ -2985,7 +2990,7 @@ class LineCheckAssistant(Tk):
                     tcont_profile=LineCheckAssistant._template_name_from_input(self.onu_c300_tcont_profile_var.get()),
                     services=tuple(services),
                 )
-                return build_batch_requests(selected_onus, base_request)
+                return build_batch_requests(selected_onus, base_request, target_ids=target_ids)
             except ValueError as exc:
                 raise ValueError(f"C300 参数错误：{exc}") from exc
         try:
@@ -3004,7 +3009,7 @@ class LineCheckAssistant(Tk):
             )
         except ValueError as exc:
             raise ValueError(f"C600 参数错误：{exc}") from exc
-        return build_batch_requests(selected_onus, base_request)
+        return build_batch_requests(selected_onus, base_request, target_ids=target_ids)
 
     def _on_onu_preview_clicked(self) -> None:
         try:
@@ -3404,6 +3409,8 @@ class LineCheckAssistant(Tk):
             self.onu_query_status_label.configure(foreground=foreground)
 
     def _render_unregistered_onu_selection(self, onus) -> None:
+        self.onu_target_id_inputs = {}
+        self.onu_active_id_target = None
         if not hasattr(self, "onu_unregistered_list_frame"):
             self.onu_unregistered_selection_vars = []
             return
@@ -3520,6 +3527,8 @@ class LineCheckAssistant(Tk):
         return [onu for onu, variable in self.onu_unregistered_selection_vars if variable.get()]
 
     def _select_all_unregistered_onus(self) -> None:
+        LineCheckAssistant._capture_onu_target_id(self)
+        self.onu_active_id_target = None
         for index, (onu, variable) in enumerate(self.onu_unregistered_selection_vars):
             variable.set(True)
             if index == 0 and self.onu_family_var.get() == OLT_FAMILY_C600:
@@ -3528,6 +3537,8 @@ class LineCheckAssistant(Tk):
         self._refresh_onu_selection_action_state()
 
     def _clear_unregistered_onu_selection(self) -> None:
+        LineCheckAssistant._capture_onu_target_id(self)
+        self.onu_active_id_target = None
         for _onu, variable in self.onu_unregistered_selection_vars:
             variable.set(False)
         self.onu_c600_selection_var.set("")
@@ -3540,15 +3551,37 @@ class LineCheckAssistant(Tk):
 
     def _on_onu_selection_toggled(self, onu, variable) -> None:
         # 原生 Checkbutton 支持一批目标；配置页仍使用同一业务模板。
+        LineCheckAssistant._capture_onu_target_id(self)
+        self.onu_active_id_target = None
         if variable.get():
+            id_var = getattr(self, f"onu_{self.onu_family_var.get().lower()}_onu_id_var", None)
+            if id_var is not None:
+                saved_id = getattr(self, "onu_target_id_inputs", {}).get(onu)
+                if saved_id is not None:
+                    id_var.set(saved_id)
+                elif getattr(onu, "suggested_onu_id", None):
+                    id_var.set(str(onu.suggested_onu_id))
+                self.onu_active_id_initial_value = id_var.get().strip()
+                self.onu_active_id_target = onu
             if self.onu_family_var.get() == OLT_FAMILY_C600:
                 self._fill_c600_from_discovered_onu(onu)
             else:
-                if getattr(onu, "suggested_onu_id", None) and hasattr(self, "onu_c300_onu_id_var"):
-                    self.onu_c300_onu_id_var.set(str(onu.suggested_onu_id))
                 self._clear_c300_cleanup_candidates()
         self._invalidate_onu_preview()
         self._refresh_onu_selection_action_state()
+
+    def _capture_onu_target_id(self) -> None:
+        """Collect the shared entry for its current ONU before changing targets."""
+        target = getattr(self, "onu_active_id_target", None)
+        if target is None or target.family != self.onu_family_var.get():
+            return
+        variable = getattr(self, f"onu_{target.family.lower()}_onu_id_var", None)
+        if variable is not None:
+            if not hasattr(self, "onu_target_id_inputs"):
+                self.onu_target_id_inputs = {}
+            value = variable.get().strip()
+            if target in self.onu_target_id_inputs or value != getattr(self, "onu_active_id_initial_value", None):
+                self.onu_target_id_inputs[target] = value
 
     def _refresh_onu_selection_action_state(self) -> None:
         has_selection = bool(self._selected_unregistered_onus())
