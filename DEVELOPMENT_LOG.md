@@ -2,6 +2,25 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-09-10 - 增加测试项单次预备测试
+
+- 类型：功能。
+- 背景：项目负责人要求在当前测试项页一键执行全部命令，并明确此入口为预备测试，每条执行一次、不重试；过程及结果在主日志打印保存，成功绿色、失败红色。
+- 完成内容：独立 service/model/UI 控制器；整批校验与目标确认、当前未保存页面快照、勾选通道串行执行、Telnet锁源及网卡状态复用、原期望/否定匹配、单条失败继续和设备异常隔离；无期望单独记为未校验；主线程显式日志颜色与原日志落盘；停止及关闭前日志排空保护。原正式测试和配置文件不变。
+- 修改文件：
+  - `.claude/plans/test-item-pretest.md`
+  - `Cheating_machine_execution_tool/src/models/test_item_pretest_models.py`
+  - `Cheating_machine_execution_tool/src/services/test_item_pretest_service.py`
+  - `Cheating_machine_execution_tool/src/ui/test_item_pretest_controls.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_test_item_pretest.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录运行 `python -m unittest discover -s tests -p test_test_item_pretest.py -v`、`python scripts/verify_baseline.py`；`git diff --check`。
+- 验证结果：新增19项预备测试回归通过；完整基线787项单元测试、64个源码编译与编译清单、173项强制基线及协议不变量全部通过。验证均为模拟会话/源码测试，没有连接设备、修改网卡、打包或启动EXE。已有本机配置与`.gitignore`工作区改动保留。
+- 后续待办：Windows源码版确认入口布局、红绿结果和日志保存；真实样机确认单次执行、多通道隔离、断连、停止及正式测试重试不变。现场结论仅依据项目负责人反馈。
+
 ## 2026-09-06 - 确认批量ONU目标ID修复验收
 
 - 类型：状态更新。

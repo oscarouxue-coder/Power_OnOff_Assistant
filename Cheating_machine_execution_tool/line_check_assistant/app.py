@@ -6,6 +6,8 @@ import re
 import sys
 import threading
 from datetime import datetime
+from src.services.test_item_pretest_service import prepare_pretest_request
+from src.ui.test_item_pretest_controls import PretestControls
 from pathlib import Path
 from tkinter import BooleanVar, Button, Canvas, Checkbutton, DoubleVar, END, Frame, IntVar, Label, Listbox, Menu, StringVar, TclError, Text, Tk, Toplevel, filedialog, messagebox, ttk
 
@@ -137,7 +139,7 @@ CONFIG_DIR = resolve_config_dir(APP_DIR)
 NETWORK_CONFIG_PATH = CONFIG_DIR / "network_card_ip.ini"
 ONU_REGISTRATION_CONFIG_PATH = CONFIG_DIR / "onu_registration.ini"
 SAMPLE_UPGRADE_SETTINGS_PATH = CONFIG_DIR / "sample_upgrade_settings.ini"
-# 测试项配置 ini:由主界面「测试项配置」按钮打开的窗口加载/保存(Q1=A:仅编辑,不接执行)。
+# 测试项配置 ini：窗口负责加载/保存，并提供独立的单次预备测试入口。
 TEST_ITEM_CONFIG_PATH = CONFIG_DIR / "test_project_config.ini"
 TEST_ITEM_DEFAULT_CONFIG_PATH = CONFIG_DIR / "test_project_config.default.ini"
 LEGACY_UI_DEFAULTS_CONFIG_PATH = CONFIG_DIR / "config.ini"
@@ -530,6 +532,9 @@ class LineCheckAssistant(Tk):
             return
 
     def _on_app_close(self) -> None:
+        pretest = getattr(self, "test_item_pretest_controls", None)
+        if pretest is not None and not pretest.can_close():
+            return
         dut_cancel_event = getattr(self, "dut_config_cancel_event", None)
         if dut_cancel_event is not None:
             dut_cancel_event.set()
@@ -4338,7 +4343,7 @@ class LineCheckAssistant(Tk):
             self.upgrade_status_var.set(stage or "尚未开始升级")
 
     def _open_test_item_config(self) -> None:
-        """打开「测试项配置」窗口：编辑配置，并允许只读查询项目信息。"""
+        """打开配置窗口：编辑、单次预备测试及只读项目信息查询。"""
         if self.test_item_config_window is not None and self.test_item_config_window.winfo_exists():
             self.test_item_config_window.deiconify()
             self.test_item_config_window.lift()
@@ -4368,7 +4373,7 @@ class LineCheckAssistant(Tk):
             content,
             text=(
                 "编辑测试项 ini（Telnet / 测试项命令 / WiFi / 项目信息）及旧工具参数。"
-                "项目信息页可对当前通道样机执行只读版本查询，不会下发配置或改变主程序测试流程。"
+                "测试项页可单次执行预备测试；项目信息页可对当前通道样机执行只读版本查询。"
             ),
             foreground=COLOR_MUTED,
             background=COLOR_BG,
@@ -4405,6 +4410,7 @@ class LineCheckAssistant(Tk):
             config.order,
             mark_dirty,
             TEST_ITEM_DEFAULT_CONFIG_PATH,
+            telnet_supplier=telnet_vars["capture"],
         )
         wifi_vars = self._build_test_item_wifi_tab(notebook, config.connect_wifi, mark_dirty)
         project_info_vars = self._build_test_item_project_info_tab(
@@ -4509,6 +4515,9 @@ class LineCheckAssistant(Tk):
             )
 
         def close_dialog() -> None:
+            pretest = getattr(self, "test_item_pretest_controls", None)
+            if pretest is not None and not pretest.can_close():
+                return
             if dirty[0]:
                 if not messagebox.askyesno(
                     "放弃修改",
@@ -4519,6 +4528,7 @@ class LineCheckAssistant(Tk):
             self._remember_module_window_size(dialog, "test_item_config")
             dialog.destroy()
             self.test_item_config_window = None
+            self.test_item_pretest_controls = None
 
         ttk.Button(button_bar, text="重新加载", command=reload, style="Secondary.TButton").pack(side="left")
         ttk.Button(button_bar, text="关闭", command=close_dialog, style="Secondary.TButton").pack(side="right")
@@ -4704,6 +4714,7 @@ class LineCheckAssistant(Tk):
         order: OrderConfig,
         mark_dirty,
         default_config_path: Path,
+        telnet_supplier=None,
     ) -> dict:
         """构建 [order] 段 Tab。返回 ``{"capture": Callable, "load": Callable}``。"""
         frame = ttk.Frame(notebook, style="App.TFrame", padding=(16, 14))
@@ -4742,6 +4753,19 @@ class LineCheckAssistant(Tk):
             wraplength=880,
             justify="left",
         ).pack(anchor="w", pady=(0, 8))
+
+        if telnet_supplier is not None:
+            self.test_item_pretest_controls = PretestControls(
+                frame,
+                capture_request=lambda: self._capture_pretest_request(
+                    capture(pretest=True), telnet_supplier()
+                ),
+                log=lambda text, tag: self._log(text, tag=tag),
+                is_busy=lambda: any(bool(getattr(self, name, False)) for name in (
+                    "running", "power_on_running", "power_test_running",
+                    "parameter_write_running", "sample_upgrade_running", "dut_config_running",
+                )),
+            )
 
         # 中间滚动列表 + 底部新增按钮
         list_outer = ttk.Frame(frame, style="App.TFrame")
@@ -4943,7 +4967,7 @@ class LineCheckAssistant(Tk):
             style="Secondary.TButton",
         ).pack(side="left", padx=(8, 0))
 
-        def capture() -> OrderConfig:
+        def capture(pretest: bool = False) -> OrderConfig:
             items: list[OrderItem] = []
             for row_dict in row_widgets:
                 segments = [
@@ -4962,11 +4986,11 @@ class LineCheckAssistant(Tk):
                     OrderItem(
                         command=command,
                         expected_segments=segments,
-                        retry_times=int(row_dict["retry_var"].get() or 1),
+                        retry_times=1 if pretest else int(row_dict["retry_var"].get() or 1),
                     )
                 )
             return OrderConfig(
-                command_fail_retry_interval_time=int(interval_var.get() or DEFAULT_COMMAND_FAIL_RETRY_INTERVAL),
+                command_fail_retry_interval_time=0 if pretest else int(interval_var.get() or DEFAULT_COMMAND_FAIL_RETRY_INTERVAL),
                 items=items,
             )
 
@@ -4980,6 +5004,10 @@ class LineCheckAssistant(Tk):
                 add_row(OrderItem())
 
         return {"capture": capture, "load": load}
+
+    def _capture_pretest_request(self, order: OrderConfig, telnet: TelnetSettings):
+        self._capture_current_channel()
+        return prepare_pretest_request(self._selected_channels(), order, telnet)
 
     def _build_test_item_ui_defaults_tab(
         self,
@@ -7645,9 +7673,9 @@ class LineCheckAssistant(Tk):
         for index, item in enumerate(items, start=1):
             self._log(f"  {index:02d}. {item}")
 
-    def _log(self, message: str) -> None:
+    def _log(self, message: str, tag: str | None = None) -> None:
         timestamp = datetime.now().strftime("%H:%M:%S")
-        tag = self._log_tag_for(message)
+        tag = self._log_tag_for(message) if tag is None else tag
         self.log_text.configure(state="normal")
         self.log_text.insert(END, f"{timestamp}  ", "time")
         if tag:
