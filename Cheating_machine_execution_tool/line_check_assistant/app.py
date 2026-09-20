@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from src.models.boot_entry import BOOT_ENTRY_LOGIN, BOOT_ENTRY_OPTIONS, normalize_boot_entry
+
 import os
 import queue
 import re
@@ -470,6 +472,7 @@ class LineCheckAssistant(Tk):
         self.sample_upgrade_save_after_id = None
         self.upgrade_mode_var = StringVar(value=upgrade_mode)
         self.upgrade_transfer_var = StringVar(value=transfer_method)
+        self.upgrade_boot_entry_var = StringVar(value=normalize_boot_entry(self.sample_upgrade_settings.boot_entry_method))
         self.upgrade_parallel_count_var = IntVar(
             value=clamp_parallel_count(self.sample_upgrade_settings.parallel_count)
         )
@@ -2005,6 +2008,7 @@ class LineCheckAssistant(Tk):
         for variable in (
             self.upgrade_mode_var,
             self.upgrade_transfer_var,
+            self.upgrade_boot_entry_var,
             self.upgrade_restore_factory_var,
             self.upgrade_username_var,
             self.upgrade_password_var,
@@ -2028,6 +2032,7 @@ class LineCheckAssistant(Tk):
 
     def _current_sample_upgrade_settings(self) -> SampleUpgradeSettings:
         return SampleUpgradeSettings(
+            boot_entry_method=LineCheckAssistant._selected_boot_entry_method(self),
             upgrade_mode=self.upgrade_mode_var.get(),
             transfer_method=LineCheckAssistant._normalize_upgrade_transfer_method(self.upgrade_transfer_var.get()),
             parallel_count=clamp_parallel_count(self.upgrade_parallel_count_var.get()),
@@ -3691,13 +3696,13 @@ class LineCheckAssistant(Tk):
         self.upgrade_restore_factory_label.grid(row=0, column=2, columnspan=2, sticky="w", padx=(0, 12), pady=8)
         self.upgrade_restore_factory_label.bind("<Button-1>", self._toggle_upgrade_restore_factory)
 
-        Label(overview, text="超级用户名", anchor="w").grid(row=2, column=0, sticky="w", padx=(12, 8), pady=8)
+        Label(overview, text="超级用户名", anchor="w").grid(row=3, column=0, sticky="w", padx=(12, 8), pady=8)
         ttk.Entry(overview, textvariable=self.upgrade_username_var).grid(
-            row=2, column=1, sticky="ew", padx=(0, 18), pady=8
+            row=3, column=1, sticky="ew", padx=(0, 18), pady=8
         )
-        Label(overview, text="密码", anchor="w").grid(row=2, column=2, sticky="w", padx=(0, 8), pady=8)
+        Label(overview, text="密码", anchor="w").grid(row=3, column=2, sticky="w", padx=(0, 8), pady=8)
         password_container = Frame(overview, background=COLOR_SURFACE)
-        password_container.grid(row=2, column=3, columnspan=2, sticky="ew", padx=(0, 12), pady=8)
+        password_container.grid(row=3, column=3, columnspan=2, sticky="ew", padx=(0, 12), pady=8)
         self.upgrade_password_entry = ttk.Entry(password_container, textvariable=self.upgrade_password_var, show="*")
         self.upgrade_password_entry.pack(side="left", fill="x", expand=True)
         self.upgrade_password_toggle = Button(
@@ -3708,15 +3713,15 @@ class LineCheckAssistant(Tk):
         )
         self.upgrade_password_toggle.pack(side="right", padx=(5, 0))
 
-        Label(overview, text="升级固件", anchor="w").grid(row=3, column=0, sticky="w", padx=(12, 8), pady=8)
+        Label(overview, text="升级固件", anchor="w").grid(row=4, column=0, sticky="w", padx=(12, 8), pady=8)
         ttk.Entry(overview, textvariable=self.upgrade_firmware_var, state="readonly").grid(
-            row=3, column=1, columnspan=3, sticky="ew", padx=(0, 8), pady=8
+            row=4, column=1, columnspan=3, sticky="ew", padx=(0, 8), pady=8
         )
         Button(overview, text="选择固件...", command=self._select_upgrade_firmware).grid(
-            row=3, column=4, sticky="e", padx=(0, 12), pady=8
+            row=4, column=4, sticky="e", padx=(0, 12), pady=8
         )
 
-        Label(overview, text="目标样机", anchor="w").grid(row=4, column=0, sticky="nw", padx=(12, 8), pady=8)
+        Label(overview, text="目标样机", anchor="w").grid(row=5, column=0, sticky="nw", padx=(12, 8), pady=8)
         Label(
             overview,
             textvariable=self.upgrade_targets_var,
@@ -3724,22 +3729,29 @@ class LineCheckAssistant(Tk):
             anchor="w",
             justify="left",
             wraplength=590,
-        ).grid(row=4, column=1, columnspan=4, sticky="ew", padx=(0, 12), pady=8)
+        ).grid(row=5, column=1, columnspan=4, sticky="ew", padx=(0, 12), pady=8)
 
-        Label(overview, text="执行状态", anchor="w").grid(row=5, column=0, sticky="nw", padx=(12, 8), pady=8)
+        Label(overview, text="执行状态", anchor="w").grid(row=6, column=0, sticky="nw", padx=(12, 8), pady=8)
         Label(
             overview,
             textvariable=self.upgrade_status_var,
             foreground=COLOR_TEXT,
             anchor="w",
-        ).grid(row=5, column=1, columnspan=4, sticky="ew", padx=(0, 12), pady=8)
+        ).grid(row=6, column=1, columnspan=4, sticky="ew", padx=(0, 12), pady=8)
         self.upgrade_progress = ttk.Progressbar(
             overview,
             variable=self.upgrade_progress_var,
             maximum=100,
             mode="determinate",
         )
-        self.upgrade_progress.grid(row=6, column=1, columnspan=4, sticky="ew", padx=(0, 12), pady=(0, 10))
+        self.upgrade_progress.grid(row=7, column=1, columnspan=4, sticky="ew", padx=(0, 12), pady=(0, 10))
+        self.upgrade_boot_entry_label = Label(overview, text="进入 Boot 方式", anchor="w")
+        self.upgrade_boot_entry_label.grid(row=2, column=0, sticky="w", padx=(12, 8), pady=8)
+        self.upgrade_boot_entry_combo = ttk.Combobox(
+            overview, textvariable=self.upgrade_boot_entry_var,
+            values=BOOT_ENTRY_OPTIONS, state="readonly", width=22,
+        )
+        self.upgrade_boot_entry_combo.grid(row=2, column=1, sticky="w", padx=(0, 18), pady=8)
         overview.columnconfigure(1, weight=1)
         overview.columnconfigure(3, weight=1)
         self._refresh_upgrade_transfer_visibility()
@@ -3802,6 +3814,10 @@ class LineCheckAssistant(Tk):
             self.upgrade_transfer_label.grid_remove()
             self.upgrade_transfer_combo.grid_remove()
 
+        for name in ("upgrade_boot_entry_label", "upgrade_boot_entry_combo"):
+            widget = getattr(self, name, None)
+            if widget is not None:
+                widget.grid() if self.upgrade_mode_var.get() == "全包升级" else widget.grid_remove()
         self._refresh_upgrade_parallel_count_visibility()
 
     def _refresh_upgrade_parallel_count_visibility(self) -> None:
@@ -4016,6 +4032,7 @@ class LineCheckAssistant(Tk):
                 final_password=self.upgrade_password_var.get().strip(),
                 restore_factory=bool(self.upgrade_restore_factory_var.get()),
                 transfer_method=transfer_method,
+                boot_entry_method=LineCheckAssistant._selected_boot_entry_method(self),
                 power_channel=power_channel,
                 serial_port=LineCheckAssistant._serial_port_for_channel(channel),
             )
@@ -4042,6 +4059,7 @@ class LineCheckAssistant(Tk):
                 f"将升级 {len(upgrade_items)} 台样机：{target_text}\n并行数：{parallel_text}\n\n"
                 f"全包升级固定将目标 VLAN 网卡准备为 192.168.1.<VLAN尾号>，样机固定为 {FULL_PACKAGE_DEVICE_IP}。\n"
                 f"升级过程不会改写 network_card_ip.ini；{power_instruction}{transfer_action}{post_transfer_instruction}\n"
+                f"进入 Boot 方式：{upgrade_items[0][1].boot_entry_method}\n"
                 f"恢复出厂：{restore_factory_text}\n\n是否继续？",
                 parent=self.upgrade_window,
             ):
@@ -4069,6 +4087,10 @@ class LineCheckAssistant(Tk):
         thread = threading.Thread(target=parallel_worker, args=(upgrade_items, parallel_count), daemon=True)
         thread.start()
         return True
+
+    def _selected_boot_entry_method(self) -> str:
+        variable = getattr(self, "upgrade_boot_entry_var", None)
+        return normalize_boot_entry(variable.get() if variable is not None else BOOT_ENTRY_LOGIN)
 
     def _selected_upgrade_transfer_method(self) -> str:
         return LineCheckAssistant._normalize_upgrade_transfer_method(self.upgrade_transfer_var.get())

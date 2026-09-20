@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from .boot_entry import BOOT_ENTRY_LOGIN
 
 
 @dataclass(frozen=True)
@@ -40,3 +41,4 @@ class FullPackageUpgradeRequest:
     transfer_method: str = "Tftp指令"
     power_channel: int = 0
     serial_port: str = ""
+    boot_entry_method: str = BOOT_ENTRY_LOGIN

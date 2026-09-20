@@ -2,6 +2,51 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-09-20 - 增加SDMC进入Boot方式
+
+- 类型：功能。
+- 背景：项目负责人确认全包升级新增手动选择的SDMC分支：循环发送sdmc加回车，间隔1秒，出现=>或现有Boot成功提示后继续，不发送Boot账号密码；Tftp指令和Tftp Put两者适用。
+- 完成内容：独立Boot方式模型与SDMC service；原账号密码方式默认保留，旧/非法配置回退原方式。新下拉框仅全包可见，自动保存、单独/无人值守确认及请求快照透传；上电稳定后接入两条原传输链路，记录TX、命中提示、超时/异常；保留电源时序、传输、收尾与最终登录/恢复出厂、并行调度。新分支600秒超时，用户名/密码提示不算成功。
+- 修改文件：
+  - `.claude/plans/sdmc-boot-entry.md`
+  - `Cheating_machine_execution_tool/src/models/boot_entry.py`
+  - `Cheating_machine_execution_tool/src/models/serial_models.py`
+  - `Cheating_machine_execution_tool/src/services/sdmc_boot_entry.py`
+  - `Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/sample_upgrade_settings_store.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/tests/test_sdmc_boot_entry.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录运行 `python -m unittest discover -s tests -p test_sdmc_boot_entry.py -v`、`python scripts/verify_baseline.py`；`git diff --check`。
+- 验证结果：首次SDMC专项9项通过，补充无人值守确认后10项均纳入完整基线；完整797项单元测试、66个源码编译与编译清单、173项强制基线和协议不变量通过，`ALL CHECKS PASSED`。仅模拟串口/电源/网络测试，未连接真实设备或改动网卡。已有文档修改与本机配置索引删除保留，未提交、未打包或启动EXE。
+- 后续待办：Windows源码版确认下拉布局、保存重开、切换显隐与确认摘要；两种传输方式真实样机分别确认SDMC时序、成功停止、超时/异常、恢复出厂最终登录及旧账号方式回归；既有验收不自动覆盖本次新分支。
+
+## 2026-09-10 - 停止跟踪本机测试项配置
+
+- 类型：修改。
+- 背景：项目负责人要求将 `Cheating_machine_execution_tool/Auto_power_on_off_tool/config/test_project_config.ini` 加入Git忽略目标；检查发现`.gitignore`已有对应规则，但文件仍被跟踪。
+- 完成内容：复用现有忽略规则，执行 `git rm --cached` 仅移除该文件的索引记录，保留本地配置内容。
+- 修改文件：该配置文件的Git索引记录、`DEVELOPMENT_LOG.md`；`.gitignore`无需重复添加规则。
+- 验证方法：操作前后比较本地文件SHA256；`git check-ignore -v`、`git ls-files`、`git diff --check`。
+- 验证结果：本地文件存在且SHA256未变；忽略规则命中，Git跟踪列表不再包含该文件。索引删除已暂存，未提交；未修改源码或运行设备测试。
+- 后续待办：下次提交时纳入该索引删除，使仓库停止跟踪本机配置。
+
+## 2026-09-10 - 确认单次预备测试验收
+
+- 类型：状态更新。
+- 背景：项目负责人在测试项单次预备测试交付后明确反馈“验收通过”。
+- 完成内容：将当前测试项页一键执行、每条仅一次不重试、主日志打印与保存、成功绿色/失败红色记录为已确认验收；同步项目状态、验收基线§2.14状态与§3待确认清单。
+- 修改文件：`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：根据本轮项目负责人反馈核对三份文档范围一致，运行 `git diff --check`。
+- 验证结果：本次功能验收通过；仅同步文档，未重跑代码测试，上一轮787项完整回归保持历史记录。未构建或启动EXE，未连接设备，未改动本机配置。
+- 后续待办：设备型号/台数、未保存编辑快照、多通道隔离、无期望、停止/断连与正式测试重试复验未提供专项现场结果，保留待确认；EXE发布不包含在本次结论中。
+
 ## 2026-09-10 - 增加测试项单次预备测试
 
 - 类型：功能。

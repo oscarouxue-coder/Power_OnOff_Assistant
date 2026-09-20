@@ -114,6 +114,8 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/models/sample_parameter_models.py",
     "src/models/dut_config_models.py",
     "src/models/serial_models.py",
+    "src/models/boot_entry.py",
+    "src/services/sdmc_boot_entry.py",
     "src/models/__init__.py",
     "src/services/__init__.py",
     "src/ui/__init__.py",

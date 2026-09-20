@@ -3,6 +3,7 @@ from __future__ import annotations
 import configparser
 from dataclasses import dataclass
 from pathlib import Path
+from src.models.boot_entry import BOOT_ENTRY_LOGIN, normalize_boot_entry
 
 
 DEFAULT_UPGRADE_MODE = "全包升级"
@@ -68,6 +69,7 @@ class SampleUpgradeSettings:
     # - ``parameter_table_path``:「写样机参数」子任务的参数表文件路径(.xlsx/.xls/.csv)
     power_operation: str = "up"
     parameter_table_path: str = ""
+    boot_entry_method: str = BOOT_ENTRY_LOGIN
 
 
 class SampleUpgradeSettingsStore:
@@ -80,6 +82,7 @@ class SampleUpgradeSettingsStore:
         parser.read(self.config_path, encoding="utf-8")
 
         return SampleUpgradeSettings(
+            boot_entry_method=normalize_boot_entry(parser.get(SAMPLE_UPGRADE_SECTION, "boot_entry_method", fallback=BOOT_ENTRY_LOGIN)),
             upgrade_mode=parser.get(SAMPLE_UPGRADE_SECTION, "upgrade_mode", fallback=DEFAULT_UPGRADE_MODE),
             transfer_method=parser.get(SAMPLE_UPGRADE_SECTION, "transfer_method", fallback=DEFAULT_UPGRADE_TRANSFER),
             parallel_count=clamp_parallel_count(
@@ -116,6 +119,7 @@ class SampleUpgradeSettingsStore:
         parser = configparser.RawConfigParser()
         parser.optionxform = str
         parser[SAMPLE_UPGRADE_SECTION] = {
+            "boot_entry_method": normalize_boot_entry(settings.boot_entry_method),
             "upgrade_mode": settings.upgrade_mode or DEFAULT_UPGRADE_MODE,
             "transfer_method": settings.transfer_method or DEFAULT_UPGRADE_TRANSFER,
             "parallel_count": str(clamp_parallel_count(settings.parallel_count)),

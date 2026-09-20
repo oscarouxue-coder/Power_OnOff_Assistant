@@ -19,6 +19,8 @@ from src.core.power_supply import (
 )
 from src.models import FullPackageUpgradeRequest, SerialSettings
 from .power_on_service import power_on_selected_channels
+from src.models.boot_entry import BOOT_ENTRY_SDMC
+from .sdmc_boot_entry import enter_sdmc_boot
 
 
 TRANSFER_TFTP_COMMAND = "Tftp指令"
@@ -652,7 +654,13 @@ def _run_tftp_command_with_power_supply(
 
     def boot_worker() -> None:
         try:
-            boot_result.append(controller.wait_for_boot_login(power_started))
+            if request.boot_entry_method == BOOT_ENTRY_SDMC:
+                if not power_started.wait(BOOT_LOGIN_TIMEOUT_SECONDS):
+                    boot_result.append(CommandResult(False, "等待程控电源写入上电帧信号超时。"))
+                else:
+                    boot_result.append(enter_sdmc_boot(controller.session, controller._cancel, emit))
+            else:
+                boot_result.append(controller.wait_for_boot_login(power_started))
         except Exception as exc:
             # 兜底:任何未在 wait_for_boot_login 内捕获的异常都变成 CommandResult 失败,
             # 避免 daemon 线程因为未处理 RuntimeError 退出后,主线程看到的是空 boot_result
@@ -697,7 +705,7 @@ def _run_tftp_command_with_power_supply(
     # power_on_channels() 返回时，本次升级专用的上电后 1 秒稳定等待已经结束。
     # 此处立即放行 worker，避免再额外等待而错过 boot 进入窗口。
     if power_enabled:
-        emit("程控电源上电稳定 1 秒完成，开始串口循环回车进入 boot。")
+        emit("程控电源上电稳定 1 秒完成，开始 SDMC 进入 boot。" if request.boot_entry_method == BOOT_ENTRY_SDMC else "程控电源上电稳定 1 秒完成，开始串口循环回车进入 boot。")
     # 必须等电源函数返回，不能在 on_channel_powered 回调中提前启动登录。
     power_started.set()
     worker.join(timeout=BOOT_LOGIN_TIMEOUT_SECONDS + 5)
@@ -789,6 +797,7 @@ def run_single_full_package_upgrade(
     server = None
     controller = None
     try:
+        emit(f"进入 Boot 方式：{request.boot_entry_method}")
         settings = SerialSettings(port=port)
         session = session_manager.acquire_control(owner, settings, log_path)
         if on_session_ready:
@@ -833,19 +842,24 @@ def run_single_full_package_upgrade(
             return power_cycle
         emit(f"程控电源下电 + 上电完成:{power_cycle.message}" if power_enabled else power_cycle.message)
         if power_enabled:
-            emit(f"程控电源上电稳定 1 秒完成，串口 {port} 开始循环回车等待 UserName 提示符进入 boot。")
+            emit(f"程控电源上电稳定 1 秒完成，串口 {port} 开始 SDMC 进入 boot。" if request.boot_entry_method == BOOT_ENTRY_SDMC else f"程控电源上电稳定 1 秒完成，串口 {port} 开始循环回车等待 UserName 提示符进入 boot。")
         else:
-            emit(f"串口 {port} 已开启，准备等待 UserName 提示符进入 boot。")
+            emit(f"串口 {port} 已开启，准备 SDMC 进入 boot。" if request.boot_entry_method == BOOT_ENTRY_SDMC else f"串口 {port} 已开启，准备等待 UserName 提示符进入 boot。")
 
         # _power_cycle_current_channel 返回时，开启帧后的升级专用 1 秒稳定窗口已经完成。
         # 立即开始循环回车，不再叠加第二个 1 秒等待。
-        username_prompt = controller.wait_for_tftp_put_boot_username()
-        if not username_prompt.ok:
-            return username_prompt
-        emit("检测到 UserName 提示符，开始使用 boot 用户名和密码登录。")
-        boot_login = controller.login_tftp_put_boot_after_username()
-        if not boot_login.ok:
-            return boot_login
+        if request.boot_entry_method == BOOT_ENTRY_SDMC:
+            boot_login = enter_sdmc_boot(controller.session, controller._cancel, emit)
+            if not boot_login.ok:
+                return boot_login
+        else:
+            username_prompt = controller.wait_for_tftp_put_boot_username()
+            if not username_prompt.ok:
+                return username_prompt
+            emit("检测到 UserName 提示符，开始使用 boot 用户名和密码登录。")
+            boot_login = controller.login_tftp_put_boot_after_username()
+            if not boot_login.ok:
+                return boot_login
         emit("boot 登录完成，准备使用 TFTPy 传输环境。")
 
         network = prepare_tftp_network(request.server_interface, request.tftp_server_ip, emit, sleep_fn)

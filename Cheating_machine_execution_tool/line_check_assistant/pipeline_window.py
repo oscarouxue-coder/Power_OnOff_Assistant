@@ -466,7 +466,7 @@ class PipelineWindow:
         settings = ctx.sample_upgrade_settings
         if "sample_upgrade" in selected:
             transfer = (
-                f" / {settings.transfer_method}"
+                f" / {settings.transfer_method} / 进入 Boot 方式：{settings.boot_entry_method}"
                 if settings.upgrade_mode == "全包升级"
                 else ""
             )

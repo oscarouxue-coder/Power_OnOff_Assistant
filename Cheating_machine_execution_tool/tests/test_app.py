@@ -3510,6 +3510,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
     def test_current_sample_upgrade_settings_reads_all_inputs(self):
         context = SimpleNamespace(
+            upgrade_boot_entry_var=Mock(get=Mock(return_value="SDMC 指令进入")),
             upgrade_mode_var=Mock(get=Mock(return_value="全包升级")),
             upgrade_transfer_var=Mock(get=Mock(return_value="Tftp指令")),
             upgrade_parallel_count_var=Mock(get=Mock(return_value=4)),
@@ -3532,6 +3533,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertEqual(
             settings,
             SampleUpgradeSettings(
+                boot_entry_method="SDMC 指令进入",
                 upgrade_mode="全包升级",
                 transfer_method="Tftp指令",
                 parallel_count=4,
@@ -3972,6 +3974,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             upgrade_username_var=Mock(get=Mock(return_value="root")),
             upgrade_password_var=Mock(get=Mock(return_value="secret")),
             upgrade_restore_factory_var=Mock(get=Mock(return_value=False)),
+            upgrade_boot_entry_var=Mock(get=Mock(return_value="SDMC 指令进入")),
             upgrade_transfer_var=Mock(get=Mock(return_value="Tftp Put")),
             upgrade_execution_var=Mock(get=Mock(return_value="串行")),
             upgrade_parallel_count_var=Mock(get=Mock(return_value=2)),
@@ -4001,6 +4004,9 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("PC 192.168.1.102 → 样机 192.168.1.1", askyesno.call_args.args[1])
         self.assertIn("恢复出厂：关闭，不会执行恢复出厂", askyesno.call_args.args[1])
         self.assertIn("不会改写 network_card_ip.ini", askyesno.call_args.args[1])
+
+        self.assertTrue(all(request.boot_entry_method == "SDMC 指令进入" for request in requests))
+        self.assertIn("进入 Boot 方式：SDMC 指令进入", askyesno.call_args.args[1])
 
     @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
     @patch("line_check_assistant.app.Path.is_file", return_value=True)
