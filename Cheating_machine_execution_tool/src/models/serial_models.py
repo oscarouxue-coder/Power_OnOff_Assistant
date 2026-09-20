@@ -42,3 +42,6 @@ class FullPackageUpgradeRequest:
     power_channel: int = 0
     serial_port: str = ""
     boot_entry_method: str = BOOT_ENTRY_LOGIN
+    web_device_ip: str = ""
+    web_source_ip: str = ""
+    web_subnet_mask: str = "255.255.255.0"

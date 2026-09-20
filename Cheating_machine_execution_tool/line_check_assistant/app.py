@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from src.models.boot_entry import BOOT_ENTRY_LOGIN, BOOT_ENTRY_OPTIONS, normalize_boot_entry
+from src.services.web_gateway_upgrade_service import (
+    TRANSFER_WEB_GATEWAY, run_parallel_web_gateway_upgrades, validate_web_target,
+)
 
 import os
 import queue
@@ -267,7 +270,7 @@ TFTP_PUT_TRANSFER = TRANSFER_TFTP_PUT
 FULL_PACKAGE_DEVICE_IP = "192.168.1.1"
 LEGACY_TFTP_COPY_TRANSFER = "Tftp拷贝命令"
 UPGRADE_TRANSFER_OPTIONS = (DEFAULT_UPGRADE_TRANSFER, TFTP_COMMAND_TRANSFER, "web打开网关")
-SERIAL_FULL_PACKAGE_TRANSFERS = {TFTP_COMMAND_TRANSFER, TFTP_PUT_TRANSFER}
+SERIAL_FULL_PACKAGE_TRANSFERS = {TFTP_COMMAND_TRANSFER, TFTP_PUT_TRANSFER, TRANSFER_WEB_GATEWAY}
 MAIN_LOG_EVENTS_PER_TICK = 120
 MAIN_LOG_IDLE_DELAY_MS = 200
 FONT_FAMILY = "Microsoft YaHei UI"
@@ -4010,9 +4013,15 @@ class LineCheckAssistant(Tk):
         upgrade_items: list[tuple[ChannelConfig, FullPackageUpgradeRequest]] = []
         power_serial_port = self._selected_power_serial_port()
         transfer_method = LineCheckAssistant._selected_upgrade_transfer_method(self)
+        is_web = transfer_method == TRANSFER_WEB_GATEWAY
+        web_device_ip = self.device_ip_var.get().strip() if is_web else ""
         for channel in channels:
             try:
-                tftp_server_ip = self._full_package_tftp_server_ip_for_channel(channel)
+                if is_web:
+                    validate_web_target(channel.network_card_ip.strip(), web_device_ip, channel.subnet_mask)
+                    tftp_server_ip = ""
+                else:
+                    tftp_server_ip = self._full_package_tftp_server_ip_for_channel(channel)
             except ValueError as exc:
                 messagebox.showwarning("VLAN IP 不正确", str(exc), parent=self.upgrade_window)
                 return False
@@ -4035,15 +4044,25 @@ class LineCheckAssistant(Tk):
                 boot_entry_method=LineCheckAssistant._selected_boot_entry_method(self),
                 power_channel=power_channel,
                 serial_port=LineCheckAssistant._serial_port_for_channel(channel),
+                web_device_ip=web_device_ip,
+                web_source_ip=channel.network_card_ip.strip() if is_web else "",
+                web_subnet_mask=channel.subnet_mask if is_web else "255.255.255.0",
             )
             upgrade_items.append((channel, request))
 
         target_text = "、".join(
             f"{request.vlan}/{request.serial_port or '(未配置COM)'}"
-            f"（PC {request.tftp_server_ip} → 样机 {FULL_PACKAGE_DEVICE_IP}）"
+            f"（PC {request.web_source_ip if is_web else request.tftp_server_ip} → 样机 {web_device_ip if is_web else FULL_PACKAGE_DEVICE_IP}）"
             for _channel, request in upgrade_items
         )
         transfer_action = "执行 Tftp Put" if transfer_method == TFTP_PUT_TRANSFER else "下发 Tftp指令"
+        if is_web:
+            transfer_action = "打开网关网页、自动选择当前固件并点击 Update software，固定等待30秒后进入90秒Boot/Bood观察"
+        network_instruction = (
+            "Web升级使用对应通道PC静态IP/掩码，浏览器出口锁定对应VLAN网卡，访问主界面样机管理IP。\n"
+            if is_web else
+            f"全包升级固定将目标 VLAN 网卡准备为 192.168.1.<VLAN尾号>，样机固定为 {FULL_PACKAGE_DEVICE_IP}。\n"
+        )
         parallel_count = clamp_parallel_count(self.upgrade_parallel_count_var.get())
         parallel_text = f"最多 {parallel_count} 台，完成即补位"
         restore_factory_text = "开启，会在最终系统登录后执行恢复出厂" if bool(self.upgrade_restore_factory_var.get()) else "关闭，不会执行恢复出厂"
@@ -4057,7 +4076,8 @@ class LineCheckAssistant(Tk):
             if not messagebox.askyesno(
                 "确认样机升级",
                 f"将升级 {len(upgrade_items)} 台样机：{target_text}\n并行数：{parallel_text}\n\n"
-                f"全包升级固定将目标 VLAN 网卡准备为 192.168.1.<VLAN尾号>，样机固定为 {FULL_PACKAGE_DEVICE_IP}。\n"
+                f"升级固件：{firmware_path}\n"
+                f"{network_instruction}"
                 f"升级过程不会改写 network_card_ip.ini；{power_instruction}{transfer_action}{post_transfer_instruction}\n"
                 f"进入 Boot 方式：{upgrade_items[0][1].boot_entry_method}\n"
                 f"恢复出厂：{restore_factory_text}\n\n是否继续？",
@@ -4068,9 +4088,9 @@ class LineCheckAssistant(Tk):
             self._log("[全流程][无人值守] 已使用总确认授权，跳过全包升级子任务确认。")
 
         self._log(
-            "[全包升级] 固定网络："
+            ("[全包升级] Web指定网络：" if is_web else "[全包升级] 固定网络：")
             + "，".join(
-                f"{request.vlan} PC {request.tftp_server_ip} → 样机 {FULL_PACKAGE_DEVICE_IP}"
+                f"{request.vlan} PC {request.web_source_ip if is_web else request.tftp_server_ip} → 样机 {web_device_ip if is_web else FULL_PACKAGE_DEVICE_IP}"
                 for _channel, request in upgrade_items
             )
         )
@@ -4080,6 +4100,7 @@ class LineCheckAssistant(Tk):
             terminal.begin_upgrade_logs([request.vlan for _channel, request in upgrade_items])
         self._set_upgrade_status("", f"准备并行升级 {len(upgrade_items)} 台样机（最多 {parallel_count} 台）", 0)
         parallel_worker = (
+            self._parallel_web_gateway_upgrade_worker if is_web else
             self._parallel_tftp_command_upgrade_worker
             if transfer_method == TFTP_COMMAND_TRANSFER
             else self._parallel_tftp_put_upgrade_worker
@@ -4194,10 +4215,18 @@ class LineCheckAssistant(Tk):
             if terminal is not None:
                 self.after(100, terminal.finish_upgrade_logs)
 
+    def _parallel_web_gateway_upgrade_worker(self, upgrade_items, parallel_count=DEFAULT_PARALLEL_COUNT):
+        # Reuse only UI progress/completion plumbing; transport dispatch stays independent.
+        LineCheckAssistant._parallel_tftp_put_upgrade_worker(
+            self, upgrade_items, parallel_count, runner=run_parallel_web_gateway_upgrades,
+        )
+
     def _parallel_tftp_put_upgrade_worker(
         self,
         upgrade_items: list[tuple[ChannelConfig, FullPackageUpgradeRequest]],
         parallel_count: int = DEFAULT_PARALLEL_COUNT,
+        *,
+        runner=None,
     ) -> None:
         requests = [request for _channel, request in upgrade_items]
         total = len(requests)
@@ -4233,7 +4262,7 @@ class LineCheckAssistant(Tk):
             refresh_status()
 
         try:
-            results = run_parallel_tftp_put_upgrades(
+            results = (runner or run_parallel_tftp_put_upgrades)(
                 requests,
                 self.serial_session_manager,
                 max_workers=max_workers,
@@ -4295,7 +4324,8 @@ class LineCheckAssistant(Tk):
             self, "样机升级完成", detail, "warning" if failed else "info"
         )
         _finish_pipeline_subtask_if_waiting(
-            self, "sample_upgrade", not failed, f"并行 Tftp Put 升级完成：成功 {len(succeeded)}/{total} 台。"
+            self, "sample_upgrade", not failed,
+            f"并行 {results[0].request.transfer_method if results else TFTP_PUT_TRANSFER} 升级完成：成功 {len(succeeded)}/{total} 台。"
         )
 
     def _toggle_upgrade_password_visibility(self) -> None:

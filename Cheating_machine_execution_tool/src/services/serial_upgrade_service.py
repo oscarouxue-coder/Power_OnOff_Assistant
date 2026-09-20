@@ -21,6 +21,7 @@ from src.models import FullPackageUpgradeRequest, SerialSettings
 from .power_on_service import power_on_selected_channels
 from src.models.boot_entry import BOOT_ENTRY_SDMC
 from .sdmc_boot_entry import enter_sdmc_boot
+from .web_gateway_upgrade_service import TRANSFER_WEB_GATEWAY, start_gateway_upgrade
 
 
 TRANSFER_TFTP_COMMAND = "Tftp指令"
@@ -796,7 +797,10 @@ def run_single_full_package_upgrade(
     session = None
     server = None
     controller = None
+    web_browser = None
     try:
+        if request.transfer_method not in (TRANSFER_TFTP_COMMAND, TRANSFER_TFTP_PUT, TRANSFER_WEB_GATEWAY):
+            return CommandResult(False, "不支持的全包固件传输方式。")
         emit(f"进入 Boot 方式：{request.boot_entry_method}")
         settings = SerialSettings(port=port)
         session = session_manager.acquire_control(owner, settings, log_path)
@@ -824,11 +828,11 @@ def run_single_full_package_upgrade(
         power_enabled = bool((request.power_serial_port or "").strip())
         if power_enabled:
             emit(
-                f"Tftp Put 前置下电 + 上电：程控电源串口 {request.power_serial_port}，"
+                f"{request.transfer_method} 前置下电 + 上电：程控电源串口 {request.power_serial_port}，"
                 f"通道 {request.power_channel}。"
             )
         else:
-            emit("未选择程控电源 COM 口。请手动重启样机后，再进行 Tftp Put boot 登录。")
+            emit(f"未选择程控电源 COM 口。请手动重启样机后，再进行 {request.transfer_method} boot 登录。")
         power_cycle = _power_cycle_current_channel(
             request=request,
             emit=emit,
@@ -860,21 +864,24 @@ def run_single_full_package_upgrade(
             boot_login = controller.login_tftp_put_boot_after_username()
             if not boot_login.ok:
                 return boot_login
-        emit("boot 登录完成，准备使用 TFTPy 传输环境。")
+        emit("boot 登录完成，准备打开网关Web升级界面。" if request.transfer_method == TRANSFER_WEB_GATEWAY
+             else "boot 登录完成，准备使用 TFTPy 传输环境。")
 
-        network = prepare_tftp_network(request.server_interface, request.tftp_server_ip, emit, sleep_fn)
-        if not network.ok:
-            return network
-        # Tftp Put 分支:直接推送固件到 192.168.1.1。Tftp指令 分支在上方已经 return,不会落到这里。
-        upload_firmware(
-            request.firmware_path,
-            TFTP_PUT_DEVICE_IP,
-            request.tftp_server_ip,
-            timeout_seconds=TFTP_PUT_TIMEOUT_SECONDS,
-            on_output=emit,
-        )
-
-        emit("TFTP 传输完成，开始观察 boot 重启标记。")
+        if request.transfer_method == TRANSFER_WEB_GATEWAY:
+            web_browser = start_gateway_upgrade(request, emit, sleep_fn)
+        else:
+            network = prepare_tftp_network(request.server_interface, request.tftp_server_ip, emit, sleep_fn)
+            if not network.ok:
+                return network
+            # Tftp Put 分支:直接推送固件到 192.168.1.1。Tftp指令 分支在上方已经 return,不会落到这里。
+            upload_firmware(
+                request.firmware_path,
+                TFTP_PUT_DEVICE_IP,
+                request.tftp_server_ip,
+                timeout_seconds=TFTP_PUT_TIMEOUT_SECONDS,
+                on_output=emit,
+            )
+            emit("TFTP 传输完成，开始观察 boot 重启标记。")
         reset_sent = controller.monitor_post_tftp()
         post_transfer_wait_seconds = (
             POWER_ON_SETTLE_SECONDS if request.restore_factory else POST_TFTP_NO_FACTORY_SETTLE_SECONDS
@@ -922,6 +929,11 @@ def run_single_full_package_upgrade(
     except Exception as exc:
         return CommandResult(False, f"{request.vlan} 串行升级异常：{exc}")
     finally:
+        if web_browser is not None:
+            try:
+                web_browser.close()
+            except Exception as exc:
+                emit(f"Web升级浏览器清理失败：{exc}")
         if server is not None:
             server.stop()
         if controller is not None:

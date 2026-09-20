@@ -9,7 +9,7 @@ from line_check_assistant.network_ops import CommandResult
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings, SampleUpgradeSettingsStore
 from src.models.boot_entry import BOOT_ENTRY_LOGIN, BOOT_ENTRY_SDMC
 from src.models.serial_models import FullPackageUpgradeRequest
-from src.services.sdmc_boot_entry import enter_sdmc_boot
+from src.services.sdmc_boot_entry import enter_sdmc_boot, boot_prompt_from_output
 from src.services.serial_upgrade_service import run_single_full_package_upgrade
 
 
@@ -27,6 +27,9 @@ class TimedSession:
     def write(self, data):
         self.writes.append((round(self.now, 6), data))
 
+    def peek_since(self, cursor):
+        return self.response if self.now >= self.response_at else ""
+
     def wait_for_any(self, markers, timeout, cursor):
         self.cursors.append(cursor)
         self.now += timeout
@@ -36,6 +39,32 @@ class TimedSession:
 
 
 class SdmcBootEntryTests(unittest.TestCase):
+    def test_boot_hash_and_partition_diagnostics_are_not_prompts(self):
+        for text in ("## Checking hash(es) for Image atf ... sha256+ OK",
+                     "device nand0 <spi1.0>, # parts = 2\n #: name size offset mask_flags",
+                     "progress 3 > 2", "UserName: Password:"):
+            self.assertIsNone(boot_prompt_from_output(text))
+        self.assertEqual(boot_prompt_from_output("## Checking hash(es) ...\n=> sdmc\r\n"), "=>")
+
+    def test_keep_sending_through_hash_logs_until_real_boot_prompt(self):
+        class BootingSession(TimedSession):
+            def peek_since(self, cursor):
+                if self.now < 2.4:
+                    return "## Checking hash(es) for Image atf ... sha256+ OK\n# parts = 2\n"
+                return "## Checking hash(es) ...\n=> "
+        session = BootingSession()
+        result, _ = self.run_entry(session, timeout=5)
+        self.assertTrue(result.ok)
+        self.assertEqual(session.writes, [(0.0, b"sdmc\r"), (1.0, b"sdmc\r"), (2.0, b"sdmc\r")])
+
+    def test_split_hash_diagnostic_does_not_pass_as_bare_prompt(self):
+        class SplitSession(TimedSession):
+            def peek_since(self, cursor):
+                return "#" if self.now < 0.1 else "## Checking hash(es) ..."
+        session = SplitSession()
+        result, _ = self.run_entry(session, timeout=2)
+        self.assertFalse(result.ok)
+
     def run_entry(self, session, timeout=3, cancel=None):
         messages = []
         result = enter_sdmc_boot(session, cancel or threading.Event(), messages.append,

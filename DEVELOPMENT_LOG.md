@@ -2,6 +2,53 @@
 
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
 
+## 2026-09-20 - 修复Boot误判与Web就绪等待
+
+- 类型：BUG 修复。
+- 背景：负责人报告VLAN148在14:09:14命中#、14:09:16打开浏览器、14:09:31双timed out。读取 `D:/Serial_Log/vlan148_upgrade_20260920_140906.log` 发现14:09:14实际为`## Checking hash(es)`，真正`=>`在14:09:16，Link Up在14:09:19。原SDMC子串判断提前放行，原浏览器无HTTP就绪重试且Page.navigate通用15秒超时；旧日志不能区分代理请求头等待与连接样机超时。
+- 完成内容：SDMC仅认可独立提示行并过滤分包#启动日志；同VLAN源IP/接口最长90秒只读GET确认升级表单后才打开浏览器，GET无HTTP响应头HTML兼容转发；Page.navigate使用30秒响应预算，代理阶段/出口及CDP方法明确记录，空闲预连接不误报。所有新增重试仅在提交前，固定30秒和后续Boot/Bood/恢复出厂逻辑保持。
+- 修改文件：
+  - `.claude/plans/fix-web-gateway-readiness.md`
+  - `Cheating_machine_execution_tool/src/services/sdmc_boot_entry.py`
+  - `Cheating_machine_execution_tool/src/core/gateway_proxy.py`
+  - `Cheating_machine_execution_tool/src/core/gateway_browser.py`
+  - `Cheating_machine_execution_tool/src/core/gateway_cdp.py`
+  - `Cheating_machine_execution_tool/tests/test_sdmc_boot_entry.py`
+  - `Cheating_machine_execution_tool/tests/test_web_gateway_upgrade.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录，`PYTHONUTF8=1`、`LINECHECK_WEB_BROWSER_TEST=1`；分别运行SDMC与Web专项，再运行 `python scripts/verify_baseline.py`、`git diff --check`。额外按明确源IP192.168.1.148/接口71发送只读GET，并用本次独立无头浏览器只读确认标题/文件框，未选择固件、未POST、未操作串口或电源、未改网卡。
+- 验证结果：现场GET发现样机返回裸HTML而非标准HTTP响应；兼容后实际只读浏览器成功取得Software update与1个文件框。第一轮13项SDMC、18项Web及818项完整基线通过；新增超时日志断言后最终结果见本轮项目状态。新增本机无头HTML模拟页测试，仅GET；原本机模拟文件提交测试继续通过。现场升级验收未完成；未打包或提交。
+- 后续待办：负责人重新执行VLAN148实际升级及多通道复验；重点看独立=>、Web就绪提示、单次提交30秒及后续收尾。历史未验收项保持。
+
+## 2026-09-20 - 补全Web网关升级路径
+
+- 类型：功能。
+- 背景：项目负责人要求“web打开网关”在进入Boot后通过所选VLAN网卡打开主界面样机管理IP，自动选择当前升级固件并点击Update software；明确网页不会变化，点击后固定等待30秒进入原后续流程。
+- 完成内容：独立本地代理、DevTools浏览器与Web service；Edge/Chrome每通道临时会话，源IPv4与Windows接口双重绑定；仅目标IP HTTP访问，不回退系统出口。请求快照和普通/无人值守确认显示真实管理IP、固件与等待规则；Web分支接入原Boot/收尾，TFTP传输仍独立。一次提交后30秒再开始90秒观察，失败阻止后续复位；并行1–8、重复VLAN/IP/串口批次拒绝、资源清理及主日志。未添加第三方Python依赖。
+- 修改文件：
+  - `.claude/plans/web-gateway-upgrade.md`
+  - `Cheating_machine_execution_tool/src/core/gateway_browser.py`
+  - `Cheating_machine_execution_tool/src/core/gateway_cdp.py`
+  - `Cheating_machine_execution_tool/src/core/gateway_proxy.py`
+  - `Cheating_machine_execution_tool/src/services/web_gateway_upgrade_service.py`
+  - `Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`
+  - `Cheating_machine_execution_tool/src/models/serial_models.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/tests/test_web_gateway_upgrade.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置 `$env:PYTHONUTF8='1'`、`$env:LINECHECK_WEB_BROWSER_TEST='1'`，运行 `python -m unittest discover -s tests -p test_web_gateway_upgrade.py -v` 和 `python scripts/verify_baseline.py`；`git diff --check`。
+- 验证结果：新增14项Web测试纳入完整811项测试，70个源码编译覆盖、173项强制基线和协议不变量全部通过。真实本机无头Edge通过loopback代理上传1.4MB临时文件到模拟页，校验完整内容、一次提交、页面204不变化以及重复提交拒绝；测试浏览器关闭及临时文件清理通过。初次集成测试暴露测试固件清理早于浏览器释放，已修正fixture退出顺序并复验；首次基线因仅设置PYTHONIOENCODING导致子进程GBK读取UTF-8失败，改用父子统一PYTHONUTF8后通过，未修改基线门禁。未连接真实样机、未修改实际网卡、未构建或启动LineCheckAssistant.exe，未提交。
+- 参考：Chromium [代理说明](https://chromium.googlesource.com/chromium/src/+/HEAD/net/docs/proxy.md) 与 [DevTools DOM.setFileInputFiles](https://chromedevtools.github.io/devtools-protocol/tot/DOM/#method-setFileInputFiles)；本地Browser_NIC工具的隔离会话设计仅作参考，未修改该仓库。
+- 后续待办：Windows可见浏览器/主界面、真实VLAN出口隔离、两种Boot方式与网关页面、30秒接90秒、复位/恢复出厂、并行及全流程端到端；均独立标为待验收。
+
 ## 2026-09-20 - 增加SDMC进入Boot方式
 
 - 类型：功能。

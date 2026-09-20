@@ -476,6 +476,12 @@ class PipelineWindow:
                 f"并行数 {settings.parallel_count}，恢复出厂 "
                 f"{'开启' if settings.restore_factory else '关闭'}。"
             )
+            if settings.upgrade_mode == "全包升级" and settings.transfer_method == "web打开网关":
+                details.append(
+                    f"  Web目标：http://{ctx.app.device_ip_var.get().strip()}/；"
+                    "对应通道VLAN/PC静态IP出口，自动选文件并点击Update software；"
+                    "固定等待30秒后进入90秒Boot/Bood观察及原收尾流程。"
+                )
         if "sample_parameter_write" in selected:
             details.append(
                 "- 写样机参数："
