@@ -1,6 +1,53 @@
 # 开发记录
 
+## 2026-10-11 - 增加消息推送配置与试发按钮
+
+- 类型：功能。
+- 背景：用户要求在测试项配置中展示并保存钉钉配置，随后追加手动测试消息按钮。
+- 完成内容：第六页“消息推送”编辑四项配置，原生勾选框、明文凭据、统一保存/重载及未保存提示；配置按段更新，保留其它字段、注释和换行。后台试发读取页面快照，无需保存、不受自动推送开关限制，按当前 @所有人发送；支持加签、10秒请求超时、接口错误提示、防重复点击及发送中关闭拦截，无自动重试。日志和确认摘要不含凭据，既有自动发送流程未改动。
+- 修改文件：
+  - `.claude/plans/message-push-tab.md`
+  - `Cheating_machine_execution_tool/src/ui/message_push_tab.py`
+  - `Cheating_machine_execution_tool/src/services/message_push_config_service.py`
+  - `Cheating_machine_execution_tool/src/core/dingtalk_robot.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_message_push_config.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录设置 `PYTHONUTF8=1`，运行 `python -m unittest discover -s tests -p test_message_push_config.py -v`、`python scripts/verify_baseline.py`；`git diff --check`。
+- 验证结果：14项新增专项通过；最终完整门禁 `ALL CHECKS PASSED`，73个源码编译、834项测试（2项既有浏览器集成测试默认跳过）、173项指定回归及协议不变量通过。早期运行暴露既有Telnet回环收包游标和TFTP测试时序偶发失败，Telnet单独运行也曾复现；未修改这些实现或测试，后续完整运行通过。Tk控件及窗口回调使用真实Tk与模拟外部配置/HTTP验证，不等同于人工可见界面验收。
+- 后续待办：负责人确认Windows可见布局、真实配置保存重开、钉钉收信及 @所有人效果。本轮未向真实群发送消息、未写入本机配置、未打包或提交；保留并行工作产生的既有改动。
+- 协议参考：[钉钉自定义机器人官方文档](https://open.dingtalk.com/document/orgapp/custom-robot-access)。
+
 本文件用于按时间记录每次开发完成的功能、优化、修改、BUG 修复、验证方式和后续待办，方便下一次继续开发，也方便做整体项目概览和管理。
+
+## 2026-10-11 - 取消跟踪本机配置文件
+
+- 类型：修改。
+- 背景：用户要求将本机 `config.ini` 加入 Git 忽略。
+- 完成内容：确认 `.gitignore` 已有对应规则；执行 `git rm --cached` 取消跟踪，保留本地配置及其内容。
+- 修改文件：
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/config/config.ini`（仅从 Git 索引移除）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：执行 `git check-ignore -v`、`git ls-files` 和 `Test-Path` 检查该配置路径。
+- 验证结果：命中 `.gitignore` 第 16 行；Git 索引不再跟踪该文件，本地文件仍存在。仅调整 Git 跟踪状态，未修改业务代码。
+- 后续待办：未提交 Git。
+
+## 2026-09-20 - 重新构建V1.1.3便携版
+
+- 类型：构建。
+- 背景：负责人要求重新打包一份 EXE。
+- 完成内容：按当前源码运行既有构建脚本，生成单文件 EXE、便携目录和 ZIP；随包说明更新为 V1.1.3，记录批量 ONU、单次预备测试、SDMC、Web升级及最新修复与验收边界。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/VERSION_INFO.txt`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置 `PYTHONUTF8=1`，执行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1`、`python scripts/verify_baseline.py`；使用 Python zipfile/hashlib 核验 ZIP 完整性、版本说明及 EXE 哈希；`git diff --check`。
+- 验证结果：构建成功，实际 EXE 归档 Tcl/Tk 门禁通过，生成6个脱敏INI；ZIP共12项且CRC检查通过，单文件/便携目录/ZIP内EXE与SHA256旁文件一致。EXE为63,275,835字节，SHA256为`4fe10a51db918b50942759c5425866fad6659fe765e58f5a7ceece38f7d6c014`。首次基线报告1项单测失败但汇总未保留具体断言；独立全量复跑通过，随后统一门禁 `ALL CHECKS PASSED`：820项测试（2项需显式开启的浏览器集成测试跳过）、70个源码文件、173项强制基线及协议不变量通过。首次失败未复现，原因未确认。
+- 后续待办：未在当前电脑运行新EXE；目标电脑启动及新增SDMC/Web真实升级、多通道验收仍待现场确认，不扩大既有验收范围；未提交Git。
 
 ## 2026-09-20 - 修复Boot误判与Web就绪等待
 

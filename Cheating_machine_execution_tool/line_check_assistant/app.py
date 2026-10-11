@@ -18,6 +18,8 @@ from tkinter import BooleanVar, Button, Canvas, Checkbutton, DoubleVar, END, Fra
 
 from .config_store import ChannelConfig, ChannelConfigStore, DEFAULT_POWER_SERIAL_PORT, DEFAULT_SUBNET_MASK
 from .legacy_ui_defaults_store import LegacyUiDefaultsStore, TELNET_ENABLE_OPTION
+from src.services.message_push_config_service import MessagePushConfigService
+from src.ui.message_push_tab import MessagePushTab
 from .network_ops import (
     CommandResult,
     adapter_alias_from_display,
@@ -4424,7 +4426,7 @@ class LineCheckAssistant(Tk):
         Label(
             content,
             text=(
-                "编辑测试项 ini（Telnet / 测试项命令 / WiFi / 项目信息）及旧工具参数。"
+                "编辑测试项 ini（Telnet / 测试项命令 / WiFi / 项目信息）、运行参数及消息推送。"
                 "测试项页可单次执行预备测试；项目信息页可对当前通道样机执行只读版本查询。"
             ),
             foreground=COLOR_MUTED,
@@ -4444,9 +4446,20 @@ class LineCheckAssistant(Tk):
                 ),
                 parent=dialog,
             )
-        config = store.load()
         legacy_defaults_store = LegacyUiDefaultsStore(LEGACY_UI_DEFAULTS_CONFIG_PATH)
-        legacy_defaults = legacy_defaults_store.load()
+        message_push_service = MessagePushConfigService(LEGACY_UI_DEFAULTS_CONFIG_PATH)
+        try:
+            message_push_values = message_push_service.load()
+            config = store.load()
+            legacy_defaults = legacy_defaults_store.load()
+        except Exception:  # 配置解析异常可能包含原始凭据，使用固定提示。
+            error = "配置加载失败，请检查 ini 格式和访问权限。"
+            self._log(f"[测试项配置 / 消息推送] {error}")
+            messagebox.showerror("加载失败", error, parent=dialog)
+            dialog.destroy()
+            self.test_item_config_window = None
+            return
+        self._log("[消息推送] 已加载 config.ini [dingtalk_config]")
 
         notebook = ttk.Notebook(content)
         notebook.pack(fill="both", expand=True, pady=(0, 12))
@@ -4476,6 +4489,10 @@ class LineCheckAssistant(Tk):
             legacy_defaults,
             mark_dirty,
         )
+        message_push_control = MessagePushTab(
+            notebook, message_push_values, mark_dirty,
+            background=COLOR_BG, foreground=COLOR_TEXT, log=self._log,
+        )
 
         button_bar = Frame(content, background=COLOR_BG)
         button_bar.pack(fill="x", side="bottom", anchor="e")
@@ -4494,19 +4511,24 @@ class LineCheckAssistant(Tk):
             try:
                 reloaded = store.load()
                 reloaded_legacy_defaults = legacy_defaults_store.load()
+                reloaded_message_push = message_push_service.load()
             except Exception as exc:  # noqa: BLE001 - ini 损坏需明确提示
-                messagebox.showerror("加载失败", f"读取 ini 失败：{exc}", parent=dialog)
+                self._log("[测试项配置 / 消息推送] 重新加载失败，请检查配置格式和访问权限。")
+                messagebox.showerror("加载失败", "读取 ini 失败，请检查配置格式和访问权限。", parent=dialog)
                 return
             legacy_defaults_control["load"](reloaded_legacy_defaults)
             telnet_vars["load"](reloaded.telnet)
             order_control["load"](reloaded.order)
             wifi_vars["load"](reloaded.connect_wifi)
             project_info_vars["load"](reloaded.project_info)
+            message_push_control.load(reloaded_message_push)
             reset_dirty()
             self._log("[测试项配置] 已从磁盘重新加载（未保存改动已丢弃）")
+            self._log("[消息推送] 已重新加载 config.ini [dingtalk_config]")
 
         def save() -> None:
             try:
+                captured_message_push = message_push_service.validate(message_push_control.capture())
                 captured = TestProjectConfig(
                     telnet=telnet_vars["capture"](),
                     order=order_control["capture"](),
@@ -4521,6 +4543,7 @@ class LineCheckAssistant(Tk):
                     captured_legacy_defaults
                 )
             except ValueError as exc:
+                self._log("[测试项配置 / 消息推送] 保存跳过：输入校验失败。")
                 messagebox.showerror("数据不合法", str(exc), parent=dialog)
                 return
             if not messagebox.askyesno(
@@ -4540,20 +4563,26 @@ class LineCheckAssistant(Tk):
                     f"软件版本={captured.project_info.software_version or '(空)'}，"
                     f"内部软件版本={captured.project_info.internal_software_version or '(空)'}，"
                     f"编译时间={captured.project_info.onu_compile_time or '(空)'}\n"
-                    f"- 旧工具参数：[ui_defaults] {len(captured_legacy_defaults)} 项\n\n"
+                    f"- 旧工具参数：[ui_defaults] {len(captured_legacy_defaults)} 项\n"
+                    f"- 消息推送：{'启用' if captured_message_push['dingtalk_flag'] == '1' else '关闭'}；"
+                    f"@所有人：{'启用' if captured_message_push['at_all'] == '1' else '关闭'}\n\n"
                     "测试项 ini 中的原注释会在保存后丢失；config.ini 的其它段和注释会保留。是否继续？"
                 ),
                 parent=dialog,
             ):
+                self._log("[消息推送] 操作员取消保存，跳过写入。")
                 return
             try:
+                self._log("[消息推送] 开始保存 config.ini [dingtalk_config]")
                 store.save(captured)
                 legacy_defaults_store.save(captured_legacy_defaults)
+                message_push_service.save(captured_message_push)
             except OSError as exc:
                 messagebox.showerror("保存失败", f"写入 ini 失败：{exc}", parent=dialog)
-                self._log(f"[测试项配置] 保存失败：{exc}")
+                self._log(f"[测试项配置 / 消息推送] 保存失败：{exc}")
                 return
             reset_dirty()
+            self._log("[消息推送] 已保存 config.ini [dingtalk_config]，未发送消息。")
             self._log(
                 f"[测试项配置] 已保存 {len(captured.order.items)} 条测试项命令，"
                 f"已将指令重试间隔 {captured.order.command_fail_retry_interval_time} 秒"
@@ -4567,6 +4596,8 @@ class LineCheckAssistant(Tk):
             )
 
         def close_dialog() -> None:
+            if not message_push_control.can_close():
+                return
             pretest = getattr(self, "test_item_pretest_controls", None)
             if pretest is not None and not pretest.can_close():
                 return
