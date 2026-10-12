@@ -4492,6 +4492,7 @@ class LineCheckAssistant(Tk):
         message_push_control = MessagePushTab(
             notebook, message_push_values, mark_dirty,
             background=COLOR_BG, foreground=COLOR_TEXT, log=self._log,
+            project_config_path=TEST_ITEM_CONFIG_PATH,
         )
 
         button_bar = Frame(content, background=COLOR_BG)

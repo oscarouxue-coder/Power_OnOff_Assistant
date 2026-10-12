@@ -1,4 +1,6 @@
 import tempfile
+import importlib.util
+import sys
 import json
 import tkinter as tk
 import unittest
@@ -12,10 +14,101 @@ from src.ui.message_push_tab import MessagePushTab
 from line_check_assistant.app import LineCheckAssistant
 from line_check_assistant.test_item_config_store import TestProjectConfig
 from src.core.dingtalk_robot import send_text
-from src.services.message_push_config_service import send_test_message
+from src.services.message_push_config_service import send_test_message, load_push_project_name
 
 
 class MessagePushSendTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.project_path = Path(self.tmp.name) / 'test_project_config.ini'
+        self.project_path.write_text('[project_info]\nproject_name = 中文项目\n', encoding='utf-8-sig')
+
+    def legacy_sender(self):
+        path = Path(__file__).resolve().parents[1] / 'Auto_power_on_off_tool/common/dingtalk_send_message.py'
+        spec = importlib.util.spec_from_file_location('_test_legacy_dingtalk', path)
+        module = importlib.util.module_from_spec(spec)
+        with patch.dict(sys.modules, {'config.config_driver': Mock()}):
+            spec.loader.exec_module(module)
+        sender = module.DingTalk()
+        sender.log = Mock()
+        # 旧项目名与磁盘项目名不同，证明发送不再采用调用参数或旧配置。
+        sender.cf.read_ini.side_effect = lambda section, key, **kwargs: {
+            'dingtalk_flag': '1', 'test_project': '旧项目',
+            'remote_tool_name': 'tool', 'remote_identification_code': 'id',
+            'remote_verification_code': 'code',
+        }[key]
+        sender.cf.read_config_file.return_value = dict(
+            webhook='https://oapi.dingtalk.com/robot/send?access_token=demo',
+            secret='demo-secret', at_all='1')
+        return module, sender
+
+    def test_formal_completion_and_failure_use_saved_name_in_title_and_body(self):
+        module, sender = self.legacy_sender()
+        with patch.object(module, 'Path', return_value=self.project_path), \
+             patch.object(module.requests, 'post') as post:
+            post.return_value.json.return_value = {'errcode': 0}
+            for normal in (0, 1):
+                self.assertIs(sender.webhook_send_message('旧项目', '测试详情', normal), True)
+                data = post.call_args.kwargs['json']
+                for value in data['markdown'].values():
+                    self.assertIn('中文项目', value)
+                    self.assertNotIn('旧项目', value)
+                    self.assertNotIn('NP2659GB', value)
+                self.assertTrue(data['at']['isAtAll'])
+            self.assertEqual(post.call_count, 2)
+        self.assertNotIn('demo-secret', str(sender.log.call_args_list))
+        self.assertNotIn('access_token=', str(sender.log.call_args_list))
+
+    def test_formal_disabled_skips_name_read_and_http(self):
+        module, sender = self.legacy_sender()
+        sender.cf.read_ini.side_effect = None
+        sender.cf.read_ini.return_value = '0'
+        with patch.object(module, 'load_push_project_name') as load, \
+             patch.object(module.requests, 'post') as post:
+            self.assertIs(sender.webhook_send_message('旧项目', '详情'), True)
+            load.assert_not_called()
+            post.assert_not_called()
+
+    def test_each_send_reloads_saved_name_and_ignores_unsaved_page_name(self):
+        module, sender = self.legacy_sender()
+        with patch.object(module, 'Path', return_value=self.project_path), \
+             patch.object(module.requests, 'post') as post, \
+             patch('src.services.message_push_config_service.send_text') as send:
+            post.return_value.json.return_value = {'errcode': 0}
+            for name in ('中文项目', '新的项目'):
+                self.project_path.write_text(f'[project_info]\nproject_name = {name}\n', encoding='utf-8')
+                send_test_message(dict(DEFAULTS, project_name='页面未保存值'), self.project_path)
+                self.assertTrue(send.call_args.args[2].startswith(f'项目：{name}\n'))
+                self.assertNotIn('页面未保存值', send.call_args.args[2])
+                sender.webhook_send_message('旧项目', '详情')
+                self.assertIn(name, post.call_args.kwargs['json']['markdown']['title'])
+
+    def test_invalid_project_config_prevents_test_and_formal_http(self):
+        module, sender = self.legacy_sender()
+        for content in (None, '[other]\nproject_name = wrong\n', '[project_info]\n',
+                        '[project_info]\nproject_name =   \n', 'private malformed', b'\xff'):
+            with self.subTest(content=content):
+                if content is None:
+                    self.project_path.unlink(missing_ok=True)
+                else:
+                    self.project_path.write_bytes(content if isinstance(content, bytes) else content.encode('utf-8'))
+                with patch('src.services.message_push_config_service.send_text') as send, \
+                     patch.object(module, 'Path', return_value=self.project_path), \
+                     patch.object(module.requests, 'post') as post:
+                    with self.assertRaisesRegex(ValueError, '已跳过发送') as caught:
+                        send_test_message(DEFAULTS, self.project_path)
+                    self.assertNotIn('private', str(caught.exception))
+                    self.assertIsInstance(sender.webhook_send_message('旧项目', '详情'), ValueError)
+                    send.assert_not_called()
+                    post.assert_not_called()
+
+    def test_project_read_permission_error_is_redacted(self):
+        with patch.object(Path, 'open', side_effect=PermissionError('private-credential')):
+            with self.assertRaisesRegex(ValueError, '项目名称读取失败') as caught:
+                load_push_project_name(self.project_path)
+        self.assertNotIn('private-credential', str(caught.exception))
+
     def response(self, payload):
         response = Mock(status=200)
         response.read.return_value = json.dumps(payload).encode()
@@ -29,13 +122,15 @@ class MessagePushSendTests(unittest.TestCase):
         with patch('src.core.dingtalk_robot.build_opener', return_value=opener), \
              patch('src.core.dingtalk_robot.time.time', return_value=1700000000):
             send_test_message(dict(DEFAULTS, webhook='https://oapi.dingtalk.com/robot/send?access_token=demo',
-                                   secret='demo-secret', at_all='1'))
+                                   secret='demo-secret', at_all='1'), self.project_path)
         request = opener.open.call_args.args[0]
         query = parse_qs(urlsplit(request.full_url).query)
         self.assertEqual(query['access_token'], ['demo'])
         self.assertEqual(query['timestamp'], ['1700000000000'])
         self.assertTrue(query['sign'][0])
         self.assertTrue(json.loads(request.data)['at']['isAtAll'])
+        self.assertEqual(json.loads(request.data)['text']['content'],
+                         '项目：中文项目\nLineCheckAssistant 消息推送测试：收到此消息表示钉钉机器人推送正常。')
         self.assertEqual(opener.open.call_args.kwargs['timeout'], 10)
         opener.open.assert_called_once()
 
@@ -230,7 +325,7 @@ class MessagePushWindowTests(unittest.TestCase):
             self.service.save.assert_not_called()
         with patch('src.ui.message_push_tab.send_test_message') as send:
             self.tab._send_worker(values)
-            send.assert_called_once_with(values)
+            self.assertEqual(send.call_args.args, (values, self.tab.project_config_path))
         self.tab._poll_result()
         self.assertFalse(self.tab.running)
         self.assertIn('发送成功', self.tab.status.get())

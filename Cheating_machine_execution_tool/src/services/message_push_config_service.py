@@ -1,4 +1,4 @@
-"""钉钉配置编辑服务；不发送消息，不在异常中包含凭据。"""
+"""钉钉配置编辑与显式试发服务；异常不包含凭据。"""
 from __future__ import annotations
 
 import configparser
@@ -13,11 +13,29 @@ DEFAULTS = {"dingtalk_flag": "0", "webhook": "", "secret": "", "at_all": "0"}
 SECTION = "dingtalk_config"
 
 
-def send_test_message(values: Mapping[str, object]) -> None:
+def load_push_project_name(config_path: Path, *, log=lambda message: None) -> str:
+    """每次发送读取磁盘项目名，不使用旧 test_project 或页面未保存值。"""
+    log('[消息推送] 读取 test_project_config.ini [project_info] project_name。')
+    try:
+        parser = configparser.RawConfigParser()
+        with Path(config_path).open(encoding='utf-8-sig') as stream:
+            parser.read_file(stream)
+        name = parser.get('project_info', 'project_name', fallback='').strip()
+    except (OSError, UnicodeError, configparser.Error):
+        raise ValueError('项目名称读取失败，已跳过发送；请检查 test_project_config.ini 的格式和访问权限。') from None
+    if not name:
+        raise ValueError('项目名称为空，已跳过发送；请保存 test_project_config.ini [project_info] project_name。')
+    log('[消息推送] 已读取磁盘项目名称。')
+    return name
+
+
+def send_test_message(values: Mapping[str, object], project_config_path: Path, *, log=lambda message: None) -> None:
     """显式试发使用页面快照，不保存配置，不受自动推送开关限制。"""
     values = MessagePushConfigService.validate(values)
+    project_name = load_push_project_name(project_config_path, log=log)
+    log('[消息推送] 下发测试消息：POST https://oapi.dingtalk.com/robot/send（凭据省略）。')
     send_text(values['webhook'], values['secret'],
-              'LineCheckAssistant 消息推送测试：收到此消息表示钉钉机器人推送正常。',
+              f'项目：{project_name}\nLineCheckAssistant 消息推送测试：收到此消息表示钉钉机器人推送正常。',
               at_all=values['at_all'] == '1')
 
 

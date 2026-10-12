@@ -850,6 +850,7 @@ def _legacy_start_all_worker(request, message_queue, stop_event) -> None:
                 *common_args,
                 request.selected_profile,
             )
+        legacy_worker.dingtalk.log = logger.info
         _connect_legacy_log_signals(legacy_worker, message_queue)
         restore_result_log_open = _install_legacy_result_log_forwarder(message_queue)
 

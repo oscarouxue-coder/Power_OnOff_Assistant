@@ -1,5 +1,39 @@
 # 开发记录
 
+## 2026-10-12 - 统一推送项目名称来源
+
+- 类型：BUG 修复。
+- 背景：正式通知使用旧项目标识或固定名称，试发文本未包含项目名称；用户要求统一读取测试项配置中实际项目名，并确认使用磁盘已保存值。
+- 完成内容：在消息推送 service 增加每次发送读取 `test_project_config.ini [project_info] project_name` 的方法；正式完成/异常通知标题与正文统一使用该值，保留旧调用参数，不影响其它用途的 `test_project`。试发正文增加“项目：{project_name}”，凭据及 @所有人仍取页面快照；未保存项目名不生效。缺失、空白、读取失败阻止发送，不回退旧值。正式路径接入主日志，试发阶段日志通过队列回主线程；不输出签名、凭据或远端原始错误文本。同步操作员说明与待验收范围。
+- 修改文件：
+  - `.claude/plans/push-project-name.md`
+  - `Cheating_machine_execution_tool/src/services/message_push_config_service.py`
+  - `Cheating_machine_execution_tool/src/ui/message_push_tab.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/common/dingtalk_send_message.py`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/tests/test_message_push_config.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录设置 `PYTHONUTF8=1`，运行 `python -m unittest discover -s tests -p test_message_push_config.py -v`、`python scripts/verify_baseline.py`、`python -m py_compile Auto_power_on_off_tool/common/dingtalk_send_message.py`；在仓库根运行 `git diff --check`。
+- 验证结果：专项19项通过；完整基线 `ALL CHECKS PASSED`（73个源码编译、839项测试、173项指定回归和协议不变量通过）。新增5项测试覆盖中文项目名、正式完成/异常通知、重新读取、未保存值忽略、自动关闭跳过，以及缺段/缺字段/空值/无文件/编码/格式/权限失败阻止发送与错误脱敏。旧钉钉模块补充编译通过，差异格式检查通过。
+- 提交前复核：2026-10-12 按用户指定备注“优化消息推送显示当前项目名”提交本次范围。首次门禁及定位复跑出现既有 TFTP 上传测试立即读文件为空的失败；TFTP 专项9项随后通过，完整门禁再次输出 `ALL CHECKS PASSED`（839项测试）。未修改 TFTP 实现或测试。
+- 后续待办：负责人确认 Windows 源码版和真实钉钉群收到的正式/测试项目名称与保存后更新效果。未发送真实消息、未改本机配置、未打包；此前取消跟踪 `config.ini` 的暂存改动保留，不纳入本次提交。
+
+## 2026-10-12 - 停止跟踪本机配置文件
+
+- 类型：修改。
+- 背景：用户要求将 `Auto_power_on_off_tool/config/config.ini` 加入 Git 忽略。
+- 完成内容：根目录 `.gitignore` 已存在对应规则；通过 `git rm --cached` 取消跟踪，保留本机配置文件及其现有修改。
+- 修改文件：
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/config/config.ini`（仅移出 Git 索引）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：`git check-ignore -v` 检查目标路径；`git ls-files --` 检查不再跟踪；`Test-Path` 检查本机文件保留；`git diff --check` 检查文档格式。
+- 验证结果：忽略规则命中，目标路径不再被跟踪，本机文件保留；未修改程序源码。
+- 后续待办：无。
+
 ## 2026-10-11 - 增加消息推送配置与试发按钮
 
 - 类型：功能。

@@ -7,13 +7,16 @@ import hmac
 import base64
 import hashlib
 import urllib
+from pathlib import Path
 
 from config.config_driver import OperationConfig
+from src.services.message_push_config_service import load_push_project_name
 
 
 class DingTalk(object):
     def __init__(self):
         self.cf = OperationConfig()
+        self.log = print
 
     def create_sign(self, access_code, secret):
         timestamp = str(round(time.time() * 1000))
@@ -33,7 +36,13 @@ class DingTalk(object):
                 self.cf.read_ini('dingtalk_config', 'dingtalk_flag',
                                  path='./config/config.ini').strip())
             if dingtalk_flag == 0:
+                self.log('[消息推送] 自动推送关闭，跳过发送。')
                 return True
+            try:
+                project_name = load_push_project_name(Path('./config/test_project_config.ini'), log=self.log)
+            except ValueError as exc:
+                self.log(f'[消息推送] 正式发送失败：{exc}')
+                return exc
             dingtalk_config = self.cf.read_config_file('./config/config.ini', 'dingtalk_config')
             remote_tool_name = self.cf.read_ini('remote_config', 'remote_tool_name',
                                                 path='./config/config.ini').strip()
@@ -50,15 +59,14 @@ class DingTalk(object):
             else:
                 at_all = True
             sign_enc = self.create_sign(access_code, secret)
-            print(sign_enc)
             url = f'https://oapi.dingtalk.com/robot/send?access_token={sign_enc}'
 
             if normal_flag:
                 data = {
                     "msgtype": "markdown",
                     "markdown": {
-                        'title': '## NP2659GB 挂测开关机出现异常',
-                        "text": f"## <font color='#339933'>{device_type} 挂测开关机完成</font>  \n\n"
+                        'title': f'## {project_name} 挂测开关机完成',
+                        "text": f"## <font color='#339933'>{project_name} 挂测开关机完成</font>  \n\n"
                                 f"> #### <font color='#339933'>{message}</font>    \n\n\n\n"
                                 f"> ###### 远程客户端信息  \n\n"
                                 f"> ###### 远程工具名称：{remote_tool_name} \n"
@@ -73,8 +81,8 @@ class DingTalk(object):
                 data = {
                     "msgtype": "markdown",
                     "markdown": {
-                        'title': '## NP2659GB 挂测开关机出现异常',
-                        "text": f"## <font color='#FFA500'>{device_type} 挂测开关机出现异常</font>  \n\n"
+                        'title': f'## {project_name} 挂测开关机出现异常',
+                        "text": f"## <font color='#FFA500'>{project_name} 挂测开关机出现异常</font>  \n\n"
                                 f"> #### <font color='#FF0000'>{message}</font>    \n\n\n\n"
                                 f"> ###### 远程客户端信息  \n\n"
                                 f"> ###### 远程工具名称：{remote_tool_name} \n"
@@ -86,17 +94,21 @@ class DingTalk(object):
                     }
                 }
 
+            self.log('[消息推送] 下发正式消息：POST https://oapi.dingtalk.com/robot/send（凭据省略）。')
             res = requests.post(url, json=data)
             # print(res.json()['errcode'])
             result = res.json()['errcode']
             if result == 0:
+                self.log('[消息推送] 正式发送成功（钉钉已接受）。')
                 return True
             else:
-                print(res.text)
-                return res.text
+                detail = f'钉钉接口拒绝消息，错误码：{result}'
+                self.log(f'[消息推送] 正式发送失败：{detail}')
+                return detail
         except Exception as e:
-            print(f'发送钉钉消息失败：{e}')
-            return e
+            detail = '正式发送失败，结果未知；请检查配置和群消息。'
+            self.log(f'[消息推送] {detail}')
+            return RuntimeError(detail)
 
     def post_image(self):
         # 钉钉机器人的 Webhook URL

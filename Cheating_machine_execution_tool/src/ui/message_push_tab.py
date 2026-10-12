@@ -7,8 +7,9 @@ from src.services.message_push_config_service import send_test_message
 
 
 class MessagePushTab:
-    def __init__(self, notebook, values, mark_dirty, *, background, foreground, log=lambda message: None):
+    def __init__(self, notebook, values, mark_dirty, *, background, foreground, project_config_path, log=lambda message: None):
         self.log = log
+        self.project_config_path = project_config_path
         self.running = False
         self.results = queue.Queue()
         self.frame = Frame(notebook, background=background, padx=20, pady=20)
@@ -31,7 +32,7 @@ class MessagePushTab:
                       foreground=foreground).grid(row=row, column=0, sticky="w", padx=(0, 16), pady=10)
                 ttk.Entry(self.frame, textvariable=variable).grid(row=row, column=1, sticky="ew", pady=10)
             variable.trace_add("write", mark_dirty)
-        Label(self.frame, text="修改后点击底部“保存”。试发使用当前输入，无需保存且不受推送开关限制；按当前设置 @所有人。",
+        Label(self.frame, text="试发使用当前推送配置，不受推送开关限制；项目名称使用“项目信息”已保存的磁盘值。",
               background=background, foreground=foreground).grid(
                   row=4, column=0, columnspan=2, sticky="w", pady=(20, 0))
         self.test_button = ttk.Button(self.frame, text="发送测试消息", command=self.send_test)
@@ -56,7 +57,8 @@ class MessagePushTab:
 
     def _send_worker(self, values):
         try:
-            send_test_message(values)
+            send_test_message(values, self.project_config_path,
+                              log=lambda message: self.results.put((None, message)))
         except (ValueError, RuntimeError) as exc:
             self.results.put((False, str(exc)))
         except Exception:
@@ -69,6 +71,10 @@ class MessagePushTab:
             success, detail = self.results.get_nowait()
         except queue.Empty:
             self.frame.after(100, self._poll_result)
+            return
+        if success is None:
+            self.log(detail)
+            self.frame.after(0, self._poll_result)
             return
         self.running = False
         self.test_button.configure(state='normal')
