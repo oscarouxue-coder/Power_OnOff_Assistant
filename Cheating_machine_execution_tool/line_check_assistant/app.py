@@ -543,6 +543,9 @@ class LineCheckAssistant(Tk):
         pretest = getattr(self, "test_item_pretest_controls", None)
         if pretest is not None and not pretest.can_close():
             return
+        session = getattr(self, "power_test_resume_session", None)
+        if session is not None:
+            session.stop()
         dut_cancel_event = getattr(self, "dut_config_cancel_event", None)
         if dut_cancel_event is not None:
             dut_cancel_event.set()
@@ -6879,9 +6882,9 @@ class LineCheckAssistant(Tk):
         detail: str,
     ) -> None:
         """保留本次开关机测试中单通道的重试和失败事件。"""
-        if status not in {"retry", "failed", "success"}:
+        if status not in {"retry", "failed", "success", "resume"}:
             return
-        if status == "success" and "重试" not in detail:
+        if status == "success" and "重试" not in detail and "续跑" not in detail:
             return
         try:
             normalized_cycle = max(1, int(cycle))
@@ -7013,6 +7016,7 @@ class LineCheckAssistant(Tk):
             child.destroy()
         for column in range(4):
             self.power_test_channel_grid.columnconfigure(column, weight=1)
+        from src.ui.power_test_resume_menu import bind_resume_menu
         for index, number in enumerate(channel_numbers):
             completed, total, stage = progresses[number]
             state, detail = states.get(number, ("running", ""))
@@ -7033,6 +7037,7 @@ class LineCheckAssistant(Tk):
                 anchor="w",
             )
             tile.grid(row=index // 4, column=index % 4, sticky="ew", padx=(0, 5), pady=2)
+            bind_resume_menu(self, tile, number)
             tile.bind(
                 "<Button-1>",
                 lambda _event, selected=number: self._show_power_test_channel_detail(
@@ -7163,6 +7168,7 @@ class LineCheckAssistant(Tk):
             "retry": "重试",
             "failed": "失败",
             "success": "重试后成功",
+            "resume": "续跑",
         }
         for event_cycle, event_status, event_detail in entries:
             lines.append(
@@ -7558,6 +7564,10 @@ class LineCheckAssistant(Tk):
         注意:``self.pipeline_window`` 是 ``PipelineWindow`` 包装器(持有 ``self.window`` 这个 Toplevel),
         ``winfo_exists()`` / ``deiconify()`` / ``lift()`` / ``focus_force()`` 必须走 ``.window``,不能直接调包装器。
         """
+        session = getattr(self, "power_test_resume_session", None)
+        if session is not None and session.is_recovering:
+            self._log("[通道续跑] 当前仍在恢复通道，请等待结束或停止后再启动全流程。")
+            return
         # 旧逻辑保留作为兜底(直接跳弹窗失败时,仍可走 ping 检查)
         if self.running:
             return
@@ -7626,8 +7636,15 @@ class LineCheckAssistant(Tk):
 
     def _stop_power_test(self) -> None:
         """主界面停止入口；委派给当前全流程编排器的既有停止事件。"""
+        session = getattr(self, "power_test_resume_session", None)
+        recovery_stopped = session is not None and session.is_recovering
+        if recovery_stopped:
+            session.stop()
+            self.stop_power_test_button.configure(state="disabled")
         pipeline_window = self.pipeline_window
         if pipeline_window is not None and pipeline_window.request_stop():
+            return
+        if recovery_stopped:
             return
         if self.power_test_running:
             self._set_power_test_status("idle")

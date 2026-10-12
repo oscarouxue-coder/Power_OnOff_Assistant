@@ -40,7 +40,7 @@ class PowerOnOffSsh(QThread):
     show_signal_warning = pyqtSignal(str)
 
     def __init__(self, ser, logger, startup_time, interval_time, wait_command_done, test_number, config_file_path,
-                 recv_email=[], device_type=''):
+                 recv_email=[], device_type='', *, initialize_power=True):
         super(PowerOnOffSsh, self).__init__()
         self.dingtalk = DingTalk()
         self.cf = OperationConfig()
@@ -63,7 +63,8 @@ class PowerOnOffSsh(QThread):
         self.power_control = PowerOnOff(self.logger)
         # self.ser = Serial(self.serial_num, self.baud_rate, self.logger)
         self.cmd_ping = Cmd(self.logger)
-        self.power_control.power_all_off(self.ser)
+        if initialize_power:
+            self.power_control.power_all_off(self.ser)
         time.sleep(1)
         # 各个通道运行标志
         self.all_channel_flag = 1
@@ -196,19 +197,23 @@ class PowerOnOffSsh(QThread):
         self.eth_status_list[num] = 0
         self.wifi_status_list[num] = 0
 
-    def run_case(self, network_card_ip, power_num, flag):
+    def run_case(self, network_card_ip, power_num, flag, *, start_cycle=1, result_suffix=""):
         """
         :param network_card_ip: 网卡IP
         :param power_num: 对应的程控电源口序号
         :param flag: 运行的标志，为时运行，为0时停止
         :return:
         """
-        times = 1
+        times = start_cycle
 
+        if not 1 <= start_cycle <= self.test_number:
+            raise ValueError("起始轮次超出测试范围")
         command_result_log = self.create_command_exec_result_file(power_num)
+        if result_suffix:
+            command_result_log = command_result_log[:-4] + "_resume_" + result_suffix + ".log"
         with open(command_result_log, 'wb', buffering=0) as file:
             self.show_signal[str].emit('通道' + str(power_num) + '开始测试')
-            times = 1
+            times = start_cycle
             match_gateway_ip = re.compile(r'[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}')
             result = self.selected_scheme_path()
             if type(result) is not bool:

@@ -38,6 +38,7 @@ from line_check_assistant.config_store import ChannelConfig
 from line_check_assistant.onu_registration_store import OnuRegistrationConfig
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
 from line_check_assistant.test_item_config_store import TestItemConfigStore
+from src.services.power_test_resume_service import PowerTestResumeSession
 from src.services.device_project_info_service import (
     DeviceProjectInfoQueryRequest,
     project_info_mismatches,
@@ -718,6 +719,13 @@ class PipelineOrchestrator:
                 for channel in self.ctx.enabled_channels
             ),
         )
+        session = PowerTestResumeSession(
+            request, self.ctx.enabled_channels, self.ctx.stop_event, self.emit,
+            on_progress=self._report_legacy_power_progress,
+            on_channel_progress=self._report_legacy_power_channel_progress,
+            on_channel_status=self._report_legacy_power_channel_status,
+            on_channel_history=self._report_legacy_power_channel_history,
+        )
         project_config = TestItemConfigStore(
             request.tool_root / "config" / request.profile_filename
         ).load()
@@ -798,10 +806,19 @@ class PipelineOrchestrator:
             else:
                 reset_channel_statuses(channel_numbers)
 
+        session.ensure_config_unchanged()
+        def register_resume_session():
+            self.ctx.app.power_test_resume_session = session
+        invoke_on_ui = _get_attr(self.ctx.app, "_invoke_pipeline_ui_action", None)
+        if callable(invoke_on_ui):
+            invoke_on_ui(register_resume_session)
+        else:
+            register_resume_session()
         result = run_legacy_power_test(
             request,
             self.emit,
             self.ctx.stop_event,
+            resume_session=session,
             on_progress=self._report_legacy_power_progress,
             on_channel_progress=self._report_legacy_power_channel_progress,
             on_channel_status=self._report_legacy_power_channel_status,

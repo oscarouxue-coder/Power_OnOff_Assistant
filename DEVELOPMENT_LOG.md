@@ -1,5 +1,48 @@
 # 开发记录
 
+## 2026-10-12 - 增加失败通道右键续跑
+
+- 类型：功能。
+- 背景：用户要求在通道概览失败小卡右键重新开始，并确认3/5保留已完成3轮、从第4轮继续；其它通道运行中及整次结束后均可操作，沿用本次配置。
+- 完成内容：新增独立续跑service及右键菜单模块，确认目标上下电，线程退出后才允许启动并防重复。保存运行标识、尝试编号、原参数及配置指纹，恢复前核对三份原配置并对目标通道重新执行三项版本只读预检。存活子进程通过控制队列复用串口和电源消费者；退出竞争中未收到启动确认的请求，等待原进程释放资源后转为单通道独立恢复；多个独立恢复互斥。旧Telnet/SSH业务增加默认兼容的起始轮次和初始化全断电开关，恢复明确不全断电，结果文件添加唯一后缀保留原失败日志。原失败历史保留并追加续跑开始/结果；总体进度取原选通道最小轮次，结束后恢复单独记录且不覆盖原全流程结论。停止覆盖待启动和执行中恢复，资源释放前拦截新全流程；Tk更新继续走主线程队列。保留本机配置取消跟踪和并行错误历史相关改动。
+- 修改文件：
+  - `.claude/plans/channel-failure-resume.md`
+  - `Cheating_machine_execution_tool/src/services/power_test_resume_service.py`
+  - `Cheating_machine_execution_tool/src/ui/power_test_resume_menu.py`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/test_case/powe_on_off_telnet.py`
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/test_case/power_on_off_ssh.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_resume.py`
+  - `Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录设置 `PYTHONUTF8=1`，运行 `python -m unittest discover -s tests -p test_power_test_resume.py -v`、`python -m unittest discover -s tests -p test_pipeline_orchestrator.py`、`python -m unittest discover -s tests -p test_pipeline_window.py`、`python -m py_compile Auto_power_on_off_tool/test_case/powe_on_off_telnet.py Auto_power_on_off_tool/test_case/power_on_off_ssh.py`、`python scripts/verify_baseline.py`；仓库根目录运行 `git diff --check`。
+- 验证结果：续跑专项17项通过，覆盖3/5从第4轮开始、运行中复用/结束恢复、Telnet及SSH恢复不全断电、不重复其它通道、旧日志保留、再次失败、退出竞争、配置变化、版本差异、过期消息隔离、防重复、停止、恢复互斥及右键确认。管道专项48项、窗口专项31项通过，两份旧业务源码编译通过；最终统一门禁 `ALL CHECKS PASSED`（75个源码编译、861项测试、173项指定回归及协议不变量通过）。初轮发现新增UI注册回调需同步次数断言、编译清单禁止旧业务目录，均已修正；旧业务单独编译而不改变门禁目录约束。此前错误历史记录中的在途门禁失败已由本轮完整通过结果覆盖。
+- 后续待办：负责人在Windows源码版及真实样机验证右键菜单、真实电源帧仅作用目标通道、运行中/结束后续跑及停止。自动化使用模拟串口和旧业务依赖，未连接真实设备；未打包、未运行EXE、未提交Git。
+
+## 2026-10-12 - 补全旧工具错误历史提取
+
+- 类型：BUG 修复。
+- 背景：负责人提供 Telnet 连接失败等待重连、`bbfdmd -c get Device.ManagementServer.X_SDMC_AcsLineStatus在通道2:执行错误时发生异常:[WinError 10054]` 与“通道 1 发送 ping error 信号”日志，要求同步显示在“重试/失败历史”。原解析仅支持指令重试、重试后成功及验证用尽失败。
+- 完成内容：新增独立错误历史解析，识别三类原文及空白变体；在主日志精简/去重前按已选通道和当前轮次投递现有历史回调。Telnet 等待重连为重试事件，命令异常和 Ping error 为失败事件；完整保存指令与异常原因。不修改通道运行状态、最终结果、设备命令、重试配置或旧结果文件；保留工作区其它在途改动。
+- 修改文件：
+  - `.claude/plans/legacy-error-history.md`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`（仅新增错误历史匹配、解析及调用）
+  - `Cheating_machine_execution_tool/tests/test_legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置 `PYTHONUTF8=1`，运行 `python -m unittest discover -s tests -p test_legacy_power_test_service.py -v`、`python scripts/verify_baseline.py`；完整 unittest 定位失败，`git diff --check` 检查格式。
+- 验证结果：新增5项回归，专项21项全部通过，覆盖三类原文、不匹配日志、多通道轮次、未选通道忽略、主日志去重前记录及结果/状态不变。当前工作区完整门禁未通过：77文件编译、75源码覆盖及协议不变量通过；844项测试中2项失败、2项默认浏览器集成测试跳过。定位为并行在途续跑修改相关的 `test_legacy_power_test_delegates_to_headless_service`（回调次数6与原断言5不符）及 `test_py_compile_files_under_allowed_dirs`（新增旧工具文件不在原允许目录），未修改这些实现或断言。格式检查通过。首次完整运行在在途编辑期间报告1失败1错误，定位复跑和最终门禁均报告上述2失败。
+- 后续待办：其它在途续跑修改完成后重跑完整基线；负责人在 Windows 源码版点击通道小卡，确认三类真实异常按通道/轮次显示并实时刷新。未进行真实设备操作，未构建EXE、未提交Git，既有验收结论不升级。
+
 ## 2026-10-12 - 统一推送项目名称来源
 
 - 类型：BUG 修复。

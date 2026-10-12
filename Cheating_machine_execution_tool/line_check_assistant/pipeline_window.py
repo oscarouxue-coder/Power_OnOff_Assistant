@@ -326,6 +326,10 @@ class PipelineWindow:
     # -- 开始 / 停止 -----------------------------------------------------
 
     def _on_start(self) -> None:
+        session = getattr(self.app, 'power_test_resume_session', None)
+        if session is not None and session.is_recovering:
+            messagebox.showwarning('通道续跑进行中', '请等待续跑结束或停止后再启动全流程。', parent=self.window)
+            return
         if self._running_thread and self._running_thread.is_alive():
             return
         selected = {code for code, var in self._check_vars.items() if var.get()}
@@ -411,6 +415,10 @@ class PipelineWindow:
         if not proceed:
             return
         # 锁定按钮
+        previous_session = getattr(self.app, 'power_test_resume_session', None)
+        if previous_session is not None:
+            previous_session.stop()
+            self.app.power_test_resume_session = None
         self._stop_requested = False
         self._set_running_ui(True)
         self._update_main_power_test_progress(0, 0)

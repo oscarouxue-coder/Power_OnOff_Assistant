@@ -597,6 +597,11 @@ class SampleUpgradeDispatchTests(unittest.TestCase):
 
 
 class LegacyPowerTestDispatchTests(unittest.TestCase):
+    def setUp(self):
+        session_patch = patch('src.services.pipeline_orchestrator.PowerTestResumeSession')
+        session_patch.start()
+        self.addCleanup(session_patch.stop)
+
     @patch("src.services.pipeline_orchestrator.query_device_project_info")
     @patch("src.services.pipeline_orchestrator.TestItemConfigStore")
     @patch("src.services.legacy_power_test_service.run_legacy_power_test")
@@ -637,7 +642,9 @@ class LegacyPowerTestDispatchTests(unittest.TestCase):
         ctx.app._invoke_pipeline_ui_action.side_effect = lambda action: action()
         emitted: List[str] = []
 
-        PipelineOrchestrator(ctx, emitted.append)._run_legacy_power_test()
+        with patch("src.services.pipeline_orchestrator.PowerTestResumeSession") as session_class:
+            PipelineOrchestrator(ctx, emitted.append)._run_legacy_power_test()
+        self.assertIs(run_power_test.call_args.kwargs['resume_session'], session_class.return_value)
 
         prepare_request.assert_called_once()
         channels = tuple(prepare_request.call_args.args[1])
@@ -669,7 +676,7 @@ class LegacyPowerTestDispatchTests(unittest.TestCase):
         ctx.app._record_power_test_channel_history.assert_called_once_with(
             2, 12, "retry", "\u51c6\u5907\u7b2c2/3\u6b21\u9a8c\u8bc1"
         )
-        self.assertEqual(ctx.app._invoke_pipeline_ui_action.call_count, 5)
+        self.assertEqual(ctx.app._invoke_pipeline_ui_action.call_count, 6)
 
     @patch("src.services.pipeline_orchestrator.query_device_project_info")
     @patch("src.services.pipeline_orchestrator.TestItemConfigStore")

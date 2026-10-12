@@ -66,7 +66,7 @@ class PowerOnOffTelnet(QThread):
 
     def __init__(self, ser, logger, startup_time, interval_time, wait_command_done, test_number, config_file_path='',
                  recv_email=[],
-                 telnet_enable_flag=0, device_type=''):
+                 telnet_enable_flag=0, device_type='', *, initialize_power=True):
         super(PowerOnOffTelnet, self).__init__()
 
         self.cf = OperationConfig()
@@ -100,7 +100,8 @@ class PowerOnOffTelnet(QThread):
         self.power_control = PowerOnOff(self.logger)
         # self.ser = Serial(self.serial_num, self.baud_rate, self.logger)
         self.cmd_ping = Cmd(self.logger)
-        self.power_control.power_all_off(self.ser)
+        if initialize_power:
+            self.power_control.power_all_off(self.ser)
         self.wifi_connect = WifiConnect(self.logger)
 
         # 各个通道运行标志
@@ -473,7 +474,7 @@ class PowerOnOffTelnet(QThread):
         tel.logout_host()
         return result1
 
-    def run_case(self, network_card_ip, power_num, stop_event=None):
+    def run_case(self, network_card_ip, power_num, stop_event=None, *, start_cycle=1, result_suffix=""):
 
         """
                :param network_card_ip: 网卡IP
@@ -484,7 +485,11 @@ class PowerOnOffTelnet(QThread):
             stop_event = self._stop_event
 
         run_flag = self.set_run_flag_1(power_num)
+        if not 1 <= start_cycle <= self.test_number:
+            raise ValueError("起始轮次超出测试范围")
         command_result_log = self.create_command_exec_result_file(power_num)
+        if result_suffix:
+            command_result_log = command_result_log[:-4] + "_resume_" + result_suffix + ".log"
         with open(command_result_log, 'wb', buffering=0) as f:
             self.show_signal[str].emit('通道' + str(power_num) + '开始测试')
             result = self.selected_scheme_path()
@@ -498,7 +503,7 @@ class PowerOnOffTelnet(QThread):
             TelnetClient.password = self.password
             print('赋值', TelnetClient.username, TelnetClient.password)
 
-            times = 1
+            times = start_cycle
             match_gateway_ip = re.compile(r'[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}')
             gateway_ip = match_gateway_ip.search(self.url).group()
             self.logger.info(gateway_ip)

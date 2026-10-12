@@ -215,6 +215,98 @@ class _HistoryProcessContext(_FakeProcessContext):
 
 
 class LegacyPowerTestServiceTests(unittest.TestCase):
+    def test_history_extracts_telnet_connection_retry(self) -> None:
+        for text in (
+            "通道 2 第 1 次连接telnet 失败，等待10s再连接一次；",
+            "通道2 第1次连接 TELNET 失败，等待 10 s 再连接一次",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(
+                    service_module._legacy_channel_history_error_from_log(text),
+                    (2, "retry", text),
+                )
+                self.assertIsNone(service_module._legacy_channel_status_from_log(text))
+
+    def test_history_extracts_full_command_exception(self) -> None:
+        text = (
+            "bbfdmd -c get Device.ManagementServer.X_SDMC_AcsLineStatus在通道2:"
+            "执行错误时发生异常:[WinError 10054] 远程主机强迫关闭了一个现有的连接。"
+        )
+        self.assertEqual(
+            service_module._legacy_channel_history_error_from_log(text),
+            (2, "failed", text),
+        )
+        self.assertIsNone(service_module._legacy_channel_status_from_log(text))
+
+    def test_history_extracts_ping_error(self) -> None:
+        text = "通道 1 发送 ping error 信号"
+        self.assertEqual(
+            service_module._legacy_channel_history_error_from_log(text),
+            (1, "failed", text),
+        )
+        self.assertIsNone(service_module._legacy_channel_status_from_log(text))
+
+    def test_history_error_parser_ignores_normal_and_unattributed_logs(self) -> None:
+        for text in (
+            "192.168.1.102登录成功",
+            "通道 2 连接telnet 成功",
+            "通道 2 发送 ping success 信号",
+            "执行错误时发生异常:[WinError 10054]",
+            "通道 2 执行指令：echo ok，在第1次时出现错误；准备第2/3次验证",
+        ):
+            with self.subTest(text=text):
+                self.assertIsNone(service_module._legacy_channel_history_error_from_log(text))
+
+    def test_parent_records_extra_errors_before_dedup_with_channel_cycles(self) -> None:
+        retry = "通道 2 第 1 次连接telnet 失败，等待10s再连接一次；"
+        exception = (
+            "bbfdmd -c get Device.ManagementServer.X_SDMC_AcsLineStatus在通道2:"
+            "执行错误时发生异常:[WinError 10054] 远程主机强迫关闭了一个现有的连接。"
+        )
+        ping = "通道 1 发送 ping error 信号"
+
+        class ErrorProcess(_HistoryCompletedProcess):
+            def start(self):
+                message_queue = self.args[1]
+                for level, text, source in (
+                    ("info", "*******通道 【2】 开始第3次测试*******", "signal"),
+                    ("info", "*******通道 【1】 开始第2次测试*******", "signal"),
+                    ("error", retry, "signal"),
+                    ("error", exception, "logger"),
+                    ("error", ping, "logger"),
+                    ("error", ping, "signal"),
+                    ("error", "通道 9 发送 ping error 信号", "logger"),
+                ):
+                    message_queue.put(dict(type="log", level=level, message=text, source=source))
+                message_queue.put(dict(type="result", ok=True, detail="全部完成"))
+                self._alive = False
+
+        class ErrorContext(_FakeProcessContext):
+            def Process(self, **kwargs):
+                return ErrorProcess(**kwargs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            request = prepare_legacy_power_test_request(
+                _write_config_tree(Path(temp_dir)),
+                (LegacyPowerChannel(1, "192.168.1.101"), LegacyPowerChannel(2, "192.168.1.102")),
+            )
+        history, emitted, statuses = [], [], []
+        result = run_legacy_power_test(
+            request, emitted.append, _FakeEvent(), process_context=ErrorContext(),
+            on_channel_history=lambda *event: history.append(event),
+            on_channel_status=lambda *event: statuses.append(event),
+        )
+        self.assertTrue(result.ok)
+        self.assertEqual(history, [
+            (2, 3, "retry", retry),
+            (2, 3, "failed", exception),
+            (1, 2, "failed", ping),
+            (1, 2, "failed", ping),
+        ])
+        self.assertEqual(statuses, [])
+        for text in (retry, exception, ping):
+            self.assertEqual(emitted.count(f"[旧工具Logs][ERROR] {text}"), 1)
+
     def test_power_frame_is_rendered_in_execution_log_format(self) -> None:
         self.assertEqual(
             service_module._format_power_frame(bytes((0x55, 0x00, 0xAD, 0x00, 0x00, 0xAD))),

@@ -84,6 +84,8 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/services/dut_wan_query_service.py",
     "src/services/device_project_info_service.py",
     "src/services/legacy_power_test_service.py",
+    "src/services/power_test_resume_service.py",
+    "src/ui/power_test_resume_menu.py",
     "src/services/power_test_log_service.py",
     "src/services/onu_batch_registration_service.py",
     "src/services/onu_registration_service.py",

@@ -18,6 +18,7 @@ import sys
 import threading
 import time
 import types
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
@@ -63,6 +64,19 @@ LEGACY_COMMAND_FAILURE_PATTERN = re.compile(
 LEGACY_COMMAND_RETRY_SUCCESS_PATTERN = re.compile(
     r"^通道\s*(?P<channel>\d+)\s*发送指令\s*(?P<command>.+?)\s*重试了\s*"
     r"(?P<retries>\d+)次之后，执行成功$"
+)
+LEGACY_HISTORY_ERROR_PATTERNS = (
+    ("retry", re.compile(
+        r"^通道\s*(?P<channel>\d+)\s*第\s*\d+\s*次连接\s*telnet\s*失败，"
+        r"等待\s*\d+\s*s\s*再连接一次[；;]?$", re.IGNORECASE,
+    )),
+    ("failed", re.compile(
+        r"^.+?在通道\s*(?P<channel>\d+)\s*[:：]\s*执行错误时发生异常\s*[:：].+$",
+    )),
+    ("failed", re.compile(
+        r"^通道\s*(?P<channel>\d+)\s*发送\s+ping\s+error\s+信号[；;]?$",
+        re.IGNORECASE,
+    )),
 )
 LEGACY_KEY_RESULT_MARKERS = (
     "登录成功",
@@ -246,6 +260,16 @@ def _legacy_channel_status_from_log(text: str) -> tuple[int, str, str] | None:
     return None
 
 
+def _legacy_channel_history_error_from_log(text: str) -> tuple[int, str, str] | None:
+    """补充旧工具错误历史；不把过程异常作为通道最终结果。"""
+    compact_text = LEGACY_LOG_WHITESPACE_PATTERN.sub(" ", text).strip()
+    for status, pattern in LEGACY_HISTORY_ERROR_PATTERNS:
+        match = pattern.fullmatch(compact_text)
+        if match is not None:
+            return int(match.group("channel")), status, text.strip()
+    return None
+
+
 def prepare_legacy_power_test_request(
     tool_root: Path,
     channels: Iterable[LegacyPowerChannel],
@@ -354,7 +378,32 @@ def prepare_legacy_power_test_request(
     )
 
 
-def run_legacy_power_test(
+def run_legacy_power_test(request, emit, stop_event, *, process_context=None,
+                          on_progress=None, on_channel_progress=None,
+                          on_channel_status=None, on_channel_history=None,
+                          resume_session=None, initial_completed=None,
+                          initialize_power=True):
+    """Run one serial-port owner; recovery sessions retain channel state."""
+    kwargs = dict(process_context=process_context, on_progress=on_progress,
+                  on_channel_progress=on_channel_progress,
+                  on_channel_status=on_channel_status, on_channel_history=on_channel_history,
+                  resume_session=resume_session, initial_completed=initial_completed,
+                  initialize_power=initialize_power)
+    if resume_session is None:
+        return _run_legacy_power_test(request, emit, stop_event, **kwargs)
+    # Recovery callers already own process_lock. Original runs acquire it here.
+    if initialize_power:
+        resume_session.process_lock.acquire()
+    try:
+        return _run_legacy_power_test(request, emit, stop_event, **kwargs)
+    finally:
+        resume_session.detach()
+        if initialize_power:
+            resume_session.original_done = True
+            resume_session.process_lock.release()
+
+
+def _run_legacy_power_test(
     request: LegacyPowerTestRequest,
     emit: Output,
     stop_event: threading.Event,
@@ -364,14 +413,22 @@ def run_legacy_power_test(
     on_channel_progress: ChannelProgressOutput | None = None,
     on_channel_status: ChannelStatusOutput | None = None,
     on_channel_history: ChannelHistoryOutput | None = None,
+    resume_session=None, initial_completed=None, initialize_power=True,
 ) -> LegacyPowerTestResult:
     """在独立无 GUI 子进程运行旧 ``Start All``，同步等待最终结果。"""
     context = process_context or multiprocessing.get_context("spawn")
     message_queue = context.Queue()
     child_stop_event = context.Event()
+    initial_completed = initial_completed or {}
+    control_queue = context.Queue() if resume_session is not None else None
+    worker_args = (request, message_queue, child_stop_event)
+    if resume_session is not None or initial_completed or not initialize_power:
+        worker_args += (control_queue, resume_session.run_id if resume_session else uuid.uuid4().hex,
+                        dict(resume_session.attempts) if resume_session else {},
+                        initial_completed, initialize_power)
     process = context.Process(
         target=_legacy_start_all_worker,
-        args=(request, message_queue, child_stop_event),
+        args=worker_args,
         name="legacy-start-all-headless",
     )
     emit(
@@ -394,167 +451,218 @@ def run_legacy_power_test(
         )
     else:
         emit("[执行开关机测试] WiFi连接配置：主控=关闭，本次跳过 WiFi 连接测试。")
-    completed_by_channel = {item.number: 0 for item in request.channels}
+    completed_by_channel = {item.number: initial_completed.get(item.number, 0) for item in request.channels}
     last_reported_cycle = 0
     if on_progress is not None:
-        on_progress(0, request.number_of_tests)
+        on_progress(min(completed_by_channel.values()), request.number_of_tests)
     process.start()
-    if on_channel_progress is not None:
-        for channel in request.channels:
-            on_channel_progress(channel.number, 0, request.number_of_tests, "等待第1轮")
+    try:
+        if resume_session is not None:
+            resume_session.attach(control_queue, tuple(completed_by_channel))
+        if on_channel_progress is not None:
+            for channel in request.channels:
+                completed = completed_by_channel[channel.number]
+                on_channel_progress(channel.number, completed, request.number_of_tests,
+                                    f"等待第{completed + 1}轮")
 
-    final_result: LegacyPowerTestResult | None = None
-    stop_deadline: float | None = None
-    exit_drain_deadline: float | None = None
-    recent_log_times: dict[tuple[str, str], float] = {}
-    last_forwarded_log_key: tuple[str, str] | None = None
-    forwarded_login_success_ips: set[str] = set()
-    channel_details: dict[int, str] = {}
-    emit(
-        "[执行开关机测试] 已启用精简日志：保留每轮开始/正常结论、关键结果、"
-        "警告/错误、程控电源指令和最终结论。"
-    )
-    while process.is_alive() or final_result is None:
-        if stop_event.is_set() and not child_stop_event.is_set():
-            emit("[执行开关机测试] 收到停止请求，正在通知旧业务停止所有通道。")
-            child_stop_event.set()
-            stop_deadline = time.monotonic() + LEGACY_STOP_GRACE_SECONDS
-        if stop_deadline is not None and process.is_alive() and time.monotonic() >= stop_deadline:
-            emit("[执行开关机测试] 旧业务未在停止宽限期内退出，终止本次无GUI专用子进程。")
-            process.terminate()
-            process.join(timeout=2)
-            return LegacyPowerTestResult(False, "用户停止，旧业务子进程已终止")
+        final_result: LegacyPowerTestResult | None = None
+        stop_deadline: float | None = None
+        exit_drain_deadline: float | None = None
+        recent_log_times: dict[tuple[str, str], float] = {}
+        last_forwarded_log_key: tuple[str, str] | None = None
+        forwarded_login_success_ips: set[str] = set()
+        channel_details: dict[int, str] = {}
+        emit(
+            "[执行开关机测试] 已启用精简日志：保留每轮开始/正常结论、关键结果、"
+            "警告/错误、程控电源指令和最终结论。"
+        )
+        while process.is_alive() or final_result is None:
+            if stop_event.is_set() and not child_stop_event.is_set():
+                emit("[执行开关机测试] 收到停止请求，正在通知旧业务停止所有通道。")
+                child_stop_event.set()
+                stop_deadline = time.monotonic() + LEGACY_STOP_GRACE_SECONDS
+            if stop_deadline is not None and process.is_alive() and time.monotonic() >= stop_deadline:
+                emit("[执行开关机测试] 旧业务未在停止宽限期内退出，终止本次无GUI专用子进程。")
+                process.terminate()
+                process.join(timeout=2)
+                return LegacyPowerTestResult(False, "用户停止，旧业务子进程已终止")
 
-        try:
-            message = message_queue.get(timeout=LEGACY_PROCESS_POLL_SECONDS)
-        except queue.Empty:
-            if not process.is_alive():
-                if exit_drain_deadline is None:
-                    exit_drain_deadline = time.monotonic() + LEGACY_RESULT_DRAIN_SECONDS
-                elif time.monotonic() >= exit_drain_deadline:
-                    break
-            continue
+            try:
+                message = message_queue.get(timeout=LEGACY_PROCESS_POLL_SECONDS)
+            except queue.Empty:
+                if not process.is_alive():
+                    if exit_drain_deadline is None:
+                        exit_drain_deadline = time.monotonic() + LEGACY_RESULT_DRAIN_SECONDS
+                    elif time.monotonic() >= exit_drain_deadline:
+                        break
+                continue
 
-        message_type = message.get("type")
-        if message_type == "log":
-            level = str(message.get("level", "info")).upper()
-            raw_text = str(message.get("message", ""))
-            source = str(message.get("source", "signal")).lower()
-            channel_status = _legacy_channel_status_from_log(raw_text)
-            if channel_status is not None:
-                channel_number, status, detail = channel_status
-                channel_details[channel_number] = detail
-                # 重试过程和最终失败必须在主日志精简/去重之前单独上报；
-                # "重试后成功"也属于本次重试历史的一部分，不能因状态恢复而丢失。
-                if on_channel_history is not None and (
-                    status in {"retry", "failed"}
-                    or (status == "success" and "重试" in detail)
+            if resume_session is not None:
+                if not resume_session.accepts(message):
+                    continue
+                resume_session.observe(message)
+            message_type = message.get("type")
+            if message_type == "channel_started":
+                channel_number = message["channel"]
+                if message.get("attempt", 0):
+                    detail = f"续跑开始：第{message['completed'] + 1}/{request.number_of_tests}轮"
+                    channel_details.pop(channel_number, None)
+                    if on_channel_status:
+                        on_channel_status(channel_number, "running", detail)
+                    if on_channel_history:
+                        on_channel_history(channel_number, message['completed'] + 1, "resume", detail)
+                    emit(f"[通道续跑] 通道 {channel_number} {detail}。")
+                continue
+            if message_type == "log":
+                level = str(message.get("level", "info")).upper()
+                raw_text = str(message.get("message", ""))
+                source = str(message.get("source", "signal")).lower()
+                history_error = _legacy_channel_history_error_from_log(raw_text)
+                if history_error is not None and on_channel_history is not None:
+                    channel_number, status, detail = history_error
+                    if channel_number in completed_by_channel:
+                        current_cycle = min(
+                            max(completed_by_channel[channel_number] + 1, 1),
+                            request.number_of_tests,
+                        )
+                        on_channel_history(channel_number, current_cycle, status, detail)
+                channel_status = _legacy_channel_status_from_log(raw_text)
+                if channel_status is not None:
+                    channel_number, status, detail = channel_status
+                    channel_details[channel_number] = detail
+                    # 重试过程和最终失败必须在主日志精简/去重之前单独上报；
+                    # "重试后成功"也属于本次重试历史的一部分，不能因状态恢复而丢失。
+                    if on_channel_history is not None and (
+                        status in {"retry", "failed"}
+                        or (status == "success" and "重试" in detail)
+                    ):
+                        completed_cycle = completed_by_channel.get(channel_number, 0)
+                        current_cycle = min(
+                            max(completed_cycle + 1, 1), request.number_of_tests
+                        )
+                        on_channel_history(channel_number, current_cycle, status, detail)
+                    if on_channel_status is not None:
+                        on_channel_status(channel_number, status, detail)
+                channel_progress = _legacy_channel_progress_from_log(
+                    raw_text,
+                    request.number_of_tests,
+                )
+                if channel_progress is not None:
+                    channel_number, completed_cycle, stage = channel_progress
+                    if channel_number in completed_by_channel:
+                        completed_by_channel[channel_number] = max(
+                            completed_by_channel[channel_number],
+                            completed_cycle,
+                        )
+                        if resume_session is not None:
+                            resume_session.progress(channel_number, completed_by_channel[channel_number])
+                        if on_channel_progress is not None:
+                            on_channel_progress(
+                                channel_number,
+                                completed_by_channel[channel_number],
+                                request.number_of_tests,
+                                stage,
+                            )
+                completed_cycle = _overall_completed_cycle(
+                    completed_by_channel,
+                    raw_text,
+                    request.number_of_tests,
+                )
+                if (
+                    on_progress is not None
+                    and completed_cycle is not None
+                    and completed_cycle > last_reported_cycle
                 ):
-                    completed_cycle = completed_by_channel.get(channel_number, 0)
-                    current_cycle = min(
-                        max(completed_cycle + 1, 1), request.number_of_tests
-                    )
-                    on_channel_history(channel_number, current_cycle, status, detail)
-                if on_channel_status is not None:
-                    on_channel_status(channel_number, status, detail)
-            channel_progress = _legacy_channel_progress_from_log(
-                raw_text,
-                request.number_of_tests,
-            )
-            if channel_progress is not None:
-                channel_number, completed_cycle, stage = channel_progress
-                if channel_number in completed_by_channel:
-                    completed_by_channel[channel_number] = max(
-                        completed_by_channel[channel_number],
-                        completed_cycle,
-                    )
+                    last_reported_cycle = completed_cycle
+                    on_progress(completed_cycle, request.number_of_tests)
+                if not _should_forward_legacy_log(level, raw_text, source):
+                    continue
+                text = _format_legacy_operator_log(raw_text, request.ping_target_ip)
+                login_match = LEGACY_LOGIN_SUCCESS_PATTERN.fullmatch(
+                    LEGACY_LOG_WHITESPACE_PATTERN.sub(" ", text).strip()
+                )
+                if login_match is not None:
+                    source_ip = login_match.group("source_ip")
+                    if source_ip in forwarded_login_success_ips:
+                        continue
+                    forwarded_login_success_ips.add(source_ip)
+                dedup_key = _legacy_log_dedup_key(level, text)
+                if dedup_key == last_forwarded_log_key:
+                    continue
+                now = time.monotonic()
+                if now - recent_log_times.get(dedup_key, float("-inf")) < LEGACY_LOG_DEDUP_SECONDS:
+                    continue
+                recent_log_times[dedup_key] = now
+                if len(recent_log_times) > 128:
+                    recent_log_times = {
+                        key: seen_at
+                        for key, seen_at in recent_log_times.items()
+                        if now - seen_at < LEGACY_LOG_DEDUP_SECONDS
+                    }
+                emit(f"[旧工具Logs][{level}] {text}")
+                last_forwarded_log_key = dedup_key
+            elif message_type == "channel_result":
+                channel_number = int(message.get("channel", 0))
+                ok = bool(message.get("ok"))
+                if not 1 <= channel_number <= 16:
+                    continue
+                if ok:
+                    status, detail = "success", "所有测试项验证成功"
+                    completed_by_channel[channel_number] = request.number_of_tests
+                    if resume_session is not None:
+                        resume_session.progress(channel_number, request.number_of_tests)
                     if on_channel_progress is not None:
                         on_channel_progress(
                             channel_number,
-                            completed_by_channel[channel_number],
                             request.number_of_tests,
-                            stage,
+                            request.number_of_tests,
+                            detail,
                         )
-            completed_cycle = _overall_completed_cycle(
-                completed_by_channel,
-                raw_text,
-                request.number_of_tests,
-            )
-            if (
-                on_progress is not None
-                and completed_cycle is not None
-                and completed_cycle > last_reported_cycle
-            ):
-                last_reported_cycle = completed_cycle
-                on_progress(completed_cycle, request.number_of_tests)
-            if not _should_forward_legacy_log(level, raw_text, source):
-                continue
-            text = _format_legacy_operator_log(raw_text, request.ping_target_ip)
-            login_match = LEGACY_LOGIN_SUCCESS_PATTERN.fullmatch(
-                LEGACY_LOG_WHITESPACE_PATTERN.sub(" ", text).strip()
-            )
-            if login_match is not None:
-                source_ip = login_match.group("source_ip")
-                if source_ip in forwarded_login_success_ips:
-                    continue
-                forwarded_login_success_ips.add(source_ip)
-            dedup_key = _legacy_log_dedup_key(level, text)
-            if dedup_key == last_forwarded_log_key:
-                continue
-            now = time.monotonic()
-            if now - recent_log_times.get(dedup_key, float("-inf")) < LEGACY_LOG_DEDUP_SECONDS:
-                continue
-            recent_log_times[dedup_key] = now
-            if len(recent_log_times) > 128:
-                recent_log_times = {
-                    key: seen_at
-                    for key, seen_at in recent_log_times.items()
-                    if now - seen_at < LEGACY_LOG_DEDUP_SECONDS
-                }
-            emit(f"[旧工具Logs][{level}] {text}")
-            last_forwarded_log_key = dedup_key
-        elif message_type == "channel_result":
-            channel_number = int(message.get("channel", 0))
-            ok = bool(message.get("ok"))
-            if not 1 <= channel_number <= 16:
-                continue
-            if ok:
-                status, detail = "success", "所有测试项验证成功"
-                if on_channel_progress is not None:
-                    on_channel_progress(
+                else:
+                    status = "failed"
+                    detail = channel_details.get(
                         channel_number,
-                        request.number_of_tests,
-                        request.number_of_tests,
-                        detail,
+                        "测试失败，详细信息请查看执行日志",
                     )
-            else:
-                status = "failed"
-                detail = channel_details.get(
-                    channel_number,
-                    "测试失败，详细信息请查看执行日志",
+                if message.get('attempt', 0) and on_channel_history:
+                    on_channel_history(channel_number,
+                                       min(completed_by_channel[channel_number] + 1, request.number_of_tests),
+                                       status, '续跑' + ('成功：' if ok else '失败：') + detail)
+                if on_channel_status is not None:
+                    on_channel_status(channel_number, status, detail)
+            elif message_type == "stage":
+                emit(f"[执行开关机测试] {message.get('message', '')}")
+                last_forwarded_log_key = None
+            elif message_type == "result":
+                final_result = LegacyPowerTestResult(
+                    bool(message.get("ok")),
+                    str(message.get("detail", "")),
                 )
-            if on_channel_status is not None:
-                on_channel_status(channel_number, status, detail)
-        elif message_type == "stage":
-            emit(f"[执行开关机测试] {message.get('message', '')}")
-            last_forwarded_log_key = None
-        elif message_type == "result":
-            final_result = LegacyPowerTestResult(
-                bool(message.get("ok")),
-                str(message.get("detail", "")),
-            )
 
-    process.join(timeout=2)
-    if final_result is None:
-        detail = f"旧业务子进程异常退出，exitcode={process.exitcode}"
-        emit(f"[执行开关机测试] 失败：{detail}")
-        return LegacyPowerTestResult(False, detail)
-    if final_result.ok and on_progress is not None and last_reported_cycle < request.number_of_tests:
-        on_progress(request.number_of_tests, request.number_of_tests)
-    emit(
-        f"[执行开关机测试] {'成功' if final_result.ok else '失败'}：{final_result.detail}"
-    )
-    return final_result
+        process.join(timeout=2)
+        if process.is_alive():
+            process.terminate()
+            process.join()
+        if final_result is None:
+            detail = f"旧业务子进程异常退出，exitcode={process.exitcode}"
+            emit(f"[执行开关机测试] 失败：{detail}")
+            return LegacyPowerTestResult(False, detail)
+        if final_result.ok and on_progress is not None and last_reported_cycle < request.number_of_tests:
+            on_progress(request.number_of_tests, request.number_of_tests)
+        emit(
+            f"[执行开关机测试] {'成功' if final_result.ok else '失败'}：{final_result.detail}"
+        )
+        return final_result
+    finally:
+        if process.is_alive():
+            process.terminate()
+        process.join()
+        if resume_session is not None:
+            resume_session.detach()
+        for ipc_queue in (message_queue, control_queue):
+            close = getattr(ipc_queue, 'close', None)
+            if callable(close):
+                close()
 
 
 class _HeadlessSignal:
@@ -768,8 +876,28 @@ def _connect_legacy_log_signals(worker, message_queue) -> None:
         )
 
 
-def _legacy_start_all_worker(request, message_queue, stop_event) -> None:
+class _AttemptQueue:
+    """Stamp channel-thread logs and result-file events before IPC."""
+    def __init__(self, target, run_id):
+        self.target = target
+        self.run_id = run_id
+        self.local = threading.local()
+
+    def put(self, message):
+        message = dict(message, run_id=self.run_id)
+        if hasattr(self.local, 'channel'):
+            message.update(channel=self.local.channel, attempt=self.local.attempt)
+        self.target.put(message)
+
+
+def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=None,
+                             run_id="", attempts=None, initial_completed=None,
+                             initialize_power=True) -> None:
     """子进程入口；必须保持模块顶层，供 Windows spawn / PyInstaller 调用。"""
+    attempts = dict(attempts or {})
+    initial_completed = initial_completed or {}
+    if control_queue is not None:
+        message_queue = _AttemptQueue(message_queue, run_id)
     serial_client = None
     legacy_worker = None
     restore_result_log_open = None
@@ -809,7 +937,8 @@ def _legacy_start_all_worker(request, message_queue, stop_event) -> None:
                 "type": "stage",
                 "message": (
                     f"打开程控电源串口 {request.serial_port}/{request.baud_rate}；"
-                    "旧 Start All 初始化将下发全通道断电帧 55 00 AD 00 00 AD。"
+                    + ("旧 Start All 初始化将下发全通道断电帧 55 00 AD 00 00 AD。"
+                       if initialize_power else "单通道恢复：跳过初始化全通道断电。")
                 ),
             }
         )
@@ -844,11 +973,13 @@ def _legacy_start_all_worker(request, message_queue, stop_event) -> None:
                 *common_args,
                 int(request.telnet_enable),
                 request.selected_profile,
+                initialize_power=initialize_power,
             )
         else:
             legacy_worker = WorkerClass(
                 *common_args,
                 request.selected_profile,
+                initialize_power=initialize_power,
             )
         legacy_worker.dingtalk.log = logger.info
         _connect_legacy_log_signals(legacy_worker, message_queue)
@@ -870,21 +1001,30 @@ def _legacy_start_all_worker(request, message_queue, stop_event) -> None:
         power_consumer.start()
 
         channel_results: dict[int, bool] = {}
-        channel_threads: list[threading.Thread] = []
+        channel_threads: dict[int, threading.Thread] = {}
+        reported_ready = set()
 
-        def run_channel(channel: LegacyPowerChannel) -> None:
+        def run_channel(channel: LegacyPowerChannel, completed=0, attempt=0) -> None:
+            if control_queue is not None:
+                message_queue.local.channel = channel.number
+                message_queue.local.attempt = attempt
+            kwargs = {}
+            if attempt or completed:
+                kwargs = dict(start_cycle=completed + 1, result_suffix=f"{run_id}_{attempt}")
             try:
                 if request.communication_method == "telnet":
                     result = legacy_worker.run_case(
                         channel.network_card_ip,
                         channel.number,
                         stop_event,
+                        **kwargs,
                     )
                 else:
                     result = legacy_worker.run_case(
                         channel.network_card_ip,
                         channel.number,
                         1,
+                        **kwargs,
                     )
                 channel_results[channel.number] = bool(result)
                 message_queue.put(
@@ -912,18 +1052,55 @@ def _legacy_start_all_worker(request, message_queue, stop_event) -> None:
         for channel in request.channels:
             if stop_event.is_set():
                 break
+            if control_queue is not None and attempts.get(channel.number, 0):
+                message_queue.put(dict(type='channel_started', channel=channel.number,
+                                       attempt=attempts[channel.number],
+                                       completed=initial_completed.get(channel.number, 0)))
             thread = threading.Thread(
                 target=run_channel,
-                args=(channel,),
+                args=(channel, initial_completed.get(channel.number, 0), attempts.get(channel.number, 0)),
                 name=f"legacy-channel-{channel.number}",
             )
             thread.start()
-            channel_threads.append(thread)
+            channel_threads[channel.number] = thread
             if stop_event.wait(1.0):
                 break
 
         stop_forwarded = False
-        while any(thread.is_alive() for thread in channel_threads):
+        while True:
+            # Readiness is only published AFTER the thread has actually exited.
+            for number, thread in list(channel_threads.items()):
+                if not thread.is_alive() and number not in reported_ready:
+                    reported_ready.add(number)
+                    message_queue.put(dict(type='channel_ready', channel=number,
+                                           attempt=attempts.get(number, 0),
+                                           ok=channel_results.get(number, False)))
+            if control_queue is not None:
+                while True:
+                    try:
+                        command = control_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                    number = command.get('channel')
+                    if (stop_event.is_set() or command.get('run_id') != run_id
+                            or number not in reported_ready
+                            or channel_results.get(number, True)
+                            or command.get('attempt', 0) <= attempts.get(number, 0)):
+                        continue
+                    completed = command['completed']
+                    if not 0 <= completed < request.number_of_tests:
+                        continue
+                    attempts[number] = command['attempt']
+                    reported_ready.discard(number)
+                    channel_results.pop(number, None)
+                    channel = next(c for c in request.channels if c.number == number)
+                    thread = threading.Thread(target=run_channel,
+                                              args=(channel, completed, attempts[number]),
+                                              name=f'legacy-resume-{number}')
+                    message_queue.put(dict(type='channel_started', channel=number,
+                                           attempt=attempts[number], completed=completed))
+                    channel_threads[number] = thread
+                    thread.start()
             if stop_event.is_set() and not stop_forwarded:
                 stop_forwarded = True
                 request_stop = getattr(legacy_worker, "request_stop", None)
@@ -931,8 +1108,10 @@ def _legacy_start_all_worker(request, message_queue, stop_event) -> None:
                     request_stop()
                 for channel_number in range(1, 17):
                     setattr(legacy_worker, f"channel_{channel_number}_flag", 0)
-            for thread in channel_threads:
-                thread.join(timeout=0.2)
+            if all(number in reported_ready for number in channel_threads):
+                break
+            for thread in list(channel_threads.values()):
+                thread.join(timeout=0.05)
 
         if stop_event.is_set():
             message_queue.put(
