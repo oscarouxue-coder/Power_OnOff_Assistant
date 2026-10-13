@@ -36,6 +36,7 @@ class TestItemConfigStoreTests(unittest.TestCase):
             self.assertEqual(loaded.telnet.input_user_flag, "ogin:")
             self.assertEqual(loaded.telnet.input_password_flag, "Password:")
             self.assertEqual(loaded.telnet.login_success_flag, "#")
+            self.assertEqual(loaded.telnet.login_after_input_str, "sh")
             self.assertEqual(loaded.telnet.telnet_need_enter_password_flag, 0)
             self.assertEqual(loaded.telnet.telnet_no_user_password_flag, 0)
             self.assertEqual(loaded.telnet.only_power_off_on, 0)
@@ -72,6 +73,7 @@ class TestItemConfigStoreTests(unittest.TestCase):
                     input_user_flag="ogin:",
                     input_password_flag="Password:",
                     login_success_flag="$",
+                    login_after_input_str="shell -l",
                     telnet_need_enter_password_flag=1,
                     telnet_no_user_password_flag=0,
                     only_power_off_on=0,
@@ -117,6 +119,7 @@ class TestItemConfigStoreTests(unittest.TestCase):
             with (Path(temp_dir) / "test_project_config.ini").open("r", encoding="utf-8") as file:
                 content = file.read()
             self.assertIn("telnet_default_on = 0", content)
+            self.assertIn("login_after_input_str = shell -l", content)
             self.assertEqual(loaded.order.command_fail_retry_interval_time, saved.order.command_fail_retry_interval_time)
             self.assertEqual(len(loaded.order.items), len(saved.order.items))
             for loaded_item, saved_item in zip(loaded.order.items, saved.order.items):
@@ -450,6 +453,61 @@ class TestItemConfigStoreTests(unittest.TestCase):
 
             self.assertEqual(loaded.telnet.password, "t*hEQ#BHu7z%%3n")
 
+    def test_login_after_input_str_round_trip_preserves_commands_and_empty(self):
+        for command in ("sh", "shell -l", "", 'printf "%s%%" ready'):
+            with self.subTest(command=command), tempfile.TemporaryDirectory() as temp_dir:
+                config_path = Path(temp_dir) / "test_project_config.ini"
+                store = TestItemConfigStore(config_path)
+
+                store.save(TestProjectConfig(telnet=TelnetSettings(login_after_input_str=command)))
+
+                self.assertEqual(store.load().telnet.login_after_input_str, command)
+                self.assertIn(
+                    f"login_after_input_str = {command}",
+                    config_path.read_text(encoding="utf-8"),
+                )
+
+    def test_saving_other_fields_keeps_existing_login_after_input_str(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "test_project_config.ini"
+            config_path.write_text(
+                "[telnet]\nlogin_after_input_str = shell -l\nport = 23\n",
+                encoding="utf-8",
+            )
+            store = TestItemConfigStore(config_path)
+            captured = store.load()
+            captured.telnet.port = 2323
+
+            store.save(captured)
+
+            reloaded = store.load()
+            self.assertEqual(reloaded.telnet.port, 2323)
+            self.assertEqual(reloaded.telnet.login_after_input_str, "shell -l")
+
+    def test_login_after_input_str_does_not_shift_existing_positional_settings(self):
+        telnet = TelnetSettings(
+            "http://192.168.10.1", 2323, "operator", "test-password", 15,
+            "login:", "Password:", ">", 1, 1, 1, 0,
+        )
+
+        self.assertEqual(telnet.telnet_need_enter_password_flag, 1)
+        self.assertEqual(telnet.telnet_no_user_password_flag, 1)
+        self.assertEqual(telnet.only_power_off_on, 1)
+        self.assertEqual(telnet.telnet_default_on, 0)
+        self.assertEqual(telnet.login_after_input_str, "sh")
+
+    def test_default_template_contains_login_after_input_str(self):
+        from configparser import RawConfigParser
+
+        template_path = (
+            Path(__file__).resolve().parents[1]
+            / "Auto_power_on_off_tool/config/test_project_config.default.ini"
+        )
+        parser = RawConfigParser()
+        parser.read(template_path, encoding="utf-8")
+
+        self.assertEqual(parser.get("telnet", "login_after_input_str"), "sh")
+
     def test_load_tolerates_unknown_keys(self):
         # ini 出现未识别 key 时不应报错,应该被忽略
         from configparser import RawConfigParser
@@ -471,6 +529,7 @@ class TestItemConfigStoreTests(unittest.TestCase):
             self.assertEqual(loaded.telnet.user, "root")
             # 老 ini 没有 telnet_default_on 时也回退默认 1(默认勾选)
             self.assertEqual(loaded.telnet.telnet_default_on, 1)
+            self.assertEqual(loaded.telnet.login_after_input_str, "sh")
 
     def test_telnet_default_on_saves_as_zero_or_one(self):
         """telnet_default_on 字段统一 0/1,即便 UI 传入 Python bool 也强制转换。"""

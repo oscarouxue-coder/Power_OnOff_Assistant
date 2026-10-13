@@ -1,5 +1,49 @@
 # 开发记录
 
+## 2026-10-13 - 调整登录后命令输入框宽度
+
+- 类型：修改
+- 背景：负责人要求“登录后命令”输入框与上方“登录成功提示符”等宽。
+- 完成内容：将该 Entry 的 `width=36` 改为 `width=18`，网格对齐由 `sticky="ew"` 改为 `sticky="w"`，保持左对齐且不随窗口横向拉伸；同步操作员说明。默认值、持久化及命令执行语义保持。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录运行 `python scripts/verify_baseline.py`；独立构造隐藏的原生 Tk Telnet 页，在 Notebook 宽度为 700 / 1000 像素时检查两输入框的宽度与对齐；仓库根运行 `git diff --check`。
+- 验证结果：完整基线 `ALL CHECKS PASSED`（79 个源码编译/覆盖、978 项测试、173 项指定回归及协议不变量通过）；两种容器宽度下，两输入框均为 132 像素，`width=18` / `sticky="w"` 一致。独立控件尺寸检查不替代完整应用的可见界面验收；未连接设备、未打包、未运行 EXE、未提交 Git。
+- 后续待办：负责人重新打开源码版测试项配置 Telnet 页查看实际布局。
+
+## 2026-10-13 - 补齐登录后命令配置及新版下发
+
+- 类型：功能。
+- 背景：负责人要求将 `test_project_config.ini [telnet] login_after_input_str` 映射到测试项配置 Telnet 页，保留成功提示符为 `>` 时发送的条件，并覆盖新版测试项预执行、执行及项目信息查询。发送后等待经确认改为1秒，空值仍发送回车。默认模板与本机方案原本已有 `sh`，但旧配置模型未映射，编辑器保存会丢弃该键。
+- 完成内容：① 配置模型末尾追加字段保持位置参数兼容，缺键默认 `sh`，自定义值及空串读写保留；中文“登录后命令”放在成功提示符下，接入未保存提醒、统一保存、重载及关闭重开恢复。② 新增共享登录后步骤，仅登录成功且提示符严格为 `>` 时去首尾空白发送一次，空串只回车，注入等待1秒；预执行沿用可取消等待，发送失败沿原路径终止当前设备并关闭会话，不计测试条数/匹配/重试。接入两个既有登录函数，预执行和开关机/续跑版本预检通过原复用路径获得支持；不合并登录实现、不改旧客户端/传输层时序。③ 主日志明确阶段、实际命令/空回车、下发成功/跳过/失败，不宣称已确认进入Shell；预执行和全流程确认补摘要，手动版本查询仅在需下发时确认，取消不创建线程或连接。全流程摘要只读复用实际方案选择，缺失/不可读/解析失败不伪造默认命令。④ 版本查询在登录后命令之后仍执行原两条只读采集，结果解析、独立只读显示、版本基准比对及失败禁止断电保持；同步操作员说明、状态及新增待验收范围。
+- 修改文件：
+  - `.claude/plans/telnet-post-login-command.md`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`
+  - `Cheating_machine_execution_tool/src/services/telnet_post_login_service.py`
+  - `Cheating_machine_execution_tool/src/services/telnet_post_login_confirmation_service.py`
+  - `Cheating_machine_execution_tool/src/services/test_item_execution_service.py`
+  - `Cheating_machine_execution_tool/src/services/device_project_info_service.py`
+  - `Cheating_machine_execution_tool/src/ui/test_item_pretest_controls.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`（仅编译清单新增两个service）
+  - `Cheating_machine_execution_tool/tests/test_telnet_post_login_service.py`
+  - `Cheating_machine_execution_tool/tests/test_telnet_post_login_confirmations.py`
+  - `Cheating_machine_execution_tool/tests/test_telnet_post_login_app.py`
+  - `Cheating_machine_execution_tool/tests/test_test_item_config_store.py`
+  - `Cheating_machine_execution_tool/tests/test_test_item_execution_service.py`
+  - `Cheating_machine_execution_tool/tests/test_device_project_info_service.py`
+  - `Cheating_machine_execution_tool/tests/test_test_item_pretest.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录设置 `PYTHONUTF8=1`，运行 `python -m unittest discover -s tests -p "test_telnet_post_login*.py" -v`、`python -m unittest discover -s tests -p test_test_item_config_store.py` 及运行service专项；最终运行 `python scripts/verify_baseline.py`。另以内联Python独立构造原生Tk Telnet页，核对真实Entry初值/编辑/capture/load、原生Checkbutton与页面请求尺寸。仓库根运行 `git diff --check`。
+- 验证结果：本轮新增39项（939→978），配置专项25项、共享步骤及三条运行路径专项54项、UI映射/手动确认7项、确认摘要10项通过；完整基线 `ALL CHECKS PASSED`（79个源码编译/覆盖、978项测试、173项指定回归及协议不变量通过）。覆盖默认/自定义/空值/百分号往返、保存保留、严格条件、发送顺序与一次性、1秒等待、发送失败关闭、预执行停止、版本解析、实际选定方案和确认取消。独立Tk源码页检查通过，请求尺寸532×522；真实变量映射测试首次因测试替身未区分密码Entry使用pack而报3项错误，修正测试定位后7项全绿。格式检查通过。自动化使用模拟会话及隔离配置，未运行完整主程序，不代表Windows可见界面或真实样机验收。
+- 后续待办：负责人在Windows源码版复验字段、保存重开、重载和确认摘要；真实样机复验 `>` 后发送、1秒等待、`#` 跳过、空回车、异常/停止与开关机/续跑版本预检。默认模板及本机INI保持现值；未操作设备、未打包、未运行EXE、未提交Git。
+
 ## 2026-10-12 - 恢复重启测试正常通道颜色
 
 - 类型：BUG 修复。

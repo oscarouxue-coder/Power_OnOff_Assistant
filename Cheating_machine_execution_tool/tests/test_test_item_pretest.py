@@ -108,6 +108,67 @@ class PretestServiceTests(unittest.TestCase):
         self.assertEqual((result.passed, result.unchecked), (0, 1))
         self.assertEqual(logs[-1][1], "warning")
 
+    def test_post_login_command_precedes_pretest_and_does_not_count_as_test(self):
+        req = request()
+        req.telnet.login_success_flag = ">"
+        req.telnet.login_after_input_str = "  busybox sh  "
+        session, event = Session(), ClockEvent()
+
+        result, logs, _, _ = self.run_request(req, [session], event)
+
+        self.assertEqual(session.sent, ["root", "test-password", "busybox sh", "first"])
+        self.assertEqual((result.passed, result.executed), (1, 1))
+        self.assertGreaterEqual(event.now, 2.0)
+        self.assertTrue(any("已下发：busybox sh" in text for text, _ in logs))
+
+    def test_empty_post_login_value_sends_enter_before_pretest(self):
+        req = request()
+        req.telnet.login_success_flag = ">"
+        req.telnet.login_after_input_str = ""
+        session = Session()
+
+        result, _, _, _ = self.run_request(req, [session])
+
+        self.assertEqual(session.sent, ["root", "test-password", "", "first"])
+        self.assertEqual(result.executed, 1)
+
+    def test_cancel_during_post_login_wait_prevents_pretest_command(self):
+        req = request()
+        req.telnet.login_success_flag = ">"
+        session, event = Session(), ClockEvent()
+
+        result, logs, _, _ = self.run_request(
+            req, [session], event,
+            lambda text, _tag: event.set() if "已下发：sh" in text else None,
+        )
+
+        self.assertEqual(session.sent, ["root", "test-password", "sh"])
+        self.assertEqual(result.executed, 0)
+        self.assertTrue(result.cancelled)
+        self.assertTrue(session._closed)
+        self.assertFalse(any("缓冲等待完成" in text for text, _ in logs))
+
+    def test_post_login_send_failure_stops_current_device_and_continues_next(self):
+        req = request(channels=[channel(), channel(2)])
+        req.telnet.login_success_flag = ">"
+        first, second = Session(), Session()
+        send_line = first.send_line
+
+        def fail_post_login(command, sensitive=False):
+            if command == "sh":
+                raise RuntimeError("模拟登录后下发失败")
+            send_line(command, sensitive=sensitive)
+
+        first.send_line = fail_post_login
+        result, logs, _, _ = self.run_request(req, [first, second])
+
+        self.assertNotIn("first", first.sent)
+        self.assertEqual(second.sent, ["root", "test-password", "sh", "first"])
+        self.assertEqual((result.device_errors, result.executed, result.passed), (1, 1, 1))
+        self.assertTrue(first._closed)
+        self.assertTrue(second._closed)
+        self.assertTrue(any("下发失败" in text for text, _ in logs))
+
     def test_negation_and_multiple_segments_are_preserved(self):
         result, _, _, _ = self.run_request(request([
             OrderItem("first", [ExpectedSegment("OK"), ExpectedSegment("ERROR", True)])

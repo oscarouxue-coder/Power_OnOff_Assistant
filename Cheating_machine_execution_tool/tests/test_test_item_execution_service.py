@@ -59,6 +59,7 @@ class FakeTelnetSession:
         # ``prefill_banner=False`` 时全部置空,样机不响应任何 prompt
         self._prefilled_user = "sdmc" if prefill_banner else ""
         self._prefilled_password = "1234" if prefill_banner else ""
+        self._login_success_flag = (prompts or {}).get("#", "#")
         # ``prefill_banner=False`` 用于「样机不响应 / 无 banner」场景的单测
         if prefill_banner:
             self._prefill_login_banner(prompts or {})
@@ -102,7 +103,7 @@ class FakeTelnetSession:
         if self._prefilled_user and text == "sdmc" and self._prefilled_user == "sdmc":
             self.history.extend(b"Password: ")
         elif self._prefilled_password and text == "1234" and self._prefilled_password == "1234":
-            self.history.extend(b"\r\n# ")
+            self.history.extend(f"\r\n{self._login_success_flag} ".encode("utf-8"))
         else:
             response = self.responses.get(text, "")
             if response:
@@ -430,6 +431,79 @@ class TestItemExecutionMultiCommandTests(unittest.TestCase):
         content = self.log_path.read_text(encoding="utf-8")
         self.assertEqual(content.count("MATCH OK"), 3)
         self.assertIn("全部完成: 3/3", content)
+
+
+class TestItemExecutionPostLoginTests(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.log_path = Path(temporary.name) / "device.log"
+
+    def _run(self, telnet, session, sleep_fn=lambda _seconds: None):
+        request = TestItemRunRequest(
+            channel=_make_channel(), telnet=telnet,
+            order=_make_order([("probe", "OK", 1)]), retry_interval_seconds=0,
+            log_path=self.log_path, sleep_fn=sleep_fn,
+            monotonic_fn=_AdvancingMonotonic(),
+        )
+        messages = []
+        with patch("src.services.test_item_execution_service.TelnetSession", return_value=session), \
+             patch("src.services.test_item_execution_service.prepare_network_for_sample",
+                   return_value=Mock(ok=True, message="就绪")):
+            result = run_test_item_execution(request, messages.append)
+        return result, messages
+
+    def test_post_login_command_precedes_first_test_command(self):
+        telnet = _make_telnet()
+        telnet.login_success_flag = ">"
+        telnet.login_after_input_str = "  busybox sh  "
+        session = FakeTelnetSession(prompts={"#": ">"})
+        session.responses["probe"] = "OK"
+        sleep = Mock()
+
+        result, messages = self._run(telnet, session, sleep)
+
+        self.assertEqual(session.sent_lines, ["sdmc", "1234", "busybox sh", "probe"])
+        self.assertEqual(result.passed, 1)
+        sleep.assert_any_call(1.0)
+        self.assertIn("已下发：busybox sh", "".join(messages))
+
+    def test_empty_post_login_value_sends_enter_before_first_test_command(self):
+        telnet = _make_telnet()
+        telnet.login_success_flag = ">"
+        telnet.login_after_input_str = ""
+        session = FakeTelnetSession(prompts={"#": ">"})
+        session.responses["probe"] = "OK"
+
+        self._run(telnet, session)
+
+        self.assertEqual(session.sent_lines, ["sdmc", "1234", "", "probe"])
+
+    def test_other_success_prompt_skips_post_login_command(self):
+        session = FakeTelnetSession()
+        session.responses["probe"] = "OK"
+        _, messages = self._run(_make_telnet(), session)
+
+        self.assertEqual(session.sent_lines, ["sdmc", "1234", "probe"])
+        self.assertIn("跳过登录后指令", "".join(messages))
+
+    def test_post_login_send_failure_stops_test_commands_and_closes_session(self):
+        telnet = _make_telnet()
+        telnet.login_success_flag = ">"
+        session = FakeTelnetSession(prompts={"#": ">"})
+        send_line = session.send_line
+
+        def fail_post_login(command, sensitive=False):
+            if command == "sh":
+                raise RuntimeError("模拟登录后下发失败")
+            send_line(command, sensitive=sensitive)
+
+        session.send_line = fail_post_login
+        with self.assertRaisesRegex(RuntimeError, "登录后下发失败"):
+            self._run(telnet, session)
+
+        self.assertNotIn("probe", session.sent_lines)
+        self.assertTrue(session.closed)
 
 
 class TestItemExecutionNetworkFailureTests(unittest.TestCase):

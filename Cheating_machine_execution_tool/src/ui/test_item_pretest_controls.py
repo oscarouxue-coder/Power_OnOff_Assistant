@@ -6,6 +6,7 @@ import threading
 from tkinter import messagebox, ttk
 
 from src.services.test_item_pretest_service import run_pretest
+from src.services.telnet_post_login_service import describe_telnet_post_login
 
 
 class PretestControls:
@@ -52,6 +53,7 @@ class PretestControls:
             f"将使用当前页面内容，按顺序执行全部 {len(request.order.items)} 条命令，每条仅一次。\n"
             f"目标通道：\n{targets}\n\n"
             "将按通道配置准备网卡并登录设备，命令可能修改设备状态。\n"
+            f"{describe_telnet_post_login(request.telnet)}\n"
             "使用未保存的页面内容，但不会自动保存配置。是否执行？",
             parent=self.parent,
         ):

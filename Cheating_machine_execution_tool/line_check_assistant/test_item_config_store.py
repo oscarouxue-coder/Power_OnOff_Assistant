@@ -65,6 +65,8 @@ class TelnetSettings:
     # ``telnet_default_on``:Telnet 段在测试项配置中是否默认启用(Q1=A,仅编辑器)。
     # 默认 1 = 勾选;老 ini 没有该 key 时 ``_load_telnet`` 也回退 1,保持向后兼容。
     telnet_default_on: int = 1
+    # 追加到末尾以保留旧的位置参数顺序；显式空串仍保留，只发送回车。
+    login_after_input_str: str = "sh"
 
 
 @dataclass
@@ -283,6 +285,7 @@ class TestItemConfigStore:
             telnet_default_on=_parse_int(
                 parser.get(section, "telnet_default_on", fallback="1"), 1
             ),
+            login_after_input_str=parser.get(section, "login_after_input_str", fallback="sh"),
         )
 
     def _load_order(self, parser: configparser.RawConfigParser) -> OrderConfig:
@@ -364,6 +367,7 @@ class TestItemConfigStore:
             "input_user_flag": telnet.input_user_flag or "",
             "input_password_flag": telnet.input_password_flag or "",
             "login_success_flag": telnet.login_success_flag or "",
+            "login_after_input_str": telnet.login_after_input_str or "",
             "telnet_need_enter_password_flag": str(_parse_int(telnet.telnet_need_enter_password_flag, 0)),
             "telnet_no_user_password_flag": str(_parse_int(telnet.telnet_no_user_password_flag, 0)),
             "only_power_off_on": str(_parse_int(telnet.only_power_off_on, 0)),

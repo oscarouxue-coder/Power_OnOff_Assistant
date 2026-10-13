@@ -129,6 +129,7 @@ from src.services.device_project_info_service import (
     DeviceProjectInfoQueryRequest,
     query_device_project_info,
 )
+from src.services.telnet_post_login_service import describe_telnet_post_login
 from src.ui import (
     MODULE_WINDOW_SIZE_STATE_PATH,
     DutConfigWindow,
@@ -4700,6 +4701,7 @@ class LineCheckAssistant(Tk):
         input_user_flag_var = StringVar(value=telnet.input_user_flag)
         input_password_flag_var = StringVar(value=telnet.input_password_flag)
         login_success_flag_var = StringVar(value=telnet.login_success_flag)
+        login_after_input_str_var = StringVar(value=telnet.login_after_input_str)
         need_pwd_flag_var = IntVar(value=telnet.telnet_need_enter_password_flag)
         no_user_pwd_flag_var = IntVar(value=telnet.telnet_no_user_password_flag)
         only_power_var = IntVar(value=telnet.only_power_off_on)
@@ -4715,6 +4717,7 @@ class LineCheckAssistant(Tk):
             input_user_flag_var,
             input_password_flag_var,
             login_success_flag_var,
+            login_after_input_str_var,
         ):
             var.trace_add("write", lambda *_a: mark_dirty())
         for var in (
@@ -4798,9 +4801,16 @@ class LineCheckAssistant(Tk):
         )
         ttk.Entry(frame, textvariable=login_success_flag_var, width=18).grid(row=9, column=1, sticky="w", pady=6)
 
-        int_field(frame, 10, "是否需要输入密码（0/1）", need_pwd_flag_var, from_=0, to=1)
-        int_field(frame, 11, "免用户名密码登录（0/1）", no_user_pwd_flag_var, from_=0, to=1)
-        int_field(frame, 12, "仅执行上下电（0/1）", only_power_var, from_=0, to=1)
+        Label(frame, text="登录后命令", width=32, anchor="w", background=COLOR_BG).grid(
+            row=10, column=0, sticky="w", padx=(0, 12), pady=6
+        )
+        ttk.Entry(frame, textvariable=login_after_input_str_var, width=18).grid(
+            row=10, column=1, sticky="w", pady=6
+        )
+
+        int_field(frame, 11, "是否需要输入密码（0/1）", need_pwd_flag_var, from_=0, to=1)
+        int_field(frame, 12, "免用户名密码登录（0/1）", no_user_pwd_flag_var, from_=0, to=1)
+        int_field(frame, 13, "仅执行上下电（0/1）", only_power_var, from_=0, to=1)
 
         frame.columnconfigure(1, weight=1)
 
@@ -4814,6 +4824,7 @@ class LineCheckAssistant(Tk):
                 input_user_flag=input_user_flag_var.get(),
                 input_password_flag=input_password_flag_var.get(),
                 login_success_flag=login_success_flag_var.get(),
+                login_after_input_str=login_after_input_str_var.get(),
                 telnet_need_enter_password_flag=int(need_pwd_flag_var.get()),
                 telnet_no_user_password_flag=int(no_user_pwd_flag_var.get()),
                 only_power_off_on=int(only_power_var.get()),
@@ -4829,6 +4840,7 @@ class LineCheckAssistant(Tk):
             input_user_flag_var.set(new_telnet.input_user_flag)
             input_password_flag_var.set(new_telnet.input_password_flag)
             login_success_flag_var.set(new_telnet.login_success_flag)
+            login_after_input_str_var.set(new_telnet.login_after_input_str)
             need_pwd_flag_var.set(new_telnet.telnet_need_enter_password_flag)
             no_user_pwd_flag_var.set(new_telnet.telnet_no_user_password_flag)
             only_power_var.set(new_telnet.only_power_off_on)
@@ -5530,7 +5542,8 @@ class LineCheckAssistant(Tk):
         Label(
             frame,
             text=(
-                "查询只读取 cat /etc/config/deviceinfo 与 cat /proc/version，不下发配置、重启或升级命令。"
+                "登录成功提示符为 > 时先发送 Telnet 页的登录后命令（默认 sh），等待 1 秒，"
+                "再读取 cat /etc/config/deviceinfo 与 cat /proc/version。"
                 "查询结果独立只读显示，不会覆写上方可手动编辑的版本输入框，也不会写入 INI；"
                 "可拖拽选择后按 Ctrl+C，或右键选择“复制全部”。"
             ),
@@ -5567,7 +5580,7 @@ class LineCheckAssistant(Tk):
         return {"capture": capture, "load": load}
 
     def _start_project_info_query(self, telnet: TelnetSettings, on_success) -> None:
-        """以主界面当前通道执行只读 Telnet 版本查询，并在主线程回填结果。"""
+        """以当前通道及 Telnet 页参数登录、查询版本，并在主线程回填结果。"""
         self._capture_current_channel()
         if not 0 <= self.current_index < len(self.channels):
             messagebox.showwarning(
@@ -5584,6 +5597,16 @@ class LineCheckAssistant(Tk):
                 parent=self.test_item_config_window,
             )
             return
+        if telnet.login_success_flag == ">":
+            if not messagebox.askyesno(
+                "确认查询样机版本",
+                f"当前通道 {channel.section}：PC {bind_ip} → 样机 {device_host}:{telnet.port}。\n\n"
+                + describe_telnet_post_login(telnet)
+                + "\n随后执行 cat /etc/config/deviceinfo 和 cat /proc/version 查询版本。\n是否继续？",
+                parent=self.test_item_config_window,
+            ):
+                self._log("[项目信息] 操作员取消登录后命令确认，跳过查询。")
+                return
         request = DeviceProjectInfoQueryRequest(
             bind_ip=bind_ip, device_host=device_host, telnet=telnet
         )

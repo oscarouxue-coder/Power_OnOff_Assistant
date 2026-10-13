@@ -1,4 +1,4 @@
-"""通过锁源 Telnet 只读查询样机版本信息。"""
+"""按测试项配置锁源登录 Telnet，再读取样机版本信息。"""
 from __future__ import annotations
 
 import re
@@ -8,6 +8,7 @@ from typing import Callable
 
 from line_check_assistant.test_item_config_store import ProjectInfoSettings, TelnetSettings
 from src.core.telnet_transport import TelnetSession
+from src.services.telnet_post_login_service import run_telnet_post_login
 
 
 Output = Callable[[str], None]
@@ -31,7 +32,7 @@ _COMPILE_TIME_PATTERN = re.compile(
 
 @dataclass(frozen=True)
 class DeviceProjectInfoQueryRequest:
-    """一次只读版本查询需要的锁源连接信息。"""
+    """一次版本查询需要的锁源连接和登录参数。"""
 
     bind_ip: str
     device_host: str
@@ -108,6 +109,9 @@ def _login(session: TelnetSession, telnet: TelnetSettings, emit: Output) -> None
     if session.wait_for_any([telnet.login_success_flag], 20.0, cursor) is None:
         raise RuntimeError(f"登录超时：未收到登录成功提示符 '{telnet.login_success_flag}'")
     emit("[项目信息] Telnet 登录成功。")
+    run_telnet_post_login(
+        session, telnet, lambda line: emit(f"[项目信息] {line}"), time.sleep
+    )
 
 
 def _run_read_only_command(

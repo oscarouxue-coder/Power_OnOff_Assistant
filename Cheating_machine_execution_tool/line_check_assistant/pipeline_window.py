@@ -33,6 +33,9 @@ from src.services.pipeline_orchestrator import (
     compute_all_subtask_statuses,
     execution_order_for,
 )
+from src.services.telnet_post_login_confirmation_service import (
+    describe_legacy_power_telnet_post_login,
+)
 from src.ui.window_paint import center_toplevel_on_parent
 
 
@@ -397,6 +400,8 @@ class PipelineWindow:
             legacy_power_note = (
                 "\n\n危险操作提示：子任务7会复用旧 Start All 业务；初始化时先向程控电源"
                 "下发全通道断电指令，再启动新工具当前勾选的通道。"
+                "\n开关机版本预检："
+                + describe_legacy_power_telnet_post_login(ctx)
             )
         unattended_note = self._unattended_confirmation_note(
             ctx, selected, unattended_execution

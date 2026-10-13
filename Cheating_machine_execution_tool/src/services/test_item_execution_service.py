@@ -45,6 +45,7 @@ from line_check_assistant.test_item_config_store import (
 )
 from src.core.fuzzy_match_runner import match_expected as _match_expected
 from src.core.telnet_transport import TelnetSession
+from src.services.telnet_post_login_service import run_telnet_post_login
 
 
 # 单条命令读回的「稳定时间」：连续 stable_seconds 秒无新数据即认为命令回显完成。
@@ -135,6 +136,7 @@ def _login(
 
     时序:先发 ``\\r`` 触发样机重发 banner → 等 input_user_flag → 发 user →
     等 input_password_flag → 发 password → 等 login_success_flag。
+    成功提示符严格为 > 时，再下发配置的登录后指令并等待 1 秒。
     任一阶段超时抛 ``RuntimeError``,由 worker 标记「登录失败」并停止该台。
 
     与 ``sample_parameter_service._login`` 同款约定:登录首步先发 ``\\r`` 触发 prompt,
@@ -183,6 +185,7 @@ def _login(
             f"({LOGIN_SUCCESS_TIMEOUT_SECONDS}s 内)"
         )
     emit(f"telnet 登录成功（flag={flag}）")
+    run_telnet_post_login(session, telnet, emit, sleep_fn)
 
 
 def _run_one_command(
