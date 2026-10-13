@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import ipaddress
 from typing import Optional, Sequence
 
@@ -171,6 +171,20 @@ class OnuProvisionRequest:
     vport_id: int = 1
     sn_bind_both: bool = True
     services: Sequence[OnuServiceMapping] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class OnuCommandPlan:
+    """An immutable execution snapshot, including edited verification expectations."""
+
+    request: OnuProvisionRequest
+    commands: tuple[str, ...]
+    edited: bool = False
+
+    def __post_init__(self) -> None:
+        # A frozen request may still have been constructed with a mutable list.
+        object.__setattr__(self, "request", replace(self.request, services=tuple(self.request.services)))
+        object.__setattr__(self, "commands", tuple(self.commands))
 
 
 @dataclass(frozen=True)

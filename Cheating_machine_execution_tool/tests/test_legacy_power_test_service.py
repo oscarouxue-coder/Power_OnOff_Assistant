@@ -6,6 +6,7 @@ import queue
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -215,6 +216,127 @@ class _HistoryProcessContext(_FakeProcessContext):
 
 
 class LegacyPowerTestServiceTests(unittest.TestCase):
+    def _run_status_messages(self, messages):
+        class StatusProcess(_HistoryCompletedProcess):
+            def start(self):
+                for message in messages:
+                    self.args[1].put(message)
+                self.args[1].put(dict(type="result", ok=False, detail="保留业务最终失败结论"))
+                self._alive = False
+
+        class StatusContext(_FakeProcessContext):
+            def Process(self, **kwargs):
+                return StatusProcess(**kwargs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            request = replace(prepare_legacy_power_test_request(
+                _write_config_tree(Path(temp_dir)),
+                (LegacyPowerChannel(2, "192.168.1.102"), LegacyPowerChannel(7, "192.168.1.107")),
+            ), number_of_tests=5)
+        statuses, history, progress, emitted = [], [], [], []
+        result = run_legacy_power_test(
+            request, emitted.append, _FakeEvent(), process_context=StatusContext(),
+            on_channel_status=lambda *event: statuses.append(event),
+            on_channel_history=lambda *event: history.append(event),
+            on_channel_progress=lambda *event: progress.append(event),
+        )
+        return result, statuses, history, progress, emitted
+
+    def test_normal_cycle_and_start_logs_report_explicit_channel_states(self):
+        self.assertEqual(service_module._legacy_channel_status_from_log(
+            "2026-10-12 21:22:30.204141: 通道2下挂的设备在第3次测试时正常"
+        ), (2, "success", "第3轮测试正常"))
+        self.assertEqual(service_module._legacy_channel_status_from_log(
+            "*******通道 【2】 开始第 4 次测试*******"
+        ), (2, "running", "第4轮执行中"))
+        for text in (
+            "通道2下挂的设备在第3次测试时正常",
+            "2026-10-12 21:22:30: 通道2下挂的设备在第3次测试时失败",
+            "2026-10-12 21:22:30: 通道2下挂的设备在第3次测试时正常，尚未确认",
+            "192.168.1.102登录成功",
+        ):
+            with self.subTest(text=text):
+                self.assertIsNone(service_module._legacy_channel_status_from_log(text))
+
+    def test_normal_cycle_restores_only_selected_channel_and_keeps_failure_history(self):
+        normal = "2026-10-12 21:22:30.204141: 通道2下挂的设备在第3次测试时正常"
+        result, statuses, history, progress, emitted = self._run_status_messages([
+            dict(type="log", message="*******通道 【2】 开始第3次测试*******"),
+            dict(type="log", message="通道 2 尝试执行指令：echo check 3次进行验证，验证失败"),
+            dict(type="log", message="通道 7 尝试执行指令：echo other 3次进行验证，验证失败"),
+            dict(type="log", message=normal, source="result_file"),
+            dict(type="log", message=normal.replace("通道2", "通道9"), source="result_file"),
+        ])
+        self.assertFalse(result.ok)
+        self.assertEqual(statuses, [
+            (2, "running", "第3轮执行中"),
+            (2, "failed", "执行指令：echo check 3次验证失败"),
+            (7, "failed", "执行指令：echo other 3次验证失败"),
+            (2, "success", "第3轮测试正常"),
+        ])
+        self.assertEqual(history, [
+            (2, 3, "failed", "执行指令：echo check 3次验证失败"),
+            (7, 1, "failed", "执行指令：echo other 3次验证失败"),
+        ])
+        self.assertEqual(progress[-1], (2, 3, 5, "第3轮完成"))
+        self.assertIn(f"[旧工具Logs][INFO] {normal}", emitted)
+
+    def test_duplicate_or_previous_cycle_normal_logs_do_not_clear_new_failure(self):
+        normal = "2026-10-12 21:22:30.204141: 通道2下挂的设备在第3次测试时正常"
+        _, statuses, history, progress, _ = self._run_status_messages([
+            dict(type="log", message=normal, source="result_file"),
+            dict(type="log", message="*******通道 【2】 开始第4次测试*******"),
+            dict(type="log", message="通道 2 尝试执行指令：echo check 3次进行验证，验证失败"),
+            dict(type="log", message=normal, source="result_file"),
+            dict(type="log", message=normal.replace("第3次", "第2次"), source="result_file"),
+            dict(type="log", message=normal.replace("第3次", "第6次"), source="result_file"),
+        ])
+        self.assertEqual(statuses, [
+            (2, "success", "第3轮测试正常"),
+            (2, "running", "第4轮执行中"),
+            (2, "failed", "执行指令：echo check 3次验证失败"),
+        ])
+        self.assertEqual(history, [(2, 4, "failed", "执行指令：echo check 3次验证失败")])
+
+    def test_final_channel_failure_overrides_normal_and_rejects_late_success(self):
+        normal = "2026-10-12 21:22:30: 通道2下挂的设备在第3次测试时正常"
+        result, statuses, _, _, _ = self._run_status_messages([
+            dict(type="log", message=normal, source="result_file"),
+            dict(type="channel_result", channel=2, ok=False),
+            dict(type="log", message=normal.replace("第3次", "第4次"), source="result_file"),
+        ])
+        self.assertFalse(result.ok)
+        self.assertEqual(statuses, [
+            (2, "success", "第3轮测试正常"),
+            (2, "failed", "测试失败，详细信息请查看执行日志"),
+        ])
+
+    def test_duplicate_or_old_cycle_start_does_not_clear_current_retry(self):
+        start = "*******通道 【2】 开始第4次测试*******"
+        _, statuses, _, _, _ = self._run_status_messages([
+            dict(type="log", message=start),
+            dict(type="log", message="通道 2 执行指令：echo check，在第1次时出现错误；准备第2/3次验证"),
+            dict(type="log", message=start),
+            dict(type="log", message=start.replace("第4次", "第3次")),
+        ])
+        self.assertEqual(statuses, [
+            (2, "running", "第4轮执行中"),
+            (2, "retry", "执行指令：echo check，在第1次时出现错误；准备第2/3次验证"),
+        ])
+
+    def test_whitespace_normal_log_uses_same_progress_and_stale_guard(self):
+        normal = "2026-10-12  21:22:30.204141:   通道2下挂的设备在第3次测试时正常"
+        _, statuses, _, progress, _ = self._run_status_messages([
+            dict(type="log", message=normal, source="result_file"),
+            dict(type="log", message="通道 2 尝试执行指令：echo check 3次进行验证，验证失败"),
+            dict(type="log", message=normal, source="result_file"),
+        ])
+        self.assertEqual(statuses, [
+            (2, "success", "第3轮测试正常"),
+            (2, "failed", "执行指令：echo check 3次验证失败"),
+        ])
+        self.assertEqual(progress[-1], (2, 3, 5, "第3轮完成"))
+
     def test_history_extracts_telnet_connection_retry(self) -> None:
         for text in (
             "通道 2 第 1 次连接telnet 失败，等待10s再连接一次；",
@@ -303,7 +425,10 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
             (1, 2, "failed", ping),
             (1, 2, "failed", ping),
         ])
-        self.assertEqual(statuses, [])
+        self.assertEqual(statuses, [
+            (2, "running", "第3轮执行中"),
+            (1, "running", "第2轮执行中"),
+        ])
         for text in (retry, exception, ping):
             self.assertEqual(emitted.count(f"[旧工具Logs][ERROR] {text}"), 1)
 

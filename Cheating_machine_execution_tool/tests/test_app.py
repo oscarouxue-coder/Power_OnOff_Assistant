@@ -64,6 +64,23 @@ from src.services.dut_advanced_config_service import (
     WIFI_MODE_OPTIONS,
     WIFI_SECURITY_MODE_OPTIONS,
 )
+from src.services.onu_command_edit_service import OnuCommandEditService
+
+
+def _mock_onu_command_editor(requests=()):
+    editor = Mock()
+
+    def load_requests(items, **_kwargs):
+        editor.requests = tuple(items)
+        editor.capture_plans.return_value = tuple(
+            OnuCommandEditService().build_default(request) for request in items
+        )
+
+    editor.load_requests.side_effect = load_requests
+    load_requests(requests)
+    return editor
+
+
 from src.ui.dut_config_window import (
     DUT_CONFIG_DEFAULT_HEIGHT,
     DUT_CONFIG_DEFAULT_WIDTH,
@@ -2618,6 +2635,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             onu_registration_window=Mock(),
             _current_onu_connection=Mock(return_value=connection),
             _build_onu_provision_requests=Mock(return_value=[request]),
+            onu_command_editor=_mock_onu_command_editor([request]),
+            _log=Mock(),
             _set_onu_query_status=Mock(),
             _set_onu_registration_action_buttons_state=Mock(),
             _onu_register_selected_worker=Mock(),
@@ -2631,7 +2650,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         askyesno.assert_called_once()
         thread_class.assert_called_once_with(
             target=context._onu_register_selected_worker,
-            args=(OLT_FAMILY_C300, connection, [request], None, False),
+            args=(OLT_FAMILY_C300, connection, [request], None, False, context.onu_command_editor.capture_plans.return_value),
             daemon=True,
         )
         worker.start.assert_called_once_with()
@@ -2660,6 +2679,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             onu_registration_window=Mock(),
             _current_onu_connection=Mock(return_value=connection),
             _build_onu_provision_requests=Mock(return_value=[request]),
+            onu_command_editor=_mock_onu_command_editor([request]),
+            _log=Mock(),
             _selected_c300_cleanup_candidate=Mock(return_value=candidate),
             _set_onu_query_status=Mock(),
             _set_onu_registration_action_buttons_state=Mock(),
@@ -2670,7 +2691,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         thread_class.assert_called_once_with(
             target=context._onu_register_selected_worker,
-            args=(OLT_FAMILY_C300, connection, [request], candidate, False),
+            args=(OLT_FAMILY_C300, connection, [request], candidate, False, context.onu_command_editor.capture_plans.return_value),
             daemon=True,
         )
 
@@ -2737,10 +2758,12 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             setattr(context, name, Mock())
         context._current_onu_connection = Mock(return_value=OltConnection(
             "172.18.18.152", "172.33.5.35", "zte", "test-password"))
+        context.onu_command_editor = _mock_onu_command_editor()
+        context._log = Mock()
 
         LineCheckAssistant._on_onu_preview_clicked(context)
         self.assertTrue(context.onu_preview_ready)
-        preview = context.onu_command_preview_text.insert.call_args.args[1]
+        preview = "\n".join(command for plan in context.onu_command_editor.capture_plans() for command in plan.commands)
         for onu, onu_id in zip(targets, (3, 4)):
             self.assertIn(f"onu {onu_id} type NP7287XGS sn {onu.serial_number}", preview)
         self.assertTrue(LineCheckAssistant._on_onu_register_selected_clicked(context))
@@ -3265,6 +3288,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             onu_source_ip_var=Mock(get=Mock(return_value="172.18.18.40")),
             onu_confirmation_summary_var=Mock(),
             onu_command_preview_text=Mock(),
+            onu_command_editor=_mock_onu_command_editor(),
             onu_register_button=Mock(),
             onu_notebook=Mock(),
             onu_preview_tab=Mock(),

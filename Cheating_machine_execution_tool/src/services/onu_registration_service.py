@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Callable, Iterable, Optional, Type
+from typing import Callable, Iterable, Optional, Sequence, Type
 
 from src.core.zte_c300_onu import ZteC300OnuDriver
 from src.core.zte_c600_onu import ZteC600OnuDriver
@@ -17,11 +17,13 @@ from src.models.onu_registration_models import (
     OLT_FAMILY_C300,
     OLT_FAMILY_C600,
     OltConnection,
+    OnuCommandPlan,
     OnuDiscoveryScope,
     OnuOperationResult,
     OnuProvisionRequest,
     RegisteredOnu,
 )
+from src.services.onu_command_edit_service import OnuCommandEditService
 
 
 DRIVER_TYPES = {
@@ -263,6 +265,8 @@ class OnuRegistrationService:
         requests: Iterable[OnuProvisionRequest],
         c300_cleanup_candidate: Optional[C300CleanupCandidate] = None,
         cancel_event: Optional[threading.Event] = None,
+        *,
+        command_plans: Optional[Sequence[OnuCommandPlan]] = None,
     ) -> OnuOperationResult:
         items = tuple(requests)
         if not items:
@@ -284,6 +288,27 @@ class OnuRegistrationService:
             cancel_event=cancel_event,
         )
         try:
+            plans = tuple(command_plans) if command_plans is not None else None
+            if plans is not None:
+                if len(plans) != len(items):
+                    raise ValueError("待下发命令计划数量与目标 ONU 数量不一致")
+                validated_plans: list[OnuCommandPlan] = []
+                editor = OnuCommandEditService()
+                for request, plan in zip(items, plans):
+                    if not isinstance(plan, OnuCommandPlan):
+                        raise ValueError("待下发命令计划类型无效")
+                    if (
+                        plan.request.family != request.family
+                        or plan.request.onu != request.onu
+                        or plan.request.onu_id != request.onu_id
+                    ):
+                        raise ValueError("待下发命令计划目标与所选 ONU 不一致")
+                    validated = editor.prepare(request, "\n".join(plan.commands))
+                    if validated.request != plan.request or validated.commands != plan.commands:
+                        raise ValueError("待下发命令与业务参数不一致，请重新校验编辑")
+                    validated_plans.append(validated)
+                plans = tuple(validated_plans)
+                items = tuple(plan.request for plan in plans)
             seen_serials: set[str] = set()
             seen_pon_ids: set[tuple[str, int]] = set()
             for request in items:
@@ -317,8 +342,16 @@ class OnuRegistrationService:
             # 预检全部通过后，才按固定顺序逐台配置、等待上线并回读。
             for index, request in enumerate(items, 1):
                 target = request.onu.onu_interface or request.onu.pon_interface
-                provision_commands = driver.build_provision_commands(request)
+                plan = plans[index - 1] if plans is not None else None
+                provision_commands = (
+                    plan.commands if plan is not None else driver.build_provision_commands(request)
+                )
                 self._log(family, f"阶段 2/3：注册与业务配置 {index}/{len(items)} {target}")
+                self._log(
+                    family,
+                    f"待下发命令：{'已编辑' if plan is not None and plan.edited else '生成命令'}，"
+                    f"实际 {len(provision_commands)} 条",
+                )
                 try:
                     provision_outputs = session.execute_many(provision_commands, timeout=25)
                 except OltCommandError:

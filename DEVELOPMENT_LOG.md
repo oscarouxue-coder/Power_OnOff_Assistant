@@ -1,5 +1,50 @@
 # 开发记录
 
+## 2026-10-12 - 恢复重启测试正常通道颜色
+
+- 类型：BUG 修复。
+- 背景：负责人提供“2026-10-12 21:22:30.204141: 通道2下挂的设备在第3次测试时正常”日志与 `通道2 3/5 失败` 截图，反馈正常后小卡未恢复绿色。原正常结果只推进轮次，没有更新旧失败状态；界面还会忽略续跑开始的运行状态。
+- 完成内容：① 旧业务适配同步提取正常轮次和明确开始信号，仅更新本次已选通道；重复/旧轮次正常、重复开始及结束后日志不覆盖新的状态，续跑开始解除目标通道终结标记。② 界面接受运行态，未到总轮次的成功状态显示绿色“正常”，满轮次仍显示绿色“已完成”；明确下一轮/续跑开始恢复运行态，后续重试/失败继续显示原样式。③ 保留既有失败历史，普通正常结果不写入异常历史；新轮次清除旧当前详情，实际业务最终失败仍覆盖为失败。设备命令、确认、线程、停止、原进度规则与最终业务判据保持；保留在途ONU命令编辑改动。
+- 修改文件：
+  - `.claude/plans/power-channel-success-color.md`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_channel_status.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置 `PYTHONUTF8=1`，运行 `python -m unittest discover -s tests -p test_legacy_power_test_service.py -v`、`python -m unittest discover -s tests -p test_power_test_channel_status.py -v`、`python -m unittest discover -s tests -p test_power_test_resume.py -v` 及 `python scripts/verify_baseline.py`；仓库根执行 `git diff --check`。
+- 验证结果：旧业务适配27项、UI状态6项、续跑17项通过；新增12项回归，当前完整基线 `ALL CHECKS PASSED`（77个源码编译/覆盖、939项测试、173项指定回归及协议不变量通过）。覆盖原文与空白归一化、失败后恢复、下一轮运行、再次异常、通道隔离、历史保留、重复/旧轮次及最终失败覆盖；UI使用模拟控件验证真实渲染方法的文字和样式，未启动完整应用。差异格式检查通过。
+- 后续待办：负责人复验Windows源码版及真实样机的 `3/5 正常` 绿色、下一轮/续跑运行态、再次失败与最终完成。验收基线§2.12/§3保留未验收标签；未操作设备、未改本机配置、未打包、未运行EXE、未提交Git。
+
+## 2026-10-12 - 增加ONU待下发命令编辑
+
+- 类型：功能。
+- 背景：负责人要求在ONU注册“3. 确认执行”编辑待下发命令，并确认固定SN/PON/ONU ID、沿用现有业务约束、按编辑参数回读；原预览只读且实际注册会重新生成命令。
+- 完成内容：新增独立逐ONU命令编辑组件，按SN/PON/ID选择并保留各自修改，提供校验及带确认的恢复生成命令；编辑待校验、原文错误行定位、执行锁定、参数变化失效清理和仅本批有效均已接入。新增解析service，支持C300类型模板/单T-CONT/DBA/六业务映射及C600类型模板/速率/SN双绑定/主资源/完整业务映射增删，调用原driver校验和完整有序命令比对，拒绝身份变化、未知/残缺/重复/重排命令、危险命令、控制字符及非ASCII空白，不自动补齐。新增不可变命令计划，最终确认显示修改状态、命令数和业务摘要；连接前重验，实际下发该快照并按新请求上线/回读，C300清理重试复用快照，原整批预检、首错/停止及独立write边界保留。补齐未派发编辑事件和执行中重新生成预览的拦截，不回写第二步或INI。
+- 修改文件：
+  - `.claude/plans/onu-command-editor.md`
+  - `Cheating_machine_execution_tool/src/ui/onu_command_editor.py`
+  - `Cheating_machine_execution_tool/src/services/onu_command_edit_service.py`
+  - `Cheating_machine_execution_tool/src/models/onu_registration_models.py`
+  - `Cheating_machine_execution_tool/src/services/onu_registration_service.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_command_edit_service.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_command_editor.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_command_editor_app.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_registration_service.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置 `PYTHONUTF8=1`，分别运行 `python -m unittest discover -s tests -p test_onu_command_edit_service.py -v`、`python -m unittest discover -s tests -p test_onu_command_editor.py -v`、`python -m unittest discover -s tests -p test_onu_command_editor_app.py -v`、`python -m unittest discover -s tests -p test_onu_registration_service.py -v`、`python -m unittest discover -s tests -p test_app.py`，以及 `python scripts/verify_baseline.py`；仓库根运行 `git diff --check`。
+- 验证结果：解析专项26项、编辑器专项17项（包含独立Tk组件构造/状态检查）、主窗口接入专项12项、注册专项54项及原主窗口195项均通过。本轮新增66项；最初完整门禁926项通过，补充特殊空白回归后完整unittest927项通过。复核期间三次原门禁报告1项单测失败（两次927项、一次933项），原脚本只保留结果摘要而未输出失败ID；诊断运行在本次进程中包裹 `run_unittest()`，原函数及 `main()` 全部检查原样执行/返回，并保存完整输出到系统临时目录 `onu-editor-baseline-unittest.txt`，不改门禁源码或绕过检查。诊断门禁927、937及最终939项均 `ALL CHECKS PASSED`（77个源码编译/覆盖、173项指定回归及协议不变量通过，最终2项默认浏览器集成测试跳过），失败未在这些诊断运行中复现，未擅自归因或修改无关模块。工作区同期出现其它通道状态在途改动，927之后的测试增量不计入本轮ONU新增66项；已保留其它改动。差异格式检查通过。测试使用模拟会话和已有回读fixture，不代表真实OLT下发或完整界面视觉验收。
+- 后续待办：负责人在Windows源码版及真实C300/C600验证逐台编辑保留、错误行号、恢复/失效/锁定、编辑快照实际下发、新参数回读、批量失败/停止、C300授权重试和独立write；新增范围已列入验收基线§2.10/§3，原验收结论保持原范围。未操作真实设备、未改本机配置、未打包、未提交Git。
+
 ## 2026-10-12 - 增加失败通道右键续跑
 
 - 类型：功能。

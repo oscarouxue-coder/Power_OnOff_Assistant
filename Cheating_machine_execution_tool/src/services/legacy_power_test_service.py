@@ -224,8 +224,22 @@ def _format_legacy_operator_log(text: str, ping_target_ip: str) -> str:
 
 
 def _legacy_channel_status_from_log(text: str) -> tuple[int, str, str] | None:
-    """从旧业务明确的重试/失败信号提取主界面通道状态。"""
+    """从旧业务明确的轮次结果和重试/失败信号提取通道状态。"""
     compact_text = LEGACY_LOG_WHITESPACE_PATTERN.sub(" ", text).strip()
+    normal_match = LEGACY_NORMAL_CYCLE_RESULT_PATTERN.fullmatch(compact_text)
+    if normal_match is not None:
+        return (
+            int(normal_match.group("channel")),
+            "success",
+            f"第{int(normal_match.group('cycle'))}轮测试正常",
+        )
+    start_match = LEGACY_CYCLE_START_PATTERN.fullmatch(compact_text)
+    if start_match is not None:
+        return (
+            int(start_match.group("channel")),
+            "running",
+            f"第{int(start_match.group('cycle'))}轮执行中",
+        )
     retry_match = LEGACY_COMMAND_RETRY_PATTERN.fullmatch(compact_text)
     if retry_match is not None:
         return (
@@ -472,6 +486,8 @@ def _run_legacy_power_test(
         last_forwarded_log_key: tuple[str, str] | None = None
         forwarded_login_success_ips: set[str] = set()
         channel_details: dict[int, str] = {}
+        finished_channels: set[int] = set()
+        started_by_channel: dict[int, int] = {}
         emit(
             "[执行开关机测试] 已启用精简日志：保留每轮开始/正常结论、关键结果、"
             "警告/错误、程控电源指令和最终结论。"
@@ -505,6 +521,8 @@ def _run_legacy_power_test(
             if message_type == "channel_started":
                 channel_number = message["channel"]
                 if message.get("attempt", 0):
+                    finished_channels.discard(channel_number)
+                    started_by_channel.pop(channel_number, None)
                     detail = f"续跑开始：第{message['completed'] + 1}/{request.number_of_tests}轮"
                     channel_details.pop(channel_number, None)
                     if on_channel_status:
@@ -526,10 +544,36 @@ def _run_legacy_power_test(
                             request.number_of_tests,
                         )
                         on_channel_history(channel_number, current_cycle, status, detail)
-                channel_status = _legacy_channel_status_from_log(raw_text)
+                normalized_text = LEGACY_LOG_WHITESPACE_PATTERN.sub(" ", raw_text).strip()
+                channel_status = _legacy_channel_status_from_log(normalized_text)
+                normal_match = LEGACY_NORMAL_CYCLE_RESULT_PATTERN.fullmatch(normalized_text)
+                start_match = LEGACY_CYCLE_START_PATTERN.fullmatch(normalized_text)
+                if channel_status is not None:
+                    channel_number = channel_status[0]
+                    # 旧轮次正常行可能被重复转发；不能覆盖下一轮异常或最终失败。
+                    if channel_number not in completed_by_channel or channel_number in finished_channels:
+                        channel_status = None
+                    elif normal_match is not None and not (
+                        completed_by_channel[channel_number]
+                        < int(normal_match.group("cycle")) <= request.number_of_tests
+                    ):
+                        channel_status = None
+                    elif start_match is not None:
+                        cycle = int(start_match.group("cycle"))
+                        if not (
+                            max(completed_by_channel[channel_number],
+                                started_by_channel.get(channel_number, 0))
+                            < cycle <= request.number_of_tests
+                        ):
+                            channel_status = None
+                        else:
+                            started_by_channel[channel_number] = cycle
                 if channel_status is not None:
                     channel_number, status, detail = channel_status
-                    channel_details[channel_number] = detail
+                    if status == "running" or normal_match is not None:
+                        channel_details.pop(channel_number, None)
+                    else:
+                        channel_details[channel_number] = detail
                     # 重试过程和最终失败必须在主日志精简/去重之前单独上报；
                     # "重试后成功"也属于本次重试历史的一部分，不能因状态恢复而丢失。
                     if on_channel_history is not None and (
@@ -544,7 +588,7 @@ def _run_legacy_power_test(
                     if on_channel_status is not None:
                         on_channel_status(channel_number, status, detail)
                 channel_progress = _legacy_channel_progress_from_log(
-                    raw_text,
+                    normalized_text,
                     request.number_of_tests,
                 )
                 if channel_progress is not None:
@@ -565,7 +609,7 @@ def _run_legacy_power_test(
                             )
                 completed_cycle = _overall_completed_cycle(
                     completed_by_channel,
-                    raw_text,
+                    normalized_text,
                     request.number_of_tests,
                 )
                 if (
@@ -606,6 +650,7 @@ def _run_legacy_power_test(
                 ok = bool(message.get("ok"))
                 if not 1 <= channel_number <= 16:
                     continue
+                finished_channels.add(channel_number)
                 if ok:
                     status, detail = "success", "所有测试项验证成功"
                     completed_by_channel[channel_number] = request.number_of_tests

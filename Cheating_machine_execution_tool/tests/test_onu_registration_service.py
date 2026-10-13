@@ -5,19 +5,21 @@ from unittest.mock import MagicMock, patch
 
 from src.core.zte_c300_onu import ZteC300OnuDriver
 from src.core.zte_c600_onu import ZteC600OnuDriver, parse_service_mappings, speed_mode_to_cli
-from src.core.zte_olt_telnet import OltCommandError, ZteOltTelnetSession
+from src.core.zte_olt_telnet import OltCommandError, OperationCancelled, ZteOltTelnetSession
 from src.models.onu_registration_models import (
     C300CleanupCandidate,
     DiscoveredOnu,
     OLT_FAMILY_C300,
     OLT_FAMILY_C600,
     OltConnection,
+    OnuCommandPlan,
     OnuDiscoveryScope,
     OnuProvisionRequest,
     OnuServiceMapping,
     OnuTemplate,
     RegisteredOnu,
 )
+from src.services.onu_command_edit_service import OnuCommandEditService
 from src.services.onu_registration_service import OnuRegistrationService, driver_for_family
 
 
@@ -1091,6 +1093,276 @@ class ServiceTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("SN 已变化", result.message)
         self.assertNotIn("no onu", "\n".join(fake.commands))
+
+
+class EditedRegistrationTests(unittest.TestCase):
+    def setUp(self):
+        self.editor = OnuCommandEditService()
+
+    def prepare(self, base, effective=None):
+        commands = driver_for_family(base.family).build_provision_commands(effective or base)
+        return self.editor.prepare(base, "\n".join(commands))
+
+    @staticmethod
+    def c300_batch():
+        first = make_c300_request()
+        second = replace(
+            first,
+            onu=replace(
+                first.onu,
+                onu_interface="gpon-onu_1/2/1:4",
+                suggested_onu_id=4,
+                serial_number="GPONA62D6F79",
+            ),
+            onu_id=4,
+        )
+        return first, second
+
+    @staticmethod
+    def batch_driver():
+        driver = MagicMock()
+        driver.validate_request.return_value = []
+        driver.build_precheck_commands.side_effect = (
+            lambda request: [f"precheck {request.onu.serial_number}"]
+        )
+        driver.precheck_allows_cli_error.return_value = False
+        driver.validate_precheck.return_value = []
+        driver.build_readiness_command.side_effect = (
+            lambda request: f"ready {request.onu.serial_number}"
+        )
+        driver.readiness_state.return_value = (True, "working")
+        driver.build_verify_commands.side_effect = (
+            lambda request: [f"verify {request.onu.serial_number}"]
+        )
+        driver.validate_verification.return_value = []
+        return driver
+
+    def test_unedited_plans_preserve_c300_and_c600_command_sequences(self):
+        for request, responses in (
+            (make_c300_request(), c300_register_responses()),
+            (make_c600_request(), c600_register_responses()),
+        ):
+            with self.subTest(family=request.family):
+                plan = self.prepare(request)
+                fake = FakeSession(responses=responses)
+                result = OnuRegistrationService(session_type=fake).register(
+                    make_connection(), [request], command_plans=[plan]
+                )
+                self.assertTrue(result.ok, result.message)
+                start = fake.commands.index("configure terminal")
+                self.assertEqual(tuple(fake.commands[start:start + len(plan.commands)]), plan.commands)
+                self.assertNotIn("write", fake.commands)
+
+    def test_c300_edited_commands_and_verification_use_new_business_values(self):
+        base = make_c300_request()
+        effective = replace(
+            base,
+            onu_type="SD-42",
+            tcont_profile="2G",
+            services=tuple(
+                OnuServiceMapping(index, vlan)
+                for index, vlan in enumerate((201, 46, 335, 600, 171, 172), 1)
+            ),
+        )
+        plan = self.prepare(base, effective)
+        responses = c300_register_responses()
+        for command, output in responses.items():
+            if isinstance(output, list):
+                responses[command] = [item.replace("SD-41", "SD-42") for item in output]
+            else:
+                responses[command] = output.replace("SD-41", "SD-42").replace("200", "201").replace("1G", "2G")
+        fake = FakeSession(responses=responses)
+        logs = []
+        result = OnuRegistrationService(logger=logs.append, session_type=fake).register(
+            make_connection(), [base], command_plans=(plan,)
+        )
+        self.assertTrue(result.ok, result.message)
+        self.assertIn("onu 3 type SD-42 sn GPONA62D6F78", fake.commands)
+        self.assertIn("tcont 1 profile 2G", fake.commands)
+        self.assertIn("service Internet gemport 1 vlan 201", fake.commands)
+        self.assertNotIn("service Internet gemport 1 vlan 200", fake.commands)
+        self.assertTrue(any(f"已编辑，实际 {len(plan.commands)} 条" in entry for entry in logs))
+
+    def test_c600_edited_commands_and_verification_use_new_business_values(self):
+        base = make_c600_request()
+        effective = replace(
+            base,
+            onu_type="CXP-56",
+            tcont_profile="WT-20G",
+            real_speed="xgspon",
+            services=tuple(
+                replace(item, vlan=174) if item.vlan == 170 else item
+                for item in base.services
+            ),
+        )
+        plan = self.prepare(base, effective)
+        responses = {
+            command: output.replace("CXP-55", "CXP-56").replace("WT-10G", "WT-20G").replace("170", "174")
+            for command, output in c600_register_responses().items()
+        }
+        collection = "show collection pon-onu gpon_onu-1/1/5:55 config"
+        responses[collection] = responses[collection].replace("  tcont 1", "  real-speed xgspon\n  tcont 1")
+        fake = FakeSession(responses=responses)
+        result = OnuRegistrationService(session_type=fake).register(
+            make_connection(), [base], command_plans=(plan,)
+        )
+        self.assertTrue(result.ok, result.message)
+        self.assertIn("onu 55 type CXP-56 sn ZTEG12345678", fake.commands)
+        self.assertIn("real-speed xgspon", fake.commands)
+        self.assertIn("tcont 1 profile WT-20G", fake.commands)
+        self.assertIn("service 1 gemport 1 vlan 174", fake.commands)
+        self.assertNotIn("service 1 gemport 1 vlan 170", fake.commands)
+
+    def test_invalid_plans_are_rejected_before_connecting(self):
+        base = make_c300_request()
+        valid = self.prepare(base)
+        other = replace(base, onu=replace(base.onu, serial_number="GPONA62D6F79"))
+        invalid_plans = (
+            (),
+            (valid, valid),
+            (object(),),
+            (self.prepare(other),),
+            (replace(valid, request=replace(valid.request, onu_id=4)),),
+            (replace(valid, request=replace(valid.request, onu_type="SD-42")),),
+            (replace(valid, commands=valid.commands + ("write",)),),
+            (replace(valid, commands=("reload",)),),
+        )
+        for plans in invalid_plans:
+            with self.subTest(plans=plans):
+                fake = FakeSession()
+                result = OnuRegistrationService(session_type=fake).register(
+                    make_connection(), [base], command_plans=plans
+                )
+                self.assertFalse(result.ok)
+                self.assertFalse(fake.connected)
+                self.assertNotIn("configure terminal", fake.commands)
+                self.assertNotIn("write", fake.commands)
+                self.assertNotIn("reload", fake.commands)
+
+    def test_edited_batch_completes_all_prechecks_before_configuring_and_verifies_effective_requests(self):
+        items = self.c300_batch()
+        plans = tuple(self.prepare(item, replace(item, onu_type="SD-42")) for item in items)
+        driver = self.batch_driver()
+        fake = FakeSession()
+        with patch("src.services.onu_registration_service.driver_for_family", return_value=driver):
+            result = OnuRegistrationService(session_type=fake).register(
+                make_connection(), items, command_plans=plans
+            )
+        self.assertTrue(result.ok, result.message)
+        self.assertEqual(fake.commands[:2], [f"precheck {item.onu.serial_number}" for item in items])
+        self.assertEqual(fake.commands[2], "configure terminal")
+        self.assertEqual(
+            [call.args[0] for call in driver.validate_verification.call_args_list],
+            [plan.request for plan in plans],
+        )
+        driver.build_provision_commands.assert_not_called()
+
+    def test_edited_batch_precheck_failure_sends_no_configuration(self):
+        items = self.c300_batch()
+        plans = tuple(self.prepare(item) for item in items)
+        driver = self.batch_driver()
+        driver.validate_precheck.side_effect = [[], ["second target occupied"]]
+        fake = FakeSession()
+        with patch("src.services.onu_registration_service.driver_for_family", return_value=driver):
+            result = OnuRegistrationService(session_type=fake).register(
+                make_connection(), items, command_plans=plans
+            )
+        self.assertFalse(result.ok)
+        self.assertNotIn("configure terminal", fake.commands)
+
+    def test_edited_batch_cli_failure_stops_before_next_target(self):
+        items = self.c300_batch()
+        plans = tuple(self.prepare(item, replace(item, onu_type="SD-42")) for item in items)
+        driver = self.batch_driver()
+        failed_command = "onu 3 type SD-42 sn GPONA62D6F78"
+        fake = FakeSession(fail_once=failed_command)
+        with patch("src.services.onu_registration_service.driver_for_family", return_value=driver):
+            result = OnuRegistrationService(session_type=fake).register(
+                make_connection(), items, command_plans=plans
+            )
+        self.assertFalse(result.ok)
+        self.assertNotIn("onu 4 type SD-42 sn GPONA62D6F79", fake.commands)
+        driver.validate_verification.assert_not_called()
+        self.assertTrue(fake.closed)
+
+    def test_edited_batch_verification_failure_stops_before_next_target(self):
+        items = self.c300_batch()
+        plans = tuple(self.prepare(item) for item in items)
+        driver = self.batch_driver()
+        driver.validate_verification.return_value = ["unexpected business readback"]
+        fake = FakeSession()
+        with patch("src.services.onu_registration_service.driver_for_family", return_value=driver):
+            result = OnuRegistrationService(session_type=fake).register(
+                make_connection(), items, command_plans=plans
+            )
+        self.assertFalse(result.ok)
+        self.assertNotIn("onu 4 type SD-41 sn GPONA62D6F79", fake.commands)
+        self.assertEqual(driver.validate_verification.call_count, 1)
+
+    def test_edited_batch_cancellation_stops_before_next_target(self):
+        items = self.c300_batch()
+        plans = tuple(self.prepare(item) for item in items)
+        driver = self.batch_driver()
+
+        class StoppedSession(FakeSession):
+            def execute(self, command, timeout=20, fail_on_cli_error=True):
+                if command == "onu 3 type SD-41 sn GPONA62D6F78":
+                    self.commands.append(command)
+                    raise OperationCancelled("操作已停止")
+                return super().execute(command, timeout, fail_on_cli_error)
+
+        fake = StoppedSession()
+        with patch("src.services.onu_registration_service.driver_for_family", return_value=driver):
+            result = OnuRegistrationService(session_type=fake).register(
+                make_connection(), items, command_plans=plans, cancel_event=threading.Event()
+            )
+        self.assertFalse(result.ok)
+        self.assertIn("操作已停止", result.message)
+        self.assertNotIn("onu 4 type SD-41 sn GPONA62D6F79", fake.commands)
+        self.assertTrue(fake.closed)
+
+    def test_command_plan_collection_is_snapshotted_before_connecting(self):
+        base = make_c300_request()
+        plans = [self.prepare(base)]
+
+        class MutatedInputSession(FakeSession):
+            def connect(self):
+                plans.clear()
+                super().connect()
+
+        fake = MutatedInputSession(responses=c300_register_responses())
+        result = OnuRegistrationService(session_type=fake).register(
+            make_connection(), [base], command_plans=plans
+        )
+        self.assertTrue(result.ok, result.message)
+        self.assertIn("onu 3 type SD-41 sn GPONA62D6F78", fake.commands)
+
+    def test_c300_cleanup_retry_reuses_edited_command_snapshot(self):
+        base = make_c300_request()
+        plan = self.prepare(base, replace(base, onu_type="SD-42"))
+        responses = c300_register_responses()
+        for command, output in responses.items():
+            responses[command] = (
+                [entry.replace("SD-41", "SD-42") for entry in output]
+                if isinstance(output, list) else output.replace("SD-41", "SD-42")
+            )
+        responses["show gpon onu state"] = "1/2/1:8 enable disable DyingGasp 1(GPON)\nZXAN#"
+        responses["show gpon onu baseinfo gpon-olt_1/2/1 8"] = (
+            "gpon-onu_1/2/1:8 SD-41 sn SN:GPON12345678 ready\nZXAN#"
+        )
+        fake = FakeSession(responses=responses, fail_once="service Internet gemport 1 vlan 200")
+        result = OnuRegistrationService(session_type=fake).register(
+            make_connection(),
+            [base],
+            c300_cleanup_candidate=C300CleanupCandidate(
+                "gpon-onu_1/2/1:8", "gpon-olt_1/2/1", 8, "DyingGasp", "GPON12345678", "SD-41"
+            ),
+            command_plans=(plan,),
+        )
+        self.assertTrue(result.ok, result.message)
+        self.assertEqual(fake.commands.count("onu 3 type SD-42 sn GPONA62D6F78"), 2)
+        self.assertNotIn("onu 3 type SD-41 sn GPONA62D6F78", fake.commands)
+        self.assertEqual(fake.commands.count("no onu 8"), 1)
 
 
 class TelnetBindingTests(unittest.TestCase):

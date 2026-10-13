@@ -123,6 +123,7 @@ from src.services import (
 )
 from src.services.onu_registration_service import OnuRegistrationService
 from src.services.onu_batch_registration_service import build_batch_requests
+from src.ui.onu_command_editor import OnuCommandEditor, command_plan_summary
 from src.services.device_project_info_service import (
     DeviceProjectInfo,
     DeviceProjectInfoQueryRequest,
@@ -1878,12 +1879,29 @@ class LineCheckAssistant(Tk):
         self.onu_preview_ready = False
         if hasattr(self, "onu_confirmation_summary_var"):
             self.onu_confirmation_summary_var.set("参数或目标已变化，请重新生成命令预览。")
-        if hasattr(self, "onu_command_preview_text"):
+        editor = getattr(self, "onu_command_editor", None)
+        if editor is not None:
+            editor.clear()
+        elif getattr(self, "onu_command_preview_text", None) is not None:
             self.onu_command_preview_text.configure(state="normal")
             self.onu_command_preview_text.delete("1.0", "end")
             self.onu_command_preview_text.configure(state="disabled")
         if hasattr(self, "onu_register_button"):
             self.onu_register_button.configure(state="disabled")
+
+    def _on_onu_command_editor_ready_changed(self, ready: bool) -> None:
+        self.onu_preview_ready = ready
+        if hasattr(self, "onu_register_button"):
+            self.onu_register_button.configure(
+                state="normal" if ready and not LineCheckAssistant._onu_operation_is_running(self) else "disabled"
+            )
+
+    def _onu_operation_is_running(self) -> bool:
+        return any(getattr(self, name, False) for name in (
+            "onu_telnet_test_running", "onu_query_running", "onu_cleanup_query_running",
+            "onu_register_running", "onu_save_olt_running", "onu_manage_query_running",
+            "onu_manage_delete_running", "onu_template_query_running",
+        ))
 
     def _current_onu_registration_config(self) -> OnuRegistrationConfig:
         services = self.onu_registration_config.c600_services or DEFAULT_C600_SERVICES
@@ -2545,14 +2563,13 @@ class LineCheckAssistant(Tk):
             textvariable=self.onu_confirmation_summary_var,
             justify="left",
         ).pack(fill="x", padx=8, pady=6)
-        self.onu_command_preview_text = Text(
-            preview_tab,
-            height=8,
-            font=("Consolas", 10),
-            wrap="none",
-            state="disabled",
+        self.onu_command_editor = OnuCommandEditor(
+            preview_tab, height=8,
+            on_ready_changed=self._on_onu_command_editor_ready_changed,
+            log=lambda text: self._log(f"[ONU注册][{self.onu_family_var.get()}] {text}"),
         )
-        self.onu_command_preview_text.grid(row=1, column=0, sticky="nsew")
+        self.onu_command_editor.frame.grid(row=1, column=0, sticky="nsew")
+        self.onu_command_preview_text = self.onu_command_editor.text
         preview_actions = Frame(preview_tab, background=COLOR_BG)
         preview_actions.grid(row=2, column=0, sticky="ew", pady=(8, 0))
         ttk.Button(
@@ -2572,7 +2589,7 @@ class LineCheckAssistant(Tk):
 
         warning_label = Label(
             content,
-            text="注册会修改 OLT 当前配置；C300 的 write 独立确认，C600 不自动 write、不自动删除 ONU。",
+            text="注册会修改 OLT 当前配置；write 仍按本次授权独立保存，命令编辑不开放删除或重启。",
             foreground=COLOR_WARNING,
             background=COLOR_BG,
         )
@@ -2622,6 +2639,9 @@ class LineCheckAssistant(Tk):
                 self._remember_module_window_size(dialog, "onu_registration")
                 dialog.destroy()
                 self.onu_registration_window = None
+                self.onu_command_editor = None
+                self.onu_command_preview_text = None
+                self.onu_preview_ready = False
 
         bottom_actions = Frame(content, background=COLOR_BG)
         bottom_actions.grid(row=6, column=0, sticky="ew", pady=(8, 0))
@@ -3030,6 +3050,9 @@ class LineCheckAssistant(Tk):
         return build_batch_requests(selected_onus, base_request, target_ids=target_ids)
 
     def _on_onu_preview_clicked(self) -> None:
+        if LineCheckAssistant._onu_operation_is_running(self):
+            self._set_onu_query_status("ONU 操作正在执行，请等待安全结束后再生成预览", COLOR_WARNING)
+            return
         try:
             requests = self._build_onu_provision_requests()
             commands = OnuRegistrationService().build_preview(requests)
@@ -3072,13 +3095,19 @@ class LineCheckAssistant(Tk):
             f"源 IP：{self.onu_source_ip_var.get().strip() or '未填写'}\n"
             f"目标：{target_lines}\n安全策略：{safety_text}"
         )
-        self.onu_command_preview_text.configure(state="normal")
-        self.onu_command_preview_text.delete("1.0", "end")
-        preview_commands = list(commands)
-        if family == OLT_FAMILY_C600 and self.onu_c600_write_after_success_var.get():
-            preview_commands.extend(["# 完整上线与只读验证成功后执行（独立会话）", "write"])
-        self.onu_command_preview_text.insert("1.0", "\n".join(preview_commands))
-        self.onu_command_preview_text.configure(state="disabled")
+        if family == OLT_FAMILY_C300:
+            write_note = "保存策略：注册命令不含 write；成功后另行确认是否保存。"
+        elif self.onu_c600_write_after_success_var.get():
+            write_note = "保存策略：完整上线与只读验证成功后，在独立会话执行 write。"
+        else:
+            write_note = "保存策略：本次不执行 write。"
+        try:
+            self.onu_command_editor.load_requests(requests, write_note=write_note)
+        except ValueError as exc:
+            self._invalidate_onu_preview()
+            self._set_onu_query_status(str(exc), COLOR_DANGER)
+            messagebox.showwarning("无法生成命令预览", str(exc), parent=self.onu_registration_window)
+            return
         self.onu_preview_ready = True
         self.onu_register_button.configure(state="normal")
         self.onu_notebook.select(self.onu_preview_tab)
@@ -3249,17 +3278,21 @@ class LineCheckAssistant(Tk):
         self._log(f"[ONU注册][{family}] 查询未注册 ONU：{host} - {result.message}")
 
     def _on_onu_register_selected_clicked(self) -> bool:
-        if self.onu_register_running:
+        if LineCheckAssistant._onu_operation_is_running(self):
             return False
         if hasattr(self, "onu_preview_ready") and not self.onu_preview_ready:
-            message = "参数或目标已变化，请重新生成命令预览后再开始注册"
+            message = "命令尚未校验或预览已失效，请先校验编辑；参数或目标变化后需重新生成命令预览"
             self._set_onu_query_status(message, COLOR_DANGER)
             messagebox.showwarning("预览已失效", message, parent=self.onu_registration_window)
             return False
         try:
             connection = self._current_onu_connection()
             requests = self._build_onu_provision_requests()
-            commands = OnuRegistrationService().build_preview(requests)
+            if tuple(requests) != self.onu_command_editor.requests:
+                self._invalidate_onu_preview()
+                raise ValueError("参数或目标已变化，请重新生成命令预览后再开始注册")
+            command_plans = self.onu_command_editor.capture_plans()
+            commands = tuple(command for plan in command_plans for command in plan.commands)
         except Exception as exc:
             self._set_onu_query_status(str(exc), COLOR_DANGER)
             messagebox.showwarning("注册参数错误", str(exc), parent=self.onu_registration_window)
@@ -3299,7 +3332,9 @@ class LineCheckAssistant(Tk):
         confirmed = messagebox.askyesno(
             "确认注册 ONU",
             f"OLT 型号：{family}\n源 IP：{connection.source_ip}\n目标：\n{onu_lines}\n"
-            f"共 {len(commands)} 条注册配置命令。{cleanup_text}\n"
+            f"共 {len(commands)} 条注册配置命令，按本次已校验快照执行。\n"
+            + "\n".join(command_plan_summary(plan) for plan in command_plans)
+            + f"{cleanup_text}\n"
             + (
                 "完整上线与只读验证成功后还会执行 write，保存整台 OLT 当前运行配置。是否继续？"
                 if write_after_success
@@ -3308,8 +3343,10 @@ class LineCheckAssistant(Tk):
             parent=self.onu_registration_window,
         )
         if not confirmed:
+            self._log(f"[ONU注册][{family}] 操作员取消命令快照确认，跳过注册")
             return False
 
+        self._log(f"[ONU注册][{family}] 已确认 {len(command_plans)} 个目标、{len(commands)} 条命令快照，按本次业务参数回读验证")
         self.onu_register_running = True
         self.onu_cancel_event = threading.Event()
         self._set_onu_query_status(f"正在注册 {len(requests)} 个 {family} ONU...", COLOR_WARNING)
@@ -3324,6 +3361,7 @@ class LineCheckAssistant(Tk):
                 requests,
                 cleanup_candidate,
                 write_after_success,
+                command_plans,
             ),
             daemon=True,
         )
@@ -3337,12 +3375,14 @@ class LineCheckAssistant(Tk):
         requests,
         cleanup_candidate,
         write_after_success: bool,
+        command_plans=None,
     ) -> None:
         result = OnuRegistrationService(logger=self._log).register(
             connection,
             requests,
             c300_cleanup_candidate=cleanup_candidate,
             cancel_event=self.onu_cancel_event,
+            command_plans=command_plans,
         )
         self.after(
             0,
@@ -3488,6 +3528,9 @@ class LineCheckAssistant(Tk):
             self.onu_register_button.configure(state="disabled")
 
     def _set_onu_registration_action_buttons_state(self, state: str) -> None:
+        editor = getattr(self, "onu_command_editor", None)
+        if editor is not None:
+            editor.set_busy(state != "normal")
         if hasattr(self, "onu_select_all_button"):
             self.onu_select_all_button.configure(state=state)
         if hasattr(self, "onu_clear_selection_button"):
@@ -3495,7 +3538,9 @@ class LineCheckAssistant(Tk):
         if hasattr(self, "onu_next_config_button"):
             self.onu_next_config_button.configure(state=state)
         if hasattr(self, "onu_register_button"):
-            self.onu_register_button.configure(state=state)
+            self.onu_register_button.configure(
+                state=state if getattr(self, "onu_preview_ready", False) else "disabled"
+            )
         if hasattr(self, "onu_preview_button"):
             self.onu_preview_button.configure(state=state)
         if hasattr(self, "onu_query_button"):
@@ -3602,7 +3647,7 @@ class LineCheckAssistant(Tk):
                 self.onu_target_id_inputs[target] = value
 
     def _refresh_onu_selection_action_state(self) -> None:
-        has_selection = bool(self._selected_unregistered_onus())
+        has_selection = bool(self._selected_unregistered_onus()) and not LineCheckAssistant._onu_operation_is_running(self)
         state = "normal" if has_selection else "disabled"
         if hasattr(self, "onu_next_config_button"):
             self.onu_next_config_button.configure(state=state)
@@ -6904,8 +6949,8 @@ class LineCheckAssistant(Tk):
         status: str,
         detail: str,
     ) -> None:
-        """更新一条旧 Start All 通道的重试、失败或完成结果。"""
-        if status not in {"retry", "failed", "success"}:
+        """更新一条旧 Start All 通道的运行、重试、失败或正常结果。"""
+        if status not in {"running", "retry", "failed", "success"}:
             return
         self.power_test_channel_states[int(channel_number)] = (status, detail)
         renderer = getattr(self, "_render_power_test_channel_overview", None)
@@ -7024,8 +7069,9 @@ class LineCheckAssistant(Tk):
                 state_text, style = "失败", "PowerChannelFailed.TLabel"
             elif state == "retry":
                 state_text, style = "重试", "PowerChannelRetry.TLabel"
-            elif state == "success" and completed >= total:
-                state_text, style = "已完成", "PowerChannelCompleted.TLabel"
+            elif state == "success":
+                state_text = "已完成" if completed >= total else "正常"
+                style = "PowerChannelCompleted.TLabel"
             elif completed == 0:
                 state_text, style = "等待", "PowerChannelWaiting.TLabel"
             else:
