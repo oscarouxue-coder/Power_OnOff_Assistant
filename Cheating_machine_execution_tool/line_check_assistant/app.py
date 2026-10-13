@@ -2522,13 +2522,18 @@ class LineCheckAssistant(Tk):
             borderwidth=0,
         ).grid(row=3, column=0, columnspan=8, sticky="w", padx=10, pady=(2, 6))
 
-        mapping_frame = ttk.LabelFrame(self.onu_c600_config_frame, text="业务映射（每行 ServiceID,VLAN）")
+        mapping_frame = ttk.LabelFrame(self.onu_c600_config_frame, text="业务映射（每行 ServiceID,ONU侧VLAN[,网络侧VLAN]）")
         mapping_frame.pack(fill="both", expand=True, pady=(8, 0))
         self.onu_c600_services_text = Text(mapping_frame, height=6, font=("Consolas", 10), wrap="none")
         self.onu_c600_services_text.insert("1.0", self.onu_registration_config.c600_services or DEFAULT_C600_SERVICES)
         self.onu_c600_services_text.pack(fill="both", expand=True, padx=8, pady=8)
         self.onu_c600_services_text.edit_modified(False)
         self.onu_c600_services_text.bind("<<Modified>>", self._on_onu_services_text_modified)
+        ttk.Label(
+            mapping_frame,
+            text="例如 2,111,171 表示 ONU VLAN111 ↔ 网络 VLAN171；两列表示两侧相同。语音/组播/TR069按网络侧335/600/50分层。",
+            wraplength=880,
+        ).pack(anchor="w", padx=8, pady=(0, 6))
         ttk.Label(
             mapping_frame,
             text=(
@@ -2590,7 +2595,7 @@ class LineCheckAssistant(Tk):
 
         warning_label = Label(
             content,
-            text="注册会修改 OLT 当前配置；write 仍按本次授权独立保存，命令编辑不开放删除或重启。",
+            text="注册会修改 OLT 当前配置；命令预览只读，业务参数请返回第二步修改；write 按本次授权独立保存。",
             foreground=COLOR_WARNING,
             background=COLOR_BG,
         )
@@ -3044,7 +3049,7 @@ class LineCheckAssistant(Tk):
                 gemport_id=int(self.onu_c600_gemport_id_var.get().strip()),
                 vport_id=int(self.onu_c600_vport_id_var.get().strip()),
                 sn_bind_both=bool(self.onu_c600_sn_bind_both_var.get()),
-                services=tuple(parse_service_mappings(self.onu_c600_services_text.get("1.0", "end"))),
+                services=tuple(parse_service_mappings(self.onu_c600_services_text.get("1.0", "end"), allow_translation=True)),
             )
         except ValueError as exc:
             raise ValueError(f"C600 参数错误：{exc}") from exc
@@ -3282,7 +3287,7 @@ class LineCheckAssistant(Tk):
         if LineCheckAssistant._onu_operation_is_running(self):
             return False
         if hasattr(self, "onu_preview_ready") and not self.onu_preview_ready:
-            message = "命令尚未校验或预览已失效，请先校验编辑；参数或目标变化后需重新生成命令预览"
+            message = "命令预览已失效，请返回配置业务并重新生成命令预览后再开始注册"
             self._set_onu_query_status(message, COLOR_DANGER)
             messagebox.showwarning("预览已失效", message, parent=self.onu_registration_window)
             return False

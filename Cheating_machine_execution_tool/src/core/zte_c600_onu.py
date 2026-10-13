@@ -54,7 +54,7 @@ def _c600_rate_label(rate_kbps: int) -> str:
         return f"{rate_kbps // 1000}M"
     return f"{rate_kbps}K" if rate_kbps else ""
 
-# C600 业务分层按现场 VLAN 语义固定资源。未列出的 VLAN 继续归入可编辑的
+# C600 业务分层按网络侧 VLAN 语义固定资源。未列出的 VLAN 继续归入可编辑的
 # 主上网 T-CONT/GEM，兼容临时增加普通数据 VLAN 的场景。
 C600_FIXED_BUSINESS_LAYERS = {
     335: ("语音", 2, "DBA_FONE", 2),
@@ -172,20 +172,25 @@ class ZteC600OnuDriver:
             errors.append("Service ID 不能重复")
         if len(vlans) != len(set(vlans)):
             errors.append("VLAN 不能重复")
-        if 600 not in vlans:
-            errors.append("C600 固定 MVLAN 600，业务映射必须包含 VLAN 600")
+        network_vlans = [item.effective_network_vlan for item in request.services]
+        if len(network_vlans) != len(set(network_vlans)):
+            errors.append("网络侧 VLAN 不能重复，暂不支持多对一转换")
+        if 600 not in network_vlans:
+            errors.append("C600 固定网络侧 MVLAN 600，业务映射必须包含网络侧 VLAN 600")
         for item in request.services:
             if not 1 <= item.service_id <= 4095:
                 errors.append(f"Service ID {item.service_id} 超出 1-4095")
             if not 1 <= item.vlan <= 4094:
                 errors.append(f"VLAN {item.vlan} 超出 1-4094")
+            if not 1 <= item.effective_network_vlan <= 4094:
+                errors.append(f"网络侧 VLAN {item.effective_network_vlan} 超出 1-4094")
         has_internet_service = any(
-            item.vlan not in C600_FIXED_BUSINESS_LAYERS for item in request.services
+            item.effective_network_vlan not in C600_FIXED_BUSINESS_LAYERS for item in request.services
         )
         active_fixed_layers = {
-            C600_FIXED_BUSINESS_LAYERS[item.vlan]
+            C600_FIXED_BUSINESS_LAYERS[item.effective_network_vlan]
             for item in request.services
-            if item.vlan in C600_FIXED_BUSINESS_LAYERS
+            if item.effective_network_vlan in C600_FIXED_BUSINESS_LAYERS
         }
         if has_internet_service:
             fixed_tcont_ids = {layer[1] for layer in active_fixed_layers}
@@ -218,11 +223,11 @@ class ZteC600OnuDriver:
         vlan_to_gemport: dict[int, int] = {}
         vlan_to_vport: dict[int, int] = {}
 
-        if any(item.vlan not in C600_FIXED_BUSINESS_LAYERS for item in request.services):
+        if any(item.effective_network_vlan not in C600_FIXED_BUSINESS_LAYERS for item in request.services):
             resources.append((request.tcont_id, request.tcont_profile, request.gemport_id))
 
         for item in request.services:
-            layer = C600_FIXED_BUSINESS_LAYERS.get(item.vlan)
+            layer = C600_FIXED_BUSINESS_LAYERS.get(item.effective_network_vlan)
             if layer is None:
                 vlan_to_gemport[item.vlan] = request.gemport_id
                 vlan_to_vport[item.vlan] = request.vport_id
@@ -235,6 +240,10 @@ class ZteC600OnuDriver:
             if resource not in resources:
                 resources.append(resource)
         return resources, vlan_to_gemport, vlan_to_vport
+
+    @staticmethod
+    def _iptv_service(request: OnuProvisionRequest) -> OnuServiceMapping:
+        return next(item for item in request.services if item.effective_network_vlan == 600)
 
     @staticmethod
     def _vport_interface(request: OnuProvisionRequest, vport_id: int) -> str:
@@ -319,7 +328,8 @@ class ZteC600OnuDriver:
             f"service {item.service_id} gemport {vlan_to_gemport[item.vlan]} vlan {item.vlan}"
             for item in request.services
         )
-        commands.extend(["mvlan 600", "exit"])
+        iptv = self._iptv_service(request)
+        commands.extend([f"mvlan {iptv.vlan}", "exit"])
 
         services_by_vport: dict[int, list[OnuServiceMapping]] = {}
         for item in request.services:
@@ -327,14 +337,17 @@ class ZteC600OnuDriver:
         for vport_id, services in services_by_vport.items():
             commands.append(f"interface {self._vport_interface(request, vport_id)}")
             commands.extend(
-                f"service-port {item.service_id} user-vlan {item.vlan} vlan {item.vlan}"
+                f"service-port {item.service_id} user-vlan {item.vlan} vlan {item.effective_network_vlan}"
                 for item in services
             )
-            if any(item.vlan == 600 for item in services):
+            if any(item.effective_network_vlan == 600 for item in services):
                 commands.extend(["igmp fast-leave enable", "igmp version v2"])
+                if iptv.vlan != 600:
+                    # 只配置目标 VPort 的组播下行转换，不改整台 OLT 的全局转换表。
+                    commands.append(f"mvlan-translate 600 to {iptv.vlan}")
             commands.append("exit")
 
-        iptv_vport = self._vport_interface(request, vlan_to_vport[600])
+        iptv_vport = self._vport_interface(request, vlan_to_vport[iptv.vlan])
         commands.extend(["igmp mvlan 600", f"receive-port {iptv_vport}", "exit", "end"])
         return commands
 
@@ -370,14 +383,27 @@ class ZteC600OnuDriver:
                 )
 
         resources, vlan_to_gemport, vlan_to_vport = self._business_plan(request)
-        iptv_vport = self._vport_interface(request, vlan_to_vport[600])
+        iptv = self._iptv_service(request)
+        iptv_vport = self._vport_interface(request, vlan_to_vport[iptv.vlan])
         expected_collection_patterns = [
-            r"^\s*mvlan\s+600\s*$",
+            rf"^\s*mvlan\s+{iptv.vlan}\s*$",
             r"^\s*igmp\s+fast-leave\s+enable\s*$",
             r"^\s*igmp\s+version\s+v2\s*$",
             r"^\s*igmp\s+mvlan\s+600\s*$",
             rf"^\s*receive-port\s+{re.escape(iptv_vport)}\s*$",
         ]
+        if iptv.vlan != 600:
+            # 转换必须出现在目标 IPTV VPort，不能借用其它端口或全局规则。
+            port_block = re.search(
+                rf"^\s*interface\s+{re.escape(iptv_vport)}\s*$"
+                r"([\s\S]*?)(?=^\s*(?:interface\s+|igmp\s+mvlan\s+)|\Z)",
+                collection, re.I | re.M,
+            )
+            if not port_block or not re.search(
+                rf"^\s*mvlan-translate\s+600\s+to\s+{iptv.vlan}\s*$",
+                port_block.group(1), re.I | re.M,
+            ):
+                errors.append(f"C600 {iptv_vport} 缺少组播转换 mvlan-translate 600 to {iptv.vlan}")
         for tcont_id, profile, gemport_id in resources:
             expected_collection_patterns.extend(
                 [
@@ -401,12 +427,15 @@ class ZteC600OnuDriver:
             )
             port_pattern = (
                 rf"^\s*service-port\s+{item.service_id}\s+user-vlan\s+{item.vlan}\s+"
-                rf"vlan\s+{item.vlan}\s*$"
+                rf"vlan\s+{item.effective_network_vlan}\s*$"
             )
             if not re.search(service_pattern, collection, re.I | re.M):
                 errors.append(f"C600 缺少 service {item.service_id}/VLAN {item.vlan}")
             if not re.search(port_pattern, collection, re.I | re.M):
-                errors.append(f"C600 缺少 service-port {item.service_id}/VLAN {item.vlan}")
+                errors.append(
+                    f"C600 缺少 service-port {item.service_id}/VLAN {item.vlan}"
+                    f"（ONU侧 {item.vlan} → 网络侧 {item.effective_network_vlan}）"
+                )
 
         runtime_ports = self.parse_service_port_details(values[1] if len(values) > 1 else "")
         for item in request.services:
@@ -445,8 +474,11 @@ class ZteC600OnuDriver:
 
         mvlan_output = values[3] if len(values) > 3 else ""
         match = re.search(r"Multicast VLAN:\s*(\d+)", clean_terminal_text(mvlan_output), re.I)
-        if not match or int(match.group(1)) != 600:
-            errors.append("C600 组播 VLAN 600 验证失败")
+        if not match or int(match.group(1)) != iptv.vlan:
+            errors.append(
+                "C600 组播 VLAN 600 验证失败" if iptv.vlan == 600
+                else f"C600 组播 VLAN {iptv.vlan} 验证失败（网络侧 MVLAN 600）"
+            )
         return errors
 
     def build_readiness_command(self, request: OnuProvisionRequest) -> str:
@@ -596,7 +628,7 @@ class ZteC600OnuDriver:
         return bool(C600_EMPTY_ID_RE.search(baseinfo_output or ""))
 
 
-def parse_service_mappings(text: str):
+def parse_service_mappings(text: str, *, allow_translation: bool = False):
     from src.models.onu_registration_models import OnuServiceMapping
 
     mappings: list[OnuServiceMapping] = []
@@ -604,10 +636,15 @@ def parse_service_mappings(text: str):
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
-        match = re.fullmatch(r"(\d+)\s*[,=:]\s*(\d+)", line)
+        pattern = r"(\d+)\s*[,=:]\s*(\d+)"
+        if allow_translation:
+            pattern += r"(?:\s*,\s*(\d+))?"
+        match = re.fullmatch(pattern, line)
         if not match:
-            raise ValueError(f"业务映射第 {line_number} 行格式错误，应为 ServiceID,VLAN")
-        mappings.append(OnuServiceMapping(int(match.group(1)), int(match.group(2))))
+            expected = "ServiceID,ONU侧VLAN[,网络侧VLAN]" if allow_translation else "ServiceID,VLAN"
+            raise ValueError(f"业务映射第 {line_number} 行格式错误，应为 {expected}")
+        network_vlan = int(match.group(3)) if allow_translation and match.group(3) else None
+        mappings.append(OnuServiceMapping(int(match.group(1)), int(match.group(2)), network_vlan))
     return mappings
 
 

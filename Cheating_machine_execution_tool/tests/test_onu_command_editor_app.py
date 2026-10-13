@@ -41,12 +41,15 @@ class OnuCommandEditorAppTests(unittest.TestCase):
 
     @patch("line_check_assistant.app.threading.Thread")
     @patch("line_check_assistant.app.messagebox.askyesno")
-    def test_confirmation_and_worker_share_edited_snapshot_even_if_editor_changes(self, confirm, thread):
+    def test_confirmation_and_worker_share_generated_snapshot_even_if_preview_changes(self, confirm, thread):
         context = self.context()
         base = context._build_onu_provision_requests.return_value[0]
-        updated = replace(base, onu_type="CUSTOM", services=(OnuServiceMapping(1, 171), OnuServiceMapping(6, 600)))
-        edited = OnuCommandEditService().prepare(base, "\n".join(ZteC600OnuDriver().build_provision_commands(updated)))
-        plans = (edited, context.onu_command_editor.capture_plans.return_value[1])
+        updated = replace(base, onu_type="CUSTOM", services=(OnuServiceMapping(1, 111, 171), OnuServiceMapping(6, 600)))
+        generated = OnuCommandEditService().build_default(updated)
+        requests = [updated, context._build_onu_provision_requests.return_value[1]]
+        context._build_onu_provision_requests.return_value = requests
+        context.onu_command_editor.requests = tuple(requests)
+        plans = (generated, context.onu_command_editor.capture_plans.return_value[1])
         context.onu_command_editor.capture_plans.return_value = plans
 
         def approve(*_args, **_kwargs):
@@ -57,9 +60,9 @@ class OnuCommandEditorAppTests(unittest.TestCase):
         self.assertTrue(LineCheckAssistant._on_onu_register_selected_clicked(context))
         self.assertIs(thread.call_args.kwargs["args"][5], plans)
         message = confirm.call_args.args[1]
-        self.assertIn("已编辑", message)
+        self.assertIn("生成命令", message)
         self.assertIn("CUSTOM", message)
-        self.assertIn("1/171", message)
+        self.assertIn("ONU VLAN111 ↔ 网络 VLAN171", message)
         self.assertIn(f"共 {sum(len(plan.commands) for plan in plans)} 条", message)
         self.assertEqual(base.onu_type, "NP7287XGS")
         context._build_onu_provision_requests.assert_called_once()
@@ -67,22 +70,22 @@ class OnuCommandEditorAppTests(unittest.TestCase):
     @patch("line_check_assistant.app.threading.Thread")
     @patch("line_check_assistant.app.messagebox.askyesno")
     @patch("line_check_assistant.app.messagebox.showwarning")
-    def test_pending_edits_block_confirmation_and_worker(self, warning, confirm, thread):
+    def test_invalid_preview_blocks_confirmation_and_worker(self, warning, confirm, thread):
         context = self.context()
         context.onu_preview_ready = False
         self.assertFalse(LineCheckAssistant._on_onu_register_selected_clicked(context))
-        self.assertIn("校验编辑", warning.call_args.args[1])
+        self.assertIn("重新生成命令预览", warning.call_args.args[1])
         confirm.assert_not_called()
         thread.assert_not_called()
 
     @patch("line_check_assistant.app.threading.Thread")
     @patch("line_check_assistant.app.messagebox.askyesno")
     @patch("line_check_assistant.app.messagebox.showwarning")
-    def test_capture_rejects_edit_before_modified_event_is_dispatched(self, warning, confirm, thread):
+    def test_capture_rejects_unexpected_preview_change(self, warning, confirm, thread):
         context = self.context()
-        context.onu_command_editor.capture_plans.side_effect = ValueError("编辑内容尚未校验")
+        context.onu_command_editor.capture_plans.side_effect = ValueError("命令预览与生成快照不一致")
         self.assertFalse(LineCheckAssistant._on_onu_register_selected_clicked(context))
-        self.assertIn("尚未校验", warning.call_args.args[1])
+        self.assertIn("快照不一致", warning.call_args.args[1])
         confirm.assert_not_called()
         thread.assert_not_called()
 
@@ -158,6 +161,22 @@ class OnuCommandEditorAppTests(unittest.TestCase):
         context._invalidate_onu_preview = Mock()
         original = context._build_onu_provision_requests.return_value[0]
         context._build_onu_provision_requests.return_value[0] = replace(original, onu_type="CHANGED")
+        self.assertFalse(LineCheckAssistant._on_onu_register_selected_clicked(context))
+        context._invalidate_onu_preview.assert_called_once()
+        self.assertIn("重新生成", warning.call_args.args[1])
+        confirm.assert_not_called()
+        thread.assert_not_called()
+
+    @patch("line_check_assistant.app.threading.Thread")
+    @patch("line_check_assistant.app.messagebox.askyesno")
+    @patch("line_check_assistant.app.messagebox.showwarning")
+    def test_network_vlan_change_before_text_event_invalidates_snapshot(self, warning, confirm, thread):
+        context = self.context()
+        context._invalidate_onu_preview = Mock()
+        original = context._build_onu_provision_requests.return_value[0]
+        context._build_onu_provision_requests.return_value[0] = replace(
+            original, services=(OnuServiceMapping(1, 170, 171), OnuServiceMapping(6, 600)),
+        )
         self.assertFalse(LineCheckAssistant._on_onu_register_selected_clicked(context))
         context._invalidate_onu_preview.assert_called_once()
         self.assertIn("重新生成", warning.call_args.args[1])

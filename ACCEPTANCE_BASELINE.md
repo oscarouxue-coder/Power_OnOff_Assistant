@@ -241,7 +241,7 @@ python scripts\verify_baseline.py
 
 ### 2.10 ZTE OLT ONU 注册
 
-- **状态**：已确认验收（C600四VPort OLT配置、MAC学习、write与清理，2026-08-24；C300默认SD-41六业务模板单台注册/回读，2026-08-25；Windows四步窗口布局、原生勾号及C300/C600文案和切换，2026-08-29；C300/C600专项、ONU终端业务与Windows专项，2026-08-30；C300/C600 ONU类型模板、DBA模板查询结果去除标签显示，2026-09-03；本次C600两台手填3/4与确认执行ID一致的修复，2026-09-06）/ 已实现未验收（C300/C600多台勾选、批量ID分配、整批预检、逐台下发回读和全流程等待结果的其余场景，2026-09-05；ID修复的其它型号与异常组合，2026-09-06；确认页逐ONU命令编辑、校验/恢复、失效清理、确认快照执行及编辑参数回读，2026-10-12）
+- **状态**：已确认验收（C600四VPort OLT配置、MAC学习、write与清理，2026-08-24；C300默认SD-41六业务模板单台注册/回读，2026-08-25；Windows四步窗口布局、原生勾号及C300/C600文案和切换，2026-08-29；C300/C600专项、ONU终端业务与Windows专项，2026-08-30；C300/C600 ONU类型模板、DBA模板查询结果去除标签显示，2026-09-03；本次C600两台手填3/4与确认执行ID一致的修复，2026-09-06）/ 已实现未验收（C300/C600多台勾选、批量ID分配、整批预检、逐台下发回读和全流程等待结果的其余场景，2026-09-05；ID修复的其它型号与异常组合，2026-09-06；C600普通数据及335/600/50的VLAN转换、目标VPort组播转换、两/三列持久化与只读确认页，2026-10-13；确认快照执行及参数回读新增范围）
 - **已确认验收（2026-09-06）**：项目负责人确认本次C600批量ONU目标ID修复通过：两台分别填写3、4，确认执行保持3、4；仅记录本次问题范围，其余批量组合保持待确认。
 - **本轮实现（2026-08-25）**：C300 查询页增加机框/槽位/PON，仍执行全局未注册查询并在客户端按目标 PON 过滤；配置页支持 ONU ID、类型模板、T-CONT/DBA和六项 ServiceID/VLAN 参数，Service ID 派生同号 GEM/VPort。默认参数保持旧六业务模板，C300 自定义参数路径仅完成代码与单元测试，未进行真实写入验收。
 - **核心行为**：
@@ -249,14 +249,14 @@ python scripts\verify_baseline.py
   - OLT型号、OLT IP、源IP、用户名、密码、登录测试和连接状态必须固定显示在分页上方；C600机框/槽位/PON必须位于第一步查询页，不得要求操作员先切到配置页再返回查询
   - C300与C600发现结果使用Windows原生`Checkbutton`多选，并保留“全选/清除”；本批仅包含操作员明确勾选的 SN，不能按查询返回顺序猜测目标。预览必须逐台显示SN、PON和最终ONU ID。单台时保留手填ONU ID；逐台配置时按目标ONU保留各自手填ID，切换目标不得被共用输入框最后值覆盖。手填ID优先于发现建议ID，同PON手填重复ID必须拒绝，不能自动改号；未单独填写的目标优先使用发现建议ID，其余自配置起始ID递增且避开本批手填/已分配ID，实际OLT占用仍由下发前预检确认。重新查询须清空本次目标ID输入。C300原始未注册输出只有位置、SN和状态，列表须额外以`注册类型:SD-41（配置模板）`、`PON类型:GPON（根据接口推断）`显示已知配置与接口推断，不得伪装成OLT实际探测的型号或最大速率；C600未注册查询结果中的`型号`必须保持设备发现语义；配置字段必须标为`ONU 类型模板`，默认从发现型号带入但允许按OLT兼容模板修改；已注册/清理候选中的`onu type`必须显示为`类型模板`。第二步按OLT型号显示C300固定模板/危险删除开关或C600完整业务参数；第三步同时显示执行摘要、完整命令预览和唯一的“开始注册”主按钮
   - 未选择ONU时不得进入配置或生成预览；OLT型号、连接、ONU选择或业务参数变化后旧预览必须失效并禁用注册，重新生成预览后才能执行；查询/执行状态、停止和关闭必须在三个步骤下持续可见
-  - 确认页命令编辑按SN/PON/ONU ID区分目标，切换保留逐台修改；修改后必须待校验并禁用开始注册，全部目标校验成功后才允许最终确认，执行期间禁止编辑。恢复已修改内容须确认；连接、目标或第二步参数变化清空本批编辑并使预览失效。编辑仅本批有效，不保存模板、不回写第二步或INI
-  - 编辑校验必须固定目标SN/PON/ONU ID，解析原型号命令体系并构造更新后的请求，再以原driver验证和完整命令顺序比对拒绝未知、缺失、重复、错上下文、重排和残缺关联；不自动补齐，错误定位目标及原文本行号，允许空行和整行`#`注释。C300保持六项业务名称、GEM/VPort派生关系和MVLAN 600；C600保持语音/组播/TR069固定分层、VLAN 600及IGMP关联，业务增删必须同步完整关联资源命令
-  - 最终确认必须显示逐台编辑状态、实际命令数和业务摘要；后台只使用确认时不可变命令计划，实际下发编辑后的合法命令，并按该计划的新请求完整回读。C300授权清理后的重试必须复用同一快照；整批只读预检先于配置、首错停止后续及停止响应不得改变。`write`独立显示并走原授权保存流程，不得混入编辑内容，也不得通过编辑器插入删除或重启命令
+  - 确认页只读命令预览允许选择复制，不提供目标下拉框、目标数/命令数/已校验状态行或编辑/校验/恢复按钮；单台显示完整命令，多台按执行顺序连续分段并以SN/PON/ONU ID标识，分段标题只展示、不下发。业务参数统一在第二步修改。连接、目标或业务参数变化必须使预览失效并禁用注册；即使Text修改事件尚未派发，当前请求与生成快照不一致也须在确认前拦截。
+  - 内部命令计划校验仍固定SN/PON/ONU ID，按型号解析请求并以driver完整命令顺序比对，拒绝未知、缺失、重复、错上下文、重排和残缺关联。C600两列保持同VLAN，三列分别表示ONU侧和网络侧；两侧VLAN各自唯一且在1–4094，Service ID唯一。普通数据及335/600/50均支持转换，资源分层按网络侧VLAN决定；C300不开放三列转换，六项业务及原有命令保持。
+  - 最终确认必须显示逐台身份、实际命令数及两侧VLAN摘要；后台只使用确认时不可变生成计划下发，并按同一请求完整回读。C300授权清理后的重试复用同一快照；整批预检先于配置、首错阻止后续及停止响应保持。write独立显示并走原授权保存流程，不混入预览配置命令。
   - 顶层标题、说明、连接区、Notebook、危险提示、状态栏和底部按钮必须使用固定行布局，只允许Notebook行伸缩；命令预览不得使用Tk Text默认大请求高度，普通`1000x900`窗口下危险提示、状态栏和“关闭/停止”必须完整显示，不得要求最大化
   - 统一service编排“登录 → 未注册查询 → 全批下发前预检 → 按预览顺序逐台配置 → 每台最长60秒可停止上线轮询 → 每台只读验证 → 结果”。预检阶段任一ID/SN/PON冲突时不得下发任何配置；配置阶段一台失败或停止时不得启动后续目标，不自动回滚已成功目标。C300与C600命令生成、接口格式和解析器由两个独立driver负责，不允许跨型号替换字符串；配置记录存在但未进入working不得误报成功
   - C300：全局`show gpon onu uncfg`查询，使用`gpon-olt_` / `gpon-onu_`、SD-41固定业务模板、`pon-onu-mng`和`mvlan 600`；下发前再次执行实机确认有效的全局`show gpon onu uncfg`并按每个目标ONU接口与SN精确确认仍未注册、以`show gpon onu baseinfo ... <ONU ID>`确认ID空闲、以`show gpon onu by sn <SN>`执行整台OLT的SN查重，不得使用实机返回`Invalid parameter`的`show gpon onu uncfg gpon-olt_<PON>`格式
   - C300下发后必须按真实C300格式核对：`baseinfo/state/detail-info`中的接口、类型模板、SN、ready/working/config success/SN Bind；`tcont/gemport/vport`中的1G模板、六个GEM active及1:1映射；`service-port/remote-onu service/remote-onu mvlan`中的六组固定业务、OK/YES及`mvlan 600`。空ID返回`ONU data is null`、空SN返回`No related information to show`时视为可继续，不得误判CLI失败
-  - C600：按PON执行`show pon onu uncfg gpon_olt-... sn model speed-mode`，使用`gpon_olt-` / `gpon_onu-` / `vport-`及可编辑ServiceID/VLAN映射；发现结果的Speed Mode不得直接转换成必下发的`real-speed`，选中ONU后默认使用`auto`并省略该命令。上网170/171/172/173/151/150及未定义普通数据VLAN使用可编辑主资源（默认T-CONT 1/GEM 1/VPort 1/`WT-10G`），语音335固定T-CONT 2/GEM 2/VPort 2/`DBA_FONE`，组播600固定T-CONT 3/GEM 3/VPort 3/`DBA_IPTV`，TR069 50固定T-CONT 4/GEM 4/VPort 4/`DBA_TR069`；gemport模式下GEM与VPort必须1:1，只创建实际出现的业务资源，并拒绝上网ID与固定资源冲突。映射必须包含VLAN 600并下发ONU侧`mvlan 600`及OLT侧`igmp fast-leave enable`、`igmp version v2`、`igmp mvlan 600 receive-port`。下发前精确拒绝ID/SN冲突；下发后必须解析collection、换行service-port、detail-info及MVLAN四组输出，逐项核对四层T-CONT/GEM/VPort、9组业务实际VPort与OK/YES、IGMP receive-port、working/config success和`Multicast VLAN: 600`
+  - C600：按PON执行`show pon onu uncfg gpon_olt-... sn model speed-mode`，使用`gpon_olt-` / `gpon_onu-` / `vport-`及可配置ServiceID/ONU侧VLAN/网络侧VLAN映射；发现结果的Speed Mode不得直接转换成必下发的`real-speed`，选中ONU后默认使用`auto`并省略该命令。上网170/171/172/173/151/150及未定义普通数据VLAN使用可编辑主资源（默认T-CONT 1/GEM 1/VPort 1/`WT-10G`），语音335固定T-CONT 2/GEM 2/VPort 2/`DBA_FONE`，组播600固定T-CONT 3/GEM 3/VPort 3/`DBA_IPTV`，TR069 50固定T-CONT 4/GEM 4/VPort 4/`DBA_TR069`；gemport模式下GEM与VPort必须1:1，只创建实际出现的业务资源，并拒绝上网ID与固定资源冲突。映射必须包含网络侧VLAN600并下发ONU侧`mvlan <该业务ONU侧VLAN>`及OLT侧`igmp fast-leave enable`、`igmp version v2`、`igmp mvlan 600 receive-port`。下发前精确拒绝ID/SN冲突；下发后必须解析collection、换行service-port、detail-info及MVLAN四组输出，逐项核对四层T-CONT/GEM/VPort、9组业务实际VPort与OK/YES、IGMP receive-port、working/config success和`Multicast VLAN: 600` ONU侧VLAN不同于600时，仅目标IPTV VPort增加`mvlan-translate 600 to <ONU侧VLAN>`，禁止改全局转换表；回读须核对两侧VLAN、ONU侧MVLAN及目标VPort内转换规则。旧同VLAN配置生成命令保持原样。
   - 两种型号遇到第一条CLI错误即停止并尝试退出配置模式；主日志必须记录型号、关键阶段、实际`TX OLT`命令、返回、成功、停止或失败
   - Telnet必须使用操作员填写的源IP调用`source_address=(bind_ip, 0)`锁定Windows出口；源IP为空/格式错误/不可绑定必须失败，不得回退系统默认网卡。C300与C600分别保存OLT IP、源IP、用户名和密码，型号切换不得串用另一型号连接资料；已知默认路径为C300 `172.18.18.151`经`172.18.18.40`、C600 `172.18.18.152`经`172.33.5.35`
   - C300离线ONU删除重试是默认关闭且不持久化的独立危险选项；启用后必须先只读查询目标PON候选并由操作员明确选择一台，配置失败后再次确认其仍为同PON离线候选且接口/SN与查询时一致，才允许只生成一条目标`no onu <ID>`，禁止批量或跨PON删除；C600任何场景都不得自动删除或回滚ONU
@@ -275,8 +275,8 @@ python scripts\verify_baseline.py
 - **项目负责人验收确认（2026-09-03）**：C300/C600 的 ONU 类型模板和 DBA 模板查询下拉项均已确认显示为“模板名（值）”；“PON类型：”“速率：”标签不再显示。此结论仅覆盖该显示调整，不覆盖同轮新增的整台 OLT 未注册 ONU 查询。
 - **禁止破坏**：C300/C600命令体系与连接资料隔离；源IP锁定；整批预检必须先于首条配置命令；一台失败停止后续；上线轮询可停止；危险删除默认关闭且不持久化、只允许明确选择的一台且批量禁用；C600不自动删除或回滚，批量不自动write，write必须默认关闭且只在本次明确选择、完整验证成功后执行；窗口当前默认和最小尺寸`1000x900`；普通窗口底部区域不被裁切；本机凭据和`onu_registration.ini`不入Git
 - **待确认**：C300/C600多台勾选下的ID分配、整批冲突预检、跨PON批次、逐台上线/回读、失败或停止后的后续阻止，以及全流程“预选→确认→等待最终结果→下一项”需要分别在Windows源码版和真实OLT上确认；既有单台现场验收不自动覆盖这些新增场景。
-- **待确认（2026-10-12，命令编辑）**：分别在Windows源码版及真实C300/C600核对目标切换与修改隔离、校验行号、恢复确认、修改后禁注册、参数变化清空及运行中禁编辑；确认实际TX与确认快照一致、回读使用新参数，C600完整业务组增删与固定分层生效、C300授权重试复用同一快照，以及批量失败/停止和独立write边界。非法编辑须在连接前拒绝；本轮自动化和源码检查不扩大既有现场结论。
-- **对应测试**：`tests/test_onu_command_edit_service.py`（双型号命令解析、合法编辑、完整业务组增删、身份/顺序/上下文与危险命令拒绝、原文行号及不可变计划）、`tests/test_onu_command_editor.py`（逐目标编辑隔离、待校验/恢复/失效、未派发修改事件拦截、错误行定位、确认快照、运行锁定与独立write说明）、`tests/test_onu_batch_registration_service.py`（批量ID分配与重复SN拒绝）、`tests/test_onu_registration_service.py`（双driver语法、发现型号/类型模板显示语义、批量预检先于下发、C300边界、C600四层T-CONT/GEM/VPort、GEM/VPort冲突、错误VPort及缺失IGMP拒绝、精确ID/SN预检、VLAN/MVLAN 600、上线与四组解析、显式write、已注册查询/删除）、`tests/test_app.py`（统一UI、ONU类型模板字段及说明、多选、四VPort提示、分型号连接、ONU原生勾选框及全源码禁止`ttk.Checkbutton`、C600 write默认不执行与选中后启动独立保存、已注册管理危险确认）、`tests/test_pipeline_orchestrator.py`（ONU全流程完成等待桥接）、`tests/test_onu_registration_store.py`、`tests/test_network_ops.py`（历史C300兼容边界）
+- **待确认（2026-10-13，VLAN转换与只读预览）**：Windows源码版复验两/三列输入与持久化、逐目标只读选择复制、编辑按钮移除、参数变化失效、确认快照与执行期间锁定；真实C600核对111→171、语音/管理转换DHCP和双向通信，以及IPTV转换时目标VPort的mvlan-translate版本兼容性、ONU侧MVLAN、IGMP加入/离开、持续播放及切台。CLI不支持时应立即失败且不write；原C300/C600、批量ID和保存验收仅保留原范围，未以自动化扩大。
+- **对应测试**：`tests/test_onu_command_edit_service.py`（双型号命令解析、合法编辑、完整业务组增删、身份/顺序/上下文与危险命令拒绝、原文行号及不可变计划）、`tests/test_onu_command_editor.py`（逐目标只读预览、编辑入口移除、失效、展示意外改写拦截、确认快照、运行锁定与独立write说明）、`tests/test_onu_batch_registration_service.py`（批量ID分配与重复SN拒绝）、`tests/test_onu_registration_service.py`（双driver语法、发现型号/类型模板显示语义、批量预检先于下发、C300边界、C600四层T-CONT/GEM/VPort、GEM/VPort冲突、错误VPort及缺失IGMP拒绝、精确ID/SN预检、VLAN/MVLAN 600、上线与四组解析、显式write、已注册查询/删除）、`tests/test_app.py`（统一UI、ONU类型模板字段及说明、多选、四VPort提示、分型号连接、ONU原生勾选框及全源码禁止`ttk.Checkbutton`、C600 write默认不执行与选中后启动独立保存、已注册管理危险确认）、`tests/test_pipeline_orchestrator.py`（ONU全流程完成等待桥接）、`tests/test_onu_registration_store.py`、`tests/test_network_ops.py`（历史C300兼容边界）；`tests/test_onu_vlan_translation.py`（两/三列兼容、持久化/UI采集、按网络侧固定分层、目标VPort组播转换、快照/模拟执行/回读差异与CLI失败）。
 
 ### 2.11 输入持久化与启动 / 打包
 
@@ -439,7 +439,7 @@ python scripts\verify_baseline.py
 
 - **2026-10-12 正常轮次颜色恢复（§2.12，已实现未验收）**：复验失败/重试后出现“第3次测试时正常”时小卡恢复绿色 `3/5 正常`、下一轮/续跑运行态、再次失败及最终完成；核对其它通道、失败历史与最终业务结论保持。源码自动化通过不代表 Windows 人工界面或真实样机验收。
 
-- **2026-10-12 ONU确认页命令编辑（§2.10，已实现未验收）**：Windows源码版需核对逐ONU编辑保留、待校验/恢复/失效清理、原文行号、确认摘要及执行期间禁编辑；真实C300/C600需核对编辑快照实际下发、按新参数回读、完整业务组增删、固定身份和业务分层、失败/停止、C300授权重试及独立write边界。编辑仅本批有效，不保存或回写INI；原单台、批量ID修复及保存验收结论保持原范围，不由自动化扩展。
+- **2026-10-13 C600 VLAN转换与只读确认页（§2.10，已实现未验收）**：按负责人要求支持普通数据及335/600/50一对一转换，确认页只读、移除编辑按钮。Windows源码版需复验输入、保存重开、选择复制、失效与确认快照；真实C600需验证WAN地址/双向业务，及网络MVLAN600到ONU用户VLAN的目标VPort转换命令兼容性和IPTV持续播放/切台。保留原C300/固定业务/批量ID/独立write验收范围，新增转换未获现场结论。
 
 - **2026-10-12 失败通道右键续跑（§2.12，已实现未验收）**：需现场验证3/5从第4轮继续、其它通道继续运行、结束后单通道恢复、再次失败、停止、配置变化拦截，以及电源实际只操作目标通道且不发送全通道断电帧；确认历史、结果文件和原全流程结论保留。自动化使用模拟设备/串口，不构成真实样机验收。
 

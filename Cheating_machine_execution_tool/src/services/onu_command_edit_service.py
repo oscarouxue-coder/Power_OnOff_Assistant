@@ -172,6 +172,17 @@ class OnuCommandEditService:
 
     def _parse_c600(self, base, lines, onu_type):
         service_rows = []
+        port_rows = {}
+        for line in lines:
+            if not line.normalized.startswith("service-port "):
+                continue
+            port = re.fullmatch(r"service-port ([0-9]+) user-vlan ([0-9]+) vlan ([0-9]+)", line.normalized)
+            if port is None:
+                raise OnuCommandEditError(base, line.number, "C600 service-port 格式无效")
+            service_id = int(port.group(1))
+            if service_id in port_rows:
+                raise OnuCommandEditError(base, line.number, f"service-port {service_id} 重复")
+            port_rows[service_id] = (line, port)
         for line in lines:
             if not line.normalized.startswith("service "):
                 continue
@@ -181,6 +192,15 @@ class OnuCommandEditService:
             service_rows.append((line, match))
         if not service_rows:
             raise OnuCommandEditError(base, lines[-1].number, "至少需要一条 ServiceID/VLAN 映射")
+        services = []
+        for line, service in service_rows:
+            service_id, user_vlan = int(service.group(1)), int(service.group(3))
+            if service_id not in port_rows:
+                raise OnuCommandEditError(base, line.number, f"缺少 service-port {service_id}")
+            port_line, port = port_rows[service_id]
+            if int(port.group(2)) != user_vlan:
+                raise OnuCommandEditError(base, port_line.number, f"service-port {service_id} user-vlan 必须与 ONU service VLAN {user_vlan} 一致")
+            services.append(OnuServiceMapping(service_id, user_vlan, int(port.group(3))))
         speed_rows = [line for line in lines if line.normalized.startswith("real-speed ")]
         if len(speed_rows) > 1:
             raise OnuCommandEditError(base, speed_rows[1].number, "实际速率命令重复")
@@ -198,7 +218,8 @@ class OnuCommandEditService:
         tcont_id, tcont_profile = base.tcont_id, base.tcont_profile
         gemport_id, vport_id = base.gemport_id, base.vport_id
         data_row = next(
-            ((line, match) for line, match in service_rows if int(match.group(3)) not in C600_FIXED_BUSINESS_LAYERS),
+            ((line, match) for line, match in service_rows
+             if int(port_rows[int(match.group(1))][1].group(3)) not in C600_FIXED_BUSINESS_LAYERS),
             None,
         )
         if data_row:
@@ -232,5 +253,5 @@ class OnuCommandEditService:
             tcont_profile=tcont_profile,
             gemport_id=gemport_id,
             vport_id=vport_id,
-            services=tuple(OnuServiceMapping(int(match.group(1)), int(match.group(3))) for _line, match in service_rows),
+            services=tuple(services),
         )

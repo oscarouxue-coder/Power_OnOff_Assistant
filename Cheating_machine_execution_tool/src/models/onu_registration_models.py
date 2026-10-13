@@ -65,6 +65,16 @@ class OnuDiscoveryScope:
 class OnuServiceMapping:
     service_id: int
     vlan: int
+    network_vlan: int | None = None
+
+    def __post_init__(self) -> None:
+        # 同 VLAN 的两列/三列输入使用相同表示，保留旧构造与 replace 语义。
+        if self.network_vlan == self.vlan:
+            object.__setattr__(self, "network_vlan", None)
+
+    @property
+    def effective_network_vlan(self) -> int:
+        return self.vlan if self.network_vlan is None else self.network_vlan
 
 
 @dataclass(frozen=True)

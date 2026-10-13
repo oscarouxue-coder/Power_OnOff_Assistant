@@ -124,20 +124,10 @@ def fake_editor():
     editor.log = Mock()
     editor.service = OnuCommandEditService()
     editor.requests = ()
-    editor.originals = ()
-    editor.drafts = []
     editor.plans = None
-    editor.validated_texts = ()
-    editor.current_index = 0
     editor.busy = False
-    editor.updating = False
-    editor.target_var = FakeVariable()
-    editor.status_var = FakeVariable()
     editor.write_note_var = FakeVariable()
-    editor.target_combo = FakeCombo()
     editor.text = FakeText()
-    editor.validate_button = FakeWidget()
-    editor.restore_button = FakeWidget()
     return editor
 
 
@@ -147,28 +137,15 @@ class OnuCommandEditorTests(unittest.TestCase):
         self.requests = (request_for(number=1), request_for(number=2))
         self.editor.load_requests(self.requests, write_note="write：关闭，验证后另行保存")
         self.editor.on_ready_changed.reset_mock()
-        self.editor.log.reset_mock()
-
-    def replace_text(self, value, *, dispatch=True):
-        self.editor.text.value = value
-        self.editor.text.modified = True
-        if dispatch:
-            self.editor._on_modified()
-
-    def switch(self, index):
-        self.editor.target_combo.current(index)
-        self.editor._switch_target()
 
     def test_load_shows_target_identity_and_separates_write_from_commands(self):
-        labels = self.editor.target_combo.options["values"]
-        for request, label in zip(self.requests, labels):
-            self.assertIn(request.onu.serial_number, label)
-            self.assertIn(request.onu.pon_interface, label)
-            self.assertIn(f"ONU ID {request.onu_id}", label)
-        self.assertEqual(self.editor.text.value, command_text(self.requests[0]))
+        for request in self.requests:
+            self.assertIn(request.onu.serial_number, self.editor.text.value)
+            self.assertIn(request.onu.pon_interface, self.editor.text.value)
+            self.assertIn(f"ONU ID {request.onu_id}", self.editor.text.value)
+            self.assertIn(command_text(request), self.editor.text.value)
         self.assertNotIn("write", self.editor.text.value.splitlines())
         self.assertIn("write：关闭", self.editor.write_note_var.get())
-        self.assertIn("校验通过", self.editor.status_var.get())
         self.assertEqual(len(self.editor.capture_plans()), 2)
 
     def test_unedited_load_preserves_generated_commands_for_both_families(self):
@@ -182,200 +159,87 @@ class OnuCommandEditorTests(unittest.TestCase):
                 self.assertEqual(plan.request, request)
                 self.assertFalse(plan.edited)
 
-    def test_modified_draft_disables_start_and_reports_pending_without_network(self):
-        self.replace_text(command_text(replace(self.requests[0], onu_type="CUSTOM-ONU")))
-        self.assertIsNone(self.editor.plans)
-        self.assertIn("待校验", self.editor.status_var.get())
-        self.editor.on_ready_changed.assert_called_with(False)
-        self.assertIn("尚未连接 OLT", self.editor.log.call_args.args[0])
+    def test_all_targets_are_visible_in_order_without_selector(self):
+        plans = self.editor.capture_plans()
+        self.assertLess(
+            self.editor.text.value.index(self.requests[0].onu.serial_number),
+            self.editor.text.value.index(self.requests[1].onu.serial_number),
+        )
+        for request in self.requests:
+            self.assertIn(command_text(request), self.editor.text.value)
+        for plan in plans:
+            self.assertFalse(any(command.startswith("# ") for command in plan.commands))
+        self.assertIs(self.editor.capture_plans(), plans)
+        self.assertEqual(self.editor.text.options["state"], "disabled")
+        self.assertFalse(hasattr(self.editor, "target_combo"))
+        self.assertFalse(hasattr(self.editor, "status_var"))
 
-    def test_switching_targets_preserves_separate_edits(self):
-        first = command_text(replace(self.requests[0], onu_type="FIRST-TYPE"))
-        second = command_text(replace(self.requests[1], onu_type="SECOND-TYPE"))
-        self.replace_text(first)
-        self.switch(1)
-        self.replace_text(second)
-        self.switch(0)
-        self.assertEqual(self.editor.text.value, first)
-        self.assertEqual(self.editor.drafts, [first, second])
-        self.switch(1)
-        self.assertEqual(self.editor.text.value, second)
-        self.assertTrue(self.editor.validate())
-        self.assertEqual([plan.request.onu_type for plan in self.editor.capture_plans()], ["FIRST-TYPE", "SECOND-TYPE"])
-
-    def test_switch_detects_changes_before_modified_event_is_dispatched(self):
-        first = command_text(replace(self.requests[0], onu_type="UNPROCESSED"))
-        self.replace_text(first, dispatch=False)
-        self.switch(1)
-        self.assertEqual(self.editor.drafts[0], first)
-        self.assertIsNone(self.editor.plans)
-        self.assertIn("待校验", self.editor.status_var.get())
-        self.editor.on_ready_changed.assert_called_with(False)
-
-    def test_capture_reads_current_text_before_modified_event_is_dispatched(self):
-        cached = self.editor.capture_plans()
-        changed = command_text(replace(self.requests[0], onu_type="UNPROCESSED"))
-        self.replace_text(changed, dispatch=False)
-        with self.assertRaisesRegex(ValueError, "尚未校验"):
+    def test_capture_rejects_unexpected_display_change_without_executing_text(self):
+        plans = self.editor.capture_plans()
+        self.editor.text.value += "\nwrite"
+        with self.assertRaisesRegex(ValueError, "快照不一致"):
             self.editor.capture_plans()
-        self.assertEqual(self.editor.drafts[0], changed)
+        self.editor.on_ready_changed.assert_called_with(False)
         self.assertIsNone(self.editor.plans)
-        self.editor.on_ready_changed.assert_called_with(False)
-        self.assertEqual(cached[0].request.onu_type, self.requests[0].onu_type)
-
-    def test_validation_selects_invalid_target_and_original_text_line(self):
-        self.switch(1)
-        invalid = "# original line numbers\n\n" + self.editor.originals[1] + "\nwrite"
-        self.replace_text(invalid)
-        self.switch(0)
-        self.assertFalse(self.editor.validate())
-        line = len(invalid.splitlines())
-        self.assertEqual(self.editor.current_index, 1)
-        self.assertEqual(self.editor.target_combo.current(), 1)
-        self.assertEqual(self.editor.text.value, invalid)
-        self.assertEqual(self.editor.text.selection, ("sel", f"{line}.0", f"{line}.end"))
-        self.assertEqual(self.editor.text.visible_index, f"{line}.0")
-        self.assertTrue(self.editor.text.focused)
-        self.assertIn(self.requests[1].onu.serial_number, self.editor.status_var.get())
-        self.assertIn(f"第 {line} 行", self.editor.status_var.get())
-        self.editor.on_ready_changed.assert_called_with(False)
+        self.assertNotIn("write", plans[0].commands)
         self.assertIn("未连接 OLT", self.editor.log.call_args.args[0])
 
-    def test_validation_returns_immutable_actual_plan_and_new_expectations(self):
-        updated = replace(
-            self.requests[0], onu_type="UPDATED-TYPE", tcont_profile="NEW-10G",
-            services=(OnuServiceMapping(10, 180), OnuServiceMapping(11, 600)),
-        )
-        edited = command_text(updated)
-        self.replace_text("# preserved locally\n\n" + edited)
-        self.assertTrue(self.editor.validate())
+    def test_generated_snapshot_is_immutable(self):
         snapshot = self.editor.capture_plans()
-        self.assertIsInstance(snapshot, tuple)
-        self.assertEqual(snapshot[0].request, updated)
-        self.assertEqual(snapshot[0].commands, tuple(edited.splitlines()))
-        self.assertTrue(snapshot[0].edited)
-        self.assertFalse(snapshot[1].edited)
-        self.editor.on_ready_changed.assert_called_with(True)
-        with self.assertRaises(FrozenInstanceError):
-            snapshot[0].edited = False
         with self.assertRaises(FrozenInstanceError):
             snapshot[0].request.onu_type = "MUTATED"
         with self.assertRaises(TypeError):
             snapshot[0].commands[0] = "write"
-        self.replace_text(self.editor.originals[0])
-        self.assertEqual(snapshot[0].commands, tuple(edited.splitlines()))
-        self.assertEqual(snapshot[0].request.services, updated.services)
-        self.assertIsNone(self.editor.plans)
+        self.editor.clear()
+        self.assertEqual(snapshot[0].commands, tuple(command_text(self.requests[0]).splitlines()))
 
-    def test_restore_cancel_preserves_current_edit(self):
-        changed = command_text(replace(self.requests[0], onu_type="KEEP-ME"))
-        self.replace_text(changed)
-        with patch("src.ui.onu_command_editor.messagebox.askyesno", return_value=False) as confirm:
-            self.editor.restore()
-        confirm.assert_called_once()
-        self.assertIs(confirm.call_args.kwargs["parent"], self.editor.parent)
-        self.assertEqual(self.editor.drafts[0], changed)
-        self.assertEqual(self.editor.text.value, changed)
-        self.assertIsNone(self.editor.plans)
-        self.assertIn("取消", self.editor.log.call_args.args[0])
-
-    def test_restore_confirm_changes_only_current_target_and_revalidates(self):
-        self.replace_text(command_text(replace(self.requests[0], onu_type="FIRST-EDIT")))
-        self.switch(1)
-        second = command_text(replace(self.requests[1], onu_type="SECOND-EDIT"))
-        self.replace_text(second)
-        self.switch(0)
-        with patch("src.ui.onu_command_editor.messagebox.askyesno", return_value=True) as confirm:
-            self.editor.restore()
-        confirm.assert_called_once()
-        self.assertEqual(self.editor.drafts, [self.editor.originals[0], second])
-        plans = self.editor.capture_plans()
-        self.assertFalse(plans[0].edited)
-        self.assertTrue(plans[1].edited)
-        self.assertEqual(plans[1].request.onu_type, "SECOND-EDIT")
-        self.editor.on_ready_changed.assert_called_with(True)
-
-    def test_restore_unchanged_target_does_not_prompt(self):
-        with patch("src.ui.onu_command_editor.messagebox.askyesno") as confirm:
-            self.editor.restore()
-        confirm.assert_not_called()
-        self.assertFalse(self.editor.capture_plans()[0].edited)
-
-    def test_clear_invalidates_all_drafts_plans_and_controls(self):
-        self.replace_text(command_text(replace(self.requests[0], onu_type="OLD-EDIT")))
+    def test_clear_invalidates_plans_and_controls(self):
         self.editor.clear()
         self.assertEqual(self.editor.requests, ())
-        self.assertEqual(self.editor.originals, ())
-        self.assertEqual(self.editor.drafts, [])
-        self.assertEqual(self.editor.validated_texts, ())
         self.assertIsNone(self.editor.plans)
         self.assertEqual(self.editor.text.value, "")
-        self.assertEqual(self.editor.target_combo.options["values"], ())
-        self.assertEqual(self.editor.target_var.get(), "")
         self.assertEqual(self.editor.write_note_var.get(), "")
-        self.assertIn("重新生成", self.editor.status_var.get())
-        for widget in (self.editor.target_combo, self.editor.text, self.editor.validate_button, self.editor.restore_button):
-            self.assertEqual(widget.options["state"], "disabled")
         self.editor.on_ready_changed.assert_called_with(False)
         with self.assertRaises(ValueError):
             self.editor.capture_plans()
 
-    def test_busy_blocks_validation_restore_and_switch_and_disables_controls(self):
-        self.replace_text(command_text(replace(self.requests[0], onu_type="BUSY-EDIT")))
+    def test_text_stays_readonly_during_execution_and_after_unlock(self):
+        plans = self.editor.capture_plans()
+        preview = self.editor.text.value
         self.editor.set_busy(True)
-        drafts = list(self.editor.drafts)
-        with patch.object(self.editor.service, "prepare") as prepare, patch(
-            "src.ui.onu_command_editor.messagebox.askyesno"
-        ) as confirm:
-            self.assertFalse(self.editor.validate())
-            self.editor.restore()
-            self.switch(1)
-        prepare.assert_not_called()
-        confirm.assert_not_called()
-        self.assertEqual(self.editor.current_index, 0)
-        self.assertEqual(self.editor.drafts, drafts)
-        for widget in (self.editor.target_combo, self.editor.text, self.editor.validate_button, self.editor.restore_button):
-            self.assertEqual(widget.options["state"], "disabled")
+        self.assertEqual(self.editor.text.options["state"], "disabled")
         self.editor.set_busy(False)
-        self.assertEqual(self.editor.target_combo.options["state"], "readonly")
-        self.assertEqual(self.editor.text.options["state"], "normal")
-        self.assertTrue(self.editor.validate())
+        self.assertEqual(self.editor.text.options["state"], "disabled")
+        self.assertEqual(self.editor.text.value, preview)
+        self.assertIs(self.editor.capture_plans(), plans)
 
-    def test_reloading_after_invalidation_discards_old_batch_edits(self):
-        self.replace_text(command_text(replace(self.requests[0], onu_type="STALE")))
+    def test_reloading_after_invalidation_discards_old_batch(self):
         self.editor.clear()
         replacement = request_for(number=9)
         self.editor.load_requests((replacement,), write_note="新批次不保存")
         plan, = self.editor.capture_plans()
         self.assertEqual(plan.request, replacement)
         self.assertFalse(plan.edited)
-        self.assertNotIn("STALE", self.editor.text.value)
-        self.assertEqual(self.editor.write_note_var.get(), "新批次不保存")
+        self.assertNotIn(self.requests[0].onu.serial_number, self.editor.text.value)
 
-    def test_empty_batch_disables_editor_and_no_operations_prompt(self):
+    def test_empty_batch_disables_preview(self):
         self.editor.load_requests(())
-        self.assertFalse(self.editor.validate())
-        with patch("src.ui.onu_command_editor.messagebox.askyesno") as confirm:
-            self.editor.restore()
-        confirm.assert_not_called()
         self.editor.on_ready_changed.assert_called_with(False)
         self.assertEqual(self.editor.text.options["state"], "disabled")
-        self.assertEqual(self.editor.target_combo.options["state"], "disabled")
+        with self.assertRaises(ValueError):
+            self.editor.capture_plans()
 
-    def test_summary_uses_validated_new_business_parameters(self):
-        updated = replace(
-            self.requests[0], onu_type="NEW-TYPE", tcont_id=9, tcont_profile="NEW-DBA",
-            services=(OnuServiceMapping(10, 180), OnuServiceMapping(11, 600)),
-        )
-        plan = self.editor.service.prepare(self.requests[0], command_text(updated))
-        summary = command_plan_summary(plan)
-        for expected in (updated.onu.serial_number, updated.onu.pon_interface, "ONU ID 1", "已编辑", "NEW-TYPE", "9/NEW-DBA", "10/180", "11/600"):
+    def test_summary_displays_both_vlan_sides(self):
+        updated = replace(self.requests[0], services=(OnuServiceMapping(2, 111, 171), OnuServiceMapping(6, 112, 600)))
+        self.editor.load_requests((updated,))
+        summary = command_plan_summary(self.editor.capture_plans()[0])
+        for expected in ("ONU VLAN111 ↔ 网络 VLAN171", "ONU VLAN112 ↔ 网络 VLAN600", "生成命令", "ONU ID 1"):
             self.assertIn(expected, summary)
-        self.assertNotIn("1/171", summary)
+        self.assertNotIn("已编辑", summary)
 
 
 class OnuCommandEditorTkTests(unittest.TestCase):
-    def test_real_tk_component_has_separate_write_note_and_busy_states(self):
+    def test_real_tk_preview_is_always_readonly_and_has_no_edit_actions(self):
         try:
             root = tk.Tk()
         except tk.TclError as exc:
@@ -388,16 +252,31 @@ class OnuCommandEditorTkTests(unittest.TestCase):
             request = request_for()
             editor.load_requests((request,), write_note="write：独立保存，默认关闭")
             root.update_idletasks()
-            self.assertEqual(editor.text.get("1.0", "end-1c"), command_text(request))
-            self.assertNotIn("write", editor.text.get("1.0", "end-1c").splitlines())
-            self.assertEqual(editor.write_note_var.get(), "write：独立保存，默认关闭")
-            self.assertEqual(str(editor.target_combo.cget("state")), "readonly")
-            self.assertEqual(str(editor.text.cget("state")), "normal")
+            expected = command_text(request)
+            self.assertEqual(editor.text.get("1.0", "end-1c"), expected)
+            self.assertEqual(str(editor.text.cget("state")), "disabled")
+            editor.text.delete("1.0", "end")
+            editor.text.insert("end", "write")
+            self.assertEqual(editor.text.get("1.0", "end-1c"), expected)
+            # disabled Text 仍可选中复制，且没有编辑/校验/恢复按钮。
+            editor.text.tag_add("sel", "1.0", "1.end")
+            self.assertTrue(editor.text.tag_ranges("sel"))
+            self.assertFalse(hasattr(editor, "validate_button"))
+            self.assertFalse(hasattr(editor, "restore_button"))
+            self.assertFalse(hasattr(editor, "validate"))
+            self.assertFalse(hasattr(editor, "restore"))
+            self.assertFalse(hasattr(editor, "target_combo"))
+            self.assertFalse(hasattr(editor, "status_var"))
+            self.assertFalse(any(isinstance(child, tk.ttk.Combobox) for child in editor.frame.winfo_children()))
             ready.assert_called_with(True)
             editor.set_busy(True)
-            for widget in (editor.target_combo, editor.text, editor.validate_button, editor.restore_button):
-                self.assertEqual(str(widget.cget("state")), "disabled")
             editor.set_busy(False)
+            self.assertEqual(str(editor.text.cget("state")), "disabled")
+            self.assertIsNotNone(editor.capture_plans())
+            editor.load_requests((request, request_for(number=2)))
+            for target in editor.requests:
+                self.assertIn(command_text(target), editor.text.get("1.0", "end-1c"))
+            self.assertEqual(len(editor.capture_plans()), 2)
             editor.clear()
             self.assertEqual(editor.text.get("1.0", "end-1c"), "")
             ready.assert_called_with(False)

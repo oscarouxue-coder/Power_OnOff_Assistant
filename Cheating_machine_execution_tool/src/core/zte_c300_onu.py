@@ -168,6 +168,8 @@ class ZteC300OnuDriver:
     def _service_ports(request: OnuProvisionRequest) -> tuple[tuple[int, int, int, str], ...]:
         if not request.services:
             return C300_SERVICE_PORTS
+        if any(item.vlan != item.effective_network_vlan for item in request.services):
+            raise ValueError("C300 暂不支持 VLAN 转换，请使用原两列业务映射")
         if len(request.services) != len(C300_SERVICE_NAMES):
             raise ValueError("C300 必须保留六项标准业务映射")
         service_ids = [item.service_id for item in request.services]

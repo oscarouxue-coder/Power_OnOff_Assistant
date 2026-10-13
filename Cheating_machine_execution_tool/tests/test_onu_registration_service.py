@@ -565,7 +565,7 @@ class DriverTests(unittest.TestCase):
 
         errors = ZteC600OnuDriver().validate_request(request)
 
-        self.assertIn("C600 固定 MVLAN 600，业务映射必须包含 VLAN 600", errors)
+        self.assertIn("C600 固定网络侧 MVLAN 600，业务映射必须包含网络侧 VLAN 600", errors)
 
     def test_c600_global_sn_precheck_rejects_other_pon_registration(self):
         driver = ZteC600OnuDriver()

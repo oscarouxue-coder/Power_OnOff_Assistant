@@ -305,7 +305,7 @@ class OnuRegistrationService:
                         raise ValueError("待下发命令计划目标与所选 ONU 不一致")
                     validated = editor.prepare(request, "\n".join(plan.commands))
                     if validated.request != plan.request or validated.commands != plan.commands:
-                        raise ValueError("待下发命令与业务参数不一致，请重新校验编辑")
+                        raise ValueError("待下发命令与业务参数不一致，请重新生成命令预览")
                     validated_plans.append(validated)
                 plans = tuple(validated_plans)
                 items = tuple(plan.request for plan in plans)
@@ -347,6 +347,16 @@ class OnuRegistrationService:
                     plan.commands if plan is not None else driver.build_provision_commands(request)
                 )
                 self._log(family, f"阶段 2/3：注册与业务配置 {index}/{len(items)} {target}")
+                if family == OLT_FAMILY_C600:
+                    for item in request.services:
+                        if item.vlan != item.effective_network_vlan:
+                            self._log(
+                                family,
+                                f"VLAN 转换业务 {item.service_id}：ONU侧 VLAN{item.vlan} ↔ "
+                                f"网络侧 VLAN{item.effective_network_vlan}，待下发并回读验证",
+                            )
+                            if item.effective_network_vlan == 600:
+                                self._log(family, f"组播转换：目标 VPort 3 下发 mvlan-translate 600 to {item.vlan}；ONU MVLAN {item.vlan}，OLT MVLAN 600")
                 self._log(
                     family,
                     f"待下发命令：{'已编辑' if plan is not None and plan.edited else '生成命令'}，"
@@ -425,6 +435,10 @@ class OnuRegistrationService:
                 verify_errors = driver.validate_verification(request, verify_outputs)
                 if verify_errors:
                     raise RuntimeError("；".join(verify_errors))
+                if family == OLT_FAMILY_C600:
+                    for item in request.services:
+                        if item.vlan != item.effective_network_vlan:
+                            self._log(family, f"VLAN 转换回读成功：业务 {item.service_id}，ONU侧 VLAN{item.vlan} ↔ 网络侧 VLAN{item.effective_network_vlan}")
                 self._log(family, f"ONU 注册与验证成功：{target}")
             message = f"已完成 {len(items)} 个 {family} ONU 注册配置和只读验证（未执行 write）"
             return OnuOperationResult(

@@ -1,5 +1,48 @@
 # 开发记录
 
+## 2026-10-13 - 移除ONU预览选择与统计区域
+
+- 类型：修改。
+- 背景：负责人截图指定删除确认执行页顶部的SN/PON/ONU ID下拉区域，以及“只读预览：目标数、命令数、业务参数已校验”状态行。
+- 完成内容：① 删除目标下拉框和预览统计状态行，并收紧网格布局。② 单台继续直接显示完整命令，多台改为按执行顺序连续分段显示，各段用SN/PON/ONU ID标识目标；标题只用于展示，不加入下发快照。③ 保留只读选择复制、保存策略说明、参数变化失效、全部生成快照校验和原确认/执行语义；同步当前说明与验收边界。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/onu_command_editor.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_command_editor.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/onu-vlan-translation-readonly-preview.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置 `PYTHONUTF8=1`，运行 `python -m unittest discover -s tests -p "test_onu_command_editor*.py"` 和 `python scripts/verify_baseline.py`；仓库根运行 `git diff --check`。
+- 验证结果：预览组件/主窗口衔接24项通过；完整基线 `ALL CHECKS PASSED`（79个源码编译/覆盖、1002项测试、173项指定回归及协议不变量通过）。独立真实Tk组件确认无目标Combobox和统计变量、文本仍只读可选择、多台命令完整展示；分段标题不进入命令计划，展示意外变化仍拒绝执行。格式检查通过；未启动完整主程序、未连接设备、未打包EXE、未提交Git。
+- 后续待办：负责人在Windows源码版查看确认页实际布局；此前VLAN转换的真实设备待验收范围保持。
+
+## 2026-10-13 - 支持C600转换并改为只读确认
+
+- 类型：功能。
+- 背景：负责人希望ONU WAN111进入网络VLAN171，现有命令编辑因两侧共用一个VLAN值而拒绝；随后要求在配置区完整支持转换、移除确认执行页编辑功能，并追加335/600/50转换范围。
+- 完成内容：① 业务模型增加可选网络侧VLAN，旧两列与显式同VLAN三列保持同一语义；C600配置支持 `ServiceID,ONU侧VLAN[,网络侧VLAN]`，原文本持久化链路兼容保存/重载。C300仍用旧格式且拒绝程序化转换。② C600所有业务按网络侧VLAN分层，335/600/50保留原固定T-CONT/DBA/GEM/VPort资源；两侧VLAN各自唯一、范围1–4094，继续拒绝资源冲突、多对一与缺少网络侧600。生成及内部计划校验分别携带两侧VLAN，后端按同一不可变确认快照下发并回读。③ IPTV转换时ONU侧service/MVLAN随用户VLAN，OLT侧IGMP/MVLAN仍为600，仅目标IPTV VPort追加 `mvlan-translate 600 to <用户VLAN>`；回读核对目标VPort转换规则及ONU侧MVLAN。旧同VLAN配置命令不变，不改全局转换表。新增命令仅完成源码/模拟验证，现场版本兼容性与节目持续播放、切台待验收。④ 确认页保留逐目标身份选择和只读预览，可选择复制，移除编辑/校验/恢复按钮及草稿状态；兼容原组件入口与内部快照校验服务。参数或目标变化失效，未派发Text事件时的网络侧VLAN变化也在确认前拦截；实际执行不读取可编辑文本。⑤ 主日志记录两侧转换关系、实际命令、组播转换及回读成功/注册失败；危险确认、整批预检、停止/首错、C300授权重试和独立write不变。同步操作员说明、状态与验收边界。
+- 修改文件：
+  - `.claude/plans/onu-vlan-translation-readonly-preview.md`
+  - `Cheating_machine_execution_tool/src/models/onu_registration_models.py`
+  - `Cheating_machine_execution_tool/src/core/zte_c600_onu.py`
+  - `Cheating_machine_execution_tool/src/core/zte_c300_onu.py`
+  - `Cheating_machine_execution_tool/src/services/onu_command_edit_service.py`
+  - `Cheating_machine_execution_tool/src/services/onu_registration_service.py`
+  - `Cheating_machine_execution_tool/src/ui/onu_command_editor.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_vlan_translation.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_command_editor.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_command_editor_app.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_registration_service.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置 `PYTHONUTF8=1`，运行 `python -m unittest discover -s tests -p "test_onu*.py"` 及 `python scripts/verify_baseline.py`；仓库根运行 `git diff --check`。
+- 验证结果：ONU专项145项通过；完整基线 `ALL CHECKS PASSED`（79个源码编译/覆盖、1002项测试、173项指定回归及协议不变量通过）。新增转换专项29项和网络侧参数失效1项，原17项编辑组件测试按新只读行为替换为11项，净增24项（978→1002）。覆盖旧命令/两列兼容、三列保存重载/UI采集、四类业务资源、非法/重复/缺600拒绝、不可变快照/模拟实际下发、两侧VLAN/错误VPort/状态/组播规则/ONU MVLAN差异、CLI不支持时停止且不write；独立真实Tk组件确认只读状态下insert/delete不改内容、允许选择、编辑操作入口移除、忙闲及清空状态正确。首次专项发现PowerShell管道编码导致新组件中文问号和旧编辑断言未更新，修正UTF-8写入与断言后全部通过；格式检查通过。
+- 后续待办：负责人复验完整Windows源码版配置页及确认页，真实C600复验WAN111→171、语音/管理转换DHCP和双向业务、IPTV目标VPort组播转换命令兼容性/持续播放/切台、失败/停止及write授权。源码/Tk与模拟会话不代表现场验收；未连接设备、未改本机INI、未打包、未运行EXE、未提交Git。
+
 ## 2026-10-13 - 调整登录后命令输入框宽度
 
 - 类型：修改
