@@ -49,11 +49,24 @@ class GatewayBrowser:
         self.process_identity = None
         self.cdp = None
         self.submitted = False
+        self.submitted_at = None
+        self.stop_control = None
+
+    def _check_stop(self):
+        if self.stop_control:
+            self.stop_control.checkpoint()
+
+    def wait_for_upload_completion(self):
+        if self.submitted:
+            return self.proxy.wait_for_upload_completion()
+        return True
 
     def start(self):
         try:
+            self._check_stop()
             executable = find_gateway_browser()
-            self.proxy.wait_for_gateway()
+            self.proxy.wait_for_gateway(**({"check_stop": self._check_stop} if self.stop_control else {}))
+            self._check_stop()
             port = self.proxy.start()
             self.profile = tempfile.TemporaryDirectory(prefix="linecheck-web-upgrade-")
             self.process = subprocess.Popen(
@@ -64,6 +77,7 @@ class GatewayBrowser:
             deadline = time.monotonic() + 20
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
             while time.monotonic() < deadline:
+                self._check_stop()
                 if self.process.poll() is not None:
                     raise RuntimeError("独立升级浏览器启动失败或已关闭。")
                 try:
@@ -82,6 +96,7 @@ class GatewayBrowser:
             # Network probing above is separate from the navigation response
             # budget, so a just-starting boot server no longer kills the batch
             # after the generic DevTools 15-second timeout.
+            self._check_stop()
             result = self.cdp.call("Page.navigate", {"url": self.url}, timeout=30)
             if result.get("errorText"):
                 raise RuntimeError(f"打开网关失败：{result['errorText']}")
@@ -90,6 +105,7 @@ class GatewayBrowser:
             raise
 
     def submit_firmware(self, firmware_path, timeout=60):
+        self._check_stop()
         if self.submitted:
             raise RuntimeError("本通道已经点击 Update software，禁止重复提交。")
         firmware = Path(firmware_path).resolve(strict=True)
@@ -113,6 +129,7 @@ class GatewayBrowser:
         })()""".replace("ORIGIN", json.dumps(expected_origin))
         deadline = time.monotonic() + timeout
         while not self.cdp.evaluate(locate):
+            self._check_stop()
             if time.monotonic() >= deadline:
                 raise TimeoutError("未找到唯一的升级文件框和 Update software 按钮，未提交升级。")
             time.sleep(0.25)
@@ -128,6 +145,9 @@ class GatewayBrowser:
             raise RuntimeError("网页固件文件选择校验失败，未点击 Update software。")
         self.log(f"Web 已选择固件：{firmware}（{selected['size']} 字节）")
         # Mark attempted before the command: a lost response must not cause a retry.
+        self._check_stop()
+        self.proxy.expect_upload()
+        self.submitted_at = time.monotonic()
         self.submitted = True
         clicked = self.cdp.evaluate("(() => {const u=window.__linecheckUpgrade;"
                                     "if(!u || !u.file.isConnected || !u.button.isConnected || u.button.disabled)"

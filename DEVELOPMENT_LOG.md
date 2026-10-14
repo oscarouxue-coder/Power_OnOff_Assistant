@@ -1,5 +1,50 @@
 # 开发记录
 
+## 2026-10-14 - 增加样机升级安全停止
+
+- 类型：功能。
+- 背景：负责人要求样机升级新增停止按钮，已确认覆盖四种方式、在安全步骤停止、全流程双向联动，直接请求停止不弹二次确认。
+- 完成内容：① 新增独立批次停止控制与停止结果，成功/失败/停止/跳过独立统计；按钮状态、关闭重开、重复启动拦截、批次回调隔离、主线程队列及线程退出后的资源收尾。② 三种全包升级停止补位，串口普通等待可退出；单台内部取消不污染共享停止事件，已开始电源组合和TFTP当前传输等待完成，停止后跳过重试、reset、后备上下电、最终登录及恢复出厂。③ 页面升级上传返回后可停止触发；已触发则保留只读状态观察，停止后不再恢复出厂，并清理HTTP会话。④ Web提交前检查停止，提交后保留30秒；代理跟踪上传POST退出或原超时后才清理专用浏览器，结果未知明确记录。⑤ 全流程停止传给所属升级，升级停止终止后续全流程，以停止结论展示。⑥ 新增35项专项、更新2项原线程启动断言，新增2个源码模块纳入编译清单；同步操作说明和验收边界。
+- 修改文件：
+  - `.claude/plans/sample-upgrade-stop.md`
+  - `Cheating_machine_execution_tool/src/models/upgrade_stop.py`
+  - `Cheating_machine_execution_tool/src/services/upgrade_stop_service.py`
+  - `Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`
+  - `Cheating_machine_execution_tool/src/services/web_gateway_upgrade_service.py`
+  - `Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/src/core/gateway_browser.py`
+  - `Cheating_machine_execution_tool/src/core/gateway_proxy.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/page_upgrade.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_upgrade_stop.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录执行 `python -m unittest discover -s tests -p test_upgrade_stop.py`；既有升级/页面/Web/主界面/全流程专项使用 `PYTHONPATH=.;tests` 运行对应6个测试模块；最终执行 `python scripts/verify_baseline.py`，检查 `git diff --check`。
+- 验证结果：35项新增专项通过；既有6模块344项回归通过（2项浏览器集成按原配置跳过）；最终完整门禁 `ALL CHECKS PASSED`，81个源码编译/覆盖、1037项测试、173项指定回归及全部协议不变量通过。测试使用模拟设备/网络/电源，未启动完整应用、未进行真实设备升级，不构成Windows可见界面或真实样机验收。
+- 后续待办：Windows源码版复验按钮布局、状态、关闭重开、停止后重新启动及全流程双向停止；真实样机四种方式单台及2/4/8台各阶段停止、资源释放与未停止路径回归，按 `ACCEPTANCE_BASELINE.md §2.6.2/§3` 记录现场结论。本轮不打包、不启动EXE、不提交Git；未改本机INI及build/dist/logs/.venv；保留原有VERSION_INFO及开发/交接记录本地改动。
+
+## 2026-10-13 - 重建V1.1.4便携EXE
+
+- 类型：构建。
+- 背景：负责人要求重新打包当前源码，交付已完成的C600 VLAN转换、只读确认页及截图指定区域移除版本。
+- 完成内容：① 更新包内版本说明为V1.1.4、发布日期2026-10-13，记录最新变更及待验收边界；版本说明同时嵌入EXE与便携ZIP。② 标准脚本完成依赖分析和归档后，覆盖旧 `dist/LineCheckAssistant.exe` 时因运行中的旧EXE被Windows拒绝访问；未结束旧程序，改用本次生成的同一spec输出到独立 `dist/V1.1.4_20261013/`。③ 按原脚本规则生成便携目录、6份脱敏INI、说明、第三方声明和SHA256文件，并压缩ZIP。只读检查EXE归档、最新ONU模块和版本说明，未启动新EXE。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/VERSION_INFO.txt`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 构建输出：
+  - `Cheating_machine_execution_tool/dist/V1.1.4_20261013/LineCheckAssistant.exe`
+  - `Cheating_machine_execution_tool/dist/V1.1.4_20261013/LineCheckAssistant_portable/`
+  - `Cheating_machine_execution_tool/dist/V1.1.4_20261013/LineCheckAssistant_portable.zip`
+- 验证方法：主源码目录先执行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1`；旧EXE占用后用 `python -m PyInstaller --noconfirm --distpath .\dist\V1.1.4_20261013 .\line_check_assistant\packaging_specs\LineCheckAssistant.spec` 完成隔离输出。使用CArchiveReader只读确认 `pyi_rth__tkinter`、`tcl/init.tcl`、`tk/tk.tcl`、嵌入版本说明及最新ONU模块；ZIP完整性、6份配置脱敏与三份EXE哈希一致检查。设置 `PYTHONUTF8=1` 后运行 `python scripts/verify_baseline.py`；仓库根运行 `git diff --check`。
+- 验证结果：构建和静态包检查通过；完整基线 `ALL CHECKS PASSED`（79个源码编译/覆盖、1002项测试、173项指定回归及协议不变量通过）。EXE为63,311,296字节，SHA256 `2CB48E0F0BA51DDBD29BF6D230779521C3D71495DDD8E831055F13271F6925BC`；ZIP为62,876,991字节，SHA256 `2FAF35EC387B266E1691EA12E20FE8C1EE3C4B4E9C5D4920324D6A12E97819EB`。默认dist根目录EXE仍为运行中的旧版，最新交付须使用版本目录。自动审批以“blocked by policy”拒绝临时build目录删除命令，保留构建临时文件，不影响新包；未重试规避策略。
+- 后续待办：目标电脑完整解压ZIP后启动及现场业务复验。未启动新EXE、未连接设备、未改本机INI、未提交Git；打包不扩大VLAN转换/IPTV命令兼容性、Windows最终布局和其它真实设备验收结论。
+
 ## 2026-10-13 - 移除ONU预览选择与统计区域
 
 - 类型：修改。

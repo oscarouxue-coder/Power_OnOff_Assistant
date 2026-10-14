@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from src.models.upgrade_stop import UpgradeStopped, UpgradeStoppedResult
+from src.services.upgrade_stop_service import UpgradeRun, result_state, summarize_results
 from src.models.boot_entry import BOOT_ENTRY_LOGIN, BOOT_ENTRY_OPTIONS, normalize_boot_entry
 from src.services.web_gateway_upgrade_service import (
     TRANSFER_WEB_GATEWAY, run_parallel_web_gateway_upgrades, validate_web_target,
@@ -491,6 +493,8 @@ class LineCheckAssistant(Tk):
         self.upgrade_password_visible = False
         self.upgrade_firmware_var = StringVar(value=self.sample_upgrade_settings.firmware_path)
         self.upgrade_targets_var = StringVar(value="未勾选目标样机")
+        self.sample_upgrade_running = False
+        self._sample_upgrade_run = None
         self.upgrade_status_var = StringVar(value="尚未开始升级")
         self.upgrade_progress_var = DoubleVar(value=0)
         # 写样机参数窗口的「首次登录账号 / 密码」也走同一份 sample_upgrade_settings.ini,
@@ -676,6 +680,9 @@ class LineCheckAssistant(Tk):
         ok, detail = self._pipeline_subtask_results.pop(code, (False, "未收到完成结果"))
         self._pipeline_subtask_events.pop(code, None)
         if not ok:
+            run = getattr(self, "_sample_upgrade_run", None)
+            if code == "sample_upgrade" and run and run.pipeline_owned and run.control.is_set():
+                raise UpgradeStopped(detail)
             raise RuntimeError(detail)
 
     def _run_pipeline_sample_upgrade(self, skip_confirmation: bool = False) -> None:
@@ -3837,7 +3844,11 @@ class LineCheckAssistant(Tk):
         buttons = Frame(content, background=COLOR_BG)
         buttons.pack(side="bottom", fill="x", pady=(18, 0))
         ttk.Button(buttons, text="关闭", width=12, command=close_dialog, style="Secondary.TButton").pack(side="right")
-        ttk.Button(buttons, text="开始升级", width=12, command=self._on_upgrade_start_clicked, style="Primary.TButton").pack(side="right", padx=(0, 8))
+        self.upgrade_stop_button = ttk.Button(buttons, text="停止升级", width=12, command=self._stop_sample_upgrade, style="Secondary.TButton")
+        self.upgrade_stop_button.pack(side="right", padx=(0, 8))
+        self.upgrade_start_button = ttk.Button(buttons, text="开始升级", width=12, command=self._on_upgrade_start_clicked, style="Primary.TButton")
+        self.upgrade_start_button.pack(side="right", padx=(0, 8))
+        self._refresh_upgrade_buttons()
         dialog.protocol("WM_DELETE_WINDOW", close_dialog)
         center_toplevel_on_parent(
             dialog, self, window_width=window_width, window_height=window_height
@@ -3893,7 +3904,101 @@ class LineCheckAssistant(Tk):
             self.upgrade_parallel_count_spin.grid_remove()
             self.upgrade_parallel_count_spin.state(["disabled"])
 
+    def _refresh_upgrade_buttons(self) -> None:
+        run = getattr(self, "_sample_upgrade_run", None)
+        running = bool(getattr(self, "sample_upgrade_running", False))
+        stopping = bool(run and run.control.is_set())
+        for name, enabled in (("upgrade_start_button", not running), ("upgrade_stop_button", running and not stopping)):
+            widget = getattr(self, name, None)
+            if widget is not None:
+                try:
+                    widget.configure(state="normal" if enabled else "disabled")
+                except TclError:
+                    pass
+
+    def _launch_upgrade_run(self, worker, args) -> bool:
+        if getattr(self, "sample_upgrade_running", False):
+            self._log("样机升级仍在运行或正在停止，未启动重复批次。")
+            return False
+        run = UpgradeRun(pipeline_owned="sample_upgrade" in getattr(self, "_pipeline_subtask_events", {}))
+        self._sample_upgrade_run = run
+        pipeline = getattr(self, "pipeline_window", None)
+        if run.pipeline_owned and pipeline and getattr(pipeline, "_stop_requested", False):
+            run.control.request_stop()
+        self.sample_upgrade_running = True
+        LineCheckAssistant._refresh_upgrade_buttons(self)
+
+        run.thread = threading.Thread(target=worker, args=args, kwargs={"run": run}, daemon=True)
+        try:
+            run.thread.start()
+        except Exception as exc:
+            LineCheckAssistant._finish_upgrade_run(self, run, [], str(exc))
+            raise
+        if callable(getattr(self, "after", None)):
+            self.after(50, lambda: LineCheckAssistant._drain_upgrade_ui(self, run))
+        return True
+
+    def _post_upgrade_ui(self, run, action) -> None:
+        if run is None:
+            self.after(0, action)
+        else:
+            run.ui_queue.put(action)
+
+    def _drain_upgrade_ui(self, run) -> None:
+        if getattr(self, "_sample_upgrade_run", None) is not run:
+            return
+        while not run.ui_queue.empty():
+            run.ui_queue.get_nowait()()
+        if not run.finished:
+            self.after(50, lambda: LineCheckAssistant._drain_upgrade_ui(self, run))
+
+    def _stop_sample_upgrade(self, from_pipeline=False) -> None:
+        run = getattr(self, "_sample_upgrade_run", None)
+        if run is None or run.finished or run.control.is_set():
+            return
+        if from_pipeline and not run.pipeline_owned:
+            return
+        run.control.request_stop()
+        self._log("[样机升级] 已请求停止：排队任务跳过；已开始的传输/刷写等待安全边界，不再发起重试、重启或恢复出厂。")
+        self.upgrade_status_var.set("正在停止，等待当前传输或设备操作安全收尾……")
+        LineCheckAssistant._refresh_upgrade_buttons(self)
+        if run.pipeline_owned and not from_pipeline:
+            window = getattr(self, "pipeline_window", None)
+            if window is not None:
+                window.request_stop()
+
+    def _finish_upgrade_run(self, run, results, error=None) -> bool:
+        if getattr(self, "_sample_upgrade_run", None) is not run or run.finished:
+            return True
+        if run.thread is not None and run.thread.is_alive():
+            # Queue completion only after the worker's finally blocks and COM cleanup.
+            self.after(50, lambda: LineCheckAssistant._finish_upgrade_run(self, run, results, error))
+            return True
+        run.finished = True
+        self.sample_upgrade_running = False
+        terminal = getattr(self, "serial_terminal", None)
+        if terminal is not None:
+            try:
+                terminal.finish_upgrade_logs()
+            except Exception as exc:
+                self._log(f"[样机升级] 串口日志界面收尾失败：{exc}")
+        LineCheckAssistant._refresh_upgrade_buttons(self)
+        stopped = run.control.is_set() or any(isinstance(item.result, UpgradeStoppedResult) for item in results)
+        if stopped or error:
+            summary = summarize_results(results)
+            detail = summary + (f"；异常：{error}" if error else "")
+            title = "样机升级已停止" if stopped else "样机升级失败"
+            self._set_upgrade_status("", title + "：" + detail, self.upgrade_progress_var.get())
+            self._log(title + "：" + detail)
+            LineCheckAssistant._report_sample_upgrade_completion(self, title, detail, "warning" if stopped else "error")
+            _finish_pipeline_subtask_if_waiting(self, "sample_upgrade", False, title + "：" + detail)
+            return True
+        return False
+
     def _on_upgrade_start_clicked(self) -> None:
+        if getattr(self, "sample_upgrade_running", False):
+            self._log("样机升级仍在运行或正在停止，请等待当前批次释放资源。")
+            return False
         self._capture_current_channel()
         if not self._validate_upgrade_required_fields():
             return
@@ -3914,6 +4019,9 @@ class LineCheckAssistant(Tk):
         messagebox.showinfo("串口日志已启动", "已打开内置串口监控，当前未下发升级命令。", parent=self.upgrade_window)
 
     def _start_page_upgrade(self, skip_confirmation: bool = False) -> bool:
+        if getattr(self, "sample_upgrade_running", False):
+            self._log("样机升级仍在运行或正在停止，请等待当前批次释放资源。")
+            return False
         channels = self._selected_page_upgrade_channels()
         if not channels:
             return False
@@ -3968,9 +4076,7 @@ class LineCheckAssistant(Tk):
             self._log("[全流程][无人值守] 已使用总确认授权，跳过页面升级子任务确认。")
 
         self._set_upgrade_status("", f"准备页面升级 {len(requests)} 台样机", 0)
-        thread = threading.Thread(target=self._page_upgrade_worker, args=(requests,), daemon=True)
-        thread.start()
-        return True
+        return LineCheckAssistant._launch_upgrade_run(self, self._page_upgrade_worker, (requests,))
 
     def _selected_page_upgrade_channels(self) -> list[ChannelConfig]:
         channels_by_vlan: dict[str, ChannelConfig] = {}
@@ -3986,7 +4092,7 @@ class LineCheckAssistant(Tk):
             return []
         return channels
 
-    def _page_upgrade_worker(self, requests: list[PageUpgradeRequest]) -> None:
+    def _page_upgrade_worker(self, requests: list[PageUpgradeRequest], run=None) -> None:
         total = len(requests)
         completed = 0
 
@@ -3994,19 +4100,31 @@ class LineCheckAssistant(Tk):
             nonlocal completed
             completed += 1
             progress = (completed / total) * 100 if total else 100
-            stage = "页面升级完成" if item_result.result.ok else "页面升级失败"
-            self.after(0, lambda request=item_result.request, stage=stage, progress=progress: self._set_upgrade_status(request.vlan, stage, progress))
+            stage = ("页面升级" + result_state(item_result.result)) if isinstance(item_result.result, UpgradeStoppedResult) else ("页面升级完成" if item_result.result.ok else "页面升级失败")
+            LineCheckAssistant._post_upgrade_ui(self, run, lambda request=item_result.request, stage=stage, progress=progress: self._set_upgrade_status(request.vlan, stage, progress))
             self.log_queue.put(item_result.result.message)
 
         self.log_queue.put(f"开始 UBUS 页面升级，共 {total} 台样机。")
-        results = run_page_upgrade_batch(
-            requests,
-            on_output=lambda line: self.log_queue.put(line),
-            on_item_complete=on_item_complete,
-        )
-        self.after(0, lambda: self._complete_page_upgrade(results))
+        try:
+            results = run_page_upgrade_batch(
+                requests,
+                on_output=lambda line: self.log_queue.put(line),
+                on_item_complete=on_item_complete,
+                **({"stop_control": run.control} if run else {}),
+            )
+            LineCheckAssistant._post_upgrade_ui(self, run, lambda: self._complete_page_upgrade(results, **({"run": run} if run else {})))
+        except Exception as exc:
+            if run:
+                LineCheckAssistant._post_upgrade_ui(self, run, lambda error=str(exc): LineCheckAssistant._finish_upgrade_run(self, run, [], error))
+            else:
+                raise
 
-    def _complete_page_upgrade(self, results) -> None:
+    def _complete_page_upgrade(self, results, run=None) -> None:
+        if run and run.thread is not None and run.thread.is_alive():
+            self.after(50, lambda: LineCheckAssistant._complete_page_upgrade(self, results, run=run))
+            return
+        if run and LineCheckAssistant._finish_upgrade_run(self, run, results):
+            return
         total = len(results)
         success_count = sum(1 for item in results if item.result.ok)
         if success_count == total:
@@ -4058,6 +4176,9 @@ class LineCheckAssistant(Tk):
         return True
 
     def _start_full_package_upgrade(self, skip_confirmation: bool = False) -> bool:
+        if getattr(self, "sample_upgrade_running", False):
+            self._log("样机升级仍在运行或正在停止，请等待当前批次释放资源。")
+            return False
         channels = self._selected_tftp_copy_upgrade_channels()
         if not channels:
             return False
@@ -4161,9 +4282,7 @@ class LineCheckAssistant(Tk):
             if transfer_method == TFTP_COMMAND_TRANSFER
             else self._parallel_tftp_put_upgrade_worker
         )
-        thread = threading.Thread(target=parallel_worker, args=(upgrade_items, parallel_count), daemon=True)
-        thread.start()
-        return True
+        return LineCheckAssistant._launch_upgrade_run(self, parallel_worker, (upgrade_items, parallel_count))
 
     def _selected_boot_entry_method(self) -> str:
         variable = getattr(self, "upgrade_boot_entry_var", None)
@@ -4217,21 +4336,23 @@ class LineCheckAssistant(Tk):
         self,
         upgrade_items: list[tuple[ChannelConfig, FullPackageUpgradeRequest]],
         parallel_count: int = DEFAULT_PARALLEL_COUNT,
+        run=None,
     ) -> None:
         requests = [request for _channel, request in upgrade_items]
         total = len(requests)
         max_workers = max(1, min(clamp_parallel_count(parallel_count), total))
-        started = succeeded = failed = 0
+        started = succeeded = failed = stopped = skipped = 0
 
         def refresh_status() -> None:
-            running = started - succeeded - failed
-            queued = total - started
-            progress = ((succeeded + failed) / total) * 100 if total else 100
-            self.after(
-                0,
+            running = started - succeeded - failed - stopped
+            queued = total - started - skipped
+            progress = ((succeeded + failed + stopped + skipped) / total) * 100 if total else 100
+            LineCheckAssistant._post_upgrade_ui(
+                self, run,
                 lambda: self._set_upgrade_status(
                     "",
-                    f"并行升级：运行中 {running} 台，已成功 {succeeded} 台，已失败 {failed} 台，排队 {queued} 台",
+                    f"并行升级：运行中 {running} 台，已成功 {succeeded} 台，已失败 {failed} 台，排队 {queued} 台"
+                    + (f"，已停止 {stopped} 台，跳过 {skipped} 台" if stopped or skipped else ""),
                     progress,
                 ),
             )
@@ -4243,8 +4364,11 @@ class LineCheckAssistant(Tk):
             refresh_status()
 
         def on_item_complete(item) -> None:
-            nonlocal succeeded, failed
-            if item.result.ok:
+            nonlocal succeeded, failed, stopped, skipped
+            if isinstance(item.result, UpgradeStoppedResult):
+                skipped += int(item.result.skipped)
+                stopped += int(not item.result.skipped)
+            elif item.result.ok:
                 succeeded += 1
             else:
                 failed += 1
@@ -4257,47 +4381,52 @@ class LineCheckAssistant(Tk):
                 self.serial_session_manager,
                 max_workers=max_workers,
                 on_output=lambda vlan, line: self.log_queue.put(f"[{vlan}] {line}"),
-                on_session_ready=lambda vlan, session, log_path: self.after(
-                    0, lambda vlan=vlan, session=session, log_path=log_path: self._attach_serial_upgrade(vlan, session, log_path)
+                on_session_ready=lambda vlan, session, log_path: LineCheckAssistant._post_upgrade_ui(
+                    self, run, lambda vlan=vlan, session=session, log_path=log_path: self._attach_serial_upgrade(vlan, session, log_path)
                 ),
                 on_item_started=on_item_started,
                 on_item_complete=on_item_complete,
+                **({"stop_control": run.control} if run else {}),
             )
-            self.after(0, lambda: self._complete_parallel_tftp_command_upgrade(total, results))
+            LineCheckAssistant._post_upgrade_ui(self, run, lambda: self._complete_parallel_tftp_command_upgrade(total, results, **({"run": run} if run else {})))
         except Exception as exc:
-            self.after(0, lambda: self._complete_parallel_tftp_command_upgrade(total, [], str(exc)))
+            LineCheckAssistant._post_upgrade_ui(self, run, lambda error=str(exc): self._complete_parallel_tftp_command_upgrade(total, [], error, **({"run": run} if run else {})))
         finally:
             terminal = getattr(self, "serial_terminal", None)
             if terminal is not None:
-                self.after(100, terminal.finish_upgrade_logs)
+                if run is None:
+                    self.after(100, terminal.finish_upgrade_logs)
 
-    def _parallel_web_gateway_upgrade_worker(self, upgrade_items, parallel_count=DEFAULT_PARALLEL_COUNT):
+    def _parallel_web_gateway_upgrade_worker(self, upgrade_items, parallel_count=DEFAULT_PARALLEL_COUNT, run=None):
         # Reuse only UI progress/completion plumbing; transport dispatch stays independent.
         LineCheckAssistant._parallel_tftp_put_upgrade_worker(
             self, upgrade_items, parallel_count, runner=run_parallel_web_gateway_upgrades,
+            **({"run": run} if run else {}),
         )
 
     def _parallel_tftp_put_upgrade_worker(
         self,
         upgrade_items: list[tuple[ChannelConfig, FullPackageUpgradeRequest]],
         parallel_count: int = DEFAULT_PARALLEL_COUNT,
+        run=None,
         *,
         runner=None,
     ) -> None:
         requests = [request for _channel, request in upgrade_items]
         total = len(requests)
         max_workers = max(1, min(clamp_parallel_count(parallel_count), total))
-        started = succeeded = failed = 0
+        started = succeeded = failed = stopped = skipped = 0
 
         def refresh_status() -> None:
-            running = started - succeeded - failed
-            queued = total - started
-            progress = ((succeeded + failed) / total) * 100 if total else 100
-            self.after(
-                0,
+            running = started - succeeded - failed - stopped
+            queued = total - started - skipped
+            progress = ((succeeded + failed + stopped + skipped) / total) * 100 if total else 100
+            LineCheckAssistant._post_upgrade_ui(
+                self, run,
                 lambda: self._set_upgrade_status(
                     "",
-                    f"并行升级：运行中 {running} 台，已成功 {succeeded} 台，已失败 {failed} 台，排队 {queued} 台",
+                    f"并行升级：运行中 {running} 台，已成功 {succeeded} 台，已失败 {failed} 台，排队 {queued} 台"
+                    + (f"，已停止 {stopped} 台，跳过 {skipped} 台" if stopped or skipped else ""),
                     progress,
                 ),
             )
@@ -4309,8 +4438,11 @@ class LineCheckAssistant(Tk):
             refresh_status()
 
         def on_item_complete(item) -> None:
-            nonlocal succeeded, failed
-            if item.result.ok:
+            nonlocal succeeded, failed, stopped, skipped
+            if isinstance(item.result, UpgradeStoppedResult):
+                skipped += int(item.result.skipped)
+                stopped += int(not item.result.skipped)
+            elif item.result.ok:
                 succeeded += 1
             else:
                 failed += 1
@@ -4323,21 +4455,28 @@ class LineCheckAssistant(Tk):
                 self.serial_session_manager,
                 max_workers=max_workers,
                 on_output=lambda vlan, line: self.log_queue.put(f"[{vlan}] {line}"),
-                on_session_ready=lambda vlan, session, log_path: self.after(
-                    0, lambda vlan=vlan, session=session, log_path=log_path: self._attach_serial_upgrade(vlan, session, log_path)
+                on_session_ready=lambda vlan, session, log_path: LineCheckAssistant._post_upgrade_ui(
+                    self, run, lambda vlan=vlan, session=session, log_path=log_path: self._attach_serial_upgrade(vlan, session, log_path)
                 ),
                 on_item_started=on_item_started,
                 on_item_complete=on_item_complete,
+                **({"stop_control": run.control} if run else {}),
             )
-            self.after(0, lambda: self._complete_parallel_tftp_put_upgrade(total, results))
+            LineCheckAssistant._post_upgrade_ui(self, run, lambda: self._complete_parallel_tftp_put_upgrade(total, results, **({"run": run} if run else {})))
         except Exception as exc:
-            self.after(0, lambda: self._complete_parallel_tftp_put_upgrade(total, [], str(exc)))
+            LineCheckAssistant._post_upgrade_ui(self, run, lambda error=str(exc): self._complete_parallel_tftp_put_upgrade(total, [], error, **({"run": run} if run else {})))
         finally:
             terminal = getattr(self, "serial_terminal", None)
             if terminal is not None:
-                self.after(100, terminal.finish_upgrade_logs)
+                if run is None:
+                    self.after(100, terminal.finish_upgrade_logs)
 
-    def _complete_parallel_tftp_command_upgrade(self, total: int, results, orchestration_error: str | None = None) -> None:
+    def _complete_parallel_tftp_command_upgrade(self, total: int, results, orchestration_error: str | None = None, run=None) -> None:
+        if run and run.thread is not None and run.thread.is_alive():
+            self.after(50, lambda: LineCheckAssistant._complete_parallel_tftp_command_upgrade(self, total, results, orchestration_error, run=run))
+            return
+        if run and LineCheckAssistant._finish_upgrade_run(self, run, results, orchestration_error):
+            return
         if orchestration_error:
             self._set_upgrade_status("", "并行升级启动失败", 0)
             self._log(orchestration_error)
@@ -4360,7 +4499,12 @@ class LineCheckAssistant(Tk):
             self, "sample_upgrade", not failed, f"并行 Tftp指令 升级完成：成功 {len(succeeded)}/{total} 台。"
         )
 
-    def _complete_parallel_tftp_put_upgrade(self, total: int, results, orchestration_error: str | None = None) -> None:
+    def _complete_parallel_tftp_put_upgrade(self, total: int, results, orchestration_error: str | None = None, run=None) -> None:
+        if run and run.thread is not None and run.thread.is_alive():
+            self.after(50, lambda: LineCheckAssistant._complete_parallel_tftp_put_upgrade(self, total, results, orchestration_error, run=run))
+            return
+        if run and LineCheckAssistant._finish_upgrade_run(self, run, results, orchestration_error):
+            return
         if orchestration_error:
             self._set_upgrade_status("", "并行升级启动失败", 0)
             self._log(orchestration_error)
@@ -4443,6 +4587,9 @@ class LineCheckAssistant(Tk):
             self.upgrade_targets_var.set("未勾选目标样机")
 
     def _set_upgrade_status(self, vlan: str, stage: str, progress: float) -> None:
+        run = getattr(self, "_sample_upgrade_run", None)
+        if run and not run.finished and run.control.is_set():
+            stage = "正在停止，等待安全收尾；" + stage
         normalized_progress = max(0.0, min(float(progress), 100.0))
         self.upgrade_progress_var.set(normalized_progress)
         if vlan:

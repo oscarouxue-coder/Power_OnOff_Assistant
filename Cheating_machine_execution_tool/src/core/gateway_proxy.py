@@ -45,6 +45,31 @@ class GatewayProxy:
         self.stop_event = threading.Event()
         self.sockets = set()
         self.lock = threading.Lock()
+        self.upload_condition = threading.Condition()
+        self.upload_seen = False
+        self.upload_active = 0
+        self.upload_started_at = None
+
+    def expect_upload(self):
+        with self.upload_condition:
+            self.upload_started_at = time.monotonic()
+
+    def wait_for_upload_completion(self, timeout=600):
+        """Drain an admitted POST, never close its sockets on a UI stop request.
+
+        No request observed: use the existing transfer budget. An active request
+        owns its existing socket/forwarding timeouts and signals its own exit.
+        """
+        with self.upload_condition:
+            started = self.upload_started_at if self.upload_started_at is not None else time.monotonic()
+            deadline = started + timeout
+            while self.upload_active or not self.upload_seen:
+                if not self.upload_active and time.monotonic() >= deadline:
+                    self.log("Web 已提交但未观察到上传请求，等待超时；设备结果待确认。")
+                    return False
+                self.upload_condition.wait(0.2)
+        self.log("Web 上传请求已结束，允许清理浏览器；设备写入结果待确认。")
+        return True
 
     def _connect(self, timeout=15):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -108,12 +133,14 @@ class GatewayProxy:
                     return
             raise RuntimeError("尚未返回文件选择框和 Update software")
 
-    def wait_for_gateway(self, timeout=90, *, clock=time.monotonic, sleep_fn=time.sleep):
+    def wait_for_gateway(self, timeout=90, *, clock=time.monotonic, sleep_fn=time.sleep, check_stop=None):
         deadline = clock() + timeout
         last_error = "尚未尝试"
         last_log = -10.0
         self.log(f"等待网关Web升级页面就绪（最长{timeout:g}秒），出口 {self.source_ip} / ifIndex {self.interface_index}。")
         while not self.stop_event.is_set():
+            if check_stop:
+                check_stop()
             remaining = deadline - clock()
             if remaining <= 0:
                 break
@@ -136,6 +163,7 @@ class GatewayProxy:
         stage = "等待浏览器请求头"
         method = ""
         response_started = False
+        upload_registered = False
         with self.lock:
             self.sockets.add(client)
         try:
@@ -156,6 +184,12 @@ class GatewayProxy:
                     or (target.port or 80) != self.target_port or target.username or target.password):
                 client.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
                 return
+            if method.upper() == "POST":
+                with self.upload_condition:
+                    self.upload_seen = True
+                    self.upload_active += 1
+                    upload_registered = True
+                    self.upload_condition.notify_all()
             stage = f"连接样机 {self.target_ip}:{self.target_port}"
             upstream = self._connect()
             with self.lock:
@@ -206,6 +240,10 @@ class GatewayProxy:
                 except OSError:
                     pass
         finally:
+            if upload_registered:
+                with self.upload_condition:
+                    self.upload_active -= 1
+                    self.upload_condition.notify_all()
             with self.lock:
                 self.sockets.discard(client)
                 if upstream:

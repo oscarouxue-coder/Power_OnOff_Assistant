@@ -7,6 +7,8 @@ import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
 from line_check_assistant.network_ops import prepare_network_for_sample
+from .upgrade_stop_service import stopped_result
+
 from src.core.bind_socket import wait_for_bindable_ip
 from src.core.gateway_browser import GatewayBrowser, find_gateway_browser
 
@@ -50,7 +52,9 @@ def selected_interface_index(alias, source_ip):
     return index
 
 
-def start_gateway_upgrade(request, emit, sleep_fn=time.sleep):
+def start_gateway_upgrade(request, emit, sleep_fn=time.sleep, stop_control=None):
+    if stop_control:
+        stop_control.checkpoint()
     validate_web_target(request.web_source_ip, request.web_device_ip, request.web_subnet_mask)
     prepared = prepare_network_for_sample(request.server_interface, request.web_source_ip,
                                           request.web_subnet_mask, on_output=emit,
@@ -59,23 +63,43 @@ def start_gateway_upgrade(request, emit, sleep_fn=time.sleep):
         raise RuntimeError(prepared.message)
     if not wait_for_bindable_ip(request.web_source_ip, 15):
         raise RuntimeError(f"Web出口IP {request.web_source_ip} 在15秒内仍不可绑定。")
+    if stop_control:
+        stop_control.checkpoint()
     index = selected_interface_index(request.server_interface, request.web_source_ip)
     browser = GatewayBrowser(request.web_source_ip, index, request.web_device_ip, emit)
+    browser.stop_control = stop_control
+    submission_wait_done = False
+    upload_drained = False
     try:
         browser.start()
+        if stop_control:
+            stop_control.checkpoint()
         browser.submit_firmware(request.firmware_path)
         emit("Web 提交动作完成，固定等待 30 秒；不等待网页变化、不重复点击。")
         sleep_fn(WEB_SUBMIT_WAIT_SECONDS)
+        submission_wait_done = True
+        if stop_control and stop_control.is_set():
+            emit("Web 正在停止：保留已提交上传请求，等待其结束或原超时。")
+            browser.wait_for_upload_completion()
+            upload_drained = True
+            stop_control.checkpoint("Web 已提交，设备结果待确认；跳过重启和恢复出厂。")
         emit("Web 提交后 30 秒等待结束，开始原有 90 秒 Boot/Bood 观察流程。")
         return browser
     except Exception:
+        # A lost click response may still have submitted the firmware.
+        if stop_control and browser.submitted:
+            if not submission_wait_done:
+                remaining = max(0, WEB_SUBMIT_WAIT_SECONDS - (time.monotonic() - browser.submitted_at))
+                sleep_fn(remaining)
+            if not upload_drained:
+                browser.wait_for_upload_completion()
         browser.close()
         raise
 
 
 def run_parallel_web_gateway_upgrades(requests, session_manager, *, max_workers=2,
                                       on_output=None, on_session_ready=None,
-                                      on_item_started=None, on_item_complete=None):
+                                      on_item_started=None, on_item_complete=None, stop_control=None):
     # Local import keeps the existing serial module independent at import time.
     from .serial_upgrade_service import (FullPackageUpgradeItemResult, UpgradePowerCycleCoordinator,
                                          run_single_full_package_upgrade)
@@ -103,16 +127,24 @@ def run_parallel_web_gateway_upgrades(requests, session_manager, *, max_workers=
             request, session_manager,
             on_output=lambda line: on_output(request.vlan, line) if on_output else None,
             on_session_ready=on_session_ready, power_cycle_coordinator=coordinator,
+            **({"stop_control": stop_control} if stop_control else {}),
         )
 
     with UpgradePowerCycleCoordinator() as coordinator, ThreadPoolExecutor(max_workers=max_workers) as executor:
         while pending or active:
-            while pending and len(active) < max_workers:
+            if stop_control and stop_control.is_set():
+                for request in pending:
+                    item = FullPackageUpgradeItemResult(request, stopped_result(request.vlan, skipped=True))
+                    completed[id(request)] = item
+                    if on_item_complete:
+                        on_item_complete(item)
+                pending.clear()
+            while pending and len(active) < max_workers and not (stop_control and stop_control.is_set()):
                 request = pending.pop(0)
                 if on_item_started:
                     on_item_started(request)
                 active[executor.submit(run_one, request, coordinator)] = request
-            done, _ = wait(active, return_when=FIRST_COMPLETED)
+            done, _ = wait(active, timeout=0.1 if stop_control else None, return_when=FIRST_COMPLETED)
             for future in done:
                 request = active.pop(future)
                 try:

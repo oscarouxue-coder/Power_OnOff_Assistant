@@ -6,6 +6,9 @@ import uuid
 import re
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
+from contextlib import nullcontext
+from src.models.upgrade_stop import UpgradeStopped
+from .upgrade_stop_service import StopAwareSerialSession, stopped_result
 from pathlib import Path
 from typing import Callable, Iterable
 
@@ -123,6 +126,7 @@ class UpgradePowerCycleCoordinator:
         on_channel_powered: Callable[[int], None] | None = None,
         off_delay_seconds: float = POWER_CYCLE_OFF_DELAY_SECONDS,
         on_delay_seconds: float = POWER_CYCLE_ON_DELAY_SECONDS,
+        stop_control=None,
     ) -> CommandResult:
         port = serial_port.strip().upper()
         if not port:
@@ -134,6 +138,8 @@ class UpgradePowerCycleCoordinator:
             lock = self._locks.setdefault(port, threading.Lock())
 
         with lock:
+            if stop_control:
+                stop_control.checkpoint()
             command_started = self._monotonic()
             try:
                 supply = self._get_or_open_supply(port, on_output)
@@ -175,17 +181,21 @@ class SerialUpgradeController:
         session,
         sleep_fn: Callable[[float], None] = time.sleep,
         monotonic_fn: Callable[[], float] = time.monotonic,
+        stop_control=None,
     ) -> None:
-        self.session = session
-        self.sleep = sleep_fn
-        self._monotonic_fn = monotonic_fn
+        self.stop_control = stop_control
+        self.firmware_submitted = False
         self._cancel = threading.Event()
+        self.session = StopAwareSerialSession(session, stop_control, self._cancel) if stop_control else session
+        self.sleep = (lambda seconds: stop_control.sleep(seconds, sleep_fn)) if stop_control else sleep_fn
+        self._monotonic_fn = monotonic_fn
 
     def cancel(self) -> None:
         self._cancel.set()
 
     def wait_for_boot_login(self, power_started: threading.Event, timeout_seconds: float = BOOT_LOGIN_TIMEOUT_SECONDS) -> CommandResult:
-        if not power_started.wait(timeout_seconds):
+        ready = self.stop_control.wait_event(power_started, timeout_seconds) if self.stop_control else power_started.wait(timeout_seconds)
+        if not ready:
             return CommandResult(False, "等待程控电源写入上电帧信号超时。")
         try:
             deadline = time.monotonic() + timeout_seconds
@@ -262,6 +272,8 @@ class SerialUpgradeController:
                 result = self.session.wait_for_any(BOOT_LOGIN_RESULT_PROMPTS, 20, result_cursor)
                 if result in ("#", ">"):
                     return CommandResult(True, "boot 登录完成。")
+            except UpgradeStopped:
+                raise
             except RuntimeError as exc:
                 return CommandResult(False, f"串口交互异常，boot 登录失败:{exc}")
             except Exception as exc:
@@ -304,11 +316,17 @@ class SerialUpgradeController:
                 on_output(
                     f"自动重试 TFTP 命令：第 {attempt}/{TFTP_COMMAND_MAX_RETRIES} 次发送 {command}"
                 )
-            self.session.send_line(command)
-
-            completed, arp_failed = self._wait_for_tftp_completion_or_arp_failure(
-                cursor, TFTP_COMMAND_TIMEOUT_SECONDS
-            )
+            if self.stop_control:
+                self.stop_control.checkpoint()
+            # Once admitted, keep the current transfer alive until its existing boundary.
+            with self.stop_control.protect() if self.stop_control else nullcontext():
+                self.firmware_submitted = True
+                self.session.send_line(command)
+                completed, arp_failed = self._wait_for_tftp_completion_or_arp_failure(
+                    cursor, TFTP_COMMAND_TIMEOUT_SECONDS
+                )
+            if self.stop_control:
+                self.stop_control.checkpoint("固件已提交/命令已下发，当前传输等待结束；设备结果待确认，跳过重试、重启和恢复出厂。")
             if completed:
                 if on_output and attempt > 1:
                     on_output(
@@ -445,6 +463,8 @@ class SerialUpgradeController:
                     self.sleep(1.0)
                     continue
                 return CommandResult(False, "boot 登录后未检测到 shell 提示符。")
+            except UpgradeStopped:
+                raise
             except RuntimeError as exc:
                 return CommandResult(False, f"串口交互异常，boot 登录失败:{exc}")
             except Exception as exc:
@@ -543,11 +563,14 @@ class SerialUpgradeController:
     ) -> None:
         if not enabled:
             return
-        self.session.write(FACTORY_RESET_COMMAND.encode("utf-8"))
-        if on_command_sent:
-            on_command_sent(f"TX {FACTORY_RESET_COMMAND}")
-        self.sleep(1)
-        self.session.write(b"\r")
+        if self.stop_control:
+            self.stop_control.checkpoint()
+        with self.stop_control.protect() if self.stop_control else nullcontext():
+            self.session.write(FACTORY_RESET_COMMAND.encode("utf-8"))
+            if on_command_sent:
+                on_command_sent(f"TX {FACTORY_RESET_COMMAND}")
+            self.sleep(1)
+            self.session.write(b"\r")
         self.sleep(8)
 
 
@@ -595,12 +618,15 @@ def _power_cycle_current_channel(
     on_channel_powered: Callable[[int], None] | None = None,
     off_delay_seconds: float = POWER_CYCLE_OFF_DELAY_SECONDS,
     on_delay_seconds: float = POWER_CYCLE_ON_DELAY_SECONDS,
+    stop_control=None,
 ) -> CommandResult:
     """对当前请求对应的程控电源通道执行一次下电 + 上电。
 
     并行模式下走 UpgradePowerCycleCoordinator 串行化电源 COM 口;
     串行模式下走 power_on_selected_channels；调用方可分别指定入 boot 与 repower 时序。
     """
+    if stop_control:
+        stop_control.checkpoint()
     if (request.power_serial_port or "").strip():
         emit(
             f"样机升级上下电时序：断电后等待 {off_delay_seconds:g} 秒，"
@@ -615,6 +641,7 @@ def _power_cycle_current_channel(
             on_channel_powered=on_channel_powered,
             off_delay_seconds=off_delay_seconds,
             on_delay_seconds=on_delay_seconds,
+            **({"stop_control": stop_control} if stop_control else {}),
         )
     return power_on_selected_channels(
         request.power_serial_port,
@@ -636,6 +663,7 @@ def _run_tftp_command_with_power_supply(
     sleep_fn: Callable[[float], None],
     power_cycle_coordinator: UpgradePowerCycleCoordinator | None = None,
     strict_tftp_bind: bool = False,
+    stop_control=None,
 ) -> CommandResult:
     """Tftp指令(样机主动拉固件)链路:程控电源上电中断 boot,TFTP 完成后未命中 reset 时再次上电复位。
 
@@ -656,7 +684,7 @@ def _run_tftp_command_with_power_supply(
     def boot_worker() -> None:
         try:
             if request.boot_entry_method == BOOT_ENTRY_SDMC:
-                if not power_started.wait(BOOT_LOGIN_TIMEOUT_SECONDS):
+                if not (stop_control.wait_event(power_started, BOOT_LOGIN_TIMEOUT_SECONDS) if stop_control else power_started.wait(BOOT_LOGIN_TIMEOUT_SECONDS)):
                     boot_result.append(CommandResult(False, "等待程控电源写入上电帧信号超时。"))
                 else:
                     boot_result.append(enter_sdmc_boot(controller.session, controller._cancel, emit))
@@ -690,18 +718,27 @@ def _run_tftp_command_with_power_supply(
             # power_on_channels() 已在开启帧后执行本次升级专用的 1 秒稳定等待。
             # 不再补足旧的 10 秒启动等待，返回后立即放行 boot 串口线程。
             wait_seconds=0,
+            **({"stop_control": stop_control} if stop_control else {}),
             on_channel_powered=on_powered,
             off_delay_seconds=off_delay_seconds,
             on_delay_seconds=on_delay_seconds,
         )
 
-    power = power_on_current_channel(
-        on_channel_powered,
-        off_delay_seconds=UPGRADE_POWER_OFF_DELAY_SECONDS,
-        on_delay_seconds=UPGRADE_POWER_ON_DELAY_SECONDS,
-    )
+    try:
+        power = power_on_current_channel(
+            on_channel_powered,
+            off_delay_seconds=UPGRADE_POWER_OFF_DELAY_SECONDS,
+            on_delay_seconds=UPGRADE_POWER_ON_DELAY_SECONDS,
+        )
+    except Exception:
+        controller.cancel()
+        power_started.set()
+        worker.join()
+        raise
     if not power.ok:
         controller.cancel()
+        power_started.set()
+        worker.join(timeout=BOOT_LOGIN_TIMEOUT_SECONDS + 5)
         return power
     # power_on_channels() 返回时，本次升级专用的上电后 1 秒稳定等待已经结束。
     # 此处立即放行 worker，避免再额外等待而错过 boot 进入窗口。
@@ -710,13 +747,22 @@ def _run_tftp_command_with_power_supply(
     # 必须等电源函数返回，不能在 on_channel_powered 回调中提前启动登录。
     power_started.set()
     worker.join(timeout=BOOT_LOGIN_TIMEOUT_SECONDS + 5)
+    if worker.is_alive():
+        controller.cancel()
+        worker.join()
+    if stop_control:
+        stop_control.checkpoint()
     if not boot_result:
         return CommandResult(False, "boot 登录线程未返回结果。")
     if not boot_result[0].ok:
         return boot_result[0]
     emit("boot 登录完成，准备传输环境。")
 
+    if stop_control:
+        stop_control.checkpoint()
     network = prepare_tftp_network(request.server_interface, request.tftp_server_ip, emit, sleep_fn)
+    if stop_control:
+        stop_control.checkpoint()
     if not network.ok:
         return network
 
@@ -739,7 +785,11 @@ def _run_tftp_command_with_power_supply(
         server.stop()
 
     emit("TFTP 传输完成，开始观察 boot 重启标记。")
+    if stop_control:
+        stop_control.checkpoint("固件已提交/命令已下发，当前传输等待结束；设备结果待确认，跳过重试、重启和恢复出厂。")
     reset_sent = controller.monitor_post_tftp()
+    if stop_control:
+        stop_control.checkpoint()
     post_transfer_wait_seconds = (
         POWER_ON_SETTLE_SECONDS if request.restore_factory else POST_TFTP_NO_FACTORY_SETTLE_SECONDS
     )
@@ -749,7 +799,7 @@ def _run_tftp_command_with_power_supply(
             if request.restore_factory
             else "检测到 Boot/Bood，已发送 reset，等待 3 秒后结束当前通道升级。"
         )
-        sleep_fn(post_transfer_wait_seconds)
+        (stop_control.sleep(post_transfer_wait_seconds, sleep_fn) if stop_control else sleep_fn(post_transfer_wait_seconds))
     else:
         emit("未检测到 boot reset，开始重新上电。" if power_enabled else "未检测到 boot reset；未配置程控电源，跳过重新上电。")
         repower = power_on_current_channel()
@@ -761,7 +811,7 @@ def _run_tftp_command_with_power_supply(
                 if request.restore_factory
                 else "后备重新上电完成，等待 3 秒后结束当前通道升级。"
             )
-            sleep_fn(post_transfer_wait_seconds)
+            (stop_control.sleep(post_transfer_wait_seconds, sleep_fn) if stop_control else sleep_fn(post_transfer_wait_seconds))
     if not request.restore_factory:
         emit("恢复出厂：关闭，跳过最终系统登录，当前通道升级流程完成。")
         return CommandResult(True, f"{request.vlan} 全包升级流程完成（未恢复出厂）。")
@@ -780,6 +830,7 @@ def run_single_full_package_upgrade(
     sleep_fn: Callable[[float], None] = time.sleep,
     power_cycle_coordinator: UpgradePowerCycleCoordinator | None = None,
     strict_tftp_bind: bool = False,
+    stop_control=None,
 ) -> CommandResult:
     def emit(message: str) -> None:
         if on_output:
@@ -799,6 +850,8 @@ def run_single_full_package_upgrade(
     controller = None
     web_browser = None
     try:
+        if stop_control:
+            stop_control.checkpoint()
         if request.transfer_method not in (TRANSFER_TFTP_COMMAND, TRANSFER_TFTP_PUT, TRANSFER_WEB_GATEWAY):
             return CommandResult(False, "不支持的全包固件传输方式。")
         emit(f"进入 Boot 方式：{request.boot_entry_method}")
@@ -806,7 +859,7 @@ def run_single_full_package_upgrade(
         session = session_manager.acquire_control(owner, settings, log_path)
         if on_session_ready:
             on_session_ready(request.vlan, session, log_path)
-        controller = SerialUpgradeController(session, sleep_fn)
+        controller = SerialUpgradeController(session, sleep_fn, **({"stop_control": stop_control} if stop_control else {}))
 
         # Tftp指令(样机主动拉固件):使用程控电源上电中断 boot,
         # TFTP 传输完成后未命中 boot reset 时再次上电复位。
@@ -820,6 +873,7 @@ def run_single_full_package_upgrade(
                 sleep_fn=sleep_fn,
                 power_cycle_coordinator=power_cycle_coordinator,
                 strict_tftp_bind=strict_tftp_bind,
+                stop_control=stop_control,
             )
 
         # Tftp Put(本机推到 192.168.1.1):先对当前通道下电 + 上电；
@@ -839,9 +893,12 @@ def run_single_full_package_upgrade(
             sleep_fn=sleep_fn,
             power_cycle_coordinator=power_cycle_coordinator,
             wait_seconds=0,
+            **({"stop_control": stop_control} if stop_control else {}),
             off_delay_seconds=UPGRADE_POWER_OFF_DELAY_SECONDS,
             on_delay_seconds=UPGRADE_POWER_ON_DELAY_SECONDS,
         )
+        if stop_control:
+            stop_control.checkpoint()
         if not power_cycle.ok:
             return power_cycle
         emit(f"程控电源下电 + 上电完成:{power_cycle.message}" if power_enabled else power_cycle.message)
@@ -854,6 +911,8 @@ def run_single_full_package_upgrade(
         # 立即开始循环回车，不再叠加第二个 1 秒等待。
         if request.boot_entry_method == BOOT_ENTRY_SDMC:
             boot_login = enter_sdmc_boot(controller.session, controller._cancel, emit)
+            if stop_control:
+                stop_control.checkpoint()
             if not boot_login.ok:
                 return boot_login
         else:
@@ -862,18 +921,26 @@ def run_single_full_package_upgrade(
                 return username_prompt
             emit("检测到 UserName 提示符，开始使用 boot 用户名和密码登录。")
             boot_login = controller.login_tftp_put_boot_after_username()
+            if stop_control:
+                stop_control.checkpoint()
             if not boot_login.ok:
                 return boot_login
+        if stop_control:
+            stop_control.checkpoint()
         emit("boot 登录完成，准备打开网关Web升级界面。" if request.transfer_method == TRANSFER_WEB_GATEWAY
              else "boot 登录完成，准备使用 TFTPy 传输环境。")
 
         if request.transfer_method == TRANSFER_WEB_GATEWAY:
-            web_browser = start_gateway_upgrade(request, emit, sleep_fn)
+            web_browser = start_gateway_upgrade(request, emit, sleep_fn, **({"stop_control": stop_control} if stop_control else {}))
+            controller.firmware_submitted = True
         else:
             network = prepare_tftp_network(request.server_interface, request.tftp_server_ip, emit, sleep_fn)
+            if stop_control:
+                stop_control.checkpoint()
             if not network.ok:
                 return network
             # Tftp Put 分支:直接推送固件到 192.168.1.1。Tftp指令 分支在上方已经 return,不会落到这里。
+            controller.firmware_submitted = True
             upload_firmware(
                 request.firmware_path,
                 TFTP_PUT_DEVICE_IP,
@@ -882,7 +949,11 @@ def run_single_full_package_upgrade(
                 on_output=emit,
             )
             emit("TFTP 传输完成，开始观察 boot 重启标记。")
+        if stop_control:
+            stop_control.checkpoint("固件已提交/命令已下发，当前传输等待结束；设备结果待确认，跳过重试、重启和恢复出厂。")
         reset_sent = controller.monitor_post_tftp()
+        if stop_control:
+            stop_control.checkpoint()
         post_transfer_wait_seconds = (
             POWER_ON_SETTLE_SECONDS if request.restore_factory else POST_TFTP_NO_FACTORY_SETTLE_SECONDS
         )
@@ -892,7 +963,7 @@ def run_single_full_package_upgrade(
                 if request.restore_factory
                 else "检测到 Boot/Bood，已发送 reset，等待 3 秒后结束当前通道升级。"
             )
-            sleep_fn(post_transfer_wait_seconds)
+            (stop_control.sleep(post_transfer_wait_seconds, sleep_fn) if stop_control else sleep_fn(post_transfer_wait_seconds))
         else:
             # 与 Tftp指令一致：传输后未观察到自动 reset 时，使用当前通道的
             # 后备下电 + 上电复位。该后备时序保持普通电源默认值，不能套用首轮
@@ -908,6 +979,7 @@ def run_single_full_package_upgrade(
                 sleep_fn=sleep_fn,
                 power_cycle_coordinator=power_cycle_coordinator,
                 wait_seconds=0,
+                **({"stop_control": stop_control} if stop_control else {}),
             )
             if not repower.ok:
                 return repower
@@ -917,7 +989,7 @@ def run_single_full_package_upgrade(
                     if request.restore_factory
                     else "后备重新上电完成，等待 3 秒后结束当前通道升级。"
                 )
-                sleep_fn(post_transfer_wait_seconds)
+                (stop_control.sleep(post_transfer_wait_seconds, sleep_fn) if stop_control else sleep_fn(post_transfer_wait_seconds))
         if not request.restore_factory:
             emit("恢复出厂：关闭，跳过最终系统登录，当前通道升级流程完成。")
             return CommandResult(True, f"{request.vlan} 全包升级流程完成（未恢复出厂）。")
@@ -926,11 +998,20 @@ def run_single_full_package_upgrade(
             return final
         controller.restore_factory_if_enabled(request.restore_factory, on_command_sent=emit)
         return CommandResult(True, f"{request.vlan} 全包升级流程完成。")
+    except UpgradeStopped as exc:
+        detail = str(exc)
+        if controller is not None and controller.firmware_submitted and "结果待确认" not in detail:
+            detail += " 固件已提交/命令已下发，设备结果待确认。"
+        result = stopped_result(request.vlan, detail)
+        emit(result.message)
+        return result
     except Exception as exc:
         return CommandResult(False, f"{request.vlan} 串行升级异常：{exc}")
     finally:
         if web_browser is not None:
             try:
+                if stop_control and stop_control.is_set():
+                    web_browser.wait_for_upload_completion()
                 web_browser.close()
             except Exception as exc:
                 emit(f"Web升级浏览器清理失败：{exc}")
@@ -951,6 +1032,7 @@ def run_parallel_tftp_command_upgrades(
     on_session_ready: Callable[[str, object, Path], None] | None = None,
     on_item_started: Callable[[FullPackageUpgradeRequest], None] | None = None,
     on_item_complete: Callable[[FullPackageUpgradeItemResult], None] | None = None,
+    stop_control=None,
 ) -> list[FullPackageUpgradeItemResult]:
     """以固定并行度执行样机主动拉取固件流程，单台失败不取消其它样机。"""
     all_requests = list(requests)
@@ -975,6 +1057,7 @@ def run_parallel_tftp_command_upgrades(
             on_session_ready=on_session_ready,
             power_cycle_coordinator=coordinator,
             strict_tftp_bind=True,
+            **({"stop_control": stop_control} if stop_control else {}),
         )
 
     # coordinator 用 with 包裹，批次结束自动 close 所有持有的程控电源 COM。
@@ -982,13 +1065,20 @@ def run_parallel_tftp_command_upgrades(
         max_workers=max_workers, thread_name_prefix="parallel-tftp"
     ) as executor:
         while pending or active:
-            while pending and len(active) < max_workers:
+            if stop_control and stop_control.is_set():
+                for request in pending:
+                    item = FullPackageUpgradeItemResult(request, stopped_result(request.vlan, skipped=True))
+                    completed[id(request)] = item
+                    if on_item_complete:
+                        on_item_complete(item)
+                pending.clear()
+            while pending and len(active) < max_workers and not (stop_control and stop_control.is_set()):
                 request = pending.pop(0)
                 if on_item_started:
                     on_item_started(request)
                 active[executor.submit(run_one, request, coordinator)] = request
 
-            done, _pending_futures = wait(active, return_when=FIRST_COMPLETED)
+            done, _pending_futures = wait(active, timeout=0.1 if stop_control else None, return_when=FIRST_COMPLETED)
             for future in done:
                 request = active.pop(future)
                 try:
@@ -1012,6 +1102,7 @@ def run_parallel_tftp_put_upgrades(
     on_session_ready: Callable[[str, object, Path], None] | None = None,
     on_item_started: Callable[[FullPackageUpgradeRequest], None] | None = None,
     on_item_complete: Callable[[FullPackageUpgradeItemResult], None] | None = None,
+    stop_control=None,
 ) -> list[FullPackageUpgradeItemResult]:
     """以固定并行度执行本机 TFTPy Client 推送固件流程，单台失败不取消其它样机。"""
     all_requests = list(requests)
@@ -1038,19 +1129,27 @@ def run_parallel_tftp_put_upgrades(
             on_session_ready=on_session_ready,
             power_cycle_coordinator=coordinator,
             strict_tftp_bind=False,
+            **({"stop_control": stop_control} if stop_control else {}),
         )
 
     with UpgradePowerCycleCoordinator() as coordinator, ThreadPoolExecutor(
         max_workers=max_workers, thread_name_prefix="parallel-tftp-put"
     ) as executor:
         while pending or active:
-            while pending and len(active) < max_workers:
+            if stop_control and stop_control.is_set():
+                for request in pending:
+                    item = FullPackageUpgradeItemResult(request, stopped_result(request.vlan, skipped=True))
+                    completed[id(request)] = item
+                    if on_item_complete:
+                        on_item_complete(item)
+                pending.clear()
+            while pending and len(active) < max_workers and not (stop_control and stop_control.is_set()):
                 request = pending.pop(0)
                 if on_item_started:
                     on_item_started(request)
                 active[executor.submit(run_one, request, coordinator)] = request
 
-            done, _pending_futures = wait(active, return_when=FIRST_COMPLETED)
+            done, _pending_futures = wait(active, timeout=0.1 if stop_control else None, return_when=FIRST_COMPLETED)
             for future in done:
                 request = active.pop(future)
                 try:

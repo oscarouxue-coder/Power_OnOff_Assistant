@@ -36,6 +36,7 @@ from typing import Any, Callable, List, Optional, Tuple
 
 from line_check_assistant.config_store import ChannelConfig
 from line_check_assistant.onu_registration_store import OnuRegistrationConfig
+from src.models.upgrade_stop import UpgradeStopped
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
 from line_check_assistant.test_item_config_store import TestItemConfigStore
 from src.services.power_test_resume_service import PowerTestResumeSession
@@ -448,6 +449,11 @@ class PipelineOrchestrator:
             self.emit(f"=== 开始子任务 {SUBTASK_LABELS[code]} ===")
             try:
                 self._run_subtask(code)
+            except UpgradeStopped as exc:
+                self.ctx.stop_event.set()
+                self.emit(f"[全流程] 子任务 {SUBTASK_LABELS[code]} 已停止：{exc}，跳过后续子任务。")
+                self._results.append(SubTaskResult(code=code, ok=False, error=str(exc)))
+                break
             except Exception as exc:  # noqa: BLE001 - 编排器统一捕获
                 self.emit(f"[全流程] 子任务 {SUBTASK_LABELS[code]} 失败:{exc}")
                 self._results.append(SubTaskResult(code=code, ok=False, error=str(exc)))

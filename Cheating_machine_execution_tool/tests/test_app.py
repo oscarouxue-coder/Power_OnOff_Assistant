@@ -4089,6 +4089,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         thread_class.assert_called_once_with(
             target=context._parallel_tftp_command_upgrade_worker,
             args=(thread_class.call_args.kwargs["args"][0], 4),
+            kwargs={"run": context._sample_upgrade_run},
             daemon=True,
         )
         context._set_upgrade_status.assert_called_once_with("", "准备并行升级 1 台样机（最多 4 台）", 0)
@@ -4122,6 +4123,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         thread_class.assert_called_once_with(
             target=context._parallel_tftp_put_upgrade_worker,
             args=(thread_class.call_args.kwargs["args"][0], 4),
+            kwargs={"run": context._sample_upgrade_run},
             daemon=True,
         )
         context._set_upgrade_status.assert_called_once_with("", "准备并行升级 1 台样机（最多 4 台）", 0)

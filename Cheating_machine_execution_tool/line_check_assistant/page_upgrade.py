@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
+from src.models.upgrade_stop import UpgradeStopped
+from src.services.upgrade_stop_service import stopped_result
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
@@ -82,6 +84,7 @@ class UbusRpcError(RuntimeError):
 
 class UbusUpgradeClient:
     def __init__(self, local_bind_ip: str = "", request_timeout: float = 30.0):
+        self.stop_control = None
         self.local_bind_ip = local_bind_ip.strip()
         self.request_timeout = request_timeout
         self.session = requests.Session()
@@ -113,6 +116,8 @@ class UbusUpgradeClient:
             ],
         }
         for _index in range(attempts):
+            if self.stop_control:
+                self.stop_control.checkpoint()
             try:
                 response = self.session.post(self.ubus_url, json=payload, timeout=self.request_timeout, verify=False)
                 response_data = response.json()
@@ -209,6 +214,8 @@ class UbusUpgradeClient:
         ]
         last_access_denied: UbusRpcError | None = None
         for label, ubus_func, params in attempts:
+            if self.stop_control:
+                self.stop_control.checkpoint()
             try:
                 self.call(UBUS_SERVICE_BBFDM, ubus_func, params)
                 return label
@@ -224,6 +231,8 @@ class UbusUpgradeClient:
 
     def trigger_factory_reset(self):
         """按公司 SdmcUbusLib 的页面 UBUS 接口下发恢复出厂。"""
+        if self.stop_control:
+            self.stop_control.checkpoint()
         return self.call(
             UBUS_SERVICE_BBFDM,
             "operate",
@@ -259,12 +268,15 @@ def run_single_page_upgrade(
     status_interval_seconds: float = 5,
     reboot_timeout_seconds: float = 360,
     reboot_interval_seconds: float = 30,
+    stop_control=None,
 ) -> CommandResult:
     def emit(message: str) -> None:
         if on_output:
             on_output(message)
 
     label = request.vlan or request.device_ip
+    if stop_control and stop_control.is_set():
+        return stopped_result(label, skipped=True)
     if not request.firmware_path.is_file():
         return CommandResult(False, f"{label} 页面升级失败：固件文件不存在：{request.firmware_path}")
 
@@ -281,18 +293,28 @@ def run_single_page_upgrade(
             return CommandResult(False, f"{label} 页面升级失败：{network_result.message}")
 
     client = client_factory(request.bind_ip)
+    client.stop_control = stop_control
+    upgrade_attempted = False
+    ordinary_sleep = (lambda seconds: stop_control.sleep(seconds, sleep_fn)) if stop_control else sleep_fn
     try:
+        if stop_control:
+            stop_control.checkpoint()
         scheme = _login_with_fallback(client, request, emit)
         if not scheme:
             return CommandResult(False, f"{label} 页面升级失败：HTTP/HTTPS 均无法登录 UBUS")
 
         upload_url = f"{scheme}://{request.device_ip}{UPLOAD_PATH}"
+        if stop_control:
+            stop_control.checkpoint()
         emit(f"{label} 上传固件到设备：{upload_url}")
         status_code, upload_msg = client.upload_file(request.firmware_path, DEVICE_SAVE_PATH, upload_url)
         if status_code != 200:
             return CommandResult(False, f"{label} 页面升级失败：上传返回 {status_code}，{upload_msg}")
 
+        if stop_control:
+            stop_control.checkpoint("上传已返回，未触发设备升级。")
         emit(f"{label} 触发 UBUS 升级命令")
+        upgrade_attempted = True
         trigger_method = client.trigger_upgrade(on_output=emit)
         emit(f"{label} 升级命令已触发：{trigger_method}")
 
@@ -304,6 +326,8 @@ def run_single_page_upgrade(
             timeout_seconds=status_timeout_seconds,
             interval_seconds=status_interval_seconds,
         )
+        if stop_control:
+            stop_control.checkpoint(f"升级命令已下发，只读观察结束：{status_result.message}；设备最终结果待确认，跳过后续操作。")
         if not status_result.ok:
             return status_result
 
@@ -314,12 +338,14 @@ def run_single_page_upgrade(
             request.username,
             request.password,
             emit,
-            sleep_fn=sleep_fn,
+            sleep_fn=ordinary_sleep,
             timeout_seconds=reboot_timeout_seconds,
             interval_seconds=reboot_interval_seconds,
         )
         if not reboot_result.ok:
             return reboot_result
+        if stop_control:
+            stop_control.checkpoint()
         if request.restore_factory:
             emit(f"{label} 已完成升级并重新登录成功，恢复出厂：开启，开始下发 UBUS 命令")
             client.trigger_factory_reset()
@@ -328,12 +354,22 @@ def run_single_page_upgrade(
         else:
             emit(f"{label} 已完成升级并重新登录成功，恢复出厂：关闭，跳过")
         return CommandResult(True, f"{label} 页面升级完成。")
+    except UpgradeStopped as exc:
+        detail = str(exc)
+        if upgrade_attempted and "结果待确认" not in detail:
+            detail += " 升级命令已尝试下发，设备最终结果待确认。"
+        result = stopped_result(label, detail)
+        emit(result.message)
+        return result
     except requests.RequestException as exc:
         return CommandResult(False, f"{label} 页面升级请求异常：{exc}")
     except Exception as exc:
         return CommandResult(False, f"{label} 页面升级异常：{exc}")
     finally:
         client.logout()
+        session = getattr(client, "session", None)
+        if session is not None:
+            session.close()
 
 
 def run_page_upgrade_batch(
@@ -341,6 +377,7 @@ def run_page_upgrade_batch(
     on_output: Optional[Callable[[str], None]] = None,
     on_item_complete: Optional[Callable[[PageUpgradeItemResult], None]] = None,
     max_workers: int = 8,
+    stop_control=None,
 ) -> list[PageUpgradeItemResult]:
     if not requests_:
         return []
@@ -348,13 +385,25 @@ def run_page_upgrade_batch(
     results: list[PageUpgradeItemResult] = []
     with ThreadPoolExecutor(max_workers=workers) as executor:
         future_map = {
-            executor.submit(run_single_page_upgrade, request, on_output): request
+            executor.submit(run_single_page_upgrade, request, on_output, **({"stop_control": stop_control} if stop_control else {})): request
             for request in requests_
         }
-        for future in as_completed(future_map):
+        def completions():
+            pending = set(future_map)
+            while pending:
+                if stop_control and stop_control.is_set():
+                    for future in pending:
+                        future.cancel()
+                done = {future for future in pending if future.done()}
+                if not done:
+                    done, _ = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
+                pending -= done
+                yield from done
+
+        for future in completions() if stop_control else as_completed(future_map):
             request = future_map[future]
             try:
-                result = future.result()
+                result = stopped_result(request.vlan, skipped=True) if future.cancelled() else future.result()
             except Exception as exc:
                 result = CommandResult(False, f"{request.vlan or request.device_ip} 页面升级异常：{exc}")
             item_result = PageUpgradeItemResult(request=request, result=result)
@@ -371,6 +420,9 @@ def _login_with_fallback(
 ) -> str:
     label = request.vlan or request.device_ip
     for scheme in ("http", "https"):
+        control = getattr(client, "stop_control", None)
+        if control:
+            control.checkpoint()
         client.switch_url(f"{scheme}://{request.device_ip}{UBUS_PATH}")
         emit(f"{label} 尝试使用 {scheme.upper()} 登录 UBUS：{client.ubus_url}")
         if client.login(request.username, request.password):

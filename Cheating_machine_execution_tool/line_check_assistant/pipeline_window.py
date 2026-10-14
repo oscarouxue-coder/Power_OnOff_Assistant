@@ -522,6 +522,10 @@ class PipelineWindow:
         self._update_main_power_test_status(
             "stopped" if self._stop_requested else "completed"
         )
+        if self._stop_requested:
+            messagebox.showinfo("全流程已停止", "当前子任务已安全退出，后续子任务未执行。", parent=self.app)
+            self._refresh_statuses()
+            return
         n_ok = sum(1 for r in results if r.ok)
         n_fail = sum(1 for r in results if not r.ok)
         failed_codes = [SUBTASK_LABELS[r.code] for r in results if not r.ok]
@@ -570,6 +574,9 @@ class PipelineWindow:
         else:
             self._orchestrator.request_stop()
         self._stop_requested = True
+        stop_upgrade = getattr(getattr(self, "app", None), "_stop_sample_upgrade", None)
+        if callable(stop_upgrade):
+            stop_upgrade(from_pipeline=True)
         self._update_main_power_test_status("stopping")
         self._emit_to_main_log(
             "[主界面] 用户点击「停止测试」；全流程将在当前子任务安全退出后终止"
