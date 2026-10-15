@@ -131,6 +131,26 @@ class RequiredBaselineTestTests(unittest.TestCase):
         self.assertTrue(result.passed, result.detail)
         self.assertIn(str(len(REQUIRED_BASELINE_TEST_IDS)), result.detail)
 
+    def test_accepts_python_312_fully_qualified_method_output(self):
+        output = "\n".join(
+            f"{test_id.rsplit('.', 1)[1]} ({test_id}) ... ok"
+            for test_id in REQUIRED_BASELINE_TEST_IDS
+        )
+        self.assertEqual(missing_required_baseline_tests(output), [])
+
+    def test_accepts_mixed_formats_and_multiline_descriptions(self):
+        output = "\n".join(
+            f"{test_id.rsplit('.', 1)[1]} ({test_id if index % 2 else test_id.rsplit('.', 1)[0]})\n说明 ... ok"
+            for index, test_id in enumerate(REQUIRED_BASELINE_TEST_IDS)
+        )
+        self.assertTrue(check_required_baseline_tests(output).passed)
+
+    def test_method_name_mismatch_does_not_satisfy_required_id(self):
+        test_id = REQUIRED_BASELINE_TEST_IDS[0]
+        method = test_id.rsplit('.', 1)[1]
+        output = f"{method} ({test_id.rsplit('.', 1)[0]}.test_another_method) ... ok"
+        self.assertIn(test_id, missing_required_baseline_tests(output))
+
 
 class CheckMustExistTests(unittest.TestCase):
     """`check_must_exist` 在临时目录下的命中/缺失行为。"""

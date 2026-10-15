@@ -73,6 +73,10 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/__init__.py",
     "src/config.py",
     "src/core/__init__.py",
+    "src/core/github_release_client.py",
+    "src/models/app_update.py",
+    "src/services/app_update_service.py",
+    "src/ui/app_update_dialog.py",
     "src/ui/serial_terminal.py",
     "src/ui/dut_config_window.py",
     "src/ui/window_paint.py",
@@ -414,12 +418,13 @@ def check_py_compile_inventory(project_root: Path) -> CheckResult:
 
 def missing_required_baseline_tests(unittest_output: str) -> list[str]:
     """从 verbose unittest 输出中找出未执行的关键回归用例。"""
-    executed_test_ids = {
-        f"{test_class}.{test_name}"
-        for test_name, test_class in re.findall(
-            r"(?m)^(test_\w+) \(([\w.]+)\)", unittest_output
-        )
-    }
+    executed_test_ids = set()
+    for test_name, qualified_name in re.findall(
+        r"(?m)^(test_\w+) \(([\w.]+)\)", unittest_output
+    ):
+        # Python 3.12 在括号内显示 module.Class.method；旧版只显示 module.Class。
+        test_id = qualified_name if qualified_name.endswith(f".{test_name}") else f"{qualified_name}.{test_name}"
+        executed_test_ids.add(test_id)
     return [
         test_id
         for test_id in REQUIRED_BASELINE_TEST_IDS

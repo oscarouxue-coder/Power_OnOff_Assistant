@@ -15,6 +15,7 @@ $exePath = Join-Path $distDir "LineCheckAssistant.exe"
 $portableDir = Join-Path $distDir "LineCheckAssistant_portable"
 $portableConfigDir = Join-Path $portableDir "Auto_power_on_off_tool\config"
 $portableZip = Join-Path $distDir "LineCheckAssistant_portable.zip"
+$portableZipChecksum = Join-Path $distDir "LineCheckAssistant_portable.zip.sha256.txt"
 
 New-Item -ItemType Directory -Force -Path $specDir | Out-Null
 
@@ -116,10 +117,16 @@ try {
     if (-not (Test-Path -LiteralPath $portableZip -PathType Leaf)) {
         throw "Portable archive was not created: $portableZip"
     }
+    $zipHash = (Get-FileHash -LiteralPath $portableZip -Algorithm SHA256).Hash
+    Set-Content `
+        -LiteralPath $portableZipChecksum `
+        -Value "$zipHash *LineCheckAssistant_portable.zip" `
+        -Encoding Ascii
 
     Write-Host "Single-file EXE: $exePath"
     Write-Host "Portable directory: $portableDir"
     Write-Host "Portable ZIP: $portableZip"
+    Write-Host "Portable ZIP SHA256: $portableZipChecksum"
 
     $resolvedProjectRoot = [System.IO.Path]::GetFullPath($projectRoot).TrimEnd('\')
     $resolvedBuildDir = [System.IO.Path]::GetFullPath($buildDir).TrimEnd('\')

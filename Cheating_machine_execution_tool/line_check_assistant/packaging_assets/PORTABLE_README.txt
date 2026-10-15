@@ -14,6 +14,12 @@ LineCheckAssistant 免安装便携版
 6. 可在 PowerShell 中执行以下命令核对 EXE 完整性：
    Get-FileHash .\LineCheckAssistant.exe -Algorithm SHA256
    结果应与 LineCheckAssistant.exe.sha256.txt 中的值一致。
+7. 主界面“检查更新”仅在手动点击后访问 GitHub，发现新版可选择下载完整便携 ZIP。
+   下载支持取消，校验通过后可打开所在文件夹，不会自动替换或启动新版。
+8. 手动换版前先结束测试、退出旧程序，备份旧目录及 Auto_power_on_off_tool/config；
+   将新 ZIP 完整解压到另一个新目录，保留新包默认配置副本，再按版本发布说明
+   迁移本机 INI 和自定义测试方案。不要把新包默认配置覆盖到旧目录；核对网卡、
+   COM、账号、项目和文件路径后使用新版，确认正常前保留旧版与备份。
 
 重要提示：设备升级、ONU 注册/删除、重启等操作会修改真实设备，执行前请确认
 目标设备、源 IP、端口及维护窗口。

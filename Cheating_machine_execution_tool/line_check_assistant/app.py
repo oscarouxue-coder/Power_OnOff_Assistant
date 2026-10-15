@@ -15,6 +15,7 @@ import threading
 from datetime import datetime
 from src.services.test_item_pretest_service import prepare_pretest_request
 from src.ui.test_item_pretest_controls import PretestControls
+from src.ui.app_update_dialog import AppUpdateDialog, arrange_update_toolbar
 from pathlib import Path
 from tkinter import BooleanVar, Button, Canvas, Checkbutton, DoubleVar, END, Frame, IntVar, Label, Listbox, Menu, StringVar, TclError, Text, Tk, Toplevel, filedialog, messagebox, ttk
 
@@ -555,6 +556,14 @@ class LineCheckAssistant(Tk):
         dut_cancel_event = getattr(self, "dut_config_cancel_event", None)
         if dut_cancel_event is not None:
             dut_cancel_event.set()
+        updates = getattr(self, "app_update_dialog", None)
+        if updates is not None and not updates.prepare_app_close(self._on_app_close):
+            return
+        if updates is not None and updates.jobs:
+            # 更新线程已退出；销毁日志控件前落盘本次收尾日志，按当前队列快照限量排空。
+            pending_logs = self.log_queue.qsize()
+            for _ in range((pending_logs + MAIN_LOG_EVENTS_PER_TICK - 1) // MAIN_LOG_EVENTS_PER_TICK):
+                self._drain_log_queue()
         try:
             if self.onu_save_after_id is not None:
                 try:
@@ -825,20 +834,29 @@ class LineCheckAssistant(Tk):
 
         toolbar = ttk.Frame(root, style="Surface.TFrame", padding=(12, 10))
         toolbar.pack(fill="x", pady=(0, 14))
-        ttk.Label(toolbar, text="常用工具", style="CardTitle.TLabel").pack(side="left", padx=(2, 16))
-        ttk.Button(toolbar, text="自动上/下电", command=self._launch_power_on, style="Primary.TButton").pack(side="left")
-        ttk.Button(toolbar, text="样机升级", command=self._open_upgrade_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(toolbar, text="写样机参数", command=self._open_sample_parameter_writer, style="Tool.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(toolbar, text="ONU注册", command=self._open_onu_registration_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(toolbar, text="串口日志", command=self._open_serial_log_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(toolbar, text="DUT配置", command=self._open_dut_config_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(toolbar, text="刷新网卡", command=self._refresh_adapters, style="Secondary.TButton").pack(side="right", padx=(0, 8))
-        ttk.Button(toolbar, text="刷新串口", command=self._refresh_power_serial_ports, style="Secondary.TButton").pack(side="right", padx=(0, 8))
+        toolbar_commands = ttk.Frame(toolbar, style="Surface.TFrame")
+        toolbar_actions = ttk.Frame(toolbar, style="Surface.TFrame")
+        ttk.Label(toolbar_commands, text="常用工具", style="CardTitle.TLabel").pack(side="left", padx=(2, 16))
+        ttk.Button(toolbar_commands, text="自动上/下电", command=self._launch_power_on, style="Primary.TButton").pack(side="left")
+        ttk.Button(toolbar_commands, text="样机升级", command=self._open_upgrade_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(toolbar_commands, text="写样机参数", command=self._open_sample_parameter_writer, style="Tool.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(toolbar_commands, text="ONU注册", command=self._open_onu_registration_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(toolbar_commands, text="串口日志", command=self._open_serial_log_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(toolbar_commands, text="DUT配置", command=self._open_dut_config_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
+        self.app_update_dialog = AppUpdateDialog(self, RELEASE_VERSION, log=self.log_queue.put)
+        self.check_updates_button = ttk.Button(
+            toolbar_actions, text="检查更新", command=self.app_update_dialog.open, style="Secondary.TButton",
+        )
+        self.check_updates_button.pack(side="right")
+        self.app_update_dialog.bind_button(self.check_updates_button)
+        ttk.Button(toolbar_actions, text="刷新网卡", command=self._refresh_adapters, style="Secondary.TButton").pack(side="right", padx=(0, 8))
+        ttk.Button(toolbar_actions, text="刷新串口", command=self._refresh_power_serial_ports, style="Secondary.TButton").pack(side="right", padx=(0, 8))
         ttk.Label(
-            toolbar,
+            toolbar_actions,
             text=admin_text,
             style="Success.TLabel" if admin_ok else "Danger.TLabel",
         ).pack(side="right", padx=(0, 16))
+        arrange_update_toolbar(toolbar, toolbar_commands, toolbar_actions)
 
         body = ttk.Frame(root, style="App.TFrame")
         body.pack(fill="both", expand=True)

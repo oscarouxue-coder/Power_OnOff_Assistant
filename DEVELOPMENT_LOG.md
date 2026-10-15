@@ -1,5 +1,32 @@
 # 开发记录
 
+## 2026-10-16 - 增加主程序检查更新与下载
+
+- 类型：功能。
+- 背景：负责人确认实施主界面手动检查 GitHub Releases、程序内下载完整便携 ZIP、校验后手动换版方案；不创建/上传 Release，也不自动替换或运行新 EXE。
+- 完成内容：① 新增独立 models/core/services/ui 模块，复用当前发布版本，按三段数字比较，读取 Latest 正式发布、说明与固定 ZIP/SHA256 附件；错误与无更新分开显示。② 后台 HTTPS 查询/重定向及流式下载，有限连接/读取超时、取消、专属临时文件、大小/SHA256/ZIP 格式检查与最终落盘；覆盖必须确认，失败保留原目标，仅清理本次临时文件。③ 独立 Tk 窗口显示结果/说明、下载和校验进度、取消及打开目录；进度合并避免消息积压，旧任务与新窗口隔离；退出保持既有设备取消请求，并等待全部更新线程清理、落盘收尾日志后退出。④ 工具栏新增更新按钮；Windows 源码装配测试发现窄窗口挤压后，将右侧控件在空间不足时整体换行，保留管理员状态/刷新串口/刷新网卡顺序；独立更新窗口的文字随宽度换行。⑤ 构建脚本新增 ZIP SHA256 旁文件，4个新增源码纳入编译清单；同步操作说明、便携说明、状态及验收边界。⑥ 全量测试通过后发现旧门禁将 Python 3.12 的完整方法名重复拼接，误报关键ID未执行；兼容新旧 verbose 格式，保持原173项名单，补3项现代/混合格式及名称不匹配回归。
+- 修改文件：
+  - `.claude/plans/main-app-update-download.md`
+  - `Cheating_machine_execution_tool/src/models/app_update.py`
+  - `Cheating_machine_execution_tool/src/core/github_release_client.py`
+  - `Cheating_machine_execution_tool/src/services/app_update_service.py`
+  - `Cheating_machine_execution_tool/src/ui/app_update_dialog.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/build_line_check_assistant.ps1`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_app_update.py`
+  - `Cheating_machine_execution_tool/tests/test_app_update_ui.py`
+  - `Cheating_machine_execution_tool/tests/test_portable_release.py`
+  - `Cheating_machine_execution_tool/tests/test_verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/PORTABLE_README.txt`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置 `PYTHONUTF8=1`，执行 `python -m unittest discover -s tests -p 'test_app_update*.py' -v`、`python -m unittest discover -s tests -p test_verify_baseline.py -v`、`python scripts/verify_baseline.py`；PowerShell Parser 只读解析打包脚本；仓库根执行 `git diff --check`。Windows Tk 测试只装配源码界面，设备/配置/日志回调替换为模拟，网络与下载使用模拟响应/临时文件；覆盖1040/1200/1600宽度、普通/检查中文字和管理员权限两类提示、主线程响应、完整下载/校验/打开目录、关闭取消与临时文件清理，以及560×470更新窗口文字/按钮可见性。另用实际 GitHubReleaseClient 只读请求公开 Latest 接口，不下载程序或上传资源。
+- 验证结果：63项更新专项全部通过，其中6项为真实 Windows Tk 源码装配/窗口测试；门禁专项20项通过（含本轮新增3项）。合计新增66项，最终完整基线 `ALL CHECKS PASSED`（85个源码编译/覆盖、1110项测试、173项指定关键回归及协议不变量通过）；PowerShell 语法检查及差异格式检查通过。首次沙箱内 Tcl 初始化资源不可访问，沙箱外验证；早期已有本机配置缺失导致的失败，验证期间该配置文件随后出现，原用例已复核通过，保留其现有内容且未纳入本轮修改清单。真实 Latest 接口于本轮返回 HTTP 404，仅能确认当前版本/资源不可访问，不能据此确定仓库私有或尚未正式发布；未误报“已是最新版”。
+- 后续待办：公开正式 Release 及同次构建 ZIP/校验附件准备好后，由负责人完成真实检查/下载与完整主程序现场操作验收。未修改本机 INI、未打包或触碰 build/dist/logs/.venv、未运行 EXE、未操作设备、未创建/上传 Release、未提交 Git；现有发布 EXE 不含此功能。
+
 ## 2026-10-15 - 跟踪全部运行配置文件
 
 - 类型：修改。
