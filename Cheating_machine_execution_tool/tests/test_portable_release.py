@@ -198,9 +198,10 @@ class PortableReleaseBuildScriptTests(unittest.TestCase):
         hook_globals = runpy.run_path(str(hook_path))
         datas = hook_globals["datas"]
 
-        self.assertEqual([destination for _source, destination in datas], ["tcl", "tk"])
-        self.assertTrue((Path(datas[0][0]) / "init.tcl").is_file())
-        self.assertTrue((Path(datas[1][0]) / "tk.tcl").is_file())
+        self.assertEqual([destination for _source, destination in datas], ["tcl", "tk", "_tcl_data", "_tk_data"])
+        for source, destination in datas:
+            expected = "init.tcl" if destination in ("tcl", "_tcl_data") else "tk.tcl"
+            self.assertTrue((Path(source) / expected).is_file())
 
     def test_build_script_creates_directory_zip_hash_and_never_launches_exe(self):
         script = (PROJECT_ROOT / "build_line_check_assistant.ps1").read_text(encoding="utf-8")
@@ -226,6 +227,8 @@ class PortableReleaseBuildScriptTests(unittest.TestCase):
         self.assertIn("PORTABLE_README.txt", script)
         self.assertIn("'tcl\\\\init.tcl'", script)
         self.assertIn("'tk\\\\tk.tcl'", script)
+        self.assertIn("'_tcl_data\\\\init.tcl'", script)
+        self.assertIn("'_tk_data\\\\tk.tcl'", script)
         self.assertNotIn("Start-Process", script)
 
 

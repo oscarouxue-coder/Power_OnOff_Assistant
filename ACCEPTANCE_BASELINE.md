@@ -26,7 +26,7 @@ python scripts\verify_baseline.py
 - 依赖以 `requirements.txt` 为准；除主程序原有 `pyserial / tftpy / requests / openpyxl / xlrd` 外，第7项旧业务无 GUI 运行还需 `requests-toolbelt / paramiko / ping3 / pywifi / configobj / psutil`（许可证清单见 `THIRD_PARTY_NOTICES.md`）
 - 打包：`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1` → 单文件`dist\LineCheckAssistant.exe`、完整目录`dist\LineCheckAssistant_portable\`和可搬运的`dist\LineCheckAssistant_portable.zip`
 - 构建便携版时必须重新生成`Auto_power_on_off_tool/config`，不得复制当前电脑的账号密码、OLT/源IP/ONU ID、钉钉与远程信息、固件/参数表路径、项目身份、网卡、串口或无线网卡绑定；业务命令模板和C600业务映射可保留。ZIP必须包含EXE、脱敏配置、`PORTABLE_README.txt`、第三方声明和EXE SHA256
-- PyInstaller 5.10.1的Tkinter运行时要求EXE解压根目录存在`tcl`和`tk`；构建门禁必须从实际EXE归档命中`tcl\init.tcl`与`tk\tk.tcl`，不得使用会触发`pyi_rth__tkinter`启动失败的`_tcl_data/_tk_data`旧目标名
+- 既有PyInstaller 5.10.1的Tkinter运行时要求EXE解压根目录存在`tcl`和`tk`，当前PyInstaller 6.21.0要求`_tcl_data`和`_tk_data`；发布包同时保留两种布局。构建门禁必须从实际EXE归档命中`tcl\init.tcl`、`tk\tk.tcl`及`_tcl_data\init.tcl`、`_tk_data\tk.tcl`，与包内实际`pyi_rth__tkinter`要求相符。2026-10-16已静态核对V1.2.1四份数据及6运行时，未在本机运行新EXE；目标电脑启动仍待负责人确认。
 - **构建后不在当前 PC 运行任一新生成的 `LineCheckAssistant.exe`**，仅确认打包成功、ZIP结构、脱敏结果和哈希并报告路径
 - 主界面内容区不得重复显示“openWRT老化测试环境搭建助手”和“配置测试通道、完成自动上/下电并检查全部线路”，“执行日志”标题下不得显示“运行步骤、检查结果和异常信息”；管理员权限状态必须位于常用工具栏右侧、视觉上在“刷新串口”左侧，权限就绪/缺失仍分别使用成功/危险样式，刷新串口与刷新网卡顺序不得改变
 - **已实现未验收（2026-08-31）**：左侧“选择测试通道”列表右键任一有效行时，必须先将该行设为当前通道，再显示“打开本次开关机运行日志”。该操作只在`Auto_power_on_off_tool/test_results/device_N/`匹配当前通道的`device_N_command_results_*.log`，按文件名时间戳选择最新项，并仅交给Windows关联程序打开；不得读取后改写、重命名或清理旧结果文件，也不得触发电源、设备或全流程操作。成功、未找到和打开失败都必须写入主执行日志。
@@ -449,7 +449,7 @@ python scripts\verify_baseline.py
 
 ### 2.15 主程序检查更新与便携包下载
 
-- **状态**：已实现未验收（2026-10-16；Windows 源码组件及模拟下载验证，真实公开 Release 联调与负责人现场操作待确认）。
+- **状态**：已实现未验收（2026-10-16；Windows源码组件、公开V1.2.1真实Release与源码更新窗口自动联调通过，发布EXE启动及负责人完整现场操作待确认）。
 - 仅由主界面“检查更新”按钮触发，使用普通网络访问现有公开仓库 GitHub Latest 正式 Release；复用包内本机版本，按三段数字比较，不提供降级、草稿或预发布。检查失败不得显示“已是最新版”。
 - 发现新版后显示版本、日期、说明和包大小，操作员可暂不下载或选择保存位置；覆盖已有文件必须确认。ZIP 和对应 SHA256 附件缺一不可，固定名称分别为 `LineCheckAssistant_portable.zip` / `LineCheckAssistant_portable.zip.sha256.txt`；构建脚本额外输出 ZIP 校验文件。
 - 请求及重定向均使用 HTTPS 并校验证书；后台流式下载到本次专属临时文件，大小、SHA256 和 ZIP 格式检查通过后才生成最终 ZIP。失败或取消只清理本次临时文件，既有目标保留；无法清理必须明确报错。
@@ -457,10 +457,11 @@ python scripts\verify_baseline.py
 - 工具栏右侧保持“管理员状态 → 刷新串口 → 刷新网卡 → 检查更新”顺序；窄窗口时右侧整体换行，避免遮挡已有入口。启动不联网，不自动替换、解压、迁移配置、退出旧版或运行新版。
 - 主日志包含检查开始、实际 GET、发现/无需更新、下载与校验、成功/失败/取消/跳过。成功后只提供打开所在文件夹及手动换版、备份配置说明。
 - **对应测试**：`tests/test_app_update.py`、`tests/test_app_update_ui.py`、`tests/test_portable_release.py`。源码 UI 验证只装配界面、使用模拟网络和临时文件，不执行主程序设备初始化，不代替真实发布/下载链路验收。
+- **发布联调证据（2026-10-16）**：V1.2.1已发布至现有公开仓库并设为Latest；匿名客户端以V1.1.4发现v1.2.1，V1.2.1及更高版本不提供更新；真实下载取消后临时文件清理。独立源码Tk更新窗口以旧版本号显示下载选择，实际下载公开ZIP后通过SHA256、ZIP完整性、包内V1.2.1及EXE哈希比对，并显示打开所在文件夹；以V1.2.1再次检查显示已是最新版。未运行交付EXE，也不将该自动化证据升级为负责人现场或真实设备验收。
 
 ## 3. 待确认 / 疑似过时内容
 
-- **2026-10-16 主程序检查更新（§2.15，已实现未验收）**：负责人需使用真实公开正式 Release 核对检查、说明、选择保存、下载进度、SHA256、取消/断网、覆盖确认及手动迁移配置；检查/下载时的完整主程序交互与退出收尾待现场确认。当前已用模拟网络完成源码工具栏及独立真实 Tk 窗口验证，不创建 Release、不上传或运行新 EXE，不扩大既有设备业务验收范围。
+- **2026-10-16 主程序检查更新（§2.15，已实现未验收）**：V1.2.1真实公开Release、匿名版本比较、下载/取消及独立源码Tk窗口联调已通过；负责人仍需在目标电脑启动发布EXE，核对完整主界面检查/下载、选择保存、取消/断网、覆盖确认、退出收尾和手动配置迁移。不以自动化源码窗口替代发布EXE启动或负责人现场验收，不扩大既有设备业务验收范围。
 
 - **2026-10-15 CMS 登录起始（§2.11/§2.14，已实现未验收）**：负责人在 Windows 源码版确认 `>` 样机预备测试、正式执行及项目信息查询；复验 `#` 既有样机、延迟提示/失败/停止和多通道隔离。VLAN122 单台两入口自动实连已确认登录及 `sh` 后的 `#`，未执行测试项、完整版本查询或设备配置，不扩大原验收范围；共享 transport 空闲读取超时仍保持原行为。
 

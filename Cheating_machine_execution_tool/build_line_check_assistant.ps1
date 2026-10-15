@@ -55,7 +55,7 @@ try {
         throw "PyInstaller did not create the expected file: $exePath"
     }
 
-    # pyi_rth__tkinter requires these exact roots below sys._MEIPASS.  Check
+    # Keep the accepted 5.x roots and the current 6.x roots below sys._MEIPASS. Check
     # the one-file archive itself so a build with misplaced Tcl/Tk data can
     # never be promoted to the portable ZIP again.
     $archiveListing = & python -m PyInstaller.utils.cliutils.archive_viewer -l $exePath 2>&1
@@ -65,8 +65,10 @@ try {
     # archive_viewer renders path separators escaped in repr form (\\).
     $hasTclData = [bool]($archiveListing | Select-String -SimpleMatch "'tcl\\init.tcl'")
     $hasTkData = [bool]($archiveListing | Select-String -SimpleMatch "'tk\\tk.tcl'")
-    if (-not ($hasTclData -and $hasTkData)) {
-        throw "Frozen Tkinter data is incomplete: expected tcl\init.tcl and tk\tk.tcl"
+    $hasModernTclData = [bool]($archiveListing | Select-String -SimpleMatch "'_tcl_data\\init.tcl'")
+    $hasModernTkData = [bool]($archiveListing | Select-String -SimpleMatch "'_tk_data\\tk.tcl'")
+    if (-not ($hasTclData -and $hasTkData -and $hasModernTclData -and $hasModernTkData)) {
+        throw "Frozen Tkinter data is incomplete: expected tcl/tk and _tcl_data/_tk_data roots"
     }
 
     if (Test-Path -LiteralPath $thirdPartyNotice) {

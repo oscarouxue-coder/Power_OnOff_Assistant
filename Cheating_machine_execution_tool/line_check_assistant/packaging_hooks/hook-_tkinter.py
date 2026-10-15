@@ -6,11 +6,14 @@ import _tkinter
 _tcl_root = Path(sys.base_prefix) / "tcl"
 datas = [
     # PyInstaller 5.10.1's pyi_rth__tkinter runtime hook reads these exact
-    # unversioned destinations from sys._MEIPASS.  Using the historical
-    # _tcl_data/_tk_data names packages the files but makes every frozen Tk
-    # application fail before main() with "Tcl data directory ... not found".
+    # unversioned destinations from sys._MEIPASS. Keep them for the accepted
+    # 5.x packaging contract; modern destinations alone break that runtime.
     (str(_tcl_root / f"tcl{_tkinter.TCL_VERSION}"), "tcl"),
     (str(_tcl_root / f"tk{_tkinter.TK_VERSION}"), "tk"),
+    # PyInstaller 6 uses these roots. Retain both layouts for the accepted
+    # 5.x packaging contract and for the current 6.x runtime hook.
+    (str(_tcl_root / f"tcl{_tkinter.TCL_VERSION}"), "_tcl_data"),
+    (str(_tcl_root / f"tk{_tkinter.TK_VERSION}"), "_tk_data"),
 ]
 
 for source, _destination in datas:

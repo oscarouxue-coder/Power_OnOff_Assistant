@@ -1,5 +1,26 @@
 # 开发记录
 
+## 2026-10-16 - 打包并发布V1.2.1
+
+- 类型：构建。
+- 背景：负责人要求重新打包EXE为1.2.1并发布到GitHub，再验证检查更新功能；遵守不在当前PC运行新EXE的仓库规则。
+- 完成内容：① 包内版本更新为V1.2.1及2026-10-16发布说明，包含主程序更新、升级停止、CMS登录修复与原有功能。② 检查当前PyInstaller 6.21.0实际运行时，发现其要求`_tcl_data/_tk_data`而原自定义钩子只生成旧布局；保留`tcl/tk`并追加6布局，构建门禁加强为四份资源均存在，原测试ID保留并增强断言。③ 执行标准打包脚本生成EXE、完整便携ZIP及SHA256，静态检查嵌入版本/更新模块、实际运行时资源、ZIP完整性、6份脱敏配置与三处EXE哈希一致。④ 创建远端v1.2.1标签指向已有更新功能提交c8836c2，保持main不变；创建草稿、上传六份附件并比对GitHub大小/摘要后正式发布为Latest。⑤ 用匿名源码客户端及真实Tk更新窗口完成实际公开Release检查、下载、校验、取消和同版无需更新联调；未运行新EXE或操作真实设备。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/VERSION_INFO.txt`
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_hooks/hook-_tkinter.py`
+  - `Cheating_machine_execution_tool/build_line_check_assistant.ps1`
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_specs/LineCheckAssistant.spec`（当前PyInstaller自动生成）
+  - `Cheating_machine_execution_tool/tests/test_portable_release.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 构建输出：`Cheating_machine_execution_tool/dist/LineCheckAssistant.exe`、`dist/LineCheckAssistant_portable/`、`dist/LineCheckAssistant_portable.zip`及`dist/LineCheckAssistant_portable.zip.sha256.txt`（后三者相对于主源码目录）。
+- GitHub发布：[LineCheckAssistant V1.2.1](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.1)；附件包括EXE、便携ZIP、两份SHA256、VERSION_INFO.txt和THIRD_PARTY_NOTICES.md。发布标签基于c8836c2fce102c490a0c8d93b46c268aa4de2aec；本轮版本/打包/文档修正未自动提交，发布说明明确源码基准及工作区打包调整。
+- 验证方法：主源码目录设置`PYTHONUTF8=1`，执行`python scripts/verify_baseline.py`与`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1`。使用CArchiveReader/PYZ读取EXE而不执行，检查四类Tcl/Tk资源、实际`pyi_rth__tkinter`所需目录、嵌入版本及四个新增更新模块；ZIP CRC/文件清单、6份配置脱敏及哈希检查。一次性验证助手`%TEMP%/linecheck_verify_v121_c8836c2.py static/live`分别执行包检查及匿名真实更新链路；发布助手使用已有Git Credential Manager凭据，仅在进程内认证，不显示或保存凭据。
+- 验证结果：完整门禁`ALL CHECKS PASSED`（85个源码编译/覆盖、1110项测试、173项指定关键回归及协议不变量）；构建成功。EXE为23,553,111字节，SHA256 `dab043eb5c5e46c4635dfc5bcc0b693cb65cca6b79c6958442b1e2ea2c56d6d6`；ZIP为23,190,186字节，SHA256 `48cb63c8fde4aaa4542c374df6090bd36acf6ba67e5ac80f0194aac8df3f3b8b`；GitHub六份附件大小及摘要全部匹配。匿名V1.1.4发现v1.2.1，V1.2.1/V1.2.2不提供更新；真实下载取消后临时文件清理；源码Tk窗口实际下载ZIP后显示SHA256通过及打开所在文件夹，下载内容的ZIP CRC、包内V1.2.1与EXE哈希均匹配本地交付物。注入旧版本号仅用于源码窗口验证，不代表运行旧/新发布EXE。
+- 后续待办：目标Windows电脑完整解压新版后启动、完整主界面/退出收尾及真实设备现场复验；自动联调不升级为负责人正式验收。未改本机INI、未运行交付EXE、未提交本轮源码修改；构建产物不纳入Git。
+
 ## 2026-10-16 - 增加主程序检查更新与下载
 
 - 类型：功能。
