@@ -1,5 +1,23 @@
 # 开发记录
 
+## 2026-10-15 - 修复CMS登录初始回车错位
+
+- 类型：BUG 修复。
+- 背景：负责人反馈预备测试连接中断、项目信息查询等待 Password 超时；VLAN122 实连发现连接后主动回车会提交空用户名，造成 CMS 登录步骤错位。负责人要求仅修复 `>` 登录路径，保留已正常工作的 `#` 路径。
+- 完成内容：① 两个新版业务登录入口仅在成功提示符严格为 `>` 时，从新连接历史起点等待用户名提示，取消无条件初始回车；覆盖预备测试、测试项执行和项目信息/版本预检查询。② 增加 CMS 起始、用户名/密码已发送及等待结果日志，新增日志不显示密码值；后续提示仍使用各自发送前 cursor，避免历史匹配。③ 保留其它提示符初始回车、源 IP、换行、超时、停止、确认、持久化及登录后命令/1秒等待。共享 transport 空闲读取超时问题不在本轮修改范围。④ 新增7项回归，同步操作说明、状态和待验收边界。
+- 修改文件：
+  - `.claude/plans/cms-telnet-login.md`
+  - `Cheating_machine_execution_tool/src/services/test_item_execution_service.py`
+  - `Cheating_machine_execution_tool/src/services/device_project_info_service.py`
+  - `Cheating_machine_execution_tool/tests/test_cms_telnet_login.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置 `PYTHONUTF8=1`，执行 `python -m unittest discover -s tests -p test_cms_telnet_login.py` 和 `python scripts/verify_baseline.py`；仓库根执行 `git diff --check`。实连使用 `TelnetSession` 绑定 192.168.1.122 → 192.168.1.1:23，依次调用项目信息 `_login` 和包装 `_CancellableSession` 的测试项 `_login`，使用已授权账号，保留实际 `sh` 与1秒等待，通过只读历史检查 CMS banner、shell 行首 `#` 且无 `Login incorrect`，最后关闭连接。
+- 验证结果：7项新增回归通过，覆盖主动/分片提示、空行/banner、非CMS原行为、缺提示不盲发、旧提示不能掩盖密码/成功阶段失败、空登录后命令及预备测试停止；完整门禁 `ALL CHECKS PASSED`（81个源码编译/覆盖、1044项测试、173项指定回归及协议不变量通过）。VLAN122 单台两个源码登录入口实连均成功到达 `>`，发送 `sh` 后观察到 `#`；未执行测试项、完整版本查询、升级、重启或设备配置。不将本次自动实连升级为负责人正式验收。
+- 后续待办：负责人复验 Windows 源码版预备测试、测试项执行、版本查询和 `#` 既有样机；多通道、异常/延迟/停止仍按基线待确认。本轮不打包、不启动EXE、不提交Git，不修改本机INI及build/dist/logs/.venv。
+
 ## 2026-10-14 - 增加样机升级安全停止
 
 - 类型：功能。

@@ -134,17 +134,20 @@ def _login(
 ) -> None:
     """按 ``TelnetSettings`` 字段完成 telnet 登录。
 
-    时序:先发 ``\\r`` 触发样机重发 banner → 等 input_user_flag → 发 user →
+    时序:CMS (>) 从历史起点等提示；其它路径先发回车 → 等 input_user_flag → 发 user →
     等 input_password_flag → 发 password → 等 login_success_flag。
     成功提示符严格为 > 时，再下发配置的登录后指令并等待 1 秒。
     任一阶段超时抛 ``RuntimeError``,由 worker 标记「登录失败」并停止该台。
 
-    与 ``sample_parameter_service._login`` 同款约定:登录首步先发 ``\\r`` 触发 prompt,
-    避免 cursor 落在 banner 中段后 wait_for_any 看不到历史 prompt。
+    CMS 会主动输出 Login:，额外回车会提交空用户名；仅其它路径保留原唤醒行为。
     """
-    # 触发样机重发 banner(若已发,则此 CR 无副作用,只是再按一次回车)
-    cursor = session.cursor()
-    session.write(b"\r", sensitive=False)
+    cms_login = telnet.login_success_flag == ">"
+    if cms_login:
+        cursor = 0  # 新连接的 Login: 可能已被读取线程收进历史。
+        emit("[Telnet 登录] CMS 路径：跳过初始回车，等待用户名提示符。")
+    else:
+        cursor = session.cursor()
+        session.write(b"\r", sensitive=False)
     flag = session.wait_for_any(
         [telnet.input_user_flag],
         timeout_seconds=LOGIN_USER_PROMPT_TIMEOUT_SECONDS,
@@ -160,6 +163,8 @@ def _login(
     # 响应正好落在该区间;若在 send_line 之后取 cursor,cursor 已在 end,无新数据可看。
     cursor = session.cursor()
     session.send_line(telnet.user, sensitive=False)
+    if cms_login:
+        emit("[Telnet 登录] 已发送用户名，等待密码提示符。")
     sleep_fn(LOGIN_INTER_STEP_SLEEP_SECONDS)
     flag = session.wait_for_any(
         [telnet.input_password_flag],
@@ -173,6 +178,8 @@ def _login(
         )
     cursor = session.cursor()
     session.send_line(telnet.password, sensitive=False)
+    if cms_login:
+        emit("[Telnet 登录] 已发送密码（隐藏），等待登录成功提示符 >。")
     sleep_fn(LOGIN_INTER_STEP_SLEEP_SECONDS)
     flag = session.wait_for_any(
         [telnet.login_success_flag],

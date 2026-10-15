@@ -94,17 +94,26 @@ def _login(session: TelnetSession, telnet: TelnetSettings, emit: Output) -> None
     if not (telnet.login_success_flag or "").strip():
         raise RuntimeError("Telnet 登录成功提示符为空，无法查询样机版本")
 
-    cursor = session.cursor()
-    session.write(b"\r", sensitive=False)
+    cms_login = telnet.login_success_flag == ">"
+    if cms_login:
+        cursor = 0  # 保留连接建立后已到达的 Login:，不提交空用户名。
+        emit("[项目信息] CMS 路径：跳过初始回车，等待用户名提示符。")
+    else:
+        cursor = session.cursor()
+        session.write(b"\r", sensitive=False)
     if session.wait_for_any([telnet.input_user_flag], 15.0, cursor) is None:
         raise RuntimeError(f"登录超时：未收到用户名提示符 '{telnet.input_user_flag}'")
     cursor = session.cursor()
     session.send_line(telnet.user, sensitive=False)
+    if cms_login:
+        emit("[项目信息] 已发送用户名，等待密码提示符。")
     time.sleep(LOGIN_INTER_STEP_SLEEP_SECONDS)
     if session.wait_for_any([telnet.input_password_flag], 10.0, cursor) is None:
         raise RuntimeError(f"登录超时：未收到密码提示符 '{telnet.input_password_flag}'")
     cursor = session.cursor()
     session.send_line(telnet.password, sensitive=False)
+    if cms_login:
+        emit("[项目信息] 已发送密码（隐藏），等待登录成功提示符 >。")
     time.sleep(LOGIN_INTER_STEP_SLEEP_SECONDS)
     if session.wait_for_any([telnet.login_success_flag], 20.0, cursor) is None:
         raise RuntimeError(f"登录超时：未收到登录成功提示符 '{telnet.login_success_flag}'")
