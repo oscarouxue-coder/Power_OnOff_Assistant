@@ -1,5 +1,18 @@
 # 开发记录
 
+## 2026-10-15 - 恢复config.ini的Git跟踪
+
+- 类型：修改。
+- 背景：负责人要求将 `Cheating_machine_execution_tool/Auto_power_on_off_tool/config/config.ini` 加入 Git 跟踪。
+- 完成内容：移除该文件的忽略规则，将现有本机配置加入 Git 暂存区，保留文件内容及其它配置的忽略规则。
+- 修改文件：
+  - `.gitignore`
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/config/config.ini`（新增跟踪）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：仓库根执行 `git ls-files --error-unmatch -- Cheating_machine_execution_tool/Auto_power_on_off_tool/config/config.ini`、`git check-ignore --no-index -- Cheating_machine_execution_tool/Auto_power_on_off_tool/config/config.ini` 和 `git diff --cached --check`；主源码目录设置 `PYTHONUTF8=1` 后执行 `python scripts/verify_baseline.py`。
+- 验证结果：文件已纳入索引且不再被忽略；完整门禁 `ALL CHECKS PASSED`（81个源码编译/覆盖、1044项测试、173项指定回归及协议不变量通过）；暂存差异格式检查通过。
+- 后续待办：无。本轮仅加入跟踪，未执行 commit。
+
 ## 2026-10-15 - 修复CMS登录初始回车错位
 
 - 类型：BUG 修复。
