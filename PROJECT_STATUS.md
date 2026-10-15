@@ -121,4 +121,4 @@ python scripts\verify_baseline.py
 - 已验收功能改动：除全量单测与协议不变量外，`verify_baseline.py` 还会确认关键行为测试实际执行、且新增主程序 Python 文件没有漏出编译清单；首次开发环境应运行 `powershell -ExecutionPolicy Bypass -File scripts\install_git_hooks.ps1` 启用提交前门禁。
 - 真实样机通过：只有项目负责人提供现场结果后，才能更新 `ACCEPTANCE_BASELINE.md` 状态标签。
 - 文档或构建调整：追加开发日志；只有影响当前入口、待办或运行命令时才更新本文件。
-- 不提交本机配置、日志、测试结果、`build/`、`dist/` 或 `.claude/settings.local.json`。
+- 按负责人要求，`Cheating_machine_execution_tool/Auto_power_on_off_tool/config/` 下所有文件纳入 Git 跟踪，保留现有配置内容；日志、测试结果、`build/`、`dist/` 和 `.claude/settings.local.json` 仍不提交。

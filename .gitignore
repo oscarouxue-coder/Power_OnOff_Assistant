@@ -8,14 +8,6 @@ __pycache__/
 .venv_serial_upgrade/
 .claude/settings.local.json
 
-# Local build and run outputs
-# Local saved form state
-Cheating_machine_execution_tool/Auto_power_on_off_tool/config/onu_registration.ini
-Cheating_machine_execution_tool/Auto_power_on_off_tool/config/sample_upgrade_settings.ini
-Cheating_machine_execution_tool/Auto_power_on_off_tool/config/network_card_ip.ini
-Cheating_machine_execution_tool/Auto_power_on_off_tool/config/test_project_config.ini
-
-
 # Current LineCheckAssistant build and runtime outputs
 Cheating_machine_execution_tool/build/
 Cheating_machine_execution_tool/dist/
@@ -33,3 +25,5 @@ Cheating_machine_execution_tool/logs/
 **/Prototype_log/
 **/script_logs/
 **/test_results/
+
+# Application configuration files are tracked; Python caches remain ignored.

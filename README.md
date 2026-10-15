@@ -32,10 +32,10 @@
 
 ## 本机文件与发布边界
 
-- `network_card_ip.ini`、ONU 注册、升级输入等属于本机运行状态，不提交 Git。
+- 按负责人要求，`Cheating_machine_execution_tool/Auto_power_on_off_tool/config/` 下所有配置与源码文件均纳入 Git 跟踪，包括本机配置；后续新增配置可正常加入跟踪，自动生成的 Python 缓存仍按通用规则忽略。
 - `build/`、`dist/`、日志和测试结果是生成物，不提交 Git。
 - 打包后不得在当前 PC 运行 `dist/LineCheckAssistant.exe`；只确认打包成功并报告输出路径。
-- 发现 webhook、密码或其他凭据时，不要复制到文档、日志或提交内容；配置模板化与凭据轮换应作为单独任务处理。
+- 上述配置按负责人要求原样纳入跟踪；其中的 webhook、密码或其他凭据不要额外复制到文档、日志或提交说明；配置模板化与凭据轮换应作为单独任务处理。
 
 中兴C300： 
 GPON ONU类型模板:

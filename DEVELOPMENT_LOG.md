@@ -1,5 +1,22 @@
 # 开发记录
 
+## 2026-10-15 - 跟踪全部运行配置文件
+
+- 类型：修改。
+- 背景：负责人要求将 `Cheating_machine_execution_tool/Auto_power_on_off_tool/config/` 文件夹下所有文件加入 Git 跟踪。
+- 完成内容：移除该目录下单个 INI 的忽略规则；保留全部配置原内容及自动生成的 Python 缓存忽略规则，同步仓库导航及交接状态中的配置跟踪边界。目录现有8个配置与源码文件，5个原已跟踪，3个新增跟踪；当前不存在的 `network_card_ip.ini` 不创建，后续出现时可正常纳入跟踪。
+- 修改文件：
+  - `.gitignore`
+  - `README.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/config/onu_registration.ini`（新增跟踪）
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/config/sample_upgrade_settings.ini`（新增跟踪）
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/config/test_project_config.ini`（新增跟踪）
+- 验证方法：核对目录文件清单与 `git ls-files`；使用 `git check-ignore --no-index` 检查现有文件及未来新增文件路径；运行 `git diff --check` 和 `git diff --cached --check`；主源码目录设置 `PYTHONUTF8=1` 后执行 `python scripts/verify_baseline.py`。
+- 验证结果：8个配置与源码文件全部已纳入索引，无遗漏；现有文件及未来新增 INI 路径均未被忽略，Python缓存仍被忽略。`git diff --check` 通过；`git diff --cached --check` 报告新增INI原有的行尾空格/文件末尾空行，为保持原内容不修改。完整门禁编译81个源码及清单覆盖、协议不变量均通过；1044项测试有1项错误、2项跳过：`test_current_config_contains_all_legacy_ui_defaults` 读取本机电源配置时缺少 `power_supply` 节，当前 `network_card_ip.ini` 不存在，门禁 exit 1，未宣称通过。首次沙箱运行另有Tk资源访问错误，沙箱外复核后仅剩上述配置错误。
+- 后续待办：如需提交，须先补齐本机 `network_card_ip.ini` 配置并重跑门禁；本轮仅加入跟踪，不执行 commit 或 push。
+
 ## 2026-10-15 - 恢复config.ini的Git跟踪
 
 - 类型：修改。
