@@ -1,6 +1,7 @@
 # Project Notes
 
 - After rebuilding the latest `dist\LineCheckAssistant.exe`, do not run it on the current PC. Only verify that packaging completed successfully and report the output path to the user.
+- GitHub 发布规则（2026-10-16）：每次发布新版，先上传并核验新版本及全部附件，确认设为 Latest 且公开可下载后，删除旧版 GitHub Releases 及其附件，最终只保留本次新版本 Release；不删除源码历史或 Git 标签。公开发布说明只写用户可见更新、下载与使用说明，不写构建测试数量、源码提交基准/工作区状态或打包电脑未运行及现场验收声明；这些内部记录保留在 DEVELOPMENT_LOG.md / PROJECT_STATUS.md / ACCEPTANCE_BASELINE.md。
 
 ## 仓库边界
 

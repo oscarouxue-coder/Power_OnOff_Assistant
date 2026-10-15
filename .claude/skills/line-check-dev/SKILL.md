@@ -153,6 +153,9 @@ python scripts\verify_baseline.py
 
 ## 8. 构建规则（硬规则）
 
+- GitHub每次发布只保留本次新版Release：先上传并核对新版全部附件、设为Latest并确认公开可下载，然后删除全部旧Release及附件。不删除Git标签或源码历史。
+- 对外发布说明仅包含用户可见更新、下载与使用说明；不加入构建/测试数量、源码基准或工作区提交状态，以及打包电脑未运行/现场验收声明。验证和验收边界仍按本工作流写内部开发日志、状态及验收基线。
+
 ```powershell
 # 打包
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1

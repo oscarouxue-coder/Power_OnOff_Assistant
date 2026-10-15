@@ -16,6 +16,10 @@ from datetime import datetime
 from src.services.test_item_pretest_service import prepare_pretest_request
 from src.ui.test_item_pretest_controls import PretestControls
 from src.ui.app_update_dialog import AppUpdateDialog, arrange_update_toolbar
+from src.ui.adapter_rename_dialog import offer_adapter_rename
+from src.services.adapter_rename_service import (
+    adapter_has_numeric_suffix, adapter_rename_is_busy, synchronize_channel_adapter_names,
+)
 from pathlib import Path
 from tkinter import BooleanVar, Button, Canvas, Checkbutton, DoubleVar, END, Frame, IntVar, Label, Listbox, Menu, StringVar, TclError, Text, Tk, Toplevel, filedialog, messagebox, ttk
 
@@ -547,6 +551,9 @@ class LineCheckAssistant(Tk):
             return
 
     def _on_app_close(self) -> None:
+        rename_dialog = getattr(self, "adapter_rename_dialog", None)
+        if rename_dialog is not None and not rename_dialog.can_close():
+            return
         pretest = getattr(self, "test_item_pretest_controls", None)
         if pretest is not None and not pretest.can_close():
             return
@@ -1233,8 +1240,9 @@ class LineCheckAssistant(Tk):
         else:
             self._refresh_parameter_preflight()
 
-    def _parameter_channel_ports(self) -> list[tuple[str, str]]:
-        self._capture_current_channel()
+    def _parameter_channel_ports(self, *, capture_current: bool = True) -> list[tuple[str, str]]:
+        if capture_current:
+            self._capture_current_channel()
         items: list[tuple[str, str]] = []
         for channel in self.channels:
             if not channel.enabled:
@@ -1328,10 +1336,10 @@ class LineCheckAssistant(Tk):
         self._refresh_parameter_preflight()
         return True
 
-    def _refresh_parameter_preflight(self) -> None:
+    def _refresh_parameter_preflight(self, *, capture_current: bool = True) -> None:
         if self.parameter_writer_window is None or not self.parameter_writer_window.winfo_exists():
             return
-        channel_ports = self._parameter_channel_ports()
+        channel_ports = self._parameter_channel_ports() if capture_current else self._parameter_channel_ports(capture_current=False)
         if not self.parameter_records:
             targets = [f"- {vlan or '未配置 VLAN'} / {port or '未映射串口'}" for vlan, port in channel_ports]
             self._render_parameter_preview(["尚未加载参数表。", "当前已勾选通道：", *(targets or ["- 无"])] )
@@ -5785,6 +5793,11 @@ class LineCheckAssistant(Tk):
             f"PC {bind_ip} → 样机 {device_host}。"
         )
 
+        self._project_info_query_count = getattr(self, "_project_info_query_count", 0) + 1
+
+        def query_finished() -> None:
+            self._project_info_query_count = max(0, self._project_info_query_count - 1)
+
         def worker() -> None:
             try:
                 result = query_device_project_info(
@@ -5793,15 +5806,21 @@ class LineCheckAssistant(Tk):
             except Exception as exc:  # noqa: BLE001 - 网络/登录/解析错误均需反馈到主线程
                 self.after(
                     0,
-                    lambda: messagebox.showerror(
-                        "查询样机版本失败", str(exc), parent=self.test_item_config_window
+                    lambda error=str(exc): messagebox.showerror(
+                        "查询样机版本失败", error, parent=self.test_item_config_window
                     ),
                 )
                 self.log_queue.put(f"[项目信息] 查询失败：{exc}")
                 return
+            finally:
+                self.after(0, query_finished)
             self.after(0, lambda: on_success(result))
 
-        threading.Thread(target=worker, daemon=True).start()
+        try:
+            threading.Thread(target=worker, daemon=True).start()
+        except Exception:
+            query_finished()
+            raise
 
     def _serial_log_directory(self) -> Path:
         return DEFAULT_LOG_DIR
@@ -5888,9 +5907,10 @@ class LineCheckAssistant(Tk):
             "候选目标来自主界面已勾选通道，实际配置和查询按DUT窗口内勾选目标执行。"
         )
 
-    def _collect_dut_telnet_requests(self) -> list[DutTelnetEnableRequest]:
+    def _collect_dut_telnet_requests(self, *, capture_current: bool = True) -> list[DutTelnetEnableRequest]:
         """把主界面已勾选通道快照转换成 DUT service 请求。"""
-        self._capture_current_channel()
+        if capture_current:
+            self._capture_current_channel()
         username = self.parameter_initial_username_var.get().strip()
         password = self.parameter_initial_password_var.get()
         requests: list[DutTelnetEnableRequest] = []
@@ -5944,10 +5964,10 @@ class LineCheckAssistant(Tk):
             if errors
         }
 
-    def _refresh_dut_config_targets(self) -> None:
+    def _refresh_dut_config_targets(self, *, capture_current: bool = True) -> None:
         if self.dut_config_running:
             return
-        requests = self._collect_dut_telnet_requests()
+        requests = self._collect_dut_telnet_requests() if capture_current else self._collect_dut_telnet_requests(capture_current=False)
         errors = self._dut_request_validation_errors(requests)
         self.dut_config_requests = requests
         self.dut_config_validation_errors = errors
@@ -6907,11 +6927,45 @@ class LineCheckAssistant(Tk):
         channel = self._channel_by_section(section)
         if not channel:
             return
+        row_vars = self.channel_row_vars.get(section)
+        selected_name = adapter_alias_from_display(row_vars["vlan"].get()) if row_vars else ""
+        if selected_name and not adapter_has_numeric_suffix(selected_name):
+            row_vars["vlan"].set(channel.vlan_name or channel.adapter_alias)
+            self.adapter_rename_dialog = offer_adapter_rename(
+                self, section=section, old_name=selected_name,
+                is_busy=lambda: adapter_rename_is_busy(self),
+                on_success=lambda new_name, result: self._on_adapter_renamed(section, selected_name, new_name, result),
+                log=self._log,
+            )
+            return
         self._capture_channel_row(channel)
         index = self.channels.index(channel)
         self._refresh_channel_list_item(index)
         self._select_channel_index(index)
         self._persist_config()
+
+    def _on_adapter_renamed(self, section, old_name, new_name, result):
+        synchronize_channel_adapter_names(self.channels, section, old_name, new_name)
+        self.adapters = [adapter.display_name for adapter in result.adapters]
+        # 不调用采集所有行的 _persist_config，避免重命名时顺带修改其它配置字段。
+        save_warning = None
+        try:
+            self.store.save(self._selected_channels(), self._selected_power_serial_port())
+            self._log(f"[网卡重命名] 通道名称与 PC 静态 IP 已保存：{NETWORK_CONFIG_PATH}")
+        except Exception as exc:
+            save_warning = f"网卡已重命名，但配置保存失败：{exc}。内存已更新，请核对后重新保存配置。"
+            self._log(f"[网卡重命名] {save_warning}")
+        self._rebuild_channel_config_rows()
+        for index in range(len(self.channels)):
+            self._refresh_channel_list_item(index)
+        channel = self._channel_by_section(section)
+        if channel is not None:
+            self._select_channel_index(self.channels.index(channel))
+        self._refresh_upgrade_targets()
+        self._refresh_dut_config_targets(capture_current=False)
+        self._refresh_parameter_preflight(capture_current=False)
+        self._invalidate_onu_preview()
+        return save_warning
 
     def _on_row_serial_changed(self, section: str) -> None:
         channel = self._channel_by_section(section)

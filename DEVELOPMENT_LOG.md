@@ -1,5 +1,48 @@
 # 开发记录
 
+## 2026-10-16 - 打包发布V1.2.2并清理旧版
+
+- 类型：构建
+- 背景：用户要求重新打包V1.2.2并发布GitHub、删除旧版；今后每次只保留新版Release，公开说明不再包含测试数量、源码基准/工作区状态及打包电脑未运行/现场验收声明。
+- 完成内容：① 更新包内版本为V1.2.2，整理为用户可见更新和使用说明；打包包含本轮网卡重命名及2–254/非网关地址提示。② 使用既有脚本生成EXE、完整便携目录、ZIP和两类SHA256；静态读取归档与PYZ，核实新增模块、实际提示、版本、Tcl/Tk双布局及脱敏配置。③ GitHub先创建草稿并上传六份附件、逐个核对大小和摘要，再发布为Latest。④ 匿名更新/完整ZIP下载及取消和源码Tk窗口联调通过后，删除旧v1.2.1 Release（ID414042851）及附件；最终仅v1.2.2（ID414083161），保留Git标签和源码历史。⑤ 在AGENTS.md和开发工作流固定只保留新版与精简公开说明规则；内部验证记录仍保留。⑥ 本轮基线暴露独立Tk测试对象循环引用延迟到worker析构的问题，在tearDown主线程释放引用并GC后完整门禁通过；未改业务或门禁规则。
+- 修改文件：
+  - `AGENTS.md`
+  - `.claude/skills/line-check-dev/SKILL.md`
+  - `.claude/release_notes/v1.2.2.md`
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/VERSION_INFO.txt`
+  - `Cheating_machine_execution_tool/tests/test_adapter_rename.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 构建输出：`Cheating_machine_execution_tool/dist/LineCheckAssistant.exe`、`dist/LineCheckAssistant_portable/`、`dist/LineCheckAssistant_portable.zip`、`dist/LineCheckAssistant_portable.zip.sha256.txt`（后三者相对于主源码目录）。
+- GitHub发布：[LineCheckAssistant V1.2.2](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.2)，六份附件为EXE、便携ZIP、两份SHA256、VERSION_INFO.txt、THIRD_PARTY_NOTICES.md。公开说明与`.claude/release_notes/v1.2.2.md`一致，未包含用户要求去除的内部信息。标签使用远端main已存在的7d418bf755c24cbae5cbb6e57875d1c05c8f03d9作为基准；交付包来自当前工作区，未自动提交/推送本轮源码。
+- 验证方法：主源码目录设置`PYTHONUTF8=1`后运行`python scripts/verify_baseline.py`与`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1`；仓库根运行`git diff --check`。一次性助手`%TEMP%/linecheck_verify_v122_20261016.py static/live`分别静态读取包及联调匿名更新/源码窗口；`%TEMP%/linecheck_release_v122_20261016.py inspect/stage/publish/prune`核对发布、附件与精确旧Release ID后执行清理。认证复用Git Credential Manager，仅在进程内使用，不输出或保存凭据。
+- 验证结果：完整门禁`ALL CHECKS PASSED`（89个源码编译/覆盖、1154项测试、173项指定关键回归及协议不变量）。EXE为23,569,970字节，SHA256 `d057b2d0c52c24def33125f3501078faa64dc42aae42924adb0fabf222d5172f`；ZIP为23,205,811字节，SHA256 `a76296da4586f46e991fd3aba99198e3401dd56fe3618198cf638171f206e5e7`。六份远端附件大小和摘要与本地一致，匿名旧版发现v1.2.2、同版/更高版本无更新，真实取消清理和源码Tk完整ZIP下载通过SHA256/CRC/包内版本/EXE哈希比对。删除旧Release后再次确认Latest仍为v1.2.2且Release总数为1；差异格式检查通过。
+- 后续待办：负责人在目标Windows电脑启动交付包，复验完整界面及§2.1网卡真实改名等新增业务；本轮自动联调不升级正式验收。未在当前PC运行新EXE，未操作真实设备或网卡，保留工作区本机INI改动，未提交Git。
+
+## 2026-10-16 - 增加网卡命名提示与确认改名
+
+- 类型：功能
+- 背景：用户要求选择非数字结尾网卡时提示修改名称，接受建议后可输入并由软件完成Windows改名；后续明确提示及新名称校验范围改为2–254，并增加“非网关地址”提示。
+- 完成内容：① 选择事件在采集/保存前恢复原选择；拒绝建议或取消输入不写入本次选择。② 独立ui/service/core/models实现可编辑名称、管理员/设备任务空闲检查、后台单次执行、15秒命令超时和InterfaceGuid回读；命令异常先核实、不盲目重试，无法确认时禁止本窗口重复提交。③ 新名称去空白、校验尾号2–254/非法字符/重复名称；显示“非网关地址”，仅为操作员选址提示，不自动查询或配置网关。④ 成功同步当前通道和旧名称引用、派生PC IP及升级/DUT/写参目标预览；只保存启用通道，保留其它字段和显式COM，历史无显式COM但原VLAN有有效映射时保存原映射以保持串口。⑤ 目标预览新增默认开启的`capture_current`关键字参数，仅改名回调传False，防止刷新顺带采集覆盖其它字段；已有调用默认行为保持。版本查询增加并发计数，直到全部结束后才允许改名。⑥ 系统改名失败不改本次配置；系统成功但配置保存失败保留新内存并明确提示，不自动回滚系统。⑦ 主日志记录确认/取消、实际命令、身份、阶段、成功/跳过/失败及保存结果；新增44项回归并同步说明、当前状态与待验收范围。
+- 修改文件：
+  - `.claude/plans/adapter-rename.md`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/src/core/network_adapter.py`
+  - `Cheating_machine_execution_tool/src/models/network_adapter.py`
+  - `Cheating_machine_execution_tool/src/services/adapter_rename_service.py`
+  - `Cheating_machine_execution_tool/src/ui/adapter_rename_dialog.py`
+  - `Cheating_machine_execution_tool/tests/test_adapter_rename.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置`PYTHONUTF8=1`，运行`python -m unittest discover -s tests -p test_adapter_rename.py -v`及`python scripts/verify_baseline.py`；仓库根执行`git diff --check`。独立Tk窗口使用模拟service，确认模态、居中、输入控件可见、校验失败保留输入、取消不调用系统、后台等待时UI响应及主线程应用结果。系统命令形式参考[Microsoft netsh interface 文档](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface)。
+- 验证结果：新增44项全部纳入最终完整门禁，`ALL CHECKS PASSED`（89个源码编译/覆盖、1154项测试、173项指定关键回归及协议不变量）；包括3项真实Tk组件测试，重命名全部模拟。首次沙箱内运行20项已有Tk测试因Tcl无法读取已安装`init.tcl`失败；沙箱外同一门禁通过，未改门禁或跳过测试。`git diff --check`通过。
+- 后续待办：负责人在完整Windows源码版及空闲测试网卡复验接受/拒绝、输入/取消、2/254边界及1拒绝、非网关地址提示、权限/运行任务拦截、成功后配置重读/原COM保持与失败/超时/保存失败分支；现有EXE不含本轮功能。未启动完整主程序、未实际修改本机网卡、未操作真实设备、不打包、不运行EXE、不提交Git，不修改本机INI或build/dist/logs/.venv。
+
 ## 2026-10-16 - 打包并发布V1.2.1
 
 - 类型：构建。
