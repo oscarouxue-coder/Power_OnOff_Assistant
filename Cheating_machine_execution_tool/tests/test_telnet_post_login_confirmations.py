@@ -40,7 +40,8 @@ def make_tool_root(base: Path, command: str = "busybox sh", flag: str = ">") -> 
         encoding="utf-8",
     )
     (config_dir / "selected.ini").write_text(
-        f"[telnet]\nlogin_success_flag = {flag}\nlogin_after_input_str = {command}\n",
+        f"[telnet]\nlogin_success_flag = {flag}\nlogin_after_input_str = {command}\n"
+        "[project_info]\nsoftware_version = a\ninternal_software_version = b\nonu_compile_time = c\n",
         encoding="utf-8",
     )
     return tool_root
@@ -96,6 +97,31 @@ class PretestConfirmationTests(unittest.TestCase):
 
 
 class LegacyPowerConfirmationServiceTests(unittest.TestCase):
+    def test_empty_versions_show_skip_without_login_command(self):
+        for value in ("", " \t "):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as temporary:
+                tool_root = make_tool_root(Path(temporary))
+                path = tool_root / "config/selected.ini"
+                path.write_text(
+                    "[telnet]\nlogin_success_flag = >\nlogin_after_input_str = must-not-send\n"
+                    f"[project_info]\nproject_name = name\nsoftware_version = {value}\n"
+                    f"internal_software_version = {value}\nonu_compile_time = {value}\n",
+                    encoding="utf-8")
+                text = confirmation_service.describe_legacy_power_telnet_post_login(pipeline_context(tool_root))
+                self.assertIn("三项版本基准均为空，跳过开始前版本校验", text)
+                self.assertNotIn("must-not-send", text)
+                self.assertNotIn("等待 1 秒", text)
+
+    def test_partial_versions_describe_missing_fields_and_block_start(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            tool_root = make_tool_root(Path(temporary))
+            (tool_root / "config/selected.ini").write_text(
+                "[project_info]\nsoftware_version = a\n", encoding="utf-8")
+            text = confirmation_service.describe_legacy_power_telnet_post_login(pipeline_context(tool_root))
+        self.assertIn("内部软件版本、ONU 软件编译时间", text)
+        self.assertIn("未启动开关机测试", text)
+        self.assertNotIn("执行三项版本预检", text)
+
     def test_selected_profile_is_used_and_configuration_is_unchanged(self):
         with tempfile.TemporaryDirectory() as temporary:
             tool_root = make_tool_root(Path(temporary))
@@ -105,6 +131,7 @@ class LegacyPowerConfirmationServiceTests(unittest.TestCase):
         self.assertIn("现场方案", text)
         self.assertIn("busybox sh", text)
         self.assertIn("等待 1 秒", text)
+        self.assertIn("执行三项版本预检", text)
         self.assertNotIn("wrong-default", text)
         self.assertEqual(before, after)
 
@@ -158,6 +185,15 @@ class LegacyPowerConfirmationServiceTests(unittest.TestCase):
 
 
 class PipelineConfirmationTests(unittest.TestCase):
+    def test_empty_versions_confirm_skip_and_keep_power_warning(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            tool_root = make_tool_root(Path(temporary))
+            (tool_root / "config/selected.ini").write_text("[project_info]\n", encoding="utf-8")
+            text = self.confirm_without_starting(pipeline_context(tool_root), {"legacy_power_test"})
+        self.assertIn("跳过开始前版本校验", text)
+        self.assertIn("下发全通道断电指令", text)
+        self.assertNotIn("等待 1 秒", text)
+
     def confirm_without_starting(self, ctx, selected):
         window = object.__new__(PipelineWindow)
         window.app = ctx.app

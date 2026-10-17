@@ -9,6 +9,7 @@ from dataclasses import replace
 from line_check_assistant.test_item_config_store import TestItemConfigStore
 from src.services.device_project_info_service import (
     DeviceProjectInfoQueryRequest, project_info_mismatches, query_device_project_info,
+    power_test_version_precheck_required,
 )
 
 
@@ -140,21 +141,26 @@ class PowerTestResumeSession:
             raise ResumeRejected('已停止，跳过续跑')
         self.ensure_config_unchanged()
         config = TestItemConfigStore(self.request.tool_root / 'config' /
-                                   self.request.profile_filename).load()
+                                   self.request.profile_filename).load(required=True)
         expected = config.project_info
-        if not all(v.strip() for v in (expected.software_version,
-                                      expected.internal_software_version, expected.onu_compile_time)):
-            raise ResumeRejected('三项版本基准不完整，未执行上下电')
-        target = self.channels[channel]
-        self.emit(f'[通道续跑] 通道 {channel} 开始三项版本只读预检。')
-        actual = query_device_project_info(DeviceProjectInfoQueryRequest(
-            bind_ip=target.network_card_ip.strip(), device_host=target.device_manage_ip.strip(),
-            telnet=config.telnet), emit=lambda line: self.emit(f'[通道续跑][{channel}] {line}'))
-        if project_info_mismatches(expected, actual):
-            raise ResumeRejected('三项版本不一致，未执行上下电')
+        try:
+            needs_precheck = power_test_version_precheck_required(expected)
+        except ValueError as exc:
+            raise ResumeRejected(f'{exc} 未执行上下电') from None
+        if needs_precheck:
+            target = self.channels[channel]
+            self.emit(f'[通道续跑] 通道 {channel} 开始三项版本只读预检。')
+            actual = query_device_project_info(DeviceProjectInfoQueryRequest(
+                bind_ip=target.network_card_ip.strip(), device_host=target.device_manage_ip.strip(),
+                telnet=config.telnet), emit=lambda line: self.emit(f'[通道续跑][{channel}] {line}'))
+            if project_info_mismatches(expected, actual):
+                raise ResumeRejected('三项版本不一致，未执行上下电')
+        else:
+            self.emit(f'[通道续跑] 通道 {channel} 三项版本基准均为空，跳过开始前版本校验。')
         if self._fingerprint() != self.fingerprint or self.stop_event.is_set():
             raise ResumeRejected('预检期间配置变化或收到停止请求，未执行上下电')
-        self.emit(f'[通道续跑] 通道 {channel} 三项版本预检通过。')
+        if needs_precheck:
+            self.emit(f'[通道续跑] 通道 {channel} 三项版本预检通过。')
 
     def _resume(self, channel):
         accepted = threading.Event()

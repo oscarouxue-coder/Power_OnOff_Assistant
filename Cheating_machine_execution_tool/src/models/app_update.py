@@ -18,14 +18,14 @@ class UpdateProgressStage(str, Enum):
     VERIFYING = "verifying"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ReleaseAsset:
     name: str
     download_url: str
     size: int
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class AppUpdateCheckResult:
     status: UpdateCheckStatus
     current_version: str
@@ -41,7 +41,7 @@ class AppUpdateCheckResult:
         return self.status is UpdateCheckStatus.UPDATE_AVAILABLE
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class AppUpdateProgress:
     stage: UpdateProgressStage
     completed_bytes: int

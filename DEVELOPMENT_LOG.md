@@ -1,5 +1,45 @@
 # 开发记录
 
+## 2026-10-17 - 支持按空版本基准跳过开始前校验
+
+- 类型：功能
+- 背景：负责人要求开关机开始前版本校验可选；确认三项全空时跳过、部分填写仍须补齐，失败通道续跑使用同一规则。
+- 完成内容：① 在现有版本查询service增加共享判定，软件版本、内部软件版本及ONU软件编译时间去除首尾空白后全空跳过，项目名称不参与；部分填写列出缺少字段，全填保持原严格查询和比对。② 完整启动及续跑跳过时不调用预检查询，不发送预检登录后命令或版本查询命令，主日志明确输出“三项版本基准均为空，跳过开始前版本校验”；保留原测试执行、配置指纹、停止检查及通道隔离。③ 配置store新增可选的关键字参数 `load(required=True)`，执行及确认摘要严格打开并解析选定方案，防止缺失或不可读文件被忽略后误判为空；其它调用默认读取语义保持。④ 总确认按实际配置说明跳过/执行预检或缺少字段，续跑确认说明同一规则，保留上下电危险提示。⑤ 新增13项回归，覆盖空值/空白、全部6种部分填写组合、完整查询与失败、配置读取/指纹和停止、单通道续跑入口以及确认摘要；同步操作员说明与待验收范围。
+- 修改文件：
+  - `.claude/plans/optional-power-version-precheck.md`
+  - `Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`
+  - `Cheating_machine_execution_tool/src/services/device_project_info_service.py`
+  - `Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/src/services/power_test_resume_service.py`
+  - `Cheating_machine_execution_tool/src/services/telnet_post_login_confirmation_service.py`
+  - `Cheating_machine_execution_tool/src/ui/power_test_resume_menu.py`
+  - `Cheating_machine_execution_tool/tests/test_device_project_info_service.py`
+  - `Cheating_machine_execution_tool/tests/test_pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_resume.py`
+  - `Cheating_machine_execution_tool/tests/test_telnet_post_login_confirmations.py`
+  - `Cheating_machine_execution_tool/tests/test_test_item_config_store.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录设置 `PYTHONUTF8=1` 和 `PYTHONPATH=tests`，运行 `python -m unittest test_device_project_info_service test_test_item_config_store test_pipeline_orchestrator test_power_test_resume test_telnet_post_login_confirmations -v`；运行 `python scripts/verify_baseline.py`；仓库根执行 `git diff --check`。
+- 验证结果：专项120项通过；完整门禁 `ALL CHECKS PASSED`（89个源码编译/覆盖、1168项测试、173项指定关键回归及协议不变量），相对本轮前1155项新增13项。源码与模拟执行证据不构成Windows完整交互或真实样机验收；文档已同步§2.12/§3新增待验收范围。
+- 后续待办：负责人在Windows源码版及真实样机复验全空跳过、部分填写拦截、全填匹配/不匹配/查询失败及失败通道续跑；现有EXE不含本轮改动。未操作真实设备、未修改本机INI、不打包、不运行EXE、不提交Git；保留已有更新兼容性和文档改动。
+
+## 2026-10-17 - 修复Python3.9启动兼容性
+
+- 类型：BUG 修复
+- 背景：负责人反馈源码入口无法运行。本机默认Python及VS Code指定虚拟环境均为3.9.10，导入检查更新模型时报错 `TypeError: dataclass() got an unexpected keyword argument 'slots'`。
+- 完成内容：① 去掉更新模块三个数据类的 `slots=True`，保留 `frozen=True`、字段、默认值及更新判断语义，恢复现有Python3.9环境导入。② 新增一项回归，以Python3.9的dataclass参数签名加载模型，覆盖三个模型构造、结果默认值/判断、replace及只读约束；较新Python上也能拦截再次引入不兼容参数。③ 使用现有3.9.10虚拟环境和临时配置/日志目录执行真实源码入口及Tk初始化、事件处理、销毁验证；网卡/串口枚举与管理员警告替换为测试桩，不执行设备操作。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/models/app_update.py`
+  - `Cheating_machine_execution_tool/tests/test_app_update.py`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录运行 `python -m unittest discover -s tests -p test_app_update.py -v`、设置 `PYTHONUTF8=1` 后运行 `python scripts/verify_baseline.py`，以及 `..\.venv_serial_upgrade\Scripts\python.exe -c "from line_check_assistant.app import main; print('MAIN_IMPORT_OK')"`；一次性标准输入脚本以临时配置/日志、真实入口 `runpy.run_path('run_line_check_assistant.py', run_name='__main__')` 和短暂Tk事件循环验证启动；仓库根运行 `git diff --check`。
+- 验证结果：更新专项40项通过（新增1项）；完整门禁 `ALL CHECKS PASSED`（89个源码编译/覆盖、1155项测试、173项指定关键回归及协议不变量）。虚拟环境导入输出 `MAIN_IMPORT_OK`；真实入口和Tk初始化输出 `ENTRY_AND_TK_STARTUP_OK 1920 1017`。仅为自动化源码启动证据，不升级负责人Windows完整业务或真实样机验收结论。
+- 后续待办：负责人使用正常配置复验日常完整交互；虚拟环境另缺少xlrd，使用.xls读取前需按requirements.txt安装，该缺项不阻断本轮启动。未修改本机INI、未修改虚拟环境、未构建/运行EXE、未提交Git。
+
 ## 2026-10-16 - 打包发布V1.2.2并清理旧版
 
 - 类型：构建

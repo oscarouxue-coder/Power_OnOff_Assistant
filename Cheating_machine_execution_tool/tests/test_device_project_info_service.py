@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import unittest
+from itertools import product
 from unittest.mock import patch
 
 from line_check_assistant.test_item_config_store import ProjectInfoSettings, TelnetSettings
@@ -10,6 +11,7 @@ from src.services.device_project_info_service import (
     PROC_VERSION_COMMAND,
     DeviceProjectInfo,
     DeviceProjectInfoQueryRequest,
+    power_test_version_precheck_required,
     project_info_mismatches,
     query_device_project_info,
 )
@@ -42,6 +44,35 @@ class _FakeTelnetSession:
 
 
 class DeviceProjectInfoQueryServiceTests(unittest.TestCase):
+    def test_power_precheck_skips_empty_or_whitespace_regardless_of_project_name(self):
+        for value in ("", " \t\n "):
+            with self.subTest(value=value):
+                self.assertFalse(power_test_version_precheck_required(ProjectInfoSettings(
+                    project_name="仍有项目名称", software_version=value,
+                    internal_software_version=value, onu_compile_time=value,
+                )))
+
+    def test_power_precheck_requires_complete_versions_and_reports_each_missing_field(self):
+        names = ("software_version", "internal_software_version", "onu_compile_time")
+        labels = ("软件版本", "内部软件版本", "ONU 软件编译时间")
+        for present in product((False, True), repeat=3):
+            if not any(present) or all(present):
+                continue
+            with self.subTest(present=present), self.assertRaises(ValueError) as error:
+                power_test_version_precheck_required(ProjectInfoSettings(**{
+                    name: " value " if filled else " \t "
+                    for name, filled in zip(names, present)
+                }))
+            missing_text = str(error.exception).split("；")[0]
+            self.assertEqual(missing_text, "项目信息基准值未填写：" + "、".join(
+                label for label, filled in zip(labels, present) if not filled
+            ))
+
+    def test_power_precheck_is_required_for_three_values(self):
+        self.assertTrue(power_test_version_precheck_required(ProjectInfoSettings(
+            software_version=" a ", internal_software_version=" b ", onu_compile_time=" c ",
+        )))
+
     @patch("src.services.device_project_info_service.TelnetSession")
     def test_query_reads_all_requested_fields(self, session_class) -> None:
         fake_session = _FakeTelnetSession(

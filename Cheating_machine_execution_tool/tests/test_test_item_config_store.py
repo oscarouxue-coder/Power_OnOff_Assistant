@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,6 +22,21 @@ from line_check_assistant.test_item_config_store import (
 
 
 class TestItemConfigStoreTests(unittest.TestCase):
+    def test_required_load_rejects_missing_unreadable_and_malformed_config(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "selected.ini"
+            store = TestItemConfigStore(path)
+            with self.assertRaises(FileNotFoundError):
+                store.load(required=True)
+            path.write_text("[project_info]\nsoftware_version =\n", encoding="utf-8")
+            self.assertEqual(store.load(required=True).project_info.software_version, "")
+            with patch.object(Path, "open", side_effect=PermissionError("unreadable")):
+                with self.assertRaises(PermissionError):
+                    store.load(required=True)
+            path.write_text("invalid configuration", encoding="utf-8")
+            with self.assertRaises(Exception):
+                store.load(required=True)
+
     def test_load_defaults_when_config_is_missing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             store = TestItemConfigStore(Path(temp_dir) / "test_project_config.ini")

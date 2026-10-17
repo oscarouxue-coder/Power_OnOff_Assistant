@@ -42,6 +42,7 @@ from line_check_assistant.test_item_config_store import TestItemConfigStore
 from src.services.power_test_resume_service import PowerTestResumeSession
 from src.services.device_project_info_service import (
     DeviceProjectInfoQueryRequest,
+    power_test_version_precheck_required,
     project_info_mismatches,
     query_device_project_info,
 )
@@ -706,7 +707,7 @@ class PipelineOrchestrator:
             open_method()
 
     def _run_legacy_power_test(self) -> None:
-        """7. 版本预检通过后，无 GUI 运行旧 Start All 并桥接 Logs。"""
+        """7. 按保存基准决定版本预检，无 GUI 运行旧 Start All 并桥接 Logs。"""
         from src.services.legacy_power_test_service import (
             LegacyPowerChannel,
             prepare_legacy_power_test_request,
@@ -734,73 +735,71 @@ class PipelineOrchestrator:
         )
         project_config = TestItemConfigStore(
             request.tool_root / "config" / request.profile_filename
-        ).load()
+        ).load(required=True)
         expected_info = project_config.project_info
-        expected_fields = (
-            ("软件版本", expected_info.software_version),
-            ("内部软件版本", expected_info.internal_software_version),
-            ("ONU 软件编译时间", expected_info.onu_compile_time),
-        )
-        missing_expected = tuple(
-            label for label, value in expected_fields if not value.strip()
-        )
-        if missing_expected:
-            raise RuntimeError(
-                "项目信息基准值未填写："
-                f"{'、'.join(missing_expected)}；请先保存测试项配置后再执行开关机测试。"
-            )
-
-        channels = self.ctx.enabled_channels
-        self.emit(
-            "[开关机版本预检] 开始逐台只读核对："
-            f"软件版本={expected_info.software_version.strip()}，"
-            f"内部软件版本={expected_info.internal_software_version.strip()}，"
-            f"ONU 软件编译时间={expected_info.onu_compile_time.strip()}。"
-        )
-        failures: list[str] = []
-        for index, channel in enumerate(channels, start=1):
-            if self.ctx.stop_event.is_set():
-                raise RuntimeError("开关机版本预检已停止，未启动开关机测试")
-            channel_label = channel.vlan_name or channel.section
+        if self.ctx.stop_event.is_set():
+            raise RuntimeError("开关机版本预检已停止，未启动开关机测试")
+        try:
+            needs_precheck = power_test_version_precheck_required(expected_info)
+        except ValueError as exc:
+            self.emit(f"[开关机版本预检] 失败：{exc}")
+            raise RuntimeError(str(exc)) from None
+        if not needs_precheck:
+            self.emit("[开关机版本预检] 三项版本基准均为空，跳过开始前版本校验。")
+        else:
+            channels = self.ctx.enabled_channels
             self.emit(
-                f"[开关机版本预检] ({index}/{len(channels)}) {channel.section}"
-                f"（{channel_label}）：PC {channel.network_card_ip} → 样机 "
-                f"{channel.device_manage_ip}。"
+                "[开关机版本预检] 开始逐台只读核对："
+                f"软件版本={expected_info.software_version.strip()}，"
+                f"内部软件版本={expected_info.internal_software_version.strip()}，"
+                f"ONU 软件编译时间={expected_info.onu_compile_time.strip()}。"
             )
-            try:
-                actual_info = query_device_project_info(
-                    DeviceProjectInfoQueryRequest(
-                        bind_ip=channel.network_card_ip.strip(),
-                        device_host=channel.device_manage_ip.strip(),
-                        telnet=project_config.telnet,
-                    ),
-                    emit=lambda line, section=channel.section: self.emit(
-                        f"[开关机版本预检][{section}] {line}"
-                    ),
-                )
-                mismatches = project_info_mismatches(expected_info, actual_info)
-            except Exception as exc:  # noqa: BLE001 - 任一只读查询失败均禁止下发电源动作
-                failures.append(f"{channel.section} 查询失败：{exc}")
-                self.emit(f"[开关机版本预检] {channel.section} 查询失败：{exc}")
-                continue
-            if mismatches:
-                failures.append(f"{channel.section}：{'；'.join(mismatches)}")
+            failures: list[str] = []
+            for index, channel in enumerate(channels, start=1):
+                if self.ctx.stop_event.is_set():
+                    raise RuntimeError("开关机版本预检已停止，未启动开关机测试")
+                channel_label = channel.vlan_name or channel.section
                 self.emit(
-                    f"[开关机版本预检] {channel.section} 不一致："
-                    f"{'；'.join(mismatches)}"
+                    f"[开关机版本预检] ({index}/{len(channels)}) {channel.section}"
+                    f"（{channel_label}）：PC {channel.network_card_ip} → 样机 "
+                    f"{channel.device_manage_ip}。"
                 )
-                continue
-            self.emit(f"[开关机版本预检] {channel.section} 三项版本全部一致。")
+                try:
+                    actual_info = query_device_project_info(
+                        DeviceProjectInfoQueryRequest(
+                            bind_ip=channel.network_card_ip.strip(),
+                            device_host=channel.device_manage_ip.strip(),
+                            telnet=project_config.telnet,
+                        ),
+                        emit=lambda line, section=channel.section: self.emit(
+                            f"[开关机版本预检][{section}] {line}"
+                        ),
+                    )
+                    mismatches = project_info_mismatches(expected_info, actual_info)
+                except Exception as exc:  # noqa: BLE001 - 任一只读查询失败均禁止下发电源动作
+                    failures.append(f"{channel.section} 查询失败：{exc}")
+                    self.emit(f"[开关机版本预检] {channel.section} 查询失败：{exc}")
+                    continue
+                if mismatches:
+                    failures.append(f"{channel.section}：{'；'.join(mismatches)}")
+                    self.emit(
+                        f"[开关机版本预检] {channel.section} 不一致："
+                        f"{'；'.join(mismatches)}"
+                    )
+                    continue
+                self.emit(f"[开关机版本预检] {channel.section} 三项版本全部一致。")
 
-        if failures:
-            raise RuntimeError(
-                f"开关机版本预检不通过：{len(failures)}/{len(channels)} 台异常；"
-                f"{' | '.join(failures)}。未启动开关机测试。"
+            if failures:
+                raise RuntimeError(
+                    f"开关机版本预检不通过：{len(failures)}/{len(channels)} 台异常；"
+                    f"{' | '.join(failures)}。未启动开关机测试。"
+                )
+            self.emit(
+                f"[开关机版本预检] 通过：{len(channels)}/{len(channels)} 台三项版本全部一致，"
+                "开始执行开关机测试。"
             )
-        self.emit(
-            f"[开关机版本预检] 通过：{len(channels)}/{len(channels)} 台三项版本全部一致，"
-            "开始执行开关机测试。"
-        )
+        if self.ctx.stop_event.is_set():
+            raise RuntimeError("开关机测试已停止，未启动开关机测试")
         reset_channel_statuses = _get_attr(
             self.ctx.app, "_reset_power_test_channel_states", None
         )

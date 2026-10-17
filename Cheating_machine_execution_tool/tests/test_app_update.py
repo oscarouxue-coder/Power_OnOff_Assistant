@@ -1,12 +1,13 @@
 import hashlib
 import io
 import os
+import runpy
 import sys
 import tempfile
 import threading
 import unittest
 import zipfile
-from dataclasses import replace
+from dataclasses import FrozenInstanceError, dataclass, replace
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -63,6 +64,32 @@ def response(status=200, *, chunks=(), headers=None, payload=None):
     if status >= 400:
         item.raise_for_status.side_effect = requests.HTTPError(str(status))
     return item
+
+
+class AppUpdateModelCompatibilityTests(unittest.TestCase):
+    def test_models_support_python39_dataclass_and_remain_frozen(self):
+        # 在较新的 Python 上也使用 3.9 的参数签名，防止再次引入 slots 等新参数。
+        def python39_dataclass(cls=None, *, init=True, repr=True, eq=True,
+                               order=False, unsafe_hash=False, frozen=False):
+            return dataclass(cls, init=init, repr=repr, eq=eq, order=order,
+                             unsafe_hash=unsafe_hash, frozen=frozen)
+
+        model_path = Path(__file__).resolve().parents[1] / "src/models/app_update.py"
+        with patch("dataclasses.dataclass", python39_dataclass):
+            models = runpy.run_path(str(model_path))
+        asset = models["ReleaseAsset"]("package.zip", "https://example.com/package.zip", 123)
+        result = models["AppUpdateCheckResult"](
+            models["UpdateCheckStatus"].UPDATE_AVAILABLE,
+            "V1.2.1", "V1.2.2", "2026-10-17", "更新", "https://example.com/release",
+        )
+        progress = models["AppUpdateProgress"](models["UpdateProgressStage"].DOWNLOADING, 1, 123)
+        self.assertTrue(result.update_available)
+        self.assertIsNone(result.package_asset)
+        self.assertEqual(result.expected_sha256, "")
+        self.assertEqual(replace(asset, size=456).size, 456)
+        for model, field in ((asset, "size"), (result, "latest_version"), (progress, "completed_bytes")):
+            with self.subTest(model=type(model).__name__), self.assertRaises(FrozenInstanceError):
+                setattr(model, field, None)
 
 
 class GitHubReleaseClientTests(unittest.TestCase):

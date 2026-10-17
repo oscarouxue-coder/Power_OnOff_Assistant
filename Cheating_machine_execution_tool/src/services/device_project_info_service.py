@@ -46,6 +46,24 @@ class DeviceProjectInfo:
     onu_compile_time: str
 
 
+def power_test_version_precheck_required(expected: ProjectInfoSettings) -> bool:
+    """三项全空可跳过；部分填写必须补齐，项目名称不参与判断。"""
+    fields = (
+        ("软件版本", expected.software_version),
+        ("内部软件版本", expected.internal_software_version),
+        ("ONU 软件编译时间", expected.onu_compile_time),
+    )
+    if not any(value.strip() for _, value in fields):
+        return False
+    missing = tuple(label for label, value in fields if not value.strip())
+    if missing:
+        raise ValueError(
+            f"项目信息基准值未填写：{'、'.join(missing)}；"
+            "请补齐三项或全部留空，保存测试项配置后再执行开关机测试。"
+        )
+    return True
+
+
 def project_info_mismatches(
     expected: ProjectInfoSettings, actual: DeviceProjectInfo
 ) -> tuple[str, ...]:
@@ -189,6 +207,7 @@ __all__ = [
     "PROC_VERSION_COMMAND",
     "DeviceProjectInfo",
     "DeviceProjectInfoQueryRequest",
+    "power_test_version_precheck_required",
     "project_info_mismatches",
     "query_device_project_info",
 ]

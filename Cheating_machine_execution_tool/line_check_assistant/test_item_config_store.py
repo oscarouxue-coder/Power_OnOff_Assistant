@@ -217,10 +217,15 @@ class TestItemConfigStore:
     def __init__(self, config_path: Path) -> None:
         self.config_path = config_path
 
-    def load(self) -> TestProjectConfig:
+    def load(self, *, required: bool = False) -> TestProjectConfig:
         parser = configparser.RawConfigParser()
         parser.optionxform = str
-        parser.read(self.config_path, encoding="utf-8")
+        if required:
+            # 执行前判断空版本基准时，读取失败不能回退为空配置。
+            with self.config_path.open("r", encoding="utf-8") as config_file:
+                parser.read_file(config_file)
+        else:
+            parser.read(self.config_path, encoding="utf-8")
 
         return TestProjectConfig(
             telnet=self._load_telnet(parser),

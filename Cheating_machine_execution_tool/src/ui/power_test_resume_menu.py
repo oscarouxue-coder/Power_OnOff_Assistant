@@ -20,7 +20,9 @@ def bind_resume_menu(app, tile, channel):
                 f'仅对通道 {channel} 执行上下电测试。\n'
                 f'保留已完成的 {completed} 轮，从第 {completed + 1}/'
                 f'{session.request.number_of_tests} 轮继续。\n'
-                '将核对原配置及三项版本，不重跑前面的全流程任务。\n\n是否继续？', parent=app):
+                '将核对原配置；三项版本基准均为空时跳过开始前版本校验，'
+                '部分填写时阻止启动，全部填写时须通过三项版本预检。\n'
+                '不重跑前面的全流程任务。\n\n是否继续？', parent=app):
             return
         if session is not getattr(app, 'power_test_resume_session', None) or not available(session):
             app._log(f'[通道续跑] 通道 {channel} 状态已变化，跳过。')

@@ -602,6 +602,59 @@ class LegacyPowerTestDispatchTests(unittest.TestCase):
         session_patch.start()
         self.addCleanup(session_patch.stop)
 
+    def test_empty_versions_skip_query_and_start_selected_channels(self):
+        for value in ("", " \t "):
+            with self.subTest(value=value), \
+                    patch("src.services.legacy_power_test_service.prepare_legacy_power_test_request") as prepare, \
+                    patch("src.services.legacy_power_test_service.run_legacy_power_test") as run, \
+                    patch("src.services.pipeline_orchestrator.TestItemConfigStore") as store, \
+                    patch("src.services.pipeline_orchestrator.query_device_project_info") as query:
+                prepared = prepare.return_value
+                prepared.tool_root = Path("legacy-tool")
+                prepared.profile_filename = "selected.ini"
+                prepared.channels = (SimpleNamespace(number=2),)
+                run.return_value = SimpleNamespace(ok=True, detail="完成")
+                store.return_value.load.return_value.project_info = ProjectInfoSettings(
+                    project_name="项目名称不参与判定", software_version=value,
+                    internal_software_version=value, onu_compile_time=value,
+                )
+                ctx = _make_context(legacy_tool_root=Path("legacy-tool"),
+                                    channels=[_make_channel("channel_2")])
+                logs = []
+                PipelineOrchestrator(ctx, logs.append)._run_legacy_power_test()
+                query.assert_not_called()
+                store.return_value.load.assert_called_once_with(required=True)
+                run.assert_called_once()
+                self.assertIs(run.call_args.args[0], prepared)
+                self.assertIn("三项版本基准均为空，跳过开始前版本校验", "\n".join(logs))
+                self.assertNotIn("预检] 通过", "\n".join(logs))
+
+    def test_empty_versions_still_reject_stop_config_change_and_read_failure(self):
+        for failure in ("stopped", "changed", "missing", "unreadable", "malformed"):
+            with self.subTest(failure=failure), \
+                    patch("src.services.legacy_power_test_service.prepare_legacy_power_test_request") as prepare, \
+                    patch("src.services.legacy_power_test_service.run_legacy_power_test") as run, \
+                    patch("src.services.pipeline_orchestrator.TestItemConfigStore") as store, \
+                    patch("src.services.pipeline_orchestrator.query_device_project_info") as query, \
+                    patch("src.services.pipeline_orchestrator.PowerTestResumeSession") as session:
+                prepare.return_value.tool_root = Path("legacy-tool")
+                prepare.return_value.profile_filename = "selected.ini"
+                store.return_value.load.return_value.project_info = ProjectInfoSettings()
+                ctx = _make_context(legacy_tool_root=Path("legacy-tool"))
+                if failure == "stopped":
+                    ctx.stop_event.set()
+                elif failure == "changed":
+                    session.return_value.ensure_config_unchanged.side_effect = RuntimeError("配置已变化")
+                else:
+                    store.return_value.load.side_effect = {
+                        "missing": FileNotFoundError(), "unreadable": PermissionError(),
+                        "malformed": ValueError("配置解析失败"),
+                    }[failure]
+                with self.assertRaises(Exception):
+                    PipelineOrchestrator(ctx, lambda _: None)._run_legacy_power_test()
+                query.assert_not_called()
+                run.assert_not_called()
+
     @patch("src.services.pipeline_orchestrator.query_device_project_info")
     @patch("src.services.pipeline_orchestrator.TestItemConfigStore")
     @patch("src.services.legacy_power_test_service.run_legacy_power_test")

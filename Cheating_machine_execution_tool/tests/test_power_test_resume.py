@@ -129,6 +129,73 @@ class ResumeTests(unittest.TestCase):
             with self.assertRaisesRegex(ResumeRejected, '版本不一致'):
                 self.session._validate(5)
 
+    def test_empty_versions_skip_query_and_resume_only_failed_channel(self):
+        for value in ('', ' \t '):
+            with self.subTest(value=value), \
+                    patch('src.services.power_test_resume_service.TestItemConfigStore') as store, \
+                    patch('src.services.power_test_resume_service.query_device_project_info') as query, \
+                    patch.object(legacy, 'run_legacy_power_test',
+                                 return_value=legacy.LegacyPowerTestResult(True, 'ok')) as run:
+                store.return_value.load.return_value.project_info = SimpleNamespace(
+                    project_name='仍有项目名称', software_version=value,
+                    internal_software_version=value, onu_compile_time=value)
+                self.failed()
+                self.session._resume(5)
+                query.assert_not_called()
+                self.assertTrue(all(call.kwargs == {'required': True}
+                                    for call in store.return_value.load.call_args_list))
+                run.assert_called_once()
+                self.assertEqual([c.number for c in run.call_args.args[0].channels], [5])
+                self.assertEqual(run.call_args.kwargs['initial_completed'], {5: 3})
+                self.assertFalse(run.call_args.kwargs['initialize_power'])
+                self.assertIn('三项版本基准均为空，跳过开始前版本校验', '\n'.join(self.logs))
+
+    def test_partial_versions_and_query_failure_prevent_resume(self):
+        with patch('src.services.power_test_resume_service.TestItemConfigStore') as store, \
+                patch('src.services.power_test_resume_service.query_device_project_info') as query, \
+                patch.object(legacy, 'run_legacy_power_test') as run:
+            info = SimpleNamespace(software_version='a', internal_software_version='', onu_compile_time='')
+            store.return_value.load.return_value.project_info = info
+            with self.assertRaisesRegex(ResumeRejected, '内部软件版本、ONU 软件编译时间'):
+                self.session._validate(5)
+            query.assert_not_called()
+            info.internal_software_version, info.onu_compile_time = 'b', 'c'
+            query.side_effect = RuntimeError('查询失败')
+            self.failed()
+            self.session._resume(5)
+            run.assert_not_called()
+
+    def test_empty_versions_still_check_config_and_stop_after_load(self):
+        for failure in ('changed', 'stopped'):
+            with self.subTest(failure=failure), \
+                    patch('src.services.power_test_resume_service.TestItemConfigStore') as store, \
+                    patch('src.services.power_test_resume_service.query_device_project_info') as query:
+                def load(**kwargs):
+                    if failure == 'stopped':
+                        self.session.stop_event.set()
+                    else:
+                        path = self.request.tool_root / 'config/config.ini'
+                        path.write_bytes(path.read_bytes() + b'\n; changed\n')
+                    return SimpleNamespace(project_info=SimpleNamespace(
+                        software_version='', internal_software_version='', onu_compile_time=''))
+                # Isolate each case's original fingerprint and stop state.
+                self.session.fingerprint = self.session._fingerprint()
+                self.session.stop_event.clear()
+                store.return_value.load.side_effect = load
+                with self.assertRaisesRegex(ResumeRejected, '配置变化或收到停止'):
+                    self.session._validate(5)
+                query.assert_not_called()
+
+    def test_unreadable_profile_cannot_skip_resume_precheck(self):
+        with patch('src.services.power_test_resume_service.TestItemConfigStore') as store, \
+                patch('src.services.power_test_resume_service.query_device_project_info') as query, \
+                patch.object(legacy, 'run_legacy_power_test') as run:
+            store.return_value.load.side_effect = PermissionError('unreadable')
+            self.failed()
+            self.session._resume(5)
+            query.assert_not_called()
+            run.assert_not_called()
+
     def test_untrusted_preflight_exception_is_redacted(self):
         self.failed()
         with patch.object(self.session, '_validate', side_effect=ValueError('password=secret')):
@@ -399,6 +466,9 @@ class ResumeMenuTests(unittest.TestCase):
             command['command']()
             self.session.submit.assert_called_once_with(5)
             self.assertIn('第 4/5', confirm.call_args.args[1])
+            self.assertIn('三项版本基准均为空时跳过', confirm.call_args.args[1])
+            self.assertIn('部分填写时阻止启动', confirm.call_args.args[1])
+            self.assertIn('仅对通道 5 执行上下电', confirm.call_args.args[1])
 
     def test_running_or_stopping_channel_is_disabled(self):
         self.session.can_resume.return_value = False
