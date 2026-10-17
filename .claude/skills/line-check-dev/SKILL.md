@@ -153,6 +153,10 @@ python scripts\verify_baseline.py
 
 ## 8. 构建规则（硬规则）
 
+- 2026-10-17负责人确认17.23MiB精简包在其它电脑可以正常运行；以后打包必须采用根README的跨电脑标准：CPython3.9.10 x64仓库外独立环境、`requirements-build.txt`锁定依赖/PyInstaller5.10.1，排除NumPy/OpenBLAS、lxml、PyQt5，禁用UPX。该反馈只确认异机运行，不推定所有设备专项已验收。
+- 标准入口`build_line_check_assistant.ps1`自动准备环境、执行`check_build_environment.py`和完整基线后，使用仓库内相对路径spec构建并检查实际归档/ZIP/哈希。不得绕过入口回退全局Python或临时调整排除项；换电脑不复制虚拟环境。新依赖或工具链升级需单独验证。
+- 推荐使用`-OutputDirectory dist\<本次独立目录> -WorkDirectory build\<本次独立目录>`保留旧包；`-CheckOnly`只运行准备/检查/完整基线，不构建EXE。完整步骤及无PATH时的`-BasePython`用法见根README。
+
 - GitHub每次发布只保留本次新版Release：先上传并核对新版全部附件、设为Latest并确认公开可下载，然后删除全部旧Release及附件。不删除Git标签或源码历史。
 - 对外发布说明仅包含用户可见更新、下载与使用说明；不加入构建/测试数量、源码基准或工作区提交状态，以及打包电脑未运行/现场验收声明。验证和验收边界仍按本工作流写内部开发日志、状态及验收基线。
 

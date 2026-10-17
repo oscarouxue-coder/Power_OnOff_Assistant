@@ -1,5 +1,69 @@
 # 开发记录
 
+## 2026-10-17 - 固定跨电脑精简打包标准
+
+- 类型：构建
+- 背景：负责人明确反馈17.23MiB精简包“我在其他电脑验证了，可以正常运行”，并要求以后每次及其它电脑打开工程均采用该方式打包。本轮记录异机正常运行确认，不推定负责人未列明的真实设备专项均已验收。
+- 完成内容：① 将独立CPython3.9.10 x64、requirements-build.txt固定依赖/PyInstaller5.10.1、排除NumPy/OpenBLAS/lxml/PyQt5及禁用外部UPX写入AGENTS、根README和开发工作流。17.23MiB是当前包体积而非后续硬门限；依赖/工具链变更必须另补验证。② 环境准备自动查找py启动器、PATH或显式BasePython，首次创建环境并安装锁定依赖；新增检查脚本拒绝全局环境、错误平台/版本/位数、系统site-packages、版本漂移、额外发行包和可被导入的大库，不修改全局环境或静默回退。③ 标准构建入口每次准备/检查独立环境、清理继承的PYTHONPATH/PYTHONHOME并明确UTF-8，再执行完整基线，全部通过后才构建；结束恢复原环境变量。新增CheckOnly入口只检查不构建。相对输出/中间路径按工程位置解析，仍保留越界保护。④ 将跟踪的spec改为唯一、无盘符绝对路径的精简配置，图标、版本、hook、旧业务路径等均从SPECPATH推导，BUILD_INFO写入本次workpath；保留单文件/无控制台、既有隐式导入和Tcl/Tk/便携包门禁，禁用未固定UPX以避免电脑差异。⑤ 新增3项环境与迁移spec回归；修复标准入口首次使用-I隔离参数忽略PYTHONUTF8时，父进程按GBK解码子测试UTF-8输出的问题，统一显式-I -X utf8。⑥ 同步§2.11异机正常运行确认和§3剩余验收边界；其它设备专项结论保持。
+- 修改文件：
+  - `AGENTS.md`
+  - `README.md`
+  - `.claude/skills/line-check-dev/SKILL.md`
+  - `.claude/plans/standard-slim-packaging.md`
+  - `Cheating_machine_execution_tool/build_line_check_assistant.ps1`
+  - `Cheating_machine_execution_tool/scripts/prepare_build_environment.ps1`
+  - `Cheating_machine_execution_tool/scripts/check_build_environment.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_specs/LineCheckAssistant.spec`
+  - `Cheating_machine_execution_tool/tests/test_portable_release.py`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用独立环境Python运行`-m unittest discover -s tests -p test_portable_release.py -v`；执行`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1 -CheckOnly`。将工程文件复制到C盘带中文/空格的新目录，副本使用脱敏INI且不复制虚拟环境、build或dist，通过同一入口`-PythonExecutable <全新独立环境>\Scripts\python.exe -CheckOnly`验证自动发现Python、首次安装锁定依赖、环境检查和完整基线。可迁移spec在新路径以模拟Analysis/PYZ/EXE装配验证实际参数、图标、隐式依赖、版本/BUILD_INFO与排除项，不生成EXE；新检查脚本及spec单独py_compile，仓库根git diff --check；核对本轮前后已有EXE与本机INI哈希。
+- 验证结果：专项10项通过。原工程和C盘中文/空格目录副本均`ALL CHECKS PASSED`（89个源码编译/覆盖、1173项测试、173项指定关键回归及协议不变量），相对前轮1170项新增3项，并输出`STANDARD_BUILD_CHECK_OK`。迁移副本从全新独立环境完成自动准备和门禁；这是同机跨目录验证，不冒充另一台打包电脑实测。负责人提供的异机正常运行结论已写入§2.11与§3。临时检查日志位于系统TEMP的`linecheck_standard_check_final_20261017.log`与`linecheck_standard_portability_20261017.log`。
+- 后续待办：其它电脑先安装Python3.9.10 x64并同步完整工程（含新增脚本、依赖锁、测试样本及资源）后执行根README命令；通过Git换电脑时需按负责人后续指令提交/同步，本轮未暂存、提交、推送或发布。真实设备专项与后续功能/工具链变更仍按原范围验收。本轮未重新打包或在当前PC运行EXE，保留现有17.23MiB包、全部旧包、运行进程、本机INI及原有工作区修改，未改业务代码。
+
+## 2026-10-17 - 精简依赖并构建独立便携候选包
+
+- 类型：构建
+- 背景：负责人询问家中约22MB与本机约62MB的EXE体积差，并明确授权按独立环境、逐组精简、验证和构建的顺序实施。原包静态清单显示Qt约28.07MiB、NumPy/OpenBLAS约11.42MiB、lxml约3.25MiB，主要为旧业务导入和可选依赖带入。
+- 完成内容：① 通过`requirements-build.txt`锁定直接/间接依赖及PyInstaller5.10.1，在`%LOCALAPPDATA%\LineCheckAssistant\build-env-py39`新建CPython3.9.10 x64独立环境；不安装三组大库，补齐pywifi未声明的Windows依赖comtypes1.1.14。尽量沿用原环境版本；原requests2.30.0低于现有requirements的2.31下限，独立环境锁定2.31.0，原全局环境未修改。② 构建脚本默认使用独立环境，允许指定Python、输出/中间目录和排除组；路径越界先拒绝，生成spec仅写本次中间目录，不覆盖既有跟踪spec。保留脱敏配置、完整便携ZIP、哈希和Tcl/Tk四份布局；增加包内外BUILD_INFO及逐包归档报告。③ 新增真实BIFF8/OLE `.xls`样本及fresh-process特征检查，在阻断NumPy/lxml/PyQt5的条件下验证主入口导入、真实.xlsx导出/重读和.xls读取（前导零与SSID保留）、Telnet/SSH/WiFi真实旧类导入/信号、SSH签名/TLS证书；不调用业务构造器或操作设备。新增另一项构建路径越界保护测试。④ 实际EXE/PYZ静态门禁核对关键业务、串口、WiFi/comtypes、TFTP、Excel、SSH原生加密库、证书、Tcl/Tk四份布局与运行时钩子；明确三组依赖和OpenBLAS不得残留，并验证ZIP CRC、完整配套文件与EXE/ZIP哈希。comtypes.gen为client运行时按需生成的可选命名空间，不误列为静态必需文件；WiFi实际使用的comtypes.GUID必须存在。⑤ 原环境仅排除NumPy/lxml构建stage1，再用精简独立环境排除三组库构建最终候选包；最终差值还包括环境中其它不使用的可选依赖。原版EXE与运行进程均保留，没有修改设备业务源码、UI、命令、默认值、持久化、停止或时序。
+- 修改文件：
+  - `.claude/plans/slim-packaging.md`
+  - `Cheating_machine_execution_tool/requirements-build.txt`
+  - `Cheating_machine_execution_tool/scripts/prepare_build_environment.ps1`
+  - `Cheating_machine_execution_tool/build_line_check_assistant.ps1`
+  - `Cheating_machine_execution_tool/scripts/verify_slim_package.py`
+  - `Cheating_machine_execution_tool/tests/test_portable_release.py`
+  - `Cheating_machine_execution_tool/tests/fixtures/slim_parameters.xls`
+  - `Cheating_machine_execution_tool/tests/fixtures/slim_parameters_README.txt`
+  - `Cheating_machine_execution_tool/THIRD_PARTY_NOTICES.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`（§1.1构建入口、§2.11新增包边界、§3复验清单）
+  - `DEVELOPMENT_LOG.md`
+- 构建输出：原包`dist/V1.2.3_20261017/LineCheckAssistant.exe`为64,840,921字节（61.84MiB）；stage1 `dist/V1.2.3_slim_stage1_20261017/LineCheckAssistant.exe`为48,272,712字节（46.04MiB）；最终`dist/V1.2.3_slim_20261017/LineCheckAssistant.exe`为18,065,376字节（17.23MiB，减少72.14%），完整便携ZIP为17,747,305字节（16.93MiB）。最终目录另含版本说明、第三方声明、BUILD_INFO、两份SHA256、实际环境/归档报告、体积对照、源码基线结果及依赖锁定文件；ZIP含6份脱敏配置。原包回退入口保留，未覆盖GitHub附件。
+- 验证方法：主源码目录执行`powershell -NoProfile -ExecutionPolicy Bypass -File scripts\prepare_build_environment.ps1`。设置`PYTHONUTF8=1`，使用`%LOCALAPPDATA%\LineCheckAssistant\build-env-py39\Scripts\python.exe`运行`-m unittest discover -s tests -p test_portable_release.py -v`、`scripts/verify_baseline.py`及`-m py_compile scripts/verify_slim_package.py`。stage1：`powershell -NoProfile -ExecutionPolicy Bypass -Command "& .\build_line_check_assistant.ps1 -PythonExecutable C:\Python\Python39\python.exe -OutputDirectory dist\V1.2.3_slim_stage1_20261017 -WorkDirectory build\slim_stage1_20261017 -ExcludedModules @('numpy','lxml')"`；最终：`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1 -OutputDirectory dist\V1.2.3_slim_20261017 -WorkDirectory build\slim_final_20261017`。独立环境运行`scripts/verify_slim_package.py --exe dist/V1.2.3_slim_20261017/LineCheckAssistant.exe --zip dist/V1.2.3_slim_20261017/LineCheckAssistant_portable.zip --exclude numpy --exclude lxml --exclude PyQt5`；另逐项比较原包业务模块、构建前后原EXE与本机INI哈希，仓库根`git diff --check`。再次复建须更换输出目录以保留现有候选包。
+- 验证结果：专项7项通过；独立环境完整门禁`ALL CHECKS PASSED`（89个源码编译/覆盖、1170项测试、173项指定关键回归及协议不变量），相对本轮前1168项新增2项。最终静态门禁`PACKAGE_ARCHIVE_OK`，2114项归档条目、827个Python模块，原包全部`src/`与`line_check_assistant/`业务模块保留，原2份EXE及6份本机INI哈希未变。最终EXE SHA256 `7db5840d940eff4d801b62afd23135e744c1bbc13cb2d41cfabb70045d26573e`，ZIP SHA256 `897998a50f6aa809d2074f1dfe6e9e3fa4216a7aac6b7c2bc8e8799f897945cb`。一次性.xls生成工具xlwt仅安装到临时工具目录，不进入独立打包环境或发布包。保留此前已有版本/spec/操作员说明/发布说明等工作区修改；本轮未暂存、提交、推送或发布。
+- 后续待办：负责人使用最终便携ZIP在目标Windows电脑新目录复验§2.11/§3所列日常入口和原真实设备范围，重点上下电Telnet/SSH、WiFi、Excel和停止；源码、密码学及归档检查不能代替新包Windows/真实样机验收。本轮未在当前PC运行新EXE、未结束旧程序、未操作真实设备、未修改本机INI；原验收结论不自动覆盖精简候选包。
+
+## 2026-10-17 - 打包发布V1.2.3并清理旧版
+
+- 类型：构建
+- 背景：负责人要求重新打包EXE为1.2.3并发布到GitHub；按既有规则先核验新版本全部附件、Latest及公开下载，再清理旧Release及附件。
+- 完成内容：① 更新包内版本为V1.2.3及2026-10-17用户可见说明，包含开始前版本预检可选化和Python3.9启动兼容修复。② 默认dist根目录有旧LineCheckAssistant.exe运行，保留进程20824/29944/36348，通过临时构建脚本复用标准构建流程，仅将dist/workpath隔离至V1.2.3_20261017；使用Python3.9.10/PyInstaller5.10.1，spec由本机工具自动生成。③ 检查EXE/PYZ嵌入版本、完整启动/续跑的空版本跳过逻辑及修复后的更新模型，Tcl/Tk双布局、ZIP CRC、6份脱敏配置、包内外EXE与SHA256一致；本机全部INI构建前后哈希一致。④ 创建草稿Release并上传EXE、完整便携ZIP、两份SHA256、VERSION_INFO.txt及THIRD_PARTY_NOTICES.md六份附件，逐一核对GitHub大小/摘要后发布为Latest；匿名完整下载六份附件并比对哈希，源码更新客户端以V1.2.2发现v1.2.3、V1.2.3不更新，实际下载便携ZIP通过哈希及ZIP完整性检查。⑤ 新版公开核验通过后，删除旧V1.2.2 Release（ID414083161）及附件，最终Release数量为1，旧标签/源码历史保留。
+- 修改文件：
+  - `.claude/release_notes/v1.2.3.md`
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/VERSION_INFO.txt`
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_specs/LineCheckAssistant.spec`（PyInstaller自动生成）
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 构建输出：`Cheating_machine_execution_tool/dist/V1.2.3_20261017/LineCheckAssistant.exe`、同目录 `LineCheckAssistant_portable/`、`LineCheckAssistant_portable.zip` 和六份发布附件。
+- GitHub发布：[LineCheckAssistant V1.2.3](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.3)，Release ID415694490；新标签指向远端main已有7566fda37b8e6574fe52be4f201cb4b1aabd2f82，保持main不变，未自动提交/推送本轮版本与文档。
+- 验证方法：主源码目录设置 `PYTHONUTF8=1` 后运行 `python scripts/verify_baseline.py`；使用临时 `linecheck_build_v123_20261017.ps1` 复用标准构建脚本并隔离输出。临时 `linecheck_release_v123_20261017.py static/stage/publish/verify/prune` 完成静态归档与脱敏核验、上传核对、发布、匿名下载及精确旧Release清理；认证仅复用Git Credential Manager进程内凭据，不输出或保存凭据。仓库根运行 `git diff --check`。
+- 验证结果：完整门禁 `ALL CHECKS PASSED`（89个源码编译/覆盖、1168项测试、173项指定关键回归及协议不变量）。EXE为64840921字节，SHA256 `fe4e6212100009ee24ea205725979c53749fe59c7a888b62308572904fbb31af`；ZIP为64333506字节，SHA256 `66c3c0341b432c21d556f57e749199a590555aabbb74d93e51952b724c8f9958`。GitHub附件大小/摘要和六份匿名完整下载均一致；Latest及最终Release数量核验通过，差异格式检查通过。当前出口IP的GitHub匿名API实测HTTP403限流；Latest及版本比较采用已认证元数据，所有附件和源码客户端下载仍为匿名，未向下载/CDN发送凭据。公开发布说明仅包含用户可见更新与下载使用方式。
+- 后续待办：负责人在目标Windows电脑启动发布包，复验§2.12新增全空跳过/部分填写拦截/完整校验及单通道续跑、其它已有待验收范围；自动化包与源码客户端证据不升级目标电脑/真实样机验收。未在本机运行新EXE、未结束旧程序、未操作设备、未修改本机INI、未提交Git。
+
 ## 2026-10-17 - 支持按空版本基准跳过开始前校验
 
 - 类型：功能

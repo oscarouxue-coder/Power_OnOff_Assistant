@@ -9,6 +9,32 @@
 - 运行：进入主源码目录后执行 `python run_line_check_assistant.py`
 - 回归门禁：进入主源码目录后执行 `python scripts/verify_baseline.py`
 
+## 在另一台 Windows 电脑打包
+
+项目统一采用已由负责人确认异机正常运行的精简方式：独立CPython **3.9.10 x64**、固定`requirements-build.txt`依赖和PyInstaller **5.10.1**，排除NumPy/OpenBLAS、lxml、PyQt5，禁用外部UPX。17.23MiB是当前版本结果，后续体积可随功能变化。
+
+1. 同步完整工程，包括`requirements-build.txt`、`scripts/`、`tests/fixtures/`、`line_check_assistant/packaging_specs/`和图标/资源；不要复制原电脑的虚拟环境、`build/`或`dist/`。通过Git换电脑时，这些源码改动需先提交/同步；本轮不会自动提交。
+2. 安装[Python 3.9.10 Windows 64-bit](https://www.python.org/downloads/release/python-3910/)，保留Tcl/Tk和pip，建议安装`py`启动器。无需把默认Python切换成3.9；脚本优先使用`py -3.9`，再查找PATH中的Python，版本和位数必须准确匹配。
+3. 在仓库根目录打开PowerShell，执行：
+
+```powershell
+cd .\Cheating_machine_execution_tool
+$buildId = Get-Date -Format yyyyMMdd_HHmmss
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1 -OutputDirectory "dist\slim_$buildId" -WorkDirectory "build\slim_$buildId"
+```
+
+脚本首次自动在`%LOCALAPPDATA%\LineCheckAssistant\build-env-py39`创建独立环境并联网安装锁定依赖；以后复用并检查该环境。每次先检查版本、隔离状态和依赖，再运行完整基线；任一步失败即停止构建，不跳过门禁或回退全局环境。使用脚本相对位置解析工程路径，支持移动目录、换盘符、中文及空格路径。每次输出独立目录，保留旧包及正在运行的旧程序。
+
+如果Python不在PATH且没有`py`启动器，在构建命令末尾加`-BasePython "实际安装目录\python.exe"`。若希望使用另一个独立环境，加`-PythonExecutable "新环境目录\Scripts\python.exe"`，脚本仍会自动准备并严格检查它。环境被装入额外库时会拒绝构建；可指定新的环境目录重新准备，不改全局Python。
+
+只检查环境和完整基线、不生成EXE：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1 -CheckOnly
+```
+
+构建输出包括`LineCheckAssistant.exe`、完整便携ZIP、SHA256、版本/构建说明、第三方声明和`PACKAGING_REPORT.json`。构建后校验实际EXE/PYZ关键模块、原生依赖、Tcl/Tk四份布局、排除项、ZIP CRC和哈希。不要在打包电脑启动新EXE；交付到目标电脑按该版本变更范围复验。**统一入口是PowerShell脚本，不直接调用全局`pyinstaller`或单独执行spec来代替完整流程。**
+
 ## 文档职责
 
 | 文件 | 只负责什么 | 何时更新 |

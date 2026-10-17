@@ -1,5 +1,13 @@
 # 项目交接状态
 
+最新打包标准（2026-10-17）：负责人已确认17.23MiB精简包在其它电脑可以正常运行，要求今后每次打包及其它电脑打开工程均按此方式执行。标准入口`Cheating_machine_execution_tool/build_line_check_assistant.ps1`自动准备独立CPython3.9.10 x64环境、安装/检查`requirements-build.txt`固定依赖及PyInstaller5.10.1，强制排除NumPy/OpenBLAS、lxml、PyQt5并禁用UPX；先完整基线再相对路径spec构建，保留实际EXE/PYZ、Tcl/Tk、ZIP和哈希检查。跨电脑执行步骤在根README，硬规则同步AGENTS与开发工作流。异机反馈只确认正常运行，各真实设备专项按原验收边界；没有发布GitHub或提交本轮源码。
+
+跨电脑复现：安装Python3.9.10 x64并完整同步工程；在主源码目录运行`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1`即可自动准备、校验及构建。推荐按根README用带时间的独立dist/build目录保留旧包。`-BasePython`支持显式Python路径，`-PythonExecutable`支持新的独立环境，`-CheckOnly`只验证不生成EXE；不得调用全局PyInstaller或单独跑spec来绕过标准流程。现有17.23MiB包位置仍为`dist/V1.2.3_slim_20261017/`，本轮未重新打包。
+
+标准入口验证：新增3项环境/可迁移spec回归，专项10项通过；原工程及复制到C盘中文/空格目录的脱敏工程副本均以标准入口`-CheckOnly`通过完整门禁`ALL CHECKS PASSED`（89个源码编译/覆盖、1173项测试、173项指定关键回归及协议不变量）。副本使用全新独立环境，自动查找Python并准备锁定依赖；统一显式UTF-8，防止隔离进程忽略PYTHONUTF8造成GBK/UTF-8不一致。未重新构建或运行EXE，现有EXE/本机INI保持，业务代码未改；实际异机运行结论来自负责人反馈。
+
+最新交付（2026-10-17）：[V1.2.3](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.3)已打包并设为GitHub Latest，包含开始前版本校验可选化及Python3.9启动兼容修复。六份附件大小/摘要与匿名完整下载哈希核验通过，源码更新客户端使用已认证真实元数据，以V1.2.2发现新版、V1.2.3不更新；真实便携ZIP匿名下载校验通过后，删除旧V1.2.2 Release及附件，最终仅保留V1.2.3，旧Git标签及源码历史保留。当前出口IP的GitHub匿名API实测HTTP403限流；Latest及版本比较采用已认证元数据，所有附件和源码客户端下载仍为匿名，未向下载/CDN发送凭据。默认dist根目录旧EXE正在运行，本次未结束旧进程，隔离输出为 `Cheating_machine_execution_tool/dist/V1.2.3_20261017/LineCheckAssistant.exe` 与同目录 `LineCheckAssistant_portable.zip`。完整门禁 `ALL CHECKS PASSED`（89个源码编译/覆盖、1168项测试、173项指定关键回归及协议不变量）；EXE/PYZ版本与新增逻辑、Tcl/Tk双布局、ZIP CRC、6份脱敏配置及本机INI未变核验通过。未在本机运行新EXE，目标电脑启动及新增行为Windows/真实样机复验仍待负责人确认；本轮未自动提交或推送源码。
+
 最新功能（2026-10-17）：开关机开始前版本预检及失败通道续跑统一按当前选定方案已保存的三项版本基准判断：去除首尾空白后全空跳过预检、部分填写提示缺少字段并阻止启动、全填沿用严格校验。项目名称不参与判断；跳过时不建立预检连接或发送预检命令，确认摘要及主日志说明跳过；配置严格读取失败、指纹变化、停止及单通道隔离保护保持。新增13项回归，专项120项通过，完整门禁 ALL CHECKS PASSED（89个源码编译/覆盖、1168项测试、173项指定关键回归及协议不变量）。Windows源码版和真实样机新增范围待负责人复验，见 ACCEPTANCE_BASELINE.md §2.12/§3。本轮不打包、不运行EXE、不提交Git，保留已有本机配置与更新兼容性改动。
 
 最新源码启动修复（2026-10-17）：检查更新模型移除Python3.9不支持的dataclass `slots=True`，保留三个数据类的只读约束、字段和默认值。新增1项兼容性回归，更新专项40项及完整门禁 `ALL CHECKS PASSED`（89个源码编译/覆盖、1155项测试、173项指定关键回归及协议不变量）。现有3.9.10虚拟环境已通过主程序导入及真实源码入口/Tk初始化、事件处理和销毁检查；使用临时配置/日志并模拟枚举与权限警告，不构成负责人完整Windows/设备验收。未构建或运行EXE，现有发布包不含本轮源码修复；正常配置下完整交互仍由负责人复验。该虚拟环境另缺xlrd，仅在使用.xls读取前需按requirements.txt补齐。

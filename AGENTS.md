@@ -1,6 +1,7 @@
 # Project Notes
 
 - After rebuilding the latest `dist\LineCheckAssistant.exe`, do not run it on the current PC. Only verify that packaging completed successfully and report the output path to the user.
+- 打包标准（2026-10-17，负责人已确认17.23MiB精简包在其它电脑正常运行）：以后统一通过`Cheating_machine_execution_tool/build_line_check_assistant.ps1`构建。使用脚本自动准备的仓库外独立CPython3.9.10 x64环境、`requirements-build.txt`固定依赖及PyInstaller5.10.1，排除NumPy/OpenBLAS、lxml、PyQt5，禁用外部UPX；构建前环境检查和完整`verify_baseline.py`、构建后实际EXE/PYZ与便携ZIP/哈希检查必须通过。禁止回退全局环境、直接使用未锁定依赖或旧机器生成的spec。跨电脑步骤见根`README.md`；工程路径必须从脚本位置推导，不写死盘符。若新增功能确需调整依赖/排除项或升级工具链，单独说明并补验证，不为追求固定17.23MiB删除必需功能。本次仅确认异机正常运行，不扩展真实设备验收范围。
 - GitHub 发布规则（2026-10-16）：每次发布新版，先上传并核验新版本及全部附件，确认设为 Latest 且公开可下载后，删除旧版 GitHub Releases 及其附件，最终只保留本次新版本 Release；不删除源码历史或 Git 标签。公开发布说明只写用户可见更新、下载与使用说明，不写构建测试数量、源码提交基准/工作区状态或打包电脑未运行及现场验收声明；这些内部记录保留在 DEVELOPMENT_LOG.md / PROJECT_STATUS.md / ACCEPTANCE_BASELINE.md。
 
 ## 仓库边界
