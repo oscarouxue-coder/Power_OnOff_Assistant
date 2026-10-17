@@ -1,5 +1,7 @@
 # 项目交接状态
 
+最新交付（2026-10-17）：[V1.2.3 精简便携包](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.3)已替换同版本原大包并设为 GitHub Latest。来源为 `Cheating_machine_execution_tool/dist/V1.2.3_slim_20261017/`，EXE 18,065,376字节（17.23 MiB）、便携ZIP 17,747,305字节（16.93 MiB）；六份附件先以临时名称上传，逐份核对大小/摘要并匿名完整下载校验后，再删除旧附件并恢复固定下载名称，正式链接再次匿名下载核验通过。最终只保留现有V1.2.3 Release，标签和源码历史保留。版本号未变，已有V1.2.3用户需手动下载换包。只读归档/ZIP门禁和完整基线 `ALL CHECKS PASSED`（1173项测试）通过；负责人此前确认的精简包异机正常运行及其它真实设备验收边界保持。本轮未重新构建、运行EXE、修改本机配置或提交/推送源码。
+
 最新打包标准（2026-10-17）：负责人已确认17.23MiB精简包在其它电脑可以正常运行，要求今后每次打包及其它电脑打开工程均按此方式执行。标准入口`Cheating_machine_execution_tool/build_line_check_assistant.ps1`自动准备独立CPython3.9.10 x64环境、安装/检查`requirements-build.txt`固定依赖及PyInstaller5.10.1，强制排除NumPy/OpenBLAS、lxml、PyQt5并禁用UPX；先完整基线再相对路径spec构建，保留实际EXE/PYZ、Tcl/Tk、ZIP和哈希检查。跨电脑执行步骤在根README，硬规则同步AGENTS与开发工作流。异机反馈只确认正常运行，各真实设备专项按原验收边界；没有发布GitHub或提交本轮源码。
 
 跨电脑复现：安装Python3.9.10 x64并完整同步工程；在主源码目录运行`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1`即可自动准备、校验及构建。推荐按根README用带时间的独立dist/build目录保留旧包。`-BasePython`支持显式Python路径，`-PythonExecutable`支持新的独立环境，`-CheckOnly`只验证不生成EXE；不得调用全局PyInstaller或单独跑spec来绕过标准流程。现有17.23MiB包位置仍为`dist/V1.2.3_slim_20261017/`，本轮未重新打包。

@@ -1,5 +1,20 @@
 # 开发记录
 
+## 2026-10-17 - 发布V1.2.3精简包并替换旧附件
+
+- 类型：构建
+- 背景：负责人要求将 `Cheating_machine_execution_tool/dist/V1.2.3_slim_20261017/` 已构建的EXE发布到GitHub。现有正式Release及包内版本均为V1.2.3，故更新同一Release附件并保留原标签和固定下载入口，不另造版本或重新构建。
+- 完成内容：① 只读检查实际EXE/PYZ关键业务模块与原生依赖、Tcl/Tk四份布局、NumPy/OpenBLAS/lxml/PyQt5排除、包内版本、ZIP CRC、配套文件及包内外EXE/ZIP哈希。② 六份附件先以 `slim20261017-pending-` 临时名称上传，全部核对GitHub大小/摘要并匿名完整下载校验后，才逐份删除旧附件并将新附件恢复为固定名称；认证凭据仅由Git Credential Manager在进程内使用，匿名下载不携带认证。③ 更新公开说明中的精简包大小，保持用户可见功能和使用说明，重新设为Latest；正式六份链接再次匿名完整下载校验，确认Release列表仅V1.2.3。④ 同步项目交接和§2.15发布证据/§3待确认清单；此前负责人确认的异机正常运行及各业务专项验收边界保持。
+- 修改文件：
+  - `.claude/release_notes/v1.2.3.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- GitHub发布：[LineCheckAssistant V1.2.3](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.3)，保留Release ID415694490；六份附件为EXE、完整便携ZIP、两份SHA256、VERSION_INFO.txt、THIRD_PARTY_NOTICES.md。未新增或删除Git标签、未改源码历史；原大包六份附件已移除，本地原大包和精简包文件均保留。
+- 验证方法：仓库根使用独立环境Python执行临时助手 `%TEMP%/linecheck_publish_slim_20261017.py inspect/stage/swap/verify`，复用 `scripts.verify_slim_package.inspect_archive/inspect_portable` 做只读检查，不调用会重写dist报告的main。主源码目录设置 `PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8` 后，用独立环境Python `-I -X utf8 scripts/verify_baseline.py` 跑完整门禁；仓库根 `git diff --check`。发布状态和不含凭据的附件清单保存在 `%TEMP%/linecheck_publish_slim_20261017_state.json`。
+- 验证结果：静态归档/便携包检查通过，六份临时名附件和六份正式名附件大小/摘要及匿名完整下载SHA256全部匹配，Latest及最终仅一个Release通过。EXE为18,065,376字节（17.23 MiB），SHA256 `7db5840d940eff4d801b62afd23135e744c1bbc13cb2d41cfabb70045d26573e`；ZIP为17,747,305字节（16.93 MiB），SHA256 `897998a50f6aa809d2074f1dfe6e9e3fa4216a7aac6b7c2bc8e8799f897945cb`。完整门禁 `ALL CHECKS PASSED`（89个源码编译/覆盖、1173项测试、173项指定关键回归及协议不变量）。首轮父进程强制UTF-8、子进程未统一编码导致UnicodeDecodeError；显式统一上述环境变量后原样门禁通过，未改业务或测试源码。门禁日志 `%TEMP%/linecheck_slim_publish_baseline_20261017.log`。
+- 后续待办：已使用V1.2.3原大包的用户需从发布页手动下载精简包，同版本检查更新不会提示。未重新构建或在当前PC运行新EXE，未结束旧进程、操作真实设备、修改本机INI或暂存/提交/推送源码；其它未列明业务专项维持既有验收范围。
+
 ## 2026-10-17 - 固定跨电脑精简打包标准
 
 - 类型：构建
