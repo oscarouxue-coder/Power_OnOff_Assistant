@@ -29,7 +29,7 @@ def wait_for(predicate, timeout=4):
 class FastEvent(threading.Event):
     def wait(self, timeout=None):
         # Skip the old 1-second spacing between initial channel launches.
-        if timeout == 1.0:
+        if timeout in (0.5, 1.0):
             return self.is_set()
         return super().wait(timeout)
 
@@ -361,8 +361,11 @@ class ResumeTests(unittest.TestCase):
         self.assertFalse(errors, errors)
         self.assertTrue(result.ok, result.detail)
         self.assertCountEqual(calls, [(5, 1), (6, 1), (5, 4)])
-        self.assertEqual(initializations, [True])
-        self.assertEqual(frames.count(bytes.fromhex('55 00 AD 00 00 AD')), 1)
+        self.assertEqual(initializations, [False])
+        self.assertNotIn(bytes.fromhex('55 00 AD 00 00 AD'), frames)
+        self.assertEqual(frames[:2], [bytes.fromhex('55 01 A1 00 05 A5'),
+                                     bytes.fromhex('55 01 A1 00 06 A6')])
+        self.assertEqual(sum(len(frame) == 6 for frame in frames), 2)
         self.assertEqual(self.session.completed, {5: 5, 6: 5})
 
     def test_after_run_adapter_never_initializes_all_off_telnet_and_ssh(self):

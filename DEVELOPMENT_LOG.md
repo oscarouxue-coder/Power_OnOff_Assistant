@@ -1,5 +1,25 @@
 # 开发记录
 
+## 2026-10-28 - 限定正式测试初始化断电通道
+
+- 类型：修改
+- 背景：负责人要求正式开关机测试初始化只断电本次已勾选通道，取消广播全通道断电，避免影响其它通道上的设备。
+- 完成内容：① Telnet/SSH旧业务构造统一禁用构造器电源初始化，由service按本次通道请求顺序去重，直接使用既有单通道帧生成器逐个发送关闭帧，每帧后可停止等待0.5秒；全部下发后才启动电源队列消费者和通道线程。直接发送避免初始软件状态为关闭时旧power_off跳过真实帧。② 初始化中停止或写入异常时终止，不继续剩余通道、不启动测试、不自动恢复已断电通道；主日志记录实际帧、目标及下发完成/停止/失败，不将下发完成视为电源回读确认。③ 总确认列出本次通道并说明仅断电勾选通道；service原initialize_power参数语义及失败通道续跑隔离保持，每轮业务和旧GUI独立入口未修改。④ 同步操作员说明、项目状态和验收基线§2.12/§3，新增行为标为已实现未验收。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/tests/test_legacy_power_initialization.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_pipeline_window.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_resume.py`
+  - `Cheating_machine_execution_tool/tests/test_telnet_post_login_confirmations.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用Python3.9.10运行`test_legacy_power_initialization.py`、`test_legacy_power_test_service.py`、`test_power_test_resume.py`、`test_pipeline_window.py`、`test_pipeline_orchestrator.py`和`test_telnet_post_login_confirmations.py`共6个专项套件；设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`后执行`python -X utf8 scripts/verify_baseline.py`。仓库根按本轮文件路径执行`git diff --check`，并核对原有两份本机配置SHA256未变。
+- 验证结果：149项专项通过；完整门禁`ALL CHECKS PASSED`（89个源码编译/覆盖、1180项测试、173项指定关键回归及协议不变量）。相对上次1173项新增7项：6项初始化回归覆盖Telnet/SSH、单/多通道、1/16边界、请求去重顺序、软件初始关闭、帧先于线程启动、停止/异常及续跑跳过；1项确认框实际多通道列表回归。本轮文件差异检查通过；全工作区差异检查另命中原有network_card_ip.ini空值行尾空格，未改动该文件。两份原有修改network_card_ip.ini与onu_registration.ini的SHA256前后相同。完整门禁日志：`%TEMP%/linecheck_selected_power_baseline_20261028.log`。
+- 后续待办：负责人按验收基线§3完成Windows源码版及真实电源复验，确认未选通道保持原电源状态、实际帧顺序、停止/异常及续跑隔离。本轮未打包、未运行EXE、未连接设备、未修改本机INI、未暂存或提交。
+
 ## 2026-10-17 - 发布V1.2.3精简包并替换旧附件
 
 - 类型：构建

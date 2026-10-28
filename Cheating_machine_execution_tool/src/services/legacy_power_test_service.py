@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
 from line_check_assistant.legacy_ui_defaults_store import LegacyUiDefaultsStore
+from src.core.power_supply import channel_power_frame
 
 
 LEGACY_CONFIG_FILENAME = "config.ini"
@@ -982,8 +983,8 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
                 "type": "stage",
                 "message": (
                     f"打开程控电源串口 {request.serial_port}/{request.baud_rate}；"
-                    + ("旧 Start All 初始化将下发全通道断电帧 55 00 AD 00 00 AD。"
-                       if initialize_power else "单通道恢复：跳过初始化全通道断电。")
+                    + ("初始化仅断电已勾选通道。"
+                       if initialize_power else "单通道恢复：跳过初始化断电。")
                 ),
             }
         )
@@ -1018,17 +1019,49 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
                 *common_args,
                 int(request.telnet_enable),
                 request.selected_profile,
-                initialize_power=initialize_power,
+                initialize_power=False,
             )
         else:
             legacy_worker = WorkerClass(
                 *common_args,
                 request.selected_profile,
-                initialize_power=initialize_power,
+                initialize_power=False,
             )
         legacy_worker.dingtalk.log = logger.info
         _connect_legacy_log_signals(legacy_worker, message_queue)
         restore_result_log_open = _install_legacy_result_log_forwarder(message_queue)
+
+        if initialize_power:
+            selected_channels = tuple(dict.fromkeys(channel.number for channel in request.channels))
+            message_queue.put({
+                "type": "stage",
+                "message": f"初始化仅断电已勾选通道：{list(selected_channels)}。",
+            })
+            for channel_number in selected_channels:
+                if stop_event.is_set():
+                    break
+                try:
+                    # 初始软件状态不能代表真实电源状态，直接下发关闭帧。
+                    serial_client.write(channel_power_frame(channel_number, False))
+                except Exception as exc:
+                    raise RuntimeError(f"初始化通道 {channel_number} 断电指令下发失败：{exc}") from exc
+                message_queue.put({
+                    "type": "stage",
+                    "message": f"初始化通道 {channel_number} 断电指令已下发（未回读电源状态）。",
+                })
+                if stop_event.wait(0.5):
+                    break
+            if stop_event.is_set():
+                message_queue.put({
+                    "type": "stage", "message": "初始化断电已停止；未启动开关机测试。",
+                })
+                message_queue.put({
+                    "type": "result", "ok": False, "detail": "用户已停止初始化断电，未启动开关机测试",
+                })
+                return
+            message_queue.put({
+                "type": "stage", "message": "已勾选通道初始化断电指令全部下发完成。",
+            })
 
         selected = {item.number for item in request.channels}
         for channel_number in range(1, 17):

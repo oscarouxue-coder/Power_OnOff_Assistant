@@ -30,6 +30,7 @@ from src.services.pipeline_orchestrator import (
     PipelineOrchestrator,
     SubTaskResult,
     SubTaskStatus,
+    _power_channel_number,
     compute_all_subtask_statuses,
     execution_order_for,
 )
@@ -397,9 +398,12 @@ class PipelineWindow:
             )
         legacy_power_note = ""
         if "legacy_power_test" in selected:
+            selected_power_channels = list(dict.fromkeys(
+                _power_channel_number(channel.section) for channel in ctx.enabled_channels
+            ))
             legacy_power_note = (
-                "\n\n危险操作提示：子任务7会复用旧 Start All 业务；初始化时先向程控电源"
-                "下发全通道断电指令，再启动新工具当前勾选的通道。"
+                "\n\n危险操作提示：子任务7会复用旧 Start All 业务；初始化仅断电已勾选通道："
+                f"{selected_power_channels}，逐通道下发关闭帧后再启动测试。"
                 "\n开关机版本预检："
                 + describe_legacy_power_telnet_post_login(ctx)
             )

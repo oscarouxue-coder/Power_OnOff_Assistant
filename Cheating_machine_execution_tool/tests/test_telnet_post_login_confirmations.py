@@ -191,7 +191,8 @@ class PipelineConfirmationTests(unittest.TestCase):
             (tool_root / "config/selected.ini").write_text("[project_info]\n", encoding="utf-8")
             text = self.confirm_without_starting(pipeline_context(tool_root), {"legacy_power_test"})
         self.assertIn("跳过开始前版本校验", text)
-        self.assertIn("下发全通道断电指令", text)
+        self.assertIn("初始化仅断电已勾选通道：[1]", text)
+        self.assertNotIn("全通道断电", text)
         self.assertNotIn("等待 1 秒", text)
 
     def confirm_without_starting(self, ctx, selected):
@@ -221,8 +222,21 @@ class PipelineConfirmationTests(unittest.TestCase):
         self.assertIn("现场方案", text)
         self.assertIn("busybox sh", text)
         self.assertIn("等待 1 秒", text)
-        self.assertIn("下发全通道断电指令", text)
+        self.assertIn("初始化仅断电已勾选通道：[1]", text)
+        self.assertNotIn("全通道断电", text)
         self.assertNotIn("wrong-default", text)
+
+    def test_legacy_confirmation_lists_only_selected_channels_in_request_order(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            ctx = pipeline_context(make_tool_root(Path(temporary)))
+            ctx.enabled_channels = [
+                ChannelConfig("channel_6", enabled=True),
+                ChannelConfig("channel_5", enabled=True),
+                ChannelConfig("channel_6", enabled=True),
+            ]
+            text = self.confirm_without_starting(ctx, {"legacy_power_test"})
+        self.assertIn("初始化仅断电已勾选通道：[6, 5]", text)
+        self.assertNotIn("全通道断电", text)
 
     def test_unselected_legacy_task_does_not_load_or_describe_its_profile(self):
         with patch("line_check_assistant.pipeline_window.describe_legacy_power_telnet_post_login") as describe:

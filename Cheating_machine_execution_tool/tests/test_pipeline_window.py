@@ -70,15 +70,16 @@ class BuildContextRegressionTests(unittest.TestCase):
         self.assertIn("请先手动重启样机", source)
         self.assertIn("确认样机已重启后再点击", source)
 
-    def test_pipeline_confirmation_warns_legacy_start_all_powers_every_channel_off(self) -> None:
-        """子任务7必须在启动前明确提示旧 Start All 的全通道断电动作。"""
+    def test_pipeline_confirmation_warns_legacy_start_all_powers_selected_channels_off(self) -> None:
+        """子任务7必须在启动前明确提示仅对勾选通道初始化断电。"""
         import inspect
         import line_check_assistant.pipeline_window as pw_mod
 
         source = inspect.getsource(pw_mod.PipelineWindow._on_start)
         self.assertIn('"legacy_power_test" in selected', source)
         self.assertIn("危险操作提示：子任务7", source)
-        self.assertIn("下发全通道断电指令", source)
+        self.assertIn("初始化仅断电已勾选通道", source)
+        self.assertNotIn("下发全通道断电指令", source)
 
     def test_pipeline_refreshes_statuses_after_returning_from_configuration(self) -> None:
         """关闭去配置子窗口并回到全流程窗口时，必须自动刷新缺项状态。"""
