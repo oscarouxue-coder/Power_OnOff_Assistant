@@ -246,6 +246,38 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn('self.channel_list.bind("<Button-3>", self._on_channel_list_context_menu)', source)
         self.assertIn('label="打开本次开关机运行日志"', source)
 
+    def test_channel_list_blank_space_does_not_select_or_toggle(self):
+        context = SimpleNamespace(channels=[object(), object()], channel_list=Mock(),
+                                  _toggle_channel_enabled=Mock(),
+                                  _toggle_selected_channel_enabled=Mock())
+        context.channel_list.nearest.return_value = 1
+        context.channel_list.bbox.return_value = (0, 20, 200, 18)
+        context._channel_list_row_at = lambda event: LineCheckAssistant._channel_list_row_at(context, event)
+        event = SimpleNamespace(x=5, y=50)
+
+        self.assertEqual(LineCheckAssistant._on_channel_list_press(context, event), "break")
+        self.assertIsNone(LineCheckAssistant._on_channel_list_click(context, event))
+        self.assertEqual(LineCheckAssistant._on_channel_list_double_click(context, event), "break")
+        context._toggle_channel_enabled.assert_not_called()
+        context._toggle_selected_channel_enabled.assert_not_called()
+
+    def test_channel_list_real_row_keeps_click_and_double_click_behavior(self):
+        context = SimpleNamespace(channels=[object(), object()], channel_list=Mock(),
+                                  _toggle_channel_enabled=Mock(),
+                                  _toggle_selected_channel_enabled=Mock(return_value="break"))
+        context.channel_list.nearest.return_value = 1
+        context.channel_list.bbox.return_value = (0, 20, 200, 18)
+        context._channel_list_row_at = lambda event: LineCheckAssistant._channel_list_row_at(context, event)
+        event = SimpleNamespace(x=5, y=20)
+
+        self.assertIsNone(LineCheckAssistant._on_channel_list_press(context, event))
+        LineCheckAssistant._on_channel_list_click(context, event)
+        context._toggle_channel_enabled.assert_called_once_with(1)
+        self.assertEqual(LineCheckAssistant._on_channel_list_double_click(context, event), "break")
+        context._toggle_selected_channel_enabled.assert_called_once_with(event)
+        event.y = 38
+        self.assertIsNone(context._channel_list_row_at(event))
+
     def test_channel_list_right_click_selects_the_clicked_row_before_showing_menu(self):
         context = SimpleNamespace(
             channels=[ChannelConfig(section="channel_1"), ChannelConfig(section="channel_2")],

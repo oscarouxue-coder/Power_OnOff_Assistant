@@ -1,5 +1,38 @@
 # 开发记录
 
+## 2026-10-30 - 修复通道列表空白点击
+
+- 类型：BUG 修复
+- 背景：点击“选择测试通道”列表底部空白处时，Listbox默认行为会选中最后一行；方框区域和双击还可能切换启用状态。
+- 完成内容：① 按实际行边界拦截空白区域的鼠标按下、松开和双击。② 保留有效行选择、方框切换、双击和空格键行为，增加回归覆盖。③ 更新用户说明及待验收边界。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置 `PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8` 后运行 `python scripts/verify_baseline.py`；使用独立Tk Listbox生成空白处单击及双击事件，检查选中项和切换回调。
+- 验证结果：完整基线 ALL CHECKS PASSED（1217项测试，较1215项增加2项；180项指定关键回归、91个源码编译/覆盖）；独立Tk鼠标事件通过。首次未统一子进程编码的基线运行因输出解码失败中止，设置UTF-8后通过。
+- 后续待办：完整Windows源码界面复验待负责人确认；未打包或执行设备操作。
+
+## 2026-10-30 - 构建并发布V1.2.5精简便携包
+
+- 类型：构建
+- 背景：负责人要求重新构建EXE并发布GitHub。开工时工作区干净，本地与远端main均为2e65f1aceea979689210b110e458ed3c20516478；GitHub仅有V1.2.4 Release。
+- 完成内容：① 版本递增为V1.2.5，日期2026-10-30，纳入工具栏已保存项目名称显示及正式Telnet测试WiFi排队/停止/续跑优化，公开说明仅含用户可见更新和下载使用说明。② 使用标准独立CPython3.9.10 x64、固定依赖/PyInstaller5.10.1构建，保持排除项和UPX策略，输出独立目录并保留旧包。③ 只读核对实际冻结的8个相关模块与当前源码编译结果一致、包内版本一致、6份脱敏配置一致且本机配置哈希未变。④ GitHub发布进度与最终核验结果见本条下方。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/VERSION_INFO.txt`
+  - `.claude/release_notes/v1.2.5.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 构建输出：`Cheating_machine_execution_tool/dist/V1.2.5_slim_20261030/`；EXE 18,078,211字节（17.24MiB），SHA256 `672d804064eac504b83567806298666195f2e8982f23ca76e33977b6a177f870`；ZIP 17,760,701字节（16.94MiB），SHA256 `3da34e4a410d8ad8dcaba87155cf42f6e6b2f81d09c6f818d33f66a9f9331b26`。
+- 验证方法：在主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，运行`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1 -OutputDirectory dist\V1.2.5_slim_20261030 -WorkDirectory build\V1.2.5_slim_20261030`。标准入口执行环境/完整基线/实际EXE归档和ZIP门禁；仓库根使用独立环境`python -I -X utf8 %TEMP%/linecheck_verify_v125_20261030.py`只读比对冻结代码与配置，使用临时发布助手`%TEMP%/linecheck_release_v125_20261030.py stage/publish/client/prune`核验发布，认证仅在GitHub API请求内使用，公开附件下载不带认证。执行`git diff --check`。
+- 验证结果：标准构建exit 0，ALL CHECKS PASSED（91个源码编译/覆盖、1215项测试、180项指定关键回归及协议不变量）；PACKAGE_ARCHIVE_OK，关键原生依赖、Tcl/Tk四份布局、排除NumPy/OpenBLAS/lxml/PyQt5、ZIP CRC及哈希通过；8个相关模块FROZEN_SOURCE_MATCH、SANITIZED_CONFIG_OK 6、LIVE_CONFIG_UNCHANGED。构建日志`%TEMP%/linecheck_build_v125_20261030.log`，归档报告`PACKAGING_REPORT.json`位于输出目录。
+- GitHub发布：已公开[正式V1.2.5](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.5)，Release ID `429030760`。六份附件（EXE、EXE SHA256、便携ZIP、ZIP SHA256、VERSION_INFO.txt、THIRD_PARTY_NOTICES.md）均已上传并逐份核对GitHub大小/摘要，匿名完整下载的大小/哈希全部一致；Latest确认V1.2.5。真实源码更新客户端使用匿名元数据和匿名SHA256附件，V1.2.4发现V1.2.5、V1.2.5无更新，输出SOURCE_UPDATE_CLIENT_OK。以上通过后删除V1.2.4 Release及附件，最终仅保留V1.2.5，旧标签与源码历史保留，输出PUBLIC_LATEST_ONLY_RELEASE_OK。新标签指向现有远端main，本轮版本/发布文档保留工作区未提交；发布状态在`%TEMP%/linecheck_release_v125_20261030.json`。
+- 后续待办：新EXE目标电脑启动、项目名称完整界面和WiFi真实双通道复验仍待负责人确认，按ACCEPTANCE_BASELINE.md §2.11/§2.12/§3执行；构建/归档/下载证据不升级现场验收。本轮未运行新EXE、未发送设备命令、未改本机配置、未暂存/提交或推送源码。
+
 ## 2026-10-30 - 在工具栏显示已保存项目名称
 
 - 类型：功能

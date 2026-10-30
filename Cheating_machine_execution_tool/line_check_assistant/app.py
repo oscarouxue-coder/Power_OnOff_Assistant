@@ -898,10 +898,11 @@ class LineCheckAssistant(Tk):
         )
         self.channel_list.pack(fill="both", expand=True, pady=(0, 10))
         self.channel_list.bind("<<ListboxSelect>>", self._on_channel_selected)
+        self.channel_list.bind("<Button-1>", self._on_channel_list_press)
         self.channel_list.bind("<ButtonRelease-1>", self._on_channel_list_click)
         self.channel_list.bind("<Button-3>", self._on_channel_list_context_menu)
         self.channel_list.bind("<space>", self._toggle_selected_channel_enabled)
-        self.channel_list.bind("<Double-Button-1>", self._toggle_selected_channel_enabled)
+        self.channel_list.bind("<Double-Button-1>", self._on_channel_list_double_click)
         self.channel_context_menu = Menu(self, tearoff=0)
         self.channel_context_menu.add_command(
             label="打开本次开关机运行日志",
@@ -7520,9 +7521,27 @@ class LineCheckAssistant(Tk):
                 lines.append(f"通道{channel_number}{detail}")
         return "\n".join(lines)
 
-    def _on_channel_list_click(self, event) -> None:
+    def _channel_list_row_at(self, event):
         index = self.channel_list.nearest(event.y)
         if index < 0 or index >= len(self.channels):
+            return None
+        row_box = self.channel_list.bbox(index)
+        if row_box is None or not row_box[1] <= event.y < row_box[1] + row_box[3]:
+            return None
+        return index
+
+    def _on_channel_list_press(self, event):
+        if self._channel_list_row_at(event) is None:
+            return "break"
+
+    def _on_channel_list_double_click(self, event):
+        if self._channel_list_row_at(event) is None:
+            return "break"
+        return self._toggle_selected_channel_enabled(event)
+
+    def _on_channel_list_click(self, event) -> None:
+        index = self._channel_list_row_at(event)
+        if index is None:
             return
         # The checkbox marker is at the beginning of each row.
         if event.x <= 28:
