@@ -25,6 +25,7 @@ from typing import Callable, Iterable, Sequence
 
 from line_check_assistant.legacy_ui_defaults_store import LegacyUiDefaultsStore
 from src.core.power_supply import channel_power_frame
+from src.services.power_test_wifi_service import PowerTestWifiScheduler
 
 
 LEGACY_CONFIG_FILENAME = "config.ini"
@@ -146,6 +147,8 @@ def _format_power_frame(payload) -> str:
 def _should_forward_legacy_log(level: str, text: str, source: str) -> bool:
     """保留操作员信号和关键结果，过滤旧 logger 的高频底层 INFO。"""
     normalized_level = level.strip().lower()
+    if text.startswith("[WiFi测试]"):
+        return True
     if normalized_level in {"warning", "error"}:
         return True
     if source == "signal":
@@ -652,6 +655,10 @@ def _run_legacy_power_test(
                 if not 1 <= channel_number <= 16:
                     continue
                 finished_channels.add(channel_number)
+                if message.get("cancelled"):
+                    if on_channel_status is not None:
+                        on_channel_status(channel_number, "stopped", "用户停止WiFi测试，保留已完成轮次")
+                    continue
                 if ok:
                     status, detail = "success", "所有测试项验证成功"
                     completed_by_channel[channel_number] = request.number_of_tests
@@ -695,9 +702,8 @@ def _run_legacy_power_test(
             return LegacyPowerTestResult(False, detail)
         if final_result.ok and on_progress is not None and last_reported_cycle < request.number_of_tests:
             on_progress(request.number_of_tests, request.number_of_tests)
-        emit(
-            f"[执行开关机测试] {'成功' if final_result.ok else '失败'}：{final_result.detail}"
-        )
+        outcome = '已停止' if stop_event.is_set() else ('成功' if final_result.ok else '失败')
+        emit(f"[执行开关机测试] {outcome}：{final_result.detail}")
         return final_result
     finally:
         if process.is_alive():
@@ -776,7 +782,7 @@ def _install_headless_legacy_stubs(request: LegacyPowerTestRequest):
 
 
 class _ForwardingLegacyLogger:
-    """旧业务 logger 适配；已知敏感值先脱敏再转发。"""
+    """旧业务 logger 适配；仅用户明确允许的WiFi信息摘要保留明文密码。"""
 
     def __init__(self, message_queue, secrets: Sequence[str]) -> None:
         self.message_queue = message_queue
@@ -797,6 +803,15 @@ class _ForwardingLegacyLogger:
 
     def info(self, message, *_args, **_kwargs) -> None:
         self._write("info", message)
+
+    def wifi_credentials(self, channel: int, cycle: int, values) -> None:
+        """每次通道执行首次读取后显示一次；不放开其它日志的敏感值过滤。"""
+        self.message_queue.put({
+            "type": "log", "level": "info", "source": "logger",
+            "message": (f"[WiFi测试] 通道{channel} 第{cycle}轮 WiFi信息："
+                        f"2.4G SSID={values[0]}，密码={values[1]}；"
+                        f"5G SSID={values[2]}，密码={values[3]}"),
+        })
 
     def warning(self, message, *_args, **_kwargs) -> None:
         self._write("warning", message)
@@ -1028,6 +1043,8 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
                 initialize_power=False,
             )
         legacy_worker.dingtalk.log = logger.info
+        if request.communication_method == "telnet":
+            legacy_worker.wifi_scheduler = PowerTestWifiScheduler()
         _connect_legacy_log_signals(legacy_worker, message_queue)
         restore_result_log_open = _install_legacy_result_log_forwarder(message_queue)
 
@@ -1079,6 +1096,7 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
         power_consumer.start()
 
         channel_results: dict[int, bool] = {}
+        cancelled_channels = set()
         channel_threads: dict[int, threading.Thread] = {}
         reported_ready = set()
 
@@ -1105,8 +1123,12 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
                         **kwargs,
                     )
                 channel_results[channel.number] = bool(result)
+                cancelled = result is None and stop_event.is_set()
+                if cancelled:
+                    cancelled_channels.add(channel.number)
                 message_queue.put(
-                    {"type": "channel_result", "channel": channel.number, "ok": bool(result)}
+                    {"type": "channel_result", "channel": channel.number, "ok": bool(result),
+                     "cancelled": cancelled}
                 )
             except Exception as exc:  # noqa: BLE001 - 子进程必须回传旧业务异常
                 channel_results[channel.number] = False
@@ -1152,7 +1174,8 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
                     reported_ready.add(number)
                     message_queue.put(dict(type='channel_ready', channel=number,
                                            attempt=attempts.get(number, 0),
-                                           ok=channel_results.get(number, False)))
+                                           ok=channel_results.get(number, False),
+                                           cancelled=number in cancelled_channels))
             if control_queue is not None:
                 while True:
                     try:
@@ -1171,6 +1194,7 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
                     attempts[number] = command['attempt']
                     reported_ready.discard(number)
                     channel_results.pop(number, None)
+                    cancelled_channels.discard(number)
                     channel = next(c for c in request.channels if c.number == number)
                     thread = threading.Thread(target=run_channel,
                                               args=(channel, completed, attempts[number]),

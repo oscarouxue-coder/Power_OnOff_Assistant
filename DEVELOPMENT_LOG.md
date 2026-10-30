@@ -1,5 +1,50 @@
 # 开发记录
 
+## 2026-10-30 - 优化开关机WiFi排队与停止
+
+- 类型：优化
+- 背景：负责人确认按通道连续双频FIFO排队，优先改进停止响应和日志；实施中明确允许所有涉及密码的显示/记录使用明文，本轮落实WiFi信息摘要，记录为后续开发偏好。
+- 完成内容：① 新增子进程内共享WiFi调度器，按到达顺序持有双频使用权，排队每10秒报告占用/等待；失败、异常、取消均释放。② 连接接口增加可选停止事件和日志回调，排队/轮询/等待及驱动动作前后检查停止；保持每频段首次加3次重试、每次约20秒、间隔10秒。③ Telnet正式测试最小接入，首次实际WiFi阶段获取并缓存信息，非首轮续跑重新获取，运行中恢复加入同一调度器；旧GUI不接入新调度，SSH及电源流程不扩展。④ 取消经channel_result/channel_ready单独传递，主界面显示已停止、不计失败或完成轮次、不触发WiFi失败通知或后续Ping，续跑会话清理保留取消状态；外层10秒终止兜底保持。⑤ 原四条WiFi查询命令增加可取消和省略原始回显选项；按负责人最终要求，每次执行/续跑首次读取后明确记录一次双频SSID及明文密码，不随重试重复。其它现有显示路径未全面调整。
+- 修改文件：
+  - `.claude/plans/power-test-wifi-queue-stop.md`
+  - `Cheating_machine_execution_tool/src/services/power_test_wifi_service.py`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/src/services/power_test_resume_service.py`
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/common/wifi_connect.py`
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/clients/telnet_client.py`
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/test_case/powe_on_off_telnet.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_wifi.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_resume.py`
+  - `Cheating_machine_execution_tool/tests/test_legacy_power_initialization.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录运行 `python -m unittest discover -s tests -p test_power_test_wifi.py -v`；`python -m py_compile Auto_power_on_off_tool/common/wifi_connect.py Auto_power_on_off_tool/clients/telnet_client.py Auto_power_on_off_tool/test_case/powe_on_off_telnet.py`；`python scripts/verify_baseline.py`；仓库根运行 `git diff --check`。输出编码使用UTF-8。
+- 验证结果：完整门禁ALL CHECKS PASSED（1204项测试，相对1180项新增24项；180项指定关键回归；90个主源码编译/覆盖及协议不变量）；旧业务3个文件独立编译通过。模拟测试覆盖双频FIFO、排队/交接/驱动调用/连接轮询/重试取消、四次尝试及等待预算、失败与异常释放、续跑缓存和取消清理、子进程取消消息、主日志保留与授权明文密码摘要。首次基线发现旧业务文件不属于主源码编译清单允许目录，已恢复清单边界并单独编译，未放宽门禁。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.12/§3进行Windows源码版与真实双通道复验；模拟测试不构成现场验收。本轮未打包、未运行EXE、未操作真实设备、未提交Git；保留原有V1.2.4发布工作区改动，已发布EXE不含本轮优化。
+
+## 2026-10-28 - 构建并发布V1.2.4精简便携包
+
+- 类型：构建
+- 背景：负责人要求打包最新EXE、更新版本号并发布到GitHub。当前源码与远端main均为76f68b469dbec286291b91bcd0a3825e336be829，开工时工作区干净；沿用既定精简构建标准和仅保留最新Release规则。
+- 完成内容：① 版本由V1.2.3更新为V1.2.4，日期2026-10-28，包内说明纳入正式测试初始化只断电已选通道、确认/日志、停止/异常和续跑隔离。② 标准脚本在独立CPython3.9.10 x64、锁定依赖/PyInstaller5.10.1环境构建；spec的BUILD_INFO改为引用本次VERSION_INFO，不再固定声称业务代码未变。③ 新包输出独立目录，保留旧包及现有进程；完整基线和实际归档/便携包检查通过。④ 准备六份GitHub附件与仅含用户可见更新、下载及使用说明的发布说明；发布进度见下方。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/VERSION_INFO.txt`
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_specs/LineCheckAssistant.spec`
+  - `.claude/release_notes/v1.2.4.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 构建输出：`Cheating_machine_execution_tool/dist/V1.2.4_slim_20261028/`；EXE 18,066,564字节（17.23MiB），SHA256 `cb149ed3f4ec20c0d34a2db66db0b6d21d41355af5346db90d7d1dcfd6715191`；ZIP 17,749,031字节（16.93MiB），SHA256 `507680d429c97b524f5384fbcbf240db36c147308f333454b82f306ef75cd09f`。
+- 验证方法：主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，执行`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1 -OutputDirectory dist\V1.2.4_slim_20261028 -WorkDirectory build\V1.2.4_slim_20261028`；标准入口包含环境检查、`python -I -X utf8 scripts/verify_baseline.py`及`verify_slim_package.py`。只读提取实际PYZ确认初始化仅断电已勾选通道/停止/完成日志，提取包内VERSION_INFO确认V1.2.4；仓库根`git diff --check`。临时发布助手`%TEMP%/linecheck_release_v124_20261028.py stage/publish/prune/verify`使用Git Credential Manager进程内认证，公开附件下载不带认证。
+- 验证结果：完整门禁`ALL CHECKS PASSED`（89个源码编译/覆盖、1180项测试、173项指定关键回归及协议不变量）；`PACKAGE_ARCHIVE_OK`，实际EXE/PYZ、关键模块/原生依赖、Tcl/Tk四份布局、NumPy/OpenBLAS/lxml/PyQt5排除、ZIP CRC、6份脱敏配置及包内外哈希通过。实际冻结业务模块含最新已选通道初始化日志。构建日志`%TEMP%/linecheck_build_v124_20261028.log`，归档报告在输出目录`PACKAGING_REPORT.json`。
+- GitHub发布：[LineCheckAssistant V1.2.4](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.4)，Release ID426829052。六份附件先上传至草稿并核对大小及GitHub SHA256摘要，全部通过后公开并设为Latest；六份正式附件均匿名完整下载，大小/哈希与本地一致。源码更新客户端使用真实匿名元数据及匿名校验附件，以V1.2.3发现V1.2.4，同版V1.2.4无更新，ZIP预期摘要一致。确认新版本公开可下载后删除旧V1.2.3 Release及附件，最终仅一个V1.2.4 Release，Latest不变，旧V1.2.3 Git标签仍存在；源码历史保留。标签使用现有远端main作为基准，构建来自本轮更新版本后的工作区；未自动暂存、提交或推送源码。发布核验状态保存在`%TEMP%/linecheck_release_v124_20261028.json`，输出`PUBLIC_LATEST_ONLY_RELEASE_OK`；最终`git diff --check`通过。
+- 后续待办：发布已完成。目标电脑启动和新增初始化断电行为的Windows源码版/真实电源复验仍待负责人确认，既有§2.12/§3边界保持。未在当前电脑运行新EXE，未操作设备或改动本机配置。
+
 ## 2026-10-28 - 限定正式测试初始化断电通道
 
 - 类型：修改

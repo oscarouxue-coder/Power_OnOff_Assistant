@@ -4647,6 +4647,13 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("cat /etc/config/deviceinfo", source)
         self.assertIn("cat /proc/version", source)
 
+    def test_wifi_cancelled_channel_displays_stopped_without_failure_history(self):
+        context = SimpleNamespace(power_test_channel_states={},
+                                  _render_power_test_channel_overview=lambda: None)
+        LineCheckAssistant._set_power_test_channel_state(context, 5, 'stopped', '用户停止WiFi测试')
+        self.assertEqual(context.power_test_channel_states[5], ('stopped', '用户停止WiFi测试'))
+        self.assertEqual(LineCheckAssistant._power_test_channel_result_summary(context), '')
+
     def test_power_test_channel_states_stay_in_overview_and_summarize_final_results(self):
         channels = [
             ChannelConfig(section="channel_2", enabled=True),

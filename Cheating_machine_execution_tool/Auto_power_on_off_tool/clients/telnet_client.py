@@ -388,7 +388,8 @@ class TelnetClient():
             self.logger.error(command + f'在通道{power_num}:执行错误时发生异常:{e}')
             return False
 
-    def execute_read_until(self, command, timeout=10, stable_time=2):
+    def execute_read_until(self, command, timeout=10, stable_time=2, *,
+                           sensitive=False, stop_event=None, on_log=None):
         """
         执行命令，等待返回完整的执行结果后再返回
 
@@ -396,7 +397,9 @@ class TelnetClient():
         :param timeout: 总超时上限（秒），防止死循环
         :param stable_time: 数据稳定时间（秒），连续 stable_time 秒没有新数据认为命令执行完成
         """
+        from common.wifi_connect import WifiConnectionCancelled, check_wifi_stop, wait_wifi
         try:
+            check_wifi_stop(stop_event)
             # 1) 写入前先把 buffer 里的残留数据清空，避免上一次命令的残余混入本次结果
             try:
                 self.tn.read_very_eager()
@@ -404,6 +407,10 @@ class TelnetClient():
                 pass
 
             # 2) 发送命令
+            check_wifi_stop(stop_event)
+            if on_log is not None:
+                on_log(f'下发只读命令：{command}')
+            check_wifi_stop(stop_event)
             self.tn.write(command.encode() + b'\n')
 
             # 3) 循环读取：只要 socket 里有数据就一直读，直到"连续 stable_time 秒没有新数据"
@@ -412,6 +419,7 @@ class TelnetClient():
             last_data_time = time.time()
 
             while time.time() - start_time < timeout:
+                check_wifi_stop(stop_event)
                 try:
                     chunk = self.tn.read_very_eager()
                     if chunk:
@@ -423,16 +431,28 @@ class TelnetClient():
                             break
                 except Exception:
                     break
-                time.sleep(0.1)
+                wait_wifi(0.1, stop_event)
 
+            check_wifi_stop(stop_event)
             command_result = output.decode('utf-8', errors='replace').strip()
+            if sensitive:
+                if on_log is not None:
+                    on_log('只读命令返回（WiFi回显隐藏）')
+                return command_result
             self.logger.info(
                 command + '执行结果：' + command_result + "\n长度：" + str(len(command_result)))
             self.file.write(
                 (command + '执行结果：' + command_result + "\n长度：" + str(len(command_result)) + '\n').encode())
             return command_result
 
+        except WifiConnectionCancelled:
+            raise
         except Exception as e:
+            check_wifi_stop(stop_event)
+            if sensitive:
+                if on_log is not None:
+                    on_log(f'失败：WiFi信息读取异常（{type(e).__name__}）')
+                return False
             self.file.write((command + f'执行指令错误时发生异常:{e}'
                              + '\n').encode())
             self.logger.error(f'执行指令错误时发生异常：{e}')

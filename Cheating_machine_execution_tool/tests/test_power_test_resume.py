@@ -80,6 +80,19 @@ class ResumeTests(unittest.TestCase):
         self.session.failed.add(channel)
         self.session.ready.add(channel)
 
+    def test_wifi_cancelled_channel_remains_cancelled_after_detach(self):
+        self.failed()
+        self.session.attach(queue.Queue(), (5,))
+        self.session.observe(dict(type='channel_started', channel=5))
+        self.session.observe(dict(type='channel_ready', channel=5, ok=False, cancelled=True))
+        self.session.detach()
+        self.assertEqual(self.session.completed[5], 3)
+        self.assertNotIn(5, self.session.failed)
+        self.assertFalse(self.session.can_resume(5))
+        self.assertIn(5, self.session.cancelled)
+        self.session.observe(dict(type='channel_started', channel=5))
+        self.assertNotIn(5, self.session.cancelled)
+
     def test_readiness_stop_success_and_duplicate_submission(self):
         self.failed()
         self.session.ready.clear()

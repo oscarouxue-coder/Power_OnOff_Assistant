@@ -1,5 +1,6 @@
 # coding: utf-8
 import socket
+from contextlib import contextmanager
 import subprocess
 import threading
 import time
@@ -8,6 +9,38 @@ import pywifi
 from pywifi import const
 from config.config_driver import OperationConfig
 from common.my_logging import creat_logger
+
+
+class WifiConnectionCancelled(Exception):
+    """用户取消 WiFi 测试，不是设备连接失败。"""
+
+
+def check_wifi_stop(stop_event):
+    if stop_event is not None and stop_event.is_set():
+        raise WifiConnectionCancelled("用户已停止 WiFi 测试")
+
+
+def wait_wifi(seconds, stop_event):
+    check_wifi_stop(stop_event)
+    if stop_event is None:
+        time.sleep(seconds)
+    elif stop_event.wait(seconds):
+        raise WifiConnectionCancelled("用户已停止 WiFi 测试")
+    check_wifi_stop(stop_event)
+
+
+@contextmanager
+def wifi_lock_with_stop(lock, stop_event):
+    acquired = False
+    try:
+        while not acquired:
+            check_wifi_stop(stop_event)
+            acquired = lock.acquire(timeout=0.2)
+        check_wifi_stop(stop_event)
+        yield
+    finally:
+        if acquired:
+            lock.release()
 
 
 class WifiConnect():
@@ -104,63 +137,69 @@ class WifiConnect():
                         continue
 
     def connect_wifi(self, ssid, password='', network_card_name='', psk='WPA2-PSK', cipher='AES',
-                     check_auto_conn_flag=0):
-        if network_card_name == 'All':
-            self.logger.info('使用所有无线网卡连接')
-            time.sleep(0.1)
-            iface = self.wifi.interfaces()
-            k = 0
-            while True:
-                iface_ = iface[k]
-                self.connect_wifi_thread(iface_, ssid, password, psk, cipher, check_auto_conn_flag)
-                if k == len(iface):
-                    break
-                print(1231231231231231232123123)
-                k += 1
-
-        elif network_card_name == '':
-            self.logger.info('未指定网卡，使用第一个无线网卡连接')
-            time.sleep(0.1)
-            iface = self.wifi.interfaces()[0]
-            print(iface)
-            connect_result = self.connect_wifi_t(iface, ssid, password, psk, cipher, check_auto_conn_flag)
-            if connect_result:
-                return True
+                     check_auto_conn_flag=0, *, stop_event=None, on_log=None):
+        check_wifi_stop(stop_event)
+        emit = on_log or self.logger.info
+        wait_wifi(0.1, stop_event)
+        try:
+            interfaces = self.wifi.interfaces()
+            check_wifi_stop(stop_event)
+            if network_card_name == 'All':
+                # 兼容旧工具入口；正式测试只允许一张选定网卡。
+                for iface in interfaces:
+                    self.connect_wifi_thread(iface, ssid, password, psk, cipher,
+                                             check_auto_conn_flag, stop_event=stop_event,
+                                             on_log=on_log)
+                return None
+            if not network_card_name:
+                iface = interfaces[0]
             else:
-                return False
+                iface = next((item for item in interfaces if network_card_name in item.name()), None)
+                if iface is None:
+                    emit('失败：指定无线网卡不可用')
+                    return False
+            emit(f'实际网卡={iface.name()}，目标SSID={ssid}')
+            return self.connect_wifi_t(iface, ssid, password, psk, cipher,
+                                       check_auto_conn_flag, stop_event=stop_event, on_log=on_log)
+        except WifiConnectionCancelled:
+            raise
+        except Exception as exc:
+            check_wifi_stop(stop_event)
+            if on_log is not None:
+                # 驱动异常可能包含 profile/密码；主程序只记录异常类型。
+                raise RuntimeError(f'WiFi网卡操作异常：{type(exc).__name__}') from None
+            raise
 
-        else:
-            self.logger.info('使用指定的无线网卡连接')
-            time.sleep(0.1)
-            iface = self.wifi.interfaces()
-            for i in iface:
-                if network_card_name in i.name():
-                    connect_result = self.connect_wifi_t(i, ssid, password, psk, cipher, check_auto_conn_flag)
-                    if connect_result:
-                        return True
-                    else:
-                        return False
-
-    def connect_wifi_thread(self, iface, ssid, password, psk, cipher, check_auto_conn_flag):
+    def connect_wifi_thread(self, iface, ssid, password, psk, cipher, check_auto_conn_flag,
+                            *, stop_event=None, on_log=None):
         t1 = threading.Thread(target=self.connect_wifi_t,
-                              args=[iface, ssid, password, psk, cipher, check_auto_conn_flag])
+                              args=[iface, ssid, password, psk, cipher, check_auto_conn_flag],
+                              kwargs=dict(stop_event=stop_event, on_log=on_log))
         t1.setDaemon(True)
         t1.start()
 
-    def connect_wifi_t(self, iface, ssid, password, psk="WPA2-PSK", cipher='AES', check_auto_conn_flag=0):
-        # 使用线程锁确保同一时间只有一个线程可以操作网卡连接
-        with self.wifi_lock:
-            self.logger.info(f"线程 {threading.current_thread().name} 获取到锁，开始连接WiFi")
-            # 取第一个无线网卡
+    def connect_wifi_t(self, iface, ssid, password, psk="WPA2-PSK", cipher='AES', check_auto_conn_flag=0,
+                       *, stop_event=None, on_log=None):
+        emit = on_log or self.logger.info
 
-            # 确保接口已开启
-            if iface.status() in [const.IFACE_DISCONNECTED, const.IFACE_INACTIVE]:
-                iface.disconnect()
-                time.sleep(1)
-                iface.scan()  # 触发接口激活s
+        def action(description, function, *args):
+            check_wifi_stop(stop_event)
+            emit(description)
+            check_wifi_stop(stop_event)
+            result = function(*args)
+            check_wifi_stop(stop_event)
+            return result
 
-            iface.disconnect()  # 断开网卡连接
-            time.sleep(1)  # 缓冲1秒
+        with wifi_lock_with_stop(self.wifi_lock, stop_event):
+            check_wifi_stop(stop_event)
+            state = iface.status()
+            check_wifi_stop(stop_event)
+            if state in [const.IFACE_DISCONNECTED, const.IFACE_INACTIVE]:
+                action('下发断开连接（激活接口前）', iface.disconnect)
+                wait_wifi(1, stop_event)
+                action('下发扫描（激活接口）', iface.scan)
+            action('下发断开原连接', iface.disconnect)
+            wait_wifi(1, stop_event)
             profile = pywifi.Profile()
             if password == '':
                 # 配置文件
@@ -190,49 +229,38 @@ class WifiConnect():
                 profile.ssid = ssid  # wifi名称
                 profile.auth = const.AUTH_ALG_OPEN  # 需要密码
                 profile.key = password  # wifi密码
-            iface.remove_all_network_profiles()  # 删除其他配置文件
-            # tmp_profile = iface.add_network_profile(profile)
-            times = 0
-            connect_flag = 0
-            while True:
-                # 加载配置文件
-                tmp_profile = iface.add_network_profile(profile)
-                iface.connect(tmp_profile)  # 连接
-                self.logger.info(f'网卡:{iface.name()} 正在连接{ssid}，等待20s.......')
-                # time.sleep(10)  # 尝试10秒能否成功连接
-                count = 0
-                while True:
-                    if iface.status() == const.IFACE_CONNECTED:
-                        connect_flag = 1
+            action('清理网卡连接配置', iface.remove_all_network_profiles)
+            for attempt in range(1, 5):
+                check_wifi_stop(stop_event)
+                emit(f'第 {attempt}/4 次连接，等待约20秒')
+                tmp_profile = action('下发目标WiFi配置（密码隐藏）', iface.add_network_profile, profile)
+                action('下发连接目标SSID', iface.connect, tmp_profile)
+                connected = False
+                for poll in range(101):
+                    check_wifi_stop(stop_event)
+                    state = iface.status()
+                    check_wifi_stop(stop_event)
+                    if state == const.IFACE_CONNECTED:
+                        connected = True
                         break
-                    else:
-                        count += 1
-                        if count > 20:
-                            break
-                        time.sleep(1)
-
-                if connect_flag:
-                    self.logger.info(f"网卡：{iface.name()} 连接成功")
-                    time.sleep(0.2)
+                    if poll < 100:
+                        wait_wifi(0.2, stop_event)
+                if connected:
+                    wait_wifi(0.2, stop_event)
                     if check_auto_conn_flag:
-                        self.logger.info('勾选自动连接')
-                        subprocess.Popen(
-                            'Netsh WLAN set profileparameter name="{}" connectionmode=auto'.format(ssid),
-                            shell=True)
+                        action('下发自动连接设置', subprocess.Popen,
+                               ['netsh', 'wlan', 'set', 'profileparameter',
+                                f'name={ssid}', 'connectionmode=auto'])
+                    check_wifi_stop(stop_event)
+                    emit(f'第 {attempt}/4 次连接成功')
                     return True
-
-                else:
-                    self.logger.info(f"网卡：{iface.name()} 连接失败，重新尝试连接")
-                    # 增加连接失败后，删除网卡profile操作
-                    iface.disconnect()
-                    iface.remove_all_network_profiles()
-                    if times == 3:
-                        self.logger.error(
-                            f"网卡：{iface.name()} 连接{ssid}，尝试{times}次都失败，不再尝试连接，请确认WiFi信息和加密方式是否准确！")
-                        iface.remove_all_network_profiles()
-                        return False
-                    times += 1
-                    time.sleep(10)
+                action('本次未连接，断开并清理配置', iface.disconnect)
+                action('清理失败连接配置', iface.remove_all_network_profiles)
+                if attempt == 4:
+                    emit('失败：第 4/4 次连接仍未成功，不再重试')
+                    return False
+                emit(f'第 {attempt}/4 次未连接，等待10秒后重试')
+                wait_wifi(10, stop_event)
 
     def get_network_cards_name(self):
         iface_name = []

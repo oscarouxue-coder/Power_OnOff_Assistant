@@ -32,6 +32,7 @@ class PowerTestResumeSession:
         self.transport_done.set()
         self.completed = {c.number: 0 for c in request.channels}
         self.failed = set()
+        self.cancelled = set()
         self.ready = set()
         self.busy = set()
         self.attempts = {c.number: 0 for c in request.channels}
@@ -70,7 +71,7 @@ class PowerTestResumeSession:
             for channel in self.owned_channels:
                 completed = self.completed[channel]
                 self.ready.add(channel)
-                if completed < self.request.number_of_tests:
+                if completed < self.request.number_of_tests and channel not in self.cancelled:
                     self.failed.add(channel)
                 if channel in self.active_started:
                     self.busy.discard(channel)
@@ -88,6 +89,7 @@ class PowerTestResumeSession:
         channel = message.get('channel')
         with self.lock:
             if message['type'] == 'channel_started':
+                self.cancelled.discard(channel)
                 self.active_started.add(channel)
                 self.ready.discard(channel)
                 self.failed.discard(channel)
@@ -97,7 +99,10 @@ class PowerTestResumeSession:
             elif message['type'] == 'channel_ready':
                 self.active_started.discard(channel)
                 self.ready.add(channel)
-                if message['ok']:
+                if message.get('cancelled'):
+                    self.cancelled.add(channel)
+                    self.failed.discard(channel)
+                elif message['ok']:
                     self.completed[channel] = self.request.number_of_tests
                     self.failed.discard(channel)
                 else:
@@ -201,8 +206,9 @@ class PowerTestResumeSession:
                     request, self.emit, self.stop_event, resume_session=self,
                     initial_completed={channel: self.completed[channel]},
                     initialize_power=False, **callbacks)
+                outcome = '已停止' if self.stop_event.is_set() else ('成功' if result.ok else '失败')
                 self.emit(f'[通道续跑] 独立恢复结果：通道 {channel} '
-                          f'{"成功" if result.ok else "失败"}；保留原全流程结论。')
+                          f'{outcome}；保留原全流程结论。')
         except Exception as exc:
             # Avoid propagating transport/config/login exception text (credentials).
             reason = str(exc) if isinstance(exc, ResumeRejected) else '执行或预检异常，未启动新的上下电任务'

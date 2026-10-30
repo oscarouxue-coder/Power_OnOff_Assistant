@@ -16,7 +16,7 @@ build_info.write_text(
     "LineCheckAssistant standard slim packaging\n"
     f"Build date: {date.today().isoformat()}\n"
     "Toolchain: CPython 3.9.10 x64 / PyInstaller 5.10.1; requirements-build.txt\n"
-    "Change: isolated dependency packaging; application business code is unchanged.\n"
+    "Change summary: see the bundled VERSION_INFO.txt for this release.\n"
     f"Excluded optional modules: {', '.join(EXCLUDED_MODULES)}\n"
     "Archive/environment evidence: PACKAGING_REPORT.json beside the EXE.\n"
     "2026-10-17 profile: project owner confirmed normal operation on another PC.\n"

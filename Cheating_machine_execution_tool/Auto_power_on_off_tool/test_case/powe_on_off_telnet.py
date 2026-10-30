@@ -18,7 +18,7 @@ from config.config_driver import OperationConfig
 from common.new_write_funs import TimestampedFile
 from common.dingtalk_send_message import DingTalk
 from test_case.wifi_connect_case import OpenWrtGetWifiInfo
-from common.wifi_connect import WifiConnect
+from common.wifi_connect import WifiConnect, WifiConnectionCancelled, check_wifi_stop
 from test_case.Onu_config import OnuCongfig
 
 # 8.31号
@@ -484,6 +484,8 @@ class PowerOnOffTelnet(QThread):
         if stop_event is None:
             stop_event = self._stop_event
 
+        wifi_scheduler = getattr(self, 'wifi_scheduler', None)
+        wifi_info = None  # 每次执行/续跑独立缓存，不跨通道或尝试共享。
         run_flag = self.set_run_flag_1(power_num)
         if not 1 <= start_cycle <= self.test_number:
             raise ValueError("起始轮次超出测试范围")
@@ -765,87 +767,136 @@ class PowerOnOffTelnet(QThread):
                                     if "NP6541_stress_test_config" not in self.config_file_path:
                                         break
 
-                                # 在此处增加 WiFi_信息的获取操作
-                                if times == 1:
-                                    self.connect_wifi_enable = OnuCongfig.connect_wifi_enable_status
-                                    self.product_solution = OnuCongfig.Onu_solution_type
-                                    self.onu_ciper = OnuCongfig.connect_wifi_ciper
-                                    self.onu_auth_mode = OnuCongfig.connect_wifi_auth_mode
-                                    self.test_2g_wifi_flag = OnuCongfig.choose_test_2g_flag
-                                    self.test_5g_wifi_flag = OnuCongfig.choose_test_5g_flag
-                                    self.appoint_wireless_card_flag = OnuCongfig.choose_wireless_card_flag
-                                    self.wireless_card = OnuCongfig.choose_wireless_card_name
-                                print('self.test_2g_wifi_flag', self.test_2g_wifi_flag, self.test_5g_wifi_flag,
-                                      self.wireless_card, self.onu_auth_mode, self.onu_ciper)
-                                print('............................................................', times)
-
-                                print('self.times', times)
-
-                                if self.connect_wifi_enable == 1:
-                                    if times == 1:
-                                        iface_name = OnuCongfig.iface_names
-                                        if iface_name is []:
-                                            return False
-                                        # 只获取一次WiFi ssid和密码
-                                        self.login_telnet_loop(tel, network_card_ip, power_num, f)
-                                        wifi_info = self.get_wifi_info(power_num, tel)
-                                    if wifi_info:
-                                        desc = f'通道{power_num} 的WiFi：{wifi_info}'
-                                        self.show_signal[str].emit(desc)
-                                        self.logger.info(desc)
-                                        if self.test_2g_wifi_flag:
-                                            wifi_connect_result = self.wifi_connect.connect_wifi(wifi_info[0],
-                                                                                                 wifi_info[1],
-                                                                                                 self.wireless_card,
-                                                                                                 psk=self.onu_auth_mode,
-                                                                                                 cipher=self.onu_ciper)
-                                            if not wifi_connect_result:
-                                                desc = f'连接通道【{power_num}】的2g ssid 失败:({wifi_info[0]},{wifi_info[1]})'
-                                                self.show_signal_error[str].emit(desc)
-                                                self.wifi_status_list[power_num - 1] = 1
-                                                self.run_status_list[power_num - 1] = 0
-                                                self.wifi_status_signal[list].emit(self.wifi_status_list)
-                                                dingtalk_result = self.dingtalk.webhook_send_message(self.device_type,
-                                                                                                     desc)
-                                                if dingtalk_result is not True:
-                                                    self.show_signal_error[str].emit(
-                                                        f'dingTalk 发送消息失败 ：{dingtalk_result}\n')
-                                                return False
-                                            else:
-                                                desc = f'连接通道【{power_num}】的2g ssid 成功:({wifi_info[0]},{wifi_info[1]})'
-                                                self.show_signal[str].emit(desc)
-                                        if self.test_5g_wifi_flag:
-                                            wifi_connect_result = self.wifi_connect.connect_wifi(wifi_info[2],
-                                                                                                 wifi_info[3],
-                                                                                                 self.wireless_card,
-                                                                                                 psk=self.onu_auth_mode,
-                                                                                                 cipher=self.onu_ciper)
-                                            if not wifi_connect_result:
-                                                desc = f'连接通道【{power_num}】的5g ssid 失败:({wifi_info[2]},{wifi_info[3]})'
-                                                self.show_signal_error[str].emit(desc)
-                                                self.wifi_status_list[power_num - 1] = 1
-                                                self.run_status_list[power_num - 1] = 0
-                                                self.wifi_status_signal[list].emit(self.wifi_status_list)
-                                                dingtalk_result = self.dingtalk.webhook_send_message(self.device_type,
-                                                                                                     desc)
-                                                if dingtalk_result is not True:
-                                                    self.show_signal_error[str].emit(
-                                                        f'dingTalk 发送消息失败 ：{dingtalk_result}\n')
-                                                return False
-                                            else:
-                                                desc = f'连接通道【{power_num}】的5g ssid 成功:({wifi_info[2]},{wifi_info[3]})'
-                                                self.show_signal[str].emit(desc)
+                                if wifi_scheduler is not None:
+                                    check_wifi_stop(stop_event)
+                                    wifi_label = f'[WiFi测试] 通道{power_num} 第{times}轮'
+                                    if not OnuCongfig.connect_wifi_enable_status:
+                                        self.logger.info(f'{wifi_label} 跳过：WiFi主控关闭')
+                                    elif not (OnuCongfig.choose_test_2g_flag or OnuCongfig.choose_test_5g_flag):
+                                        self.logger.info(f'{wifi_label} 跳过：2.4G、5G均未启用')
                                     else:
-                                        desc = f'获取通道【{power_num}】 的WiFi信息失败'
-                                        self.show_signal_error[str].emit(desc)
-                                        self.wifi_status_list[power_num - 1] = 1
-                                        self.run_status_list[power_num - 1] = 0
-                                        self.wifi_status_signal[list].emit(self.wifi_status_list)
-                                        dingtalk_result = self.dingtalk.webhook_send_message(self.device_type, desc)
-                                        if dingtalk_result is not True:
-                                            self.show_signal_error[str].emit(
-                                                f'dingTalk 发送消息失败 ：{dingtalk_result}\n')
-                                        return False
+                                        if wifi_info is None:
+                                            self.product_solution = OnuCongfig.Onu_solution_type
+                                            self.logger.info(f'{wifi_label} 开始获取WiFi信息')
+                                            self.login_telnet_loop(tel, network_card_ip, power_num, f)
+                                            check_wifi_stop(stop_event)
+                                            wifi_info = wifi_scheduler.read_info(
+                                                tel, stop_event,
+                                                lambda text: self.logger.info(f'{wifi_label} {text}'),
+                                                self.product_solution)
+                                            check_wifi_stop(stop_event)
+                                            if wifi_info:
+                                                self.logger.wifi_credentials(power_num, times, wifi_info)
+                                        if wifi_info:
+                                            wifi_result, failed_band = wifi_scheduler.test_bands(
+                                                channel=power_num, cycle=times,
+                                                card=OnuCongfig.choose_wireless_card_name,
+                                                stop_event=stop_event, emit=self.logger.info,
+                                                connector=self.wifi_connect, wifi_info=wifi_info,
+                                                test_2g=OnuCongfig.choose_test_2g_flag,
+                                                test_5g=OnuCongfig.choose_test_5g_flag,
+                                                auth=OnuCongfig.connect_wifi_auth_mode,
+                                                cipher=OnuCongfig.connect_wifi_ciper)
+                                            if wifi_result == 'cancelled':
+                                                raise WifiConnectionCancelled()
+                                            check_wifi_stop(stop_event)
+                                            desc = f'{wifi_label} 连接{failed_band}失败' if wifi_result == 'failed' else ''
+                                        else:
+                                            desc = f'{wifi_label} 获取WiFi信息失败'
+                                        if desc:
+                                            check_wifi_stop(stop_event)
+                                            self.show_signal_error[str].emit(desc)
+                                            self.wifi_status_list[power_num - 1] = 1
+                                            self.run_status_list[power_num - 1] = 0
+                                            self.wifi_status_signal[list].emit(self.wifi_status_list)
+                                            check_wifi_stop(stop_event)
+                                            dingtalk_result = self.dingtalk.webhook_send_message(self.device_type, desc)
+                                            if dingtalk_result is not True:
+                                                self.show_signal_error[str].emit(f'dingTalk 发送消息失败 ：{dingtalk_result}\n')
+                                            return False
+                                    check_wifi_stop(stop_event)
+                                else:
+                                    # 在此处增加 WiFi_信息的获取操作
+                                    if times == 1:
+                                        self.connect_wifi_enable = OnuCongfig.connect_wifi_enable_status
+                                        self.product_solution = OnuCongfig.Onu_solution_type
+                                        self.onu_ciper = OnuCongfig.connect_wifi_ciper
+                                        self.onu_auth_mode = OnuCongfig.connect_wifi_auth_mode
+                                        self.test_2g_wifi_flag = OnuCongfig.choose_test_2g_flag
+                                        self.test_5g_wifi_flag = OnuCongfig.choose_test_5g_flag
+                                        self.appoint_wireless_card_flag = OnuCongfig.choose_wireless_card_flag
+                                        self.wireless_card = OnuCongfig.choose_wireless_card_name
+                                    print('self.test_2g_wifi_flag', self.test_2g_wifi_flag, self.test_5g_wifi_flag,
+                                          self.wireless_card, self.onu_auth_mode, self.onu_ciper)
+                                    print('............................................................', times)
+
+                                    print('self.times', times)
+
+                                    if self.connect_wifi_enable == 1:
+                                        if times == 1:
+                                            iface_name = OnuCongfig.iface_names
+                                            if iface_name is []:
+                                                return False
+                                            # 只获取一次WiFi ssid和密码
+                                            self.login_telnet_loop(tel, network_card_ip, power_num, f)
+                                            wifi_info = self.get_wifi_info(power_num, tel)
+                                        if wifi_info:
+                                            desc = f'通道{power_num} 的WiFi：{wifi_info}'
+                                            self.show_signal[str].emit(desc)
+                                            self.logger.info(desc)
+                                            if self.test_2g_wifi_flag:
+                                                wifi_connect_result = self.wifi_connect.connect_wifi(wifi_info[0],
+                                                                                                     wifi_info[1],
+                                                                                                     self.wireless_card,
+                                                                                                     psk=self.onu_auth_mode,
+                                                                                                     cipher=self.onu_ciper)
+                                                if not wifi_connect_result:
+                                                    desc = f'连接通道【{power_num}】的2g ssid 失败:({wifi_info[0]},{wifi_info[1]})'
+                                                    self.show_signal_error[str].emit(desc)
+                                                    self.wifi_status_list[power_num - 1] = 1
+                                                    self.run_status_list[power_num - 1] = 0
+                                                    self.wifi_status_signal[list].emit(self.wifi_status_list)
+                                                    dingtalk_result = self.dingtalk.webhook_send_message(self.device_type,
+                                                                                                         desc)
+                                                    if dingtalk_result is not True:
+                                                        self.show_signal_error[str].emit(
+                                                            f'dingTalk 发送消息失败 ：{dingtalk_result}\n')
+                                                    return False
+                                                else:
+                                                    desc = f'连接通道【{power_num}】的2g ssid 成功:({wifi_info[0]},{wifi_info[1]})'
+                                                    self.show_signal[str].emit(desc)
+                                            if self.test_5g_wifi_flag:
+                                                wifi_connect_result = self.wifi_connect.connect_wifi(wifi_info[2],
+                                                                                                     wifi_info[3],
+                                                                                                     self.wireless_card,
+                                                                                                     psk=self.onu_auth_mode,
+                                                                                                     cipher=self.onu_ciper)
+                                                if not wifi_connect_result:
+                                                    desc = f'连接通道【{power_num}】的5g ssid 失败:({wifi_info[2]},{wifi_info[3]})'
+                                                    self.show_signal_error[str].emit(desc)
+                                                    self.wifi_status_list[power_num - 1] = 1
+                                                    self.run_status_list[power_num - 1] = 0
+                                                    self.wifi_status_signal[list].emit(self.wifi_status_list)
+                                                    dingtalk_result = self.dingtalk.webhook_send_message(self.device_type,
+                                                                                                         desc)
+                                                    if dingtalk_result is not True:
+                                                        self.show_signal_error[str].emit(
+                                                            f'dingTalk 发送消息失败 ：{dingtalk_result}\n')
+                                                    return False
+                                                else:
+                                                    desc = f'连接通道【{power_num}】的5g ssid 成功:({wifi_info[2]},{wifi_info[3]})'
+                                                    self.show_signal[str].emit(desc)
+                                        else:
+                                            desc = f'获取通道【{power_num}】 的WiFi信息失败'
+                                            self.show_signal_error[str].emit(desc)
+                                            self.wifi_status_list[power_num - 1] = 1
+                                            self.run_status_list[power_num - 1] = 0
+                                            self.wifi_status_signal[list].emit(self.wifi_status_list)
+                                            dingtalk_result = self.dingtalk.webhook_send_message(self.device_type, desc)
+                                            if dingtalk_result is not True:
+                                                self.show_signal_error[str].emit(
+                                                    f'dingTalk 发送消息失败 ：{dingtalk_result}\n')
+                                            return False
 
                                 # # 关闭 telnet
                                 # tel.logout_host()
@@ -916,6 +967,10 @@ class PowerOnOffTelnet(QThread):
                     else:
                         time.sleep(1)
                         return True
+                except WifiConnectionCancelled:
+                    self.run_status_list[power_num - 1] = 0
+                    self.logger.info(f'[WiFi测试] 通道{power_num} 第{times}轮 取消：用户停止，保留已完成轮次')
+                    return None
                 except Exception as e:
                     self.show_signal_error[str].emit(f'通道 {power_num} 程序运行异常：{e}')
                     self.ping_status_list[power_num - 1] = 1

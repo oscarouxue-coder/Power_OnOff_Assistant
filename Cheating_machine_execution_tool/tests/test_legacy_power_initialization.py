@@ -26,7 +26,7 @@ class ImmediateEvent(threading.Event):
 
 class SelectedPowerInitializationTests(unittest.TestCase):
     def run_worker(self, numbers, communication="telnet", *, initialize_power=True,
-                   stop_after=None, fail_at=None, initially_stopped=False):
+                   stop_after=None, fail_at=None, initially_stopped=False, wifi_cancel=False):
         event = ImmediateEvent()
         if initially_stopped:
             event.set()
@@ -66,6 +66,10 @@ class SelectedPowerInitializationTests(unittest.TestCase):
 
             def run_case(self, ip, channel, *args, **kwargs):
                 timeline.append(("run", channel))
+                if wifi_cancel:
+                    assert isinstance(self.wifi_scheduler, legacy.PowerTestWifiScheduler)
+                    event.set()
+                    return None
                 return True
 
         modules = {}
@@ -119,6 +123,14 @@ class SelectedPowerInitializationTests(unittest.TestCase):
                         self.assertIn("下发程控电源指令：" + frame.hex(" ").upper(), text)
                     self.assertIn("未回读电源状态", text)
                     self.assertIn("全部下发完成", text)
+
+    def test_wifi_cancel_has_separate_result_and_ready_messages(self):
+        _, _, messages, _ = self.run_worker((5,), wifi_cancel=True)
+        for kind in ('channel_result', 'channel_ready'):
+            message = next(item for item in messages if item['type'] == kind)
+            self.assertTrue(message['cancelled'])
+            self.assertFalse(message['ok'])
+        self.assertIn('用户已停止', messages[-1]['detail'])
 
     def test_duplicate_selected_channels_are_initialized_once_in_request_order(self):
         frames, _, _, event = self.run_worker((6, 5, 6))

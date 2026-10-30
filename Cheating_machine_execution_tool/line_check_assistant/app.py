@@ -7197,7 +7197,7 @@ class LineCheckAssistant(Tk):
         detail: str,
     ) -> None:
         """更新一条旧 Start All 通道的运行、重试、失败或正常结果。"""
-        if status not in {"running", "retry", "failed", "success"}:
+        if status not in {"running", "retry", "failed", "success", "stopped"}:
             return
         self.power_test_channel_states[int(channel_number)] = (status, detail)
         renderer = getattr(self, "_render_power_test_channel_overview", None)
@@ -7257,13 +7257,14 @@ class LineCheckAssistant(Tk):
         }
         retries = sum(state == "retry" for state in state_by_channel.values())
         failures = sum(state == "failed" for state in state_by_channel.values())
+        stopped = sum(state == "stopped" for state in state_by_channel.values())
         if minimum_completed >= total_cycles:
             summary = f"全部通道已完成：{len(channel_numbers)}/{len(channel_numbers)}"
         else:
             current_cycle = minimum_completed + 1
             current_finished = sum(value >= current_cycle for value in completed_values)
             running = sum(
-                value < total and state not in {"retry", "failed"}
+                value < total and state not in {"retry", "failed", "stopped"}
                 for value, total, state in (
                     (progresses[number][0], progresses[number][1], state_by_channel[number])
                     for number in channel_numbers
@@ -7273,6 +7274,8 @@ class LineCheckAssistant(Tk):
                 f"第 {current_cycle} 轮：已完成 {current_finished}/{len(channel_numbers)}"
                 f" ｜运行中 {running} ｜重试 {retries} ｜失败 {failures}"
             )
+        if stopped:
+            summary += f" ｜已停止 {stopped}"
         self.power_test_channel_summary_var.set(summary)
 
         maximum_completed = max(completed_values)
@@ -7316,6 +7319,8 @@ class LineCheckAssistant(Tk):
                 state_text, style = "失败", "PowerChannelFailed.TLabel"
             elif state == "retry":
                 state_text, style = "重试", "PowerChannelRetry.TLabel"
+            elif state == "stopped":
+                state_text, style = "已停止", "PowerChannelWaiting.TLabel"
             elif state == "success":
                 state_text = "已完成" if completed >= total else "正常"
                 style = "PowerChannelCompleted.TLabel"
@@ -7356,6 +7361,7 @@ class LineCheckAssistant(Tk):
         completed, total, stage = progress
         status, detail = self.power_test_channel_states.get(int(channel_number), ("running", ""))
         status_text = {
+            "stopped": "已停止",
             "retry": "重试中",
             "failed": "失败",
             "success": "已完成" if completed >= total else "验证正常",
