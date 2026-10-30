@@ -1,5 +1,27 @@
 # 开发记录
 
+## 2026-10-30 - 在工具栏显示已保存项目名称
+
+- 类型：功能
+- 背景：负责人要求主界面显眼位置显示项目信息中的项目名称，确认放在现有工具栏内，并明确不要“当前项目：”前缀。
+- 完成内容：① 新增独立项目名称UI组件，浅蓝底、深蓝加粗，按字体实际像素宽度省略长名称，悬停显示完整值，关闭或更新时清理提示窗口与定时回调。② 主窗口复用现有TestItemConfigStore严格读取已保存项目名，启动/打开配置/重新加载/保存后刷新；保存部分失败通过finally回读磁盘，取消保存或未保存表单不用于显示。③ 空值/缺文件显示“未设置”，读取异常显示“读取失败”并记录固定日志，不阻断启动、不输出配置原文。④ 保持既有工具按钮、管理员提示顺序与自适应换行逻辑；新增源码纳入编译清单。
+- 修改文件：
+  - `.claude/plans/project-name-toolbar.md`
+  - `Cheating_machine_execution_tool/src/ui/project_name_badge.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_project_name_badge.py`
+  - `Cheating_machine_execution_tool/tests/test_message_push_config.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/tests/test_app_update_ui.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录运行 `python -X utf8 -m unittest discover -s tests -p test_project_name_badge.py`、`python -X utf8 -m unittest discover -s tests -p test_message_push_config.py`、`python -X utf8 -m unittest discover -s tests -p test_app_update_ui.py`；`python -X utf8 scripts/verify_baseline.py`；`git diff --check`。额外以Tk scaling 1.333333/1.666667/2.0复用真实源码工具栏装配测试，替换设备/配置/日志回调且不运行应用初始化；用git show HEAD只读加载修改前方法对照150%窄窗口结果。
+- 验证结果：54项专项通过；完整基线ALL CHECKS PASSED，1215项测试（相对1204项新增11项）、180项指定关键回归、91个源码编译/覆盖与协议不变量全部通过。真实Tk组件检查正常/超长中文名称、提示完整值、窗口销毁回调清理及保存/取消/重新加载/部分失败；100%/125%字体缩放下1040/1200/1600宽度，以及150%下1200/1600宽度均通过。150%下1040宽度原DUT按钮仅60像素、需求151像素，修改前HEAD对照同样复现，属既有限制，本轮未扩大工具栏重构范围。专项启动命令首次误用非包tests模块路径，改用discover/测试目录加载后正常；组件首次隐藏窗口测量为1像素，已补请求宽度回退后通过。既有Tk多窗口测试销毁时仍输出ThemeChanged/轮询回调提示，未产生单测失败。
+- 后续待办：负责人核对完整Windows源码版实际显示与操作；150%字体缩放请保持1200像素以上宽度或最大化。自动化源码组件检查不升级现场或EXE验收。本轮未打包、未运行EXE、未发送设备命令、未主动修改本机配置、未提交Git。结束检查发现本机test_project_config.ini的project_info.project_name存在独立差异；本轮新增测试使用临时文件或Mock，不写该配置，保留当前差异、不回退或纳入功能改动清单。
+
 ## 2026-10-30 - 优化开关机WiFi排队与停止
 
 - 类型：优化

@@ -383,9 +383,10 @@ class CurrentChannelSelectionTests(unittest.TestCase):
     def test_test_item_config_entry_reuses_open_window(self):
         config_window = Mock()
         config_window.winfo_exists.return_value = True
-        context = SimpleNamespace(test_item_config_window=config_window)
+        context = SimpleNamespace(test_item_config_window=config_window, _refresh_saved_project_name=Mock())
 
         LineCheckAssistant._open_test_item_config(context)
+        context._refresh_saved_project_name.assert_called_once_with()
 
         config_window.deiconify.assert_called_once_with()
         config_window.lift.assert_called_once_with()

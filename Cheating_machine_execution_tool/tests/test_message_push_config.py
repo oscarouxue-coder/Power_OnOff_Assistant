@@ -2,6 +2,7 @@ import tempfile
 import importlib.util
 import sys
 import json
+import queue
 import tkinter as tk
 import unittest
 from pathlib import Path
@@ -234,6 +235,9 @@ class MessagePushWindowTests(unittest.TestCase):
         self.root._restore_module_window_size = Mock(return_value=(1000, 960))
         self.root._remember_module_window_size = Mock()
         self.root._log = Mock()
+        self.root.log_queue = queue.Queue()
+        self.root.project_name_badge = Mock()
+        self.root._refresh_saved_project_name = lambda: LineCheckAssistant._refresh_saved_project_name(self.root)
         self.config = TestProjectConfig()
         self.legacy = dict(communication_method='telnet', telnet_enable='0', baud_rate='19200',
                            selected_profile='test', startup_time='1', interval_time='1',
@@ -299,6 +303,44 @@ class MessagePushWindowTests(unittest.TestCase):
         self.messages.askyesno.reset_mock()
         self.buttons['关闭'].invoke()
         self.messages.askyesno.assert_not_called()
+
+    def test_project_badge_reads_saved_name_on_open_and_reload(self):
+        self.root.project_name_badge.set_name.assert_called_with("")
+        self.store.load.return_value = TestProjectConfig()
+        self.store.load.return_value.project_info.project_name = "磁盘新名称"
+        self.buttons['重新加载'].invoke()
+        self.root.project_name_badge.set_name.assert_called_with("磁盘新名称")
+
+    def test_project_badge_ignores_unsaved_edit_and_cancelled_save(self):
+        self.config.project_info.project_name = "未保存名称"
+        self.messages.askyesno.return_value = False
+        self.buttons['保存'].invoke()
+        self.store.save.assert_not_called()
+        self.root.project_name_badge.set_name.assert_called_once_with("")
+
+    def test_project_badge_reads_disk_after_save_and_partial_failure(self):
+        # 首个文件已写入后，后续 config.ini 写入失败也必须展示实际磁盘值。
+        disk = TestProjectConfig()
+        disk.project_info.project_name = "实际已保存名称"
+        def write_project(_config):
+            self.store.load.return_value = disk
+        self.store.save.side_effect = write_project
+        for fail in (False, True):
+            with self.subTest(partial_failure=fail):
+                self.service.save.side_effect = OSError("write failed") if fail else None
+                self.root.project_name_badge.reset_mock()
+                self.buttons['保存'].invoke()
+                self.root.project_name_badge.set_name.assert_called_once_with("实际已保存名称")
+
+    def test_project_badge_reflects_disk_when_first_save_or_reload_fails(self):
+        self.store.load.return_value = TestProjectConfig()
+        self.store.load.return_value.project_info.project_name = "原磁盘名称"
+        self.store.save.side_effect = OSError("write failed")
+        self.buttons['保存'].invoke()
+        self.root.project_name_badge.set_name.assert_called_with("原磁盘名称")
+        self.store.load.side_effect = ValueError("invalid config")
+        self.buttons['重新加载'].invoke()
+        self.root.project_name_badge.set_name.assert_called_with("", failed=True)
 
     def test_cancel_save_and_reload(self):
         self.tab.variables['secret'].set('edited')

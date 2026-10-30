@@ -81,6 +81,7 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/models/app_update.py",
     "src/services/app_update_service.py",
     "src/ui/app_update_dialog.py",
+    "src/ui/project_name_badge.py",
     "src/ui/serial_terminal.py",
     "src/ui/dut_config_window.py",
     "src/ui/window_paint.py",

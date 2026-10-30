@@ -16,6 +16,7 @@ from datetime import datetime
 from src.services.test_item_pretest_service import prepare_pretest_request
 from src.ui.test_item_pretest_controls import PretestControls
 from src.ui.app_update_dialog import AppUpdateDialog, arrange_update_toolbar
+from src.ui.project_name_badge import ProjectNameBadge
 from src.ui.adapter_rename_dialog import offer_adapter_rename
 from src.services.adapter_rename_service import (
     adapter_has_numeric_suffix, adapter_rename_is_busy, synchronize_channel_adapter_names,
@@ -525,6 +526,7 @@ class LineCheckAssistant(Tk):
         self.log_path = LOG_DIR / f"line_check_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
         self._build_ui()
+        self._refresh_saved_project_name()
         self.bind(
             "<ButtonPress-1>", self._bring_main_window_to_front, add="+"
         )
@@ -843,6 +845,11 @@ class LineCheckAssistant(Tk):
         toolbar.pack(fill="x", pady=(0, 14))
         toolbar_commands = ttk.Frame(toolbar, style="Surface.TFrame")
         toolbar_actions = ttk.Frame(toolbar, style="Surface.TFrame")
+        self.project_name_badge = ProjectNameBadge(
+            toolbar_actions, font_family=FONT_FAMILY,
+            background=COLOR_PRIMARY_SOFT, foreground=COLOR_PRIMARY_DARK,
+        )
+        self.project_name_badge.pack(side="left", padx=(0, 16))
         ttk.Label(toolbar_commands, text="常用工具", style="CardTitle.TLabel").pack(side="left", padx=(2, 16))
         ttk.Button(toolbar_commands, text="自动上/下电", command=self._launch_power_on, style="Primary.TButton").pack(side="left")
         ttk.Button(toolbar_commands, text="样机升级", command=self._open_upgrade_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
@@ -4623,8 +4630,24 @@ class LineCheckAssistant(Tk):
         else:
             self.upgrade_status_var.set(stage or "尚未开始升级")
 
+    def _refresh_saved_project_name(self) -> None:
+        """只展示磁盘配置；失败不影响主窗口或测试项配置的既有流程。"""
+        try:
+            name = TestItemConfigStore(TEST_ITEM_CONFIG_PATH).load(required=True).project_info.project_name
+        except FileNotFoundError:
+            self.project_name_badge.set_name("")
+            self.log_queue.put("[项目名称] 配置文件不存在，显示未设置。")
+        except Exception:
+            self.project_name_badge.set_name("", failed=True)
+            self.log_queue.put("[项目名称] 读取失败，请检查配置格式和访问权限。")
+        else:
+            self.project_name_badge.set_name(name)
+            self.log_queue.put("[项目名称] 已刷新已保存的项目名称。" if name.strip()
+                               else "[项目名称] 已保存名称为空，显示未设置。")
+
     def _open_test_item_config(self) -> None:
         """打开配置窗口：编辑、单次预备测试及只读项目信息查询。"""
+        self._refresh_saved_project_name()
         if self.test_item_config_window is not None and self.test_item_config_window.winfo_exists():
             self.test_item_config_window.deiconify()
             self.test_item_config_window.lift()
@@ -4744,6 +4767,8 @@ class LineCheckAssistant(Tk):
                 self._log("[测试项配置 / 消息推送] 重新加载失败，请检查配置格式和访问权限。")
                 messagebox.showerror("加载失败", "读取 ini 失败，请检查配置格式和访问权限。", parent=dialog)
                 return
+            finally:
+                self._refresh_saved_project_name()
             legacy_defaults_control["load"](reloaded_legacy_defaults)
             telnet_vars["load"](reloaded.telnet)
             order_control["load"](reloaded.order)
@@ -4809,6 +4834,8 @@ class LineCheckAssistant(Tk):
                 messagebox.showerror("保存失败", f"写入 ini 失败：{exc}", parent=dialog)
                 self._log(f"[测试项配置 / 消息推送] 保存失败：{exc}")
                 return
+            finally:
+                self._refresh_saved_project_name()
             reset_dirty()
             self._log("[消息推送] 已保存 config.ini [dingtalk_config]，未发送消息。")
             self._log(

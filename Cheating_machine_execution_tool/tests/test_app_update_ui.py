@@ -339,6 +339,8 @@ class AppUpdateTkTests(unittest.TestCase):
             for text in ("检查更新", "正在检查…"):
                 for admin_text in ("管理员权限已就绪", "缺少管理员权限，请右键以管理员身份运行"):
                     with self.subTest(width=width, text=text, admin=admin_text):
+                        project_name = "已保存项目A" if text == "检查更新" else "超长中文项目名称ABC" * 20
+                        self.root.project_name_badge.set_name(project_name)
                         admin.configure(text=admin_text)
                         self.root.check_updates_button.configure(text=text)
                         self.root.geometry(f"{width}x780")
@@ -348,6 +350,12 @@ class AppUpdateTkTests(unittest.TestCase):
                                 self.assertTrue(widget.winfo_ismapped(), widget.cget("text"))
                                 self.assertGreaterEqual(widget.winfo_width(), widget.winfo_reqwidth(), widget.cget("text"))
                                 self.assertLessEqual(widget.winfo_rootx() + widget.winfo_width(), toolbar.winfo_rootx() + toolbar.winfo_width())
+                        badge = self.root.project_name_badge
+                        self.assertTrue(badge.winfo_ismapped())
+                        self.assertGreaterEqual(badge.winfo_rootx(), toolbar.winfo_rootx())
+                        self.assertLessEqual(badge.winfo_rootx() + badge.winfo_width(), admin.winfo_rootx())
+                        self.assertEqual(badge.full_text, project_name)
+                        self.assertLessEqual(badge.name_font.measure(badge.label.cget("text")), badge.winfo_width() - 24)
         self.assertIsNone(self.dialog.task)
 
     def test_real_tk_application_close_waits_until_partial_download_is_cleaned(self):
