@@ -1,4 +1,5 @@
 import tempfile
+import gc
 import importlib.util
 import sys
 import json
@@ -229,7 +230,7 @@ class MessagePushWindowTests(unittest.TestCase):
     def setUp(self):
         self.root = tk.Tk()
         self.root.withdraw()
-        self.addCleanup(self.root.destroy)
+        self.addCleanup(self._close_test_root)
         self.root.test_item_config_window = None
         self.root.test_item_pretest_controls = None
         self.root._restore_module_window_size = Mock(return_value=(1000, 960))
@@ -286,6 +287,13 @@ class MessagePushWindowTests(unittest.TestCase):
                 yield from walk(child)
         self.buttons = {w.cget('text'): w for w in walk(self.root.test_item_config_window)
                         if isinstance(w, ttk.Button)}
+
+    def _close_test_root(self):
+        self.root.destroy()
+        self.root = None
+        self.tab = None
+        self.buttons = {}
+        gc.collect()
 
     def test_native_controls_and_save(self):
         notebook = self.tab.frame.master

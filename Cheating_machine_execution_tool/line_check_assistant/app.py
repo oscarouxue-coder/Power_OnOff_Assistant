@@ -72,6 +72,7 @@ from .test_item_config_store import (
     WIFI_CIPHER_OPTIONS,
 )
 from src.core.wifi_interfaces import list_wifi_interface_names
+from src.core.serial_inventory import list_serial_port_names, normalize_com_port
 from src.core.zte_c600_onu import parse_service_mappings, speed_mode_to_cli
 from src.core import (
     SerialSessionManager,
@@ -359,11 +360,11 @@ class LineCheckAssistant(Tk):
         self.sample_upgrade_settings = self.sample_upgrade_settings_store.load()
         self._module_window_size_state_path = MODULE_WINDOW_SIZE_STATE_PATH
         self.channels = self.store.load()
-        self.power_serial_port = self.store.load_power_serial_port()
+        self.power_serial_port = normalize_com_port(self.store.load_power_serial_port())
+        self.show_all_resources_var = BooleanVar(value=False)
+        self.all_serial_ports: list[str] = []
         self.adapters = list_adapter_display_names()
         self.power_serial_options = self._build_power_serial_options()
-        if self.power_serial_port not in self.power_serial_options:
-            self.power_serial_port = DEFAULT_POWER_SERIAL_PORT
         self._ensure_channel_slots()
         self.current_index = 0 if self.channels else -1
         self._last_selected_index = self.current_index
@@ -945,18 +946,29 @@ class LineCheckAssistant(Tk):
             power_form,
             textvariable=self.power_serial_var,
             values=self.power_serial_options,
-            width=28,
+            width=12,
             state="readonly",
         )
         self.power_serial_combo.grid(row=0, column=1, sticky="w", padx=(12, 24))
         self.power_serial_combo.bind("<<ComboboxSelected>>", self._on_power_serial_changed)
         self.power_serial_combo.bind("<FocusOut>", self._on_power_serial_changed)
         ttk.Label(power_form, text="样机管理 IP", style="Surface.TLabel").grid(row=0, column=2, sticky="w")
-        device_ip_entry = ttk.Entry(power_form, textvariable=self.device_ip_var, width=22)
+        device_ip_entry = ttk.Entry(power_form, textvariable=self.device_ip_var, width=16)
         device_ip_entry.grid(row=0, column=3, sticky="w", padx=(12, 0))
         device_ip_entry.bind("<FocusOut>", self._on_device_ip_changed)
         device_ip_entry.bind("<Return>", self._on_device_ip_changed)
-        power_form.columnconfigure(4, weight=1)
+        power_form.columnconfigure(5, weight=1)
+        Checkbutton(
+            power_form,
+            text="显示所有网卡和串口",
+            variable=self.show_all_resources_var,
+            command=self._on_show_all_resources_changed,
+            background=COLOR_SURFACE,
+            activebackground=COLOR_SURFACE,
+            foreground=COLOR_TEXT,
+            highlightthickness=0,
+            borderwidth=0,
+        ).grid(row=0, column=4, sticky="w", padx=(12, 0))
 
         form = ttk.Frame(config_card, style="Surface.TFrame")
         form.pack(fill="x")
@@ -6871,6 +6883,7 @@ class LineCheckAssistant(Tk):
         for child in self.channel_table.winfo_children():
             child.destroy()
         self.channel_row_vars = {}
+        self.channel_row_combos = {}
 
         selected_channels = [channel for channel in self.channels if channel.enabled]
         if not selected_channels:
@@ -6940,6 +6953,10 @@ class LineCheckAssistant(Tk):
                 "<<ComboboxSelected>>",
                 lambda _event, section=channel.section: self._on_row_serial_changed(section),
             )
+            self.channel_row_combos[channel.section] = {
+                "vlan": vlan_combo,
+                "serial_port": serial_combo,
+            }
 
     def _on_row_enabled_changed(self, section: str) -> None:
         channel = self._channel_by_section(section)
@@ -7056,12 +7073,52 @@ class LineCheckAssistant(Tk):
             return ""
 
     def _build_power_serial_options(self) -> list[str]:
+        if self.show_all_resources_var.get():
+            return ["", *self.all_serial_ports]
         return ["", *[f"COM{101 + index}" for index in range(POWER_SUPPLY_COUNT)]]
 
-    def _refresh_power_serial_ports(self) -> None:
+    def _read_all_serial_ports(self) -> None:
+        try:
+            ports = list_serial_port_names()
+        except Exception as exc:
+            self._log(
+                f"[网卡和串口] 串口枚举失败：{exc}；保留上次成功清单"
+                f"（{len(self.all_serial_ports)} 个），当前选择不变。"
+            )
+            return
+        self.all_serial_ports = ports
+        if ports:
+            self._log_list("[网卡和串口] 已识别本机串口", ports)
+        else:
+            self._log("[网卡和串口] 未识别到本机串口，当前选择保持不变。")
+
+    def _update_resource_options(self) -> None:
+        """仅更新候选，不重建控件、不采集或保存配置。"""
         self.power_serial_options = self._build_power_serial_options()
         self.power_serial_combo.configure(values=self.power_serial_options)
+        vlan_options = self._current_vlan_options()
+        serial_options = self._current_channel_serial_options()
+        for combos in self.channel_row_combos.values():
+            combos["vlan"].configure(values=vlan_options)
+            combos["serial_port"].configure(values=serial_options)
+
+    def _on_show_all_resources_changed(self) -> None:
+        show_all = self.show_all_resources_var.get()
+        if show_all:
+            self._read_all_serial_ports()
+        self._update_resource_options()
+        mode = "已开启，展示全部识别网卡和本机串口" if show_all else "已关闭，恢复原有分组候选"
+        self._log(
+            f"[网卡和串口] {mode}；网卡 {len(self._current_vlan_options())} 个，"
+            f"通道 COM {len(self._current_channel_serial_options())} 个；当前选择保持不变。"
+        )
+
+    def _refresh_power_serial_ports(self) -> None:
+        if self.show_all_resources_var.get():
+            self._read_all_serial_ports()
+        self._update_resource_options()
         self._log_list("已刷新程控电源串口候选", self.power_serial_options)
+        self._log_list("已刷新通道对应 COM口候选", self._current_channel_serial_options())
 
     def _selected_power_serial_port(self) -> str:
         value = self.power_serial_var.get().strip()
@@ -7071,10 +7128,13 @@ class LineCheckAssistant(Tk):
         return self._vlan_adapter_options()
 
     def _current_channel_serial_options(self) -> list[str]:
+        if self.show_all_resources_var.get():
+            return list(self.all_serial_ports)
         return serial_options_for_power_serial_port(self._selected_power_serial_port())
 
     def _vlan_adapter_options(self) -> list[str]:
-        return vlan_options_for_power_serial_port(self.adapters, self._selected_power_serial_port())
+        serial_port = "" if self.show_all_resources_var.get() else self._selected_power_serial_port()
+        return vlan_options_for_power_serial_port(self.adapters, serial_port)
 
     @staticmethod
     def _serial_port_for_channel(channel: ChannelConfig) -> str:
@@ -7111,6 +7171,15 @@ class LineCheckAssistant(Tk):
         self._persist_config()
         options = self._current_vlan_options()
         serial_options = self._current_channel_serial_options()
+        if self.show_all_resources_var.get():
+            self._log(
+                f"程控电源串口已切换为 {selected or '空值'}；已开启显示所有网卡和串口，"
+                f"VLAN 下拉框展示全部 {len(options)} 个识别网卡，"
+                f"通道对应 COM口展示全部 {len(serial_options)} 个本机串口。"
+            )
+            if not selected:
+                self._log("未选择程控电源串口；请手动重启样机后，再进行后续步骤。")
+            return
         if not selected:
             self._log(
                 "未选择程控电源串口；通道对应 VLAN 下拉框展示所有识别网卡，"
@@ -7682,7 +7751,7 @@ class LineCheckAssistant(Tk):
 
     def _refresh_adapters(self) -> None:
         self.adapters = list_adapter_display_names()
-        self._rebuild_channel_config_rows()
+        self._update_resource_options()
         if self.adapters:
             self._log_list("已刷新网卡", self.adapters)
         else:
@@ -7767,6 +7836,9 @@ class LineCheckAssistant(Tk):
 
         options = self._build_power_serial_options()
         current = self._selected_power_serial_port()
+        # 已保存或因刷新暂时不可见的当前串口仍可保留，不自动换到其它电源。
+        if current and normalize_com_port(current) and current not in options:
+            options.append(current)
         selected = StringVar(value=current if current in options else DEFAULT_POWER_SERIAL_PORT)
         action_default = initial_action if initial_action in POWER_ACTION_OPTIONS else POWER_ACTION_ON
         action = StringVar(value=action_default)
@@ -7792,7 +7864,7 @@ class LineCheckAssistant(Tk):
                 value = selected.get().strip()
                 selected_port = port_from_display(value) or value.upper()
                 if selected_port not in options:
-                    messagebox.showwarning("COM 口不正确", "程控电源串口只能选择 COM101 到 COM106。", parent=dialog)
+                    messagebox.showwarning("COM 口不正确", "请从当前程控电源串口候选中选择，或留空。", parent=dialog)
                     return
                 selected_action = action.get().strip()
                 if selected_action not in POWER_ACTION_OPTIONS:

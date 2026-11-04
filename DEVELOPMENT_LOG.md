@@ -1,5 +1,41 @@
 # 开发记录
 
+## 2026-11-04 - 确认全部网卡和串口显示验收
+
+- 类型：状态更新
+- 背景：负责人在本轮功能实现及勾选框移至样机管理IP输入框右侧后，反馈“实际验证通过”。
+- 完成内容：① **真实样机验收 / 状态更新**：依据负责人现场反馈，将本轮“显示所有网卡和串口”及其右侧布局标为已确认验收。② 同步PROJECT_STATUS.md及ACCEPTANCE_BASELINE.md §2.1，移除§3本项待确认记录。③ 本次仅确认本轮显示与选择功能，不增加设备执行、样机台数或EXE交付验收结论。
+- 修改文件：
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+- 验证方法：核对负责人反馈与三份文档的状态、日期及范围一致；运行 `git diff --check -- DEVELOPMENT_LOG.md PROJECT_STATUS.md ACCEPTANCE_BASELINE.md`。
+- 验证结果：负责人实际验证通过（2026-11-04）；本轮三份文档差异检查通过。全工作区检查另提示本机network_card_ip.ini独立变动中空值行的尾部空格，未修改或清理该配置。本轮仅同步验收记录，不重复运行代码测试；最近完整基线为本日实现记录中的1228项测试通过。
+- 后续待办：本项无；保留其它功能既有待验收项，不打包、不提交Git、不改本机配置。
+
+## 2026-11-04 - 增加全部网卡和串口显示开关
+
+- 类型：功能
+- 背景：负责人要求主界面“2 配置测试参数”增加勾选框，开启时同时显示全部网卡、程控电源COM及通道COM；确认串口仅列出本机实际识别项，开关每次启动关闭。
+- 完成内容：① 原生Checkbutton及三类候选联动，直接更新控件、不清除当前选择或因切换写配置。按负责人追加要求，将开关放到样机管理IP输入框右侧同一行，电源候选宽度改为12、IP输入框改为16，确保最小窗口可显示。② 独立core通过已有pyserial只读枚举全部品牌/编号COM，自然排序去重；失败保留成功清单，空清单保留选择，刷新两处COM同步。③ 电源切换、行重建和上/下电弹窗遵循模式，保留当前串口；有效已保存电源COM不再因固定候选被启动逻辑重置。④ 保留原分组、命名提示、显式COM映射、设备确认及执行协议，同步操作说明和待验收边界。⑤ 完整基线发现既有Tk测试的Mock闭包持有变量后被worker触发GC，补充测试主线程回收和根窗口引用释放，不修改设备或运行时线程逻辑。
+- 修改文件：
+  - `.claude/plans/all-network-and-serial-options.md`
+  - `Cheating_machine_execution_tool/src/core/serial_inventory.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_resource_options.py`
+  - `Cheating_machine_execution_tool/tests/test_app_update_ui.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/tests/test_message_push_config.py`
+  - `Cheating_machine_execution_tool/tests/test_telnet_post_login_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录以UTF-8运行 `python -X utf8 -m unittest discover -s tests -p test_resource_options.py -v`、`python -X utf8 scripts/verify_baseline.py`；仓库根运行 `git diff --check`。当前沙箱中原安装目录及系统临时目录的Tcl脚本无法由原生Tcl读取，临时复制Python312的tcl资源到根目录`.cache/linecheck-source-tk`并设置TCL_LIBRARY/TK_LIBRARY指向其tcl8.6/tk8.6；因当前Python312缺comtypes，将锁定的`comtypes==1.1.14`通过`pip install --target .cache/linecheck-test-deps`放入隔离目录，设置PYTHONPATH指向该目录。均未修改全局安装或打包环境；验证缓存完成后清理，后续复现应使用依赖齐全的源码环境或按上述方式准备临时资源。
+- 验证结果：11项新增专项通过；完整基线ALL CHECKS PASSED（1228项测试，相对1217项新增11项；180项指定关键回归、92个源码编译/覆盖及协议不变量）。真实源码Tk装配检查1040/1200/1600像素宽度下开关完整显示且位于管理IP右侧同一行，并验证所有候选联动、失败/空列表、保留选择及配置兼容。单独24项更新UI回归通过，差异检查通过。首次专项缺日志队列夹具已补齐；原安装Tcl资源不可读、缺依赖及既有测试跨线程GC问题已按上述方式处理，未放宽门禁。
+- 后续待办：负责人完整Windows源码版及实际接线复验见ACCEPTANCE_BASELINE.md §2.1/§3；本轮未打包、运行EXE、执行设备操作或提交Git。开工前network_card_ip.ini已有差异，期间观察到独立更新，保留当前文件、不回退或纳入功能修改清单；新增测试仅使用临时配置或Mock。
+
 ## 2026-10-30 - 修复通道列表空白点击
 
 - 类型：BUG 修复

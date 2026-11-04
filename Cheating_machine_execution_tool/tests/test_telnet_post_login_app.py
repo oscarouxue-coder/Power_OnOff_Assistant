@@ -1,5 +1,6 @@
 """登录后命令的真实 Tk 变量映射和手动查询确认回归。"""
 import tempfile
+import gc
 import unittest
 from contextlib import ExitStack
 from pathlib import Path
@@ -16,6 +17,7 @@ from line_check_assistant.test_item_config_store import (
 
 class TelnetPostLoginTabTests(unittest.TestCase):
     def build_tab(self, settings):
+        self.addCleanup(gc.collect)
         interpreter = Tcl()
         dirty = Mock()
         entries, labels = [], []

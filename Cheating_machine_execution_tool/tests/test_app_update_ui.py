@@ -1,4 +1,5 @@
 import inspect
+import gc
 import queue
 import re
 import sys
@@ -8,7 +9,7 @@ import time
 import unittest
 from dataclasses import replace
 from pathlib import Path
-from tkinter import StringVar, Tk, ttk
+from tkinter import BooleanVar, StringVar, Tk, ttk
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -244,6 +245,10 @@ class AppUpdateTkTests(unittest.TestCase):
             if task.thread is not None:
                 task.thread.join(2)
         self.root.destroy()
+        self.dialog = None
+        self.button = None
+        self.root = None
+        gc.collect()
 
     def pump_until(self, condition):
         deadline = time.monotonic() + 4
@@ -323,6 +328,7 @@ class AppUpdateTkTests(unittest.TestCase):
         self.root.adapters = []
         self.root.power_serial_port = ""
         self.root.power_serial_options = [""]
+        self.root.show_all_resources_var = BooleanVar(master=self.root, value=False)
         self.root.log_path = Path("not-written.log")
         self.root.log_queue = self.logs
         for name in ("power_test_status_var", "power_test_progress_text_var", "power_test_channel_summary_var", "power_test_channel_attention_var", "power_test_channel_detail_var"):

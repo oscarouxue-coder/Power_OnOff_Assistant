@@ -75,6 +75,7 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/core/__init__.py",
     "src/core/github_release_client.py",
     "src/core/network_adapter.py",
+    "src/core/serial_inventory.py",
     "src/models/network_adapter.py",
     "src/services/adapter_rename_service.py",
     "src/ui/adapter_rename_dialog.py",

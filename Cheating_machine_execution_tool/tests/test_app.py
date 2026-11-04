@@ -1,4 +1,5 @@
 import inspect
+import gc
 import os
 import queue
 import re
@@ -2748,6 +2749,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
     def _onu_batch_id_context(self, family=OLT_FAMILY_C600):
         from tkinter import BooleanVar, StringVar, Tcl
 
+        # Mock闭包持有Tcl变量，测试返回后在主线程回收，避免后续worker触发析构。
+        self.addCleanup(gc.collect)
         interpreter = Tcl()
         def text_var(value):
             return StringVar(master=interpreter, value=value)
