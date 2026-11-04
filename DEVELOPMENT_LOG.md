@@ -1,5 +1,49 @@
 # 开发记录
 
+## 2026-11-05 - 移除无线Ping页断开连接提示
+
+- 类型：修改
+- 背景：负责人认为WiFi页“测试会断开所选无线网卡当前连接”容易引起误会，要求去除。
+- 完成内容：仅删除WiFi页无线Ping说明末尾的该句，保留“无线Ping支持IPv4 / 域名；每项4包，至少1个回复通过。”；连接、认证、Ping、默认值及配置保存行为均不变。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/wifi_test_controls.py`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录运行`python -X utf8 scripts/verify_baseline.py`；检查界面标签文本及`git diff --check`。源码验证使用与前条相同的临时Tcl资源及锁定comtypes隔离依赖，完成后清理，不修改全局环境。
+- 验证结果：完整基线ALL CHECKS PASSED（1281项测试、190项指定关键回归、99个源码编译/覆盖及协议不变量）；标签文本检查与差异检查通过。
+- 后续待办：不打包、不运行EXE、不提交；真实样机验收范围保持不变。
+
+## 2026-11-05 - 优化WiFi连接并增加可选无线Ping
+
+- 类型：功能
+- 背景：负责人要求落实已确认的WiFi优化计划，自动识别认证、提供分频段/合一接入选择，并增加可输入IPv4或域名的无线Ping开关；4包至少1个有效回复通过。本轮从2026-11-04开始实施，完成于2026-11-05。
+- 完成内容：① 独立models/core/service/UI模块实现目标只读Mapping/实例、SSID/BSSID、认证及双频状态采集；分频段核对实际身份/频率，合一模式记录一次实际接入；Windows Native WLAN按BSSID建立未持久化临时profile，核验连续稳定2秒，退出只断开临时连接，保留用户profile。② 默认自动认证、保留高级手动及原值，旧配置新增4键兼容默认，主控关闭跳过无线校验，合一模式保留但忽略频段勾选，保存/总确认/主日志显示模式、认证来源及Ping目标。③ 指定无线接口异步DNS（5秒、取消后保留原生buffer至completion）、等待无线IPv4（30秒），原始ICMP socket同时绑定源IP和IP_UNICAST_IF；4包×2秒、包间1秒，验证IP/标识/序号/随机载荷/校验和，显示丢包及时延；连接/频段/接口/源IP改变可覆盖已有回复。④ 保留FIFO连续项目、停止及失败续跑，环境异常单独标明，不重连掩盖Ping失败；保留有线Ping、电源、SSH和旧GUI边界。⑤ 不新增第三方依赖；新增源码及10项强制回归纳入基线。
+- 修改文件：
+  - `.claude/plans/wifi-connection-and-wireless-ping.md`
+  - `Cheating_machine_execution_tool/src/models/wifi_test_models.py`
+  - `Cheating_machine_execution_tool/src/core/wifi_target_reader.py`
+  - `Cheating_machine_execution_tool/src/core/windows_wifi.py`
+  - `Cheating_machine_execution_tool/src/core/wireless_ip.py`
+  - `Cheating_machine_execution_tool/src/core/wireless_ping.py`
+  - `Cheating_machine_execution_tool/src/services/wifi_connection_service.py`
+  - `Cheating_machine_execution_tool/src/services/power_test_wifi_service.py`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/src/ui/wifi_test_controls.py`
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/test_case/powe_on_off_telnet.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_wifi_connection_service.py`
+  - `Cheating_machine_execution_tool/tests/test_wireless_ping.py`
+  - `Cheating_machine_execution_tool/tests/test_wifi_test_controls.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置`PYTHONUTF8=1`及`PYTHONIOENCODING=utf-8`，运行`python -X utf8 -m unittest discover -s tests -p 'test_wifi*.py' -v`、`python -X utf8 -m unittest discover -s tests -p test_wireless_ping.py -v`及完整`python -X utf8 scripts/verify_baseline.py`；独立Tk装配测量默认Clam主题自动/手动布局；仓库根运行`git diff --check`。当前沙箱原安装Tcl不可由原生Tcl读取，按既有源码验证做法复制tcl8.6/tk8.6到根`.cache/wifi-test-tk`，设置TCL_LIBRARY/TK_LIBRARY；将锁定comtypes==1.1.14安装到隔离`.cache/wifi-test-deps`并设置PYTHONPATH。不改全局Python、打包环境或本机配置，验证后清理本轮缓存。
+- 验证结果：完整基线`ALL CHECKS PASSED`（1281项测试，相对1228项新增53项；原有2项需显式启用的无头浏览器测试保持跳过，新增测试全部执行；190项指定关键回归，99个源码编译/覆盖及协议不变量）。默认Clam下WiFi页自动布局654×324、手动布局680×334，可放入既有960×940配置窗口。首次完整基线定位到旧便携打包导入夹具缺新模式字段，已在兼容入口使用per_band默认值，原10项打包回归通过；未放宽既有测试。源码测试均使用Mock接口/设备/socket；本机仅做只读地址枚举和Tk装配，没有实际关联WiFi、DNS/Ping发包或设备操作。
+- 后续待办：新成功判据替代旧“仅网卡已连接”判据，标记已实现未验收；负责人完成Windows完整界面、真实Mapping/双频/多通道/认证/停止续跑及DNS/ICMP无线出口抓包，清单见ACCEPTANCE_BASELINE.md §2.11/§2.12/§3。不打包、不运行EXE、不提交/发布，不改变已有真实样机验收结论。
+
 ## 2026-11-04 - 确认全部网卡和串口显示验收
 
 - 类型：状态更新

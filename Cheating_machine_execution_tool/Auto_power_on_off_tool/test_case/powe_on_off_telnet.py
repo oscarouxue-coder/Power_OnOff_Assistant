@@ -772,7 +772,8 @@ class PowerOnOffTelnet(QThread):
                                     wifi_label = f'[WiFi测试] 通道{power_num} 第{times}轮'
                                     if not OnuCongfig.connect_wifi_enable_status:
                                         self.logger.info(f'{wifi_label} 跳过：WiFi主控关闭')
-                                    elif not (OnuCongfig.choose_test_2g_flag or OnuCongfig.choose_test_5g_flag):
+                                    elif (getattr(OnuCongfig, 'wifi_connection_test_mode', 'per_band') == 'per_band'
+                                          and not (OnuCongfig.choose_test_2g_flag or OnuCongfig.choose_test_5g_flag)):
                                         self.logger.info(f'{wifi_label} 跳过：2.4G、5G均未启用')
                                     else:
                                         if wifi_info is None:
@@ -790,7 +791,8 @@ class PowerOnOffTelnet(QThread):
                                         if wifi_info:
                                             wifi_result, failed_band = wifi_scheduler.test_bands(
                                                 channel=power_num, cycle=times,
-                                                card=OnuCongfig.choose_wireless_card_name,
+                                                card=(OnuCongfig.choose_wireless_card_name
+                                                      if getattr(OnuCongfig, 'choose_wireless_card_flag', 1) else ''),
                                                 stop_event=stop_event, emit=self.logger.info,
                                                 connector=self.wifi_connect, wifi_info=wifi_info,
                                                 test_2g=OnuCongfig.choose_test_2g_flag,
@@ -800,9 +802,11 @@ class PowerOnOffTelnet(QThread):
                                             if wifi_result == 'cancelled':
                                                 raise WifiConnectionCancelled()
                                             check_wifi_stop(stop_event)
-                                            desc = f'{wifi_label} 连接{failed_band}失败' if wifi_result == 'failed' else ''
+                                            desc = f'{wifi_label} 无线测试{failed_band}失败' if wifi_result == 'failed' else ''
+                                            if wifi_result == 'error':
+                                                desc = f'{wifi_label} 测试环境异常：{failed_band}'
                                         else:
-                                            desc = f'{wifi_label} 获取WiFi信息失败'
+                                            desc = f'{wifi_label} 获取WiFi信息失败（测试环境/样机信息异常，未执行连接）'
                                         if desc:
                                             check_wifi_stop(stop_event)
                                             self.show_signal_error[str].emit(desc)

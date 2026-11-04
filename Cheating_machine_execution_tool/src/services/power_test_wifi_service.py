@@ -9,14 +9,34 @@ import re
 class PowerTestWifiScheduler:
     """仅调度使用权，不操作网卡；取消等待返回 False，不冒充设备失败。"""
 
-    def __init__(self, clock=time.monotonic):
+    def __init__(self, clock=time.monotonic, *, options=None, test_2g=True, test_5g=True,
+                 connection_service=None):
         self._condition = threading.Condition()
         self._pending = deque()
         self._owner = None
         self._clock = clock
+        self.options = options
+        self.test_2g = test_2g
+        self.test_5g = test_5g
+        self.connection_service = connection_service
 
     def read_info(self, client, stop_event, emit, solution):
         """沿用原 OpenWrt 四条只读命令；省略原始回显，由调用者记录信息摘要。"""
+        if self.options is not None:
+            from src.core.wifi_target_reader import read_wifi_snapshot
+            from src.models.wifi_test_models import WifiEnvironmentError, WifiCancelled
+            from src.services.wifi_connection_service import validate_wifi_options
+            try:
+                validate_wifi_options(self.options, solution=solution)
+                bands = ('2.4G', '5G') if self.options.connection_test_mode == 'unified' else tuple(
+                    b for b, active in (('2.4G', self.test_2g), ('5G', self.test_5g)) if active)
+                return read_wifi_snapshot(client, stop_event, emit, bands=bands,
+                                          allow_partial=self.options.connection_test_mode == 'unified')
+            except WifiCancelled:
+                return None  # 调用者紧接着检查同一个stop_event，保持既有取消信号语义。
+            except (WifiEnvironmentError, ValueError) as exc:
+                emit(f'测试环境异常：{exc}')
+                return None
         if solution != 'openwrt':
             emit('失败：当前方案没有可用的WiFi信息读取实现')
             return None
@@ -38,6 +58,17 @@ class PowerTestWifiScheduler:
                    wifi_info, test_2g, test_5g, auth, cipher):
         """返回 (success/failed/cancelled/skipped, 频段)，通知由调用者在释放后处理。"""
         label = f"[WiFi测试] 通道{channel} 第{cycle}轮 网卡={card or '自动选择第一张'}"
+        if self.options is not None:
+            from src.services.wifi_connection_service import WifiConnectionService
+            if self.options.connection_test_mode == 'per_band' and not test_2g and not test_5g:
+                emit(f'{label} 跳过：2.4G、5G均未启用')
+                return 'skipped', ''
+            with self.reserve(channel, cycle, card, stop_event, emit) as acquired:
+                if not acquired:
+                    return 'cancelled', ''
+                service = self.connection_service or WifiConnectionService()
+                return service.run(wifi_info, self.options, card, test_2g, test_5g, auth, cipher,
+                                   stop_event, lambda message: emit(label + ' ' + message))
         if not test_2g and not test_5g:
             emit(f"{label} 跳过：2.4G、5G均未启用")
             return 'skipped', ''

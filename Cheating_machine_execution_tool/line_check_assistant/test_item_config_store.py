@@ -110,6 +110,10 @@ class ConnectWifiSettings:
     cipher: str = "AES"
     choose_wireless_card: int = 0
     wireless_card_name: str = ""
+    connection_test_mode: str = "per_band"
+    security_source: str = "auto"
+    wireless_ping_enable: int = 0
+    wireless_ping_target: str = ""
 
 
 @dataclass
@@ -340,6 +344,10 @@ class TestItemConfigStore:
             ),
             product_solution=parser.get(section, "product_solution", fallback="openwrt"),
             auth_mode=parser.get(section, "auth_mode", fallback="WPA2-PSK"),
+            connection_test_mode=parser.get(section, "connection_test_mode", fallback="per_band"),
+            security_source=parser.get(section, "security_source", fallback="auto"),
+            wireless_ping_enable=_parse_int(parser.get(section, "wireless_ping_enable", fallback="0"), 0),
+            wireless_ping_target=parser.get(section, "wireless_ping_target", fallback=""),
             cipher=parser.get(section, "cipher", fallback="AES"),
             choose_wireless_card=_parse_int(
                 parser.get(section, "choose_wireless_card", fallback="0"), 0
@@ -397,6 +405,10 @@ class TestItemConfigStore:
             "product_solution": (wifi.product_solution or "openwrt").strip().lower(),
             "auth_mode": (wifi.auth_mode or "WPA2-PSK").strip(),
             "cipher": (wifi.cipher or "AES").strip(),
+            "connection_test_mode": wifi.connection_test_mode.strip(),
+            "security_source": wifi.security_source.strip(),
+            "wireless_ping_enable": str(1 if bool(wifi.wireless_ping_enable) else 0),
+            "wireless_ping_target": wifi.wireless_ping_target.strip(),
             "choose_wireless_card": str(1 if bool(wifi.choose_wireless_card) else 0),
             "wireless_card_name": (wifi.wireless_card_name or "").strip(),
         }

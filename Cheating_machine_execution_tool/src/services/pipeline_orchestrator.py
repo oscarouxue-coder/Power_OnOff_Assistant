@@ -337,6 +337,7 @@ def _summarize_legacy_power_test(ctx: PipelineContext) -> SubTaskStatus:
     from src.services.legacy_power_test_service import (
         LegacyPowerChannel,
         prepare_legacy_power_test_request,
+        wifi_request_summary,
     )
 
     if ctx.legacy_tool_root is None:
@@ -371,6 +372,7 @@ def _summarize_legacy_power_test(ctx: PipelineContext) -> SubTaskStatus:
             f"通信={request.communication_method} / COM={request.serial_port} / "
             f"方案={request.selected_profile} / {len(request.channels)} 通道 / "
             f"循环={request.number_of_tests}次"
+            + (' / ' + wifi_request_summary(request) if wifi_request_summary(request) else '')
         ),
         missing=(),
     )

@@ -4825,6 +4825,9 @@ class LineCheckAssistant(Tk):
                     f"5G={'启用' if captured.connect_wifi.test_5g_enable else '关闭'}；"
                     f"认证={captured.connect_wifi.auth_mode}；加密={captured.connect_wifi.cipher}；"
                     f"网卡={captured.connect_wifi.wireless_card_name if captured.connect_wifi.choose_wireless_card else '自动选择'}\n"
+                    f"- WiFi模式：{'分别验证频段' if captured.connect_wifi.connection_test_mode == 'per_band' else '合一网络接入（任一频段）'}；"
+                    f"认证来源={'自动识别' if captured.connect_wifi.security_source == 'auto' else '高级手动'}；"
+                    f"无线Ping={'启用，目标=' + captured.connect_wifi.wireless_ping_target if captured.connect_wifi.wireless_ping_enable else '关闭'}\n"
                     f"- 项目信息：项目={captured.project_info.project_name or '(空)'}，"
                     f"软件版本={captured.project_info.software_version or '(空)'}，"
                     f"内部软件版本={captured.project_info.internal_software_version or '(空)'}，"
@@ -5498,6 +5501,7 @@ class LineCheckAssistant(Tk):
 
         connection_frame = Frame(frame, background=COLOR_BG)
         connection_frame.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(0, 10))
+        wifi_band_controls = []
         for column, (text, variable) in enumerate(
             (
                 ("连接 WiFi（主控）", enable_var),
@@ -5505,7 +5509,7 @@ class LineCheckAssistant(Tk):
                 ("测试 5G WiFi", test_5g_var),
             )
         ):
-            Checkbutton(
+            wifi_check = Checkbutton(
                 connection_frame,
                 text=text,
                 variable=variable,
@@ -5515,7 +5519,10 @@ class LineCheckAssistant(Tk):
                 activebackground=COLOR_BG,
                 highlightthickness=0,
                 borderwidth=0,
-            ).grid(row=0, column=column, sticky="w", padx=(0, 28))
+            )
+            wifi_check.grid(row=0, column=column, sticky="w", padx=(0, 28))
+            if column > 0:
+                wifi_band_controls.append(wifi_check)
 
         Label(frame, text="ONU 方案类型", width=18, anchor="w", background=COLOR_BG).grid(
             row=2, column=0, sticky="w", padx=(0, 12), pady=6
@@ -5607,6 +5614,11 @@ class LineCheckAssistant(Tk):
             style="Tool.TButton",
         ).grid(row=4, column=3, sticky="w", padx=(12, 0), pady=(14, 6))
 
+        from src.ui.wifi_test_controls import WifiTestControls
+        advanced_widgets = (frame.grid_slaves(row=2, column=2) + frame.grid_slaves(row=2, column=3)
+                            + frame.grid_slaves(row=3, column=0) + frame.grid_slaves(row=3, column=1))
+        wifi_extra = WifiTestControls(frame, wifi, mark_dirty, wifi_band_controls, advanced_widgets, COLOR_BG)
+
         Label(
             frame,
             text=(
@@ -5617,12 +5629,17 @@ class LineCheckAssistant(Tk):
             background=COLOR_BG,
             wraplength=560,
             justify="left",
-        ).grid(row=5, column=0, columnspan=4, sticky="w", pady=(8, 0))
+        ).grid(row=7, column=0, columnspan=4, sticky="w", pady=(8, 0))
 
         frame.columnconfigure(1, weight=1)
         frame.columnconfigure(3, weight=1)
 
         def capture() -> ConnectWifiSettings:
+            from src.models.wifi_test_models import WifiTestOptions
+            from src.services.wifi_connection_service import validate_wifi_options
+            extra = wifi_extra.capture()
+            validate_wifi_options(WifiTestOptions(**extra), bool(enable_var.get()),
+                                  (solution_var.get() or 'openwrt').strip().lower())
             return ConnectWifiSettings(
                 enable=int(enable_var.get()),
                 test_2g_enable=int(test_2g_var.get()),
@@ -5632,6 +5649,7 @@ class LineCheckAssistant(Tk):
                 cipher=(cipher_var.get() or "AES").strip(),
                 choose_wireless_card=int(choose_wireless_card_var.get()),
                 wireless_card_name=wireless_card_name_var.get().strip(),
+                **extra,
             )
 
         def load(new_wifi: ConnectWifiSettings) -> None:
@@ -5643,8 +5661,10 @@ class LineCheckAssistant(Tk):
             cipher_var.set(new_wifi.cipher or "AES")
             choose_wireless_card_var.set(int(new_wifi.choose_wireless_card))
             wireless_card_name_var.set(new_wifi.wireless_card_name or "")
+            wifi_extra.load(new_wifi)
 
-        return {"capture": capture, "load": load, "refresh_wireless_cards": refresh_wireless_cards}
+        return {"capture": capture, "load": load, "refresh_wireless_cards": refresh_wireless_cards,
+                "extra_controls": wifi_extra}
 
     def _build_test_item_project_info_tab(
         self,

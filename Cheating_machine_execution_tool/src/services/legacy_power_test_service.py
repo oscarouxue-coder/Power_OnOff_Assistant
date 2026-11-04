@@ -125,12 +125,27 @@ class LegacyPowerTestRequest:
     wifi_wireless_card_name: str
     channels: tuple[LegacyPowerChannel, ...]
     ping_target_ip: str = ""
+    wifi_connection_test_mode: str = "per_band"
+    wifi_security_source: str = "auto"
+    wireless_ping_enable: bool = False
+    wireless_ping_target: str = ""
 
 
 @dataclass(frozen=True)
 class LegacyPowerTestResult:
     ok: bool
     detail: str
+
+
+def wifi_request_summary(request):
+    if request.communication_method != 'telnet' or not request.connect_wifi_enable:
+        return ''
+    mode = '分别验证频段' if request.wifi_connection_test_mode == 'per_band' else '合一网络接入（任一频段）'
+    source = '自动识别' if request.wifi_security_source == 'auto' else f'手动{request.wifi_auth_mode}/{request.wifi_cipher}'
+    card = request.wifi_wireless_card_name if request.wifi_choose_wireless_card else '自动选择首张可用无线网卡'
+    ping = request.wireless_ping_target if request.wireless_ping_enable else '关闭'
+    return (f'WiFi模式={mode}，认证={source}，网卡={card}，无线Ping={ping}；'
+            '测试将断开所选无线网卡当前连接，仅使用任务临时配置；无线Ping与有线Ping独立。')
 
 
 Output = Callable[[str], None]
@@ -342,8 +357,8 @@ def prepare_legacy_power_test_request(
         "connect_wifi", "enable", fallback=False
     )
     product_solution = profile_parser.get(
-        "connect_wifi", "product_solution", fallback=""
-    ).strip().lower()
+        "connect_wifi", "product_solution", fallback="openwrt"
+    ).strip().lower() or 'openwrt'
     wifi_test_2g_enable = profile_parser.getboolean(
         "connect_wifi", "test_2g_enable", fallback=True
     )
@@ -364,6 +379,16 @@ def prepare_legacy_power_test_request(
     ).strip()
     if connect_wifi_enable and wifi_choose_wireless_card and not wifi_wireless_card_name:
         raise ValueError("WiFi 连接测试已勾选指定无线网卡，但无线网卡名称为空")
+    from src.models.wifi_test_models import WifiTestOptions
+    from src.services.wifi_connection_service import validate_wifi_options
+    wifi_options = WifiTestOptions(
+        profile_parser.get('connect_wifi', 'connection_test_mode', fallback='per_band').strip(),
+        profile_parser.get('connect_wifi', 'security_source', fallback='auto').strip(),
+        profile_parser.getboolean('connect_wifi', 'wireless_ping_enable', fallback=False),
+        profile_parser.get('connect_wifi', 'wireless_ping_target', fallback='').strip(),
+    )
+    if defaults['communication_method'] == 'telnet':
+        validate_wifi_options(wifi_options, connect_wifi_enable, product_solution)
     request_url = profile_parser.get(
         defaults["communication_method"], "request_url", fallback=""
     ).strip()
@@ -393,6 +418,10 @@ def prepare_legacy_power_test_request(
         wifi_wireless_card_name=wifi_wireless_card_name,
         channels=selected_channels,
         ping_target_ip=ping_target_ip,
+        wifi_connection_test_mode=wifi_options.connection_test_mode,
+        wifi_security_source=wifi_options.security_source,
+        wireless_ping_enable=wifi_options.wireless_ping_enable,
+        wireless_ping_target=wifi_options.wireless_ping_target,
     )
 
 
@@ -467,6 +496,8 @@ def _run_legacy_power_test(
             f"方案={request.product_solution}，认证={request.wifi_auth_mode}，"
             f"加密={request.wifi_cipher}，网卡={wifi_card}"
         )
+        if request.communication_method == 'telnet':
+            emit('[执行开关机测试] ' + wifi_request_summary(request))
     else:
         emit("[执行开关机测试] WiFi连接配置：主控=关闭，本次跳过 WiFi 连接测试。")
     completed_by_channel = {item.number: initial_completed.get(item.number, 0) for item in request.channels}
@@ -773,6 +804,7 @@ def _install_headless_legacy_stubs(request: LegacyPowerTestRequest):
         Onu_solution_type = request.product_solution
         choose_wireless_card_flag = int(request.wifi_choose_wireless_card)
         choose_wireless_card_name = request.wifi_wireless_card_name
+        wifi_connection_test_mode = getattr(request, 'wifi_connection_test_mode', 'per_band')
         iface_names: list[str] = []
 
     onu_module = types.ModuleType("test_case.Onu_config")
@@ -984,6 +1016,11 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
                     f"{request.wifi_wireless_card_name}；当前可用："
                     f"{', '.join(onu_config_class.iface_names)}"
                 )
+            if (request.communication_method == 'telnet' and request.wireless_ping_enable
+                    and (request.wifi_connection_test_mode == 'unified'
+                         or request.wifi_test_2g_enable or request.wifi_test_5g_enable)):
+                from src.core.wireless_ping import preflight_raw_socket
+                preflight_raw_socket()
 
         from common.serilal_client import Serial
         if request.communication_method == "telnet":
@@ -1044,7 +1081,11 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
             )
         legacy_worker.dingtalk.log = logger.info
         if request.communication_method == "telnet":
-            legacy_worker.wifi_scheduler = PowerTestWifiScheduler()
+            from src.models.wifi_test_models import WifiTestOptions
+            legacy_worker.wifi_scheduler = PowerTestWifiScheduler(
+                options=WifiTestOptions(request.wifi_connection_test_mode, request.wifi_security_source,
+                                        request.wireless_ping_enable, request.wireless_ping_target),
+                test_2g=request.wifi_test_2g_enable, test_5g=request.wifi_test_5g_enable)
         _connect_legacy_log_signals(legacy_worker, message_queue)
         restore_result_log_open = _install_legacy_result_log_forwarder(message_queue)
 
