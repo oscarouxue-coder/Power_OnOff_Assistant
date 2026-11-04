@@ -398,7 +398,13 @@ class LineCheckAssistant(Tk):
         self.parameter_preflight = None
         self.parameter_cancel_event = None
         self.serial_session_manager = SerialSessionManager()
-        self.serial_terminal = SerialTerminalWindow(self, self.serial_session_manager, self._serial_log_directory())
+        self.serial_terminal = SerialTerminalWindow(
+            self,
+            self.serial_session_manager,
+            self._serial_log_directory(),
+            on_log_dir_changed=self._on_serial_log_directory_changed,
+            logger=self._log,
+        )
         self.dut_config_window = None
         self.dut_config_running = False
         self.dut_config_cancel_event = None
@@ -5883,7 +5889,18 @@ class LineCheckAssistant(Tk):
             raise
 
     def _serial_log_directory(self) -> Path:
-        return DEFAULT_LOG_DIR
+        terminal = self.__dict__.get("serial_terminal")
+        return terminal.get_log_directory() if terminal is not None else DEFAULT_LOG_DIR
+
+    def _on_serial_log_directory_changed(self, log_dir: Path) -> None:
+        """串口窗口的 Tk 主线程回调：同步全流程摘要，不触碰已打开的监控。"""
+        self._log(f"[串口日志] 当前日志目录已更新：{log_dir}")
+        pipeline = self.__dict__.get("pipeline_window")
+        if pipeline is None or not pipeline.window.winfo_exists():
+            return
+        if pipeline._running_thread is not None and pipeline._running_thread.is_alive():
+            return
+        pipeline._refresh_statuses()
 
     def _attach_serial_upgrade(self, vlan: str, session, log_path: Path) -> None:
         self.serial_terminal.attach_upgrade(

@@ -9,10 +9,12 @@ from collections import deque
 from datetime import date
 from pathlib import Path
 from tkinter import END, Frame, Label, StringVar, Text, Toplevel, filedialog, messagebox, ttk
+from typing import Callable
 
 from src.config import DEFAULT_LOG_DIR
 from src.core import SerialSessionManager, vlan_to_serial_port
 from src.models import SerialSettings
+from src.ui.closable_notebook import ClosableNotebook
 from src.ui.window_paint import center_toplevel_on_parent
 
 
@@ -47,10 +49,15 @@ class SerialTerminalWindow:
         manager: SerialSessionManager,
         log_dir: Path,
         state_file: Path | None = None,
+        on_log_dir_changed: Callable[[Path], None] | None = None,
+        logger: Callable[[str], None] | None = None,
     ) -> None:
         self.master = master
         self.manager = manager
         self.log_dir = log_dir
+        self._log_dir_initialized = False
+        self._on_log_dir_changed = on_log_dir_changed
+        self._logger = logger
         # 默认存到用户目录下,跨平台、安全且不会被误删
         self.state_file = state_file or (Path.home() / ".aouxue_serial_terminal.json")
         self.window = None
@@ -91,6 +98,7 @@ class SerialTerminalWindow:
             return
         # 优先恢复上次保存的日志目录,失效时回退到默认 D:\Serial_Log
         self.log_dir = self._restore_log_dir()
+        self._log_dir_initialized = True
         self.window = Toplevel(self.master)
         self.window.title("串口日志记录")
         # 优先恢复上次窗口位置+大小,无效时回退到默认尺寸
@@ -110,7 +118,7 @@ class SerialTerminalWindow:
         ttk.Entry(path_bar, textvariable=self.log_dir_var, width=50, state="readonly").pack(side="left", padx=(4, 6))
         ttk.Button(path_bar, text="浏览…", command=self._choose_log_dir).pack(side="left", padx=(0, 4))
         ttk.Button(path_bar, text="打开文件夹", command=self._open_log_dir).pack(side="left")
-        self.notebook = ttk.Notebook(self.window)
+        self.notebook = ClosableNotebook(self.window, on_close=self._on_tab_close)
         self.notebook.pack(fill="both", expand=True, padx=12, pady=(0, 12))
         self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
         for target in vlans:
@@ -120,6 +128,8 @@ class SerialTerminalWindow:
         if saved_geometry is None or self._geometry_is_at_top_left(saved_geometry):
             center_toplevel_on_parent(self.window, self.master)
         self._poll()
+        if self._on_log_dir_changed is not None:
+            self._on_log_dir_changed(self.log_dir)
 
     @staticmethod
     def _geometry_is_at_top_left(geometry: str) -> bool:
@@ -168,10 +178,10 @@ class SerialTerminalWindow:
             return True
         try:
             self.log_dir.mkdir(parents=True, exist_ok=True)
-            owner = f"terminal:{id(self)}:{item['port']}"
+            owner = f"terminal:{id(self)}:{vlan}:{item['port']}"
             path = build_serial_log_path(self.log_dir, vlan, item["port"])
             session = self.manager.acquire_monitor(owner, SerialSettings(item["port"]), path)
-            subscriber = lambda event, v=vlan: self.events.put_nowait((v, event))
+            subscriber = self._make_subscriber(vlan, item)
             session.subscribe(subscriber)
             item.update(owner=owner, session=session, subscriber=subscriber)
             item["status"].set(f"{item['port']} 监控中，日志：{path}")
@@ -199,10 +209,66 @@ class SerialTerminalWindow:
         self._ensure_tab(vlan, port)
         item = self.tabs[vlan.lower()]
         if item["subscriber"] is None:
-            subscriber = lambda event, v=vlan.lower(): self.events.put_nowait((v, event))
+            subscriber = self._make_subscriber(vlan.lower(), item)
             session.subscribe(subscriber)
             item.update(session=session, subscriber=subscriber)
         item["status"].set(f"{item['port']} 正在自动升级，手动发送已锁定，日志：{log_path}")
+
+    def _make_subscriber(self, vlan: str, item: dict):
+        # Each subscription has its own identity, even after stopping/reopening
+        # the same VLAN. Reader callbacks already in flight cannot revive it.
+        token = object()
+        item["event_token"] = token
+        return lambda event: self.events.put_nowait((vlan, event, token))
+
+    def _on_tab_close(self, frame: str) -> None:
+        for vlan, item in tuple(self.tabs.items()):
+            if str(item["frame"]) == frame:
+                self.close_tab(vlan)
+                return
+
+    def close_tab(self, vlan: str) -> bool:
+        """Release only this monitor; upgrade controllers must keep their tab."""
+        item = self.tabs.get(vlan.lower())
+        if item is None:
+            return False
+        vlan = vlan.lower()
+        target = f"{vlan} / {item['port']}"
+        self._log_close(f"请求关闭 {target}")
+        try:
+            if not self.manager.manual_writable(item["port"]):
+                self._log_close(f"跳过关闭 {target}：当前串口正在自动升级")
+                messagebox.showwarning(
+                    "串口被占用", "当前串口正在自动升级，升级结束后可关闭", parent=self.window,
+                )
+                return False
+            session, subscriber = item["session"], item["subscriber"]
+            if session is not None and subscriber is not None:
+                session.unsubscribe(subscriber)
+            try:
+                if item["owner"]:
+                    self.manager.release(item["owner"], item["port"])
+            except Exception:
+                if session is not None and subscriber is not None:
+                    session.subscribe(subscriber)
+                raise
+            item.update(owner=None, session=None, subscriber=None, event_token=None)
+            self.notebook.forget(item["frame"])
+            self.tabs.pop(vlan)
+            self._pending_chunks.pop(vlan, None)
+            self._pending_char_counts.pop(vlan, None)
+            self._pending_dropped_chars.pop(vlan, None)
+            item["frame"].destroy()
+        except Exception as exc:
+            self._log_close(f"关闭失败 {target}：{exc}")
+            messagebox.showerror("关闭串口失败", f"{target}\n{exc}", parent=self.window)
+            return False
+        self._log_close(f"已关闭 {target} 的监控及标签，已保存日志保留")
+        return True
+
+    def _log_close(self, message: str) -> None:
+        if self._logger is not None:
+            self._logger(f"[串口日志] {message}")
 
     def _on_command_return(self, vlan: str) -> str:
         """命令行输入框按 Enter 时的入口，等价于「发送」按钮。
@@ -246,7 +312,7 @@ class SerialTerminalWindow:
                 item["session"].unsubscribe(item["subscriber"])
             if item["owner"]:
                 self.manager.release(item["owner"], item["port"])
-            item.update(owner=None, session=None, subscriber=None)
+            item.update(owner=None, session=None, subscriber=None, event_token=None)
             item["status"].set(f"{item['port']} 已停止")
 
     def _poll(self) -> None:
@@ -255,11 +321,11 @@ class SerialTerminalWindow:
         deadline = time.monotonic() + _RENDER_TIME_BUDGET_SECONDS
         while processed < _RENDER_EVENTS_PER_TICK and time.monotonic() < deadline:
             try:
-                vlan, event = self.events.get_nowait()
+                vlan, event, token = self.events.get_nowait()
             except queue.Empty:
                 break
             processed += 1
-            if vlan in self.tabs:
+            if vlan in self.tabs and self.tabs[vlan].get("event_token") is token:
                 self._append_pending_chunk(vlan, event.text)
 
         # 仅刷新当前可见 Tab；其它 Tab 的输出先合并缓冲，切换过去后再显示。
@@ -413,8 +479,14 @@ class SerialTerminalWindow:
             return None
         return geometry
 
-    def _restore_log_dir(self) -> Path:
-        """从 state_file 恢复日志目录;无效或缺失时回退到默认 D:\\Serial_Log"""
+    def get_log_directory(self) -> Path:
+        """只读获取当前目录；窗口首次打开前读取有效历史配置，不创建目录或弹窗。"""
+        if self._log_dir_initialized:
+            return self.log_dir
+        return self._saved_log_dir() or DEFAULT_LOG_DIR
+
+    def _saved_log_dir(self) -> Path | None:
+        """窗口恢复和全流程摘要共用的历史目录校验。"""
         saved = self._load_state().get("log_dir")
         if isinstance(saved, str) and saved:
             try:
@@ -423,6 +495,13 @@ class SerialTerminalWindow:
                     return path
             except (OSError, ValueError):
                 pass
+        return None
+
+    def _restore_log_dir(self) -> Path:
+        """从 state_file 恢复日志目录;无效或缺失时回退到默认 D:\\Serial_Log"""
+        saved = self._saved_log_dir()
+        if saved is not None:
+            return saved
         # 默认路径不存在时主动创建,首次运行也能直接用
         try:
             DEFAULT_LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -458,9 +537,12 @@ class SerialTerminalWindow:
             messagebox.showerror("无法创建目录", f"{new_path}\n{exc}", parent=self.window)
             return
         self.log_dir = new_path
+        self._log_dir_initialized = True
         if self.log_dir_var is not None:
             self.log_dir_var.set(str(new_path))
         self._save_state()
+        if self._on_log_dir_changed is not None:
+            self._on_log_dir_changed(self.log_dir)
 
     def _open_log_dir(self) -> None:
         """在系统文件管理器中打开当前日志目录"""

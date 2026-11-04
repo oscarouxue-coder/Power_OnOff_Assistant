@@ -374,6 +374,8 @@ class PipelineWindow:
         for code in actual_order:
             suffix = "（全流程开始时提前启动）" if code == "serial_terminal" else ""
             confirm_lines.append(f"  ✓ {SUBTASK_LABELS[code]}{suffix}")
+            if code == "serial_terminal":
+                confirm_lines.append(f"    {statuses[code].summary}")
         subtask_interval_note = ""
         if len(actual_order) > 1:
             subtask_interval_note = "\n\n执行约束：串口日志预启动和环境线路检查完成后不等待；其余每个已选子任务结束后等待 120 秒，再开始下一个已选子任务。"

@@ -2320,6 +2320,37 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         context.serial_terminal.show.assert_called_once_with([("vlan101", "COM8")])
 
+    def test_serial_log_directory_handles_initialization_and_delegates_current_value(self):
+        from src.config import DEFAULT_LOG_DIR
+
+        context = SimpleNamespace()
+        self.assertEqual(LineCheckAssistant._serial_log_directory(context), DEFAULT_LOG_DIR)
+        context.serial_terminal = Mock()
+        current = Path(r"C:\Logs\最新日志")
+        context.serial_terminal.get_log_directory.return_value = current
+        self.assertEqual(LineCheckAssistant._serial_log_directory(context), current)
+        context.serial_terminal.get_log_directory.assert_called_once_with()
+
+    def test_serial_directory_notification_refreshes_idle_pipeline_and_logs(self):
+        pipeline = SimpleNamespace(window=Mock(), _running_thread=None, _refresh_statuses=Mock())
+        context = SimpleNamespace(pipeline_window=pipeline, _log=Mock())
+        current = Path(r"C:\Logs\最新日志")
+        LineCheckAssistant._on_serial_log_directory_changed(context, current)
+        pipeline._refresh_statuses.assert_called_once_with()
+        self.assertIn(str(current), context._log.call_args.args[0])
+
+    def test_serial_directory_notification_safely_skips_absent_closed_or_running_pipeline(self):
+        context = SimpleNamespace(_log=Mock())
+        LineCheckAssistant._on_serial_log_directory_changed(context, Path("logs"))
+        for exists, running in [(False, False), (True, True)]:
+            with self.subTest(exists=exists, running=running):
+                pipeline = Mock()
+                pipeline.window.winfo_exists.return_value = exists
+                pipeline._running_thread.is_alive.return_value = running
+                context.pipeline_window = pipeline
+                LineCheckAssistant._on_serial_log_directory_changed(context, Path("logs"))
+                pipeline._refresh_statuses.assert_not_called()
+
     def test_pipeline_serial_logs_show_then_open_all(self):
         calls = []
         terminal = Mock()

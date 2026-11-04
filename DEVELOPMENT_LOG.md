@@ -1,5 +1,62 @@
 # 开发记录
 
+## 2026-11-05 - 构建并发布V1.2.7两附件便携包
+
+- 类型：构建
+- 背景：负责人要求重新构建EXE并发布GitHub。开始时本地HEAD和远端main均为`4d4c358e4dd462af8b8eb3f7a0ff01118be8f31c`，线上仅有V1.2.6 Release；工作区已有串口日志目录同步和标签单独关闭改动，本轮保留并纳入构建，不自动提交或推送源码。
+- 完成内容：① 版本递增为V1.2.7，更新包内版本说明及公开Release说明，公开内容仅含用户可见更新、完整ZIP与ZIP校验文件下载及使用方法。② 通过唯一标准脚本复用仓库外独立CPython3.9.10 x64环境、固定依赖和PyInstaller5.10.1，排除NumPy/OpenBLAS、lxml、PyQt5，禁用外部UPX，保留全部构建前后门禁，输出独立目录并保留旧本地产物。③ 只读比对100个相关冻结模块（包含串口终端、ClosableNotebook、主程序及全流程窗口）与当前源码一致；233份源码/构建/测试文件构建前后哈希一致，6份便携配置与脱敏生成结果一致，9份本机配置哈希未变。④ 创建GitHub草稿，仅上传同次构建的便携ZIP与ZIP SHA256文件，逐份核对大小/摘要后发布为Latest；两个附件匿名完整下载校验及真实源码更新客户端检查、下载和SHA256通过后，删除旧V1.2.6 Release及附件，最终仅保留V1.2.7，Git标签与源码历史保留。⑤ 同步当前交付入口和待复验边界，未将自动化验证升级为真实样机验收。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/VERSION_INFO.txt`
+  - `.claude/release_notes/v1.2.7.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 构建输出：`Cheating_machine_execution_tool/dist/V1.2.7_slim_20261105/`，包含EXE、便携目录、ZIP、EXE/ZIP校验文件、版本/构建说明、第三方声明及`PACKAGING_REPORT.json`。EXE 18,114,638字节（17.28MiB），SHA256 `9f51163dffb6edb8be5d2984bcc0c2d429a094225881338981cb07bd0ed9e6e6`；ZIP 17,797,434字节（16.97MiB），SHA256 `90df2ae58a25a87d24880b4b12bda7755c12d47946c71538d4d9debc3de1920f`。版本说明、第三方声明及EXE校验文件继续包含在ZIP内，不单独上传。
+- 验证方法：主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，执行`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1 -OutputDirectory dist\V1.2.7_slim_20261105 -WorkDirectory build\V1.2.7_slim_20261105 -BasePython <独立CPython3.9.10路径>`。仓库根使用独立环境Python运行本轮临时助手`%TEMP%/linecheck_release_v127_20261105.py inspect/stage/publish/verify/prune`，最后执行`git diff --check`并复核本机配置和源码哈希。GitHub API凭据仅由Git Credential Manager在进程内提供，不输出凭据；公开附件及源码更新客户端请求均匿名。
+- 验证结果：标准脚本exit 0，完整基线ALL CHECKS PASSED（1305项测试、190项指定关键回归、100个源码编译/覆盖和协议不变量），PACKAGE_ARCHIVE_OK；FROZEN_SOURCE_MATCH 100、SANITIZED_CONFIG_OK 6、LIVE_CONFIG_UNCHANGED 9。GitHub两附件为17,797,434字节ZIP和99字节校验文件，大小及SHA256摘要一致；ANONYMOUS_DOWNLOAD_OK两份通过。真实源码更新客户端确认V1.2.6发现V1.2.7、V1.2.7无更新，实际ZIP下载和SHA256验证通过，输出SOURCE_UPDATE_CLIENT_CHECK_DOWNLOAD_SHA256_OK；最终PUBLIC_LATEST_ONLY_RELEASE_OK。本轮没有修改业务源码、测试、依赖、工具链或门禁。
+- GitHub发布：已公开[正式V1.2.7](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.7)，Release ID `434232275`；核验后删除V1.2.6 Release（ID `434171396`）及其六份附件，保留`v1.2.6`等标签和现有main历史。发布状态/清单保留于`%TEMP%/linecheck_release_v127_20261105.json`，构建前快照`%TEMP%/linecheck_v127_prebuild.json`，完整构建日志`%TEMP%/linecheck_build_v127_20261105.log`。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.3/§2.11/§2.12/§2.15/§3完成目标电脑启动、完整主程序交互及新增串口/WiFi等原范围复验。未在当前PC运行新EXE，未连接真实设备、改本机配置、暂存/提交或推送源码。
+
+## 2026-11-05 - 增加串口标签单独关闭
+
+- 类型：功能
+- 背景：负责人要求在每个串口标签增加“×”，可直接停止指定串口并移除标签；已确认自动升级占用期间禁止关闭，普通关闭不弹二次确认，已保存日志保留。
+- 完成内容：① 独立ClosableNotebook沿用当前主题标签布局，仅同一关闭区域按下并释放才请求关闭；正文切换、拖离取消及非当前标签选择保持正常，图标按显示缩放绘制并由当前Tk解释器持有，支持窗口重开。② 串口窗口按实际COM检查升级控制权，占用提示“当前串口正在自动升级，升级结束后可关闭”；普通关闭取消目标订阅并通过原管理器释放监控所有权，移除标签及显示缓冲。未打开/已停止标签可关闭，最后一个标签关闭后窗口保留，主界面入口可恢复标签，再用打开全部启用；文件和通道配置保留。③ 监控所有权包含VLAN，多个标签共用COM时不会因关闭一个标签而释放其它标签的连接；订阅身份隔离队列与迟到回调，关闭重开同一VLAN不混入旧输出。④ 可选logger回调接入主执行日志，记录实际VLAN/COM的请求、成功、占用跳过与失败；释放失败恢复订阅并保留标签/错误提示。⑤ 保留已有日志目录同步修改、命名/逐行时间戳、设备命令、停止全部及升级收尾，新增模块纳入编译清单，并同步操作说明和待验收边界。
+- 修改文件：
+  - `.claude/plans/serial-tab-close.md`
+  - `Cheating_machine_execution_tool/src/ui/closable_notebook.py`
+  - `Cheating_machine_execution_tool/src/ui/serial_terminal.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_serial_terminal.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用既有仓库外独立CPython3.9.10环境，设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，运行`python -I -X utf8 -m unittest discover -s tests -p test_serial_terminal.py -v`及`python -I -X utf8 scripts/verify_baseline.py`；仓库根执行`git diff --check`。新增用例创建独立真实Tk控件，用临时状态/目录、真实串口会话管理器和模拟驱动验证默认/Clam主题标签命中、关闭资源与日志落盘，不打开真实COM或完整应用。
+- 验证结果：新增14项回归，33项串口专项通过；完整基线ALL CHECKS PASSED（1305项测试，相对1291新增14项；190项指定关键回归，100个源码编译/覆盖及全部协议不变量）。覆盖当前/非当前、最后、未打开/停止标签，正文切换、拖离/跨叉释放，升级共享/专用会话占用拦截与释放后关闭、释放失败保留、其它串口及共享COM持续工作、关闭后重开、旧事件隔离、日志末尾半行/关闭状态及读线程/文件句柄释放。沙箱内Tcl初始化失败，使用沙箱外既有独立环境验证；首次完整基线触发Tk对象在后台线程垃圾回收，新增用例改为主线程释放窗口引用并显式回收后，专项及完整基线通过。未放宽门禁或跳过新增测试。验证日志保留于`%TEMP%/linecheck_serial_close_special_20261105.log`及`%TEMP%/linecheck_serial_close_baseline_20261105_retry.log`，初次失败另存同前缀`baseline_20261105.log`。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.3/§3完成日常Windows主程序和真实串口复核；自动化不升级真实样机验收。本轮不打包、不运行EXE、不连接真实设备、不改本机配置、不暂存/提交/发布源码。
+
+## 2026-11-05 - 修复全流程串口日志目录同步
+
+- 类型：BUG 修复
+- 背景：全流程第6项通过主程序固定返回的`D:\Serial_Log`构造摘要，未读取串口日志窗口恢复或最新选择的目录。负责人确认选择后立即同步，并要求首次打开串口窗口前也能读取上次有效目录。
+- 完成内容：① 串口终端新增只读`get_log_directory()`，当前内存值优先，首次打开前读取历史配置，共用既有目录校验；摘要读取不建目录、不弹窗、不打开串口。② 新增可选目录回调，恢复和选择成功后由Tk主线程记录目录并刷新仍存在且未运行的全流程窗口；取消/失败保持原值，保存失败仍同步本次实际使用的内存目录并保留原错误提示。③ 主程序初始化安全回退原默认目录，正常读取委托串口实例；全流程确认框补充当前串口目录摘要。④ 新目录只用于后续新打开的监控，已有监控不迁移文件、不释放或重启会话；默认目录、JSON格式、设备命令和执行时序不变。⑤ 更新操作说明与验收边界，负责人日常复核及真实设备结论保持独立。
+- 修改文件：
+  - `.claude/plans/serial-log-directory-sync.md`
+  - `Cheating_machine_execution_tool/src/ui/serial_terminal.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/tests/test_serial_terminal.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用既有独立CPython3.9.10环境，unittest discovery组合运行`test_serial_terminal.py`、`test_app.py`、`test_pipeline_window.py`及`test_pipeline_orchestrator.py`；设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`后运行`python -I -X utf8 scripts/verify_baseline.py`。新增Tk用例实际创建源码串口与全流程窗口，以临时JSON/目录和模拟串口完成恢复、立即同步、取消执行确认、关闭重开和窗口销毁回调；全程不实例化完整应用或执行设备流程。仓库根执行`git diff --check`。
+- 验证结果：新增10项回归，301项专项通过；完整基线ALL CHECKS PASSED（1291项测试、190项指定关键回归、99个源码编译/覆盖及协议不变量）。加强保存失败时新目录优先的断言后，最终完整基线再次通过；差异格式检查通过，本机配置无工作区改动。当前沙箱内Tcl初始化失败，复制临时Tcl/Tk资源仍失败；沙箱外源码测试正常，未改全局环境。首次完整基线因子进程编码不一致出现UnicodeDecodeError，按既有方式显式设置UTF-8后通过，未修改门禁。基线日志保留于`%TEMP%/linecheck_serial_directory_baseline_20261105.log`、`%TEMP%/linecheck_serial_directory_baseline_20261105_utf8.log`及`%TEMP%/linecheck_serial_directory_baseline_20261105_final.log`。
+- 后续待办：负责人日常主程序复核及实际串口落盘按ACCEPTANCE_BASELINE.md §2.3/§3核对；自动化与隔离Tk验证不升级真实样机验收。不打包、不运行EXE、不操作设备、不改本机配置、不暂存或提交源码。最终验证完成后工作区另出现`src/ui/closable_notebook.py`及`scripts/verify_baseline.py`的对应编译清单改动，均非本轮操作，已保留；上述99个源码编译/覆盖结果对应这些并行改动出现前的状态。
+
 ## 2026-11-05 - 精简后续GitHub发布为两附件
 
 - 类型：构建
