@@ -84,7 +84,7 @@ class WifiControlsTests(unittest.TestCase):
     def test_native_checks_mode_switch_preserves_band_selections(self):
         wifi = ConnectWifiSettings(test_2g_enable=0, test_5g_enable=1)
         self.control['load'](wifi)
-        self.extra.mode.set('合一网络接入（任一频段）')
+        self.extra.mode.set('双频合一')
         connection_frame = next(child for child in self.frame.winfo_children()
                                 if isinstance(child, tk.Frame) and len(child.winfo_children()) == 3)
         band_checks = connection_frame.winfo_children()[1:]

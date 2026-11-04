@@ -1,5 +1,22 @@
 # 开发记录
 
+## 2026-11-05 - 将WiFi模式名称改为双频合一
+
+- 类型：修改
+- 背景：负责人要求将“合一网络接入（任一频段）”改为“双频合一”。
+- 完成内容：统一修改WiFi模式下拉、保存确认及执行摘要的显示名称，更新操作说明和对应Tk交互夹具；内部`unified`配置值、默认选择及测试判定保持不变。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/wifi_test_controls.py`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_wifi_test_controls.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录运行`python -X utf8 scripts/verify_baseline.py`，检查显示字符串和`git diff --check`。沿用临时隔离Tcl资源及锁定comtypes测试依赖，完成后清理。
+- 验证结果：完整基线ALL CHECKS PASSED（1281项测试、190项指定关键回归、99个源码编译/覆盖及协议不变量）；显示名称检查和差异检查通过。
+- 后续待办：不打包、不运行EXE、不提交；保持现有真实样机验收边界。
+
 ## 2026-11-05 - 移除无线Ping页断开连接提示
 
 - 类型：修改

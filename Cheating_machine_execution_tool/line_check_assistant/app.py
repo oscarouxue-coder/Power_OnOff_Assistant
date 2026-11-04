@@ -4825,7 +4825,7 @@ class LineCheckAssistant(Tk):
                     f"5G={'启用' if captured.connect_wifi.test_5g_enable else '关闭'}；"
                     f"认证={captured.connect_wifi.auth_mode}；加密={captured.connect_wifi.cipher}；"
                     f"网卡={captured.connect_wifi.wireless_card_name if captured.connect_wifi.choose_wireless_card else '自动选择'}\n"
-                    f"- WiFi模式：{'分别验证频段' if captured.connect_wifi.connection_test_mode == 'per_band' else '合一网络接入（任一频段）'}；"
+                    f"- WiFi模式：{'分别验证频段' if captured.connect_wifi.connection_test_mode == 'per_band' else '双频合一'}；"
                     f"认证来源={'自动识别' if captured.connect_wifi.security_source == 'auto' else '高级手动'}；"
                     f"无线Ping={'启用，目标=' + captured.connect_wifi.wireless_ping_target if captured.connect_wifi.wireless_ping_enable else '关闭'}\n"
                     f"- 项目信息：项目={captured.project_info.project_name or '(空)'}，"

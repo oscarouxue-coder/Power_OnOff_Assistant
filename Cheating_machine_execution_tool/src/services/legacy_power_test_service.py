@@ -140,7 +140,7 @@ class LegacyPowerTestResult:
 def wifi_request_summary(request):
     if request.communication_method != 'telnet' or not request.connect_wifi_enable:
         return ''
-    mode = '分别验证频段' if request.wifi_connection_test_mode == 'per_band' else '合一网络接入（任一频段）'
+    mode = '分别验证频段' if request.wifi_connection_test_mode == 'per_band' else '双频合一'
     source = '自动识别' if request.wifi_security_source == 'auto' else f'手动{request.wifi_auth_mode}/{request.wifi_cipher}'
     card = request.wifi_wireless_card_name if request.wifi_choose_wireless_card else '自动选择首张可用无线网卡'
     ping = request.wireless_ping_target if request.wireless_ping_enable else '关闭'

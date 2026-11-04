@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk
 
 
-MODES = {'分别验证频段': 'per_band', '合一网络接入（任一频段）': 'unified'}
+MODES = {'分别验证频段': 'per_band', '双频合一': 'unified'}
 
 
 class WifiTestControls:
