@@ -155,10 +155,13 @@ try {
     & $PythonExecutable -I -X utf8 $packageVerifier --exe $exePath --zip $portableZip @auditArgs
     if ($LASTEXITCODE -ne 0) { throw "Package archive verification failed" }
 
-    Write-Host "Single-file EXE: $exePath"
-    Write-Host "Portable directory: $portableDir"
-    Write-Host "Portable ZIP: $portableZip"
-    Write-Host "Portable ZIP SHA256: $portableZipChecksum"
+    Write-Host "Local build artifacts (retained for verification): $distDir"
+    Write-Host "  Single-file EXE: $exePath"
+    Write-Host "  Portable directory: $portableDir"
+    Write-Host "GitHub Release attachments (upload only these two files from this build):"
+    Write-Host "  Portable ZIP: $portableZip"
+    Write-Host "  Portable ZIP SHA256: $portableZipChecksum"
+    Write-Host "Version information, third-party notices and the EXE checksum are included in the portable ZIP; do not upload them or the EXE separately."
 
     $resolvedBuildDir = [System.IO.Path]::GetFullPath($buildDir).TrimEnd('\')
     if (($resolvedBuildDir -eq $allowedBuildRoot -or $resolvedBuildDir.StartsWith($allowedBuildRoot + "\", [System.StringComparison]::OrdinalIgnoreCase)) -and (Test-Path -LiteralPath $resolvedBuildDir)) {

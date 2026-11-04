@@ -26,6 +26,7 @@ python scripts\verify_baseline.py
 - 依赖以 `requirements.txt` 为准；除主程序原有 `pyserial / tftpy / requests / openpyxl / xlrd` 外，第7项旧业务无 GUI 运行还需 `requests-toolbelt / paramiko / ping3 / pywifi / configobj / psutil`（许可证清单见 `THIRD_PARTY_NOTICES.md`）
 - 打包：`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1` → 单文件`dist\LineCheckAssistant.exe`、完整目录`dist\LineCheckAssistant_portable\`和可搬运的`dist\LineCheckAssistant_portable.zip`
 - 标准精简构建统一执行`build_line_check_assistant.ps1`：自动准备仓库外CPython3.9.10 x64环境，按`requirements-build.txt`锁定依赖与PyInstaller5.10.1，检查隔离/精确版本/额外依赖和NumPy/lxml/PyQt5缺失，再执行完整基线后使用可迁移spec打包；固定排除NumPy/OpenBLAS、lxml、PyQt5并禁用UPX。环境或门禁失败不得回退全局环境或其它配置。`-CheckOnly`只准备/检查/跑基线，不构建EXE；路径均从脚本位置推导，输出/中间目录只允许在项目dist/build内。跨电脑步骤见根README；每个新包仍需实际EXE/PYZ关键模块、原生依赖、Tcl/Tk四份布局及便携ZIP/哈希检查。
+- GitHub附件约定（2026-11-05，下一次构建/发布开始执行）：只上传同一次构建的`LineCheckAssistant_portable.zip`及`LineCheckAssistant_portable.zip.sha256.txt`；本地完整构建产物和全部门禁保持，版本说明、第三方声明及EXE校验文件继续保留在ZIP内。先草稿上传并核对两个附件大小/SHA256，发布为Latest后匿名完整下载校验并验证源码更新客户端，再清理旧Release及附件；不删除Git标签或源码历史。更新客户端及其接口不变，V1.2.6六份附件及历史发布证据保持；本约定不改变任何Windows或真实样机验收结论。
 - 构建便携版时必须重新生成`Auto_power_on_off_tool/config`，不得复制当前电脑的账号密码、OLT/源IP/ONU ID、钉钉与远程信息、固件/参数表路径、项目身份、网卡、串口或无线网卡绑定；业务命令模板和C600业务映射可保留。ZIP必须包含EXE、脱敏配置、`PORTABLE_README.txt`、第三方声明和EXE SHA256
 - 既有PyInstaller 5.10.1的Tkinter运行时要求EXE解压根目录存在`tcl`和`tk`，当前PyInstaller 6.21.0要求`_tcl_data`和`_tk_data`；发布包同时保留两种布局。构建门禁必须从实际EXE归档命中`tcl\init.tcl`、`tk\tk.tcl`及`_tcl_data\init.tcl`、`_tk_data\tk.tcl`，与包内实际`pyi_rth__tkinter`要求相符。2026-10-16已静态核对V1.2.1四份数据及6运行时；2026-10-17使用PyInstaller5.10.1打包V1.2.3，实际归档同样命中四份数据及5运行时，未在本机运行新EXE；目标电脑启动仍待负责人确认。
 - **构建后不在当前 PC 运行任一新生成的 `LineCheckAssistant.exe`**，仅确认打包成功、ZIP结构、脱敏结果和哈希并报告路径
@@ -470,6 +471,10 @@ python scripts\verify_baseline.py
 
 ### 2.15 主程序检查更新与便携包下载
 
+- **V1.2.6发布证据（2026-11-05）**：[正式Release](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.6)六份附件已上传并逐份核对GitHub大小/SHA256摘要，匿名完整下载的大小/哈希一致，Latest为V1.2.6。真实匿名源码更新客户端以V1.2.5发现新版、V1.2.6无更新，ZIP预期摘要一致。以上通过后删除旧V1.2.5 Release及附件，最终仅保留V1.2.6，旧Git标签和源码历史保留。新标签指向现有远端main；版本与发布文档保留本地工作区，未自动提交/推送源码；公开下载证据不升级现场验收。
+
+- **V1.2.6构建证据（2026-11-05，已实现未验收）**：标准独立CPython3.9.10 x64/锁定依赖/PyInstaller5.10.1入口生成`dist/V1.2.6_slim_20261105/`；完整基线ALL CHECKS PASSED，实际EXE/PYZ、原生依赖、Tcl/Tk四份布局、排除项、ZIP CRC及哈希检查通过。只读比对99个冻结模块与源码一致，包含WiFi新模块及旧业务无GUI入口；6份脱敏配置一致，本机配置未变。包含显示全部网卡/串口、WiFi两模式/自动认证/可选无线Ping及通道空白点击修复。未运行新EXE，目标电脑启动、完整UI和新增WiFi/无线Ping真实设备复验仍待负责人确认，既有验收边界保持。
+
 - **V1.2.5发布证据（2026-10-30）**：[正式Release](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.5)六份附件已上传并逐份核对GitHub大小/摘要，匿名完整下载的大小/SHA256均一致，Latest为V1.2.5。源码更新客户端使用匿名元数据与匿名SHA256附件，以V1.2.4发现新版、V1.2.5无更新。核验完成后删除旧V1.2.4 Release及附件，最终仅V1.2.5，旧Git标签和源码历史保留。标签指向现有远端main，版本/发布文档保留本地工作区，未自动提交或推送源码；公开下载证据不升级现场验收。
 
 - **V1.2.5构建证据（2026-10-30，已实现未验收）**：标准独立CPython3.9.10 x64/锁定依赖/PyInstaller5.10.1入口生成`dist/V1.2.5_slim_20261030/`；完整基线ALL CHECKS PASSED（1215项测试、180项指定关键回归、91个源码编译/覆盖）。实际EXE/PYZ含V1.2.5版本，主界面、项目名称组件、WiFi调度、正式测试/续跑和旧业务相关8个模块与当前源码编译结果一致；原生依赖、Tcl/Tk四份布局、排除依赖、ZIP CRC、6份脱敏配置和哈希通过。本机配置哈希未变，未运行新EXE。EXE 18,078,211字节、ZIP 17,760,701字节，哈希见DEVELOPMENT_LOG.md本轮记录；构建证据不升级为目标电脑启动或§2.11/§2.12现场验收。
@@ -494,6 +499,8 @@ python scripts\verify_baseline.py
 - **发布联调证据（2026-10-16）**：V1.2.1已发布至现有公开仓库并设为Latest；匿名客户端以V1.1.4发现v1.2.1，V1.2.1及更高版本不提供更新；真实下载取消后临时文件清理。独立源码Tk更新窗口以旧版本号显示下载选择，实际下载公开ZIP后通过SHA256、ZIP完整性、包内V1.2.1及EXE哈希比对，并显示打开所在文件夹；以V1.2.1再次检查显示已是最新版。未运行交付EXE，也不将该自动化证据升级为负责人现场或真实设备验收。
 
 ## 3. 待确认 / 疑似过时内容
+
+- **2026-11-05 V1.2.6交付包**：目标电脑启动与完整主程序交互待负责人确认；新增WiFi模式、认证、无线Ping、停止/续跑和DNS/ICMP出口按下方§2.11/§2.12清单复验。显示全部网卡/串口沿用负责人2026-11-04源码功能验收结论，不额外推定本轮EXE交付验收；通道列表空白点击等原待确认项保持。构建、归档及公开下载校验不替代Windows或真实设备验收。
 
 - **2026-11-05 WiFi新判据与无线Ping（§2.11/§2.12）**：负责人在Windows源码版复验模式/高级设置显隐、原生勾选框、保存重开、旧配置默认及开始确认；真实样机复验双频合一开/关、单频、两模式、多通道同名SSID、认证组合、缺少Mapping/BSSID、停止与失败续跑、临时profile不影响原配置。无线Ping复验开/关、IPv4/域名、获取IP/DNS失败、部分/全部丢包、过程中切频/换BSSID；用抓包确认DNS和ICMP走所选无线接口，有线可达但无线不通时不能通过。新成功判据替代旧判据后的真实WiFi路径单独待确认，原历史验收结论保留，不扩大为本轮新源码或EXE交付验收。
 

@@ -247,7 +247,7 @@ python .\run_line_check_assistant.py
 
 ## 打包与免安装发布
 
-安装 PyInstaller 后，在 `Cheating_machine_execution_tool` 目录执行：
+在 `Cheating_machine_execution_tool` 目录执行标准构建脚本（自动准备独立环境与固定依赖，跨电脑步骤见根 `README.md`）：
 
 ```powershell
 .\build_line_check_assistant.ps1
@@ -259,14 +259,16 @@ python .\run_line_check_assistant.py
 - `dist\LineCheckAssistant_portable\`：可直接复制的完整免安装目录。
 - `dist\LineCheckAssistant_portable.zip`：推荐复制到另一台电脑的压缩包；必须完整解压后再运行，不能只取出 EXE。
 
-另生成 `dist\LineCheckAssistant_portable.zip.sha256.txt`，格式为 `SHA256值 *LineCheckAssistant_portable.zip`，用于程序内下载校验。
+另生成 `dist\LineCheckAssistant_portable.zip.sha256.txt`，格式为 `SHA256值 *LineCheckAssistant_portable.zip`，用于程序内下载校验。本地EXE、便携目录、EXE校验文件、版本/构建说明、第三方声明及构建报告继续保留，完整基线、EXE/PYZ、脱敏配置、Tcl/Tk、ZIP CRC和哈希门禁保持。
 
-GitHub 更新发布约定：先更新 `line_check_assistant/packaging_assets/VERSION_INFO.txt` 的版本与说明，再构建并检查交付物；Release 标签统一为 `v主版本.次版本.修订号`，数字必须与包内版本一致。创建草稿 Release，填写更新说明并上传以下两个**同一次构建**的附件，核对附件完整后再发布并标记为 Latest：
+GitHub 更新发布约定（从2026-11-05确认后的下一次构建/发布开始执行）：先更新 `line_check_assistant/packaging_assets/VERSION_INFO.txt` 的版本与说明，再构建并检查交付物；Release 标签统一为 `v主版本.次版本.修订号`，数字必须与包内版本一致。创建草稿 Release，填写更新说明，**只上传**以下两个**同一次构建**的附件，核对大小/SHA256后发布并标记为 Latest：
 
 - `LineCheckAssistant_portable.zip`
 - `LineCheckAssistant_portable.zip.sha256.txt`
 
-不要把 GitHub 自动生成的源码 ZIP 当作便携包，也不要使用包内仅用于 EXE 的哈希代替 ZIP 哈希；附件缺失时客户端明确提示发布不完整。创建/上传 Release 单独执行，构建脚本不会自动发布或上传。
+发布为Latest后，匿名完整下载并核对两个附件的大小/SHA256、验证源码更新客户端，再删除旧Release及附件；保留Git标签和源码历史。公开发布说明只指引下载完整ZIP及ZIP校验文件，不再单独提供EXE下载。版本说明、第三方声明及EXE校验文件继续包含在ZIP内。V1.2.6及其六份附件、历史发布记录保持原样。
+
+不要把 GitHub 自动生成的源码 ZIP 当作便携包，也不要使用包内仅用于 EXE 的哈希代替 ZIP 哈希；附件缺失时客户端明确提示发布不完整。现有更新客户端已支持只包含这两个附件的发布，哈希不符仍阻止保存为最终ZIP。创建/上传 Release 单独执行，构建脚本不会自动发布或上传。
 
 便携目录包含 EXE、`PORTABLE_README.txt`、`VERSION_INFO.txt`（版本号与本版变更说明）、第三方声明、SHA256 文件和程序所需的 `Auto_power_on_off_tool\config`。构建时只把当前配置当作字段/业务模板，自动清空当前电脑的 OLT/DUT/升级账号密码、OLT/源IP、ONU ID、钉钉和远程控制信息、固件/参数表路径、项目版本，以及网卡、串口和无线网卡绑定；C600业务映射等业务默认模板继续保留。另一台电脑首次运行前必须重新填写网络、测试项、升级/写参和ONU注册配置。
 

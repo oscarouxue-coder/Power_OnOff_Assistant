@@ -157,8 +157,10 @@ python scripts\verify_baseline.py
 - 标准入口`build_line_check_assistant.ps1`自动准备环境、执行`check_build_environment.py`和完整基线后，使用仓库内相对路径spec构建并检查实际归档/ZIP/哈希。不得绕过入口回退全局Python或临时调整排除项；换电脑不复制虚拟环境。新依赖或工具链升级需单独验证。
 - 推荐使用`-OutputDirectory dist\<本次独立目录> -WorkDirectory build\<本次独立目录>`保留旧包；`-CheckOnly`只运行准备/检查/完整基线，不构建EXE。完整步骤及无PATH时的`-BasePython`用法见根README。
 
-- GitHub每次发布只保留本次新版Release：先上传并核对新版全部附件、设为Latest并确认公开可下载，然后删除全部旧Release及附件。不删除Git标签或源码历史。
+- 从2026-11-05确认后的下一次构建/发布开始，GitHub只上传同一次构建的`LineCheckAssistant_portable.zip`和`LineCheckAssistant_portable.zip.sha256.txt`。本地完整EXE、便携目录、EXE/ZIP校验文件、版本/构建说明、第三方声明和构建报告继续生成并验证；ZIP内的版本说明、第三方声明及EXE校验文件保持，不单独上传EXE或其它文件。构建脚本最后会区分本地产物及这两个GitHub附件；不自动上传。
+- GitHub每次发布只保留本次新版Release：创建草稿并上传两个附件、核对大小/SHA256，发布为Latest，匿名完整下载校验两个附件并验证源码更新客户端后，再删除全部旧Release及附件。不删除Git标签或源码历史。V1.2.6及其六份附件、历史发布记录不追溯修改。
 - 对外发布说明仅包含用户可见更新、下载与使用说明；不加入构建/测试数量、源码基准或工作区提交状态，以及打包电脑未运行/现场验收声明。验证和验收边界仍按本工作流写内部开发日志、状态及验收基线。
+- 后续编写版本说明和Release说明时，统一指引下载完整便携ZIP及其ZIP校验文件，不再沿用历史说明中的单独EXE下载指引；完整解压、备份和手动迁移配置说明保持。更新客户端及其接口不变，缺少任一附件或校验失败仍须明确报错。
 
 ```powershell
 # 打包

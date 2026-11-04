@@ -1,6 +1,10 @@
 # 项目交接状态
 
-最新源码优化（2026-11-05）：正式Telnet开关机WiFi增加“分别验证频段 / 双频合一”选择、默认自动认证及高级手动设置；按只读Mapping和样机BSSID识别目标，Native WLAN临时连接不保存或清理用户profile，核对实际身份/频率/认证并连续稳定2秒。可选无线Ping默认关闭，支持IPv4/域名；指定无线接口DNS及源IPv4/出口接口，4包至少1回复通过，连接变化覆盖已有回复。保留FIFO、取消、失败续跑、电源和有线Ping；完整基线ALL CHECKS PASSED（1281项测试、190项指定关键回归、99个源码编译/覆盖；新增53项专项）。新源码尚未打包，Windows完整界面、真实双频/多通道及DNS/ICMP无线抓包待负责人复验，详见ACCEPTANCE_BASELINE.md §2.11/§2.12/§3及DEVELOPMENT_LOG.md本轮记录。
+后续发布约定（2026-11-05，下一次构建/发布开始执行）：GitHub只上传同次构建的`LineCheckAssistant_portable.zip`及`LineCheckAssistant_portable.zip.sha256.txt`；构建脚本完成提示已区分本地产物和这两个上传路径。本地完整EXE、便携目录、说明/声明、校验文件、构建报告及全部门禁保持，更新客户端与接口不变。先草稿上传并核对大小/SHA256，再设为Latest、匿名完整下载校验并验证源码更新客户端，最后删除旧Release及附件；保留Git标签和源码历史。后续公开说明只提供完整ZIP及ZIP校验文件的下载指引。PowerShell语法及输出预览通过，74项打包/更新专项和完整基线ALL CHECKS PASSED（1281项测试、190项指定关键回归、99个源码编译/覆盖），本机配置和现有V1.2.6交付物哈希不变。此次仅调整脚本提示及发布规范，不重新构建，不改线上V1.2.6六份附件或历史发布记录，不自动提交源码；详细结果见DEVELOPMENT_LOG.md本轮记录。
+
+最新交付（2026-11-05）：[V1.2.6精简便携包](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.6)已公开发布并设为GitHub Latest；输出`Cheating_machine_execution_tool/dist/V1.2.6_slim_20261105/`，EXE 18,110,748字节（17.27MiB），ZIP 17,793,176字节（16.97MiB）。包含显示全部网卡/串口、WiFi分别验证频段/双频合一、自动认证、可选无线Ping和通道空白点击修复。标准独立CPython3.9.10 x64/锁定依赖/PyInstaller5.10.1完整基线ALL CHECKS PASSED（1281项测试、190项指定关键回归、99个源码编译/覆盖）；实际EXE/PYZ、Tcl/Tk、排除项、ZIP CRC及哈希通过，99个相关冻结模块与源码一致，6份脱敏配置一致，本机配置未变。六份附件GitHub大小/摘要及匿名完整下载哈希通过，匿名源码更新客户端确认V1.2.5可发现新版、V1.2.6无更新；核验后删除旧V1.2.5 Release及附件，最终仅V1.2.6，保留Git标签和源码历史。未运行新EXE或自动提交/推送源码；目标电脑启动、完整界面及本轮WiFi/无线Ping真实设备复验仍待负责人确认，见ACCEPTANCE_BASELINE.md §2.15/§3及DEVELOPMENT_LOG.md本轮记录。
+
+最新源码优化（2026-11-05）：正式Telnet开关机WiFi增加“分别验证频段 / 双频合一”选择、默认自动认证及高级手动设置；按只读Mapping和样机BSSID识别目标，Native WLAN临时连接不保存或清理用户profile，核对实际身份/频率/认证并连续稳定2秒。可选无线Ping默认关闭，支持IPv4/域名；指定无线接口DNS及源IPv4/出口接口，4包至少1回复通过，连接变化覆盖已有回复。保留FIFO、取消、失败续跑、电源和有线Ping；完整基线ALL CHECKS PASSED（1281项测试、190项指定关键回归、99个源码编译/覆盖；新增53项专项）。已纳入V1.2.6，Windows完整界面、真实双频/多通道及DNS/ICMP无线抓包待负责人复验，详见ACCEPTANCE_BASELINE.md §2.11/§2.12/§3及DEVELOPMENT_LOG.md本轮记录。
 
 最新功能验收（2026-11-04）：负责人确认“显示所有网卡和串口”及勾选框位于样机管理IP输入框右侧的布局实际验证通过，本轮显示与选择功能已确认验收，见ACCEPTANCE_BASELINE.md §2.1和DEVELOPMENT_LOG.md。开关启动默认关闭；开启后网卡列展示全部识别网卡，两处COM列展示本机实际识别的全部串口，关闭恢复原分组且保留选择。实现时11项新增专项及完整基线ALL CHECKS PASSED（1228项测试、180项指定关键回归、92个源码编译/覆盖），1040/1200/1600像素窗口源码Tk布局通过。此次仅同步负责人验收结果，不增加设备执行或EXE交付验收范围；未打包、提交或改动本机配置。
 

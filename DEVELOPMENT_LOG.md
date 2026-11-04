@@ -1,5 +1,40 @@
 # 开发记录
 
+## 2026-11-05 - 精简后续GitHub发布为两附件
+
+- 类型：构建
+- 背景：负责人确认从下一次构建/发布开始，GitHub仅提供完整便携ZIP及其SHA256文件；本地保留完整构建和验证，本轮不重新构建、不调整线上V1.2.6。
+- 完成内容：① 标准构建脚本只调整校验成功后的完成提示，区分本地完整产物与两个待上传路径，明确EXE、版本说明、第三方声明和EXE校验文件不单独上传，后面三项继续包含在ZIP内。② 仓库规则、根README、开发工作流、操作说明及验收基线统一“草稿上传两附件→核对大小/SHA256→发布为Latest→匿名完整下载校验及源码更新客户端验证→清理旧Release”的顺序，保留Git标签和源码历史；后续版本/发布说明只指引下载完整ZIP及ZIP校验文件。③ 更新客户端及其接口、固定工具链、完整基线、EXE/PYZ、脱敏配置、Tcl/Tk、ZIP CRC和哈希门禁不变；V1.2.6版本说明、历史发布说明及其六份线上附件不追溯修改。④ 项目状态增加下一次构建/发布的生效入口，既有V1.2.6发布工作区改动原样保留。
+- 修改文件：
+  - `Cheating_machine_execution_tool/build_line_check_assistant.ps1`
+  - `AGENTS.md`
+  - `README.md`
+  - `.claude/skills/line-check-dev/SKILL.md`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：使用PowerShell原生`System.Management.Automation.Language.Parser.ParseFile`解析构建脚本，仅提取并执行其完成提示的`Write-Host`节点，以占位路径预览输出、不执行构建。主源码目录使用现有独立CPython3.9.10环境，以unittest discovery组合运行`test_portable_release.py`和`test_app_update*.py`，再运行`python -I -X utf8 scripts/verify_baseline.py`；仓库根执行`git diff --check`，只读比对本机配置及现有V1.2.6交付物SHA256。
+- 验证结果：POWERSHELL_SYNTAX_OK、DISPLAY_PREVIEW_OK；74项专项全部通过，覆盖仅两附件的更新识别和下载、逐一缺少附件、ZIP哈希不符及旧文件保护等路径；完整基线ALL CHECKS PASSED（1281项测试、190项指定关键回归、99个源码编译/覆盖及协议不变量），无新增或修改测试。29份既有本机配置/源码及V1.2.6本地产物哈希一致，输出CONFIG_AND_V126_ARTIFACTS_UNCHANGED 29；差异格式检查通过。专项及完整基线日志分别保留于`%TEMP%/linecheck_two_assets_special_20261105.log`、`%TEMP%/linecheck_two_assets_baseline_20261105.log`。
+- 后续待办：下次构建及发布采用两附件规范；本轮未运行构建脚本完整流程、未生成或运行新EXE、未访问或修改GitHub Release、未操作设备、未改本机配置、未暂存/提交/推送源码。Windows和真实样机验收结论保持。
+
+## 2026-11-05 - 构建并发布V1.2.6精简便携包
+
+- 类型：构建
+- 背景：负责人要求重新构建EXE并发布GitHub。开工时工作区干净，源码与远端main均为`864b43a`，GitHub仅有V1.2.5 Release；本机尚无标准CPython3.9.10及独立打包环境。
+- 完成内容：① 版本递增为V1.2.6、日期2026-11-05，纳入显示全部网卡/串口、WiFi分别验证频段/双频合一、自动认证、可选无线Ping及通道空白点击修复；公开说明仅含用户可见更新和下载使用说明。② 从python.org下载CPython3.9.10 x64官方安装包，验证有效Python Software Foundation签名，安装至仓库外`%LOCALAPPDATA%/LineCheckAssistant/cpython3910`，不改默认Python/PATH；标准脚本自动准备`build-env-py39`及固定依赖。③ 标准入口完整基线、PyInstaller5.10.1构建、EXE/PYZ/Tcl/Tk/排除项/ZIP/哈希检查通过，保持既有工具链和UPX策略，输出独立目录。④ 只读比对95个主程序模块及4个旧业务相关冻结模块与源码一致，6份便携配置与脱敏生成结果一致，9份本机源码/配置文件哈希未变（排除自动生成的Python字节码缓存）。⑤ 先创建草稿上传六份附件并核对GitHub大小/摘要，再公开为Latest；匿名完整下载及真实源码更新客户端通过后，删除旧Release及附件。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/VERSION_INFO.txt`
+  - `.claude/release_notes/v1.2.6.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 构建输出：`Cheating_machine_execution_tool/dist/V1.2.6_slim_20261105/`；EXE 18,110,748字节（17.27MiB），SHA256 `15a3e62e4f9e7c987ddc586c4ba7fe264788497d1897ca7928dc75c06fdd19d0`；ZIP 17,793,176字节（16.97MiB），SHA256 `fafe1952afcf9af354927839d3c4fcab49106e50fd1a003ce06c9aa9dc86fe14`。
+- 验证方法：主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，执行`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1 -OutputDirectory dist\V1.2.6_slim_20261105 -WorkDirectory build\V1.2.6_slim_20261105 -BasePython <独立CPython3.9.10路径>`；仓库根使用独立环境Python执行临时助手`%TEMP%/linecheck_release_v126_20261105.py inspect/stage/publish/verify/prune`，执行`git diff --check`。Git认证仅由Git Credential Manager在进程内提供给GitHub API，公开附件下载及更新客户端不带认证。
+- 验证结果：标准构建exit 0，ALL CHECKS PASSED（99个源码编译/覆盖、1281项测试、190项指定关键回归及协议不变量；既有2项需显式启用的浏览器测试保持跳过），PACKAGE_ARCHIVE_OK，99个相关模块FROZEN_SOURCE_MATCH、SANITIZED_CONFIG_OK 6、LIVE_CONFIG_UNCHANGED。本机新环境首次标准门禁报告1项测试错误、摘要未包含具体失败栈；随后同环境完整单测1281项通过，标准入口复跑全部门禁通过，未修改源码、测试或门禁。首次日志`%TEMP%/linecheck_build_v126_20261105.log`、完整单测日志`%TEMP%/linecheck_unittest_v126_20261105.log`及成功构建日志`%TEMP%/linecheck_build_v126_20261105_retry.log`保留；若再次出现首次错误需收集完整失败栈。输出目录含实际归档报告`PACKAGING_REPORT.json`。
+- GitHub发布：已公开[正式V1.2.6](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.6)，Release ID `434171396`。六份附件为EXE、EXE SHA256、便携ZIP、ZIP SHA256、VERSION_INFO.txt、THIRD_PARTY_NOTICES.md；全部GitHub大小/摘要及匿名完整下载哈希一致，Latest为V1.2.6。真实匿名源码更新客户端确认V1.2.5发现新版、V1.2.6无更新，输出SOURCE_UPDATE_CLIENT_OK；随后删除V1.2.5 Release（ID `429030760`）及附件，最终仅保留V1.2.6，旧标签及main源码历史不变，输出PUBLIC_LATEST_ONLY_RELEASE_OK。新标签指向当前远端main，本轮版本及发布文档未自动暂存/提交/推送；状态保存在`%TEMP%/linecheck_release_v126_20261105.json`。
+- 后续待办：目标电脑启动、完整Windows界面及WiFi/无线Ping真实样机复验按ACCEPTANCE_BASELINE.md §2.11/§2.12/§2.15/§3完成；自动化和公开下载证据不升级真实样机验收。未在当前PC运行新EXE，未操作设备或改动本机配置。
+
 ## 2026-11-05 - 将WiFi模式名称改为双频合一
 
 - 类型：修改

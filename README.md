@@ -35,6 +35,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant
 
 构建输出包括`LineCheckAssistant.exe`、完整便携ZIP、SHA256、版本/构建说明、第三方声明和`PACKAGING_REPORT.json`。构建后校验实际EXE/PYZ关键模块、原生依赖、Tcl/Tk四份布局、排除项、ZIP CRC和哈希。不要在打包电脑启动新EXE；交付到目标电脑按该版本变更范围复验。**统一入口是PowerShell脚本，不直接调用全局`pyinstaller`或单独执行spec来代替完整流程。**
 
+## GitHub 发布附件
+
+从2026-11-05确认后的下一次构建/发布开始，GitHub Release只上传同一次构建输出的两个文件：
+
+- `LineCheckAssistant_portable.zip`
+- `LineCheckAssistant_portable.zip.sha256.txt`
+
+构建脚本完成后会单独列出这两个待上传路径。本地仍保留完整EXE、便携目录、校验文件和构建报告；版本说明、第三方声明及EXE校验文件随ZIP提供，不再作为独立附件上传。公开发布说明统一指引下载完整ZIP及ZIP校验文件，不再提供单独EXE下载说明。
+
+发布顺序：创建草稿并上传两个附件 → 核对大小/SHA256 → 发布并设为Latest → 匿名完整下载校验两个附件并验证源码更新客户端 → 删除旧Release及附件；Git标签与源码历史保留。更新客户端已支持两附件发布，无需修改接口；构建脚本仍只负责本地构建，不自动上传。V1.2.6及其六份附件、历史发布记录保持原样。
+
 ## 文档职责
 
 | 文件 | 只负责什么 | 何时更新 |
