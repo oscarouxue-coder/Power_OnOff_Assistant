@@ -246,6 +246,10 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         self.assertIn('self.channel_list.bind("<Button-3>", self._on_channel_list_context_menu)', source)
         self.assertIn('label="打开本次开关机运行日志"', source)
+        self.assertIn('label="打开本次WiFi连接日志"', source)
+        self.assertIn('command=self._open_selected_power_test_wifi_log', source)
+        self.assertLess(source.index('label="打开本次开关机运行日志"'),
+                        source.index('label="打开本次WiFi连接日志"'))
 
     def test_channel_list_blank_space_does_not_select_or_toggle(self):
         context = SimpleNamespace(channels=[object(), object()], channel_list=Mock(),
@@ -332,6 +336,59 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         showinfo.assert_called_once()
         self.assertIn("通道 2 未找到结果文件", context._log.call_args.args[0])
+
+    @patch("line_check_assistant.app.os.startfile")
+    @patch("line_check_assistant.app.latest_power_test_wifi_log")
+    def test_open_wifi_log_uses_selected_channel_and_latest_resume_file(self, lookup, startfile):
+        path = Path('test_results/device_2/device_2_wifi_20261106000102123456_resume_2.log')
+        lookup.return_value = path
+        context = SimpleNamespace(current_index=1, _log=Mock(), channels=[
+            ChannelConfig(section='channel_1'), ChannelConfig(section='channel_2')])
+        LineCheckAssistant._open_selected_power_test_wifi_log(context)
+        self.assertEqual(lookup.call_args.args[1], 2)
+        startfile.assert_called_once_with(str(path))
+        self.assertIn('已打开通道 2 最新日志', context._log.call_args.args[0])
+
+    @patch("line_check_assistant.app.os.startfile")
+    @patch("line_check_assistant.app.messagebox.showinfo")
+    @patch("line_check_assistant.app.latest_power_test_wifi_log", return_value=None)
+    def test_open_wifi_log_without_file_shows_expected_directory(self, lookup, showinfo, startfile):
+        context = SimpleNamespace(current_index=0, _log=Mock(), channels=[ChannelConfig(section='channel_7')])
+        LineCheckAssistant._open_selected_power_test_wifi_log(context)
+        self.assertIn('device_7', showinfo.call_args.args[1])
+        self.assertIn('未找到WiFi日志', context._log.call_args.args[0])
+        startfile.assert_not_called()
+
+    @patch("line_check_assistant.app.latest_power_test_wifi_log")
+    @patch("line_check_assistant.app.messagebox.showwarning")
+    def test_open_wifi_log_requires_valid_channel(self, warning, lookup):
+        for index, section in ((-1, 'channel_2'), (0, 'invalid')):
+            with self.subTest(index=index):
+                context = SimpleNamespace(current_index=index, _log=Mock(),
+                                          channels=[ChannelConfig(section=section)])
+                LineCheckAssistant._open_selected_power_test_wifi_log(context)
+                self.assertTrue(context._log.called)
+        self.assertEqual(warning.call_count, 2)
+        lookup.assert_not_called()
+
+    @patch("line_check_assistant.app.os.startfile")
+    @patch("line_check_assistant.app.messagebox.showerror")
+    @patch("line_check_assistant.app.latest_power_test_wifi_log", side_effect=OSError('denied'))
+    def test_open_wifi_log_reports_lookup_error(self, lookup, error, startfile):
+        context = SimpleNamespace(current_index=0, _log=Mock(), channels=[ChannelConfig(section='channel_2')])
+        LineCheckAssistant._open_selected_power_test_wifi_log(context)
+        error.assert_called_once()
+        self.assertIn('查找失败', context._log.call_args.args[0])
+        startfile.assert_not_called()
+
+    @patch("line_check_assistant.app.os.startfile", side_effect=OSError('no file association'))
+    @patch("line_check_assistant.app.messagebox.showerror")
+    @patch("line_check_assistant.app.latest_power_test_wifi_log", return_value=Path('wifi.log'))
+    def test_open_wifi_log_reports_open_error(self, lookup, error, startfile):
+        context = SimpleNamespace(current_index=0, _log=Mock(), channels=[ChannelConfig(section='channel_2')])
+        LineCheckAssistant._open_selected_power_test_wifi_log(context)
+        error.assert_called_once()
+        self.assertIn('打开失败', context._log.call_args.args[0])
 
     def test_parameter_and_serial_log_targets_use_saved_channel_com_selection(self):
         channels = [

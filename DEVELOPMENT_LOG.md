@@ -1,5 +1,50 @@
 # 开发记录
 
+## 2026-11-06 - 保存并支持右键打开WiFi日志
+
+- 类型：功能
+- 背景：负责人要求参考现有便携版`Auto_power_on_off_tool/test_results/device_N/`结构，将WiFi连接日志单独保存，并参照“打开本次开关机运行日志”增加右键入口；已确认同目录独立文件、明文SSID/密码和写入失败时继续测试并告警。
+- 完成内容：① 新增独立WiFi日志service，在无GUI适配层旁路接收logger及操作员信号，早于主界面过滤/去重，保持原消息与IPC运行/尝试标记。文件按通道线程/尝试绑定，首次WiFi消息后排他创建`device_N_wifi_YYYYMMDDHHMMSSffffff.log`，同时间碰撞递增微秒；每次执行多轮共用，续跑另建`_resume_尝试编号.log`。② 每行保存时间戳、级别、通道/轮次和完整WiFi正文，首次读取的双频SSID/密码按原值明文保存，逐条刷新。正常、失败、异常及取消退出均关闭，主日志显示实际创建/关闭路径；文件创建/写入/刷新/关闭失败仅告警一次并停用本尝试文件，原消息继续转发、设备测试继续，新执行/续跑重新尝试。③ 左侧通道列表右键在原命令日志项后新增“打开本次WiFi连接日志”，仅查对应`device_N_wifi_*.log`的最新文件（含续跑/正在写入）交Windows关联程序打开；无效通道/无日志/查找或打开失败均提示并写主日志。④ 保留现有日志精简和主日志原文保存、原命令文件字节、旧菜单、连接/重试/DNS/Ping/停止/续跑及电源行为，未修改旧设备业务文件。新增编译清单项，更新操作说明、当前状态及待验收边界。
+- 修改文件：
+  - `.claude/plans/wifi-result-logs.md`
+  - `Cheating_machine_execution_tool/src/services/power_test_wifi_log_service.py`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/src/services/power_test_log_service.py`
+  - `Cheating_machine_execution_tool/src/services/__init__.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_wifi_logs.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_log_service.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，以`python -m unittest discover -s tests -p <文件名>`分别运行`test_power_test_wifi_logs.py`、`test_power_test_log_service.py`、`test_app.py`、`test_power_test_resume.py`、`test_power_test_wifi.py`、`test_legacy_power_test_service.py`及`test_main_log_filter.py`；再运行`python scripts/verify_baseline.py`。真实`_legacy_start_all_worker`使用临时配置、假Serial/Worker/PyWiFi，验证消息转发、执行结果及线程finally关闭；UI调用模拟`os.startfile`，不启动关联程序。临时目录离线重放负责人前次日志，按通道写入并逐条比对消息、密码及行数。检查本轮差异格式、新文件尾随空格及两份本机配置SHA256。
+- 验证结果：新增23项回归（独立WiFi文件/真实适配器14项、定位4项、UI回调5项），310项专项通过；完整基线ALL CHECKS PASSED（1341项测试、190项指定关键回归、102个源码编译/覆盖及协议不变量），完整输出`%TEMP%/linecheck_wifi_result_logs_baseline_20261106.log`。521条WiFi消息完整写入3个临时文件：通道1为225行、通道2为236行、通道7为60行，所有正文、明文SSID/密码、DNS及逐包详情保留，原消息全部转发；原命令文件分段写入后的字节和正常结论桥接保持。权限、创建、写入、刷新及关闭故障均可见且不改变假设备成功结果；停止和异常路径文件关闭、续跑文件/IPC标记、同时间戳碰撞与多线程隔离通过。仅模拟UI回调与文件关联打开，未启动完整Windows主界面或真实设备，不升级现场验收结论。
+- 工作区保护：保留上一轮WiFi日志精简源码/测试/文档及两份已修改配置。本轮开始及结束时`network_card_ip.ini` SHA256均为`397b26322f22b8782875d515ab760afd5a05a389a34c251593acc1b51b624fab`，`test_project_config.ini`均为`61ac6cb421344e25edd9323cd4bc947d1b30ef36fde47ee1efe99ab8f73d1914`。本轮文件差异检查通过，未修改已有配置尾随空格或其它用户改动。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.12/§3复核日常Windows右键菜单、真实文件关联打开/运行中查看、真实多通道WiFi、停止/续跑及文件故障告警。未向现有便携版目录写入或迁移历史日志，未打包、运行EXE、操作设备、暂存或提交源码；便携版需后续授权构建才包含本功能。
+
+## 2026-11-05 - 精简WiFi主界面日志并保留明文密码
+
+- 类型：优化
+- 背景：负责人提供正式开关机测试日志，要求减少WiFi连接过程在主界面的输出，确认实施“界面摘要、文件详情保留”，并明确读取到的WiFi密码在界面和日志文件中按原值明文打印。
+- 完成内容：① 新增独立显示过滤模块，严格限定旧工具正式WiFi日志前缀，隐藏已知INFO过程细节，保留连接下发/核验、实际接口/源IP/目标、Ping汇总、重试原因、取消/跳过/异常及未知文本。缩短前缀并移除重复的长网卡名称。② 主程序日志入口仅将过滤结果插入Text；每条原文继续写主日志文件一次，颜色仍按原消息计算、显式tag仍有效。DUT配置及其它日志保持原样。③ 首次双频SSID/密码摘要作为不透明文本保留，密码中的空格、阶段词或“网卡=”不会被过滤/替换；沿用每通道每次执行/续跑首次成功读取后输出一次的现有调用与缓存语义，未改旧业务、scheduler或连接service。④ 新模块纳入编译清单，同步操作员说明、当前状态和验收边界。连接/重试次数、DNS/Ping及判据、停止/续跑、电源和本机配置均未修改。
+- 修改文件：
+  - `.claude/plans/wifi-main-log-slim.md`
+  - `Cheating_machine_execution_tool/src/ui/main_log_filter.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_main_log_filter.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用既有Python3.9.10，设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，分别运行`python -m unittest discover -s tests -p test_main_log_filter.py`、`test_power_test_wifi.py`、`test_legacy_power_test_service.py`，然后执行`python scripts/verify_baseline.py`。对负责人粘贴日志逐行剥离原时间戳，以临时文件和模拟Text调用真实`LineCheckAssistant._log`，比对落盘的原始正文及实际插入数量，检查DNS错误、扫描重试、丢包汇总和明文凭据保留。全程不进行设备或网络操作。
+- 验证结果：新增13项测试，61项专项通过；完整基线ALL CHECKS PASSED（1318项测试、190项指定关键回归、101个源码编译/覆盖及协议不变量），完整输出`%TEMP%/linecheck_wifi_main_log_baseline_20261105.log`。离线重放752行全部按原文落盘，无重复；界面显示366行，其中WiFi由521行减少到135行（减少74.1%），2条DNS 9005、4条扫描重试、16条Ping汇总、2条25%丢包及3条明文SSID/密码摘要均保留。13项新增测试还覆盖失败续跑轮次、特殊字符密码、其它/DUT日志不变和颜色/显式tag。仅使用模拟Text，未启动完整Windows主界面，不升级为真实样机验收。
+- 工作区保护：开始时已有`network_card_ip.ini`及`test_project_config.ini`改动，两份文件SHA256前后分别保持`397b26322f22b8782875d515ab760afd5a05a389a34c251593acc1b51b624fab`与`81f2e60159b36c40eebc6ad32faa5991bee612e2ad4b9c0d28611c87f6e77993`。全局`git diff --check`发现已有`test_project_config.ini:29`空值行的尾随空格，按授权保留本机配置；本轮文件单独差异检查通过。
+- 后续待办：负责人在日常Windows源码版核对实际显示、每次执行/续跑首次明文摘要、异常颜色和文件详情，见ACCEPTANCE_BASELINE.md §2.12/§3。未打包、运行EXE、操作真实设备、暂存或提交源码。
+
 ## 2026-11-05 - 构建并发布V1.2.7两附件便携包
 
 - 类型：构建

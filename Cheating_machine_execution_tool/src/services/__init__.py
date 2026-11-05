@@ -50,7 +50,7 @@ from .legacy_power_test_service import (
     prepare_legacy_power_test_request,
     run_legacy_power_test,
 )
-from .power_test_log_service import latest_power_test_result_log
+from .power_test_log_service import latest_power_test_result_log, latest_power_test_wifi_log
 from .device_project_info_service import (
     DeviceProjectInfo,
     DeviceProjectInfoQueryRequest,
@@ -135,6 +135,7 @@ __all__ = [
     "compute_all_subtask_statuses",
     "power_on_selected_channels",
     "latest_power_test_result_log",
+    "latest_power_test_wifi_log",
     "prepare_legacy_power_test_request",
     "preflight_parameter_targets",
     "project_info_mismatches",

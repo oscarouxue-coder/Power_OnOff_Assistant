@@ -26,6 +26,7 @@ from typing import Callable, Iterable, Sequence
 from line_check_assistant.legacy_ui_defaults_store import LegacyUiDefaultsStore
 from src.core.power_supply import channel_power_frame
 from src.services.power_test_wifi_service import PowerTestWifiScheduler
+from src.services.power_test_wifi_log_service import WifiResultLogQueue, WifiResultLogWriter
 
 
 LEGACY_CONFIG_FILENAME = "config.ini"
@@ -994,6 +995,7 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
     serial_client = None
     legacy_worker = None
     restore_result_log_open = None
+    wifi_logs = None
     try:
         tool_root = Path(request.tool_root).resolve()
         os.chdir(tool_root)
@@ -1029,6 +1031,11 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
             from test_case.power_on_off_ssh import PowerOnOffSsh as WorkerClass
 
         secrets = _read_profile_secrets(tool_root, request.profile_filename)
+        if request.communication_method == 'telnet' and request.connect_wifi_enable:
+            output_queue = message_queue
+            wifi_logs = WifiResultLogWriter(
+                tool_root, lambda text: output_queue.put({'type': 'stage', 'message': text}))
+            message_queue = WifiResultLogQueue(output_queue, wifi_logs)
         logger = _ForwardingLegacyLogger(message_queue, secrets)
         message_queue.put(
             {
@@ -1148,6 +1155,8 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
             kwargs = {}
             if attempt or completed:
                 kwargs = dict(start_cycle=completed + 1, result_suffix=f"{run_id}_{attempt}")
+            if wifi_logs is not None:
+                wifi_logs.start_channel(channel.number, attempt)
             try:
                 if request.communication_method == "telnet":
                     result = legacy_worker.run_case(
@@ -1183,6 +1192,9 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
                 message_queue.put(
                     {"type": "channel_result", "channel": channel.number, "ok": False}
                 )
+            finally:
+                if wifi_logs is not None:
+                    wifi_logs.finish_channel()
 
         message_queue.put(
             {

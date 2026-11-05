@@ -17,6 +17,7 @@ from src.services.test_item_pretest_service import prepare_pretest_request
 from src.ui.test_item_pretest_controls import PretestControls
 from src.ui.app_update_dialog import AppUpdateDialog, arrange_update_toolbar
 from src.ui.project_name_badge import ProjectNameBadge
+from src.ui.main_log_filter import format_main_log_message
 from src.ui.adapter_rename_dialog import offer_adapter_rename
 from src.services.adapter_rename_service import (
     adapter_has_numeric_suffix, adapter_rename_is_busy, synchronize_channel_adapter_names,
@@ -125,6 +126,7 @@ from src.services import (
     run_parallel_sample_parameter_writes,
     run_single_sample_parameter_write,
     latest_power_test_result_log,
+    latest_power_test_wifi_log,
     turn_off_selected_channels,
     turn_on_selected_channels,
     validate_dut_telnet_request,
@@ -914,6 +916,10 @@ class LineCheckAssistant(Tk):
         self.channel_context_menu.add_command(
             label="打开本次开关机运行日志",
             command=self._open_selected_power_test_log,
+        )
+        self.channel_context_menu.add_command(
+            label="打开本次WiFi连接日志",
+            command=self._open_selected_power_test_wifi_log,
         )
         for channel in self.channels:
             self.channel_list.insert(END, self._channel_list_label(channel))
@@ -7713,6 +7719,39 @@ class LineCheckAssistant(Tk):
             return
         self._log(f"[开关机运行日志] 已打开通道 {channel_number} 最新日志：{log_path}")
 
+    def _open_selected_power_test_wifi_log(self) -> None:
+        """只读打开当前通道最新WiFi文件，定位规则由service负责。"""
+        if not 0 <= self.current_index < len(self.channels):
+            messagebox.showwarning("未选择通道", "请先在左侧选择要查看WiFi日志的测试通道。", parent=self)
+            self._log("[WiFi连接日志] 未选择有效通道，未打开日志。")
+            return
+        channel = self.channels[self.current_index]
+        channel_number = power_channel_from_section(channel.section)
+        if not channel_number:
+            messagebox.showwarning("通道不正确", f"无法识别通道：{channel.section}", parent=self)
+            self._log(f"[WiFi连接日志] 无法识别通道：{channel.section}。")
+            return
+        try:
+            log_path = latest_power_test_wifi_log(APP_DIR / "Auto_power_on_off_tool", channel_number)
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("查找WiFi连接日志失败", str(exc), parent=self)
+            self._log(f"[WiFi连接日志] 通道 {channel_number} 查找失败：{exc}")
+            return
+        if log_path is None:
+            result_dir = APP_DIR / "Auto_power_on_off_tool" / "test_results" / f"device_{channel_number}"
+            messagebox.showinfo("未找到WiFi连接日志",
+                                f"通道 {channel_number} 暂无可打开的WiFi连接日志。\n\n结果目录：{result_dir}",
+                                parent=self)
+            self._log(f"[WiFi连接日志] 通道 {channel_number} 未找到WiFi日志：{result_dir}")
+            return
+        try:
+            os.startfile(str(log_path))
+        except OSError as exc:
+            messagebox.showerror("打开WiFi连接日志失败", f"{log_path}\n\n{exc}", parent=self)
+            self._log(f"[WiFi连接日志] 通道 {channel_number} 打开失败：{log_path}；{exc}")
+            return
+        self._log(f"[WiFi连接日志] 已打开通道 {channel_number} 最新日志：{log_path}")
+
     def _toggle_selected_channel_enabled(self, _event=None) -> str:
         selection = self.channel_list.curselection()
         index = selection[0] if selection else self.current_index
@@ -8229,16 +8268,18 @@ class LineCheckAssistant(Tk):
             self._log(f"  {index:02d}. {item}")
 
     def _log(self, message: str, tag: str | None = None) -> None:
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        tag = self._log_tag_for(message) if tag is None else tag
-        self.log_text.configure(state="normal")
-        self.log_text.insert(END, f"{timestamp}  ", "time")
-        if tag:
-            self.log_text.insert(END, message + "\n", tag)
-        else:
-            self.log_text.insert(END, message + "\n")
-        self.log_text.configure(state="disabled")
-        self.log_text.see(END)
+        display_message = format_main_log_message(message)
+        if display_message is not None:
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            tag = self._log_tag_for(message) if tag is None else tag
+            self.log_text.configure(state="normal")
+            self.log_text.insert(END, f"{timestamp}  ", "time")
+            if tag:
+                self.log_text.insert(END, display_message + "\n", tag)
+            else:
+                self.log_text.insert(END, display_message + "\n")
+            self.log_text.configure(state="disabled")
+            self.log_text.see(END)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with self.log_path.open("a", encoding="utf-8") as file:
             file.write(f"{timestamp} {message}\n")
