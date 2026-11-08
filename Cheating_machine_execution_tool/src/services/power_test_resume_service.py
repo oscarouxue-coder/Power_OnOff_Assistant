@@ -5,6 +5,7 @@ import hashlib
 import threading
 import uuid
 from dataclasses import replace
+from pathlib import Path
 
 from line_check_assistant.test_item_config_store import TestItemConfigStore
 from src.services.device_project_info_service import (
@@ -36,6 +37,7 @@ class PowerTestResumeSession:
         self.ready = set()
         self.busy = set()
         self.attempts = {c.number: 0 for c in request.channels}
+        self.wifi_logs = {}
         self.accepted = {}
         self.owned_channels = set()
         self.active_started = set()
@@ -88,7 +90,12 @@ class PowerTestResumeSession:
     def observe(self, message):
         channel = message.get('channel')
         with self.lock:
-            if message['type'] == 'channel_started':
+            if message['type'] == 'wifi_log_created':
+                # 再次在同一把锁内核对，防止过滤后恰好切换续跑编号。
+                if (message.get('run_id') == self.run_id and channel in self.attempts
+                        and message.get('attempt') == self.attempts[channel]):
+                    self.wifi_logs[channel, message['attempt']] = Path(message['path'])
+            elif message['type'] == 'channel_started':
                 self.cancelled.discard(channel)
                 self.active_started.add(channel)
                 self.ready.discard(channel)
@@ -108,6 +115,13 @@ class PowerTestResumeSession:
                 else:
                     self.failed.add(channel)
                 self.busy.discard(channel)
+
+    def current_wifi_log(self, channel):
+        """只返回当前批次、当前尝试已成功刷新的文件，不扫描历史目录。"""
+        with self.lock:
+            if channel not in self.attempts:
+                return None
+            return self.wifi_logs.get((channel, self.attempts[channel]))
 
     def progress(self, channel, completed):
         with self.lock:

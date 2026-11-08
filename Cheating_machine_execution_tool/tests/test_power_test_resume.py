@@ -80,6 +80,56 @@ class ResumeTests(unittest.TestCase):
         self.session.failed.add(channel)
         self.session.ready.add(channel)
 
+    def wifi_created(self, channel=5, attempt=0, **fields):
+        return dict(dict(type='wifi_log_created', channel=channel, attempt=attempt,
+                         run_id=self.session.run_id, path=f'device_{channel}_wifi_{attempt}.log'), **fields)
+
+    def test_wifi_log_only_current_run_attempt_and_channel_are_visible(self):
+        self.assertIsNone(self.session.current_wifi_log(5))
+        self.session.observe(self.wifi_created())
+        self.session.observe(self.wifi_created(channel=6))
+        self.assertEqual(self.session.current_wifi_log(5), Path('device_5_wifi_0.log'))
+        self.assertEqual(self.session.current_wifi_log(6), Path('device_6_wifi_0.log'))
+        for fields in ({'run_id': 'old-run'}, {'attempt': 9}, {'channel': 99}, {'run_id': None}):
+            event = self.wifi_created()
+            event.update(fields, path='wrong.log')
+            self.session.observe(event)
+        self.assertEqual(self.session.current_wifi_log(5), Path('device_5_wifi_0.log'))
+        self.assertIsNone(self.session.current_wifi_log(99))
+
+    def test_wifi_resume_attempt_hides_previous_file_until_new_file_arrives(self):
+        self.session.observe(self.wifi_created())
+        self.session.attempts[5] = 1
+        self.assertIsNone(self.session.current_wifi_log(5))
+        self.session.observe(self.wifi_created())
+        self.assertIsNone(self.session.current_wifi_log(5))
+        self.session.observe(self.wifi_created(attempt=1))
+        self.assertEqual(self.session.current_wifi_log(5), Path('device_5_wifi_1.log'))
+
+    def test_wifi_log_survives_completion_stop_and_detach_but_not_new_session(self):
+        self.session.observe(self.wifi_created())
+        self.session.observe(dict(type='channel_ready', channel=5, ok=True))
+        self.session.detach()
+        self.session.stop()
+        self.assertEqual(self.session.current_wifi_log(5), Path('device_5_wifi_0.log'))
+        another = PowerTestResumeSession(self.request, self.channels, threading.Event(), self.logs.append)
+        another.observe(self.wifi_created())
+        self.assertIsNone(another.current_wifi_log(5))
+
+    def test_real_resume_switches_wifi_path_before_sending_resume_command(self):
+        self.failed()
+        self.session.observe(self.wifi_created())
+        class Transport:
+            def put(inner, command):
+                self.assertEqual(command['attempt'], 1)
+                self.assertIsNone(self.session.current_wifi_log(5))
+                self.session.observe(dict(type='channel_started', channel=5))
+        self.session.attach(Transport(), (5,))
+        with patch.object(self.session, '_validate'):
+            self.session._resume(5)
+        self.assertEqual(self.session.attempts[5], 1)
+        self.assertIsNone(self.session.current_wifi_log(5))
+
     def test_wifi_cancelled_channel_remains_cancelled_after_detach(self):
         self.failed()
         self.session.attach(queue.Queue(), (5,))

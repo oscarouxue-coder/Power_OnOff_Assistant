@@ -1,5 +1,27 @@
 # 开发记录
 
+## 2026-11-09 - 修复本次WiFi日志误开历史文件
+
+- 类型：BUG 修复
+- 背景：负责人反馈“打开本次WiFi连接日志”仍打开此前运行的文件。确认菜单实际按文件名扫描历史目录取最新文件；2026-11-09主日志四次打开2026-11-07通道1文件，同份主日志没有本次WiFi测试或文件创建事件。负责人确认严格限定当前批次和执行/续跑尝试，未生成时提示，不增加历史入口。
+- 完成内容：① 写入器新增可选on_created回调，仅首条摘要写入并flush成功后报告准确路径；子进程wifi_log_created沿用现有_AttemptQueue的run_id/attempt标记。② 父会话持锁按通道/尝试保存路径，登记时复核当前run_id/attempt以防续跑切换竞争；查询仅返回当前尝试，不扫描历史目录。沿用新批次替换会话和续跑递增编号，完成/停止保留路径，重启无持久化回退。③ 菜单只打开会话准确路径，无当前批次、通道未参与、尚未生成、文件删除/移动及访问/打开失败分别提示并记主日志。日志懒创建、命名、故障只告警一次并继续测试、原业务消息/结果/连接/重试/停止/电源及设备命令保持。④ 同步计划、操作说明、项目状态和验收边界，保留本轮开始已有onu_registration.ini修改。
+- 修改文件：
+  - `.claude/plans/wifi-current-log.md`
+  - `Cheating_machine_execution_tool/src/services/power_test_wifi_log_service.py`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/src/services/power_test_resume_service.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_wifi_logs.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_resume.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用CPython3.9.10，设置PYTHONUTF8=1及PYTHONIOENCODING=utf-8，运行`python -m unittest discover -s tests -p test_power_test_wifi_logs.py -v`、`python -m unittest discover -s tests -p test_power_test_resume.py`、`python -m unittest discover -s tests -p test_app.py`及`python scripts/verify_baseline.py`。仓库外`%TEMP%/linecheck_wifi_current_ui_20261109.py`使用临时配置和日志、真实Tk窗口/Menu/Text、后台写入器及主线程after回调验证，提示框和os.startfile拦截核对参数；未连接真实设备、未打开历史文件。核对6份INI哈希、历史文件字节及git diff --check。
+- 验证结果：新增11项回归，19项日志、26项续跑和215项界面专项通过；完整基线ALL CHECKS PASSED（1432项测试、190项指定关键回归、105个源码编译/覆盖及全部协议不变量），输出`%TEMP%/linecheck_wifi_current_baseline_20261109.log`。覆盖首条创建/写入/flush故障不报告路径、首次刷新后仅报告一次、跨通道/批次/尝试隔离、真实无GUI适配器到父会话、实际续跑编号切换、过期消息、完成/停止/新会话、缺失文件及访问/打开异常。vista和Clam各10个隔离Tk菜单场景通过，历史文件字节保持，报告`%TEMP%/linecheck_wifi_current_ui_20261109.json`；真实Tk菜单invoke不代表可见鼠标键盘交互。6份本机INI哈希未变，git diff --check通过。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.12/§3复核Windows源码版实际右键菜单、本次日志创建前后、续跑和停止后打开。Computer Use初始化、两次窗口枚举及重置重试均报`native pipe is unavailable ... 系统找不到指定的文件 (os error 2)`，未取得可见交互证据；自动化不升级真实设备验收。本轮未打包、运行EXE、发布、暂存或提交。
+
 ## 2026-11-08 - 提速已注册ONU批量查询
 
 - 类型：优化

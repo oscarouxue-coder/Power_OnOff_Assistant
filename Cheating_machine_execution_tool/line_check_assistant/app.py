@@ -127,7 +127,6 @@ from src.services import (
     run_parallel_sample_parameter_writes,
     run_single_sample_parameter_write,
     latest_power_test_result_log,
-    latest_power_test_wifi_log,
     turn_off_selected_channels,
     turn_on_selected_channels,
     validate_dut_telnet_request,
@@ -7725,7 +7724,7 @@ class LineCheckAssistant(Tk):
         self._log(f"[开关机运行日志] 已打开通道 {channel_number} 最新日志：{log_path}")
 
     def _open_selected_power_test_wifi_log(self) -> None:
-        """只读打开当前通道最新WiFi文件，定位规则由service负责。"""
+        """只读打开当前测试批次及当前执行尝试的WiFi文件。"""
         if not 0 <= self.current_index < len(self.channels):
             messagebox.showwarning("未选择通道", "请先在左侧选择要查看WiFi日志的测试通道。", parent=self)
             self._log("[WiFi连接日志] 未选择有效通道，未打开日志。")
@@ -7736,26 +7735,34 @@ class LineCheckAssistant(Tk):
             messagebox.showwarning("通道不正确", f"无法识别通道：{channel.section}", parent=self)
             self._log(f"[WiFi连接日志] 无法识别通道：{channel.section}。")
             return
-        try:
-            log_path = latest_power_test_wifi_log(APP_DIR / "Auto_power_on_off_tool", channel_number)
-        except (OSError, ValueError) as exc:
-            messagebox.showerror("查找WiFi连接日志失败", str(exc), parent=self)
-            self._log(f"[WiFi连接日志] 通道 {channel_number} 查找失败：{exc}")
+        session = getattr(self, 'power_test_resume_session', None)
+        if session is None:
+            messagebox.showinfo("暂无本次WiFi连接日志", "当前没有开关机测试批次，未打开历史日志。", parent=self)
+            self._log(f"[WiFi连接日志] 通道 {channel_number} 无当前测试批次，未打开历史日志。")
             return
+        if channel_number not in session.completed:
+            messagebox.showinfo("通道未参与本次测试", f"通道 {channel_number} 未参与当前开关机测试批次。", parent=self)
+            self._log(f"[WiFi连接日志] 通道 {channel_number} 未参与本次测试，未打开日志。")
+            return
+        log_path = session.current_wifi_log(channel_number)
         if log_path is None:
             result_dir = APP_DIR / "Auto_power_on_off_tool" / "test_results" / f"device_{channel_number}"
-            messagebox.showinfo("未找到WiFi连接日志",
-                                f"通道 {channel_number} 暂无可打开的WiFi连接日志。\n\n结果目录：{result_dir}",
+            messagebox.showinfo("本次WiFi连接日志尚未生成",
+                                f"通道 {channel_number} 当前执行尝试尚未生成WiFi连接日志，未打开历史日志。\n\n结果目录：{result_dir}",
                                 parent=self)
-            self._log(f"[WiFi连接日志] 通道 {channel_number} 未找到WiFi日志：{result_dir}")
+            self._log(f"[WiFi连接日志] 通道 {channel_number} 本次WiFi日志尚未生成：{result_dir}")
             return
         try:
+            if not log_path.is_file():
+                messagebox.showinfo("本次WiFi连接日志不存在", f"本次日志已被删除或移动：\n{log_path}", parent=self)
+                self._log(f"[WiFi连接日志] 通道 {channel_number} 本次文件不存在：{log_path}")
+                return
             os.startfile(str(log_path))
         except OSError as exc:
             messagebox.showerror("打开WiFi连接日志失败", f"{log_path}\n\n{exc}", parent=self)
             self._log(f"[WiFi连接日志] 通道 {channel_number} 打开失败：{log_path}；{exc}")
             return
-        self._log(f"[WiFi连接日志] 已打开通道 {channel_number} 最新日志：{log_path}")
+        self._log(f"[WiFi连接日志] 已打开通道 {channel_number} 本次日志：{log_path}")
 
     def _toggle_selected_channel_enabled(self, _event=None) -> str:
         selection = self.channel_list.curselection()

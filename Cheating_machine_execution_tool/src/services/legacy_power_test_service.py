@@ -556,6 +556,9 @@ def _run_legacy_power_test(
                     continue
                 resume_session.observe(message)
             message_type = message.get("type")
+            if message_type == 'wifi_log_created':
+                # 路径已由当前会话登记；不参与业务结果、进度或日志去重。
+                continue
             if message_type == "channel_started":
                 channel_number = message["channel"]
                 wifi_history.reset(channel_number)
@@ -1053,7 +1056,9 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
         if request.communication_method == 'telnet' and request.connect_wifi_enable:
             output_queue = message_queue
             wifi_logs = WifiResultLogWriter(
-                tool_root, lambda text: output_queue.put({'type': 'stage', 'message': text}))
+                tool_root, lambda text: output_queue.put({'type': 'stage', 'message': text}),
+                on_created=lambda channel, attempt, path: output_queue.put(dict(
+                    type='wifi_log_created', channel=channel, attempt=attempt, path=str(path))))
             message_queue = WifiResultLogQueue(output_queue, wifi_logs)
         logger = _ForwardingLegacyLogger(message_queue, secrets)
         message_queue.put(

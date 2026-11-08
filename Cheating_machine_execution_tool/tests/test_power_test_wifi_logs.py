@@ -27,8 +27,10 @@ class WifiResultLogTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.events = []
+        self.created = []
         self.writer = WifiResultLogWriter(self.root, self.events.append,
-                                         now=lambda: datetime(2026, 11, 6, 0, 1, 2, 123456))
+                                         now=lambda: datetime(2026, 11, 6, 0, 1, 2, 123456),
+                                         on_created=lambda *event: self.created.append(event))
         self.writer.start_channel(2)
         self.addCleanup(self.writer.finish_channel)
 
@@ -39,6 +41,37 @@ class WifiResultLogTests(unittest.TestCase):
         self.writer.write('info', wifi())
         self.assertFalse((self.root / 'test_results').exists())
         self.assertEqual(self.events, [])
+        self.assertEqual(self.created, [])
+
+    def test_created_callback_follows_first_flush_and_only_once_per_attempt(self):
+        def created(channel, attempt, path):
+            self.assertIn('first', path.read_text(encoding='utf-8'))
+            self.created.append((channel, attempt, path))
+        self.writer.on_created = created
+        self.writer.write('info', wifi(body='first'))
+        self.writer.write('info', wifi(body='second'))
+        self.assertEqual(len(self.created), 1)
+        self.assertEqual(self.created[0][:2], (2, 0))
+        self.writer.finish_channel()
+        self.writer.start_channel(2, 1)
+        self.writer.write('info', wifi(body='first resumed'))
+        self.assertEqual(len(self.created), 2)
+        self.assertEqual(self.created[1][:2], (2, 1))
+        self.assertNotEqual(self.created[0][2], self.created[1][2])
+
+    def test_first_write_or_flush_failure_never_reports_a_current_file(self):
+        for operation in ('write', 'flush'):
+            with self.subTest(operation=operation):
+                self.writer.start_channel(2)
+                opened = Mock()
+                getattr(opened, operation).side_effect = OSError('disk failure')
+                def open_file(state):
+                    state.file = opened
+                    state.path = self.root / 'partial.log'
+                with patch.object(self.writer, '_open', side_effect=open_file):
+                    self.writer.write('info', wifi())
+                self.writer.finish_channel()
+                self.assertEqual(self.created, [])
 
     def test_all_cycles_plaintext_and_errors_are_flushed_but_details_are_hidden(self):
         stages = ['WiFi信息：2.4G SSID=my ssid，密码=p a ss!；5G SSID=test5，密码=key5',
@@ -130,6 +163,7 @@ class WifiResultLogTests(unittest.TestCase):
                 self.assertIn('device_2_wifi_', self.events[0])
                 self.assertIn('设备测试继续', self.events[0])
                 self.writer.finish_channel()
+                self.assertEqual(self.created, [])
         self.writer.start_channel(2, 1)
         self.writer.write('info', wifi(body='recovered'))
         self.assertIn('recovered', latest_power_test_wifi_log(self.root, 2).read_text(encoding='utf-8'))
@@ -225,7 +259,7 @@ class _FastEvent(threading.Event):
 
 
 class HeadlessWifiLogIntegrationTests(unittest.TestCase):
-    def _run(self, *, mode='success', attempt=0, fail_log=False, enabled=True):
+    def _run(self, *, mode='success', attempt=0, fail_log=False, enabled=True, parent=False):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         root = _write_config_tree(Path(temporary.name))
@@ -273,6 +307,16 @@ class HeadlessWifiLogIntegrationTests(unittest.TestCase):
                 stack.enter_context(patcher)
             if fail_log:
                 stack.enter_context(patch('src.services.power_test_wifi_log_service.Path.mkdir', side_effect=OSError('full')))
+            if parent:
+                from test_power_test_resume import ThreadContext
+                from src.services.power_test_resume_service import PowerTestResumeSession
+                session = PowerTestResumeSession(request, [], stop, lambda _: None)
+                session.attempts[2] = attempt
+                result = legacy.run_legacy_power_test(
+                    request, lambda _: None, stop, process_context=ThreadContext(),
+                    resume_session=session, initial_completed={2: 2} if attempt else {},
+                    initialize_power=False)
+                return root, session, result
             legacy._legacy_start_all_worker(request, target, stop, control_queue=queue.Queue(),
                                            run_id='test-run', attempts={2: attempt},
                                            initial_completed={2: 2} if attempt else {}, initialize_power=False)
@@ -289,6 +333,21 @@ class HeadlessWifiLogIntegrationTests(unittest.TestCase):
         self.assertTrue(any('已关闭' in m.get('message', '') for m in messages))
         self.assertTrue(next(m for m in messages if m['type']=='channel_result')['ok'])
         self.assertTrue(all(m['attempt']==2 for m in messages if m['type']=='log' and m.get('source')=='logger'))
+        self.assertEqual([m for m in messages if m['type'] == 'wifi_log_created'], [dict(
+            type='wifi_log_created', channel=2, attempt=2, run_id='test-run', path=str(path.resolve()))])
+
+    def test_writer_to_parent_session_reports_exact_path_for_original_and_resume(self):
+        for attempt in (0, 2):
+            with self.subTest(attempt=attempt):
+                root, session, result = self._run(attempt=attempt, parent=True)
+                self.assertTrue(result.ok)
+                self.assertEqual(session.current_wifi_log(2), latest_power_test_wifi_log(root, 2).resolve())
+                self.assertIsNone(session.current_wifi_log(7))
+
+    def test_writer_failure_keeps_parent_current_path_empty_and_test_successful(self):
+        _, session, result = self._run(fail_log=True, parent=True)
+        self.assertTrue(result.ok)
+        self.assertIsNone(session.current_wifi_log(2))
 
     def test_real_adapter_preserves_success_despite_log_failure(self):
         root, messages = self._run(fail_log=True)
@@ -296,6 +355,7 @@ class HeadlessWifiLogIntegrationTests(unittest.TestCase):
         self.assertEqual(sum('记录已停用' in m.get('message', '') for m in messages), 1)
         self.assertTrue(next(m for m in messages if m['type']=='channel_result')['ok'])
         self.assertEqual(sum(m['type']=='log' and 'WiFi测试' in m.get('message', '') for m in messages), 3)
+        self.assertFalse(any(m['type'] == 'wifi_log_created' for m in messages))
 
     def test_real_adapter_closes_after_cancellation_and_exception(self):
         for mode in ('cancelled', 'exception'):

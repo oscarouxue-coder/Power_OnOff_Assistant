@@ -25,10 +25,12 @@ class _ChannelLog:
 
 
 class WifiResultLogWriter:
-    def __init__(self, tool_root: Path, emit: Callable[[str], None], *, now=datetime.now):
+    def __init__(self, tool_root: Path, emit: Callable[[str], None], *, now=datetime.now,
+                 on_created: Callable[[int, int, Path], None] | None = None):
         self.root = Path(tool_root)
         self.emit = emit
         self.now = now
+        self.on_created = on_created
         self.local = threading.local()
 
     def start_channel(self, channel: int, attempt: int = 0) -> None:
@@ -89,6 +91,8 @@ class WifiResultLogWriter:
             self._fail(state, action, exc)
             return
         if created:
+            if self.on_created is not None:
+                self.on_created(state.channel, state.attempt, state.path)
             self.emit(f'[WiFi日志] 通道 {state.channel} 已创建：{state.path}')
 
     def finish_channel(self) -> None:
