@@ -18,6 +18,7 @@ from src.ui.test_item_pretest_controls import PretestControls
 from src.ui.app_update_dialog import AppUpdateDialog, arrange_update_toolbar
 from src.ui.project_name_badge import ProjectNameBadge
 from src.ui.main_log_filter import format_main_log_message
+from src.utils.wifi_log_summary import WifiLogSummary
 from src.ui.adapter_rename_dialog import offer_adapter_rename
 from src.services.adapter_rename_service import (
     adapter_has_numeric_suffix, adapter_rename_is_busy, synchronize_channel_adapter_names,
@@ -8268,7 +8269,10 @@ class LineCheckAssistant(Tk):
             self._log(f"  {index:02d}. {item}")
 
     def _log(self, message: str, tag: str | None = None) -> None:
-        display_message = format_main_log_message(message)
+        summary = self.__dict__.get('_wifi_log_summary')
+        if summary is None:
+            summary = self._wifi_log_summary = WifiLogSummary()
+        display_message = format_main_log_message(message, summary)
         if display_message is not None:
             timestamp = datetime.now().strftime("%H:%M:%S")
             tag = self._log_tag_for(message) if tag is None else tag
@@ -8280,9 +8284,9 @@ class LineCheckAssistant(Tk):
                 self.log_text.insert(END, display_message + "\n")
             self.log_text.configure(state="disabled")
             self.log_text.see(END)
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with self.log_path.open("a", encoding="utf-8") as file:
-            file.write(f"{timestamp} {message}\n")
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with self.log_path.open("a", encoding="utf-8") as file:
+                file.write(f"{timestamp} {display_message}\n")
 
 
 def main() -> None:

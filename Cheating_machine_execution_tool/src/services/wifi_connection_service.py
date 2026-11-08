@@ -5,7 +5,8 @@ from src.core.windows_wifi import NativeWifiBackend, choose_security, AUTH_NAMES
 from src.core.wireless_ping import run_wireless_ping
 from src.core.wireless_ip import validate_ping_target
 from src.models.wifi_test_models import (
-    WifiEnvironmentError, WifiVerificationError, WifiCancelled, frequency_band, check_stop, wait,
+    WifiEnvironmentError, WifiVerificationError, WifiScanError, WifiCancelled,
+    frequency_band, check_stop, wait,
 )
 
 
@@ -49,15 +50,23 @@ class WifiConnectionService:
                                           stop, log, supported)
                     if not ok:
                         return 'failed', band_label
+                    check_stop(stop)
+                    log('成功：本项无线测试通过')  # _test_group的finally已确认清理完成。
                 check_stop(stop)
                 return 'success', ''
         except WifiCancelled:
             emit('取消：用户停止WiFi测试')
             return 'cancelled', band_label
         except (WifiEnvironmentError, ValueError) as exc:
+            if stop.is_set():
+                emit('取消：用户停止WiFi测试')
+                return 'cancelled', band_label
             emit(f'测试环境异常：{exc}')
             return 'error', f'{band_label}：{exc}'
         except WifiVerificationError as exc:
+            if stop.is_set():
+                emit('取消：用户停止WiFi测试')
+                return 'cancelled', band_label
             emit(f'验证失败：{exc}')
             return 'failed', f'{band_label}：{exc}'
         except Exception as exc:
@@ -90,6 +99,23 @@ class WifiConnectionService:
             raise WifiVerificationError('实际认证/加密与本次连接约束不符')
         return connection, observation
 
+    def _wait_disconnected(self, backend, interface, stop):
+        deadline, stable_since = self.clock() + 5, None
+        while True:
+            check_stop(stop)
+            now = self.clock()
+            if backend.interface_state(interface) == 4:  # wlan_interface_state_disconnected
+                if stable_since is None:
+                    stable_since = now
+                if now - stable_since >= 0.5:
+                    return
+            else:
+                stable_since = None
+            remaining = deadline - self.clock()
+            if remaining <= 0:
+                raise WifiEnvironmentError('临时连接断开未确认（最长5秒，要求连续断开至少0.5秒）')
+            wait(min(0.2, remaining), stop, clock=self.clock)
+
     def _test_group(self, backend, interface, targets, options, auth, cipher, stop, emit, supported):
         for attempt in range(1, 5):
             check_stop(stop)
@@ -100,11 +126,25 @@ class WifiConnectionService:
             emit(f'第 {attempt}/4 次连接，扫描/连接/核验共约20秒；认证来源={options.security_source}')
             try:
                 emit('下发无线扫描')
-                backend.start_scan(interface)
-                while not backend.scan_ready() and self.clock() < deadline:
-                    wait(min(0.2, max(0, deadline - self.clock())), stop, clock=self.clock)
+                try:
+                    check_stop(stop)
+                    backend.start_scan(interface)
+                    while True:
+                        check_stop(stop)
+                        if backend.scan_ready():
+                            break
+                        remaining = deadline - self.clock()
+                        if remaining <= 0:
+                            raise WifiScanError('扫描超时', retryable=True,
+                                                reason='20秒扫描/连接/核验预算已用尽')
+                        wait(min(0.2, remaining), stop, clock=self.clock)
+                finally:
+                    backend.end_scan()
                 check_stop(stop)
-                observations = backend.observations(interface) if backend.scan_ready() else ()
+                if self.clock() >= deadline:
+                    raise WifiScanError('扫描超时', retryable=True,
+                                        reason='20秒扫描/连接/核验预算已用尽')
+                observations = backend.observations(interface)
                 candidates = [(t, o) for t in targets for o in observations
                               if t.bssid == o.bssid and t.ssid == o.ssid and frequency_band(o.frequency) == t.band]
                 if not candidates:
@@ -123,6 +163,8 @@ class WifiConnectionService:
                 emit(f'目标SSID={target.ssid} BSSID={target.bssid} 频段={target.band} '
                      f'认证={AUTH_NAMES.get(pair[0], pair[0])} 加密={CIPHER_NAMES.get(pair[1], pair[1])}')
                 check_stop(stop)
+                if self.clock() >= deadline:
+                    raise WifiVerificationError('扫描/连接/核验预算已用尽，未下发连接')
                 owned = True  # 调用即可能改变接口，异常时也必须清理临时连接。
                 emit('下发目标BSSID临时连接配置（不保存或覆盖用户配置）')
                 backend.connect(interface, target, pair)
@@ -154,10 +196,17 @@ class WifiConnectionService:
                             else:
                                 emit('跳过：无线Ping未启用')
                             check_stop(stop)
-                            emit('成功：本项无线测试通过')
                             return True
                     wait(min(0.2, max(0, deadline - self.clock())), stop, clock=self.clock)
                 raise WifiVerificationError(last_failure + '，连接/稳定核验超时')
+            except WifiScanError as exc:
+                check_stop(stop)
+                if ping_phase:
+                    raise
+                if not exc.retryable or attempt == 4:
+                    action = '立即结束' if not exc.retryable else '次数已用尽，结束当前频段'
+                    raise WifiEnvironmentError(f'第{attempt}/4次扫描失败：{exc}；{action}') from None
+                emit(f'第{attempt}/4次扫描失败：{exc}；10秒后重试')
             except WifiVerificationError as exc:
                 if ping_phase:
                     # Ping阶段离开目标/换频段，不能通过重新关联掩盖。
@@ -173,7 +222,17 @@ class WifiConnectionService:
                             raise WifiEnvironmentError('临时无线连接清理失败，请检查所选网卡') from None
                         emit('取消后临时连接清理异常，请检查所选网卡')
                     else:
-                        emit('临时连接已清理')
+                        if stop.is_set():
+                            emit('取消：已下发临时连接断开，断开状态未确认')
+                        else:
+                            try:
+                                self._wait_disconnected(backend, interface, stop)
+                            except WifiCancelled:
+                                emit('取消：已下发临时连接断开，断开状态未确认')
+                                raise
+                            except WifiEnvironmentError as exc:
+                                raise WifiEnvironmentError(f'临时连接断开未确认：{exc}') from None
+                            emit('临时连接已清理')
             if attempt < 4:
                 emit('等待10秒后重试')
                 wait(10, stop, clock=self.clock)

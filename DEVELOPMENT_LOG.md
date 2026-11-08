@@ -1,5 +1,49 @@
 # 开发记录
 
+## 2026-11-07 - 确认WiFi断开并恢复扫描异常
+
+- 类型：BUG 修复
+- 背景：负责人提供通道7日志，2.4G通过后5G在扫描阶段以“无线扫描失败”退出，手动可连接Test5G1CBA。只读核对Windows事件发现2.4G于13:28:25.912断开，约0.21秒后工具报告扫描失败，同一网卡后续于13:38:07.487手动连接目标成功。确认原实现未等待断开状态、未保存扫描失败原因码，且扫描异常跳过既有连接重试；双频切换竞态仍是待现场验证方向，未据此认定真实驱动根因。负责人确认实施断开确认、诊断和共用现有4次尝试的恢复方案。
+- 完成内容：① Native WLAN增加interface_state查询，service在每次临时连接下发断开后按0.2秒轮询，连续disconnected至少0.5秒才继续，最长5秒；确认期间维持FIFO使用权，超时当前通道环境异常，不重复发送断开。停止完成既有必要清理并取消确认等待/后续扫描/重试/频段；并发错误返回时停止优先。② 增加兼容WifiEnvironmentError的WifiScanError，保留source/reason_code/retryable/reason。回调校验数据长度并复制原因DWORD，工作线程解码；缺失/转换失败仍保留可得数值，API返回错误、通知失败和超时明确区分。锁保护扫描状态，忽略其它接口、无活动扫描及重复结束通知，每次扫描重置状态，退出/超时结束接收；同接口其它客户端在活动窗口内的扫描通知仍无法可靠区分，未作完全隔离承诺。③ 异步失败、扫描超时及API错误21/170/995/1237/1460消耗当前尝试，沿用每频段4次、每次20秒扫描/连接/稳定核验预算和10秒间隔；权限/接口/句柄/服务及其它未分类API错误立即结束，最终扫描异常仍归环境错误。扫描/结果读取耗尽预算后不再下发连接，Ping阶段不重连，原身份/认证/Ping判据保持。④ 将最终成功事件移到finally清理确认完成之后，清理失败/超时/停止不会提前打印通过。沿用共用摘要，异常含频段、次数、来源、数值/十六进制代码、原因及后续动作，正常状态轮询隐藏；三处日志及实际连接尝试编号一致。
+- 修改文件：
+  - `.claude/plans/wifi-scan-recovery.md`
+  - `Cheating_machine_execution_tool/src/models/wifi_test_models.py`
+  - `Cheating_machine_execution_tool/src/core/windows_wifi.py`
+  - `Cheating_machine_execution_tool/src/services/wifi_connection_service.py`
+  - `Cheating_machine_execution_tool/tests/test_wifi_connection_service.py`
+  - `Cheating_machine_execution_tool/tests/test_main_log_filter.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用既有Python3.9.10，设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，运行`python -m unittest discover -s tests -p test_wifi_connection_service.py`、`python -m unittest discover -s tests -p test_main_log_filter.py`及完整`python scripts/verify_baseline.py`。新增Native测试直接驱动真实回调/ctypes解析，WLAN API全部为假对象；service使用虚拟时钟/假网卡，不建立真实无线连接。实际scheduler→service模拟“2.4G通过、5G扫描失败、第2次恢复”，临时主日志/模拟Text/独立WiFi文件逐条比对。检查本轮差异和本机配置SHA256。
+- 验证结果：新增25项回归；49项连接/Native WLAN专项、17项日志专项通过。覆盖断开延迟/状态抖动/超时/查询失败、停止发生于扫描/重试/断开确认、同轮后续执行重新从第1次尝试开始、FIFO确认期所有权、四次扫描异常、110秒扫描超时总预算、永久/未知API错误、通知原因复制/缺失/短数据/转换失败/非目标/重复/旧状态，以及清理完成后才打印通过。真实service模拟三处摘要相同，5G恢复连接显示第2/4次，扫描异常只产生一次对应的重试日志；原双频/单5G/合一、Ping不重连等既有专项保持。完整基线ALL CHECKS PASSED（1370项测试、190项指定关键回归、103个源码编译/覆盖及协议不变量），完整输出`%TEMP%/linecheck_wifi_scan_recovery_baseline_20261107.log`。
+- 工作区保护：保留上一轮共用日志摘要源码/测试/文档及本机config.ini已有改动，不修改配置项、密码/BSSID/认证、样机网络或电源命令；基线前本机6份INI快照位于`%TEMP%/linecheck_wifi_scan_configs_20261107.json`。本轮未自动操作真实WiFi、启动完整主程序、打包、运行EXE、暂存或提交源码。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.12/§3复验Test5G1CBA单5G及双频切换、失败续跑、停止和多通道；若再次失败，用新增来源/原因码定位真实驱动原因。自动化结果不升级Windows或真实设备验收结论。
+
+## 2026-11-07 - 统一精简WiFi界面和文件日志
+
+- 类型：优化
+- 背景：负责人要求进一步精简WiFi连接日志，并将主界面、主日志及独立WiFi文件统一为已确认的“关键摘要”；此前仅精简显示，文件仍保留查询、扫描、DNS、逐包Ping及清理详情。
+- 完成内容：① 新增共用摘要器，按通道/当前轮次/频段缓存尝试编号、核验SSID/实际频段及Ping结果；首次读取重置同轮续跑状态，文件上下文在每次执行尝试独立创建。保留首次双频SSID/明文密码原值，实际竞争排队及等待、每次实际连接下发；正常连接核验/Ping汇总等到最终成功事件后合并为一条，合一模式显示实际频段，Ping关闭注明未启用。② 隐藏正常读取/扫描/认证、周期等待、DNS、逐包Ping及正常清理/取得/释放过程。重试原因、警告/错误、取消、重要跳过及未知消息立即保留；Ping后最终核验失败或停止不会提前报通过，尚未发布的Ping汇总随异常保留。③ 主界面与主日志共用同一次格式化结果，文件不再另存隐藏原文；独立文件使用同一规则，首次可保存摘要才排他创建，保留命名/碰撞/续跑、逐条刷新、关闭、故障只告警一次且继续设备测试的机制。空正文和带前导零的消息也能安全保存。④ 原IPC及运行/尝试标记完整转发，供历史、进度和结果判断使用；业务连接/重试/Ping判据/停止/设备命令、原命令文件、DUT及其它日志保持。同步说明和待复验边界，未升级真实设备验收。
+- 修改文件：
+  - `.claude/plans/wifi-logs-key-summary.md`
+  - `Cheating_machine_execution_tool/src/utils/wifi_log_summary.py`
+  - `Cheating_machine_execution_tool/src/ui/main_log_filter.py`
+  - `Cheating_machine_execution_tool/src/services/power_test_wifi_log_service.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_main_log_filter.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_wifi_logs.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用Python3.9.10，设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，运行`python -m unittest discover -s tests -p test_main_log_filter.py`及`python -m unittest discover -s tests -p test_power_test_wifi_logs.py`，再运行`python scripts/verify_baseline.py`。临时脚本`%TEMP%/linecheck_wifi_summary_replay_20261107.py`只读重放既有6份WiFi文件，以临时目录/模拟Text调用真实主日志入口与独立文件写入器，逐条比较三处摘要并校验源日志及配置SHA256；完整报告`%TEMP%/linecheck_wifi_summary_replay_20261107.json`。检查本轮差异格式和用户已有配置保护。
+- 验证结果：31项日志专项通过；最终完整基线ALL CHECKS PASSED（1345项测试、190项指定关键回归、103个源码编译/覆盖及协议不变量），完整输出`%TEMP%/linecheck_wifi_key_summary_baseline_20261107.log`。覆盖双频/合一、Ping关闭/部分/全部丢包、实际尝试编号、DNS9005、停止、同轮续跑、跨通道/轮次隔离、特殊字符凭据、未知/多行消息、文件故障及原IPC/命令文件保留。6份既有日志4779条原始消息生成457条摘要（减少90.4%），三处逐条一致，原日志及配置哈希不变；正常双频示例为首次凭据加每频段两条，排队/异常另记。首次完整基线曾报告1项单测失败，门禁输出只保留尾部，未提供具体测试ID；随后独立全量1345项通过（2项既有跳过），调整空正文兼容前后完整基线均通过，未绕开检查或修改业务测试判据。
+- 工作区保护：保留本轮开始已有的`Auto_power_on_off_tool/config/config.ini`改动；未写入历史结果/日志目录，未修改设备连接、配置或电源行为，未打包、运行EXE、操作设备、暂存或提交源码。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.12/§3复核日常Windows主界面/颜色、三处摘要一致性、真实双频/合一、停止/续跑和文件故障；当前自动化与离线重放不代替现场验收。
+
 ## 2026-11-06 - 保存并支持右键打开WiFi日志
 
 - 类型：功能

@@ -12,6 +12,18 @@ class WifiEnvironmentError(Exception):
     pass
 
 
+class WifiScanError(WifiEnvironmentError):
+    """扫描故障保留来源/数值原因，服务层决定是否消耗一次尝试重试。"""
+
+    def __init__(self, source, reason_code=None, *, retryable=False, reason=''):
+        self.source = source
+        self.reason_code = reason_code
+        self.retryable = retryable
+        self.reason = reason
+        code = '未提供' if reason_code is None else f'{reason_code}/0x{reason_code:08X}'
+        super().__init__(f'无线扫描失败（来源={source}，错误码={code}；{reason or "原因未提供"}）')
+
+
 class WifiVerificationError(Exception):
     pass
 

@@ -139,6 +139,7 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/services/power_test_wifi_log_service.py",
     "src/ui/wifi_test_controls.py",
     "src/ui/main_log_filter.py",
+    "src/utils/wifi_log_summary.py",
     "src/core/zte_c300_onu.py",
     "src/core/zte_c600_onu.py",
     "src/core/zte_olt_telnet.py",

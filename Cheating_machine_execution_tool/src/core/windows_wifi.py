@@ -8,7 +8,7 @@ import uuid
 from xml.sax.saxutils import escape
 
 from src.models.wifi_test_models import (
-    WifiInterface, WifiObservation, WifiConnection, WifiEnvironmentError,
+    WifiInterface, WifiObservation, WifiConnection, WifiEnvironmentError, WifiScanError,
 )
 
 U32 = C.c_uint32
@@ -16,6 +16,7 @@ U16 = C.c_uint16
 U8 = C.c_ubyte
 AUTH_NAMES = {1: '开放', 4: 'WPA-PSK', 7: 'WPA2-PSK', 9: 'WPA3-SAE'}
 CIPHER_NAMES = {0: '无', 2: 'TKIP', 4: 'AES'}
+RETRYABLE_SCAN_ERRORS = frozenset((21, 170, 995, 1237, 1460))
 
 
 class Guid(C.Structure):
@@ -172,6 +173,9 @@ class NativeWifiBackend:
         self._scan_event = threading.Event()
         self._scan_guid = None
         self._scan_failed = False
+        self._scan_reason = None
+        self._scan_active = False
+        self._scan_lock = threading.Lock()
         self._callback = None
         P = C.c_void_p
         signatures = {
@@ -184,6 +188,7 @@ class NativeWifiBackend:
             'WlanConnect': [W.HANDLE, C.POINTER(Guid), C.POINTER(ConnectionParameters), P],
             'WlanDisconnect': [W.HANDLE, C.POINTER(Guid), P],
             'WlanRegisterNotification': [W.HANDLE, U32, W.BOOL, P, P, P, C.POINTER(U32)],
+            'WlanReasonCodeToString': [U32, U32, W.LPWSTR, P],
         }
         for name, args in signatures.items():
             function = getattr(self.api, name)
@@ -203,13 +208,7 @@ class NativeWifiBackend:
         self._ok(self.api.WlanOpenHandle(2, None, C.byref(version), C.byref(self.handle)), '打开无线服务')
         callback_type = C.WINFUNCTYPE(None, C.POINTER(Notification), C.c_void_p)
 
-        def on_notification(pointer, _context):
-            note = pointer.contents
-            if note.source == 8 and note.guid.text() == self._scan_guid and note.code in (7, 8):
-                self._scan_failed = note.code == 8
-                self._scan_event.set()
-
-        self._callback = callback_type(on_notification)
+        self._callback = callback_type(self._on_notification)
         previous = U32()
         try:
             self._ok(self.api.WlanRegisterNotification(self.handle, 8, False, self._callback,
@@ -220,6 +219,7 @@ class NativeWifiBackend:
         return self
 
     def __exit__(self, *_args):
+        self.end_scan()
         # 注销会等待已在执行的回调完成，之后才释放Python callback。
         previous = U32()
         self.api.WlanRegisterNotification(self.handle, 0, False, None, None, None, C.byref(previous))
@@ -272,17 +272,73 @@ class NativeWifiBackend:
         finally:
             self.api.WlanFreeMemory(data)
 
+    def _on_notification(self, pointer, _context):
+        note = pointer.contents
+        with self._scan_lock:
+            if (not self._scan_active or note.source != 8 or note.code not in (7, 8)
+                    or note.guid.text().lower() != self._scan_guid):
+                return
+            # pData只在回调期间有效，立即复制DWORD，不在回调中调用其它WLAN API。
+            self._scan_reason = (U32.from_address(note.data).value
+                                 if note.code == 8 and note.data and note.size >= C.sizeof(U32) else None)
+            self._scan_failed = note.code == 8
+            self._scan_active = False  # 仅接收本次第一个结束通知。
+            self._scan_event.set()
+
     def start_scan(self, interface):
-        self._scan_guid = interface.guid
-        self._scan_event.clear()
-        self._scan_failed = False
+        with self._scan_lock:
+            self._scan_guid = interface.guid.lower()
+            self._scan_event.clear()
+            self._scan_failed = False
+            self._scan_reason = None
+            self._scan_active = True
         guid = Guid.parse(interface.guid)
-        self._ok(self.api.WlanScan(self.handle, C.byref(guid), None, None, None), '下发无线扫描')
+        try:
+            code = self.api.WlanScan(self.handle, C.byref(guid), None, None, None)
+        except Exception:
+            self.end_scan()
+            raise
+        if code:
+            self.end_scan()
+            hint = '；请检查Windows位置访问权限及无线服务' if code == 5 else ''
+            try:
+                reason = C.FormatError(code).strip()
+            except (OSError, ValueError, OverflowError):
+                reason = 'Windows未提供错误说明'
+            raise WifiScanError('API返回', code, retryable=code in RETRYABLE_SCAN_ERRORS,
+                                reason=reason + hint)
+
+    def end_scan(self):
+        """停止接收通知，不取消驱动扫描、不改变无线连接。"""
+        with self._scan_lock:
+            self._scan_active = False
 
     def scan_ready(self):
-        if self._scan_failed:
-            raise WifiEnvironmentError('无线扫描失败')
-        return self._scan_event.is_set()
+        with self._scan_lock:
+            failed, reason = self._scan_failed, self._scan_reason
+            ready = self._scan_event.is_set()
+        if failed:
+            message = '扫描失败通知未提供原因码'
+            if reason is not None:
+                buffer = C.create_unicode_buffer(1024)
+                try:
+                    code = self.api.WlanReasonCodeToString(reason, len(buffer), buffer, None)
+                    message = buffer.value.strip() if code == 0 and buffer.value.strip() else '原因文本转换失败'
+                except (OSError, ValueError):
+                    message = '原因文本转换失败'
+            raise WifiScanError('异步通知', reason, retryable=True, reason=message)
+        return ready
+
+    def interface_state(self, interface):
+        code, data, size = self._query(interface, 6)  # wlan_intf_opcode_interface_state
+        try:
+            self._ok(code, '读取无线接口状态')
+            if not data.value or size < C.sizeof(U32):
+                raise WifiEnvironmentError('无线接口状态返回无效')
+            return U32.from_address(data.value).value
+        finally:
+            if data.value:
+                self.api.WlanFreeMemory(data)
 
     def observations(self, interface):
         data = C.c_void_p()

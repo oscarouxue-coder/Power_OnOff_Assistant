@@ -1,12 +1,14 @@
-"""逐通道/执行尝试的WiFi原始日志；文件故障只告警，不改变设备测试。"""
+"""逐通道/执行尝试的WiFi摘要日志；文件故障只告警，不改变设备测试。"""
 from __future__ import annotations
 
 import re
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, TextIO
+
+from src.utils.wifi_log_summary import WifiLogSummary
 
 
 _WIFI_CONTEXT = re.compile(r'^\[WiFi测试\] 通道(?P<channel>\d+) 第(?P<cycle>\d+)轮(?: |$)')
@@ -19,6 +21,7 @@ class _ChannelLog:
     path: Path | None = None
     file: TextIO | None = None
     disabled: bool = False
+    summary: WifiLogSummary = field(default_factory=WifiLogSummary)
 
 
 class WifiResultLogWriter:
@@ -64,6 +67,9 @@ class WifiResultLogWriter:
         if (state is None or state.disabled or match is None
                 or int(match['channel']) != state.channel):
             return
+        summary = state.summary.format(text, level)
+        if summary is None:
+            return
         created = state.file is None
         action = '创建' if created else '写入/刷新'
         try:
@@ -71,8 +77,10 @@ class WifiResultLogWriter:
                 self._open(state)
             action = '写入/刷新'
             timestamp = self.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-            context = match.group(0).rstrip()
-            body = text[match.end():]
+            cycle = int(match['cycle'])
+            context = f'[WiFi] 通道{state.channel} 第{cycle}轮'
+            # 文件已有独立级别字段，正文与界面共用；多行仍逐行带上下文。
+            body = summary.split(f'通道{state.channel} 第{cycle}轮 ', 1)[1]
             # 多行消息仍让每个物理行带上通道/轮次；凭据正文按原值保存。
             for line in body.split('\n'):
                 state.file.write(f'{timestamp} [{level.upper()}] {context} {line}\n')

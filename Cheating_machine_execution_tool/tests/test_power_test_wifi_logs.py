@@ -17,7 +17,7 @@ from src.services.power_test_wifi_log_service import WifiResultLogQueue, WifiRes
 from test_legacy_power_test_service import _write_config_tree
 
 
-def wifi(channel=2, cycle=1, body='下发无线扫描'):
+def wifi(channel=2, cycle=1, body='新的驱动提示'):
     return f'[WiFi测试] 通道{channel} 第{cycle}轮 {body}'
 
 
@@ -40,7 +40,7 @@ class WifiResultLogTests(unittest.TestCase):
         self.assertFalse((self.root / 'test_results').exists())
         self.assertEqual(self.events, [])
 
-    def test_all_cycles_plaintext_and_hidden_details_are_flushed_while_open(self):
+    def test_all_cycles_plaintext_and_errors_are_flushed_but_details_are_hidden(self):
         stages = ['WiFi信息：2.4G SSID=my ssid，密码=p a ss!；5G SSID=test5，密码=key5',
                   '下发只读命令：bbfdmd -c get Device.WiFi.SSID.1.SSID',
                   '频段=2.4G 无线DNS结果：203.0.113.1；本项使用第一个IPv4',
@@ -50,12 +50,15 @@ class WifiResultLogTests(unittest.TestCase):
             self.writer.write('info', wifi(cycle=cycle, body=body))
             path = latest_power_test_wifi_log(self.root, 2)
             self.assertIsNotNone(path)
-            self.assertIn(body, path.read_text(encoding='utf-8'))
+            if cycle in (1, 5):
+                self.assertIn(body, path.read_text(encoding='utf-8'))
+            else:
+                self.assertNotIn(body, path.read_text(encoding='utf-8'))
         paths = list(self.root.rglob('*.log'))
         self.assertEqual(len(paths), 1)
         lines = paths[0].read_text(encoding='utf-8').splitlines()
-        self.assertEqual(len(lines), len(stages))
-        self.assertTrue(all('[INFO] [WiFi测试] 通道2 第' in line for line in lines))
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(all('[INFO] [WiFi] 通道2 第' in line for line in lines))
         self.assertTrue(paths[0].name.endswith('20261106000102123456.log'))
         handle = self.writer.local.state.file
         self.writer.finish_channel()
@@ -67,7 +70,11 @@ class WifiResultLogTests(unittest.TestCase):
         self.writer.write('warning', wifi(cycle=3, body='诊断第一行\n诊断第二行'))
         lines = latest_power_test_wifi_log(self.root, 2).read_text(encoding='utf-8').splitlines()
         self.assertEqual(len(lines), 2)
-        self.assertTrue(all('[WARNING] [WiFi测试] 通道2 第3轮' in line for line in lines))
+        self.assertTrue(all('[WARNING] [WiFi] 通道2 第3轮' in line for line in lines))
+        # 空正文及前导零的旧消息仍安全保存，不能让日志适配层中断测试。
+        self.writer.write('info', '[WiFi测试] 通道02 第03轮')
+        self.assertIn('[WiFi] 通道2 第3轮 \n',
+                      latest_power_test_wifi_log(self.root, 2).read_text(encoding='utf-8'))
 
     def test_same_timestamp_collision_and_resume_do_not_overwrite(self):
         self.writer.write('info', wifi(body='original'))
@@ -195,8 +202,19 @@ class WifiResultLogTests(unittest.TestCase):
         finally:
             restore()
         self.assertEqual(command.read_bytes(), expected)
-        self.assertIn('无线Ping第4/4包：超时', latest_power_test_wifi_log(self.root, 2).read_text(encoding='utf-8'))
+        self.assertIsNone(latest_power_test_wifi_log(self.root, 2))
+        self.assertTrue(any('无线Ping第4/4包：超时' in m.get('message', '') for m in target.queue))
         self.assertEqual(sum(m.get('source')=='result_file' for m in target.queue), 1)
+
+    def test_hidden_only_messages_do_not_create_empty_file_or_change_ipc(self):
+        target = queue.Queue()
+        forwarding = WifiResultLogQueue(target, self.writer)
+        for body in ('开始获取WiFi信息', '下发无线扫描', '临时连接已清理'):
+            message = dict(type='log', level='info', source='logger', message=wifi(body=body))
+            forwarding.put(message)
+            self.assertIs(target.get_nowait(), message)
+        self.assertIsNone(latest_power_test_wifi_log(self.root, 2))
+        self.assertEqual(self.events, [])
 
 
 class _FastEvent(threading.Event):
@@ -231,7 +249,8 @@ class HeadlessWifiLogIntegrationTests(unittest.TestCase):
                     cycle = kwargs.get('start_cycle', 1)
                     self.logger.wifi_credentials(channel, cycle, ('test2', 'secret2', 'test5', 'secret5'))
                     for number in (cycle, cycle+1):
-                        self.logger.info(wifi(channel, number, '无线Ping第1/4包：超时'))
+                        self.logger.info(wifi(channel, number,
+                                              '频段=2.4G 下发目标BSSID临时连接配置（不保存或覆盖用户配置）'))
                 if mode == 'exception': raise RuntimeError('fake device failure')
                 if mode == 'cancelled':
                     event.set()
