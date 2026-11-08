@@ -298,7 +298,8 @@ class IntegrationTests(unittest.TestCase):
             for line in messages])
         for message in messages:
             self.assertTrue(any(message in line for line in logs), message)
-        self.assertEqual(history, [])
+        self.assertEqual([event[:3] for event in history], [(2, 1, 'retry')])
+        self.assertIn('第1/4次', history[0][3])
 
     def test_real_wifi_stage_cancel_skips_ping_notifications_and_completion(self):
         # 执行真实 run_case 的 WiFi 分支及其取消处理；只隔离此前设备命令。

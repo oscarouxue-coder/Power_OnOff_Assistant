@@ -1,5 +1,25 @@
 # 开发记录
 
+## 2026-11-08 - 补齐WiFi重试与失败历史
+
+- 类型：BUG 修复
+- 背景：负责人提供截图，WiFi导致通道失败后，“重试/失败历史”仍显示0条。定位到旧业务适配器只提取指令重试/Telnet等历史，WiFi原始消息未接入历史回调；负责人确认方案，并选择同时保留重试后成功记录。
+- 完成内容：① 新增独立PowerTestWifiHistory，在父进程接收原始WiFi IPC后、主日志摘要/去重前解析，复用现有历史和通道状态回调，保持窗口结构。记录实际通道/轮次、频段、已知尝试次数、原因及错误码，覆盖信息读取、扫描、连接核验、无线Ping/DNS和清理。② 同次重试的原因与等待只记一次；暂存过程失败原因，非取消的channel_result确认失败后生成一条最终失败，并替换笼统通道失败摘要；同次WiFi续跑失败不再追加重复的通用“续跑失败”。③ 只有频段最终通过（清理确认后）才记录重试后成功，首次成功不记异常历史；取消/跳过/排队不新增失败。新任务独立持有，轮次/通道隔离，channel_started重置解析而保留历史，沿用run_id/attempt旧消息过滤，不追补旧历史。④ 新源码纳入编译清单，原有“WiFi日志不产生历史”的测试更新为确认重试记录，补充真实service配假网卡/虚拟时钟、模拟IPC及窗口控件回归；同步操作员说明、项目状态和待验收边界。
+- 修改文件：
+  - `.claude/plans/wifi-retry-failure-history.md`
+  - `Cheating_machine_execution_tool/src/services/power_test_wifi_history_service.py`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_wifi_history.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_wifi.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用现有CPython3.9，设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，运行`python -m unittest discover -s tests -p test_power_test_wifi_history.py -v`、`python -m unittest discover -s tests -p test_power_test_wifi.py -v`及完整`python scripts/verify_baseline.py`；对比基线前后6份本机INI的SHA256，执行`git diff --check`。
+- 验证结果：新增16项历史专项及原21项WiFi专项通过。覆盖四次连接/扫描用尽（3条重试+1条最终失败）、API永久错误、原因码、重试后成功、双频/合一、无线Ping/DNS、清理失败、取消不增加失败、多通道/轮次隔离、续跑历史及旧尝试过滤、已打开窗口条数/正文刷新；连接核验或Ping后失败不误报恢复成功。完整基线ALL CHECKS PASSED（1386项测试、190项指定关键回归、104个源码编译/覆盖及全部协议不变量），输出`%TEMP%/linecheck_wifi_history_baseline_20261108.log`。6份本机INI哈希未变，未改动配置、设备命令、重试预算、连接判据、停止/续跑流程或日志摘要规则。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.12/§3复验Windows源码版窗口实时刷新及真实样机WiFi异常/恢复/续跑；当前自动化使用假网卡、虚拟时钟、模拟IPC及Text控件，不构成Windows完整交互或现场验收。本轮未操作真实WiFi、启动完整主程序、打包、运行EXE、暂存或提交。
+
 ## 2026-11-07 - 确认WiFi断开并恢复扫描异常
 
 - 类型：BUG 修复

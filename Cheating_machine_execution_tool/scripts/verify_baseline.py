@@ -96,6 +96,7 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/services/device_project_info_service.py",
     "src/services/legacy_power_test_service.py",
     "src/services/power_test_wifi_service.py",
+    "src/services/power_test_wifi_history_service.py",
     "src/services/power_test_resume_service.py",
     "src/ui/power_test_resume_menu.py",
     "src/services/power_test_log_service.py",

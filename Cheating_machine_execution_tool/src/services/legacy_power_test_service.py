@@ -26,6 +26,7 @@ from typing import Callable, Iterable, Sequence
 from line_check_assistant.legacy_ui_defaults_store import LegacyUiDefaultsStore
 from src.core.power_supply import channel_power_frame
 from src.services.power_test_wifi_service import PowerTestWifiScheduler
+from src.services.power_test_wifi_history_service import PowerTestWifiHistory
 from src.services.power_test_wifi_log_service import WifiResultLogQueue, WifiResultLogWriter
 
 
@@ -524,6 +525,7 @@ def _run_legacy_power_test(
         channel_details: dict[int, str] = {}
         finished_channels: set[int] = set()
         started_by_channel: dict[int, int] = {}
+        wifi_history = PowerTestWifiHistory(completed_by_channel, request.number_of_tests)
         emit(
             "[执行开关机测试] 已启用精简日志：保留每轮开始/正常结论、关键结果、"
             "警告/错误、程控电源指令和最终结论。"
@@ -556,6 +558,7 @@ def _run_legacy_power_test(
             message_type = message.get("type")
             if message_type == "channel_started":
                 channel_number = message["channel"]
+                wifi_history.reset(channel_number)
                 if message.get("attempt", 0):
                     finished_channels.discard(channel_number)
                     started_by_channel.pop(channel_number, None)
@@ -571,6 +574,15 @@ def _run_legacy_power_test(
                 level = str(message.get("level", "info")).upper()
                 raw_text = str(message.get("message", ""))
                 source = str(message.get("source", "signal")).lower()
+                for channel_number, cycle, status, detail in wifi_history.consume(raw_text):
+                    if status == "success":
+                        channel_details.pop(channel_number, None)
+                    else:
+                        channel_details[channel_number] = detail
+                    if on_channel_history is not None:
+                        on_channel_history(channel_number, cycle, status, detail)
+                    if on_channel_status is not None:
+                        on_channel_status(channel_number, status, detail)
                 history_error = _legacy_channel_history_error_from_log(raw_text)
                 if history_error is not None and on_channel_history is not None:
                     channel_number, status, detail = history_error
@@ -687,6 +699,13 @@ def _run_legacy_power_test(
                 if not 1 <= channel_number <= 16:
                     continue
                 finished_channels.add(channel_number)
+                wifi_failures = wifi_history.finish(
+                    channel_number, ok=ok, cancelled=bool(message.get("cancelled")),
+                )
+                for _, cycle, status, detail in wifi_failures:
+                    channel_details[channel_number] = detail
+                    if on_channel_history is not None:
+                        on_channel_history(channel_number, cycle, status, detail)
                 if message.get("cancelled"):
                     if on_channel_status is not None:
                         on_channel_status(channel_number, "stopped", "用户停止WiFi测试，保留已完成轮次")
@@ -709,7 +728,7 @@ def _run_legacy_power_test(
                         channel_number,
                         "测试失败，详细信息请查看执行日志",
                     )
-                if message.get('attempt', 0) and on_channel_history:
+                if message.get('attempt', 0) and on_channel_history and not wifi_failures:
                     on_channel_history(channel_number,
                                        min(completed_by_channel[channel_number] + 1, request.number_of_tests),
                                        status, '续跑' + ('成功：' if ok else '失败：') + detail)
