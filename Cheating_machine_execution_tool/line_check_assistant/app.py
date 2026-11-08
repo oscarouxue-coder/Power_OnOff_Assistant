@@ -2572,7 +2572,7 @@ class LineCheckAssistant(Tk):
         ).grid(row=1, column=6, columnspan=2, sticky="w", padx=10, pady=5)
         ttk.Label(
             c600_form,
-            text="ONU 类型模板是 OLT 中的 onu-type 模板名称；默认带入查询到的 ONU 型号，可按实际兼容模板修改。",
+            text="ONU 类型模板是 OLT 中的 onu-type 模板名称；自动保存上次填写值，仅为空时带入查询到的 ONU 型号。",
             style="Muted.TLabel",
         ).grid(row=2, column=0, columnspan=8, sticky="w", padx=10, pady=(2, 0))
         Checkbutton(
@@ -2922,13 +2922,17 @@ class LineCheckAssistant(Tk):
             return
         family = self.onu_family_var.get()
         command_text = (
-            "show gpon onu state（全局查询，按目标 PON 过滤）"
+            "terminal length 0\n"
+            "show gpon onu state（全局查询，按目标 PON 过滤）\n"
+            f"show gpon onu baseinfo {pon_interface}"
             if family == OLT_FAMILY_C300
-            else f"show gpon onu state {pon_interface}"
+            else f"show running-config-interface {pon_interface}\n"
+            f"show gpon onu state {pon_interface}"
         )
         confirmed = messagebox.askyesno(
             "确认查询已注册 ONU",
-            f"将登录 {family} OLT 并执行只读命令：\n{command_text}\n是否继续？",
+            f"将登录 {family} OLT 并执行只读查询：\n{command_text}\n"
+            "批量命令不支持或信息缺项时，使用逐台只读查询补齐。\n是否继续？",
             parent=self.onu_registration_window,
         )
         if not confirmed:
@@ -3731,7 +3735,7 @@ class LineCheckAssistant(Tk):
             )
 
     def _fill_c600_from_discovered_onu(self, onu) -> None:
-        if getattr(onu, "model", ""):
+        if not self.onu_c600_onu_type_var.get().strip() and getattr(onu, "model", ""):
             self.onu_c600_onu_type_var.set(onu.model)
         if getattr(onu, "speed_mode", ""):
             self.onu_c600_real_speed_var.set(speed_mode_to_cli(onu.speed_mode))

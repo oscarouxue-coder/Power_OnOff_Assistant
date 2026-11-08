@@ -61,6 +61,25 @@ class OnuRegistrationStoreTests(unittest.TestCase):
 
             self.assertEqual(loaded.password, "abc%123")
 
+    def test_save_and_load_preserves_custom_onu_type_templates(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "onu_registration.ini"
+            saved = OnuRegistrationConfig(c600_onu_type="TZW-99", c300_onu_type="CUSTOM-GPON")
+
+            OnuRegistrationStore(path).save(saved)
+            loaded = OnuRegistrationStore(path).load()
+
+            self.assertEqual(loaded.c600_onu_type, "TZW-99")
+            self.assertEqual(loaded.c300_onu_type, "CUSTOM-GPON")
+
+    def test_save_and_load_preserves_empty_onu_type_for_discovery_fallback(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "onu_registration.ini"
+
+            OnuRegistrationStore(path).save(OnuRegistrationConfig(c600_onu_type=""))
+
+            self.assertEqual(OnuRegistrationStore(path).load().c600_onu_type, "")
+
     def test_save_and_load_preserves_dual_olt_settings(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             store = OnuRegistrationStore(Path(temp_dir) / "onu_registration.ini")

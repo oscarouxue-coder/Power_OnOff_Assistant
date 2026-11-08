@@ -1,5 +1,48 @@
 # 开发记录
 
+## 2026-11-08 - 提速已注册ONU批量查询
+
+- 类型：优化
+- 背景：负责人要求提速“查询已注册ONU”，确认先核查两种OLT的批量命令后实施。原C300逐台补SN/类型模板，C600逐台取状态；只读命令帮助及实连确认支持按PON批量baseinfo/state。复测另发现C600公共提示符正则会将配置块`!</if-intf>`结尾的`>`误认为命令完成，出现仅返回5行配置、错误空列表；41台降为38台则由负责人明确说明为其手动删除3台，两者分别记录。
+- 完成内容：① C300保留关闭分页及全局状态，按目标PON批量baseinfo补身份；C600保留定义列表，按PON批量状态。精确PON/ID关联且保持原顺序/全部状态，兼容分页缩进，重复/缺项只补查对应目标，批量命令被拒绝回退逐台；未知信息沿用原显示，禁止误用其它ONU记录。② 超时/断线/取消直接结束，不继续失步会话；记录实际命令、候选数、命令数、耗时及回退原因。确认提示列出批量命令及兼容说明。③ 为查询入口新增独立RegisteredOnuQuerySession，以登录时取得的完整末尾提示符判断结束；原接收等待/分页保持，公共zte_olt_telnet.py、注册/删除/独立write及设备配置命令均未修改。④ 更新编译清单、专项测试、计划、操作说明、当前状态和验收边界，保留本轮开始已有模板保留源码/测试/文档及本机配置。
+- 修改文件：
+  - `.claude/plans/onu-registered-query-speed.md`
+  - `Cheating_machine_execution_tool/src/core/zte_c300_onu.py`
+  - `Cheating_machine_execution_tool/src/core/zte_c600_onu.py`
+  - `Cheating_machine_execution_tool/src/core/zte_olt_registered_query.py`
+  - `Cheating_machine_execution_tool/src/services/onu_registration_service.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_registered_query.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_registration_service.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用CPython3.9.10，设置PYTHONUTF8=1及PYTHONIOENCODING=utf-8，运行`python -m unittest discover -s tests -p test_onu_registered_query.py -v`、`python -m unittest discover -s tests -p test_onu_registration_service.py`、`python -m unittest discover -s tests -p test_app.py`及`python scripts/verify_baseline.py`。真实OLT以已保存连接资料锁源，仅执行帮助和show查询（C300沿用会话关闭分页），对照HEAD原逐台service和修改后service；两组均用完整提示符会话避免原空列表缺陷，每型号新流程三次。仓库外`%TEMP%/linecheck_onu_bulk_ui_20261108.py`在临时配置/日志目录运行真实Tk窗口、按钮invoke、查询线程和after回调，OLT为严格命令顺序模拟对象，确认返回值由测试驱动。核对6份INI哈希及`git diff --check`。
+- 验证结果：新增27项查询专项及1项界面确认回归；27项查询、原54项service和212项界面逻辑通过。覆盖分页缩进、全状态、跨PON、反序关联、空表、重复/缺项、拒绝/格式不识别回退、补查仍不可得、错误身份隔离、断线/超时/停止、分段配置块/提示符/分页与实际默认service会话集成。完整基线ALL CHECKS PASSED（1421项测试、190项指定关键回归、105个源码编译/覆盖），输出`%TEMP%/linecheck_onu_bulk_baseline_20261108.log`。真实C300 14台16条4.562秒→3条1.594/1.640/1.641秒；C600当前38台39条10.047秒→2条1.953/1.891/1.937秒，包含登录，全部字段、数量和顺序逐项一致，无补查，报告`%TEMP%/linecheck_onu_bulk_live_20261108.json`。隔离Tk检查通过两型号确认取消不连接、真实工作线程与主线程回填、无自动选择、显式单选启用删除及按钮复位，报告`%TEMP%/linecheck_onu_bulk_ui_20261108/report.json`；确认框为模拟返回，不代表可见鼠标键盘交互。
+- 配置保护：6份INI与23:39:58快照对比，5份哈希保持；`onu_registration.ini`在23:44:50发生保存变化，早于隔离Tk验证，当前两组连接资料完整，保留当前文件不恢复或覆盖。源码修改和临时Tk脚本未回写该本机文件；临时Tk只写仓库外配置。公共`zte_olt_telnet.py`无差异，`git diff --check`通过。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.10/§3复验Windows可见确认框、查询响应/列表、停止及其它OLT软件版本的兼容分支；Computer Use重试和重置后仍报native pipe不可用，未取得实际鼠标键盘交互证据。只读实连不升级负责人现场验收。未执行注册/删除/write、网卡或电源操作，未打包、运行EXE、发布、暂存或提交。
+
+## 2026-11-08 - 保留C600已填写的ONU类型模板
+
+- 类型：BUG 修复
+- 背景：负责人反馈ONU类型模板TZW-99无法保存。字段已有自动保存及INI读写；根因是C600每次选择或全选ONU时无条件用发现型号覆盖当前模板，并触发自动保存。负责人确认保留上次填写值，仅空值时回填，不增加按设备型号映射。
+- 完成内容：① C600发现回填只在当前模板去除首尾空白后为空且发现型号非空时执行；手填、下拉选择、既有默认值与多选/全选共用同一规则。② 复用400毫秒自动保存、窗口关闭前即时保存及启动加载，未修改store、INI格式、默认值或本机配置；速率回填、ONU ID、业务映射、预览失效、注册确认和write授权保持。③ 更新字段提示、操作说明、当前状态和待复验边界，补充7项回归。
+- 修改文件：
+  - `.claude/plans/onu-template-retention.md`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_registration_store.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用CPython3.9.10，设置PYTHONUTF8=1及PYTHONIOENCODING=utf-8，运行`python -m unittest discover -s tests -p test_app.py`、`python -m unittest discover -s tests -p test_onu_registration_store.py`和`python scripts/verify_baseline.py`；运行仓库外临时脚本`%TEMP%/linecheck_onu_template_ui_20261108.py`，将源码版配置、窗口尺寸及日志全部指向临时目录，以真实Tk窗口/Combobox、保存回调、窗口关闭回调和两个独立Python进程验证保存重开及重启加载。核对本机INI哈希及`git diff --check`。
+- 验证结果：界面逻辑211项、配置7项通过；新增7项覆盖手填/下拉/默认值保留、首尾空白、空字段回填与空型号、切换/全选、查询不覆盖，以及自定义/空模板配置往返。完整基线ALL CHECKS PASSED（1393项测试、190项指定关键回归、104个源码编译/覆盖及全部协议不变量），输出`%TEMP%/linecheck_onu_template_baseline_20261108.log`。真实Tk自动化检查通过：TZW-99自动保存、关闭重开、切换发现型号不覆盖；TZW-99-FAST在400毫秒等待前立即关闭即已保存；独立进程重启后恢复TZW-99，报告位于`%TEMP%/linecheck_onu_template_ui_20261108/`。Windows窗口工具重试及重置后仍报native pipe不可用，未获得可见窗口或鼠标键盘交互证据。6份本机INI在验证前后SHA256一致，git diff --check通过。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.10/§3复验Windows实际输入、下拉、立即关闭、重启及选择/全选；Tk自动化不替代可见交互或真实OLT验收。本轮未操作设备、打包、运行EXE、发布、暂存或提交。
+
 ## 2026-11-08 - 补齐WiFi重试与失败历史
 
 - 类型：BUG 修复

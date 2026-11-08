@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
+from src.core.zte_olt_telnet import clean_terminal_text
 from src.models.onu_registration_models import (
     C300CleanupCandidate,
     DiscoveredOnu,
@@ -643,6 +644,31 @@ class ZteC300OnuDriver:
                 )
             )
         return candidates
+
+    @staticmethod
+    def build_registered_baseinfo_query_command(pon_interface: str) -> str:
+        return f"show gpon onu baseinfo {pon_interface}"
+
+    def parse_registered_baseinfo(
+        self, pon_interface: str, output: str
+    ) -> dict[str, dict[str, str]]:
+        """按接口关联目标 PON 的身份信息，兼容分页残留缩进。"""
+        normalized = "\n".join(
+            line.lstrip() for line in clean_terminal_text(output or "").splitlines()
+        )
+        target_pon = pon_interface.rsplit("_", 1)[-1]
+        result: dict[str, dict[str, str]] = {}
+        duplicates: set[str] = set()
+        for item in self.parse_baseinfo(normalized):
+            interface = item["interface"].lower()
+            if interface.rsplit("_", 1)[-1].split(":", 1)[0] != target_pon:
+                continue
+            if interface in result or interface in duplicates:
+                result.pop(interface, None)
+                duplicates.add(interface)
+            else:
+                result[interface] = item
+        return result
 
     @staticmethod
     def build_delete_identity_command(candidate: RegisteredOnu) -> str:

@@ -3125,7 +3125,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn('text="完整验证成功后执行 write（危险，仅本次有效）"', open_source)
         self.assertIn('"ONU 类型模板"', open_source)
         self.assertIn(
-            '"ONU 类型模板是 OLT 中的 onu-type 模板名称；默认带入查询到的 ONU 型号，可按实际兼容模板修改。"',
+            '"ONU 类型模板是 OLT 中的 onu-type 模板名称；自动保存上次填写值，仅为空时带入查询到的 ONU 型号。"',
             open_source,
         )
         self.assertNotIn('"ONU 型号"', open_source)
@@ -3230,6 +3230,32 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             daemon=True,
         )
         worker.start.assert_called_once_with()
+        confirmation = askyesno.call_args.args[1]
+        self.assertIn("show running-config-interface gpon_olt-1/1/5", confirmation)
+        self.assertIn("show gpon onu state gpon_olt-1/1/5", confirmation)
+        self.assertIn("逐台只读查询补齐", confirmation)
+
+    @patch("line_check_assistant.app.messagebox.askyesno", return_value=False)
+    @patch("line_check_assistant.app.threading.Thread")
+    def test_c300_registered_query_confirmation_lists_bulk_commands_and_cancel_stops(self, thread_class, askyesno):
+        context = SimpleNamespace(
+            onu_manage_query_running=False,
+            onu_manage_delete_running=False,
+            onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C300)),
+            onu_registration_window=Mock(),
+            _current_onu_connection=Mock(return_value=OltConnection("192.0.2.1", "192.0.2.2", "test", "test")),
+            _current_onu_manage_pon_interface=Mock(return_value="gpon-olt_1/2/1"),
+            _clear_registered_candidates=Mock(),
+        )
+        LineCheckAssistant._on_onu_manage_query_clicked(context)
+        confirmation = askyesno.call_args.args[1]
+        self.assertIn("terminal length 0", confirmation)
+        self.assertIn("show gpon onu state（全局查询，按目标 PON 过滤）", confirmation)
+        self.assertIn("show gpon onu baseinfo gpon-olt_1/2/1", confirmation)
+        self.assertNotIn("show gpon onu state gpon-olt_1/2/1", confirmation)
+        thread_class.assert_not_called()
+        context._clear_registered_candidates.assert_not_called()
+        self.assertFalse(context.onu_manage_query_running)
 
     def test_complete_onu_manage_query_lists_candidates_without_autoselect(self):
         candidate = RegisteredOnu(
@@ -3367,7 +3393,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             speed_mode="XGS-PON",
         )
         context = SimpleNamespace(
-            onu_c600_onu_type_var=Mock(),
+            onu_c600_onu_type_var=Mock(get=Mock(return_value="")),
             onu_c600_real_speed_var=Mock(),
             _set_onu_query_status=Mock(),
         )
@@ -3376,6 +3402,107 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         context.onu_c600_onu_type_var.set.assert_called_once_with("NP7287XGS")
         context.onu_c600_real_speed_var.set.assert_called_once_with("auto")
+
+    def test_c600_discovery_preserves_manual_and_dropdown_templates(self):
+        onu = DiscoveredOnu(
+            family=OLT_FAMILY_C600, pon_interface="gpon_olt-1/1/5",
+            serial_number="SDMC176D42AA", model="NP7287XGS", speed_mode="XGS-PON",
+        )
+        for template in ("TZW-99", "TZW-99（GPON）", "  TZW-99  ", "CXP-55"):
+            with self.subTest(template=template):
+                context = SimpleNamespace(
+                    onu_c600_onu_type_var=Mock(get=Mock(return_value=template)),
+                    onu_c600_real_speed_var=Mock(), _set_onu_query_status=Mock(),
+                )
+
+                LineCheckAssistant._fill_c600_from_discovered_onu(context, onu)
+
+                context.onu_c600_onu_type_var.set.assert_not_called()
+                context.onu_c600_real_speed_var.set.assert_called_once_with("auto")
+
+    def test_c600_discovery_fills_whitespace_template_only_with_available_model(self):
+        for model in ("NP7287XGS", ""):
+            with self.subTest(model=model):
+                onu = DiscoveredOnu(
+                    family=OLT_FAMILY_C600, pon_interface="gpon_olt-1/1/5",
+                    serial_number="SDMC176D42AA", model=model,
+                )
+                context = SimpleNamespace(
+                    onu_c600_onu_type_var=Mock(get=Mock(return_value=" \t ")),
+                    onu_c600_real_speed_var=Mock(), _set_onu_query_status=Mock(),
+                )
+
+                LineCheckAssistant._fill_c600_from_discovered_onu(context, onu)
+
+                if model:
+                    context.onu_c600_onu_type_var.set.assert_called_once_with(model)
+                else:
+                    context.onu_c600_onu_type_var.set.assert_not_called()
+                context.onu_c600_real_speed_var.set.assert_not_called()
+
+    def test_c600_switching_selected_onus_preserves_template_and_invalidates_preview(self):
+        from dataclasses import replace
+
+        context, targets = self._onu_batch_id_context()
+        context.onu_c600_onu_type_var.set("TZW-99")
+        context._set_onu_query_status = Mock()
+        context._fill_c600_from_discovered_onu = (
+            lambda onu: LineCheckAssistant._fill_c600_from_discovered_onu(context, onu)
+        )
+        for target, model in zip(targets, ("NP7287XGS", "OTHER-GPON")):
+            LineCheckAssistant._on_onu_selection_toggled(
+                context, replace(target, model=model), Mock(get=Mock(return_value=True))
+            )
+            self.assertEqual(context.onu_c600_onu_type_var.get(), "TZW-99")
+        self.assertEqual(context._invalidate_onu_preview.call_count, 2)
+
+    def test_c600_select_all_preserves_template_or_fills_first_model_when_empty(self):
+        from dataclasses import replace
+
+        for template, expected in (("TZW-99", "TZW-99"), ("", "FIRST-MODEL")):
+            with self.subTest(template=template):
+                context, _targets = self._onu_batch_id_context()
+                context.onu_c600_onu_type_var.set(template)
+                context._set_onu_query_status = Mock()
+                context._fill_c600_from_discovered_onu = (
+                    lambda onu: LineCheckAssistant._fill_c600_from_discovered_onu(context, onu)
+                )
+                context.onu_unregistered_selection_vars = [
+                    (replace(onu, model=model), selected)
+                    for (onu, selected), model in zip(
+                        context.onu_unregistered_selection_vars, ("FIRST-MODEL", "SECOND-MODEL")
+                    )
+                ]
+                for _onu, selected in context.onu_unregistered_selection_vars:
+                    selected.set(False)
+
+                LineCheckAssistant._select_all_unregistered_onus(context)
+
+                self.assertEqual(context.onu_c600_onu_type_var.get(), expected)
+                self.assertTrue(all(selected.get() for _onu, selected in context.onu_unregistered_selection_vars))
+                context._invalidate_onu_preview.assert_called_once_with()
+
+    def test_c600_template_query_updates_choices_without_overwriting_input(self):
+        from src.models.onu_registration_models import OnuTemplate
+
+        context, _targets = self._onu_batch_id_context()
+        context.onu_c600_onu_type_var.set("TZW-99")
+        context.onu_c600_onu_type_combo = Mock()
+        context._set_onu_registration_action_buttons_state = Mock()
+        context._set_onu_query_status = Mock()
+        context._log = Mock()
+        result = OnuOperationResult(
+            True, "查询成功", templates=(OnuTemplate("OTHER-GPON", "GPON"),),
+        )
+
+        LineCheckAssistant._complete_onu_template_query(
+            context, OLT_FAMILY_C600, "172.18.18.152", "onu_type", result
+        )
+
+        self.assertEqual(context.onu_c600_onu_type_var.get(), "TZW-99")
+        context.onu_c600_onu_type_combo.configure.assert_called_once_with(
+            values=tuple(template.display_text for template in result.templates)
+        )
 
     def test_invalidating_onu_preview_clears_commands_and_disables_registration(self):
         context = SimpleNamespace(

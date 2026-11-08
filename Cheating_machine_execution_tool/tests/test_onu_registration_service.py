@@ -1017,11 +1017,9 @@ class ServiceTests(unittest.TestCase):
                 "onu 55 type CXP-55 sn ZTEG12345678\n"
                 "onu 56 type CXP-55 sn ZTEG99999999\nZXAN#"
             ),
-            "show gpon onu state gpon_olt-1/1/5 55": (
-                "1/1/5:55 enable disable OffLine N/A\nZXAN#"
-            ),
-            "show gpon onu state gpon_olt-1/1/5 56": (
-                "1/1/5:56 enable enable working XGS-PON\nZXAN#"
+            "show gpon onu state gpon_olt-1/1/5": (
+                "1/1/5:55 enable disable OffLine N/A\n"
+                "          1/1/5:56 enable enable working XGS-PON\nZXAN#"
             ),
         }
         fake = FakeSession(responses=responses)
@@ -1042,6 +1040,10 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(result.registered_onus[0].serial_number, "ZTEG12345678")
         self.assertEqual(result.registered_onus[0].state, "OffLine")
         self.assertEqual(result.registered_onus[1].state, "working")
+        self.assertEqual(fake.commands, [
+            "show running-config-interface gpon_olt-1/1/5",
+            "show gpon onu state gpon_olt-1/1/5",
+        ])
 
     def test_delete_registered_onu_rechecks_identity_and_verifies_after(self):
         candidate = RegisteredOnu(

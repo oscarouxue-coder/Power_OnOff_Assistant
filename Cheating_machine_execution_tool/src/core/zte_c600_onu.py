@@ -596,6 +596,32 @@ class ZteC600OnuDriver:
         return f"show gpon onu state {pon_interface} {onu_id}"
 
     @staticmethod
+    def build_registered_state_query_command(pon_interface: str) -> str:
+        return f"show gpon onu state {pon_interface}"
+
+    @staticmethod
+    def parse_registered_states(pon_interface: str, output: str) -> dict[int, str]:
+        """只关联目标 PON 的状态，不按在线状态过滤，重复 ID 留待补查。"""
+        location = pon_interface.split("-", 1)[1]
+        result: dict[int, str] = {}
+        duplicates: set[int] = set()
+        for line in clean_terminal_text(output or "").splitlines():
+            match = _C600_STATE_LINE_RE.match(line.strip())
+            if not match:
+                continue
+            interface, _admin, _omcc, phase = match.groups()
+            pon, onu_id_text = interface.split(":", 1)
+            if pon != location:
+                continue
+            onu_id = int(onu_id_text)
+            if onu_id in result or onu_id in duplicates:
+                result.pop(onu_id, None)
+                duplicates.add(onu_id)
+            else:
+                result[onu_id] = phase
+        return result
+
+    @staticmethod
     def parse_onu_state_label(output: str) -> str:
         """解析单台 ONU 的运行状态标签（用于展示，不做在线 / 离线过滤）。"""
         for raw_line in clean_terminal_text(output or "").splitlines():

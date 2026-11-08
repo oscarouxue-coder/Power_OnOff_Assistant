@@ -144,6 +144,7 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/core/zte_c300_onu.py",
     "src/core/zte_c600_onu.py",
     "src/core/zte_olt_telnet.py",
+    "src/core/zte_olt_registered_query.py",
     "src/models/onu_registration_models.py",
     "src/models/sample_parameter_models.py",
     "src/models/dut_config_models.py",

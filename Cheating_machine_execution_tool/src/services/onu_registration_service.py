@@ -6,6 +6,7 @@ from typing import Callable, Iterable, Optional, Sequence, Type
 
 from src.core.zte_c300_onu import ZteC300OnuDriver
 from src.core.zte_c600_onu import ZteC600OnuDriver
+from src.core.zte_olt_registered_query import RegisteredOnuQuerySession
 from src.core.zte_olt_telnet import (
     CLI_ERROR_RE,
     OltCommandError,
@@ -503,34 +504,68 @@ class OnuRegistrationService:
         driver = driver_for_family(family)
         commands: list[str] = []
         outputs: list[str] = []
+        started_at = time.monotonic()
+
+        def check_cancelled() -> None:
+            if cancel_event is not None and cancel_event.is_set():
+                raise OperationCancelled("操作已停止")
+
         try:
+            check_cancelled()
             self._log(family, f"开始查询目标 PON 口已注册 ONU：{pon_interface}")
-            with self.session_type(
+            query_session_type = (
+                RegisteredOnuQuerySession
+                if self.session_type is ZteOltTelnetSession else self.session_type
+            )
+            with query_session_type(
                 connection,
                 logger=lambda text: self._log(family, text),
                 cancel_event=cancel_event,
             ) as session:
+                def execute(command: str, timeout: float = 30, *, fail_on_cli_error: bool = True) -> str:
+                    check_cancelled()
+                    commands.append(command)
+                    try:
+                        output = session.execute(
+                            command, timeout=timeout, fail_on_cli_error=fail_on_cli_error
+                        )
+                    except OltCommandError as exc:
+                        outputs.append(exc.output)
+                        raise
+                    outputs.append(output)
+                    check_cancelled()
+                    return output
+
                 if family == OLT_FAMILY_C300:
-                    terminal = session.execute("terminal length 0")
-                    commands.append("terminal length 0")
-                    outputs.append(terminal)
+                    execute("terminal length 0", timeout=20)
                     query_command = driver.build_registered_query_command(pon_interface)
-                    state_output = session.execute(query_command, timeout=30)
-                    commands.append(query_command)
-                    outputs.append(state_output)
+                    state_output = execute(query_command)
                     candidates = driver.parse_registered_candidates(pon_interface, state_output)
+                    identities = {}
+                    if candidates:
+                        identity_command = driver.build_registered_baseinfo_query_command(pon_interface)
+                        try:
+                            identity_output = execute(identity_command)
+                        except OltCommandError:
+                            self._log(family, "批量身份查询被 OLT 拒绝，回退逐台只读查询")
+                        else:
+                            identities = driver.parse_registered_baseinfo(pon_interface, identity_output)
+                        missing = sum(
+                            candidate.onu_interface.lower() not in identities for candidate in candidates
+                        )
+                        if missing:
+                            self._log(family, f"批量身份信息缺少 {missing} 项，逐台补查 SN 和类型模板")
                     enriched: list[RegisteredOnu] = []
                     for candidate in candidates:
-                        identity_command = driver.build_delete_identity_command(candidate)
-                        identity_output = session.execute(
-                            identity_command,
-                            timeout=20,
-                            fail_on_cli_error=False,
-                        )
-                        commands.append(identity_command)
-                        outputs.append(identity_output)
-                        baseinfo = driver.parse_baseinfo(identity_output)
-                        item = baseinfo[0] if baseinfo else None
+                        check_cancelled()
+                        interface = candidate.onu_interface.lower()
+                        item = identities.get(interface)
+                        if item is None:
+                            identity_command = driver.build_delete_identity_command(candidate)
+                            identity_output = execute(
+                                identity_command, timeout=20, fail_on_cli_error=False
+                            )
+                            item = driver.parse_registered_baseinfo(pon_interface, identity_output).get(interface)
                         enriched.append(
                             RegisteredOnu(
                                 family=candidate.family,
@@ -544,21 +579,31 @@ class OnuRegistrationService:
                         )
                 else:
                     query_command = driver.build_registered_query_command(pon_interface)
-                    config_output = session.execute(query_command, timeout=30)
-                    commands.append(query_command)
-                    outputs.append(config_output)
+                    config_output = execute(query_command)
                     location = pon_interface.split("-", 1)[1]
+                    definitions = driver.parse_registered_onu_defs(config_output)
+                    states = {}
+                    if definitions:
+                        state_command = driver.build_registered_state_query_command(pon_interface)
+                        try:
+                            state_output = execute(state_command)
+                        except OltCommandError:
+                            self._log(family, "批量状态查询被 OLT 拒绝，回退逐台只读查询")
+                        else:
+                            states = driver.parse_registered_states(pon_interface, state_output)
+                        missing = sum(onu_id not in states for onu_id, _type, _sn in definitions)
+                        if missing:
+                            self._log(family, f"批量状态信息缺少 {missing} 项，逐台补查状态")
                     enriched = []
-                    for onu_id, onu_type, serial_number in driver.parse_registered_onu_defs(config_output):
-                        state_command = driver.build_onu_state_command(pon_interface, onu_id)
-                        state_output = session.execute(
-                            state_command,
-                            timeout=30,
-                            fail_on_cli_error=False,
-                        )
-                        commands.append(state_command)
-                        outputs.append(state_output)
-                        state_label = driver.parse_onu_state_label(state_output)
+                    for onu_id, onu_type, serial_number in definitions:
+                        check_cancelled()
+                        state_label = states.get(onu_id)
+                        if state_label is None:
+                            state_command = driver.build_onu_state_command(pon_interface, onu_id)
+                            state_output = execute(state_command, fail_on_cli_error=False)
+                            state_label = driver.parse_registered_states(pon_interface, state_output).get(
+                                onu_id, "未查询到状态"
+                            )
                         enriched.append(
                             RegisteredOnu(
                                 family=family,
@@ -570,12 +615,18 @@ class OnuRegistrationService:
                                 onu_type=onu_type,
                             )
                         )
+            check_cancelled()
             message = (
                 f"查询到 {len(enriched)} 个已注册 ONU，请选择要删除的一台"
                 if enriched
                 else "目标 PON 口未查询到已注册 ONU"
             )
             self._log(family, message)
+            self._log(
+                family,
+                f"已注册 ONU 查询完成：候选 {len(enriched)} 个，命令 {len(commands)} 条，"
+                f"耗时 {time.monotonic() - started_at:.2f} 秒",
+            )
             return OnuOperationResult(
                 True,
                 message,
