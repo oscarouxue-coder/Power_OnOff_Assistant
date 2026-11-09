@@ -1,5 +1,64 @@
 # 开发记录
 
+## 2026-11-09 - 取消旧登录探测并联动凭据置灰
+
+- 类型：修改
+- 背景：负责人确认取消“是否需要输入密码”及其旧额外回车探测，不新增仅密码登录；实施中追加“免用户名密码登录”或“仅执行上下电”任一为是时，将登录用户名/密码输入框置灰。
+- 完成内容：① Telnet页删除废弃字段变量、trace及capture/load映射，剩余两个只读是/否下拉上移至11/12行，沿用负责人确认的Checkbutton规范例外。② 旧客户端不再读取该配置或执行额外回车探测，原文件为1也立即失效；模型保留兼容字段和位置，加载固定0且不写盘，保存兼容键固定0。③ 任一保留选项为是时两项凭据Entry设disabled，两项全否恢复normal；初始化/编辑/重载均同步，不清空值，保存/capture与密码显隐行为保持，免认证失败仍沿用原凭据回退。④ 正常登录、免认证成功/回退、登录后命令/等待和失败边界保持，仅移除已确认的旧分支，不改变停止、版本预检、设备命令或上下电时序；同步操作员说明及验收边界。
+- 修改文件：
+  - `.claude/plans/remove-telnet-password-probe.md`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/clients/telnet_client.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/tests/test_test_item_config_store.py`
+  - `Cheating_machine_execution_tool/tests/test_legacy_telnet_login.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录用`../.venv_serial_upgrade/Scripts/python.exe`（CPython3.9.10）设置PYTHONUTF8=1、PYTHONIOENCODING=utf-8，运行`-m unittest discover -s tests -p test_app.py`、`-p test_test_item_config_store.py`、`-p test_legacy_telnet_login.py`、`-p test_telnet_post_login_app.py`，单独`-m py_compile Auto_power_on_off_tool/clients/telnet_client.py`，并运行`scripts/verify_baseline.py`。新旧登录回归提取真实完整旧方法并使用模拟Telnet响应/时钟，不构造网络；仓库外`%TEMP%/linecheck_remove_password_probe_ui_20261109.py`使用临时INI和真实Tk控件，不启动完整主程序或连接设备；核对6份本机INI及6份原WiFi改动文件哈希和本轮diff。
+- 验证结果：新增10项回归（界面2、存储2、旧登录6），220项界面、28项存储、6项旧登录及7项登录后命令专项通过，共261项。覆盖废弃值缺失/0/1/非法内容加载无写盘、内存旧值1保存归零、构造位置兼容，普通凭据发送无额外回车/探测、免认证单回车成功或失败回退、精确>的登录后命令/空回车及原等待、用户名/密码/成功提示失败；联动覆盖四种初始化组合、逐项选择、重载、恢复可编辑和非空凭据保存重开。完整基线ALL CHECKS PASSED（1459项测试、190项指定关键回归、105个源码编译/覆盖及协议不变量），日志`%TEMP%/linecheck_remove_password_probe_baseline_20261109.log`；旧客户端单独编译通过。vista/Clam各四种组合真实Tk检查通过，包括disabled拒绝输入、两项全否恢复编辑、候选弹层、废弃项消失、同列布局无越界，报告`%TEMP%/linecheck_remove_password_probe_ui_20261109.json`。6份本机INI和既有WiFi源码/测试/基线脚本/计划哈希均保持，本轮diff检查通过。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.11/§3复验Windows源码版可见选择、置灰颜色及鼠标键盘操作、保存提醒/重开，以及旧配置1停用后的真实设备正常登录、免认证成功/回退与登录后命令。本轮Computer Use窗口枚举仍报`native pipe is unavailable ... 系统找不到指定的文件 (os error 2)`，未取得可见交互证据；隔离Tk和模拟会话不升级现场验收。未改本机INI、既有WiFi改动或依赖，未打包、运行EXE、操作设备、暂存或提交。
+
+## 2026-11-09 - 补齐Ping阶段连接核验重试
+
+- 类型：修改
+- 背景：通道7第28轮在第1/4次连接后报“无法核验实际连接频率”，未进入下一次尝试。确认原service进入Ping阶段后所有验证异常均直接结束；负责人确认连接核验失败也共用每频段4次尝试（首次+最多3次重试），Ping全部无回复及环境异常保持原规则，并批准计划实施。
+- 完成内容：① service增加私有Ping无回复异常，与连接核验失败区分，公共接口/返回值保持；等待无线IP、Ping中及末次复核的连接核验异常回到原循环。② 失败先清理并确认断开，等待10秒后重新扫描、连接、稳定核验和完整Ping，扫描/连接/Ping共用4次、不累计旧回复；每次扫描/连接/稳定核验20秒、连续稳定2秒、FIFO和停止/清理规则保持。③ 沿用原尝试失败/等待消息并注明Ping阶段，三处摘要及历史解析不改；验证用尽3条重试+1条最终失败，清理成功后才记恢复。④ 新增14项回归，原不重连关键测试替换为更强的4次用尽且不误报成功测试，同步REQUIRED_BASELINE_TEST_IDS及验收项；同步操作员说明、状态、验收边界和待复验清单。
+- 修改文件：
+  - `.claude/plans/wifi-ping-guard-retry.md`
+  - `Cheating_machine_execution_tool/src/services/wifi_connection_service.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_wifi_connection_service.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_wifi_history.py`
+  - `Cheating_machine_execution_tool/tests/test_main_log_filter.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用`../.venv_serial_upgrade/Scripts/python.exe`（CPython3.9.10），设置PYTHONUTF8=1、PYTHONIOENCODING=utf-8，执行`-m unittest discover -s tests -p test_wifi_connection_service.py`、`-p test_power_test_wifi_history.py`、`-p test_main_log_filter.py`、`-p test_wireless_ping.py`和`scripts/verify_baseline.py`。对比本轮开始保存的6份本机INI及4份原有源码/测试/计划文件SHA256，并检查本轮文件的git diff --check。
+- 验证结果：60项连接/Native WLAN、18项历史、18项日志及20项无线Ping专项通过（共116项）；覆盖各类核验异常后恢复、真实Ping入口等待IP阶段异常、扫描/连接/Ping混合预算、末次复核、旧回复不累计、双频/合一、FIFO、停止、清理失败/超时、Ping无回复及DNS/IP/socket异常不重试。真实service配假网卡/虚拟时钟，历史通过原始IPC重放，主界面控件为模拟对象；三处摘要一致、历史去重及恢复时机通过。完整基线ALL CHECKS PASSED（1449项测试、190项指定关键回归、105个源码编译/覆盖及协议不变量），输出`%TEMP%/linecheck_wifi_ping_retry_baseline_20261109.log`。本机配置及既有未提交源码/测试/计划保持，未改依赖或工具链。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.12/§3复验Windows源码版及真实样机：故障后清理/等待/重连/Ping顺序、最多4次、第二次恢复/用尽、双频及历史/日志一致；自动化不替代现场验收。本轮未操作真实WiFi/设备、电源或网卡配置，未启动完整主程序、打包、运行EXE、暂存或提交。
+
+## 2026-11-09 - 将Telnet三项选项改为是或否
+
+- 类型：优化
+- 背景：负责人要求将Telnet页“是否需要输入密码”“免用户名密码登录”“仅执行上下电”的0/1显示改为“是/否”，并移除标签中的“（0/1）”；计划已确认，本次三项只读下拉作为原生Checkbutton规范的明确例外。
+- 完成内容：① 在既有Telnet页内将三项改为只读“是、否”下拉，保持原行列、左对齐及字段宽度。② 初始化/重载将1映射为“是”、0映射为“否”，capture仍返回整数；INI键名/格式、默认值、待保存trace、其它字段和登录/上下电执行保持。③ 更新中文标签断言，增加八种组合的load/capture、逐项修改提醒及临时INI保存重开回归；旧登录后命令测试补齐Combobox模拟。④ 同步操作员说明、状态及验收边界，保留原现场结论。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/tests/test_telnet_post_login_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/telnet-yes-no.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用`../.venv_serial_upgrade/Scripts/python.exe`（CPython3.9.10），设置PYTHONUTF8=1、PYTHONIOENCODING=utf-8，执行`-m unittest discover -s tests -p test_app.py`、`-p test_telnet_post_login_app.py`、`-p test_portable_release.py`及`scripts/verify_baseline.py`。隔离真实Tk脚本`%TEMP%/linecheck_telnet_yes_no_ui_20261109.py`使用临时INI，不启动完整主程序或连接设备；检查vista/Clam两主题的候选弹层、只读输入、三项位置、修改回调及八组合保存/销毁重建/重载。最后核对6份本机INI哈希和本轮文件的`git diff --check`。
+- 验证结果：新增3项回归，218项界面、7项登录后命令及10项便携依赖专项通过。首次基线暴露旧测试未模拟Combobox及开发虚拟环境缺少既有依赖xlrd，分别补齐模拟并在`.venv_serial_upgrade`安装已有锁定版本`xlrd==2.0.2`，未改依赖文件或全局Python。随后一次基线仍返回1项失败、其默认摘要未含用例明细；仓库外诊断脚本仅包装原`run_unittest`以保存完整输出，原`verify_baseline.main()`全部门禁最终通过：ALL CHECKS PASSED，1435项测试（2项跳过）、190项指定关键回归、105个源码编译/覆盖及协议不变量；日志为`%TEMP%/linecheck_telnet_yes_no_diagnostic_20261109.log`和`%TEMP%/linecheck_telnet_yes_no_full_tests_20261109.log`，未修改或跳过门禁。真实Tk两主题各八组合通过，三项同列且无越界，报告`%TEMP%/linecheck_telnet_yes_no_ui_20261109.json`。6份INI哈希未变，本轮文件diff检查通过；原有test_project_config.ini三处尾随空格保留。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.11/§3复验Windows可见界面的鼠标/键盘选择、保存提醒及重开。Computer Use初始化后两次窗口枚举均报`native pipe is unavailable ... 系统找不到指定的文件 (os error 2)`；未取得可见交互证据，隔离Tk自动化不升级现场验收。本轮未打包、运行EXE、操作设备、暂存或提交。
+
 ## 2026-11-09 - 修复本次WiFi日志误开历史文件
 
 - 类型：BUG 修复

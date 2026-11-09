@@ -59,6 +59,7 @@ class TelnetSettings:
     input_user_flag: str = "ogin:"
     input_password_flag: str = "Password:"
     login_success_flag: str = "#"
+    # 已废弃，仅保留字段及位置参数兼容；配置加载/保存固定为0，登录不再使用。
     telnet_need_enter_password_flag: int = 0
     telnet_no_user_password_flag: int = 0
     only_power_off_on: int = 0
@@ -281,9 +282,7 @@ class TestItemConfigStore:
             input_user_flag=parser.get(section, "input_user_flag", fallback="ogin:"),
             input_password_flag=parser.get(section, "input_password_flag", fallback="Password:"),
             login_success_flag=parser.get(section, "login_success_flag", fallback="#"),
-            telnet_need_enter_password_flag=_parse_int(
-                parser.get(section, "telnet_need_enter_password_flag", fallback="0"), 0
-            ),
+            telnet_need_enter_password_flag=0,
             telnet_no_user_password_flag=_parse_int(
                 parser.get(section, "telnet_no_user_password_flag", fallback="0"), 0
             ),
@@ -381,7 +380,7 @@ class TestItemConfigStore:
             "input_password_flag": telnet.input_password_flag or "",
             "login_success_flag": telnet.login_success_flag or "",
             "login_after_input_str": telnet.login_after_input_str or "",
-            "telnet_need_enter_password_flag": str(_parse_int(telnet.telnet_need_enter_password_flag, 0)),
+            "telnet_need_enter_password_flag": "0",  # 兼容旧配置键，废弃值不再生效。
             "telnet_no_user_password_flag": str(_parse_int(telnet.telnet_no_user_password_flag, 0)),
             "only_power_off_on": str(_parse_int(telnet.only_power_off_on, 0)),
             # telnet_default_on 统一为 0/1,即便 UI 传入 Python bool 也强制转换,避免保存为 "True"/"False"。

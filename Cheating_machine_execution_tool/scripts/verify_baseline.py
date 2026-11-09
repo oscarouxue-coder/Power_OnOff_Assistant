@@ -166,7 +166,7 @@ REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
     "test_wifi_connection_service.ConnectionServiceTests.test_same_ssid_requires_both_actual_bssids_and_pings_each_band",
     "test_wifi_connection_service.ConnectionServiceTests.test_unified_mode_runs_once_even_when_saved_band_flags_off",
     "test_wifi_connection_service.ConnectionServiceTests.test_other_dut_with_same_ssid_never_passes_and_keeps_retry_budget",
-    "test_wifi_connection_service.ConnectionServiceTests.test_wrong_band_during_ping_overrides_prior_reply_without_reconnection",
+    "test_wifi_connection_service.ConnectionServiceTests.test_wrong_band_during_ping_retries_in_shared_budget_without_false_success",
     "test_wifi_connection_service.ConnectionServiceTests.test_native_scheduler_keeps_reservation_across_ping",
     "test_wifi_connection_service.TargetReaderTests.test_missing_mapping_is_not_replaced_by_fixed_indices",
     "test_wireless_ping.WirelessPingTests.test_four_packets_bind_wireless_source_and_interface_and_report_statistics",

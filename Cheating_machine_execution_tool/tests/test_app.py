@@ -2319,11 +2319,12 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             "用户名提示符",
             "密码提示符",
             "登录成功提示符",
-            "是否需要输入密码（0/1）",
-            "免用户名密码登录（0/1）",
-            "仅执行上下电（0/1）",
+            "免用户名密码登录",
+            "仅执行上下电",
         ):
             self.assertIn(label, telnet_source)
+        self.assertNotIn("（0/1）", telnet_source)
+        self.assertNotIn("是否需要输入密码", telnet_source)
         for old_label in (
             'text="request_url"',
             'text="user"',
@@ -2349,6 +2350,136 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("list_wifi_interface_names()", wifi_source)
         self.assertIn("wifi.test_2g_enable", wifi_source)
         self.assertIn("wifi.wireless_card_name", wifi_source)
+
+    def _telnet_yes_no_controls(self, settings, credential_entries=None):
+        from tkinter import IntVar, StringVar, Tcl
+
+        self.addCleanup(gc.collect)
+        interpreter = Tcl()
+        dirty = Mock()
+        entries = []
+
+        def entry(*_args, **kwargs):
+            widget = Mock()
+            entries.append(widget)
+            return widget
+
+        with patch("line_check_assistant.app.StringVar", side_effect=lambda **kw: StringVar(master=interpreter, **kw)), \
+             patch("line_check_assistant.app.IntVar", side_effect=lambda **kw: IntVar(master=interpreter, **kw)), \
+             patch("line_check_assistant.app.ttk.Frame"), \
+             patch("line_check_assistant.app.Label"), \
+             patch("line_check_assistant.app.Button"), \
+             patch("line_check_assistant.app.Checkbutton"), \
+             patch("line_check_assistant.app.ttk.Entry", side_effect=entry), \
+             patch("line_check_assistant.app.ttk.Spinbox"), \
+             patch("line_check_assistant.app.ttk.Combobox") as combo:
+            controls = LineCheckAssistant._build_test_item_telnet_tab(
+                SimpleNamespace(), Mock(), settings, dirty
+            )
+        self.assertEqual(combo.call_count, 2)
+        for invocation in combo.call_args_list:
+            self.assertEqual(invocation.kwargs["values"], ("是", "否"))
+            self.assertEqual(invocation.kwargs["state"], "readonly")
+        variables = [invocation.kwargs["textvariable"] for invocation in combo.call_args_list]
+        if credential_entries is not None:
+            credential_entries.extend(
+                [next(widget for widget in entries if widget.grid.call_args and widget.grid.call_args.kwargs.get("row") == 3),
+                 next(widget for widget in entries if widget.pack.called)]
+            )
+        return controls, variables, dirty
+
+    def test_telnet_yes_no_load_and_capture_preserve_all_flag_combinations(self):
+        from itertools import product
+
+        controls, variables, _dirty = self._telnet_yes_no_controls(TelnetSettings())
+        self.assertEqual([var.get() for var in variables], ["否"] * 2)
+        self.assertEqual(controls["capture"](), TelnetSettings())
+        for flags in product((0, 1), repeat=2):
+            with self.subTest(flags=flags):
+                settings = TelnetSettings(
+                    telnet_no_user_password_flag=flags[0],
+                    only_power_off_on=flags[1],
+                    telnet_default_on=0,
+                    login_after_input_str="",
+                )
+                controls["load"](settings)
+                self.assertEqual([var.get() for var in variables], ["是" if flag else "否" for flag in flags])
+                self.assertEqual(controls["capture"](), settings)
+
+    def test_telnet_yes_no_selection_marks_dirty_and_changes_only_its_flag(self):
+        fields = ("telnet_no_user_password_flag", "only_power_off_on")
+        controls, variables, dirty = self._telnet_yes_no_controls(TelnetSettings())
+        dirty.assert_not_called()
+        for index, var in enumerate(variables):
+            for text, flag in (("是", 1), ("否", 0)):
+                with self.subTest(field=fields[index], text=text):
+                    dirty.reset_mock()
+                    var.set(text)
+                    dirty.assert_called_once_with()
+                    expected = TelnetSettings(**{fields[index]: flag})
+                    self.assertEqual(controls["capture"](), expected)
+
+    def test_telnet_yes_no_save_and_reopen_keep_numeric_ini_flags(self):
+        import configparser
+        from itertools import product
+
+        fields = ("telnet_no_user_password_flag", "only_power_off_on")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "test_project_config.ini"
+            store = TestItemConfigStore(path)
+            config = store.load()
+            config.telnet.user = "retained-user"
+            config.telnet.password = "retained-password"
+            controls, variables, _dirty = self._telnet_yes_no_controls(config.telnet)
+            for flags in product((0, 1), repeat=2):
+                with self.subTest(flags=flags):
+                    for var, flag in zip(variables, flags):
+                        var.set("是" if flag else "否")
+                    config.telnet = controls["capture"]()
+                    store.save(config)
+                    parser = configparser.RawConfigParser()
+                    parser.read(path, encoding="utf-8")
+                    self.assertEqual([parser.get("telnet", field) for field in fields], [str(flag) for flag in flags])
+                    reloaded = TestItemConfigStore(path).load()
+                    reopened, reopened_vars, _dirty = self._telnet_yes_no_controls(reloaded.telnet)
+                    self.assertEqual([var.get() for var in reopened_vars], ["是" if flag else "否" for flag in flags])
+                    self.assertEqual(reopened["capture"](), config.telnet)
+
+    def test_telnet_tab_discards_deprecated_flag_on_initial_load_and_reload(self):
+        settings = TelnetSettings(telnet_need_enter_password_flag=1)
+        controls, _variables, dirty = self._telnet_yes_no_controls(settings)
+        dirty.assert_not_called()
+        self.assertEqual(controls["capture"]().telnet_need_enter_password_flag, 0)
+        controls["load"](settings)
+        self.assertEqual(controls["capture"]().telnet_need_enter_password_flag, 0)
+
+    def test_telnet_credentials_disable_for_either_flag_and_preserve_values(self):
+        from itertools import product
+
+        for initial_flags in product((0, 1), repeat=2):
+            with self.subTest(initial_flags=initial_flags):
+                settings = TelnetSettings(user="retained-user", password="retained-password",
+                                          telnet_no_user_password_flag=initial_flags[0],
+                                          only_power_off_on=initial_flags[1])
+                entries = []
+                controls, variables, dirty = self._telnet_yes_no_controls(settings, entries)
+                dirty.assert_not_called()
+                initial_state = "disabled" if any(initial_flags) else "normal"
+                for widget in entries:
+                    widget.configure.assert_called_with(state=initial_state)
+                for flags in ((1, 0), (1, 1), (0, 1), (0, 0)):
+                    for var, flag in zip(variables, flags):
+                        dirty.reset_mock()
+                        var.set("是" if flag else "否")
+                        dirty.assert_called_once_with()
+                    for widget in entries:
+                        widget.configure.assert_called_with(state="disabled" if any(flags) else "normal")
+                    captured = controls["capture"]()
+                    self.assertEqual((captured.user, captured.password), (settings.user, settings.password))
+                controls["load"](settings)
+                for widget in entries:
+                    widget.configure.assert_called_with(state=initial_state)
+                self.assertEqual(controls["capture"](), settings)
 
     def test_test_item_command_groups_use_wider_vertical_spacing(self):
         """测试项命令组之间应有明显留白，段内布局保持不变。"""

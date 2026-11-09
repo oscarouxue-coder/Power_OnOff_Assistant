@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import Mock
 
 import test_legacy_power_test_service as parent_tests
-from test_wifi_connection_service import FakeBackend, VirtualEvent, TARGETS
+from test_wifi_connection_service import FakeBackend, VirtualEvent, TARGETS, OBS
 from src.models.wifi_test_models import (
     WifiEnvironmentError, WifiScanError, WifiSnapshot, WifiTestOptions, WirelessPingResult,
 )
@@ -128,6 +128,45 @@ class WifiHistoryTests(unittest.TestCase):
         self.assertEqual([e[2] for e in history], ['failed'])
         self.assertIn('无线Ping全部无有效回复', history[0][3])
         self.assertEqual(ping.call_count, 1)
+
+    def test_ping_guard_exhaustion_keeps_three_retries_and_one_detailed_failure(self):
+        backend = FakeBackend()
+        backend.scan_callback = lambda: setattr(backend, 'obs', OBS)
+        def probe(*args):
+            backend.obs = ()
+            args[-1]()
+        ping = Mock(side_effect=probe)
+        _, states, history, _, _ = self.replay(self.service_messages(
+            backend, WifiTestOptions(wireless_ping_enable=True), ping))
+        self.assertEqual([e[2] for e in history], ['retry'] * 3 + ['failed'])
+        self.assertTrue(all('Ping阶段连接核验失败：无法核验实际连接频率' in e[3] for e in history))
+        self.assertIn('第4/4次', history[-1][3])
+        self.assertEqual(states[-1], (2, 'failed', history[-1][3]))
+        self.assertEqual(ping.call_count, 4)
+
+    def test_ping_guard_recovery_records_success_only_after_final_cleanup(self):
+        ping = Mock()
+        events = []
+        def probe(*args):
+            if ping.call_count == 1:
+                from src.models.wifi_test_models import WifiVerificationError
+                raise WifiVerificationError('无法核验实际连接频率')
+            return WirelessPingResult('192.0.2.1', 4, (1.0,))
+        ping.side_effect = probe
+        messages = self.service_messages(options=WifiTestOptions(wireless_ping_enable=True), ping=ping)
+        parser = PowerTestWifiHistory([2], 3)
+        for message in messages:
+            if message['type'] == 'log':
+                stage = message['message']
+                emitted = parser.consume(stage)
+                if any(e[2] == 'success' for e in emitted):
+                    self.assertTrue(stage.endswith('成功：本项无线测试通过'))
+                    self.assertTrue(any(m.get('message', '').endswith('临时连接已清理')
+                                        for m in messages[:messages.index(message)]))
+                events.extend(emitted)
+        self.assertEqual([e[2] for e in events], ['retry', 'success'])
+        self.assertIn('重试1次后测试通过', events[-1][3])
+        self.assertEqual(ping.call_count, 2)
 
     def test_dns_environment_error_keeps_original_code(self):
         ping = Mock(side_effect=WifiEnvironmentError('无线DNS解析失败：9005 DNS_ERROR_RCODE_REFUSED'))

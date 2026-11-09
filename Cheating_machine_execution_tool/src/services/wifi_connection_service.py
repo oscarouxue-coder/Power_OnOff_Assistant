@@ -10,6 +10,10 @@ from src.models.wifi_test_models import (
 )
 
 
+class _WifiPingNoReplyError(WifiVerificationError):
+    """Ping无回复直接失败，与可消耗原尝试预算的连接核验异常区分。"""
+
+
 def validate_wifi_options(options, enabled=True, solution='openwrt'):
     if not enabled:
         return
@@ -192,7 +196,7 @@ class WifiConnectionService:
                                 check_stop(stop)
                                 guard()
                                 if not result.ok:
-                                    raise WifiVerificationError('无线Ping全部无有效回复，不重连或重跑整组Ping')
+                                    raise _WifiPingNoReplyError('无线Ping全部无有效回复，不重连或重跑整组Ping')
                             else:
                                 emit('跳过：无线Ping未启用')
                             check_stop(stop)
@@ -207,11 +211,14 @@ class WifiConnectionService:
                     action = '立即结束' if not exc.retryable else '次数已用尽，结束当前频段'
                     raise WifiEnvironmentError(f'第{attempt}/4次扫描失败：{exc}；{action}') from None
                 emit(f'第{attempt}/4次扫描失败：{exc}；10秒后重试')
+            except _WifiPingNoReplyError:
+                raise
             except WifiVerificationError as exc:
+                check_stop(stop)
                 if ping_phase:
-                    # Ping阶段离开目标/换频段，不能通过重新关联掩盖。
-                    raise
-                emit(f'第 {attempt}/4 次未通过：{exc}')
+                    emit(f'第 {attempt}/4 次未通过：Ping阶段连接核验失败：{exc}')
+                else:
+                    emit(f'第 {attempt}/4 次未通过：{exc}')
             finally:
                 if owned:
                     emit('下发断开临时连接；不删除电脑原有无线配置')

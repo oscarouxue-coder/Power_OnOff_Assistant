@@ -90,7 +90,7 @@ class TestItemConfigStoreTests(unittest.TestCase):
                     input_password_flag="Password:",
                     login_success_flag="$",
                     login_after_input_str="shell -l",
-                    telnet_need_enter_password_flag=1,
+                    telnet_need_enter_password_flag=0,
                     telnet_no_user_password_flag=0,
                     only_power_off_on=0,
                     telnet_default_on=0,  # 显式关掉,验证非默认 1 也能往返
@@ -499,6 +499,34 @@ class TestItemConfigStoreTests(unittest.TestCase):
             reloaded = store.load()
             self.assertEqual(reloaded.telnet.port, 2323)
             self.assertEqual(reloaded.telnet.login_after_input_str, "shell -l")
+
+    def test_deprecated_password_probe_loads_as_zero_without_rewriting_ini(self):
+        for value in (None, "0", "1", "invalid"):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as temp_dir:
+                path = Path(temp_dir) / "test_project_config.ini"
+                content = "[telnet]\n"
+                if value is not None:
+                    content += f"telnet_need_enter_password_flag = {value}\n"
+                path.write_text(content, encoding="utf-8")
+                original = path.read_bytes()
+                loaded = TestItemConfigStore(path).load()
+                self.assertEqual(loaded.telnet.telnet_need_enter_password_flag, 0)
+                self.assertEqual(path.read_bytes(), original)
+
+    def test_deprecated_password_probe_saves_zero_even_if_memory_value_is_one(self):
+        for value in (None, "0", "1", "invalid"):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as temp_dir:
+                path = Path(temp_dir) / "test_project_config.ini"
+                content = "[telnet]\n"
+                if value is not None:
+                    content += f"telnet_need_enter_password_flag = {value}\n"
+                path.write_text(content, encoding="utf-8")
+                store = TestItemConfigStore(path)
+                loaded = store.load()
+                loaded.telnet.telnet_need_enter_password_flag = 1
+                store.save(loaded)
+                self.assertIn("telnet_need_enter_password_flag = 0\n", path.read_text(encoding="utf-8"))
+                self.assertEqual(store.load().telnet.telnet_need_enter_password_flag, 0)
 
     def test_login_after_input_str_does_not_shift_existing_positional_settings(self):
         telnet = TelnetSettings(

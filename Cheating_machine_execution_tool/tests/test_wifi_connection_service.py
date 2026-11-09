@@ -144,14 +144,192 @@ class ConnectionServiceTests(unittest.TestCase):
         self.assertGreaterEqual(self.event.now, 110)
         self.ping.assert_not_called()
 
-    def test_wrong_band_during_ping_overrides_prior_reply_without_reconnection(self):
+    def test_wrong_band_during_ping_retries_in_shared_budget_without_false_success(self):
         def ping(*args):
             self.backend.override = WifiConnection(TARGETS[1].ssid, TARGETS[1].bssid, 7, 4)
             args[-1]()
+        self.backend.scan_callback = lambda: setattr(self.backend, 'override', None)
         self.ping.side_effect = ping
         self.assertEqual(self.run_service(WifiTestOptions(wireless_ping_enable=True))[0], 'failed')
-        self.assertEqual(self.backend.connections, ['2.4G'])
+        self.assertEqual(self.backend.connections, ['2.4G'] * 4)
+        self.assertEqual(self.backend.disconnects, 4)
+        self.assertEqual(self.ping.call_count, 4)
+        self.assertEqual(sum('等待10秒后重试' in s for s in self.logs), 3)
+        self.assertFalse(any('成功：本项无线测试通过' in s for s in self.logs))
+
+    def test_each_ping_connection_guard_failure_can_recover_then_start_next_band(self):
+        for failure in ('disconnect', 'identity', 'missing_frequency', 'wrong_frequency', 'security'):
+            with self.subTest(failure=failure):
+                self.setUp()
+                disconnected_at = []
+                original_disconnect = self.backend.disconnect
+                def disconnect(interface):
+                    original_disconnect(interface)
+                    disconnected_at.append(self.event.now)
+                self.backend.disconnect = disconnect
+                def scan():
+                    if self.backend.scans == 2:
+                        self.assertGreaterEqual(self.event.now - disconnected_at[-1], 10.49)
+                    self.backend.override, self.backend.obs = None, OBS
+                self.backend.scan_callback = scan
+                def ping(*args):
+                    if self.ping.call_count == 1:
+                        if failure == 'disconnect':
+                            self.backend.target = None
+                        elif failure == 'identity':
+                            self.backend.override = WifiConnection('other', '02:00:00:00:ff:01', 7, 4)
+                        elif failure == 'missing_frequency':
+                            self.backend.obs = ()
+                        elif failure == 'wrong_frequency':
+                            self.backend.obs = (replace(OBS[0], frequency=5180000), OBS[1])
+                        else:
+                            self.backend.pair = (4, 2)
+                        args[-1]()
+                    return WirelessPingResult('192.0.2.1', 4, (2.0,))
+                self.ping.side_effect = ping
+                result = self.run_service(WifiTestOptions(wireless_ping_enable=True))
+                self.assertEqual(result, ('success', ''))
+                self.assertEqual(self.backend.connections, ['2.4G', '2.4G', '5G'])
+                self.assertEqual(self.backend.disconnects, 3)
+                self.assertEqual(self.ping.call_count, 3)
+                self.assertEqual(sum('Ping阶段连接核验失败' in s for s in self.logs), 1)
+                self.assertEqual(sum('成功：本项无线测试通过' in s for s in self.logs), 2)
+
+    def test_ipv4_wait_guard_failure_also_uses_four_attempts(self):
+        from src.core.wireless_ping import run_wireless_ping
+        self.backend.scan_callback = lambda: setattr(self.backend, 'obs', OBS)
+        def adapters():
+            self.backend.obs = ()
+            return []
+        sockets = Mock()
+        def ping(interface, target, stop, emit, guard):
+            return run_wireless_ping(interface, target, stop, emit, guard,
+                                     adapter_provider=adapters, socket_factory=sockets,
+                                     clock=lambda: self.event.now)
+        self.ping.side_effect = ping
+        result = self.run_service(WifiTestOptions(wireless_ping_enable=True,
+                                                  wireless_ping_target='192.0.2.1'))
+        self.assertEqual(result[0], 'failed')
+        self.assertEqual(self.backend.scans, 4)
+        self.assertEqual(self.backend.disconnects, 4)
+        self.assertEqual(self.ping.call_count, 4)
+        sockets.assert_not_called()
+        self.assertEqual(sum('Ping阶段连接核验失败：无法核验实际连接频率' in s
+                             for s in self.logs), 4)
+
+    def test_scan_connection_and_ping_guard_failures_share_four_attempts(self):
+        def scan():
+            self.backend.obs = OBS
+            self.backend.override = (WifiConnection('other', '02:00:00:00:ff:01', 7, 4)
+                                     if self.backend.scans == 2 else None)
+            if self.backend.scans == 1:
+                raise WifiScanError('异步通知', retryable=True)
+        self.backend.scan_callback = scan
+        def ping(*args):
+            self.backend.obs = ()
+            args[-1]()
+        self.ping.side_effect = ping
+        self.assertEqual(self.run_service(WifiTestOptions(wireless_ping_enable=True))[0], 'failed')
+        self.assertEqual(self.backend.scans, 4)
+        self.assertEqual(self.backend.connections, ['2.4G'] * 3)
+        self.assertEqual(self.ping.call_count, 2)
+        self.assertEqual(sum(s.endswith('等待10秒后重试') for s in self.logs), 3)
+
+    def test_post_ping_guard_failure_retries_and_unified_mode_recovers(self):
+        self.backend.scan_callback = lambda: setattr(self.backend, 'obs', OBS)
+        def ping(*args):
+            if self.ping.call_count == 1:
+                self.backend.obs = ()  # 已收到回复，但返回service后的最后复核失败。
+            return WirelessPingResult('192.0.2.1', 4, (1.0,))
+        self.ping.side_effect = ping
+        self.assertEqual(self.run_service(WifiTestOptions('unified', wireless_ping_enable=True)),
+                         ('success', ''))
+        self.assertEqual(self.ping.call_count, 2)
+        self.assertEqual(self.backend.connections, ['2.4G', '2.4G'])
+        self.assertEqual(sum('成功：本项无线测试通过' in s for s in self.logs), 1)
+
+    def test_prior_ping_reply_cannot_pass_later_attempt_with_no_replies(self):
+        self.backend.scan_callback = lambda: setattr(self.backend, 'obs', OBS)
+        def ping(*args):
+            if self.ping.call_count == 1:
+                self.backend.obs = ()
+                return WirelessPingResult('192.0.2.1', 4, (1.0,))
+            return WirelessPingResult('192.0.2.1', 4, ())
+        self.ping.side_effect = ping
+        result = self.run_service(WifiTestOptions(wireless_ping_enable=True))
+        self.assertEqual(result[0], 'failed')
+        self.assertIn('无线Ping全部无有效回复', result[1])
+        self.assertEqual(self.ping.call_count, 2)
+        self.assertEqual(self.backend.connections, ['2.4G', '2.4G'])
+        self.assertFalse(any('成功：本项无线测试通过' in s for s in self.logs))
+
+    def test_cancel_in_ping_guard_retry_wait_starts_no_new_attempt(self):
+        self.ping.side_effect = WifiVerificationError('无法核验实际连接频率')
+        self.event.on_wait = lambda: self.event.set() if self.logs[-1].endswith('等待10秒后重试') else None
+        self.assertEqual(self.run_service(WifiTestOptions(wireless_ping_enable=True))[0], 'cancelled')
+        self.assertEqual(self.backend.scans, 1)
         self.assertEqual(self.backend.disconnects, 1)
+        self.assertFalse(any('成功：本项无线测试通过' in s for s in self.logs))
+
+    def test_stop_wins_over_ping_guard_failure(self):
+        def ping(*args):
+            self.event.set()
+            raise WifiVerificationError('无法核验实际连接频率')
+        self.ping.side_effect = ping
+        self.assertEqual(self.run_service(WifiTestOptions(wireless_ping_enable=True))[0], 'cancelled')
+        self.assertEqual(self.backend.disconnects, 1)
+        self.assertFalse(any('次未通过' in s for s in self.logs))
+
+    def test_ping_guard_cleanup_failure_starts_no_retry(self):
+        self.ping.side_effect = WifiVerificationError('无法核验实际连接频率')
+        self.backend.disconnect = Mock(side_effect=RuntimeError('cleanup'))
+        result = self.run_service(WifiTestOptions(wireless_ping_enable=True))
+        self.assertEqual(result[0], 'error')
+        self.assertIn('清理失败', result[1])
+        self.assertEqual(self.backend.scans, 1)
+        self.assertEqual(self.ping.call_count, 1)
+
+    def test_ping_environment_errors_still_do_not_retry(self):
+        for reason in ('无线DNS解析失败：9005', '所选无线网卡30秒内未获得可用IPv4地址',
+                       '无线Ping接口/socket异常（错误码5）'):
+            with self.subTest(reason=reason):
+                self.setUp()
+                self.ping.side_effect = WifiEnvironmentError(reason)
+                result = self.run_service(WifiTestOptions(wireless_ping_enable=True))
+                self.assertEqual(result[0], 'error')
+                self.assertIn(reason, result[1])
+                self.assertEqual(self.backend.connections, ['2.4G'])
+                self.assertEqual(self.ping.call_count, 1)
+
+    def test_ping_guard_disconnect_timeout_starts_no_retry(self):
+        self.ping.side_effect = WifiVerificationError('无法核验实际连接频率')
+        self.backend.interface_state = lambda _: 3
+        result = self.run_service(WifiTestOptions(wireless_ping_enable=True))
+        self.assertEqual(result[0], 'error')
+        self.assertIn('临时连接断开未确认', result[1])
+        self.assertEqual(self.backend.scans, 1)
+        self.assertEqual(self.backend.disconnects, 1)
+
+    def test_fifo_owner_is_retained_through_ping_guard_retry(self):
+        scheduler = PowerTestWifiScheduler(options=WifiTestOptions(wireless_ping_enable=True),
+                                            connection_service=self.service)
+        owners = []
+        def ping(*args):
+            owners.append(scheduler._owner)
+            if self.ping.call_count == 1:
+                raise WifiVerificationError('无法核验实际连接频率')
+            return WirelessPingResult('192.0.2.1', 4, (1.0,))
+        self.ping.side_effect = ping
+        self.event.on_wait = lambda: owners.append(scheduler._owner)
+        result = scheduler.test_bands(channel=2, cycle=3, card='Wi-Fi', stop_event=self.event,
+                                      emit=self.logs.append, connector=None,
+                                      wifi_info=WifiSnapshot(TARGETS), test_2g=True, test_5g=True,
+                                      auth='WPA2-PSK', cipher='AES')
+        self.assertEqual(result, ('success', ''))
+        self.assertTrue(owners)
+        self.assertEqual(set(owners), {'通道2 第3轮'})
+        self.assertEqual(self.backend.connections, ['2.4G', '2.4G', '5G'])
+        self.assertFalse(scheduler._owner)
 
     def test_ping_failure_does_not_reconnect_or_start_second_band(self):
         self.ping.return_value = WirelessPingResult('192.0.2.1', 4, ())

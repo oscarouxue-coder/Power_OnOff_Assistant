@@ -252,6 +252,49 @@ class MainLogPersistenceTests(unittest.TestCase):
         self.assertTrue(any('0x00010009' in text and '10秒后重试' in text for text in main))
         self.assertEqual(sum('测试通过' in text for text in main), 2)
 
+    def test_real_service_ping_guard_retry_keeps_three_sinks_and_fresh_ping_result(self):
+        from test_wifi_connection_service import FakeBackend, VirtualEvent, TARGETS, OBS
+        from src.services.wifi_connection_service import WifiConnectionService
+        from src.services.power_test_wifi_service import PowerTestWifiScheduler
+        from src.models.wifi_test_models import WifiSnapshot, WifiTestOptions, WirelessPingResult
+        backend, stop = FakeBackend(), VirtualEvent()
+        backend.scan_callback = lambda: setattr(backend, 'obs', OBS)
+        ping = Mock()
+        def probe(interface, target, event, emit, guard):
+            replies = (99.0,) if ping.call_count == 1 else (2.0, 4.0)
+            emit(f'无线Ping汇总：发送4 接收{len(replies)} 丢包率={(4-len(replies))*25}% '
+                 f'时延min/avg/max={min(replies):.2f}/{sum(replies)/len(replies):.2f}/{max(replies):.2f}ms 通过')
+            if ping.call_count == 1:
+                backend.obs = ()  # 汇总后service最后核验失败，不能提前显示通过。
+            return WirelessPingResult('192.0.2.1', 4, replies)
+        ping.side_effect = probe
+        service = WifiConnectionService(lambda: backend, ping, lambda: stop.now)
+        scheduler = PowerTestWifiScheduler(options=WifiTestOptions(wireless_ping_enable=True),
+                                            connection_service=service)
+        writer = WifiResultLogWriter(self.root, lambda _: None)
+        writer.start_channel(2)
+        self.addCleanup(writer.finish_channel)
+        def emit(text):
+            writer.write('info', text)
+            LineCheckAssistant._log(self.context, '[旧工具Logs][INFO] ' + text)
+        result = scheduler.test_bands(channel=2, cycle=4, card='Wi-Fi', stop_event=stop,
+                                     emit=emit, connector=None, wifi_info=WifiSnapshot(TARGETS),
+                                     test_2g=True, test_5g=False, auth='WPA2-PSK', cipher='AES')
+        self.assertEqual(result, ('success', ''))
+        main = [line[20:] for line in self.context.log_path.read_text(encoding='utf-8').splitlines()]
+        saved = next(self.root.glob('test_results/device_2/*.log')).read_text(encoding='utf-8')
+        independent = [line.split('[INFO] ', 1)[1] for line in saved.splitlines()]
+        rendered = [call.args[1].rstrip('\n') for call in self.context.log_text.insert.call_args_list
+                    if call.args[0] == 'end' and not (len(call.args) == 3 and call.args[2] == 'time')]
+        self.assertEqual(main, independent)
+        self.assertEqual(main, rendered)
+        self.assertEqual(sum('Ping阶段连接核验失败：无法核验实际连接频率' in s for s in main), 1)
+        self.assertTrue(any('2.4G 第2/4次下发连接' in s for s in main))
+        successes = [s for s in main if '测试通过' in s]
+        self.assertEqual(len(successes), 1)
+        self.assertIn('Ping发送4/接收2', successes[0])
+        self.assertNotIn('99.00', successes[0])
+
     def test_real_forwarded_credentials_are_plaintext_in_ui_and_file_on_resume(self):
         messages = queue.Queue()
         logger = _ForwardingLegacyLogger(messages, ('sample-password', 'other-secret'))

@@ -38,7 +38,7 @@ class TelnetPostLoginTabTests(unittest.TestCase):
             for name in ("Frame", "Button", "Checkbutton"):
                 stack.enter_context(patch.object(app, name))
             stack.enter_context(patch.object(app, "Label", side_effect=label))
-            for name in ("Frame", "Spinbox"):
+            for name in ("Frame", "Spinbox", "Combobox"):
                 stack.enter_context(patch.object(app.ttk, name))
             stack.enter_context(patch.object(app.ttk, "Entry", side_effect=entry))
             controls = app.LineCheckAssistant._build_test_item_telnet_tab(

@@ -78,8 +78,6 @@ class TelnetClient():
                                                         path='./config/' + self.config_file_path).strip()
             self.login_success_flag = self.cf.read_ini('telnet', 'login_success_flag',
                                                        path='./config/' + self.config_file_path).strip()
-            self.telnet_need_enter_password_flag = self.cf.read_ini('telnet', 'telnet_need_enter_password_flag',
-                                                                    path='./config/' + self.config_file_path).strip()
 
             self.command_execute_fail_interval_time = int(self.cf.read_ini('other_config',
                                                                            'command_fail_retry_interval_time',
@@ -129,17 +127,6 @@ class TelnetClient():
             if int(self.telnet_no_user_password_flag) == 1:
                 self.tn.write(b'\n')
                 response_01 = self.tn.read_until(self.login_success_flag.encode(), timeout=3)
-                print(response_01)
-                if '#'.encode() in response_01:
-                    return True
-            if int(self.telnet_need_enter_password_flag) == 1:
-                self.tn.write(b'\n')
-                time.sleep(0.5)
-                command_result = self.tn.read_very_eager().decode('utf-8')
-                self.logger.info(command_result)
-                self.tn.write(b'\n')
-                # time.sleep(0.5)
-                response_01 = self.tn.read_until(self.input_user_flag.encode(), timeout=10)
                 print(response_01)
                 if '#'.encode() in response_01:
                     return True

@@ -4939,9 +4939,8 @@ class LineCheckAssistant(Tk):
         input_password_flag_var = StringVar(value=telnet.input_password_flag)
         login_success_flag_var = StringVar(value=telnet.login_success_flag)
         login_after_input_str_var = StringVar(value=telnet.login_after_input_str)
-        need_pwd_flag_var = IntVar(value=telnet.telnet_need_enter_password_flag)
-        no_user_pwd_flag_var = IntVar(value=telnet.telnet_no_user_password_flag)
-        only_power_var = IntVar(value=telnet.only_power_off_on)
+        no_user_pwd_flag_var = StringVar(value="是" if telnet.telnet_no_user_password_flag == 1 else "否")
+        only_power_var = StringVar(value="是" if telnet.only_power_off_on == 1 else "否")
         # Telnet 默认已开启(默认 1 = 勾选,可在 UI 中由用户切换;Q1=A 仅编辑器)。
         telnet_default_on_var = IntVar(value=telnet.telnet_default_on)
 
@@ -4955,14 +4954,13 @@ class LineCheckAssistant(Tk):
             input_password_flag_var,
             login_success_flag_var,
             login_after_input_str_var,
+            no_user_pwd_flag_var,
+            only_power_var,
         ):
             var.trace_add("write", lambda *_a: mark_dirty())
         for var in (
             port_var,
             timeout_var,
-            need_pwd_flag_var,
-            no_user_pwd_flag_var,
-            only_power_var,
             telnet_default_on_var,
         ):
             var.trace_add("write", lambda *_a: mark_dirty())
@@ -5004,7 +5002,8 @@ class LineCheckAssistant(Tk):
         Label(frame, text="登录用户名", width=32, anchor="w", background=COLOR_BG).grid(
             row=3, column=0, sticky="w", padx=(0, 12), pady=6
         )
-        ttk.Entry(frame, textvariable=user_var, width=24).grid(row=3, column=1, sticky="ew", pady=6)
+        user_entry = ttk.Entry(frame, textvariable=user_var, width=24)
+        user_entry.grid(row=3, column=1, sticky="ew", pady=6)
 
         Label(frame, text="登录密码（明文）", width=32, anchor="w", background=COLOR_BG).grid(
             row=4, column=0, sticky="w", padx=(0, 12), pady=6
@@ -5045,11 +5044,28 @@ class LineCheckAssistant(Tk):
             row=10, column=1, sticky="w", pady=6
         )
 
-        int_field(frame, 11, "是否需要输入密码（0/1）", need_pwd_flag_var, from_=0, to=1)
-        int_field(frame, 12, "免用户名密码登录（0/1）", no_user_pwd_flag_var, from_=0, to=1)
-        int_field(frame, 13, "仅执行上下电（0/1）", only_power_var, from_=0, to=1)
+        # 负责人确认这两项使用“是/否”下拉框，作为原生勾选框规范的例外。
+        for row, label, var in (
+            (11, "免用户名密码登录", no_user_pwd_flag_var),
+            (12, "仅执行上下电", only_power_var),
+        ):
+            Label(frame, text=label, width=32, anchor="w", background=COLOR_BG).grid(
+                row=row, column=0, sticky="w", padx=(0, 12), pady=6
+            )
+            ttk.Combobox(
+                frame, textvariable=var, values=("是", "否"), state="readonly", width=10
+            ).grid(row=row, column=1, sticky="w", pady=6)
 
         frame.columnconfigure(1, weight=1)
+
+        def refresh_credentials_state(*_args) -> None:
+            state = "disabled" if no_user_pwd_flag_var.get() == "是" or only_power_var.get() == "是" else "normal"
+            user_entry.configure(state=state)
+            pwd_entry.configure(state=state)
+
+        no_user_pwd_flag_var.trace_add("write", refresh_credentials_state)
+        only_power_var.trace_add("write", refresh_credentials_state)
+        refresh_credentials_state()
 
         def capture() -> TelnetSettings:
             return TelnetSettings(
@@ -5062,9 +5078,8 @@ class LineCheckAssistant(Tk):
                 input_password_flag=input_password_flag_var.get(),
                 login_success_flag=login_success_flag_var.get(),
                 login_after_input_str=login_after_input_str_var.get(),
-                telnet_need_enter_password_flag=int(need_pwd_flag_var.get()),
-                telnet_no_user_password_flag=int(no_user_pwd_flag_var.get()),
-                only_power_off_on=int(only_power_var.get()),
+                telnet_no_user_password_flag=int(no_user_pwd_flag_var.get() == "是"),
+                only_power_off_on=int(only_power_var.get() == "是"),
                 telnet_default_on=int(telnet_default_on_var.get()),
             )
 
@@ -5078,9 +5093,8 @@ class LineCheckAssistant(Tk):
             input_password_flag_var.set(new_telnet.input_password_flag)
             login_success_flag_var.set(new_telnet.login_success_flag)
             login_after_input_str_var.set(new_telnet.login_after_input_str)
-            need_pwd_flag_var.set(new_telnet.telnet_need_enter_password_flag)
-            no_user_pwd_flag_var.set(new_telnet.telnet_no_user_password_flag)
-            only_power_var.set(new_telnet.only_power_off_on)
+            no_user_pwd_flag_var.set("是" if new_telnet.telnet_no_user_password_flag == 1 else "否")
+            only_power_var.set("是" if new_telnet.only_power_off_on == 1 else "否")
             telnet_default_on_var.set(int(new_telnet.telnet_default_on))
 
         return {
