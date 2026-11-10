@@ -1,5 +1,20 @@
 # 开发记录
 
+## 2026-11-09 - 构建并发布V1.2.8便携包
+
+- 类型：构建
+- 背景：负责人要求构建EXE并发布GitHub。开始时工作区干净，HEAD为`2b2cd1d196a4e2d5bbdfad0ebfb4b61df23fcea7`，线上仅有V1.2.7；本轮递增版本并纳入近期已完成的WiFi、ONU及Telnet修改，不自动提交或推送源码。
+- 完成内容：① 包内版本更新为V1.2.8/2026-11-09，记录WiFi共用摘要、严格本次日志定位、重试/失败历史、断开确认和扫描/Ping连接核验重试，以及ONU批量查询、类型模板保留、Telnet旧探测移除与凭据置灰。② 使用唯一标准构建脚本、仓库外独立CPython3.9.10 x64、锁定依赖及PyInstaller5.10.1；排除NumPy/OpenBLAS、lxml、PyQt5并禁用UPX，保留旧本地产物。③ 只读比对119个冻结业务模块与当前源码一致，包含旧Telnet客户端；6份便携配置与重新脱敏结果一致，9份本机配置哈希保持。④ 创建草稿，只上传同次构建的完整便携ZIP和ZIP SHA256，核对GitHub大小/摘要后发布为Latest；两个附件匿名完整下载及源码更新客户端实际下载校验通过后，删除旧V1.2.7 Release及附件，保留Git标签与源码历史。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/VERSION_INFO.txt`
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+- 验证方法：主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，执行`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1 -OutputDirectory dist\V1.2.8_slim_20261109 -WorkDirectory build\V1.2.8_slim_20261109`。使用构建独立环境Python以`-I -X utf8`运行本轮临时助手`%TEMP%/linecheck_release_v128_20261109/release.py inspect/stage/publish/verify/prune`；最后执行`git diff --check`并复核本机配置哈希及仅有上述四份文件改动。GitHub凭据仅通过Git Credential Manager在内存提供，不输出或落盘；公开附件下载与源码更新客户端均匿名。
+- 验证结果：标准脚本exit 0，完整基线ALL CHECKS PASSED（1459项测试、190项指定关键回归、105个源码编译/覆盖及协议不变量），PACKAGE_ARCHIVE_OK；FROZEN_SOURCE_MATCH 119、SANITIZED_CONFIG_OK 6、LIVE_CONFIG_UNCHANGED 9。EXE为18,133,639字节，SHA256 `6b44fa21b96d05d6ca9f7a84e59930ae4f5a3e881d77aff57f0fd6071f8aab57`；ZIP为17,816,828字节，SHA256 `ec63385cb2e425f026e2adafed8cdfea8127a72daa21c31d12b626f96d3e88d8`；ZIP校验文件99字节。两个GitHub附件大小/摘要及匿名下载一致；真实匿名源码更新客户端以V1.2.7发现V1.2.8、V1.2.8无更新，实际ZIP下载/大小/SHA256校验通过，SOURCE_UPDATE_CLIENT_OK；最终PUBLIC_LATEST_ONLY_RELEASE_OK。本轮不修改业务源码、依赖、工具链或构建门禁。
+- GitHub发布：[V1.2.8](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.8)，Release ID `439307858`，标签指向既有远端提交`2b2cd1d196a4e2d5bbdfad0ebfb4b61df23fcea7`；旧V1.2.7 Release ID `434232275`已在全部验证后删除，旧标签保持。本地产物`Cheating_machine_execution_tool/dist/V1.2.8_slim_20261109/`；构建日志、发布状态、匿名下载及静态验证证据保留于`%TEMP%/linecheck_release_v128_20261109/`。公开说明只含用户可见更新、完整ZIP及ZIP校验文件下载/使用方法。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.3/§2.10/§2.11/§2.12/§2.15/§3复验目标电脑启动、完整Windows交互及近期Telnet/ONU/WiFi真实设备行为，沿用原待确认清单。不在当前PC运行新EXE，不操作真实设备，不修改本机配置，不暂存、提交或推送源码；构建、静态归档和公开下载证据不升级现场验收结论。
+
 ## 2026-11-09 - 取消旧登录探测并联动凭据置灰
 
 - 类型：修改
