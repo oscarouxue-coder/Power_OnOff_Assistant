@@ -16,6 +16,7 @@ from src.core import SerialSessionManager, vlan_to_serial_port
 from src.models import SerialSettings
 from src.ui.closable_notebook import ClosableNotebook
 from src.ui.window_paint import center_toplevel_on_parent
+from src.ui.module_theme import apply_module_theme
 
 
 _DEFAULT_GEOMETRY = "1000x650"
@@ -125,6 +126,7 @@ class SerialTerminalWindow:
             vlan, port = self._target_values(target)
             self._ensure_tab(vlan, port)
         self.window.protocol("WM_DELETE_WINDOW", self.close)
+        apply_module_theme(self.window)
         if saved_geometry is None or self._geometry_is_at_top_left(saved_geometry):
             center_toplevel_on_parent(self.window, self.master)
         self._poll()
@@ -219,7 +221,15 @@ class SerialTerminalWindow:
         # the same VLAN. Reader callbacks already in flight cannot revive it.
         token = object()
         item["event_token"] = token
-        return lambda event: self.events.put_nowait((vlan, event, token))
+        def receive(event):
+            observer = getattr(self, "diagnostic_observer", None)
+            if observer is not None:
+                try:
+                    observer(vlan, event)
+                except Exception:
+                    pass
+            self.events.put_nowait((vlan, event, token))
+        return receive
 
     def _on_tab_close(self, frame: str) -> None:
         for vlan, item in tuple(self.tabs.items()):
@@ -237,6 +247,11 @@ class SerialTerminalWindow:
         self._log_close(f"请求关闭 {target}")
         try:
             if not self.manager.manual_writable(item["port"]):
+                cancel_debug = getattr(self, "ai_debug_cancel", None)
+                if cancel_debug is not None and cancel_debug(item["port"]):
+                    self._log_close(f"取消 {target} 的AI Debug，等待清理后关闭")
+                    self.window.after(100, lambda: self.close_tab(vlan))
+                    return False
                 self._log_close(f"跳过关闭 {target}：当前串口正在自动升级")
                 messagebox.showwarning(
                     "串口被占用", "当前串口正在自动升级，升级结束后可关闭", parent=self.window,
@@ -287,6 +302,11 @@ class SerialTerminalWindow:
         if session is None:
             return
         if not self.manager.manual_writable(item["port"]):
+            cancel_debug = getattr(self, "ai_debug_cancel", None)
+            owner = self.manager.control_owner(item["port"]) if cancel_debug is not None else ""
+            if owner.startswith("ai-debug:"):
+                messagebox.showwarning("串口被占用", "AI Debug正在使用当前串口，结束后恢复手动发送。", parent=self.window)
+                return
             messagebox.showwarning("串口被占用", "当前通道正在自动升级，只允许查看串口输出。", parent=self.window)
             return
         value = item["command"].get() if not force_enter else ""
@@ -308,6 +328,9 @@ class SerialTerminalWindow:
 
     def stop_all(self) -> None:
         for item in self.tabs.values():
+            cancel_debug = getattr(self, "ai_debug_cancel", None)
+            if cancel_debug is not None:
+                cancel_debug(item["port"])
             if item["subscriber"] is not None and item["session"] is not None:
                 item["session"].unsubscribe(item["subscriber"])
             if item["owner"]:
@@ -409,6 +432,12 @@ class SerialTerminalWindow:
             output.delete("1.0", f"{lines_to_remove + 1}.0")
 
     def close(self) -> None:
+        cancel_debug = getattr(self, "ai_debug_cancel", None)
+        if cancel_debug is not None:
+            pending = any([cancel_debug(item["port"]) for item in self.tabs.values()])
+            if pending and self.window is not None:
+                self.window.after(100, self.close)
+                return
         if self._after_id and self.window is not None:
             self.window.after_cancel(self._after_id)
         self.stop_all()

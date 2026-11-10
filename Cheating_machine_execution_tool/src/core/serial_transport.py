@@ -309,6 +309,24 @@ class SerialSessionManager:
         with self._lock:
             return port.upper() not in self._controllers
 
+    def existing_session(self, settings: SerialSettings) -> PySerialSession | None:
+        """诊断只复用已打开的相同配置；不得悄悄改变串口参数。"""
+        with self._lock:
+            session = self._sessions.get(settings.port.upper())
+            if session is not None and session.settings != settings:
+                raise RuntimeError("已打开串口参数与目标配置不一致")
+            return session
+
+    def acquire_existing_control(self, owner: str, settings: SerialSettings) -> PySerialSession:
+        with self._lock:
+            if self.existing_session(settings) is None:
+                raise RuntimeError("目标串口尚未打开")
+            return self._acquire(owner, settings, None, control=True)
+
+    def control_owner(self, port: str) -> str:
+        with self._lock:
+            return self._controllers.get(port.upper(), "")
+
     def shutdown_all(self) -> None:
         with self._lock:
             sessions = tuple(self._sessions.values())

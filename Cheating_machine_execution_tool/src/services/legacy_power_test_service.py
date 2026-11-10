@@ -431,13 +431,15 @@ def run_legacy_power_test(request, emit, stop_event, *, process_context=None,
                           on_progress=None, on_channel_progress=None,
                           on_channel_status=None, on_channel_history=None,
                           resume_session=None, initial_completed=None,
-                          initialize_power=True):
+                          initialize_power=True, diagnostic_observer=None):
     """Run one serial-port owner; recovery sessions retain channel state."""
     kwargs = dict(process_context=process_context, on_progress=on_progress,
                   on_channel_progress=on_channel_progress,
                   on_channel_status=on_channel_status, on_channel_history=on_channel_history,
                   resume_session=resume_session, initial_completed=initial_completed,
                   initialize_power=initialize_power)
+    if diagnostic_observer is not None:
+        kwargs["diagnostic_observer"] = diagnostic_observer
     if resume_session is None:
         return _run_legacy_power_test(request, emit, stop_event, **kwargs)
     # Recovery callers already own process_lock. Original runs acquire it here.
@@ -463,9 +465,18 @@ def _run_legacy_power_test(
     on_channel_status: ChannelStatusOutput | None = None,
     on_channel_history: ChannelHistoryOutput | None = None,
     resume_session=None, initial_completed=None, initialize_power=True,
+    diagnostic_observer=None,
 ) -> LegacyPowerTestResult:
     """在独立无 GUI 子进程运行旧 ``Start All``，同步等待最终结果。"""
     context = process_context or multiprocessing.get_context("spawn")
+    diagnostic_run_id = resume_session.run_id if resume_session is not None else uuid.uuid4().hex
+    def observe_diagnostic(message):
+        if diagnostic_observer is not None:
+            try:
+                diagnostic_observer(dict(message, run_id=diagnostic_run_id))
+            except Exception:
+                pass  # AI旁路故障不改变测试流程、判据和停止语义。
+    observe_diagnostic({"type": "diagnostic_start"})
     message_queue = context.Queue()
     child_stop_event = context.Event()
     initial_completed = initial_completed or {}
@@ -556,6 +567,7 @@ def _run_legacy_power_test(
                     continue
                 resume_session.observe(message)
             message_type = message.get("type")
+            observe_diagnostic(message)
             if message_type == 'wifi_log_created':
                 # 路径已由当前会话登记；不参与业务结果、进度或日志去重。
                 continue
@@ -760,6 +772,7 @@ def _run_legacy_power_test(
         emit(f"[执行开关机测试] {outcome}：{final_result.detail}")
         return final_result
     finally:
+        observe_diagnostic({"type": "diagnostic_stop" if stop_event.is_set() else "diagnostic_end"})
         if process.is_alive():
             process.terminate()
         process.join()

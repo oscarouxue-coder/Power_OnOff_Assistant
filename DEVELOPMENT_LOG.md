@@ -1,5 +1,95 @@
 # 开发记录
 
+## 2026-11-11 - 取消AI诊断材料脱敏
+
+- 类型：修改
+- 背景：负责人提供包含`<IP_1>`、`<IP_3>`的AI分析，要求全部显示真实信息；明确选择取消诊断材料的账号、密码等脱敏，仅模型服务API密钥继续限于请求认证。本轮按确认方案实施，不扩展设备采集或执行权限。
+- 完成内容：① 保留`DiagnosticRedactor`及`add_secrets/text/object/dumps`接口，取消IP/MAC/SSID别名及密码、令牌、URL/嵌套字段的通用遮盖，仅过滤已登记的模型服务API密钥（包含字典键）；业务层不再登记设备账号/密码。② 手动提问、自动上下文、PC快照、分段串口、工具续接、模型回复、本地报告和确认案例保留真实值；AI登录主日志显示实际下发的设备用户名/密码。现有监控确认框及每次诊断主日志明确真实信息范围与接收厂商/地址，不新增开关或确认流程。③ 提示词要求引用真实采集值、区分配置同子网/存在默认路由/已验证DUT可达，未验证连通性不宣称线路正常；旧报告占位符不自动恢复，重启源码程序后重新采集。④ 同步操作员说明、项目状态和验收基线§2.16/§3，保留既有未验收标签和全部其它工作区修改。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/utils/ai_redaction.py`
+  - `Cheating_machine_execution_tool/src/services/ai_diagnostic_service.py`
+  - `Cheating_machine_execution_tool/src/core/ai_debug_transport.py`
+  - `Cheating_machine_execution_tool/src/core/ai_client.py`
+  - `Cheating_machine_execution_tool/src/services/ai_store.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_core.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_debug.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_integration.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用`%LOCALAPPDATA%/LineCheckAssistant/build-env-py39/Scripts/python.exe`，设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，运行`-I -X utf8 -m unittest discover -s tests -p "test_ai*.py"`及`-I -X utf8 scripts/verify_baseline.py`。专项使用模拟HTTPS响应、模拟设备/PC输出及临时数据库、独立真实Tk控件，不调用真实厂商API或设备。
+- 验证结果：102项AI专项通过（此前96项，本轮新增6项并更新既有脱敏断言）；覆盖两种协议请求与工具结果续接、模型回复保留真实值、模型密钥仅在认证头出现、嵌套凭据/URL令牌、手动/自动诊断、PC解码、串口拆包、报告持久化/通知/显示、确认案例、实际登录下发日志和监控确认提示。完整基线ALL CHECKS PASSED：1561项测试、190项指定回归、120个源码编译/覆盖及全部协议不变量通过。
+- 后续待办：负责人重启源码程序后按ACCEPTANCE_BASELINE.md §2.16/§3复验真实云端API、真实DUT及完整Windows操作。本轮未打包、运行EXE、发布、提交或改写本机配置；离线/独立Tk结果不升级现场验收结论。
+
+## 2026-11-10 - 修正AI证据乱码与转义符显示
+
+- 类型：BUG 修复
+- 背景：负责人提供AI回复原文，PC快照中netsh中文出现“绯荤粺涓婃湁”等乱码，且本地证据直接显示嵌套JSON转义符；负责人要求开始修正。本轮仅处理PC采集解码和证据显示，不变更设备命令、诊断流程、模型配置或存储结构。
+- 完成内容：① 新增纯工具`ai_output.py`，优先严格识别UTF-8/BOM，再兼容Windows OEM/ANSI及系统编码；解码后按字符截断，坏字节保留替代标记并在主执行日志提示，记录实际PC命令、编码、返回码和成功/失败。② UI调用格式化工具，解析已知工具列表及PC快照，显示实际换行、工具/命令分段，保留失败信息、尾部现场日志、字面反斜杠路径及无法解析的旧原文；不改数据库及模型证据、不推测恢复已损坏中文。③ 新增18项回归，覆盖混合编码、UTF-8模式、本地OEM/ANSI、BOM、坏字节、中文截断、嵌套JSON/尾部日志/路径、真实Tk报告切换和持久化不变；编译清单及操作员说明/状态/验收待确认清单同步。
+- 修改文件：
+  - `.claude/plans/ai-output-decoding.md`
+  - `Cheating_machine_execution_tool/src/utils/ai_output.py`
+  - `Cheating_machine_execution_tool/src/services/ai_debug_service.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_output.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_debug.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_integration.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用`%LOCALAPPDATA%/LineCheckAssistant/build-env-py39/Scripts/python.exe`（既有CPython3.9.10独立环境），设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，执行`-I -X utf8 -m unittest discover -s tests -p "test_ai*.py"`和`-I -X utf8 scripts/verify_baseline.py`。只读运行`ipconfig /all`、`route print -4`、`netsh wlan show interfaces`，仅打印编码/返回码/替代字符数和中文标签检查，不输出环境原文；用户附件按UTF-8读取后离线格式化，不修改附件；本轮关联文件检查空白。
+- 验证结果：96项AI专项通过（此前78项，本轮新增18项）；完整基线ALL CHECKS PASSED，1555项测试、190项指定回归、120个源码编译/覆盖和全部协议不变量通过。本机实际ipconfig/route为CP936、netsh为UTF-8，三条命令返回码0，中文标签检查通过，替代字符数均0。用户附件证据重放为160行可读文本，无外层JSON转义符，旧乱码保留；真实Tk报告显示/只读状态及保存内容不变通过。本轮关联文件空白检查通过；全工作区检查另发现`network_card_ip.ini`新增修改和空`serial_port`行尾空格，来源未判定，未改写或回退该配置，保留其它工作区修改。
+- 后续待办：重启源码程序并重新发起分析，旧报告已损坏中文不自动恢复；负责人按ACCEPTANCE_BASELINE.md §2.16/§3复验完整Windows报告显示/切换、新采集中文与原有API/DUT待验收项。本轮未调用真实云端API、操作DUT、打包、运行EXE、提交或发布，自动化不升级现场验收结论。
+
+## 2026-11-10 - 接入多厂商AI诊断并统一模块背景
+
+- 类型：功能
+- 背景：负责人确认实施多厂商AI建议、受控Debug和单机案例方案；选择最终失败或同通道同阶段连续三次异常触发，Telnet优先、不可用时回退目标串口，串口打印随时被动读取，禁止AI触发DUT重启。实施期间追加要求AI、写样机参数、串口日志、DUT配置及检查更新的背景与测试项配置一致，后续模块沿用。
+- 完成内容：① 独立模型/协议/触发/执行器/凭据/存储/UI模块，支持DeepSeek、MiniMax、OpenAI及自定义、多账号、模型手填/列表、无项目资料的问答/工具续接能力测试；配置和凭据版本绑定，诊断固定厂商与模型，不跨厂商回退，不增加依赖。② 默认关闭本次监控，三次异常轻量、第四次/最终失败可深入，分批次/通道/阶段/频段/轮次及续跑去重，5轮模型/10次采集、20秒查询、120秒/2MiB上下文；正式旧业务IPC在验收过滤后旁路观察，补环境Ping及Telnet编号重试事件，原测试判据和命令保持。③ Telnet锁源、失败回退共享串口，串口被动订阅不消费数据，不抢占升级、不打断Boot；主动采集只接受注册工具，临时日志/抓包有界，原值恢复及未完成记录持久化，不调用重启/上下电/升级/恢复出厂；新设备任务先清理已有AI控制。④ 用户级DPAPI、统一脱敏和串口拆包按行过滤，报告与人工确认案例SQLite本地保存，可修订/停用/删除，检索不包含未确认草稿，不微调；打包spec纳入操作员说明供离线检索，实际构建留待后续。⑤ `module_theme`局部派生背景统一为`#eef2f5`，保留原状态文字色、按钮、输入/日志区及原生勾选，动态控件沿用，不改全局主题；同步AGENTS及开发skill要求。
+- 修改文件：
+  - `AGENTS.md`
+  - `.claude/skills/line-check-dev/SKILL.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_specs/LineCheckAssistant.spec`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/src/models/ai_diagnostics.py`
+  - `Cheating_machine_execution_tool/src/core/ai_credentials.py`
+  - `Cheating_machine_execution_tool/src/core/ai_client.py`
+  - `Cheating_machine_execution_tool/src/core/ai_debug_transport.py`
+  - `Cheating_machine_execution_tool/src/core/serial_transport.py`
+  - `Cheating_machine_execution_tool/src/services/ai_store.py`
+  - `Cheating_machine_execution_tool/src/services/ai_trigger_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_event_adapter.py`
+  - `Cheating_machine_execution_tool/src/services/ai_debug_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_diagnostic_service.py`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_serial_bridge.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/module_theme.py`
+  - `Cheating_machine_execution_tool/src/ui/serial_terminal.py`
+  - `Cheating_machine_execution_tool/src/ui/dut_config_window.py`
+  - `Cheating_machine_execution_tool/src/ui/app_update_dialog.py`
+  - `Cheating_machine_execution_tool/src/ui/power_test_resume_menu.py`
+  - `Cheating_machine_execution_tool/src/utils/ai_redaction.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_core.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_trigger.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_debug.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_integration.py`
+- 验证方法：在主源码目录使用仓库外既有CPython3.9.10独立环境执行`python -I -X utf8 -m unittest discover -s tests -p "test_ai*.py"`、串口专项及`python -I -X utf8 scripts/verify_baseline.py`，子进程设置`PYTHONUTF8=1`/`PYTHONIOENCODING=utf-8`；Tk资源在沙箱内不可读，测试经审批在沙箱外执行，全部使用临时目录、模拟API/串口和假设备。另检查`git diff --check`、改动清单及既有配置无改动。按AGENTS第13条运行既有`install_git_hooks.ps1`，本仓库`core.hooksPath=.githooks`已启用，不提交代码。
+- 验证结果：新增78项专项通过，原串口33项专项通过；最终完整基线ALL CHECKS PASSED（1537项测试、190项指定回归、119个源码编译/覆盖及协议不变量）。中途完整检查发现停止流程的最小上下文无`app`属性，已修正为可选观察并复验全量；补采集进程名/stdout唯一文件校验及停止回读，避免误停其它进程或漏停logread。真实Tk检查包括厂商配置切换、模型可编辑、背景/动态控件、非模态、原生勾选与主线程清理；没有运行完整主程序、调用真实云端API或操作真实DUT，不扩大现场验收范围。
+- 后续待办：负责人按`ACCEPTANCE_BASELINE.md §2.3/§2.16/§3`复验实际厂商账号、DUT工具兼容/串口/Telnet/停止恢复及完整Windows交互。本轮不构建、不运行EXE、不发布、不提交，既有本机配置与生成物不改。
+
 ## 2026-11-09 - 构建并发布V1.2.8便携包
 
 - 类型：构建

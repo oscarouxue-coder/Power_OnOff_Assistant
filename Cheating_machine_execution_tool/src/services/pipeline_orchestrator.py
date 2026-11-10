@@ -425,6 +425,8 @@ class PipelineOrchestrator:
     SUBTASK_TO_NEXT_WAIT_SECONDS = 120.0
 
     def __init__(self, ctx: PipelineContext, emit: Output) -> None:
+        import uuid
+        self.diagnostic_run_id = uuid.uuid4().hex
         self.ctx = ctx
         self.emit = emit
         self._results: List[SubTaskResult] = []
@@ -441,6 +443,7 @@ class PipelineOrchestrator:
         Raises:
             PipelineError: 任一「致命」子任务失败时抛出(非致命子任务如串口日志失败只记结果)。
         """
+        self._observe_diagnostic({"type": "diagnostic_start"})
         self.emit("=== 全流程执行开始 ===")
         execution_order = execution_order_for(selected)
         for index, code in enumerate(execution_order):
@@ -541,14 +544,20 @@ class PipelineOrchestrator:
                     channel.device_manage_ip,
                 )
             except Exception as exc:  # noqa: BLE001 - 网络准备本身就可能抛(网卡不存在等)
+                self._observe_diagnostic({"type": "diagnostic_event", "channel": _power_channel_number(channel.section),
+                    "stage": "environment_ping", "feature": "ping", "status": "failed", "detail": str(exc)})
                 self.emit(f"[环境检查] {channel.section} 启动失败:{exc}")
                 failed.append(channel.section)
                 continue
             if result.ok:
+                self._observe_diagnostic({"type": "diagnostic_event", "channel": _power_channel_number(channel.section),
+                    "stage": "environment_ping", "feature": "ping", "status": "success", "detail": result.message})
                 passed += 1
                 self.emit(f"[环境检查] {channel.section} 通过:{result.message}")
             else:
                 failed.append(channel.section)
+                self._observe_diagnostic({"type": "diagnostic_event", "channel": _power_channel_number(channel.section),
+                    "stage": "environment_ping", "feature": "ping", "status": "failed", "detail": result.message + "\n" + result.output})
                 self.emit(f"[环境检查] {channel.section} 失败:{result.message}")
                 if result.output.strip():
                     for line in result.output.strip().splitlines():
@@ -728,13 +737,20 @@ class PipelineOrchestrator:
                 for channel in self.ctx.enabled_channels
             ),
         )
+        diagnostic_options = {}
+        diagnostic_observer = _get_attr(self.ctx.app, "_observe_ai_power_event", None)
+        if callable(diagnostic_observer):
+            diagnostic_options["diagnostic_observer"] = diagnostic_observer
         session = PowerTestResumeSession(
             request, self.ctx.enabled_channels, self.ctx.stop_event, self.emit,
             on_progress=self._report_legacy_power_progress,
             on_channel_progress=self._report_legacy_power_channel_progress,
             on_channel_status=self._report_legacy_power_channel_status,
             on_channel_history=self._report_legacy_power_channel_history,
+            **diagnostic_options,
         )
+        if diagnostic_options:
+            session.run_id = self.diagnostic_run_id
         project_config = TestItemConfigStore(
             request.tool_root / "config" / request.profile_filename
         ).load(required=True)
@@ -830,9 +846,18 @@ class PipelineOrchestrator:
             on_channel_progress=self._report_legacy_power_channel_progress,
             on_channel_status=self._report_legacy_power_channel_status,
             on_channel_history=self._report_legacy_power_channel_history,
+            **diagnostic_options,
         )
         if not result.ok:
             raise RuntimeError(result.detail)
+
+    def _observe_diagnostic(self, message):
+        callback = _get_attr(_get_attr(self.ctx, "app", None), "_observe_ai_power_event", None)
+        if callable(callback):
+            try:
+                callback(dict(message, run_id=self.diagnostic_run_id))
+            except Exception:
+                pass
 
     def _report_legacy_power_progress(self, completed: int, total: int) -> None:
         """把后台开关机轮次进度安全投递到 Tk 主线程。"""

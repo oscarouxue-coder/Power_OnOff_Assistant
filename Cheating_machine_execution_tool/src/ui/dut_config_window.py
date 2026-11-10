@@ -1,6 +1,8 @@
 """DUT 配置窗口；仅负责界面展示和回调，不承载 UBUS 业务逻辑。"""
 from __future__ import annotations
 
+from src.ui.module_theme import apply_module_theme
+
 import json
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
@@ -571,6 +573,7 @@ class DutConfigWindow:
         self.window.geometry(f"{window_width}x{window_height}")
         self.window.minsize(DUT_CONFIG_MIN_WIDTH, DUT_CONFIG_MIN_HEIGHT)
         self.window.protocol("WM_DELETE_WINDOW", on_close)
+        apply_module_theme(self.window)
 
         self.username_var = username_var
         self.password_var = password_var
@@ -785,6 +788,7 @@ class DutConfigWindow:
         self.notebook.bind(
             "<<NotebookTabChanged>>", self._on_dut_tab_changed, add="+"
         )
+        apply_module_theme(self.window)
         center_toplevel_on_parent(
             self.window,
             master,

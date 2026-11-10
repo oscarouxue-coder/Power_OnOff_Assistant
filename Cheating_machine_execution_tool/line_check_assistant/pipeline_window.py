@@ -330,6 +330,9 @@ class PipelineWindow:
     # -- 开始 / 停止 -----------------------------------------------------
 
     def _on_start(self) -> None:
+        prepare_ai = getattr(self.app, "_prepare_ai_for_device_action", None)
+        if callable(prepare_ai) and prepare_ai() is False:
+            return
         session = getattr(self.app, 'power_test_resume_session', None)
         if session is not None and session.is_recovering:
             messagebox.showwarning('通道续跑进行中', '请等待续跑结束或停止后再启动全流程。', parent=self.window)

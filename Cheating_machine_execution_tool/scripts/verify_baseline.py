@@ -51,6 +51,21 @@ class CheckResult(NamedTuple):
 # 1. py_compile 文件清单(以 `ACCEPTANCE_BASELINE.md §0` + 当前 `src/` / `line_check_assistant/`
 #    下全部 .py 为准;新增 .py 后必须手工补到本列表)。
 PY_COMPILE_FILES: tuple[str, ...] = (
+    "src/ui/module_theme.py",
+    "src/models/ai_diagnostics.py",
+    "src/core/ai_client.py",
+    "src/core/ai_credentials.py",
+    "src/core/ai_debug_transport.py",
+    "src/services/ai_store.py",
+    "src/services/ai_trigger_service.py",
+    "src/services/ai_event_adapter.py",
+    "src/services/ai_debug_service.py",
+    "src/services/ai_diagnostic_service.py",
+    "src/ui/ai_diagnostics_window.py",
+    "src/ui/ai_serial_bridge.py",
+    "src/ui/ai_assistant_controller.py",
+    "src/utils/ai_redaction.py",
+    "src/utils/ai_output.py",
     # line_check_assistant 包
     "line_check_assistant/__init__.py",
     "line_check_assistant/app.py",

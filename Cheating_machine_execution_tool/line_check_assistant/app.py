@@ -18,6 +18,7 @@ from src.ui.test_item_pretest_controls import PretestControls
 from src.ui.app_update_dialog import AppUpdateDialog, arrange_update_toolbar
 from src.ui.project_name_badge import ProjectNameBadge
 from src.ui.main_log_filter import format_main_log_message
+from src.ui.module_theme import apply_module_theme
 from src.utils.wifi_log_summary import WifiLogSummary
 from src.ui.adapter_rename_dialog import offer_adapter_rename
 from src.services.adapter_rename_service import (
@@ -568,6 +569,10 @@ class LineCheckAssistant(Tk):
         pretest = getattr(self, "test_item_pretest_controls", None)
         if pretest is not None and not pretest.can_close():
             return
+        assistant = self.__dict__.get("ai_assistant")
+        if assistant is not None and not assistant.prepare_app_close():
+            self.after(100, self._on_app_close)
+            return
         session = getattr(self, "power_test_resume_session", None)
         if session is not None:
             session.stop()
@@ -866,6 +871,7 @@ class LineCheckAssistant(Tk):
         ttk.Button(toolbar_commands, text="ONU注册", command=self._open_onu_registration_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar_commands, text="串口日志", command=self._open_serial_log_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar_commands, text="DUT配置", command=self._open_dut_config_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(toolbar_commands, text="AI诊断", command=self._open_ai_assistant, style="Tool.TButton").pack(side="left", padx=(8, 0))
         self.app_update_dialog = AppUpdateDialog(self, RELEASE_VERSION, log=self.log_queue.put)
         self.check_updates_button = ttk.Button(
             toolbar_actions, text="检查更新", command=self.app_update_dialog.open, style="Secondary.TButton",
@@ -1183,6 +1189,7 @@ class LineCheckAssistant(Tk):
             dialog, "sample_parameter_writer"
         )
         dialog.minsize(860, 590)
+        apply_module_theme(dialog, COLOR_BG)
 
         # 参数表路径是全流程子任务 4 的必填项，必须直接复用实例级持久变量；
         # 不能每次开写参窗口再新建临时 StringVar，否则选表后全流程仍会读到空路径。
@@ -1400,6 +1407,8 @@ class LineCheckAssistant(Tk):
         self.parameter_preview_text.configure(state="disabled")
 
     def _start_sample_parameter_write(self, skip_confirmation: bool = False) -> bool:
+        if not LineCheckAssistant._prepare_ai_for_device_action(self):
+            return False
         if self.parameter_write_running:
             return False
         self._refresh_parameter_preflight()
@@ -4058,6 +4067,8 @@ class LineCheckAssistant(Tk):
         return False
 
     def _on_upgrade_start_clicked(self) -> None:
+        if not LineCheckAssistant._prepare_ai_for_device_action(self):
+            return
         if getattr(self, "sample_upgrade_running", False):
             self._log("样机升级仍在运行或正在停止，请等待当前批次释放资源。")
             return False
@@ -5916,6 +5927,72 @@ class LineCheckAssistant(Tk):
         terminal = self.__dict__.get("serial_terminal")
         return terminal.get_log_directory() if terminal is not None else DEFAULT_LOG_DIR
 
+    def _open_ai_assistant(self) -> None:
+        from src.ui.ai_assistant_controller import AiAssistantController
+        assistant = self.__dict__.get("ai_assistant")
+        if assistant is None:
+            assistant = AiAssistantController(
+                self, self.serial_terminal, self.serial_session_manager,
+                self._collect_ai_targets, self._ai_target_busy,
+                lambda: self.power_serial_port, self.log_queue.put,
+                APP_DIR / "line_check_assistant_README.md",
+                background=COLOR_BG, foreground=COLOR_TEXT,
+            )
+            self.ai_assistant = assistant
+        assistant.open()
+        if self.__dict__.get("power_test_running", False):
+            pipeline = self.__dict__.get("pipeline_window")
+            orchestrator = getattr(pipeline, "_orchestrator", None)
+            session = self.__dict__.get("power_test_resume_session")
+            run_id = getattr(orchestrator, "diagnostic_run_id", None) or getattr(session, "run_id", None)
+            if run_id:
+                assistant.observe({"type": "diagnostic_start", "run_id": run_id})
+
+    def _collect_ai_targets(self):
+        from src.models.ai_diagnostics import DiagnosticTarget
+        self._capture_current_channel()
+        telnet = TestItemConfigStore(TEST_ITEM_CONFIG_PATH).load(required=True).telnet
+        return tuple(DiagnosticTarget(
+            int(channel.section.rsplit("_", 1)[-1]),
+            adapter_alias_from_display(channel.vlan_name or channel.adapter_alias).strip(),
+            self._serial_port_for_channel(channel), channel.network_card_ip.strip(),
+            channel.device_manage_ip.strip(), int(telnet.port or 23), telnet.user, telnet.password,
+            telnet.input_user_flag, telnet.input_password_flag, telnet.login_success_flag,
+            bool(telnet.telnet_no_user_password_flag),
+            subnet_mask=channel.subnet_mask,
+        ) for channel in self._selected_channels())
+
+    def _ai_target_busy(self, target) -> bool:
+        if any(bool(self.__dict__.get(name, False)) for name in (
+            "running", "power_on_running", "parameter_write_running", "dut_config_running",
+            "onu_register_running", "onu_save_olt_running", "sample_upgrade_running",
+        )):
+            return True
+        if self.__dict__.get("power_test_running", False):
+            session = self.__dict__.get("power_test_resume_session")
+            if session is None:
+                return True
+            assistant = self.__dict__.get("ai_assistant")
+            if assistant is not None and session.run_id != assistant.service.run_id:
+                return True
+            with session.lock:
+                return target.channel not in session.ready or target.channel in session.active_started
+        run = self.__dict__.get("_sample_upgrade_run")
+        return bool(run is not None and not getattr(run, "finished", True))
+
+    def _observe_ai_power_event(self, message) -> None:
+        assistant = self.__dict__.get("ai_assistant")
+        if assistant is not None:
+            assistant.observe(message)
+
+    def _prepare_ai_for_device_action(self) -> bool:
+        assistant = self.__dict__.get("ai_assistant")
+        if assistant is None or assistant.service.prepare_device_action():
+            return True
+        self._log("[AI诊断] 已停止新增采集，等待当前临时操作恢复后可重新启动设备任务。")
+        messagebox.showinfo("等待AI采集清理", "当前AI临时采集正在恢复，请在清理完成后重新启动设备任务。", parent=self)
+        return False
+
     def _on_serial_log_directory_changed(self, log_dir: Path) -> None:
         """串口窗口的 Tk 主线程回调：同步全流程摘要，不触碰已打开的监控。"""
         self._log(f"[串口日志] 当前日志目录已更新：{log_dir}")
@@ -7306,6 +7383,9 @@ class LineCheckAssistant(Tk):
 
     def _reset_power_test_channel_states(self, channel_numbers: list[int]) -> None:
         """仅清空本次选中通道的旧结论和运行概览。"""
+        assistant = self.__dict__.get("ai_assistant")
+        if assistant is not None:
+            assistant.refresh_targets()
         for channel_number in channel_numbers:
             self.power_test_channel_states.pop(channel_number, None)
             self.power_test_channel_progresses.pop(channel_number, None)
@@ -8110,6 +8190,10 @@ class LineCheckAssistant(Tk):
 
     def _set_power_test_status(self, status: str) -> None:
         """在 Tk 主线程同步主界面的全流程状态与停止按钮。"""
+        assistant = self.__dict__.get("ai_assistant")
+        if assistant is not None and status in {"completed", "failed", "stopped"}:
+            assistant.observe({"type": "diagnostic_stop" if status == "stopped" else "diagnostic_end",
+                               "run_id": assistant.service.run_id})
         labels = {
             "idle": "开关机测试状态：未运行",
             "running": "开关机测试状态：正在执行",
@@ -8155,6 +8239,9 @@ class LineCheckAssistant(Tk):
 
     def _stop_power_test(self) -> None:
         """主界面停止入口；委派给当前全流程编排器的既有停止事件。"""
+        assistant = self.__dict__.get("ai_assistant")
+        if assistant is not None:
+            assistant.service.cancel()
         session = getattr(self, "power_test_resume_session", None)
         recovery_stopped = session is not None and session.is_recovering
         if recovery_stopped:
@@ -8175,6 +8262,11 @@ class LineCheckAssistant(Tk):
         return [channel for channel in self.channels if channel.enabled]
 
     def _run_checks(self, channels) -> None:
+        if not LineCheckAssistant._prepare_ai_for_device_action(self):
+            return
+        assistant = self.__dict__.get("ai_assistant")
+        if assistant is not None:
+            assistant.refresh_targets()
         invalid_message = self._validate_channels(channels)
         if invalid_message:
             messagebox.showwarning("配置不完整", invalid_message)
@@ -8203,6 +8295,9 @@ class LineCheckAssistant(Tk):
         return ""
 
     def _check_worker(self, channels) -> None:
+        import uuid
+        diagnostic_run_id = uuid.uuid4().hex
+        LineCheckAssistant._observe_ai_power_event(self, {"type": "diagnostic_start", "run_id": diagnostic_run_id})
         passed = 0
         for index, channel in enumerate(channels, start=1):
             self.log_queue.put(f"开始检查 {channel.section}")
@@ -8224,8 +8319,12 @@ class LineCheckAssistant(Tk):
                     self.log_queue.put("  诊断输出：")
                     for line in result.output.strip().splitlines():
                         self.log_queue.put(f"    {line}")
+            LineCheckAssistant._observe_ai_power_event(self, {"type": "diagnostic_event", "run_id": diagnostic_run_id,
+                "channel": power_channel_from_section(channel.section), "stage": "environment_ping", "feature": "ping",
+                "status": "success" if result.ok else "failed", "detail": result.message + "\n" + result.output})
             self.log_queue.put(f"__PROGRESS__:{index}")
         self.log_queue.put(f"线路检查完成：通过 {passed}/{len(channels)}")
+        LineCheckAssistant._observe_ai_power_event(self, {"type": "diagnostic_end", "run_id": diagnostic_run_id})
         self.log_queue.put("__DONE__")
 
     def _drain_log_queue(self) -> None:

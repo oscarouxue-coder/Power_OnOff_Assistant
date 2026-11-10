@@ -11,6 +11,7 @@ from tkinter import StringVar, Text, Toplevel, filedialog, messagebox, ttk
 from src.models.app_update import AppUpdateProgress, UpdateProgressStage
 from src.services.app_update_service import AppUpdateCancelled, AppUpdateError, AppUpdateService
 from src.ui.window_paint import center_toplevel_on_parent
+from src.ui.module_theme import apply_module_theme
 
 
 MANUAL_UPDATE_HINT = (
@@ -132,6 +133,7 @@ class AppUpdateDialog:
         self.close_button.pack(side="right")
         self.action_button = ttk.Button(actions, text="重新检查", command=self.check)
         self.action_button.pack(side="right", padx=8)
+        apply_module_theme(self.window)
         center_toplevel_on_parent(self.window, self.parent, window_width=660, window_height=540)
         self.check()
 

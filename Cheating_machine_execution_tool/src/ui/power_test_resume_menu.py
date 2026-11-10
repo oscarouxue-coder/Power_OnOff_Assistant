@@ -27,6 +27,9 @@ def bind_resume_menu(app, tile, channel):
         if session is not getattr(app, 'power_test_resume_session', None) or not available(session):
             app._log(f'[通道续跑] 通道 {channel} 状态已变化，跳过。')
             return
+        prepare_ai = getattr(app, "_prepare_ai_for_device_action", None)
+        if callable(prepare_ai) and prepare_ai() is False:
+            return
         if session.submit(channel):
             _poll_recovery(app, session)
         else:
