@@ -53,6 +53,11 @@ class CheckResult(NamedTuple):
 PY_COMPILE_FILES: tuple[str, ...] = (
     "src/ui/module_theme.py",
     "src/models/ai_diagnostics.py",
+    "src/models/ai_conversation.py",
+    "src/core/ai_network_probe.py",
+    "src/services/ai_evidence_context.py",
+    "src/services/ai_conversation_service.py",
+    "src/ui/ai_chat_panel.py",
     "src/core/ai_client.py",
     "src/core/ai_credentials.py",
     "src/core/ai_debug_transport.py",

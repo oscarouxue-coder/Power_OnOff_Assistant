@@ -4,18 +4,24 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.services.ai_diagnostic_service import AiDiagnosticService
+from src.services.ai_conversation_service import AiConversationService
 from src.ui.ai_diagnostics_window import AiDiagnosticsWindow
 from src.ui.ai_serial_bridge import AiSerialBridge
 
 
 class AiAssistantController:
     def __init__(self, master, terminal, manager, targets, busy, forbidden_port, emit, manual_path,
-                 background="#eef2f5", foreground="#17202a"):
+                 background="#eef2f5", foreground="#17202a", context=None, shared_busy=None):
         self.master = master
         self.bridge = AiSerialBridge(terminal, manager, busy, forbidden_port)
         self.service = AiDiagnosticService(emit, self.bridge.acquire, self.bridge.read,
                                            self.bridge.busy, manual_path=manual_path)
-        self.dialog = AiDiagnosticsWindow(master, self.service, targets, background, foreground)
+        self.conversation = AiConversationService(self.service, context,
+            (lambda target: self.bridge.call_ui(lambda: shared_busy(target))) if shared_busy else None,
+            target_current=lambda target: self.bridge.call_ui(lambda: target in tuple(targets())))
+        self.service.conversation = self.conversation
+        self.dialog = AiDiagnosticsWindow(master, self.service, targets, background, foreground,
+                                          conversation=self.conversation)
         terminal.diagnostic_observer = self.service.observe_serial
         self.terminal = terminal
         self.closing = False
@@ -48,7 +54,7 @@ class AiAssistantController:
             self.service.begin_close()
             self.service.emit("[AI诊断] 程序退出，等待采集清理及网络请求结束")
         if (not self.service.idle or self.dialog.background or self.service.worker_thread.is_alive()
-                or self.service.event_thread.is_alive()):
+                or self.service.event_thread.is_alive() or self.conversation.worker.is_alive()):
             return False
         self.closed = True
         self.bridge.close()

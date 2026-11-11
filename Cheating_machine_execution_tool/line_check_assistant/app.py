@@ -5929,6 +5929,8 @@ class LineCheckAssistant(Tk):
 
     def _open_ai_assistant(self) -> None:
         from src.ui.ai_assistant_controller import AiAssistantController
+        from src.services.ai_evidence_context import AiEvidenceContext
+        context = self.__dict__.setdefault("ai_evidence_context", AiEvidenceContext())
         assistant = self.__dict__.get("ai_assistant")
         if assistant is None:
             assistant = AiAssistantController(
@@ -5937,6 +5939,7 @@ class LineCheckAssistant(Tk):
                 lambda: self.power_serial_port, self.log_queue.put,
                 APP_DIR / "line_check_assistant_README.md",
                 background=COLOR_BG, foreground=COLOR_TEXT,
+                context=context, shared_busy=self._ai_shared_network_busy,
             )
             self.ai_assistant = assistant
         assistant.open()
@@ -5981,9 +5984,22 @@ class LineCheckAssistant(Tk):
         return bool(run is not None and not getattr(run, "finished", True))
 
     def _observe_ai_power_event(self, message) -> None:
+        from src.services.ai_evidence_context import AiEvidenceContext
+        context = self.__dict__.get("ai_evidence_context")
+        if context is None:
+            context = AiEvidenceContext()
+            self.ai_evidence_context = context
+        context.observe(message)
         assistant = self.__dict__.get("ai_assistant")
         if assistant is not None:
             assistant.observe(message)
+
+    def _ai_shared_network_busy(self, target) -> bool:
+        session = self.__dict__.get("power_test_resume_session")
+        request = getattr(session, "request", None)
+        return self._ai_target_busy(target) or bool(
+            self.__dict__.get("power_test_running", False) and
+            (request is None or getattr(request, "connect_wifi_enable", False)))
 
     def _prepare_ai_for_device_action(self) -> bool:
         assistant = self.__dict__.get("ai_assistant")

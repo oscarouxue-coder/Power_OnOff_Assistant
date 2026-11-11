@@ -46,6 +46,8 @@ class AiDiagnosticService:
         self.targets = {}
         self.profile = None
         self.lock = threading.RLock()
+        self.operation_lock = threading.Lock()
+        self.conversation = None
         self.events = queue.Queue(maxsize=1000)
         self.jobs = queue.Queue(maxsize=16)
         self.updates = queue.Queue(maxsize=200)
@@ -124,6 +126,8 @@ class AiDiagnosticService:
                 kind = message.get("type")
                 if kind == "diagnostic_start":
                     new_run = str(message["run_id"])
+                    if self.conversation is not None:
+                        self.conversation.on_run(new_run)
                     if self.trigger.enabled and self.monitor_bound_run not in (None, new_run):
                         self.enable_monitor(False)
                         self.notify("monitor_off", "上一批次监控已结束，请为新批次重新启用")
@@ -223,6 +227,10 @@ class AiDiagnosticService:
     def prepare_device_action(self):
         """操作员任务优先；已有临时操作必须先恢复，禁止两条控制路径交叉。"""
         self.cancel()
+        if self.conversation is not None:
+            self.conversation.cancel_all()
+            if not self.conversation.idle:
+                return False
         with self.lock:
             return not any(executor.transport is not None for executor in self.executors.values())
 
@@ -237,7 +245,10 @@ class AiDiagnosticService:
             try:
                 if stop.is_set():
                     raise InterruptedError("采集开始前已取消")
-                self._diagnose(job, key, stop, snapshot)
+                with self.operation_lock:
+                    if stop.is_set():
+                        raise InterruptedError("采集开始前已取消")
+                    self._diagnose(job, key, stop, snapshot)
             except Exception as exc:
                 snapshot.update(status="已取消" if isinstance(exc, InterruptedError) else "失败",
                                 report=self.redactor.text(str(exc)) + "\n本地恢复状态：" + snapshot.get("recovery", "无临时修改"))
@@ -334,10 +345,13 @@ class AiDiagnosticService:
         return identifier
 
     def begin_close(self):
+        if self.conversation is not None:
+            self.conversation.begin_close()
         self.trigger.enabled = False
         self.cancel()
         self.shutdown.set()
 
     @property
     def idle(self):
-        return not self.active_jobs and self.jobs.empty()
+        return (not self.active_jobs and self.jobs.empty() and
+                (self.conversation is None or self.conversation.idle))

@@ -16,7 +16,7 @@ from src.utils.ai_output import format_diagnostic_evidence
 
 
 class AiDiagnosticsWindow:
-    def __init__(self, master, service, targets_provider, background=MODULE_BACKGROUND, foreground="#17202a"):
+    def __init__(self, master, service, targets_provider, background=MODULE_BACKGROUND, foreground="#17202a", conversation=None):
         self.master, self.service, self.targets_provider = master, service, targets_provider
         self.background_color, self.foreground_color = background, foreground
         self.window = None
@@ -29,6 +29,8 @@ class AiDiagnosticsWindow:
         self.reports = {}
         self._poll_id = None
         self.new_profile_mode = True
+        self.conversation = conversation
+        self.chat_panel = None
 
     def open(self):
         if self.window is not None and self.window.winfo_exists():
@@ -49,6 +51,12 @@ class AiDiagnosticsWindow:
         self._connection_tab(connection)
         self._diagnosis_tab(diagnosis)
         self._cases_tab(cases)
+        if self.conversation is not None:
+            from src.ui.ai_chat_panel import AiChatPanel
+            chat = ttk.Frame(book, padding=10)
+            book.insert(0, chat, text="对话排障")
+            self.chat_panel = AiChatPanel(chat, self, self.conversation)
+            book.select(chat)
         self._apply_theme()
         center_toplevel_on_parent(self.window, self.master)
         self._reload_profiles()
@@ -329,6 +337,8 @@ class AiDiagnosticsWindow:
                 self.channel_choice.current(0)
             if self.service.profile is not None:
                 self.service.configure(self.service.profile, self.targets)
+            if self.chat_panel is not None:
+                self.chat_panel.refresh_targets()
         except Exception as exc:
             self.targets = ()
             self.service.emit("[AI配置] 目标刷新失败：" + str(exc))
@@ -451,6 +461,8 @@ class AiDiagnosticsWindow:
 
     def _poll(self):
         self._poll_id = None
+        if self.chat_panel is not None:
+            self.chat_panel.poll()
         for _ in range(40):
             try:
                 kind, value = self.events.get_nowait()

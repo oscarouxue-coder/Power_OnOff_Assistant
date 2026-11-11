@@ -477,6 +477,15 @@ def _run_legacy_power_test(
             except Exception:
                 pass  # AI旁路故障不改变测试流程、判据和停止语义。
     observe_diagnostic({"type": "diagnostic_start"})
+    for channel in request.channels:
+        observe_diagnostic({"type": "diagnostic_settings", "channel": channel.number,
+            "attempt": (resume_session.attempts.get(channel.number, 0) if resume_session else 0),
+            "settings": {"communication_method": request.communication_method,
+                         "number_of_tests": request.number_of_tests,
+                         "wireless_ping_target": request.wireless_ping_target,
+                         "wifi_wireless_card_name": request.wifi_wireless_card_name if request.wifi_choose_wireless_card else "",
+                         "wifi_test_2g_enable": request.wifi_test_2g_enable,
+                         "wifi_test_5g_enable": request.wifi_test_5g_enable}})
     message_queue = context.Queue()
     child_stop_event = context.Event()
     initial_completed = initial_completed or {}
@@ -571,6 +580,8 @@ def _run_legacy_power_test(
             if message_type == 'wifi_log_created':
                 # 路径已由当前会话登记；不参与业务结果、进度或日志去重。
                 continue
+            if message_type == 'result_log_created':
+                continue  # 只读证据登记，不参与原测试结果。
             if message_type == "channel_started":
                 channel_number = message["channel"]
                 wifi_history.reset(channel_number)
@@ -956,13 +967,21 @@ def _is_legacy_command_result_file(file, mode: str) -> bool:
     )
 
 
-def _install_legacy_result_log_forwarder(message_queue):
+def _install_legacy_result_log_forwarder(message_queue, record_paths=False):
     """在当前旧业务子进程内安装窄范围结果文件转发器。"""
     original_open = builtins.open
 
     def forwarding_open(file, mode="r", *args, **kwargs):
         opened_file = original_open(file, mode, *args, **kwargs)
         if _is_legacy_command_result_file(file, str(mode)):
+            if record_paths:
+                try:
+                    path = Path(file).resolve()
+                    match = LEGACY_COMMAND_RESULT_FILENAME_PATTERN.fullmatch(path.name)
+                    message_queue.put({"type": "result_log_created", "channel": int(match["device_number"]),
+                                       "path": str(path)})
+                except Exception:
+                    pass  # 证据登记失败不影响原文件与业务。
             return _ForwardingLegacyResultFile(opened_file, message_queue)
         return opened_file
 
@@ -1131,7 +1150,7 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
                                         request.wireless_ping_enable, request.wireless_ping_target),
                 test_2g=request.wifi_test_2g_enable, test_5g=request.wifi_test_5g_enable)
         _connect_legacy_log_signals(legacy_worker, message_queue)
-        restore_result_log_open = _install_legacy_result_log_forwarder(message_queue)
+        restore_result_log_open = _install_legacy_result_log_forwarder(message_queue, record_paths=True)
 
         if initialize_power:
             selected_channels = tuple(dict.fromkeys(channel.number for channel in request.channels))

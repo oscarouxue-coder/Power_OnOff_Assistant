@@ -53,6 +53,17 @@ class DiagnosticStore:
                 created TEXT, payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS recovery(id TEXT PRIMARY KEY, payload TEXT NOT NULL,
                 state TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS chat_sessions(id TEXT PRIMARY KEY, created TEXT NOT NULL,
+                payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS chat_messages(id INTEGER PRIMARY KEY, session_id TEXT NOT NULL,
+                payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS chat_groups(id INTEGER PRIMARY KEY, session_id TEXT NOT NULL,
+                payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS chat_evidence(id TEXT PRIMARY KEY, session_id TEXT NOT NULL,
+                payload TEXT NOT NULL);
+            CREATE INDEX IF NOT EXISTS chat_messages_session ON chat_messages(session_id,id);
+            CREATE INDEX IF NOT EXISTS chat_groups_session ON chat_groups(session_id,id);
+            CREATE INDEX IF NOT EXISTS chat_evidence_session ON chat_evidence(session_id);
         ''')
         self.db.commit()
 
@@ -162,6 +173,66 @@ class DiagnosticStore:
     def pending_recovery(self):
         with self.lock:
             return [(r[0], json.loads(r[1])) for r in self.db.execute("SELECT id,payload FROM recovery WHERE state='pending'")]
+
+    def create_chat(self, payload):
+        with self.lock:
+            self.db.execute("INSERT INTO chat_sessions VALUES(?,?,?)",
+                            (payload["id"], payload["created"], json.dumps(payload, ensure_ascii=False)))
+            self.db.commit()
+
+    def chat(self, identifier):
+        with self.lock:
+            row = self.db.execute("SELECT payload FROM chat_sessions WHERE id=?", (identifier,)).fetchone()
+            if row is None:
+                raise ValueError("排障会话不存在")
+            return json.loads(row[0])
+
+    def chats(self):
+        with self.lock:
+            return [json.loads(row[0]) for row in self.db.execute(
+                "SELECT payload FROM chat_sessions ORDER BY created DESC, rowid DESC")]
+
+    def update_chat(self, identifier, **changes):
+        with self.lock:
+            payload = self.chat(identifier)
+            payload.update(changes)
+            self.db.execute("UPDATE chat_sessions SET payload=? WHERE id=?",
+                            (json.dumps(payload, ensure_ascii=False), identifier))
+            self.db.commit()
+            return payload
+
+    def append_chat(self, identifier, payload, group=False):
+        table = "chat_groups" if group else "chat_messages"
+        with self.lock:
+            self.db.execute("INSERT INTO " + table + "(session_id,payload) VALUES(?,?)",
+                            (identifier, json.dumps(payload, ensure_ascii=False)))
+            self.db.commit()
+
+    def chat_items(self, identifier, group=False):
+        table = "chat_groups" if group else "chat_messages"
+        with self.lock:
+            return [json.loads(row[0]) for row in self.db.execute(
+                "SELECT payload FROM " + table + " WHERE session_id=? ORDER BY id", (identifier,))]
+
+    def add_chat_evidence(self, identifier, evidence):
+        return self.add_chat_evidence_batch(identifier, (evidence,))[0]
+
+    def add_chat_evidence_batch(self, identifier, evidence):
+        # 来源/原文相同的快照不重复存储；新时间点的主动查询由来源中的调用ID区分。
+        rows = []
+        for item in evidence:
+            text = json.dumps((identifier, item["source"], item["text"], item["run_id"]), ensure_ascii=False)
+            key = hashlib.sha256(text.encode("utf-8")).hexdigest()
+            rows.append((key, identifier, json.dumps(dict(item, id=key), ensure_ascii=False)))
+        with self.lock:
+            self.db.executemany("INSERT OR IGNORE INTO chat_evidence VALUES(?,?,?)", rows)
+            self.db.commit()
+        return [row[0] for row in rows]
+
+    def chat_evidence(self, identifier):
+        with self.lock:
+            return [json.loads(row[0]) for row in self.db.execute(
+                "SELECT payload FROM chat_evidence WHERE session_id=? ORDER BY rowid", (identifier,))]
 
     def close(self):
         with self.lock:

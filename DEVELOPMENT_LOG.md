@@ -1,5 +1,33 @@
 # 开发记录
 
+## 2026-11-11 - 增加AI持续对话排障
+
+- 类型：功能
+- 背景：负责人反馈现有AI诊断与预期有差距，明确要求在挂测故障后通过多轮对话与AI共同debug，并确认覆盖开关机/Telnet测试项/WiFi/Ping、一次授权后自主连续排查、主动询问现场问题及等待反馈；原测试规则保持，操作员手动决定何时停测。按已确认计划实施独立模块，不迁移已验收业务。
+- 完成内容：① 新增默认“对话排障”页、独立会话service和消息/证据模型，SQLite增量建表兼容旧报告/案例，固定批次/通道/目标/模型，支持连续追问、纠正、文本导入、历史报告起始材料、证据查看/关键词检索；保存原始协议组，最多续接最近8轮/48000字符并明确提示裁剪，保留最初问题和异常线索。② ask_user结构化提问说明问题与原因、保存问题ID并显示“等待你回复”，未答不推测；独立检查可先完成，用户回答携问题ID继续，两种已有协议均续接。③ 一次会话授权开放注册式查询/有限Debug，进程重启、新批次、目标/模型变更不沿用；每条消息5轮模型/10次工具，上限后可继续；停止当前轮次和结束授权分别处理，程序退出等待对话/单次诊断线程及恢复清理。④ 挂测开始即旁路缓存每通道2MiB/2000条验收过滤后的事件，实际写入端登记准确结果/WiFi日志路径，晚打开窗口可读取本次记录；最多64KiB尾读，不冒认历史文件，批量持久化并标明记录/查询/读取时间。⑤ 新增固定参数路由/地址/ARP/无线状态查询，复用既有源IP+ifIndex绑定ICMP，限定有线管理地址或本次明确无线接口/配置目标，固定4包/每包2秒；资源忙、身份不明或无IPv4跳过，不改网络、不抢占连接、不改变挂测判据/重试/续跑。⑥ 现有单次诊断与会话共享执行互斥，工具执行前重新核对目标/配置，拒绝非法/重复调用ID，停止/异常仍保存已得证据与恢复状态；模型密钥继续仅用于认证并过滤，真实材料策略保持。同步操作员说明、状态及验收待确认项。
+- 修改文件：
+  - `.claude/plans/ai-conversation-debug.md`
+  - `Cheating_machine_execution_tool/src/models/ai_conversation.py`
+  - `Cheating_machine_execution_tool/src/core/ai_network_probe.py`
+  - `Cheating_machine_execution_tool/src/services/ai_evidence_context.py`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_store.py`
+  - `Cheating_machine_execution_tool/src/services/ai_diagnostic_service.py`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_conversation.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用`%LOCALAPPDATA%/LineCheckAssistant/build-env-py39/Scripts/python.exe`，设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`；运行`-I -X utf8 -m unittest discover -s tests -p "test_ai_conversation.py"`及`-I -X utf8 scripts/verify_baseline.py`。专项使用模拟HTTPS响应/设备、假网络接口/ICMP执行器、临时SQLite/文本文件及独立真实Tk控件，不读取真实模型密钥、不调用云端或DUT、不操作真实无线接口。Git差异及空白检查另行核对。
+- 验证结果：新增42项会话/证据/网络/真实Tk专项全部通过；144项AI测试纳入最终全量，完整基线ALL CHECKS PASSED：1603项测试、190项指定回归、125个源码编译/覆盖及全部协议不变量通过。完整verbose另确认2项既有浏览器模拟网页验收因未显式启用而跳过，指定回归均实际执行。独立Tk验证提问/等待/反馈、只读显示、历史目标继续分析及后台任务结束后发送按钮恢复，控制器退出验证后台线程结束后才关闭数据库。初轮1589项通过后补充了边界回归；中间门禁一次返回1项失败的截断汇总，随后保存完整verbose复核1603项通过，最终代码再运行完整门禁通过，不使用中间失败结果作通过证据。单独以-I运行全量发现首个旧测试缺少项目搜索路径，故完整verbose使用与门禁子进程一致的非-I unittest命令；未改测试门禁或旧测试。Git差异空白检查通过。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.16/§3复验真实厂商API、完整Windows交互及真实DUT。未打包、运行EXE、发布或提交，不升级原现场验收标签；不新增依赖，不修改本机配置或既有日志。
+
 ## 2026-11-11 - 取消AI诊断材料脱敏
 
 - 类型：修改
