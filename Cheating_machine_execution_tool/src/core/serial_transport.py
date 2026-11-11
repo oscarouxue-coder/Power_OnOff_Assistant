@@ -327,6 +327,14 @@ class SerialSessionManager:
         with self._lock:
             return self._controllers.get(port.upper(), "")
 
+    def diagnostic_state(self, port: str) -> dict:
+        """仅查看程序内部已知所有者，不打开设备、不推测外部占用。"""
+        with self._lock:
+            key = port.upper()
+            return {"port": key, "opened_in_program": key in self._sessions,
+                    "monitor_owners": sorted(self._owners.get(key, ())),
+                    "control_owner": self._controllers.get(key, "")}
+
     def shutdown_all(self) -> None:
         with self._lock:
             sessions = tuple(self._sessions.values())

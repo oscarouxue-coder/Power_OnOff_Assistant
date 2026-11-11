@@ -17,6 +17,7 @@ class AiAssistantController:
         self.bridge = AiSerialBridge(terminal, manager, busy, forbidden_port)
         self.service = AiDiagnosticService(emit, self.bridge.acquire, self.bridge.read,
                                            self.bridge.busy, manual_path=manual_path)
+        self.service.serial_status = self.bridge.serial_status
         self.conversation = AiConversationService(self.service, context,
             (lambda target: self.bridge.call_ui(lambda: shared_busy(target))) if shared_busy else None,
             target_current=lambda target: (target in tuple(targets()) if threading.current_thread() is threading.main_thread()

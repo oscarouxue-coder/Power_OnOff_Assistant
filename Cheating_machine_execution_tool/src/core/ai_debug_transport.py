@@ -91,8 +91,14 @@ class DiagnosticTransport:
             if self.session is not None:
                 self.session.close()
             self.session = None
-            self.emit(f"[AI Debug] Telnet 不可用（{type(exc).__name__}），尝试目标串口；连接原因不代表根因")
-        return self.fallback_serial()
+            telnet_error = f"{type(exc).__name__}: {exc}"
+            self.emit(f"[AI Debug] Telnet 不可用（{telnet_error}），尝试目标串口；连接原因不代表根因")
+        try:
+            return self.fallback_serial()
+        except InterruptedError:
+            raise
+        except Exception as exc:
+            raise DebugConnectionUnavailable(f"Telnet连接失败：{telnet_error}；串口连接失败：{exc}") from exc
 
     def fallback_serial(self):
         self.check()  # 忙碌不允许通过串口绕过。
@@ -114,7 +120,7 @@ class DiagnosticTransport:
             self.check()
         if self.session is None:
             raise DebugConnectionUnavailable("诊断连接未建立")
-        # command 只来自本地工具注册表，禁止暴露给模型任意文本参数。
+        # 单次诊断只传固定命令；完整对话命令须先经过独立风险审查/具体操作授权。
         self.emit(f"[AI Debug][{self.kind}] TX：{command}")
         cursor = self.session.cursor()
         self.session.send_line(command, sensitive=False)

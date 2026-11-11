@@ -64,6 +64,7 @@ class SerialTerminalWindow:
         self.window = None
         self.notebook = None
         self.tabs = {}
+        self.last_open_errors = {}
         self.events: queue.Queue = queue.Queue(maxsize=2000)
         self._pending_chunks: dict[str, deque[str]] = {}
         self._pending_char_counts: dict[str, int] = {}
@@ -174,7 +175,7 @@ class SerialTerminalWindow:
         self.tabs[normalized] = {"port": resolved_port, "frame": frame, "status": status, "output": output, "command": command, "owner": None, "session": None, "subscriber": None}
         self.notebook.add(frame, text=f"{normalized} / {resolved_port}")
 
-    def open_monitor(self, vlan: str) -> bool:
+    def open_monitor(self, vlan: str, *, raise_errors: bool = False) -> bool:
         item = self.tabs[vlan]
         if item["session"] is not None:
             return True
@@ -187,10 +188,17 @@ class SerialTerminalWindow:
             session.subscribe(subscriber)
             item.update(owner=owner, session=session, subscriber=subscriber)
             item["status"].set(f"{item['port']} 监控中，日志：{path}")
+            self.last_open_errors.pop(item["port"].upper(), None)
             return True
-        except queue.Full:
+        except queue.Full as exc:
+            self.last_open_errors[item["port"].upper()] = "串口事件队列已满"
+            if raise_errors:
+                raise RuntimeError("串口事件队列已满") from exc
             return False
         except Exception as exc:
+            self.last_open_errors[item["port"].upper()] = str(exc)
+            if raise_errors:
+                raise
             messagebox.showerror("打开串口失败", str(exc), parent=self.window)
             return False
 

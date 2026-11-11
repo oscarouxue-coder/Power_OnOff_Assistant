@@ -64,7 +64,7 @@ class AiSerialBridge:
             if not self.manager.manual_writable(target.port):
                 raise RuntimeError("目标串口已被其它流程控制，只允许读取日志")
             self.terminal.show([(target.vlan, target.port)])
-            if not self.terminal.open_monitor(target.vlan.lower()):
+            if not self.terminal.open_monitor(target.vlan.lower(), raise_errors=True):
                 raise RuntimeError("目标串口打开失败")
             owner = "ai-debug:" + uuid.uuid4().hex
             session = self.manager.acquire_existing_control(owner, SerialSettings(target.port))
@@ -104,6 +104,14 @@ class AiSerialBridge:
         if session is None:
             return "目标串口未打开，无实时串口输出；未为被动读取自动打开COM"
         return session.peek_since(max(0, session.cursor() - 65536))
+
+    def serial_status(self, target):
+        def snapshot():
+            result = self.manager.diagnostic_state(target.port)
+            result["last_open_error"] = self.terminal.last_open_errors.get(target.port.upper(), "")
+            result["power_port_conflict"] = target.port.upper() == self.forbidden_port().upper()
+            return result
+        return self.call_ui(snapshot)
 
     def close(self):
         self.closed = True

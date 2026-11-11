@@ -15,6 +15,7 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.models.ai_diagnostics import ProviderProfile
 from src.services.ai_conversation_service import AiConversationService
+from src.services.ai_action_service import AiActionService
 from src.services.ai_evidence_context import AiEvidenceContext
 from src.services.ai_store import DiagnosticStore, profile_fingerprint
 from src.ui.ai_chat_panel import AiChatPanel
@@ -46,6 +47,7 @@ class DeletionFixture:
         self.service.shutdown = threading.Event()
         self.service.updates = queue.Queue()
         self.service.context = AiEvidenceContext()
+        self.service.actions = AiActionService(self.service)
         self.add_session("s1")
         self.add_session("s2")
 

@@ -9,6 +9,7 @@ from src.services.ai_store import profile_fingerprint
 from src.models.ai_diagnostics import ProviderProfile
 from src.ui.module_theme import apply_module_theme
 from src.ui.ai_context_status import AiContextStatus
+from src.ui.ai_action_approval import AiActionApproval
 
 
 CHAT_FONT = "Microsoft YaHei UI"
@@ -74,6 +75,8 @@ class AiChatPanel:
         self.output.configure(yscrollcommand=scroll.set)
         self.input = tk.Text(composer, height=4, wrap="word", font=(CHAT_FONT, 11), padx=8, pady=6)
         self.input.pack(fill="x", pady=6)
+        self.action_approval = AiActionApproval(composer, self.service, self.owner.background_color)
+        self.action_approval.pack(fill="x", pady=(0, 5))
         self.input.bind("<Control-Return>", lambda event: self.send())
         row = ttk.Frame(composer)
         row.pack(fill="x")
@@ -235,6 +238,7 @@ class AiChatPanel:
         apply_module_theme(window, self.owner.background_color)
 
     def render(self):
+        self.action_approval.show(self.selected)
         if not self.selected:
             self.context_status.show()
             self.revision = None
@@ -257,7 +261,7 @@ class AiChatPanel:
         same_session = self.revision is not None and self.revision[0] == self.selected
         self.revision = revision
         self.status.set(f"批次：{session['run_id']} | 通道{session['target']['channel']} | {session['profile']['provider']}/{session['profile']['model']} | "
-                        f"{session['status']} | {collection['reason']}\n"
+                        f"{session['status']} | {collection['reason']}；有效会话开放本机/样机完整工具\n"
                         f"真实诊断信息（含材料中的账号、密码）将发送至{session['profile']['provider']} / "
                         f"{session['profile']['base_url']}；模型API密钥仅用于认证。")
         at_end = self.output.yview()[1] > 0.98

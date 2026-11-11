@@ -48,6 +48,7 @@ class DiagnosticToolExecutor:
         self.serial_acquire, self.serial_read, self.busy = serial_acquire, serial_read, busy
         self.transport_factory = transport_factory
         self.transport = None
+        self.allow_read_fallback = True
         self.used = 0
         self.recovery_state = "无临时修改"
 
@@ -89,9 +90,14 @@ class DiagnosticToolExecutor:
                 connection = self._connection()
                 try:
                     result = connection.command(READ_COMMANDS[params["category"]])
-                except DebugConnectionUnavailable:
+                except DebugConnectionUnavailable as exc:
                     if connection.kind != "Telnet":
                         raise
+                    if not self.allow_read_fallback:
+                        connection.close()
+                        self.transport = None
+                        raise DebugConnectionUnavailable(
+                            f"{exc}；未自动切换通道或重新登录，请重新请求查询并确认新连接") from exc
                     self.emit("[AI Debug] Telnet只读查询连接失效，回退串口核查；临时修改不自动重发")
                     connection.fallback_serial()
                     result = connection.command(READ_COMMANDS[params["category"]])

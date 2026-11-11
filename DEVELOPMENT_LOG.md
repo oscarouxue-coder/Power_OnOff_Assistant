@@ -1,5 +1,39 @@
 # 开发记录
 
+## 2026-11-12 - 开放AI本机与样机完整工具
+
+- 类型：功能
+- 背景：负责人反馈AI只能返回“目标串口打开失败”，不能自行查询设备管理器/PnP；确认有效会话默认开放本机和样机完整工具，普通操作由AI判断后自动执行，危险或未知操作由操作员批准具体内容，按已批准计划实施。
+- 完成内容：① 新增独立操作模型、Windows命令/文件执行器、串口只读诊断、风险审查与动作service、非模态确认组件。对话开放PowerShell、文件读取/UTF-8写入、当前目标样机命令和实际COM/PnP/驱动诊断；自动监控/单次诊断仍保持原工具边界，旧业务结构与升级流程不搬迁、不新增协议、不自动提权。② 通用命令和文件修改使用当前已验证模型的独立审查请求，复用完整预算和最近用量，普通操作自动执行，危险/未知/审查失败转人工，绕过占用保护或获取模型密钥被阻止；首次设备登录明确确认，复用连接不重复。Telnet已连接查询失效后，对话不静默切换/重新登录，新调用重新确认；原监控保留受控只读回退。③ SQLite新增chat_actions和索引，兼容既有库；操作绑定会话/批次/目标/模型/参数/文件版本及指纹，CAS状态和共用短锁保证批准/拒绝/停止/后台结束不会重复下发，等待Tk实时目标检查不持确认锁。停止/变化/新批次/退出/重启取消待执行授权，重启不自动恢复执行、执行中记录标为待核实；等待批准的旧会话恢复为可继续，不保留假等待。动作记录随会话在同一事务删除，UI轮询仅查询待确认状态，避免反复加载大结果。④ PowerShell挂起启动、先加入带KILL_ON_JOB_CLOSE的Windows Job Object再恢复运行，默认60秒/最大1800秒，停止和超时清理本次进程树；标准输出/错误单路1MiB有界，保留退出码/编码/截断/清理状态。文件读取支持偏移，单次片段与UTF-8写入最多1MiB，展示完整拟写入内容/差异及哈希，覆盖前复核版本并原子替换。样机命令锁源并复用共享串口，下发后异常不切通道重发，同一结果不明操作再次请求须人工批准；通用操作结果明确不自动回滚，不再误用“无临时修改”概括其变更。⑤ 串口诊断不打开COM，查询全部实际端口、PnP故障代码/驱动与程序内部所有者，外部占用者无证据为未知；AI打开失败不弹出阻塞框，原始错误传到工具，Telnet及串口同时失败分别保留原因；人工打开原错误框保持。⑥ 文档同步新操作边界和风险判断不能构成系统沙箱隔离的限制，新增源码纳入编译清单。
+- 修改文件：
+  - `.claude/plans/ai-full-access.md`
+  - `Cheating_machine_execution_tool/src/models/ai_actions.py`
+  - `Cheating_machine_execution_tool/src/core/ai_local_executor.py`
+  - `Cheating_machine_execution_tool/src/core/ai_serial_diagnostics.py`
+  - `Cheating_machine_execution_tool/src/services/ai_action_service.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_action_approval.py`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_debug_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_store.py`
+  - `Cheating_machine_execution_tool/src/core/ai_debug_transport.py`
+  - `Cheating_machine_execution_tool/src/core/serial_transport.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_serial_bridge.py`
+  - `Cheating_machine_execution_tool/src/ui/serial_terminal.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_actions.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_conversation.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_session_deletion.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用仓库外独立CPython3.9.10，设置PYTHONUTF8=1/PYTHONIOENCODING=utf-8，执行`python -I -X utf8 -m unittest discover -s tests -p "test_ai*.py"`和`python -I -X utf8 -m unittest discover -s tests -p "test_serial*.py"`；对本轮18个Python文件逐一py_compile，并只读比对scripts/verify_baseline.py编译清单与134个实际源码；检查文档边界、路径链接及`git diff --check`。新专项只使用临时文件/数据库、假云端/设备、真实Windows无害PowerShell子进程和独立Tk窗口，不执行真实升级、重启、Ping或访问真实API。
+- 验证结果：最终AI专项Ran 256 tests / OK（新增37项）；串口相关Ran 79 tests / OK。独立Windows Job Object子孙进程超时清理、中文标准/错误输出、退出码/工作目录、取消与输出上限实测通过；vista/Clam确认窗口680×420及完整AI窗口940×660的真实Tk控件映射、按钮可见、非模态、会话切换检查通过。18个Python文件编译、134个源码清单覆盖及差异格式检查通过。首次新增UI检查因测试root隐藏导致transient窗口不可见，调整独立测试窗口后通过；并发回归实际发现停止/新批次与后台结束竞争产生`ValueError: 操作状态已变化`，现以同一短锁串行化失效/下发/完成并复验。Tk销毁阶段原有ThemeChanged提示不影响测试断言和退出码。本轮未运行完整基线，保留此前完整验证记录；不触发已验收功能结构调整，不构建、不运行新EXE、不发布、不提交。
+- 补充验证：子进程超时测试进一步使用绝对临时文件路径，排除子进程工作目录差异导致“未写入”的假阳性；最后重跑LocalExecutorTests全部5项 / OK，测试文件再次编译通过。生产代码未因此调整，不重复扩大测试范围。
+- 后续待办：负责人重启源码版后复验真实模型风险判断/两种协议、完整Windows人工交互及真实DUT登录/授权/异常；现场COM3故障根因须依据新工具实际采集，不以本轮离线模拟推定。见ACCEPTANCE_BASELINE.md §2.16/§3。
+
 ## 2026-11-12 - 固定展示上下文容量与请求用量
 
 - 类型：功能

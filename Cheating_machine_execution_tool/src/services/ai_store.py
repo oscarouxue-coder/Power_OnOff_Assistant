@@ -61,6 +61,9 @@ class DiagnosticStore:
                 payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS chat_evidence(id TEXT PRIMARY KEY, session_id TEXT NOT NULL,
                 payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS chat_actions(id TEXT PRIMARY KEY, session_id TEXT NOT NULL,
+                state TEXT NOT NULL, payload TEXT NOT NULL);
+            CREATE INDEX IF NOT EXISTS chat_actions_session ON chat_actions(session_id);
             CREATE INDEX IF NOT EXISTS chat_messages_session ON chat_messages(session_id,id);
             CREATE INDEX IF NOT EXISTS chat_groups_session ON chat_groups(session_id,id);
             CREATE INDEX IF NOT EXISTS chat_evidence_session ON chat_evidence(session_id);
@@ -231,7 +234,7 @@ class DiagnosticStore:
             for identifier in identifiers:
                 self.chat(identifier)  # 不允许失效选择造成部分删除。
             parameters = [(identifier,) for identifier in identifiers]
-            for table in ("chat_messages", "chat_groups", "chat_evidence"):
+            for table in ("chat_messages", "chat_groups", "chat_evidence", "chat_actions"):
                 self.db.executemany("DELETE FROM " + table + " WHERE session_id=?", parameters)
             self.db.executemany("DELETE FROM chat_sessions WHERE id=?", parameters)
         return len(identifiers)
@@ -242,6 +245,43 @@ class DiagnosticStore:
             self.db.execute("INSERT INTO " + table + "(session_id,payload) VALUES(?,?)",
                             (identifier, json.dumps(payload, ensure_ascii=False)))
             self.db.commit()
+
+    def save_action(self, action):
+        with self.lock:
+            self.chat(action["session_id"])
+            self.db.execute("INSERT INTO chat_actions VALUES(?,?,?,?)", (action["id"], action["session_id"],
+                            action["state"], json.dumps(action, ensure_ascii=False)))
+            self.db.commit()
+
+    def actions(self, identifier, states=None):
+        with self.lock:
+            sql, params = "SELECT payload FROM chat_actions WHERE session_id=?", [identifier]
+            if states is not None:
+                if not states:
+                    return []
+                sql += " AND state IN (" + ",".join("?" for _ in states) + ")"
+                params.extend(states)
+            return [json.loads(row[0]) for row in self.db.execute(
+                sql + " ORDER BY rowid", params)]
+
+    def action(self, action_id):
+        with self.lock:
+            row = self.db.execute("SELECT payload FROM chat_actions WHERE id=?", (action_id,)).fetchone()
+            if row is None:
+                raise ValueError("操作记录不存在")
+            return json.loads(row[0])
+
+    def change_action(self, action_id, expected, state, **changes):
+        """比较状态后单次转移，重复点击和旧确认不能重复下发。"""
+        with self.lock:
+            action = self.action(action_id)
+            if action["state"] not in expected:
+                raise ValueError("操作状态已变化，本次未授权或执行")
+            action.update(changes, state=state)
+            self.db.execute("UPDATE chat_actions SET state=?,payload=? WHERE id=?",
+                            (state, json.dumps(action, ensure_ascii=False), action_id))
+            self.db.commit()
+            return action
 
     def chat_items(self, identifier, group=False):
         table = "chat_groups" if group else "chat_messages"
