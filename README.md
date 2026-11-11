@@ -7,7 +7,8 @@
 - 主源码与运行目录：`Cheating_machine_execution_tool/`
 - 源码入口：`Cheating_machine_execution_tool/run_line_check_assistant.py`
 - 运行：进入主源码目录后执行 `python run_line_check_assistant.py`
-- 回归门禁：进入主源码目录后执行 `python scripts/verify_baseline.py`
+- 日常修改默认只运行相关检查：按影响范围执行必要的局部编译、相关专项测试及差异检查；纯文档只检查内容一致性、链接和差异格式，不运行代码测试。
+- 完整基线：仅在用户明确要求、提交代码前、标准打包（包括 `-CheckOnly`）或已验收功能结构调整时，进入主源码目录执行 `python scripts/verify_baseline.py`。局部行为或显示修改不因涉及已验收功能自动触发完整基线，原复验要求仍保留；详细规则见 [AGENTS.md](AGENTS.md) 和 [开发工作流 §5](.claude/skills/line-check-dev/SKILL.md#5-验证范围与完整基线触发条件)。
 
 ## 在另一台 Windows 电脑打包
 

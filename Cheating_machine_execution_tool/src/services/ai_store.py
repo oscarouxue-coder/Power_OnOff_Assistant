@@ -78,6 +78,8 @@ class DiagnosticStore:
             raise ValueError("不支持的 API 协议")
         if not 5 <= profile.timeout <= 180 or not 256 <= profile.max_output <= 32768:
             raise ValueError("超时须为5–180秒，输出上限须为256–32768")
+        if type(profile.context_tokens) is not int or profile.context_tokens < 0:
+            raise ValueError("上下文上限须为正整数，留空表示自动识别")
         profile = replace(profile, base_url=base)
         binding = f"{profile.id}|{base}"
         with self.lock:
@@ -117,6 +119,24 @@ class DiagnosticStore:
         with self.lock:
             self.db.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (name, json.dumps(value, ensure_ascii=False)))
             self.db.commit()
+
+    def model_context(self, profile):
+        return self.setting(self._model_context_key(profile.base_url, profile.model), 0)
+
+    @staticmethod
+    def _model_context_key(base_url, model):
+        identity = json.dumps([canonical_url(base_url), model], ensure_ascii=False)
+        return "model_context:" + hashlib.sha256(identity.encode("utf-8")).hexdigest()
+
+    def cache_model_contexts(self, profile, models):
+        # 缺字段或刷新失败不抹掉已有容量；不同地址和模型各自保存。
+        with self.lock, self.db:
+            for model in models:
+                capacity = model.get("context_tokens", 0)
+                if type(capacity) is int and capacity > 0:
+                    key = self._model_context_key(profile.base_url, model["id"])
+                    self.db.execute("INSERT OR REPLACE INTO settings VALUES(?,?)",
+                                    (key, json.dumps(capacity)))
 
     def save_report(self, identifier, payload):
         with self.lock:
@@ -200,6 +220,21 @@ class DiagnosticStore:
                             (json.dumps(payload, ensure_ascii=False), identifier))
             self.db.commit()
             return payload
+
+    def delete_chats(self, identifiers):
+        """仅删除指定会话的数据；整批校验和四张表的删除共用一次事务。"""
+        identifiers = tuple(dict.fromkeys(identifiers))
+        if not identifiers:
+            return 0
+        with self.lock, self.db:
+            self.db.execute("BEGIN IMMEDIATE")
+            for identifier in identifiers:
+                self.chat(identifier)  # 不允许失效选择造成部分删除。
+            parameters = [(identifier,) for identifier in identifiers]
+            for table in ("chat_messages", "chat_groups", "chat_evidence"):
+                self.db.executemany("DELETE FROM " + table + " WHERE session_id=?", parameters)
+            self.db.executemany("DELETE FROM chat_sessions WHERE id=?", parameters)
+        return len(identifiers)
 
     def append_chat(self, identifier, payload, group=False):
         table = "chat_groups" if group else "chat_messages"

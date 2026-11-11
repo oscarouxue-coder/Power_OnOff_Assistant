@@ -10,6 +10,7 @@ from tkinter import messagebox, ttk
 from src.core.ai_client import DiagnosticModelClient
 from src.models.ai_diagnostics import PROVIDERS, ProviderProfile, DebugTriggerPolicy
 from src.services.ai_store import profile_fingerprint
+from src.services.ai_context_budget import context_capacity, refresh_model_context
 from src.ui.window_paint import center_toplevel_on_parent
 from src.ui.module_theme import apply_module_theme, MODULE_BACKGROUND
 from src.utils.ai_output import format_diagnostic_evidence
@@ -81,10 +82,11 @@ class AiDiagnosticsWindow:
         form = ttk.Frame(parent)
         form.pack(fill="x")
         self.vars = {key: tk.StringVar(self.window) for key in
-                     ("name", "provider", "base_url", "protocol", "model", "timeout", "max_output", "key")}
+                     ("name", "provider", "base_url", "protocol", "model", "timeout", "max_output", "context_tokens", "key")}
         labels = (("name", "配置名称"), ("provider", "模型厂商"), ("base_url", "API 地址"),
                   ("protocol", "接口协议"), ("model", "模型 ID"), ("timeout", "请求超时（秒）"),
-                  ("max_output", "最大输出 Token"), ("key", "API 密钥（留空保留）"))
+                  ("max_output", "最大输出 Token"), ("context_tokens", "上下文上限 Token（留空自动）"),
+                  ("key", "API 密钥（留空保留）"))
         for index, (key, title) in enumerate(labels):
             ttk.Label(form, text=title).grid(row=index, column=0, sticky="w", pady=6)
             if key in ("provider", "protocol", "model"):
@@ -99,6 +101,10 @@ class AiDiagnosticsWindow:
                 widget = ttk.Entry(form, textvariable=self.vars[key], show="*" if key == "key" else "")
             widget.grid(row=index, column=1, sticky="ew", padx=10, pady=6)
         form.columnconfigure(1, weight=1)
+        self.context_status = tk.StringVar(self.window)
+        ttk.Label(parent, textvariable=self.context_status, wraplength=900).pack(anchor="w", pady=(4, 0))
+        for key in ("base_url", "model", "context_tokens"):
+            self.vars[key].trace_add("write", self._update_context_status)
         buttons = ttk.Frame(parent)
         buttons.pack(fill="x", pady=14)
         for title, action in (("保存并选择", self._save), ("刷新模型", self._models), ("测试连接与工具能力", self._test)):
@@ -191,8 +197,25 @@ class AiDiagnosticsWindow:
     def _fill_profile(self, profile):
         self.profile = profile
         for key, variable in self.vars.items():
-            variable.set("" if key == "key" else str(getattr(profile, key)))
+            variable.set("" if key == "key" or (key == "context_tokens" and not profile.context_tokens)
+                         else str(getattr(profile, key)))
         self.connection_status.set(profile.capability)
+        self._update_context_status()
+
+    def _update_context_status(self, *_args):
+        try:
+            raw = self.vars["context_tokens"].get().strip()
+            capacity_value = int(raw) if raw else 0
+            if raw and capacity_value <= 0:
+                raise ValueError("上下文上限须为正整数，留空表示自动识别")
+            profile = replace(self.profile, base_url=self.vars["base_url"].get().strip(),
+                              model=self.vars["model"].get().strip(), context_tokens=capacity_value)
+            capacity = context_capacity(self.service.store, profile)
+            text = (f"上下文：{capacity.tokens} Token；来源：{capacity.source}；输入用量为保守估算"
+                    if capacity.tokens else "上下文：未知容量，使用最近50轮 / 100000字符；可手填Token上限")
+        except (ValueError, TypeError):
+            text = "上下文：请填写有效API地址；Token上限须为正整数或留空自动识别"
+        self.context_status.set(text)
 
     def _reload_profiles(self, selected=None):
         self.profiles = self.service.store.profiles()
@@ -248,6 +271,7 @@ class AiDiagnosticsWindow:
         self.vars["base_url"].set(address)
         self.vars["protocol"].set(protocol)
         self.vars["model"].set("")
+        self.vars["context_tokens"].set("")
         self.vars["key"].set("")
         self.model_choice["values"] = ()
 
@@ -255,6 +279,10 @@ class AiDiagnosticsWindow:
         try:
             values = {key: variable.get().strip() for key, variable in self.vars.items() if key != "key"}
             values["timeout"], values["max_output"] = int(values["timeout"]), int(values["max_output"])
+            raw_context = values["context_tokens"]
+            values["context_tokens"] = int(raw_context) if raw_context else 0
+            if raw_context and values["context_tokens"] <= 0:
+                raise ValueError("上下文上限须为正整数，留空表示自动识别")
             key = self.vars["key"].get().strip() or None
             self.service.redactor.add_secrets((key,))
             self.profile = self.service.store.save_profile(replace(self.profile, **values), key)
@@ -301,7 +329,7 @@ class AiDiagnosticsWindow:
         def fetch(stop):
             client = DiagnosticModelClient(profile, key, self.service.redactor)
             try:
-                return profile.id, client.models(stop)
+                return profile, refresh_model_context(self.service.store, client, stop)
             finally:
                 client.close()
         self.connection_status.set("正在刷新模型，仍可手填模型ID…")
@@ -471,9 +499,11 @@ class AiDiagnosticsWindow:
             if kind == "error":
                 self.connection_status.set("配置异常：" + value + "；模型列表失败时仍可手填ID")
                 self.service.emit("[AI配置] " + value)
-            elif kind == "models" and value[0] == self.profile.id:
-                self.model_choice["values"] = value[1]
-                self.connection_status.set("模型列表已刷新；不会自动切换当前模型")
+            elif kind == "models":
+                requested, models = value
+                if requested.id == self.profile.id and requested.base_url == self.vars["base_url"].get().strip().rstrip("/"):
+                    self.model_choice["values"] = tuple(item["id"] for item in models)
+                    self.connection_status.set("模型列表及容量已刷新；不会自动切换当前模型")
             elif kind == "capability":
                 profile, capability, detail = value
                 current = next((p for p in self.service.store.profiles() if p.id == profile.id), None)
@@ -498,6 +528,7 @@ class AiDiagnosticsWindow:
             elif kind == "warning":
                 self.service.emit("[AI监控] " + payload)
         if self.window is not None and self.window.winfo_exists():
+            self._update_context_status()
             self._poll_id = self.master.after(100, self._poll)
 
     def hide(self):

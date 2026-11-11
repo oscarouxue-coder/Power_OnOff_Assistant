@@ -1,6 +1,6 @@
 ---
 name: line-check-dev
-description: LineCheckAssistant 开发工作流。开工前先读 AGENTS.md + PROJECT_STATUS.md + DEVELOPMENT_LOG.md（最近 3 条）+ ACCEPTANCE_BASELINE.md 相关章节；按 ui/core/services/models 分层；改完代码必跑 `python -m unittest discover -s tests`，按规范追加 DEVELOPMENT_LOG.md 条目；默认不自动 commit；构建后不运行 dist\LineCheckAssistant.exe。覆盖任何代码改动、BUG 修复、重构、文档同步、真实样机验收记录。
+description: LineCheckAssistant 开发工作流。开工前先读 AGENTS.md + PROJECT_STATUS.md + DEVELOPMENT_LOG.md（最近 3 条）+ ACCEPTANCE_BASELINE.md 相关章节；按 ui/core/services/models 分层；日常修改默认只跑相关检查，完整基线仅在用户明确要求、提交代码前、标准打包（含 -CheckOnly）或已验收功能结构调整时执行；按规范追加 DEVELOPMENT_LOG.md 条目；默认不自动 commit；构建后不运行 dist\LineCheckAssistant.exe。覆盖任何代码改动、BUG 修复、重构、文档同步、真实样机验收记录。
 ---
 
 # LineCheckAssistant 开发工作流
@@ -69,7 +69,7 @@ line_check_assistant/  Tk 主程序、配置 store、UI 窗口、网络/页面�
 2. **新增功能从正确的独立模块开始。** 新窗口优先放 `src/ui/`，业务流程放 `src/services/`，底层协议放 `src/core/`，请求/结果模型放 `src/models/`；`line_check_assistant/app.py` 只保留入口装配、输入收集、service 调用和 Tk 主线程回调。
 3. **旧代码只做需求触发的小步整理。** 当前需求必须修改既有大块代码时，只整理该需求直接涉及的一个功能或一个边界；保留既有入口、方法名或必要兼容代理，确保可以单独回退。
 4. **结构调整与行为修改默认分开。** 不在同一轮同时大范围搬迁代码并改变默认值、INI / JSON 持久化、确认弹窗、执行日志、线程 / 队列、停止事件、设备命令或业务时序。确需合并时，先向用户确认并在计划中写明不可变行为、验证和回退方式。
-5. **先保护再移动。** 结构调整前补齐当前行为的特征测试；调整后运行专项测试和完整基线。涉及已验收 UI 时继续做 Windows 源码版复验；涉及真实设备路径时只能由项目负责人提供现场结果，不得把自动化测试升级为真实样机验收。
+5. **先保护再移动。** 结构调整前补齐当前行为的特征测试；调整后运行专项测试，对已验收功能的结构调整还必须运行完整基线，其它情况按 §5 选择检查范围。涉及已验收 UI 时继续做 Windows 源码版复验；涉及真实设备路径时只能由项目负责人提供现场结果，不得把自动化测试升级为真实样机验收。
 6. **禁止用 Mixin 或共享全局状态掩盖耦合。** 新模块应拥有明确输入、输出、生命周期和停止边界，不得只是把同一批 `self.xxx` 状态分散到多个文件。
 7. **模块窗口背景统一。** 使用与测试项配置相同的 `COLOR_BG`（当前`#eef2f5`），调用`src/ui/module_theme.py::apply_module_theme`应用局部背景，动态控件同样沿用；保留按钮、输入/日志区、状态文字色和原生勾选语义，不修改全局主题。AI诊断、写样机参数、串口日志、DUT配置和检查更新已接入此入口。
 
@@ -109,21 +109,25 @@ line_check_assistant/  Tk 主程序、配置 store、UI 窗口、网络/页面�
 
 ---
 
-## 5. 验证命令（必须跑）
+## 5. 验证范围与完整基线触发条件
 
-按 `ACCEPTANCE_BASELINE.md` §0 + §1.3 + §1.4，统一封装在 `scripts/verify_baseline.py`：
+**日常修改默认只运行相关检查**：代码修改按影响范围执行必要的局部编译、相关专项测试及差异检查，不为低影响修改机械新增测试；纯文档修改只检查内容一致性、链接和差异格式，不运行代码测试。相关检查失败时先定位问题并补充直接相关的验证，失败本身不自动触发完整基线。
+
+**完整基线仅在以下四类情况执行**：① 用户明确要求执行完整基线或全量回归；② 提交代码前；③ 标准打包时，包括现有构建入口的 `-CheckOnly`；④ 对已验收功能进行搬迁、拆分、重写等结构调整时。仅修改已验收功能的局部行为或显示，不因“涉及已验收功能”自动触发完整基线；仍做相关检查并遵守原复验要求。用户只说“检查一下”或“验证修改”时默认相关检查。
+
+触发完整基线时，执行 `ACCEPTANCE_BASELINE.md` §0 + §1.3 + §1.4 对应的统一入口 `scripts/verify_baseline.py`（以下从仓库根目录执行）：
 
 ```powershell
-cd F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool
+cd .\Cheating_machine_execution_tool
 python scripts\verify_baseline.py
 ```
 
 - 预期：`ALL CHECKS PASSED`，exit 0
 - 任何一条 `FAIL` 都必须先修复再提交（`AGENTS.md` 规则 13）
-- 验证包含 4 类检查：① 全量 py_compile ② 全量 unittest（解析 `Ran N tests`）③ §1.3 必须命中不变量 grep ④ §1.3 / §1.4 必须不出现模式 grep
-- 单条检查的常量定义在 `scripts/verify_baseline.py` 的 `PY_COMPILE_FILES` / `MUST_EXIST` / `MUST_NOT_EXIST`；`AGENTS.md` 中同名章节是可读副本
+- 验证包含 6 类检查：① 编译清单全量 py_compile ② 新增 `src/` / `line_check_assistant/` 源码必须纳入编译清单 ③ 全量 unittest（解析 `Ran N tests`）④ 已验收关键行为的指定测试 ID 必须实际执行 ⑤ §1.3 必须命中不变量 grep ⑥ §1.3 / §1.4 必须不出现模式 grep
+- 检查配置定义在 `scripts/verify_baseline.py` 的 `PY_COMPILE_FILES` / `REQUIRED_BASELINE_TEST_IDS` / `MUST_EXIST` / `MUST_NOT_EXIST`；`AGENTS.md` 中验收不变量章节是 grep 清单的可读副本
 
-新增单测后必须确认 `Ran N tests ... OK` 中 N 正确递增（之前的基线 + 本轮新增 = 当前）。
+新增单测后，在实际运行的专项范围内核对 `Ran N tests ... OK` 及新增用例；完整基线触发时再核对全量结果，不为统计全量测试数额外启动完整基线。完成报告列明本轮实际执行的检查及结果；未执行完整基线时明确注明，并保留最近一次完整验证记录，不将旧结果表述为本轮结果。
 
 ---
 
@@ -137,7 +141,7 @@ python scripts\verify_baseline.py
    - 全场景通过：`- **状态**：已确认验收`
    - 部分通过（如仅 1 台）：`- **状态**：已确认验收（N 台单台，YYYY-MM-DD）/ 已实现未验收（2/4/8 台并行）`
 4. 在「核心验收行为」列出主执行日志期望序列（用户核对实际跑出的日志）
-5. 更新测试基线到 `python -m unittest discover -s tests` 实跑数
+5. 记录本轮实际执行的检查与现场结果；仅记录负责人提供的现场验收结果时不自动运行代码测试或完整基线。若按 §5 触发完整基线，再更新最近一次完整验证记录，否则保留旧记录并注明本轮未运行。
 
 **不要**在没有真实样机记录的情况下擅自升级状态标签。
 
@@ -213,9 +217,9 @@ plan 文档存放：`.claude/plans/<slug>.md`（参考已有 `telnet-ubus-pre-en
 1. 读 5 份文档，定位改动的 §2.x 章节与已有断言
 2. **若改动 ≥ 3 文件或核心模块**：写 `.claude/plans/<slug>.md`，用 `EnterPlanMode` 让用户确认
 3. 写代码（遵守分层、保留 `sensitive` / `known_secrets` 形参兼容）
-4. 加单测（参照 `tests/test_*.py` 同类断言风格；优先 mock 外部 IO）
-5. 跑 `python scripts\verify_baseline.py`，确认 `ALL CHECKS PASSED`（封装了 py_compile + unittest + §1.3/§1.4 grep；任一 FAIL 必须先修复再提交）
+4. 按改动需要补充相关单测（参照 `tests/test_*.py` 同类断言风格；优先 mock 外部 IO）；不为低影响修改机械新增测试，纯文档修改不运行代码测试
+5. 先按 §5 判断触发条件，再选择验证范围：日常只做相关检查；用户明确要求、提交代码前、标准打包（含 `-CheckOnly`）或已验收功能结构调整时才运行完整 `python scripts\verify_baseline.py` 并确认 `ALL CHECKS PASSED`。相关检查失败先修复并补充直接相关验证，不自动扩大到完整基线
 6. 在 `DEVELOPMENT_LOG.md` 顶部追加模板条目
 7. **按 §3 矩阵同步其它文档**（PROJECT_STATUS / ACCEPTANCE_BASELINE / README）
-8. 把改动文件、验证结果、后续待办告诉用户
+8. 把改动文件、本轮实际验证结果、后续待办告诉用户；未运行完整基线时明确注明，保留最近一次完整验证记录，不将旧结果表述为本轮结果
 9. **不执行 git commit**，等用户说"提交"

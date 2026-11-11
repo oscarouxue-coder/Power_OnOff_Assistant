@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import replace
 import copy
 import json
+import re
 import threading
 import requests
 
@@ -13,6 +14,10 @@ from src.services.ai_store import canonical_url, profile_fingerprint
 
 class ModelServiceError(RuntimeError):
     pass
+
+
+class ContextLengthError(ModelServiceError):
+    """仅表示服务明确拒绝上下文长度；不携带服务原文。"""
 
 
 class DiagnosticModelClient:
@@ -36,6 +41,8 @@ class DiagnosticModelClient:
             )
             try:
                 if not 200 <= response.status_code < 300:
+                    if response.status_code in (400, 413, 422) and self._context_error(response, stop):
+                        raise ContextLengthError("服务返回上下文超限；请调整容量或缩短材料")
                     # 不输出服务响应正文/请求头，避免代理回显密钥及原始输入。
                     category = {401: "密钥无效", 403: "权限不足", 404: "地址或模型不存在",
                                 429: "限流或额度不足"}.get(response.status_code, "服务请求失败")
@@ -59,12 +66,53 @@ class DiagnosticModelClient:
         except (requests.RequestException, ValueError) as exc:
             raise ModelServiceError("模型网络或响应解析失败：" + type(exc).__name__) from None
 
-    def models(self, stop=None):
-        response = self._request("GET", "models", stop=stop)
-        return tuple(str(x["id"]) for x in response.get("data", [])
-                     if isinstance(x, dict) and isinstance(x.get("id"), str))
+    @staticmethod
+    def _context_error(response, stop):
+        # 有界读取仅用于识别错误类别；不回显正文，防止代理回显认证密钥。
+        data = bytearray()
+        for chunk in response.iter_content(8192):
+            if stop is not None and stop.is_set():
+                raise InterruptedError("诊断已取消")
+            if len(data) + len(chunk) > 65536:
+                return False
+            data.extend(chunk)
+        try:
+            body = json.loads(data)
+        except (ValueError, TypeError):
+            return False
+        if not isinstance(body, dict):
+            return False
+        error = body.get("error", body)
+        if isinstance(error, str):
+            error = {"message": error}
+        if not isinstance(error, dict):
+            return False
+        codes = {"context_length_exceeded", "max_context_length_exceeded", "input_too_long", "too_many_tokens"}
+        if any(error.get(field) in codes for field in ("code", "type") if isinstance(error.get(field), str)):
+            return True
+        message = error.get("message", "")
+        return isinstance(message, str) and bool(re.search(
+            r"maximum context length|context length (?:is )?exceeded|exceeds? (?:the )?context window|prompt is too long",
+            message, re.I))
 
-    def complete(self, history, tools=(), stop=None):
+    def model_details(self, stop=None):
+        response = self._request("GET", "models", stop=stop)
+        data = response.get("data", [])
+        if not isinstance(data, list):
+            raise ModelServiceError("模型列表格式不正确")
+        models = []
+        for item in data:
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"]:
+                continue
+            capacity = next((item[key] for key in ("context_window", "context_length", "max_context_tokens")
+                             if type(item.get(key)) is int and item[key] > 0), 0)
+            models.append({"id": item["id"], "context_tokens": capacity})
+        return tuple(models)
+
+    def models(self, stop=None):
+        return tuple(item["id"] for item in self.model_details(stop))
+
+    def request_payload(self, history, tools=()):
         profile = self.profile
         payload = {"model": profile.model, "stream": False}
         if profile.protocol == "responses":
@@ -80,8 +128,12 @@ class DiagnosticModelClient:
                 payload["tool_choice"] = "auto"
         # 出网内容仅过滤已登记的模型认证密钥，诊断材料保留真实值。
         # 当前厂商思考字段仅供协议续接。
+        return self.redactor.object(payload)
+
+    def complete(self, history, tools=(), stop=None):
+        profile = self.profile
         response = self._request("POST", "responses" if profile.protocol == "responses" else "chat/completions",
-                                 self.redactor.object(payload), stop)
+                                 self.request_payload(history, tools), stop)
         calls = []
         if profile.protocol == "responses":
             output = response.get("output", [])

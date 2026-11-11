@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
 
 from src.services.ai_diagnostic_service import AiDiagnosticService
 from src.services.ai_conversation_service import AiConversationService
@@ -18,7 +19,8 @@ class AiAssistantController:
                                            self.bridge.busy, manual_path=manual_path)
         self.conversation = AiConversationService(self.service, context,
             (lambda target: self.bridge.call_ui(lambda: shared_busy(target))) if shared_busy else None,
-            target_current=lambda target: self.bridge.call_ui(lambda: target in tuple(targets())))
+            target_current=lambda target: (target in tuple(targets()) if threading.current_thread() is threading.main_thread()
+                                           else self.bridge.call_ui(lambda: target in tuple(targets()))))
         self.service.conversation = self.conversation
         self.dialog = AiDiagnosticsWindow(master, self.service, targets, background, foreground,
                                           conversation=self.conversation)

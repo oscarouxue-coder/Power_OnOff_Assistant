@@ -28,6 +28,8 @@ class ProviderProfile:
     # 只有经过该配置本次测试的能力才能启用工具；更改配置会清除此字段。
     tested_fingerprint: str = ""
     credential_revision: str = ""
+    # 0 表示自动识别；仅影响上下文预算，不改变模型身份或工具授权。
+    context_tokens: int = 0
 
 
 @dataclass(frozen=True)

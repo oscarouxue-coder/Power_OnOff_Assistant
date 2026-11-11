@@ -1,5 +1,144 @@
 # 开发记录
 
+## 2026-11-12 - 固定展示上下文容量与请求用量
+
+- 类型：功能
+- 背景：负责人要求上下文容量信息固定展示、不再每轮插入聊天，并能看到已用上下文；确认仅在请求/工具交互/回复时更新、不计算输入草稿，按已确认计划实施。
+- 完成内容：① 新增独立usage service，在模型请求前复用完整预算估算，回复后归一化Chat Completions的prompt_tokens/completion_tokens和Responses的input_tokens/output_tokens；完整非负整数字段有效时采用接口值，否则输入保持原请求估算、输出按新增回复协议组UTF-8字节保守估算，包含思考和工具参数。合计仅为最近请求输入加输出，忽略累计/缓存/思考细分以免重复相加；输出预留和5%余量不计入已用，不修改预算或裁剪。② 会话JSON新增兼容快照，保存配置身份、容量/来源、输出设置、时间、状态和有界的上一有效回复；请求、工具续接、重试分别更新，失败/取消保留最近有效数据，异常重启修正中断请求状态。旧会话无记录不补算/出网，配置改变后过期，已有数据库不迁移表。③ 新增独立固定状态组件，显示容量/来源、最近用量及估算/接口标记、时间/占比/进度，未知容量仅显示后备规则及用量。仅事件更新不算草稿；用量在正文revision检查前独立刷新，不重绘正文，保留选区与阅读位置。停止新增普通容量聊天消息，旧system/context且以“上下文容量：”开头的消息只隐藏显示，保留原始存储、其它角色同文及裁剪/失败警告。④ 最小窗口发现旧pack顺序使正文挤占底部发送按钮，调整本页输入/操作区先预留空间、正文使用剩余高度；没有改动执行语义或全局主题。新增模块纳入编译清单，同步文档和验收待确认项，保留既有工作区修改。
+- 修改文件：
+  - `.claude/plans/ai-context-status.md`
+  - `Cheating_machine_execution_tool/src/services/ai_context_usage.py`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_context_status.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_context_usage.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置PYTHONUTF8=1、PYTHONIOENCODING=utf-8，使用`%LOCALAPPDATA%/LineCheckAssistant/build-env-py39/Scripts/python.exe`执行`-I -X utf8 -m unittest discover -s tests -p "test_ai*.py"`；对4个业务源码、2个测试和基线脚本执行`-I -X utf8 -m py_compile`，单独调用`check_py_compile_inventory(Path.cwd())`；执行`git diff --check`、文档和残留容量消息检索。仅临时SQLite、假HTTPS/模型/工具及独立真实Tk，无真实用户数据库/密钥、厂商API或DUT访问。
+- 验证结果：219项AI专项通过（此前204项，新增15项）；新用量专项13项、显示专项11项，覆盖两协议usage/缺失/异常/零值、输入与新增回复估算、缓存/思考细分不重复累计、工具结果后的新请求、裁剪重试/失败/取消保留、重启/中断恢复、配置过期/旧会话、未知容量、溢出比例及预留不算已用。独立Tk在vista/Clam的真实AI窗口940×660验证容量/用量区域、进度、会话切换、底部按钮/输入可见和正文可用高度；显示专项验证旧容量隐藏但存储不变、重要提示保留、用量刷新不重绘正文/不跟随草稿/不改变选区或阅读锚点。首次布局专项在两主题均发现发送按钮未映射（1×1），修正本页pack空间分配后全部通过。7文件编译、129个源码编译清单覆盖及差异格式检查通过。AI全套有既有Tk ThemeChanged销毁提示，最终219项OK、退出码0。本轮未运行完整基线，最近1634项测试/190项指定回归/126个源码编译与覆盖为此前结果，保留原记录，不作为本轮结果。
+- 后续待办：负责人重启源码版按ACCEPTANCE_BASELINE.md §2.16/§3核对真实两协议usage、固定区刷新/会话恢复/停止失败及完整Windows交互；估算不是精确Tokenizer结果，接口值仅按服务实际返回标注，离线测试不升级真实API或DUT验收。本轮未打包/运行EXE、发布、提交或操作真实设备，未调整依赖或构建工具链。
+
+## 2026-11-12 - 默认启用AI对话采集并移除授权按钮
+
+- 类型：修改
+- 背景：负责人提供00:48:50已授权后仍回答“没有无线状态采集能力”的对话，要求默认授权并移除按钮；确认同时移除结束授权，新旧及重启恢复的有效会话均默认生效，按已确认计划实施。
+- 完成内容：① 会话service以统一实时资格校验替代手动授权集合，不新增数据库字段或迁移；核对批次、当前目标/登录配置、模型身份及工具能力验证，旧批次/失效目标仅分析材料，模型身份变更需新建，重启恢复重新校验。创建/打开/导入不启动采集；新批次及退出停止后台新增采集并沿用恢复清理。保留authorized只读兼容入口，删除手动授权/撤销入口。② 移除两个授权按钮及确认框，保留停止本轮；状态栏显示默认允许或具体受限原因、真实信息范围和接收方，模型/目标状态变化无新消息时也刷新。目标配置校验在UI线程直接读取、后台经既有主线程桥调用，避免界面等待自身。③ 每次模型请求（含上下文超限重试）重新核对资格，在系统材料中提供当前工具名称、可用状态/原因和剩余额度，再纳入既有预算；历史拒绝不代表当前能力，SSID查询使用现有无线状态工具。主日志记录状态、实际请求工具清单和接收方；执行前再次校验，原白名单、资源忙跳过、限额、命令和恢复规则保持，自动监控仍默认关闭。④ 更新原授权/重启/删除测试，新增两协议历史拒绝后SSID查询/结果续接、重启后目标/模型受限、模型返回后目标变化、排队批次切换/退出及独立Tk按钮/状态/布局共6项；同步文档并保留已有工作区改动。
+- 修改文件：
+  - `.claude/plans/ai-chat-default-collection.md`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_conversation.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_context_budget.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_session_deletion.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置PYTHONUTF8=1、PYTHONIOENCODING=utf-8，使用`%LOCALAPPDATA%/LineCheckAssistant/build-env-py39/Scripts/python.exe`执行`-I -X utf8 -m unittest discover -s tests -p "test_ai*.py"`；对本轮3个业务源码和4个测试文件执行`-I -X utf8 -m py_compile`，执行`git diff --check`及授权文案/调用残留检索。专项仅用临时SQLite、模拟HTTPS/网络状态/执行器及独立真实Tk，不读取真实模型密钥、不调用厂商API或真实DUT。
+- 验证结果：204项AI专项通过（此前198项，本轮新增6项）；会话52项、删除18项、显示9项分项亦通过。两协议实际出站工具定义与实时状态一致，模拟SSID结果正确续接，额度耗尽工具列表清空；停止、退出、批次/目标变化、删除失败回滚/成功失效及主/后台目标校验通过。独立Tk在vista/Clam主题940×660核对两个按钮消失、停止保留、状态原因/信息范围及按钮边界通过；7文件编译通过，差异格式检查通过。AI全套结束出现既有Tk ThemeChanged销毁提示，unittest结果204项OK、退出码0。本轮未运行完整基线，最近1634项测试/190项指定回归/126个源码编译与覆盖的完整结果保留为此前记录，不作为本轮结果。
+- 后续待办：负责人重启源码版，按ACCEPTANCE_BASELINE.md §2.16/§3复验新旧及重启恢复会话默认查询SSID、真实两协议工具调用、完整Windows交互和DUT采集/停止恢复。模拟回复不证明真实模型已遵循提示词；本轮未打包/运行EXE、发布、提交或操作真实设备，未调整依赖或构建门禁，不扩展现场验收结论。
+
+## 2026-11-12 - 按模型容量管理AI对话上下文
+
+- 类型：功能
+- 背景：负责人要求默认使用模型最大上下文容量；确认未知容量允许手填，未填写时采用最近50轮/100000字符，已知容量取消固定轮数及字符限制，单条用户消息32768字符保持。
+- 完成内容：① 新增独立上下文预算service，配置字段context_tokens默认为0/自动，UI提供留空自动输入及生效容量/来源；手填优先，其次接口容量。模型列表保留有效context_window/context_length/max_context_tokens元数据，缓存按规范化API地址和模型隔离；失败/缺字段保留旧值，无缓存首次发送每地址/模型自动尝试一次，显式刷新可更新，不猜模型名称。② 预算每次模型调用前覆盖完整请求材料（系统提示、问题、证据、历史、工具定义和本轮结果），按UTF-8字节保守估算Token并标明，预留配置输出及模型容量5%余量；未知容量按完整协议组的序列化字符数及50轮裁剪。③ 仅移除较早整组，当前问题及本轮工具链完整保存；服务明确上下文超限时减半旧历史、每条用户消息最多两次重试，跨模型交互共用次数；仅重发请求，不重做设备工具，其它HTTP错误不重试。无可裁剪历史或当前材料放不下时提示并保留记录，停止/异常仍完成执行器清理。④ 旧配置缺字段默认自动，旧会话下一轮使用当前容量；容量字段不进入模型身份/工具验证指纹，不清授权、不强制新会话。模型密钥过滤保持，错误响应最多读取64KiB只识别类别、不回显原文。主日志记录容量读取、来源、估算、裁剪、请求和重试成功/失败；同步操作员说明、状态和验收待确认项，保留已有工作区修改。
+- 修改文件：
+  - `.claude/plans/ai-model-context-budget.md`
+  - `Cheating_machine_execution_tool/src/models/ai_diagnostics.py`
+  - `Cheating_machine_execution_tool/src/core/ai_client.py`
+  - `Cheating_machine_execution_tool/src/services/ai_context_budget.py`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_store.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_context_budget.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_conversation.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录设置PYTHONUTF8=1、PYTHONIOENCODING=utf-8，使用`%LOCALAPPDATA%/LineCheckAssistant/build-env-py39/Scripts/python.exe`运行`-I -X utf8 -m unittest discover -s tests -p "test_ai*.py"`；对本轮6个业务源码、2个测试文件及基线脚本执行py_compile（9文件），单独调用`check_py_compile_inventory(Path.cwd())`核对新模块已入编译清单；执行`git diff --check`及旧上下文限制说明检索。测试使用临时SQLite、假HTTPS响应和假执行器，独立Tk核对vista/Clam两主题940×660模型接入页布局、字段保存重载、来源显示及非法值提示，不读取真实模型密钥或访问厂商/DUT。
+- 验证结果：198项AI专项通过（此前175项，新增23项）；覆盖50轮及100000字符精确边界、已知容量跨60轮/100000字符、UTF-8估算/输出/5%余量、模型接口/手填优先级、缓存隔离/重启/缺字段及失败保留、旧配置/会话兼容、授权不变、两种协议超限重试与工具关联ID、重试不重复工具/跨交互最多两次、工具返回后重新预算、当前问题/结果完整留存、非长度错误不重试及停止。9文件编译通过，编译清单覆盖127个源码；独立Tk最小窗口检查通过。最初布局断言在页面尚未映射时读到宽度1，等待真实Tk布局事件后通过，未放宽断言。AI全套结束有既有Tk ThemeChanged销毁提示，unittest结果198项OK、退出码0。差异格式检查通过。本轮按日常相关检查规则未运行完整基线，下方1634项等全量结果仅为此前记录，不作为本轮结果。
+- 后续待办：负责人重启源码版，按ACCEPTANCE_BASELINE.md §2.16/§3复验真实厂商容量信息、长对话预算/超限提示、两种协议设备工具续接/停止及Windows完整交互；保守估算不代表精确Token计数或实际最大容量利用率。本轮未操作真实设备、未打包/运行EXE、未发布或提交，未调整依赖/构建工具链，不扩展真实样机验收结论。
+
+## 2026-11-12 - 调整项目验证执行规则
+
+- 类型：文档
+- 背景：负责人确认日常修改默认只运行相关检查；完整基线仅在明确要求、提交代码前、标准打包（含 `-CheckOnly`）或已验收功能结构调整时执行，避免通用工作流将每次修改扩大为全量回归。
+- 完成内容：① 统一 AGENTS、开发工作流摘要/§2.1/§5/§11、根导航、验收基线 §0/§1.2 和项目状态的验证范围；局部行为或显示修改不因涉及已验收功能自动触发完整基线，原复验要求保持。② 日常代码修改按影响范围做必要的局部编译、相关专项及差异检查，不为低影响修改机械新增测试；纯文档只查内容、链接和差异格式。检查失败先定位并补充直接相关验证，不自动转为完整基线；“检查一下”“验证修改”默认相关检查。③ 完成报告区分本轮实际检查与最近一次完整验证，新增测试的统计不额外触发全量，单独记录现场验收结果不自动启动代码测试；统一完整基线六类检查说明。④ 保留 Git hook、构建入口、基线脚本、历史计划、历史测试结果、验收标签及原有工作区修改。
+- 修改文件：
+  - `AGENTS.md`
+  - `.claude/skills/line-check-dev/SKILL.md`
+  - `README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：检索并逐处核对当前规则文档的触发条件、日常检查范围及报告要求；核对根导航新增本地链接和章节锚点；静态检查 `.githooks/pre-commit` 及构建脚本中完整基线调用与 `-CheckOnly` 的先后顺序。执行 `git diff --check -- AGENTS.md .claude/skills/line-check-dev/SKILL.md README.md ACCEPTANCE_BASELINE.md PROJECT_STATUS.md DEVELOPMENT_LOG.md`；对比修改前文件哈希和文档快照，确认仅本条列出的六份文档变化、历史开发记录完整保留、验收基线 §1.3 起的内容未改动。
+- 验证结果：文档一致性、本地链接与章节锚点、差异格式检查通过；Git hook 仍直接执行完整基线，标准构建仍在 `-CheckOnly` 返回前执行完整基线并在失败时阻止继续。本轮仅六份规则文档变化，原有源码/基线脚本等工作区文件与修改前哈希一致；此前开发记录和验收章节保留。本轮未运行代码测试或完整基线，之前的完整验证记录不作为本轮结果。
+- 后续待办：无。本轮未提交、打包、运行 EXE、发布或操作真实设备；未修改现有门禁逻辑或增加跳过参数，不改变任何真实样机验收结论。
+
+## 2026-11-12 - 精简AI简单问题回复
+
+- 类型：优化
+- 背景：负责人提供“你是谁”“你是什么模型”的实际对话，简单问题仍重复目标参数、工具/权限边界、旧故障和继续排障邀请；已确认按简单问题1～3句话、排障保留必要证据及步骤、要求详细时展开的计划实施。
+- 完成内容：① 仅修改对话提示词，区分普通问答与实际排障；简单问题直接回答，不知道时简短说明、不猜测，不为附带证据而检索历史或调用无关采集工具；无可信模型标识时指向“模型接入”。② 排障按需保留证据、事实/推测、判断/步骤和缺失信息，要求“详细说明”时不受简单问答句数限制；恢复状态继续由程序单独显示，正式报告格式及全部授权/工具/诊断边界保持，不新增界面、存储、分类器或输出截断。③ 新增两种API协议实际出站提示词检查、排障/详细追问边界与证据/恢复状态检查、正式报告兼容检查；不把模拟回复长度作为真实模型效果证据。④ 同步操作员说明、状态及验收待确认项，保留本轮前已有工作区改动。
+- 修改文件：
+  - `.claude/plans/ai-simple-replies.md`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_conversation.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用`%LOCALAPPDATA%/LineCheckAssistant/build-env-py39/Scripts/python.exe`，设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`；执行`-I -X utf8 -m unittest discover -s tests -p "test_ai*.py"`及`-I -X utf8 scripts/verify_baseline.py`，另做`git diff --check`。专项只使用模拟HTTPS响应/设备执行器、临时SQLite及既有独立Tk控件，不读取真实模型密钥，不访问厂商API或真实DUT。
+- 验证结果：175项AI专项通过（此前172项，本轮新增3项），覆盖Chat Completions/Responses的三类简单问题出站请求、排障及详细追问的提示词/证据/独立恢复状态保留，以及正式报告格式不变。完整基线ALL CHECKS PASSED：1634项测试、190项指定回归、126个源码编译/覆盖及全部协议不变量通过。`git diff --check`通过；未调用真实模型，实际回复详略尚未验收。
+- 后续待办：负责人重启Windows源码版，在新旧会话用“你是谁”“你是什么模型”“VLAN是什么”“分析Ping失败”“详细说明”复验真实模型回复详略；自动化仅验证提示词实际传递及既有行为，不升级真实API/DUT验收结论。本轮未打包、运行EXE、发布或提交，不修改本机配置/已有日志。
+
+## 2026-11-12 - 增加排障会话批量删除
+
+- 类型：功能
+- 背景：负责人要求删除本地排障会话，确认增加管理窗口和批量删除；选中任务仍在排查/排队/清理时整批拒绝，需手动停止并等待后台结束，不自动停止或部分删除。
+- 完成内容：① 独立“管理会话”窗口列出创建时间、标题、通道、模型、状态，支持Ctrl/Shift多选、全选/取消/刷新、删除选中/清空全部，初始选中当前会话，永久删除确认默认取消；清空固定点击时ID集合，不包含确认期间新建会话。② service在服务锁内复核全部ID及running/executors存活状态，整批拦截并提示；store使用BEGIN IMMEDIATE及同一事务删除会话、消息、原始协议组、证据，异常回滚，成功后才清除对应授权并通知。主执行日志记录请求、成功、跳过或失败。③ 删除后立即刷新管理列表和主下拉框，保留未删除当前会话的输入/阅读位置/选区；当前被删时清空旧输入、切换最新剩余会话并同步目标，全空恢复新建提示，迟到通知不读已删ID。④ 原始日志/导入/抓包文件、报告、案例、模型配置、共享批次证据及恢复记录保持，不下发设备命令；新增模块纳入编译门禁。保留本轮前已有对话时间与阅读样式修改。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/ai_session_manager.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_store.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_session_deletion.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_conversation.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用`%LOCALAPPDATA%/LineCheckAssistant/build-env-py39/Scripts/python.exe`，设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`；执行`-I -X utf8 -m unittest discover -s tests -p "test_ai*.py"`及`-I -X utf8 scripts/verify_baseline.py`，另做`git diff --check`。专项只使用临时SQLite、模拟响应/执行器及独立真实Tk控件，不访问真实用户AI数据库、厂商API或DUT。
+- 验证结果：新增20项删除/界面/后台线程专项纳入172项AI测试并通过，覆盖事务失败四表回滚及授权保留、删除后重开、其它文件/业务数据保留、排队取消/执行器清理中拦截、未选忙碌会话隔离、默认取消、固定清空集合、当前切换/输入/全空/迟到通知及vista/Clam最小窗口布局。首轮18项专项中的vista布局检查因仅处理idle、窗口未完成映射而失败；改为完整处理原生映射/尺寸事件后实测按钮均在客户区内，AI专项通过。完整基线ALL CHECKS PASSED：1631项测试、190项指定回归、126个源码编译/覆盖及全部协议不变量通过。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.16/§3完成Windows人工复验；本轮未打包、运行EXE、发布或提交，不修改本机配置/已有日志，不升级既有真实API/DUT验收结论。
+
+## 2026-11-11 - 优化对话时间与阅读样式
+
+- 类型：优化
+- 背景：负责人反馈对话标题含`T`和`+08:00`、角色与正文缺乏层次，确认采用`2026-11-11 23:38:41`显示时间及“彩色标题＋浅底色＋深色正文”的推荐方案；仅修改显示，不调整会话/授权/采集语义。
+- 完成内容：① 增加UI局部时间格式化，覆盖消息标题、会话列表及证据窗口，支持带偏移/小数秒/UTC标记及旧时间，保持原时钟值，异常时间原文回显；不改模型时间生成、数据库或协议。② 现有Text控件使用局部标签，用户深蓝/浅蓝、AI青绿/浅青绿、普通状态灰/浅灰、人工问题橙/浅橙、错误红/浅红，正文深色；微软雅黑UI标题/正文11号、时间9号、普通状态10号，增加内边距/行距/消息留白，只按角色及kind设置样式。③ 选区标签优先级置顶，保留正文/换行/复制；刷新同会话恢复顶部阅读锚点及选区，位于底部或切换会话时跟随末尾；渲染版本仍包含后台运行状态，等待回复与发送按钮恢复保持。④ 新增8项纯时间/独立真实Tk显示专项，模拟数据不访问API/设备或真实用户数据库；同步操作员说明、状态及验收待确认项。
+- 修改文件：
+  - `.claude/plans/ai-chat-readability.md`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用`%LOCALAPPDATA%/LineCheckAssistant/build-env-py39/Scripts/python.exe`，设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`；执行`-I -X utf8 -m unittest discover -s tests -p "test_ai_chat_presentation.py" -v`、`-I -X utf8 -m unittest discover -s tests -p "test_ai*.py"`及`-I -X utf8 scripts/verify_baseline.py`，另做Git差异/空白检查。独立Tk仅使用模拟service/只读数据，不调用模型或设备、不改真实用户数据库。
+- 验证结果：8项显示专项全部通过，覆盖三处时间显示与原数据不变、类型/字号/颜色/选区优先级、正文不按关键词误上色、历史锚点/选区、底部跟随、等待回复/按钮恢复及历史切换；152项AI专项通过。完整基线ALL CHECKS PASSED：1611项测试、190项指定回归、125个源码编译/覆盖及全部协议不变量通过。Git差异空白检查通过。独立Tk和模拟数据不升级为负责人完整Windows目视验收。
+- 后续待办：负责人重启源码程序后按ACCEPTANCE_BASELINE.md §2.16/§3完成Windows目视复验。未打包、运行EXE、发布或提交，不扩展真实API/DUT验收，保留既有工作区修改。
+
 ## 2026-11-11 - 增加AI持续对话排障
 
 - 类型：功能
