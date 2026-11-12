@@ -201,7 +201,6 @@ class PipelineConfirmationTests(unittest.TestCase):
         window.window = Mock()
         window._running_thread = None
         window._check_vars = {code: Mock(get=Mock(return_value=True)) for code in selected}
-        window._unattended_execution_var = Mock(get=Mock(return_value=False))
         window._build_context = Mock(return_value=ctx)
         window._set_running_ui = Mock()
         statuses = {code: SimpleNamespace(ready=True) for code in selected}

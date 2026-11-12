@@ -30,7 +30,6 @@ class PretestControls:
             style="Secondary.TButton",
         )
         self.stop_button.pack(side="left", padx=(8, 0))
-        ttk.Label(self.frame, text="每条仅执行一次；过程和结果保存到主界面日志。",).pack(side="left", padx=(12, 0))
 
     def start(self):
         if self.running:

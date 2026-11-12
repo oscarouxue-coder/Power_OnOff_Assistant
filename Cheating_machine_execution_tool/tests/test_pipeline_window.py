@@ -29,55 +29,40 @@ class FakeApp:
 
 class BuildContextRegressionTests(unittest.TestCase):
     def test_pipeline_defaults_to_no_selected_subtasks(self) -> None:
-        """打开全流程窗口时，7 个子任务必须全部不勾选。"""
-        from line_check_assistant.pipeline_window import PipelineWindow
-        from src.services.pipeline_orchestrator import SUBTASK_CODES
+        """窗口只显示三项，首次打开全部不勾选。"""
+        from line_check_assistant.pipeline_window import (
+            PipelineWindow, WINDOW_SUBTASK_CODES, WINDOW_SUBTASK_LABELS,
+        )
+        self.assertEqual(WINDOW_SUBTASK_CODES, ("env_check", "serial_terminal", "legacy_power_test"))
+        self.assertEqual(list(WINDOW_SUBTASK_LABELS.values()), [
+            "1. 环境线路检查", "2. 串口日志（全流程期间持续记录）", "3. 执行开关机测试",
+        ])
+        self.assertTrue(all(not PipelineWindow._default_checked(code) for code in WINDOW_SUBTASK_CODES))
 
-        self.assertTrue(SUBTASK_CODES)
-        self.assertTrue(all(not PipelineWindow._default_checked(code) for code in SUBTASK_CODES))
-
-    def test_pipeline_selection_uses_check_mark(self) -> None:
-        """选中态必须显示标准勾号，未选中时保持空框。"""
-        from line_check_assistant.pipeline_window import PipelineWindow
-
-        self.assertEqual(PipelineWindow._selection_mark(True), "✓")
-        self.assertEqual(PipelineWindow._selection_mark(False), "")
-
-    def test_unattended_execution_is_opt_in_and_limited_to_upgrade_and_parameter_write(self) -> None:
+    def test_pipeline_selection_uses_native_checkbutton(self) -> None:
         import inspect
-        import line_check_assistant.pipeline_window as pw_mod
+        from line_check_assistant.pipeline_window import PipelineWindow
+        source = inspect.getsource(PipelineWindow._build_row)
+        self.assertIn("selector = Checkbutton(", source)
+        self.assertNotIn("ttk.Checkbutton", source)
+        self.assertNotIn("Canvas(", source)
 
-        init_source = inspect.getsource(pw_mod.PipelineWindow.__init__)
-        build_source = inspect.getsource(pw_mod.PipelineWindow._build)
-        start_source = inspect.getsource(pw_mod.PipelineWindow._on_start)
-        summary_source = inspect.getsource(pw_mod.PipelineWindow._unattended_confirmation_note)
-
-        self.assertIn("BooleanVar(value=False)", init_source)
-        self.assertIn("Checkbutton(", build_source)
-        self.assertIn("unattended_execution", build_source)
-        self.assertIn("unattended_execution", start_source)
-        self.assertIn("unattended_execution=unattended_execution", start_source)
-        self.assertIn('"sample_upgrade" in selected', summary_source)
-        self.assertIn('"sample_parameter_write" in selected', summary_source)
-        self.assertNotIn('"onu_registration" in selected', summary_source)
-
-    def test_pipeline_confirmation_contains_manual_reboot_guard_for_empty_com(self) -> None:
-        """空 COM 的全流程执行必须在启动后台线程前要求操作员确认手动重启。"""
+    def test_pipeline_has_no_unattended_or_upgrade_reboot_confirmation(self) -> None:
         import inspect
-        import line_check_assistant.pipeline_window as pw_mod
-
-        source = inspect.getsource(pw_mod.PipelineWindow._on_start)
-        self.assertIn("请先手动重启样机", source)
-        self.assertIn("确认样机已重启后再点击", source)
+        from line_check_assistant.pipeline_window import PipelineWindow
+        source = inspect.getsource(PipelineWindow._build) + inspect.getsource(PipelineWindow._on_start)
+        self.assertNotIn("无人值守", source)
+        self.assertNotIn("请先手动重启样机", source)
+        self.assertNotIn("_unattended_execution_var", source)
 
     def test_pipeline_confirmation_warns_legacy_start_all_powers_selected_channels_off(self) -> None:
-        """子任务7必须在启动前明确提示仅对勾选通道初始化断电。"""
+        """开关机测试必须在启动前明确提示仅对勾选通道初始化断电。"""
         import inspect
         import line_check_assistant.pipeline_window as pw_mod
 
         source = inspect.getsource(pw_mod.PipelineWindow._on_start)
         self.assertIn('"legacy_power_test" in selected', source)
-        self.assertIn("危险操作提示：子任务7", source)
+        self.assertIn("危险操作提示：执行开关机测试", source)
         self.assertIn("初始化仅断电已勾选通道", source)
         self.assertNotIn("下发全通道断电指令", source)
 
@@ -234,7 +219,8 @@ class BuildContextRegressionTests(unittest.TestCase):
         source = inspect.getsource(pw_mod.PipelineWindow._on_start)
         self.assertIn("len(actual_order) > 1", source)
         self.assertIn("串口日志预启动和环境线路检查完成后不等待", source)
-        self.assertIn("其余每个已选子任务结束后等待 120 秒", source)
+        self.assertIn("直接进入下一个已选子任务", source)
+        self.assertNotIn("等待 120 秒", source)
 
     def test_pipeline_confirmation_does_not_call_numbered_items_pipelines(self) -> None:
         """面向操作员的编号项统一称为子任务，不再显示管道1/后续管道。"""
@@ -244,7 +230,6 @@ class BuildContextRegressionTests(unittest.TestCase):
         source = inspect.getsource(pw_mod.PipelineWindow._on_start)
         self.assertNotIn("管道1", source)
         self.assertNotIn("后续已勾选管道", source)
-        self.assertIn("其余每个已选子任务", source)
         self.assertIn("下一个已选子任务", source)
 
     def test_build_context_does_not_load_test_item_order_config(self) -> None:
@@ -353,6 +338,163 @@ class BuildContextRegressionTests(unittest.TestCase):
             self.assertIsNotNone(statuses[code].summary)
             self.assertIsInstance(statuses[code].missing, tuple)
         self.assertNotIn("test_item_execution", statuses)
+
+
+class SimplifiedPipelineTests(unittest.TestCase):
+    def test_main_log_uses_current_window_numbers(self):
+        from queue import Queue
+        from line_check_assistant.pipeline_window import PipelineWindow, WINDOW_SUBTASK_LABELS
+        from src.services.pipeline_orchestrator import SUBTASK_LABELS
+        window = PipelineWindow.__new__(PipelineWindow)
+        window.app = SimpleNamespace(log_queue=Queue())
+        for code, label in WINDOW_SUBTASK_LABELS.items():
+            window._emit_to_main_log(f"=== 开始子任务 {SUBTASK_LABELS[code]} ===")
+            self.assertEqual(window.app.log_queue.get_nowait(), f"=== 开始子任务 {label} ===")
+
+    def make_window(self, selected):
+        from line_check_assistant.pipeline_window import PipelineWindow
+        window = PipelineWindow.__new__(PipelineWindow)
+        window.app = SimpleNamespace()
+        window.window = MagicMock()
+        window._running_thread = None
+        window._check_vars = {code: MagicMock(get=MagicMock(return_value=True)) for code in selected}
+        window._build_context = MagicMock(return_value=SimpleNamespace(enabled_channels=[]))
+        window._set_running_ui = MagicMock()
+        window._update_main_power_test_progress = MagicMock()
+        window._update_main_power_test_status = MagicMock()
+        window._emit_to_main_log = MagicMock()
+        return window
+
+    def test_start_only_submits_three_allowed_tasks_in_prestart_order(self):
+        from line_check_assistant.pipeline_window import WINDOW_SUBTASK_CODES
+        from src.services.pipeline_orchestrator import SUBTASK_CODES
+        window = self.make_window(SUBTASK_CODES)
+        statuses = {code: SimpleNamespace(ready=True, summary="当前配置") for code in WINDOW_SUBTASK_CODES}
+        with patch("line_check_assistant.pipeline_window.compute_all_subtask_statuses", return_value=statuses) as compute, patch(
+            "line_check_assistant.pipeline_window.describe_legacy_power_telnet_post_login", return_value="版本预检说明"
+        ), patch("line_check_assistant.pipeline_window.messagebox.askyesno", return_value=True) as confirm, patch(
+            "line_check_assistant.pipeline_window.threading.Thread"
+        ) as worker:
+            window._on_start()
+        compute.assert_called_once_with(window._build_context.return_value, WINDOW_SUBTASK_CODES)
+        self.assertEqual(worker.call_args.kwargs["args"], (set(WINDOW_SUBTASK_CODES),))
+        worker.return_value.start.assert_called_once_with()
+        window.window.withdraw.assert_called_once_with()
+        window._build_context.assert_called_once_with()
+        text = confirm.call_args.args[1]
+        self.assertLess(text.index("2. 串口日志"), text.index("1. 环境线路检查"))
+        self.assertLess(text.index("1. 环境线路检查"), text.index("3. 执行开关机测试"))
+        for code in set(SUBTASK_CODES) - set(WINDOW_SUBTASK_CODES):
+            window._check_vars[code].get.assert_not_called()
+        for removed in ("自动上/下电", "样机升级", "写样机参数", "ONU 注册", "无人值守", "子任务7"):
+            self.assertNotIn(removed, text)
+
+    def test_removed_tasks_cannot_start_when_no_allowed_task_is_selected(self):
+        window = self.make_window(("power_cycle", "sample_upgrade", "sample_parameter_write", "onu_registration"))
+        with patch("line_check_assistant.pipeline_window.messagebox.showwarning") as warning:
+            window._on_start()
+        warning.assert_called_once()
+        window._build_context.assert_not_called()
+
+    def test_refresh_only_updates_visible_rows_and_handles_context_failure(self):
+        from line_check_assistant.pipeline_window import PipelineWindow, WINDOW_SUBTASK_CODES
+        from src.services.pipeline_orchestrator import SubTaskStatus
+        window = self.make_window(())
+        window._status_summary_vars = {code: MagicMock() for code in WINDOW_SUBTASK_CODES}
+        window._status_missing_vars = {code: MagicMock() for code in WINDOW_SUBTASK_CODES}
+        statuses = {code: SubTaskStatus(code, True, code, ()) for code in WINDOW_SUBTASK_CODES}
+        with patch("line_check_assistant.pipeline_window.compute_all_subtask_statuses", return_value=statuses) as compute:
+            window._refresh_statuses()
+        compute.assert_called_once_with(window._build_context.return_value, WINDOW_SUBTASK_CODES)
+        for code in WINDOW_SUBTASK_CODES:
+            window._status_summary_vars[code].set.assert_called_with(code)
+        window._build_context.side_effect = RuntimeError("配置暂不可用")
+        PipelineWindow._refresh_statuses(window)
+        for code in WINDOW_SUBTASK_CODES:
+            window._status_missing_vars[code].set.assert_called_with("错误:配置暂不可用")
+
+    def test_status_scope_skips_removed_summarizers_and_keeps_default_compatibility(self):
+        from line_check_assistant.pipeline_window import WINDOW_SUBTASK_CODES
+        from src.services.pipeline_orchestrator import SUBTASK_CODES, compute_all_subtask_statuses
+        summarizers = {code: MagicMock(return_value=code) for code in SUBTASK_CODES}
+        with patch("src.services.pipeline_orchestrator._SUMMARIZERS", summarizers):
+            self.assertEqual(tuple(compute_all_subtask_statuses(None, WINDOW_SUBTASK_CODES)), WINDOW_SUBTASK_CODES)
+            for code in set(SUBTASK_CODES) - set(WINDOW_SUBTASK_CODES):
+                summarizers[code].assert_not_called()
+            self.assertEqual(compute_all_subtask_statuses(None, ()), {})
+            self.assertEqual(tuple(compute_all_subtask_statuses(None)), SUBTASK_CODES)
+
+    def test_missing_fields_warning_and_final_confirmation_can_both_cancel(self):
+        from src.services.pipeline_orchestrator import SubTaskStatus
+        for answers, expected_prompts in (([False], 1), ([True, False], 2)):
+            with self.subTest(answers=answers):
+                window = self.make_window(("env_check",))
+                with patch("line_check_assistant.pipeline_window.compute_all_subtask_statuses", return_value={
+                    "env_check": SubTaskStatus("env_check", False, "未就绪", ("通道",)),
+                }), patch("line_check_assistant.pipeline_window.messagebox.askyesno", side_effect=answers) as confirm, patch(
+                    "line_check_assistant.pipeline_window.threading.Thread"
+                ) as worker:
+                    window._on_start()
+                self.assertEqual(confirm.call_count, expected_prompts)
+                worker.assert_not_called()
+                window.window.withdraw.assert_not_called()
+
+    def test_real_tk_three_rows_native_controls_theme_and_minimum_size(self):
+        import tkinter as tk
+        from tkinter import ttk
+        from line_check_assistant.pipeline_window import PipelineWindow, WINDOW_SUBTASK_CODES
+        from src.services.pipeline_orchestrator import SubTaskStatus
+        from src.ui.module_theme import MODULE_BACKGROUND
+        root = tk.Tk()
+        self.addCleanup(root.destroy)
+        root.withdraw()
+        root._restore_module_window_size = MagicMock(return_value=(880, 520))
+        root._remember_module_window_size = MagicMock()
+        statuses = {
+            code: SubTaskStatus(code, False, "通信=telnet / COM=COM7 / 方案=TEST_PROJECT / 1 通道 / 循环=100次", ("当前配置未就绪",))
+            for code in WINDOW_SUBTASK_CODES
+        }
+        for theme in ("vista", "clam"):
+            with self.subTest(theme=theme):
+                ttk.Style(root).theme_use(theme)
+                with patch.object(PipelineWindow, "_build_context", return_value=SimpleNamespace()), patch(
+                    "line_check_assistant.pipeline_window.compute_all_subtask_statuses", return_value=statuses
+                ):
+                    window = PipelineWindow(root)
+                    window.window.geometry("880x520")
+                    root.update()
+                    self.assertEqual(tuple(window._check_vars), WINDOW_SUBTASK_CODES)
+                    self.assertEqual(window.window.cget("background"), MODULE_BACKGROUND)
+                    for code, control in window._selection_controls.items():
+                        self.assertEqual(control.winfo_class(), "Checkbutton")
+                        self.assertFalse(window._check_vars[code].get())
+                        control.invoke()
+                        self.assertTrue(window._check_vars[code].get())
+                    def check_bounds(widget):
+                        self.assertLessEqual(widget.winfo_rootx() + widget.winfo_width(), window.window.winfo_rootx() + window.window.winfo_width())
+                        self.assertLessEqual(widget.winfo_rooty() + widget.winfo_height(), window.window.winfo_rooty() + window.window.winfo_height())
+                        for child in widget.winfo_children():
+                            check_bounds(child)
+                    check_bounds(window.window)
+                    self.assertTrue(window._start_button.winfo_viewable())
+                    self.assertFalse(hasattr(window, "_unattended_execution_var"))
+                    config_buttons = []
+                    def collect_buttons(widget):
+                        for child in widget.winfo_children():
+                            if child.winfo_class() == "TButton" and child.cget("text") == "去配置":
+                                config_buttons.append(child)
+                            collect_buttons(child)
+                    collect_buttons(window.window)
+                    self.assertEqual(len(config_buttons), 3)
+                    with patch.object(window, "_open_config") as configure:
+                        for button in config_buttons:
+                            button.invoke()
+                    self.assertEqual([call.args[0] for call in configure.call_args_list], [
+                        "_open_network_config", "_open_serial_log_module", "_open_test_item_config",
+                    ])
+                    window._on_close()
+                    root.update_idletasks()
+        self.assertEqual(root._remember_module_window_size.call_count, 2)
 
 
 class OpenNetworkConfigRegressionTests(unittest.TestCase):

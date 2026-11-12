@@ -5067,8 +5067,10 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             "\n    internal_software_version_var.set(result.internal_software_version)", source
         )
         self.assertNotIn("\n    onu_compile_time_var.set(result.onu_compile_time)", source)
-        self.assertIn("cat /etc/config/deviceinfo", source)
-        self.assertIn("cat /proc/version", source)
+        self.assertIn("查询结果只读，不自动保存", source)
+        from src.services.device_project_info_service import DEVICEINFO_COMMAND, PROC_VERSION_COMMAND
+        self.assertEqual(DEVICEINFO_COMMAND, "cat /etc/config/deviceinfo")
+        self.assertEqual(PROC_VERSION_COMMAND, "cat /proc/version")
 
     def test_wifi_cancelled_channel_displays_stopped_without_failure_history(self):
         context = SimpleNamespace(power_test_channel_states={},

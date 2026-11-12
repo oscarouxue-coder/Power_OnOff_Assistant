@@ -1,5 +1,153 @@
 # 开发记录
 
+## 2026-11-12 - 完成通道字号优化提交前验证
+
+- 类型：BUG 修复
+- 背景：负责人要求以“优化通道字号”备注提交Git。完整提交门禁发现字号放大后，1040像素最小宽度下“显示所有网卡和串口”勾选框超出窗口6像素。
+- 完成内容：① 仅收紧程控电源串口、样机管理IP及勾选框之间的三处横向留白，使勾选框完整落在配置卡片内；保留13号字、34字符通道列表宽度、输入框宽度、原生勾选、默认值、持久化及业务逻辑。② 复验既有资源选项及通道列表专项、完整基线和两种尺寸的独立Tk布局。③ 更新最新验证记录；本次提交沿用负责人已暂存的24个文件，包含通道字号及此前AI界面、全流程、说明文字等改动，提交备注使用“优化通道字号”，保留项目要求的协作者署名。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+- 验证方法：首先在仓库根运行`git hook run pre-commit`，由既有钩子在主源码目录调用CPython3.9.10 x64及`scripts/verify_baseline.py`。失败后在主源码目录用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -m unittest discover -s tests -v`收集完整详情；进程内按钩子规则规范化TMPDIR/TEMP/TMP路径。修正后运行`-m py_compile line_check_assistant/app.py`、`test_resource_options.py`全11项及`test_app.py`既有通道列表5项专项。通过stdin导入`scripts.verify_baseline`执行原`main()`，仅包裹`run_unittest`将其原始返回输出留存，不改变测试、结果或门禁规则；详细输出在`%TEMP%/linecheck-channel-git-final-unittest-20261112.log`。复跑`%TEMP%/linecheck-channel-spacing-ywbalc8y/check_layout.py`，补充横向勾选框边界与源码AST等价检查；执行`git diff --check`，正常Git提交继续启用既有pre-commit门禁。
+- 验证结果：首次完整门禁报告1777项中的2项失败；详细复跑仍有1项失败，定位为`test_resource_options.ResourceOptionsTkTests.test_native_checkbox_defaults_off_and_fits_main_card`，另一项未复现、不推定原因。修正后三处留白的局部编译及16项相关测试全部通过；最终完整基线`ALL CHECKS PASSED`：1777项测试、2项既有可选检查跳过，190项指定回归实际执行、137个源码编译/覆盖及全部协议不变量通过。独立Tk通过Vista/Clam主题的1200×780与1040×700四组检查，通道文字、底部按钮和右侧原生勾选框均完整可见，原有点击/双击/空格/右键/空白命中行为通过。AST确认本轮补修仅改变三处留白，文档及差异格式检查通过。未运行完整主程序或交付EXE、连接真实设备、改写真实配置、打包或发布；此前1758项完整验证保留为历史记录。
+- 后续待办：Windows完整程序人工复核及真实模型/设备验收仍沿用原待确认范围，不以本次离线基线升级验收结论。
+
+## 2026-11-12 - 放大通道列表字号与行间距
+
+- 类型：优化
+- 背景：负责人要求放大左侧通道列表文字、增加行间距，并确认采用13号微软雅黑及每行上下留白方案。
+- 完成内容：① 通道列表字体从11号调整为13号，设置`selectborderwidth=3`，保留34字符宽度；本机100%缩放下行距由21像素增至30像素。② 最小窗口下先为底部“全选/清除”按钮保留空间，列表使用剩余高度，沿用原滚动方式。③ 保留既有列表结构、单击/双击/空格/右键与空白命中规则、通道启用及配置保存语义；同步操作员说明，保留其它工作区修改。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -m py_compile line_check_assistant/app.py`执行局部编译；通过stdin将`tests`加入sys.path，使用`unittest.defaultTestLoader.loadTestsFromNames`运行`test_app.CurrentChannelSelectionTests`中的`test_channel_selection_list_is_wide_enough_for_vlan_and_com_text`、`test_channel_list_right_click_menu_opens_selected_power_test_log`、`test_channel_list_blank_space_does_not_select_or_toggle`、`test_channel_list_real_row_keeps_click_and_double_click_behavior`及`test_channel_list_right_click_selects_the_clicked_row_before_showing_menu`。独立Tk检查脚本保留于`%TEMP%/linecheck-channel-spacing-ywbalc8y/check_layout.py`，从主源码目录使用同一Python执行；使用真实主界面构建方法、16条模拟VLAN/COM通道及空业务回调，隔离完整程序初始化、设备和真实配置。运行`git diff --check`并核对文档一致性。
+- 验证结果：局部编译及5项既有专项全部通过、无跳过；独立Tk通过Vista/Clam主题的1200×780及1040×700四组检查，逐行核对16条通道的完整文字、滚动可达性、增大后的行距及底部按钮可见性，验证点击/双击/空格实际绑定、右键选行和空白区域命中。初次独立检查定位Clam最小窗口下底部按钮被列表挤出，调整布局预留顺序后复验通过；参考旧行距的测试控件移至独立窗口，避免测试自身被布局挤出。AST对比确认本轮源码仅改变字体、选中边框留白及底部按钮布局优先级；文档与差异检查通过。本轮未运行完整基线，保留此前1758项完整验证记录；未新增仓库测试文件、启动完整主程序或交付EXE、连接设备、改写真实配置、提交、打包或发布。
+- 后续待办：负责人重启Windows源码版复核日常布局；独立Tk检查不替代完整主程序人工验收，现有交付包不包含本轮源码显示调整。
+
+## 2026-11-12 - 精简各模块固定说明标签
+
+- 类型：优化
+- 背景：负责人确认精简各界面固定功能介绍，特别是DUT配置各页顶部长段说明，保留必要短提示、动态反馈及风险确认。
+- 完成内容：① 删除主界面勾选说明，以及样机升级、测试项配置、开关机运行参数、ONU注册、预备测试和全流程中已确认的固定介绍标签及占位。② 删除DUT的Telnet、WAN、2.4G/5G WiFi、语音和TR069页顶部介绍，保留动态WAN/WiFi规则、当前状态、目标表和操作入口。③ 自动保存、DUT目标和版本查询分别缩为“修改自动保存”“请勾选本次操作的 DUT”“查询结果只读，不自动保存”。AI输入区沿用工作区并行更新的“Enter发送，Alt+Enter换行”短提示及现有绑定，不回退新快捷键。④ 使用规则补入操作员说明，保留此前标题粗体及既有默认值、持久化、设备命令、业务流程和验收结论。
+- 修改文件：
+  - `.claude/plans/static-ui-hints-cleanup.md`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/src/ui/dut_config_window.py`
+  - `Cheating_machine_execution_tool/src/ui/test_item_pretest_controls.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`（精简说明，最终沿用并行更新的快捷键短提示）
+  - `Cheating_machine_execution_tool/tests/test_app.py`（调整一项依赖旧说明文案的已有断言）
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`，执行`-m py_compile line_check_assistant/app.py line_check_assistant/pipeline_window.py src/ui/dut_config_window.py src/ui/ai_chat_panel.py src/ui/test_item_pretest_controls.py tests/test_app.py`。通过stdin将`tests`加入sys.path，以`unittest.defaultTestLoader.loadTestsFromNames(['test_app', 'test_pipeline_window', 'test_test_item_pretest', 'test_ai_chat_presentation', 'test_device_project_info_service'])`和`unittest.TextTestRunner(verbosity=1)`执行专项，按结果返回退出码。临时目录`%TEMP%/linecheck-static-hints-d9guer_5/`保留`check_label_ast.py`、`check_layout.py`及修改前快照，可从主源码目录用同一Python重跑；分别验证标签以外的AST一致及独立真实Tk布局，空回调/临时状态文件隔离设备与真实配置。检查文档一致性及`git diff --check`。
+- 验证结果：6个Python文件编译通过，最终316项相关测试全部通过、无跳过。首次306项专项中1项仍在UI介绍中查找版本查询命令，已调整为检查简短提示及服务命令常量，并追加既有查询服务专项覆盖实际命令、锁源与解析。独立真实Tk通过DUT六页Vista/Clam主题1530×880布局及可见按钮边界，动态WAN删除规则和六个当前状态区保留；全流程880×520原生勾选框、去配置/开始按钮及动态缺项状态正常；运行参数、版本查询和预备测试页输入、只读、数据收集及按钮状态正常；主界面1200×780和1040×700三个标题12号粗体、短保存提示、进度及按钮正常。app、全流程、DUT和预备测试四个文件的源码AST除指定标签变化外完全相同；AI相关专项覆盖并行新增的快捷键行为，保留其它工作区改动。差异格式和文档一致性检查通过。本轮未运行完整基线，保留此前1758项完整验证记录；未新增仓库测试文件、启动完整主程序或交付EXE、连接设备、改写真实配置、提交、打包或发布。
+- 后续待办：负责人正常重启Windows源码版复验完整数据下各模块界面；独立Tk及自动化检查不替代完整主程序人工操作或真实样机验收。现有交付包不包含本轮源码显示调整。
+
+## 2026-11-12 - 调整AI输入框发送与换行快捷键
+
+- 类型：优化
+- 背景：负责人要求AI输入框单次Enter发送、Alt+Enter换行，并确认保留原Ctrl+Enter及发送按钮。
+- 完成内容：① 输入框Enter直接复用原send入口及其break返回，避免发送后默认插入换行。② 新增局部换行回调，Alt+Enter在光标处插入一个换行，有选中文本时替换选区，返回break阻止继续发送；不改业务流程、确认规则或模型/设备调用边界。③ 原Ctrl+Enter和按钮保持，现有快捷键提示及操作员说明同步。④ 在现有显示专项中新增7项真实Tk键盘测试，覆盖单次发送/无残留换行、换行位置/选区替换、多行原文、失败草稿、回答问题及原入口兼容；同步当前状态和待复验项，保留全部原工作区修改。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+- 验证方法：从主源码目录使用本仓库`linecheck.pythonExecutable`配置指向的CPython3.9.10 x64执行`-X utf8 -m unittest discover -s tests -p test_ai_chat_presentation.py -v`及`-X utf8 -m py_compile src/ui/ai_chat_panel.py tests/test_ai_chat_presentation.py`；执行`git diff --check`，核对本轮六个文件的差异及快捷键说明/文档路径一致性。键盘测试使用真实Tk输入控件和event_generate触发绑定，service为Mock，不请求模型或访问设备。
+- 验证结果：26项AI界面专项全部通过（含新增7项），无跳过；两个Python文件局部编译、本轮六个文件差异格式及文档一致性检查通过。首次测试发现原显示fixture缺少模型配置id，生成随机id导致原发送入口按配置变更尝试新建会话；已仅在键盘测试辅助方法补固定id后复验通过，无需修改原发送逻辑。本轮未运行完整基线，保留此前1758项完整验证记录；未提交、打包、发布、运行交付EXE或改写本机配置。
+- 后续待办：负责人重启Windows源码版复验完整程序键盘交互，见ACCEPTANCE_BASELINE.md §2.16/§3；现有V1.2.9包不含本轮调整，既有真实模型/设备验收状态保持。
+
+## 2026-11-12 - 精简主界面说明并加粗三处标题
+
+- 类型：优化
+- 背景：负责人要求删除主界面“检查全部启用通道。环境检查通过后，系统将自动开始执行开关机测试。”固定说明，并将三个步骤标题加粗；今后新增功能默认不再添加此类常驻说明。
+- 完成内容：① 删除该说明的整个标签及其布局占位。② 仅为“选择测试通道”“配置测试参数”“环境检查与开关机测试”三个标题显式指定微软雅黑 UI、12号、粗体，避免通用字体设置覆盖共享样式；其它标题和动态状态、进度、按钮及执行流程保持。③ AGENTS.md新增固定说明文字约定，使用说明写入操作员文档，执行反馈通过动态状态和主执行日志呈现，继续保留必要确认、风险和错误提示；同步操作员说明。保留全部原工作区改动。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `AGENTS.md`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录执行`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -m py_compile line_check_assistant/app.py`。通过UTF-8 stdin临时脚本从源码AST提取原`_configure_theme`和`_build_ui`，在独立真实Tk根窗口构建主界面；设备/配置回调和更新对话框替换为空操作，不调用完整主程序初始化，通道表使用空数据。在默认1200×780和最小1040×700尺寸读取三个标题的实际字体、请求/实际尺寸及各级父容器边界，核对固定说明不存在、标题后直接跟随状态行、进度条和按钮可见，以及其它标题的字体选项保持。执行`git diff --check`并检查本轮差异和文档一致性。
+- 验证结果：局部编译通过；两个尺寸的独立真实Tk检查均通过，三个标题实际字体均为Microsoft YaHei UI、12号、bold，无裁切，状态行直接跟随标题、间距正常，进度条和停止按钮可见。首次检查脚本因PowerShell默认管道编码导致中文变为问号，已仅在检查进程中指定UTF-8输出编码后通过，无需调整程序。差异格式及文档一致性检查通过。本轮未运行完整基线，保留此前1758项完整验证记录；未新增测试文件、启动完整主程序或交付EXE、改写本机配置、连接设备、提交、打包或发布，不变更现有验收结论。
+- 后续待办：负责人正常重启Windows源码版查看完整数据下的实际界面；独立Tk检查不替代完整主程序人工验收，现有交付包不包含本轮源码修改。
+
+## 2026-11-12 - 精简全流程为三项任务入口
+
+- 类型：优化
+- 背景：负责人确认仅从全流程执行界面移除自动上/下电、样机升级、写样机参数、ONU注册，保留四项独立功能；剩余三项重新编号，并移除仅用于升级和写参的本次无人值守选项。
+- 完成内容：① 窗口专用三项白名单覆盖构建、刷新、收集选择、校验及确认，启动时忽略其它任务；仅计算环境线路检查、串口日志、执行开关机测试状态，编排器状态API增加可选范围、默认兼容原七项调用，原业务能力和任务代码保留。② 删除无人值守区域和升级专用手动重启确认；保留开关机仅断电已选通道及版本预检确认，窗口/确认/结果/主日志统一编号1～3。串口预启动和环境检查后直接进入下一项，确认文案按当前三项说明无额外等待，原编排器时序和停止不变。③ 使用Windows原生Checkbutton和局部统一背景，默认920×560、最小880×520，参数摘要换行并利用整行宽度，继续恢复和保存尺寸；三个去配置入口保持。④ 更新窗口专项及已移除无人值守UI的两项升级测试引用，保留独立升级Boot/Web验证；同步当前说明、状态、验收边界和待复验项，保留历史现场结论、最近完整基线及所有原工作区改动。
+- 修改文件：
+  - `.claude/plans/simplify-pipeline-entrypoints.md`（新增，负责人确认方案）
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/tests/test_pipeline_window.py`
+  - `Cheating_machine_execution_tool/tests/test_sdmc_boot_entry.py`
+  - `Cheating_machine_execution_tool/tests/test_web_gateway_upgrade.py`
+  - `Cheating_machine_execution_tool/tests/test_telnet_post_login_confirmations.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`，进程内设置`PYTHONUTF8=1`和`PYTHONIOENCODING=utf-8`；通过`sys.path.insert(0, 'tests')`及`unittest.defaultTestLoader.loadTestsFromNames(['test_pipeline_window', 'test_pipeline_orchestrator', 'test_window_size_state', 'test_telnet_post_login_confirmations', 'test_sdmc_boot_entry', 'test_web_gateway_upgrade'])`执行专项，以`unittest.TextTestRunner(verbosity=1)`运行并按结果返回退出码。对本轮3个源码和4个测试文件执行`-m py_compile`，检查文档一致性及`git diff --check`。
+- 验证结果：最终136项专项通过（2项既有真实浏览器集成按默认设置跳过），7个Python文件编译及差异格式检查通过。覆盖只提交三项、旧任务不可启动、缺项/总确认取消、状态范围及默认七项兼容、错误刷新、串口预启动/非致命失败、环境检查致命失败、停止/进度/主线程回调、旧业务委派及独立升级；独立真实Tk在Vista/Clam、880×520验证三项原生控件、默认不勾选/点击切换、统一背景、全部控件边界、按钮可见、三个配置目标与关闭保存入口。首次差异检查发现删除旧测试后文件末尾多余空行，已清理并通过。未运行完整基线，保留此前1758项完整验证记录；未启动完整主程序或交付EXE、未连接设备、未打包、提交或发布。
+- 后续待办：负责人重启Windows源码版复验三项窗口及尺寸恢复，并按ACCEPTANCE_BASELINE.md §2.12/§3确认当前三项真实样机端到端、仅断电已选通道和失败/停止路径。旧七项窗口历史验收保留，独立功能既有验收不扩大；当前V1.2.9交付包不含本轮源码改动。
+
+## 2026-11-12 - 精简单行状态并增强辨识度
+
+- 类型：优化
+- 背景：负责人要求将“新会话”旁的状态合并为一行、减少纵向占用并增强辨识度，确认长内容悬停查看；实施中进一步明确不要状态行外框。
+- 完成内容：① 新增独立AiChatStatus展示组件，将原三行合并为“状态 · 时分秒 ｜ 最新状态”，正文11号加粗深蓝、时间9号、错误红字，背景沿用模块主题；与按钮垂直居中、不增加按钮行高，按最新要求移除普通/错误/焦点外框及行内滚动条。② 长文本按字体实际像素宽度省略并随窗口缩放重算，悬停400毫秒后以非模态提示展示完整日期时间和原始换行/内容，最多8行并可滚动、选择复制，不主动转移输入焦点。移入提示不中断操作，移出、状态/会话变化、隐藏/销毁时清理提示和定时任务。③ 面板保留既有入口和status_output兼容引用，仅转发会话与最新消息；数据库、最新一条规则、容量提示隐藏、正文独立刷新、授权和业务执行/停止/恢复边界保持。新增源码纳入编译清单，记录实施计划；4项新增显示专项及既有断言覆盖新展示和生命周期。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_status.py`（新增）
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`（仅新增源码编译清单项）
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `.claude/plans/ai-chat-single-line-status.md`（新增）
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+- 验证方法：主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -`，通过stdin脚本将`tests`加入sys.path，以unittest加载`test_ai_chat_presentation`、`test_ai_context_usage`、`test_ai_conversation`、`test_ai_session_deletion`和`test_ai_workspace`并按结果返回退出码；单独执行`-m unittest discover -s tests -p test_verify_baseline.py -v`。去框后执行`-m unittest discover -s tests -p test_ai_chat_presentation.py -v`；执行`-m py_compile src/ui/ai_chat_status.py src/ui/ai_chat_panel.py tests/test_ai_chat_presentation.py scripts/verify_baseline.py`，单独调用`check_py_compile_inventory(Path.cwd())`，检查`git diff --check`及文档路径/内容一致性。
+- 验证结果：首轮19项显示专项有2项在Tk映射完成前读取到空白单行显示，测试同步改为处理完整Tk事件后再读取实际尺寸/省略文本；随后120项AI相关专项及20项门禁自身检查全部通过，共140项、无跳过；去框后19项显示专项复验通过。四个Python文件编译及137个源码清单覆盖通过，本轮文件差异格式和文档一致性检查通过。全工作区差异检查另发现非本轮文件`tests/test_sdmc_boot_entry.py`末尾新增空行，保留其它工作区修改，不在本轮修整。覆盖Vista/Clam、940×660布局、缩放省略、真实400毫秒定时提示、焦点保持、完整原文/滚动/选择、提示清理、会话切换及正文阅读位置/选区/草稿。本轮未运行完整基线，保留下方此前1758项完整验证记录；未提交、打包、发布或运行新EXE，不调用真实模型/设备，不改写本机配置，原工作区改动保留。
+- 后续待办：负责人重启Windows源码版复验单行无框状态和悬浮提示完整交互，继续按ACCEPTANCE_BASELINE.md §2.16/§3保留真实模型/设备待验收边界；现有V1.2.9包不含本轮源码显示调整。
+
+## 2026-11-12 - 固定显示最新会话状态
+
+- 类型：优化
+- 背景：负责人要求将截图中的恢复状态移到“新会话”按钮旁边固定显示，并确认覆盖全部系统状态、只显示最新一条，不增加状态历史入口。
+- 完成内容：① 在现有AiChatPanel局部增加三行只读状态区，显示最新系统消息及时间，支持自动换行、纵向滚动、选择复制，普通灰色/错误红色，背景沿用模块主题。② 聊天只渲染用户/AI消息及确认问题；采集/恢复/导入/裁剪/错误转到固定区，历史容量消息保持隐藏；原始消息和数据库不改写。③ 状态与发送按钮独立刷新，正文revision只依赖可见消息；状态变化不重绘正文，保留阅读位置、选区和草稿。切换/重开恢复各会话状态，无记录/无选择显示占位。④ 新增4项并调整现有显示专项，覆盖类型替换、通用操作不自动回滚提示、旧记录、切换/重开、颜色/滚动/选择及Vista/Clam最小布局，保留业务执行、授权、停止和恢复规则。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+- 验证方法：主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -`，通过stdin脚本将`tests`加入sys.path，以`unittest.defaultTestLoader.loadTestsFromNames`加载`test_ai_chat_presentation`、`test_ai_context_usage`、`test_ai_conversation`、`test_ai_session_deletion`和`test_ai_workspace`，执行`unittest.TextTestRunner(verbosity=1)`并按结果返回退出码；执行`-m py_compile src/ui/ai_chat_panel.py tests/test_ai_chat_presentation.py`及`git diff --check`，核对文档内容与链接。独立Tk使用模拟数据，不请求真实模型、不连接设备或运行交付EXE。
+- 验证结果：首轮显示专项在窗口尚未完成映射时读到1像素高度，新增测试改为等待Tk完成映射后核对；最终116项相关测试全部通过、无跳过，两个Python文件编译通过，差异格式及文档一致性检查通过。覆盖Vista/Clam、940×660布局、长状态滚动与选择、会话切换/重开/删除、正文阅读位置/选区/草稿及运行按钮更新。本轮未运行完整基线，保留下方此前1758项完整验证记录；未提交、打包、发布或修改本机配置，原工作区改动保留。
+- 后续待办：负责人重启Windows源码版复验固定状态区的完整交互，按ACCEPTANCE_BASELINE.md §2.16/§3保留真实模型与设备待验收范围；现有V1.2.9交付包不含本轮源码显示调整。
+
+## 2026-11-12 - 构建并发布V1.2.9
+
+- 类型：构建
+- 背景：负责人要求重新打包EXE并发布到GitHub；本轮沿用标准精简工具链、两个附件及先核验新版后清理旧Release的发布规则。
+- 完成内容：① 包内版本递增为V1.2.9、日期2026-11-12，公开说明包含AI排障工作台、持续对话/会话管理、监控和报告接手、工具操作确认、模型上下文及显示优化、Telnet百分号密码读取修复，以及完整ZIP下载和配置迁移说明。② 标准脚本使用本机已有CPython3.9.10 x64，在仓库外自动创建`%LOCALAPPDATA%/LineCheckAssistant/build-env-py39`，安装`requirements-build.txt`锁定依赖和PyInstaller5.10.1，保留NumPy/OpenBLAS、lxml、PyQt5排除及UPX禁用策略；未回退开发或全局打包环境。③ 完整基线、EXE/PYZ与便携ZIP/哈希全部通过，产物留存独立`dist/V1.2.9_slim_20261112/`；静态核对133个冻结模块（含30个AI模块及旧配置驱动）与当前源码一致，6份便携配置与重新生成的脱敏结果一致，嵌入操作员说明/版本说明一致，ZIP CRC通过。④ Git Credential Manager设备授权完成后使用指定仓库账号，凭据仅在进程内用于GitHub API；先创建草稿上传同次构建的ZIP及ZIP SHA256两个附件，逐份核对GitHub大小/摘要，再公开为Latest。⑤ 两个附件匿名完整下载大小/SHA256一致，真实匿名源码更新客户端以V1.2.8发现新版、V1.2.9无更新，并实际下载ZIP完成大小/哈希/ZIP检查；通过后删除V1.2.8 Release及其附件，最终只保留V1.2.9，原Git标签和源码历史保持。⑥ 未在当前PC运行新EXE；新标签指向已存在的远端main，与本地HEAD `55fe6a14af65697e68228866b160df9831238142`一致。本轮版本/发布记录保留在工作区，未自动提交或推送源码；本机运行配置未改写。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/VERSION_INFO.txt`
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+- 验证方法：主源码目录设置子进程UTF-8并将TMPDIR/TEMP/TMP规范化，执行`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1 -BasePython "$env:LOCALAPPDATA\Programs\Python\Python39\python.exe" -OutputDirectory dist\V1.2.9_slim_20261112 -WorkDirectory build\V1.2.9_slim_20261112`。完整门禁由标准入口执行，构建后读取实际CArchive/PYZ、规范化代码文件名后比对源码编译结果，重新生成临时脱敏配置并逐份比对ZIP；读取ZIP/EXE校验文件及`PACKAGING_REPORT.json`。GitHub草稿校验、公开匿名下载、真实`AppUpdateService.check_for_update/download_update`及旧Release清理按顺序执行；核对`git diff --check`、本机配置无差异。助手与回执位于`%TEMP%/linecheck_release_v129_20261112/`（`build.log`、`static_audit.json`、`release_state.json`及匿名下载文件）。
+- 验证结果：独立构建环境检查及完整基线`ALL CHECKS PASSED`：1758项测试、190项指定回归实际执行、136个源码编译/覆盖及全部协议不变量通过。PyInstaller5.10.1打包、Tcl/Tk四份布局、原生依赖、排除项、ZIP CRC、配套文件和哈希门禁通过，输出`PACKAGE_ARCHIVE_OK`；补充静态源码/脱敏一致性检查通过，`exe_launched=false`。GitHub输出`DRAFT_ASSETS_SHA256_OK`、`PUBLISHED_LATEST`、两个`ANONYMOUS_DOWNLOAD_SHA256_OK`、`SOURCE_UPDATE_CLIENT_OK`及`PUBLIC_LATEST_ONLY_RELEASE_OK`。
+- 产物摘要：EXE为18,141,673字节，SHA256 `8e7c133bdf74284c095a4b5565bb3c39e2cf22df0ceede02abc11fb7754aed6c`；ZIP为17,828,213字节，SHA256 `ee73fada34b42c306a7dd377675473e43aac33c97174aacafd01705b052ace24`。本地保留EXE、便携目录、版本/构建说明、第三方声明、EXE/ZIP校验文件和构建报告。
+- GitHub发布：[LineCheckAssistant V1.2.9](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.9)，Release ID `442744384`，Latest且公开；仅有`LineCheckAssistant_portable.zip`和`LineCheckAssistant_portable.zip.sha256.txt`两个附件。匿名下载及源码更新客户端全部通过后，删除旧V1.2.8 Release（ID `439307858`）及附件；保留全部原有Git标签/源码历史，新标签指向现有远端main，未自动提交或推送本轮工作区。
+- 后续待办：负责人在目标Windows电脑验证新包启动、完整交互和AI/模型接口/真实DUT，以及含百分号密码的现场Telnet登录；按ACCEPTANCE_BASELINE.md §2.15/§2.16/§3原范围复验，不将本轮构建、静态检查或下载校验升级为现场验收。
+
 ## 2026-11-12 - 验证AI优化本地提交
 
 - 类型：测试

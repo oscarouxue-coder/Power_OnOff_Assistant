@@ -66,6 +66,7 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/services/ai_context_usage.py",
     "src/ui/ai_context_status.py",
     "src/ui/ai_chat_panel.py",
+    "src/ui/ai_chat_status.py",
     "src/ui/ai_session_manager.py",
     "src/core/ai_client.py",
     "src/core/ai_credentials.py",

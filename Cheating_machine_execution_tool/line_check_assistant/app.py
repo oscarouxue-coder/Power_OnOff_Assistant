@@ -173,7 +173,7 @@ POWER_ON_WAIT_SECONDS = 0
 POWER_ACTION_ON = "上电"
 POWER_ACTION_OFF = "下电"
 POWER_ACTION_OPTIONS = (POWER_ACTION_ON, POWER_ACTION_OFF)
-CHANNEL_LIST_FONT = ("Microsoft YaHei UI", 11)
+CHANNEL_LIST_FONT = ("Microsoft YaHei UI", 13)
 CHANNEL_FIELD_WIDTH = 42
 TEST_ITEM_COMMAND_GROUP_SPACING = 14
 LEGACY_CHANNEL_TEST_START_PATTERN = re.compile(
@@ -192,7 +192,7 @@ MODULE_WINDOW_SIZE_SPECS = {
     "onu_registration": (1000, 900, 1000, 900),
     "sample_upgrade": (820, 720, 820, 620),
     "test_item_config": (960, 940, 960, 940),
-    "pipeline": (920, 800, 880, 780),
+    "pipeline": (920, 560, 880, 520),
 }
 
 
@@ -892,8 +892,7 @@ class LineCheckAssistant(Tk):
 
         left = ttk.Frame(body, style="Surface.TFrame", padding=14)
         left.pack(side="left", fill="y", padx=(0, 14))
-        ttk.Label(left, text="1  选择测试通道", style="CardTitle.TLabel").pack(anchor="w")
-        ttk.Label(left, text="点击方框或双击可切换启用状态", style="CardHint.TLabel").pack(anchor="w", pady=(3, 10))
+        ttk.Label(left, text="1  选择测试通道", style="CardTitle.TLabel", font=(FONT_FAMILY, 12, "bold")).pack(anchor="w")
         self.channel_list = Listbox(
             left,
             width=34,
@@ -904,6 +903,7 @@ class LineCheckAssistant(Tk):
             foreground=COLOR_TEXT,
             selectbackground=COLOR_PRIMARY_SOFT,
             selectforeground=COLOR_PRIMARY_DARK,
+            selectborderwidth=3,
             activestyle="none",
             relief="flat",
             borderwidth=0,
@@ -933,7 +933,7 @@ class LineCheckAssistant(Tk):
             self.channel_list.selection_set(self.current_index)
 
         selection_actions = ttk.Frame(left, style="Surface.TFrame")
-        selection_actions.pack(fill="x")
+        selection_actions.pack(side="bottom", fill="x", before=self.channel_list)
         ttk.Button(selection_actions, text="全选", command=lambda: self._set_all_channels_enabled(True), style="Secondary.TButton").pack(side="left", fill="x", expand=True)
         ttk.Button(selection_actions, text="清除", command=lambda: self._set_all_channels_enabled(False), style="Secondary.TButton").pack(side="left", fill="x", expand=True, padx=(8, 0))
 
@@ -944,9 +944,9 @@ class LineCheckAssistant(Tk):
         config_card.pack(fill="x", pady=(0, 12))
         config_header = ttk.Frame(config_card, style="Surface.TFrame")
         config_header.pack(fill="x")
-        ttk.Label(config_header, text="2  配置测试参数", style="CardTitle.TLabel").pack(side="left")
+        ttk.Label(config_header, text="2  配置测试参数", style="CardTitle.TLabel", font=(FONT_FAMILY, 12, "bold")).pack(side="left")
         ttk.Button(config_header, text="测试项配置", command=self._open_test_item_config, style="Tool.TButton").pack(side="right")
-        ttk.Label(config_card, text="通道勾选、VLAN和COM口选择会实时保存", style="CardHint.TLabel").pack(anchor="w", pady=(3, 10))
+        ttk.Label(config_card, text="修改自动保存", style="CardHint.TLabel").pack(anchor="w", pady=(3, 10))
 
         self.enabled_var = BooleanVar(value=True)
         self.vlan_var = StringVar()
@@ -967,12 +967,12 @@ class LineCheckAssistant(Tk):
             width=12,
             state="readonly",
         )
-        self.power_serial_combo.grid(row=0, column=1, sticky="w", padx=(12, 24))
+        self.power_serial_combo.grid(row=0, column=1, sticky="w", padx=(4, 8))
         self.power_serial_combo.bind("<<ComboboxSelected>>", self._on_power_serial_changed)
         self.power_serial_combo.bind("<FocusOut>", self._on_power_serial_changed)
         ttk.Label(power_form, text="样机管理 IP", style="Surface.TLabel").grid(row=0, column=2, sticky="w")
         device_ip_entry = ttk.Entry(power_form, textvariable=self.device_ip_var, width=16)
-        device_ip_entry.grid(row=0, column=3, sticky="w", padx=(12, 0))
+        device_ip_entry.grid(row=0, column=3, sticky="w", padx=(4, 0))
         device_ip_entry.bind("<FocusOut>", self._on_device_ip_changed)
         device_ip_entry.bind("<Return>", self._on_device_ip_changed)
         power_form.columnconfigure(5, weight=1)
@@ -986,7 +986,7 @@ class LineCheckAssistant(Tk):
             foreground=COLOR_TEXT,
             highlightthickness=0,
             borderwidth=0,
-        ).grid(row=0, column=4, sticky="w", padx=(12, 0))
+        ).grid(row=0, column=4, sticky="w", padx=(4, 0))
 
         form = ttk.Frame(config_card, style="Surface.TFrame")
         form.pack(fill="x")
@@ -999,12 +999,7 @@ class LineCheckAssistant(Tk):
         run_card.pack(fill="x", pady=(0, 12))
         run_copy = ttk.Frame(run_card, style="Surface.TFrame")
         run_copy.pack(side="left", fill="x", expand=True)
-        ttk.Label(run_copy, text="3  环境检查与开关机测试", style="CardTitle.TLabel").pack(anchor="w")
-        ttk.Label(
-            run_copy,
-            text="检查全部启用通道。环境检查通过后，系统将自动开始执行开关机测试。",
-            style="CardHint.TLabel",
-        ).pack(anchor="w", pady=(3, 4))
+        ttk.Label(run_copy, text="3  环境检查与开关机测试", style="CardTitle.TLabel", font=(FONT_FAMILY, 12, "bold")).pack(anchor="w")
         power_test_status_row = ttk.Frame(run_copy, style="Surface.TFrame")
         power_test_status_row.pack(fill="x", pady=(3, 8))
         self.power_test_status_label = ttk.Label(
@@ -2197,13 +2192,6 @@ class LineCheckAssistant(Tk):
             foreground=COLOR_TEXT,
         )
         title_label.grid(row=0, column=0, sticky="w")
-        subtitle_label = Label(
-            content,
-            text="统一支持中兴 C300 与 C600；业务流程一致，实际 CLI 按型号严格隔离。",
-            foreground=COLOR_MUTED,
-            background=COLOR_BG,
-        )
-        subtitle_label.grid(row=1, column=0, sticky="w", pady=(4, 8))
 
         connection_frame = ttk.LabelFrame(content, text="OLT 连接")
         connection_frame.grid(row=2, column=0, sticky="ew", pady=(0, 8))
@@ -3777,12 +3765,6 @@ class LineCheckAssistant(Tk):
         content = Frame(dialog, padx=20, pady=18, background=COLOR_BG)
         content.pack(fill="both", expand=True)
         Label(content, text="样机升级", font=(FONT_FAMILY, 18, "bold"), background=COLOR_BG, foreground=COLOR_TEXT).pack(anchor="w")
-        Label(
-            content,
-            text="选择升级方式、升级固件和目标样机。页面升级会通过 UBUS 批量执行。",
-            foreground=COLOR_MUTED,
-            background=COLOR_BG,
-        ).pack(anchor="w", pady=(6, 16))
 
         overview = ttk.LabelFrame(content, text="升级配置")
         overview.pack(fill="x")
@@ -4713,17 +4695,6 @@ class LineCheckAssistant(Tk):
             background=COLOR_BG,
             foreground=COLOR_TEXT,
         ).pack(anchor="w")
-        Label(
-            content,
-            text=(
-                "编辑测试项 ini（Telnet / 测试项命令 / WiFi / 项目信息）、运行参数及消息推送。"
-                "测试项页可单次执行预备测试；项目信息页可对当前通道样机执行只读版本查询。"
-            ),
-            foreground=COLOR_MUTED,
-            background=COLOR_BG,
-            wraplength=920,
-            justify="left",
-        ).pack(anchor="w", pady=(6, 12))
 
         store = TestItemConfigStore(TEST_ITEM_CONFIG_PATH)
         if not TEST_ITEM_CONFIG_PATH.exists():
@@ -5432,18 +5403,6 @@ class LineCheckAssistant(Tk):
             foreground=COLOR_TEXT,
             background=COLOR_BG,
         ).pack(anchor="w", pady=(0, 6))
-        Label(
-            frame,
-            text=(
-                "这里显示 config.ini [ui_defaults] 的开关机运行时间参数。"
-                "通信方式、Telnet Enable、波特率和默认方案由其它配置维护，本页不重复显示；"
-                "保存不会改动 config.ini 的其它配置段。"
-            ),
-            foreground=COLOR_MUTED,
-            background=COLOR_BG,
-            wraplength=880,
-            justify="left",
-        ).pack(anchor="w", pady=(0, 12))
 
         rows_frame = ttk.Frame(frame, style="App.TFrame")
         rows_frame.pack(fill="both", expand=True)
@@ -5820,12 +5779,7 @@ class LineCheckAssistant(Tk):
 
         Label(
             frame,
-            text=(
-                "登录成功提示符为 > 时先发送 Telnet 页的登录后命令（默认 sh），等待 1 秒，"
-                "再读取 cat /etc/config/deviceinfo 与 cat /proc/version。"
-                "查询结果独立只读显示，不会覆写上方可手动编辑的版本输入框，也不会写入 INI；"
-                "可拖拽选择后按 Ctrl+C，或右键选择“复制全部”。"
-            ),
+            text="查询结果只读，不自动保存",
             foreground=COLOR_MUTED,
             background=COLOR_BG,
             wraplength=560,
@@ -8171,8 +8125,8 @@ class LineCheckAssistant(Tk):
         """2026-07-20: 主界面「检查并执行测试」按钮升级为「全流程执行」弹窗入口。
 
         旧实现:直接调 ``_run_checks``(仅做已勾选通道的 ping 通过性检查)。
-        新实现:弹「全流程执行」窗口,操作员勾选 7 个子任务(自动上/下电 / 环境线路检查 /
-        样机升级 / 写样机参数 / ONU 注册 / 串口日志 / 测试项配置)后,按 1→7 顺序串行执行,
+        新实现:弹「全流程执行」窗口,操作员勾选环境线路检查、串口日志、执行开关机测试。
+        串口日志若勾选则先预启动,再依次执行已选的环境线路检查和开关机测试,
         任一失败(串口日志除外)→ 整个全流程停止。
         ``_run_checks`` / ``_check_worker`` 仍保留供单通道 ping 检查场景使用。
 

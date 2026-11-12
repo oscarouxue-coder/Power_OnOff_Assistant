@@ -618,9 +618,7 @@ class DutConfigWindow:
         ttk.Label(outer, text="DUT配置", style="Header.TLabel").pack(anchor="w")
         ttk.Label(
             outer,
-            text=(
-                "主界面已勾选通道作为候选；在下方目标表再次勾选本次需要配置或查询的 DUT。"
-            ),
+            text="请勾选本次操作的 DUT",
             style="Subtitle.TLabel",
         ).pack(anchor="w", pady=(3, 12))
 
@@ -657,16 +655,6 @@ class DutConfigWindow:
             style="Muted.TLabel",
         ).pack(side="left", padx=(6, 0))
 
-        ttk.Label(
-            telnet_tab,
-            text=(
-                "目标来自主界面已勾选通道。执行时会启用对应 VLAN 网卡、设置 PC 静态 IP，"
-                "目标表内可再次勾选本次范围；通过 UBUS 开启 Telnet，并从该 VLAN 源 IP 验证 TCP 23 端口。"
-            ),
-            style="Muted.TLabel",
-            wraplength=850,
-            justify="left",
-        ).pack(fill="x", anchor="w", pady=(0, 10))
 
         self._build_current_status_area(
             telnet_tab, "telnet", "尚未查询当前Telnet状态。"
@@ -1136,16 +1124,6 @@ class DutConfigWindow:
     def _build_wan_tab(self, on_refresh, on_start, on_query, on_stop, on_close) -> None:
         tab = ttk.Frame(self.notebook, padding=12)
         self.notebook.add(tab, text="WAN配置")
-        ttk.Label(
-            tab,
-            text=(
-                "批量新增、修改或删除 WAN；支持 IPv4、IPv6 与 IPv4+IPv6 双栈。"
-                "修改/删除请先查询并从共同存在的 WAN 下拉列表选择，"
-                "删除不会自动匹配或删除其它 WAN。"
-                "UBUS 凭据和并行数与 Telnet 配置页共享。"
-            ),
-            style="Muted.TLabel", wraplength=1080, justify="left",
-        ).pack(fill="x", anchor="w", pady=(0, 6))
         form = ttk.LabelFrame(tab, text="WAN 参数", padding=8)
         form.pack(fill="x")
         self.wan_operation_var = StringVar(value="新增")
@@ -1558,19 +1536,6 @@ class DutConfigWindow:
     ) -> None:
         tab = ttk.Frame(self.notebook, padding=12)
         self.notebook.add(tab, text=f"{band} WiFi配置")
-        ttk.Label(
-            tab,
-            text=(
-                f"批量配置主 {band} SSID；查询会按厂商 Mapping 解析真实 Radio/AP/SSID 路径。"
-                "查询成功后，认证、信道、带宽、协议和功率下拉会按DUT实际能力更新。"
-                "开启双频合一时，当前名称、启用/隐藏、认证密码、最大接入数和WMM会同步到两个频段，"
-                "同时显示并独立配置2.4G/5G的信道、带宽和协议，公共发射功率写入两个Radio。"
-                "UBUS凭据和并行数与Telnet页共享。"
-            ),
-            style="Muted.TLabel",
-            wraplength=1180,
-            justify="left",
-        ).pack(fill="x", anchor="w", pady=(0, 6))
         form = ttk.LabelFrame(tab, text=f"{band} WiFi 参数", padding=8)
         form.pack(fill="x")
         defaults = {
@@ -1800,14 +1765,6 @@ class DutConfigWindow:
     def _build_voice_tab(self, on_refresh, on_start, on_query, on_stop, on_close) -> None:
         tab = ttk.Frame(self.notebook, padding=12)
         self.notebook.add(tab, text="语音配置")
-        ttk.Label(
-            tab,
-            text=(
-                "批量配置 SIP 基础参数、服务器、账号、5 项编码优先级和 DigitMap；"
-                "UBUS 凭据和并行数与 Telnet 配置页共享。"
-            ),
-            style="Muted.TLabel",
-        ).pack(fill="x", anchor="w", pady=(0, 6))
         form = ttk.LabelFrame(tab, text="语音参数", padding=8)
         form.pack(fill="x")
         self.voice_line_index_var = StringVar(value="1")
@@ -1876,14 +1833,6 @@ class DutConfigWindow:
     def _build_tr069_tab(self, on_refresh, on_start, on_query, on_stop, on_close) -> None:
         tab = ttk.Frame(self.notebook, padding=12)
         self.notebook.add(tab, text="TR069配置")
-        ttk.Label(
-            tab,
-            text=(
-                "批量配置 ManagementServer 参数并回读；可选在配置成功后触发一次手动 Inform；"
-                "UBUS 凭据和并行数与 Telnet 配置页共享。"
-            ),
-            style="Muted.TLabel",
-        ).pack(fill="x", anchor="w", pady=(0, 6))
         form = ttk.LabelFrame(tab, text="TR069 参数", padding=8)
         form.pack(fill="x")
         self.tr069_acs_url_var = StringVar(value="http://172.18.18.101:7547/ACS-server/ACS")

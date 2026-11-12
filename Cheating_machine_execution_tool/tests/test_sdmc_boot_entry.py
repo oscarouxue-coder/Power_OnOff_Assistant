@@ -185,14 +185,3 @@ class SdmcBootEntryTests(unittest.TestCase):
         for transfer in ("Tftp指令", "Tftp Put"):
             with self.subTest(transfer=transfer):
                 self.run_flow(transfer, restore=True)
-
-    def test_unattended_confirmation_includes_selected_boot_method(self):
-        from types import SimpleNamespace
-        from line_check_assistant.pipeline_window import PipelineWindow
-        settings = SampleUpgradeSettings(boot_entry_method=BOOT_ENTRY_SDMC)
-        context = SimpleNamespace(sample_upgrade_settings=settings)
-        note = PipelineWindow._unattended_confirmation_note(context, {"sample_upgrade"}, True)
-        self.assertIn("进入 Boot 方式：SDMC 指令进入", note)
-        settings.upgrade_mode = "页面升级"
-        note = PipelineWindow._unattended_confirmation_note(context, {"sample_upgrade"}, True)
-        self.assertNotIn("进入 Boot 方式", note)

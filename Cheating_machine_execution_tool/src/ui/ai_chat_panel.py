@@ -10,6 +10,7 @@ from src.models.ai_diagnostics import ProviderProfile
 from src.ui.module_theme import apply_module_theme
 from src.ui.ai_context_status import AiContextStatus
 from src.ui.ai_action_approval import AiActionApproval
+from src.ui.ai_chat_status import AiChatStatus
 
 
 CHAT_FONT = "Microsoft YaHei UI"
@@ -55,6 +56,9 @@ class AiChatPanel:
         self.target_choice = ttk.Combobox(row, state="readonly", width=24)
         self.target_choice.pack(side="left", padx=6)
         ttk.Button(row, text="新会话", command=self.new).pack(side="left", padx=3)
+        self.session_status = AiChatStatus(row, background=self.owner.background_color, font_family=CHAT_FONT)
+        self.session_status.pack(side="left", fill="x", expand=True, padx=(8, 0))
+        self.status_output = self.session_status.output
         self.context_status = AiContextStatus(parent)
         self.context_status.pack(fill="x", pady=(0, 5))
         # 先预留底部输入/操作区，最小窗口下由聊天正文承担高度收缩。
@@ -74,6 +78,8 @@ class AiChatPanel:
         self.input.pack(fill="x", pady=6)
         self.action_approval = AiActionApproval(composer, self.service, self.owner.background_color)
         self.action_approval.pack(fill="x", pady=(0, 5))
+        self.input.bind("<Return>", lambda event: self.send())
+        self.input.bind("<Alt-Return>", self._insert_newline)
         self.input.bind("<Control-Return>", lambda event: self.send())
         row = ttk.Frame(composer)
         row.pack(fill="x")
@@ -81,7 +87,7 @@ class AiChatPanel:
         self.send_button.pack(side="left")
         for title, action in (("停止本轮排查", self.stop), ("导入文本日志", self.import_text), ("查看证据", self.evidence)):
             ttk.Button(row, text=title, command=action).pack(side="left", padx=5)
-        ttk.Label(composer, text="Ctrl+Enter发送。保持现有挂测规则；你决定何时停测。AI无法确认的现场会主动询问，未答不推测。",
+        ttk.Label(composer, text="Enter发送，Alt+Enter换行",
                   wraplength=960).pack(anchor="w", pady=5)
         self.refresh()
 
@@ -173,6 +179,15 @@ class AiChatPanel:
             self.error(exc)
             return None
 
+    def _insert_newline(self, event=None):
+        selection = self.input.tag_ranges("sel")
+        if selection:
+            self.input.mark_set("insert", selection[0])
+            self.input.delete(*selection)
+        self.input.insert("insert", "\n")
+        self.input.see("insert")
+        return "break"
+
     def send(self):
         try:
             if not self.selected and not self.new():
@@ -227,24 +242,35 @@ class AiChatPanel:
         output.configure(state="disabled")
         apply_module_theme(window, self.owner.background_color)
 
+    def _show_status(self, message=None):
+        """仅投影当前会话的最新系统消息；不改原始记录或聊天正文。"""
+        created = format_chat_time(message.get("created", "")) if message else ""
+        self.session_status.show(self.selected, message, created)
+
     def render(self):
         self.action_approval.show(self.selected)
         if not self.selected:
             self.context_status.show()
+            self._show_status()
             self.revision = None
             self.output.configure(state="normal")
             self.output.delete("1.0", "end")
             self.output.configure(state="disabled")
             self.send_button.configure(state="normal")
             return
-        session = self.service.store.chat(self.selected)
-        # 用量单独刷新；不将快照加入正文revision，避免破坏阅读位置和选区。
+        # 用量和系统状态独立刷新；不加入正文revision，避免破坏阅读位置和选区。
         self.context_status.show(self.service.context_status(self.selected))
         messages = self.service.store.chat_items(self.selected)
-        collection = self.service.collection_status(self.selected)
+        latest_status = next((message for message in reversed(messages) if message["role"] == "system"
+                              and not (message.get("kind") == "context"
+                                       and message["text"].startswith("上下文容量："))), None)
+        self._show_status(latest_status)
+        messages = [message for message in messages if message["role"] != "system"]
         with self.service.lock:
             running = self.selected in self.service.running
-        revision = (self.selected, len(messages), session["status"], collection["reason"], running)
+        self.send_button.configure(state="disabled" if running else "normal")
+        revision = (self.selected, tuple((m["role"], m.get("kind", "text"), m["created"], m["text"])
+                                         for m in messages))
         if revision == self.revision:
             return
         same_session = self.revision is not None and self.revision[0] == self.selected
@@ -258,8 +284,6 @@ class AiChatPanel:
         for message in messages:
             role = message["role"]
             kind = message.get("kind", "text")
-            if role == "system" and kind == "context" and message["text"].startswith("上下文容量："):
-                continue
             style = kind if kind in ("question", "error") else (role if role in MESSAGE_COLORS else "system")
             start = self.output.index("end-1c")
             self.output.insert("end", f"{labels.get(role, role)} · ", ("header_" + style,))
@@ -274,7 +298,6 @@ class AiChatPanel:
             self.output.see("end")
         else:
             self.output.yview(top_index)
-        self.send_button.configure(state="disabled" if running else "normal")
 
     def poll(self):
         changed = False
@@ -289,5 +312,5 @@ class AiChatPanel:
             if self.session_manager is not None and self.session_manager.window.winfo_exists():
                 self.session_manager.refresh()
         else:
-            # 模型能力/目标可能在别页更新，无新消息时也刷新实时采集状态。
+            # 无新消息时也独立刷新上下文用量、系统状态和运行按钮。
             self.render()

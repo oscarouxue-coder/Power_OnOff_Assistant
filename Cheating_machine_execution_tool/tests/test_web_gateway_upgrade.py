@@ -271,16 +271,6 @@ class WebGatewayTests(unittest.TestCase):
             context.device_ip_var.get.return_value = "10.0.0.1"
             self.assertEqual(request.web_device_ip, "192.168.7.1")
 
-    def test_unattended_confirmation_shows_web_destination_and_wait(self):
-        from line_check_assistant.pipeline_window import PipelineWindow
-        from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
-        context = SimpleNamespace(
-            sample_upgrade_settings=SampleUpgradeSettings(transfer_method="web打开网关"),
-            app=SimpleNamespace(device_ip_var=Mock(get=Mock(return_value="192.168.7.1"))),
-        )
-        note = PipelineWindow._unattended_confirmation_note(context, {"sample_upgrade"}, True)
-        self.assertIn("http://192.168.7.1/", note)
-        self.assertIn("固定等待30秒", note)
 
     def test_duplicate_source_or_vlan_rejects_whole_batch(self):
         with tempfile.TemporaryDirectory() as folder:

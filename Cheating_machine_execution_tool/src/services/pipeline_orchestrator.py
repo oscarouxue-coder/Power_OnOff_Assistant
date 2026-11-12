@@ -1,9 +1,9 @@
 """「检查并执行测试 → 全流程执行」管道编排器。
 
 背景：
-- 主界面「检查并执行测试」按钮触发的全流程管道:
-  把 7 个子任务(自动上/下电 / 环境线路检查 / 样机升级 / 写样机参数 / ONU注册 / 串口日志 / 执行开关机测试)
-  作为可勾选的子任务；串口日志若勾选则在全流程开始时预启动，其余任务按 1→7 相对顺序串行执行。
+- 主界面「检查并执行测试」当前仅提供环境线路检查、串口日志和执行开关机测试。
+  本模块保留 7 个任务代码及既有调度能力以兼容原调用；窗口通过指定任务范围计算三项状态。
+  串口日志若勾选则在全流程开始时预启动，其余任务保持原相对顺序串行执行。
 - 本模块负责:
   ① 评估 7 个子任务「必填项当前状态」→ 弹窗展示给操作员确认
   ② 先预启动已勾选的串口日志，其余子任务按 1→7 相对顺序执行
@@ -389,9 +389,12 @@ _SUMMARIZERS = {
 }
 
 
-def compute_all_subtask_statuses(ctx: PipelineContext) -> dict[str, SubTaskStatus]:
-    """按 1→7 顺序计算所有 7 个子任务的状态。"""
-    return {code: _SUMMARIZERS[code](ctx) for code in SUBTASK_CODES}
+def compute_all_subtask_statuses(
+    ctx: PipelineContext, task_codes: Optional[Tuple[str, ...]] = None
+) -> dict[str, SubTaskStatus]:
+    """计算指定任务状态；未指定范围时兼容原有全部任务调用。"""
+    codes = SUBTASK_CODES if task_codes is None else task_codes
+    return {code: _SUMMARIZERS[code](ctx) for code in codes}
 
 
 class PipelineError(RuntimeError):
