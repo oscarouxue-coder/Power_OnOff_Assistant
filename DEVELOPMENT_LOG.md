@@ -1,5 +1,110 @@
 # 开发记录
 
+## 2026-11-12 - 验证AI优化本地提交
+
+- 类型：测试
+- 背景：负责人要求创建一次本地Git提交，备注为`优化ai能力2`；此前VS Code提交曾被测试门禁拦截，需要以本轮实际检查结果为准。
+- 完成内容：核对AI工作台/上下文显示等既有改动、Git跨电脑环境适配、Telnet密码原文读取修复及相应测试/文档，共29个提交文件；三份本机运行配置`config.ini`、`network_card_ip.ini`、`test_project_config.ini`保留在工作区，不纳入本轮提交。未新增业务代码，未修改构建/日志/虚拟环境目录。使用负责人配置的Git身份及指定提交标题，按工作流保留协作署名；仅本地提交，不推送。
+- 修改文件：
+  - `DEVELOPMENT_LOG.md`（本轮提交前验证记录）
+  - `PROJECT_STATUS.md`（本轮完整基线与提交交接入口）
+- 验证方法：仓库根执行`git hook run pre-commit`，由钩子使用本仓库配置的CPython3.9.10 x64进入主源码目录执行`scripts/verify_baseline.py`；核对`git diff --cached --check`、提交文件清单、本地用户名/邮箱和三份未暂存配置。实际`git commit`继续执行同一提交门禁，不绕过检查；提交后核对Git标题、作者、署名和工作区状态。
+- 验证结果：提交前实际钩子返回0、`ALL CHECKS PASSED`：1758项测试、190项指定回归实际执行、136个源码编译/覆盖及全部协议不变量通过；暂存差异格式检查通过。1758包含新增4项旧配置原文读取回归；本轮结果不替代此前失败记录。提交阶段的门禁与提交结果以本轮Git命令输出和最终提交为准。
+- 后续待办：本机三份运行配置保持未提交；真实模型、Windows人工和真实样机仍按既有验收清单复验，不因本地提交扩大验收结论。
+
+## 2026-11-12 - 修复Telnet密码百分号读取异常
+
+- 类型：BUG 修复
+- 背景：执行日志出现`[旧工具Logs][ERROR] 读取test_project_config.ini信息出现异常：'%' must be followed by '%' or '(', found: '%3n'`。旧业务`read_ini_raw()`向原文解析器读取文件，却从普通解析器取值，导致密码被内插解析，首次直接调用还会缺少配置段，切换方案后可能读取普通解析器中的旧密码。
+- 完成内容：① 仅将`read_ini_raw()`取值改为`self.conf_01.get(section, option)`，保留接口、调用入口与普通读取的既有内插行为。② 新增4项回归，使用临时配置及真实配置驱动，覆盖`%3n`、`%%`、`%(name)s`、普通密码、空值、中文路径、首次直接调用、先读用户名再读密码及切换方案往返读取。③ 保留本机密码原值和工作区已有修改，本轮恢复原文读取约定，不改变操作步骤或既有验收结论。
+- 修改文件：
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/config/config_driver.py`
+  - `Cheating_machine_execution_tool/tests/test_legacy_config_driver.py`（新增）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -m unittest discover -s tests -p test_legacy_config_driver.py -v`先复现；修复后使用同一解释器执行`-c "import sys, unittest; sys.path.insert(0, 'tests'); names = ['test_legacy_config_driver', 'test_test_item_config_store', 'test_legacy_power_test_service', 'test_legacy_power_initialization']; result = unittest.TextTestRunner(verbosity=1).run(unittest.defaultTestLoader.loadTestsFromNames(names)); sys.exit(not result.wasSuccessful())"`。执行`-m py_compile Auto_power_on_off_tool/config/config_driver.py tests/test_legacy_config_driver.py`、本轮文件差异格式检查及两份本机配置SHA256前后比对。
+- 验证结果：修复前4项测试出现3个子测试断言失败、6个子测试异常，准确复现密码内插、首次读取及跨方案读取问题；修复后全部66项相关测试通过（新增4项），无跳过，两个Python文件编译通过。本轮文件差异格式检查通过。本机`test_project_config.ini`与`network_card_ip.ini`的SHA256前后分别保持`2ccc22bd8e63b656e32d990ad7f07473a6b1073529cba4cb6868414f5fdece28`与`401912f1e9f972923b352e7ab730bf23f29829f007894ffe928586215ca5e40a`。本轮未运行完整基线，保留下方此前1754项完整验证记录；未提交、打包、运行EXE或连接设备。
+- 后续待办：负责人重新启动源码版后按原操作流程复验含百分号密码的实际Telnet登录；本轮离线测试不替代真实样机验收，不扩大原验收结论。
+
+## 2026-11-12 - 适配跨电脑Git提交Python环境
+
+- 类型：优化
+- 背景：Git提交前钩子直接调用PATH中的`python`，本机命中Microsoft Store占位入口并报`Python was not found`；不同电脑的安装位置、默认版本和编辑器环境不一致。负责人确认仅优化提交入口，项目检查统一使用CPython3.9.10 x64，允许本机路径不同。
+- 完成内容：① shell钩子调用仓库内PowerShell入口，按本仓库显式配置、已激活环境、根/主源码`.venv`、标准构建环境、`py -3.9`及PATH的`python/python3`依次检查；真实探测实现/精确版本/位数和解释器可执行性，跳过占位及不合规自动候选，显式配置失效直接阻止提交并提示修正。② 安装脚本新增`-PythonExecutable`，验证后仅写本仓库`.git/config`，无参数保留原值，支持unset恢复自动搜索；本机已绑定已有`.venv_serial_upgrade/Scripts/python.exe`，未安装Python或依赖，未改虚拟环境。③ 显示选定解释器资料，进入主源码目录执行一次原完整基线并透传退出码，不因失败切环境重试；探测时临时禁用启动器自动安装选项并恢复原设置。④ 钩子子进程使用UTF-8，规范化现有TMPDIR/TEMP/TMP短路径，保留系统设置；真实Git复验发现Git额外注入的TMPDIR优先于TEMP/TMP，已补全此路径处理，未改原有工作目录断言。⑤ 新增21项临时仓库/替身解释器专项，覆盖优先级、错误实现/版本/位数、坏解释器、占位入口、无解释器、安装配置、中文/空格路径、退出码和不重试、禁止自动安装、临时路径及Git环境隔离；临时仓库命令清除父Git变量，防止提交时误写调用者仓库。查找Git for Windows shell兼容cmd/ucrt64等实际可执行文件位置。⑥ 更新跨电脑说明、当前状态和确认方案，保留此前暂存内容，不自动提交。
+- 修改文件：
+  - `.claude/plans/git-hook-python-discovery.md`（新增）
+  - `.githooks/pre-commit`
+  - `Cheating_machine_execution_tool/scripts/git_hook_python.ps1`（新增）
+  - `Cheating_machine_execution_tool/scripts/run_git_pre_commit.ps1`（新增）
+  - `Cheating_machine_execution_tool/scripts/install_git_hooks.ps1`
+  - `Cheating_machine_execution_tool/tests/test_git_hook_environment.py`（新增）
+  - `README.md`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：仓库根执行`powershell -NoProfile -ExecutionPolicy Bypass -File .\Cheating_machine_execution_tool\scripts\install_git_hooks.ps1 -PythonExecutable .\.venv_serial_upgrade\Scripts\python.exe`并核对本地Git配置。主源码目录用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -m unittest discover -s tests -p test_git_hook_environment.py -v`运行阶段专项，后续新增Git变量隔离和TMPDIR检查分别以`-k fixture_git_commands`、`-k temporary_directory_aliases`定向复验；执行新测试文件`py_compile`和三个PowerShell脚本AST语法检查。最终在普通仓库根环境直接执行`git hook run pre-commit`，不创建提交；检查`git diff --check`及原暂存差异。
+- 验证结果：阶段18项、19项、20项专项依次通过，最后新增的Git变量隔离用例及补全TMPDIR的专项各1项定向复验通过；最终21项均纳入全量运行。普通shell阶段基线1751/1753项通过；首次实际Git环境基线1754项有1项既有`test_ai_actions.LocalExecutorTests.test_chinese_stdout_stderr_working_directory_and_exit_code`失败，完整诊断日志位于`%TEMP%/linecheck_hook_debug_ee91f794891d469782f2110ff3f2016d/unittest.log`，原因已确认为Git注入短路径TMPDIR，修正入口后实际`git hook run pre-commit`返回0，完整基线`ALL CHECKS PASSED`：1754项测试、190项指定回归实际执行、136个源码编译/覆盖和全部协议不变量通过。新测试编译、三个PowerShell语法及差异格式检查通过；此前20个暂存文件的差异保留。本轮未打包、运行交付EXE、创建提交或进行真实设备操作。
+- 后续待办：新电脑按根README准备CPython3.9.10 x64及项目依赖；本轮仅验证提交环境及离线基线，不扩展Windows人工交互、真实模型或真实样机验收结论。
+
+## 2026-11-12 - 合并AI排障工作台与报告接手
+
+- 类型：优化
+- 背景：负责人指出“对话排障”和“诊断与监控”重复提供人工提问与采集入口，但结果形式、目标选择及停止范围不同；确认以聊天为主工作台、监控和报告独立窗口，并手动接手自动报告的方案。
+- 完成内容：① 合并为排障工作台/模型接入/已确认案例三个标签；聊天成为唯一人工发送入口，保留会话管理、固定上下文、证据、日志导入、默认采集及操作批准，移除旧单次提问界面和跨页“从当前报告新建”入口。② 监控和报告拆为独立UI模块，窗口延迟创建、可同时使用、重复唤起、关闭只隐藏；监控范围独立于聊天目标，应用策略支持重新确认，取消/非法输入保留原有效策略。监控关闭只取消诊断任务，停止本轮只作用于当前会话；既有执行锁、队列、设备工具及清理保持。③ 新报告只显示更新提示，不切会话、不插入聊天、不自动请求；报告刷新保留所选ID、阅读位置和选区，所选报告超出最近100份也保留。④ 新报告JSON增加采集时目标快照，新增按ID读取报告与service接手入口；会话兼容保存来源报告ID。接手按报告目标/原批次建会话，使用当前模型并保留报告原模型来源，等待人工发送。旧批次/目标失效只分析材料；无快照旧报告必须明确选择并确认同通道当前目标，无批次按历史材料处理，不迁移数据库表。⑤ 报告转案例草稿固定来源ID，切报告及既有案例修订不串来源；新建空案例不沿用旧报告。⑥ 新源码加入编译清单，补18项工作台专项，更新原UI专项的报告/监控入口并在测试销毁Tk前排空主题空闲事件；同步操作员说明、状态及验收待办，保留原有工作区修改。
+- 修改文件：
+  - `.claude/plans/ai-diagnostic-workspace.md`
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_monitor_window.py`（新增）
+  - `Cheating_machine_execution_tool/src/ui/ai_reports_window.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_diagnostic_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_store.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_integration.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_workspace.py`（新增）
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe`，进程内设置`PYTHONUTF8=1`和`PYTHONIOENCODING=utf-8`；将该进程的TEMP/TMP经`Path(...).resolve()`规范化为完整路径，保留系统环境设置。执行`-m unittest discover -s tests -p 'test_ai*.py'`，以及通过`sys.path.insert(0, 'tests')`和`unittest.defaultTestLoader.loadTestsFromNames(['test_ai_workspace', 'test_ai_integration'])`运行接手与UI专项；对本轮7个源码、门禁脚本及2个测试文件共10个Python文件执行`py_compile`，调用`check_py_compile_inventory(Path.cwd())`核对新增源码覆盖，并检查`git diff --check`与文档入口一致性。
+- 验证结果：最终全部274项AI专项通过，无跳过；新增18项工作台专项及关联集成专项共44项通过。覆盖不同通道接手、旧批次与目标变化、旧报告确认/取消、无批次历史限制、首次发送前零模型请求、发送后工具范围、案例来源、报告刷新与阅读位置、监控和会话停止隔离。独立真实Tk在Vista/Clam、主窗口940×660及两辅助窗口最小尺寸下通过控件可见/边界、非模态及背景检查。10个Python文件编译、136个源码编译清单覆盖及差异格式检查通过。首次14项新增测试中2处夹具问题（未等待100ms轮询、目标对象误用字典）已修正；首轮272项中仅已有命令测试受TEMP短路径/长路径文本差异影响，按此前环境记录规范化后通过。中间出现的Tk主题销毁诊断已由相关测试排空空闲事件解决，最终274项输出正常。本轮未运行完整基线，保留最近1715项完整验证记录；未启动完整主程序或EXE、未访问真实厂商API/样机、未打包、提交或发布。
+- 后续待办：负责人重启Windows源码版按`ACCEPTANCE_BASELINE.md §2.16 / §3`复验工作台、监控/报告接手及真实模型/样机路径；独立Tk和离线协议测试不替代完整主程序交互或真实设备验收，不扩展既有现场结论。
+
+## 2026-11-12 - 精简上下文用量提示为单行
+
+- 类型：优化
+- 背景：负责人确认采用“上下文容量：1,048,576 Token ｜ 当前上下文用量：5,749（0.55%）”，查看最近请求的上下文占用程度，而不是历次请求Token累加；要求合并两行并隐藏次要明细。
+- 完成内容：① 固定状态组件合并为一个文字标签，保留进度条与随窗口宽度自动换行；隐藏来源、输出预留、余量说明、输入/输出明细与时间。② 有效接口用量直接显示，估算值加“约”，请求前保留“预计输入”；未知容量省略百分比，请求中/失败/取消/记录过期/待更新提示保持。仅改UI展示，不改用量计算、请求预算、快照存储、刷新时机或正文渲染。③ 调整现有界面、用量及会话删除测试，同步操作员说明、项目状态、验收基线及待复验内容；保留已有工作区修改和验收结论。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/ai_context_status.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_context_usage.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_session_deletion.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`，进程内设置`PYTHONUTF8=1`与`PYTHONIOENCODING=utf-8`；执行`-m py_compile src/ui/ai_context_status.py tests/test_ai_context_usage.py tests/test_ai_chat_presentation.py tests/test_ai_session_deletion.py`及`-c "import sys, unittest; sys.path.insert(0, 'tests'); suite = unittest.defaultTestLoader.loadTestsFromNames(['test_ai_context_usage', 'test_ai_chat_presentation', 'test_ai_session_deletion']); result = unittest.TextTestRunner(verbosity=1).run(suite); sys.exit(not result.wasSuccessful())"`，检查文档一致性、旧标签引用及`git diff --check`。
+- 验证结果：4个Python文件编译通过；42项相关专项全部通过，无跳过。独立真实Tk覆盖Vista/Clam两主题的单标签精确文案、900到320像素窄窗口自动换行、940×660完整窗口输入/按钮可见及会话切换；估算/预计输入/未知容量/超上限进度钳制/失败/取消/过期/无会话状态、删除后空状态及正文阅读位置/选区保持通过。旧标签引用已清除，差异格式检查通过。本轮未运行完整基线，保留最近1715项完整验证记录；未启动完整主程序或交付EXE，未打包、提交或发布。
+- 后续待办：负责人重启Windows源码版目视复核单行提示；真实厂商usage及完整Windows人工/样机验收仍按ACCEPTANCE_BASELINE.md §2.16/§3待确认，不以本轮离线专项和独立Tk升级现场结论。
+
+## 2026-11-12 - 移除AI对话双行状态提示
+
+- 类型：修改
+- 背景：负责人要求删除截图中的批次/通道/模型/采集状态和真实诊断信息发送说明两行提示，并确认按显示调整计划实施。
+- 完成内容：① 删除对话面板对应Label、StringVar和刷新文字，空会话原新建提示一并移除，不保留占位。② 保留固定上下文区、会话列表、正文和操作按钮，不修改采集、权限确认、设备命令、主日志、存储和公共接口。③ 调整现有显示、对话流程及会话删除测试，同步用户说明、项目状态与验收基线的当前描述和待复验内容，保留既有验收结论。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_conversation.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_session_deletion.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe`，进程内设置`PYTHONUTF8=1`与`PYTHONIOENCODING=utf-8`；执行`-m py_compile src/ui/ai_chat_panel.py tests/test_ai_chat_presentation.py tests/test_ai_conversation.py tests/test_ai_session_deletion.py`、`-m unittest discover -s tests -p test_ai_chat_presentation.py -v`；使用`-c "import sys, unittest; sys.path.insert(0, 'tests'); suite = unittest.defaultTestLoader.loadTestsFromNames(['test_ai_conversation', 'test_ai_session_deletion']); result = unittest.TextTestRunner(verbosity=1).run(suite); sys.exit(not result.wasSuccessful())"`执行另外两组关联专项。检查文档一致性及`git diff --check`。
+- 验证结果：4个相关Python文件编译通过；显示专项11项及关联专项70项全部通过，共81项，无跳过。独立真实Tk在Vista/Clam主题、940×660窗口下检查上下文容量/用量/进度、正文、输入框及按钮可见且不越界；刷新、采集状态变化、切换及清空会话后均无双行提示或占位。对话等待/回答及删除后空状态通过，差异格式检查通过。本轮未运行完整基线，保留最近1715项完整验证记录；未启动完整主程序或新EXE，未打包、提交或发布。
+- 后续待办：负责人重启Windows源码版目视复核；真实模型及样机等既有待验收事项保持，不以独立Tk及离线专项升级验收结论。
+
 ## 2026-11-12 - 验证并提交本机启动环境记录
 
 - 类型：状态更新

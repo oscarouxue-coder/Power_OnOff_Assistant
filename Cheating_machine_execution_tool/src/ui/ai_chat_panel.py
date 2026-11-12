@@ -54,10 +54,7 @@ class AiChatPanel:
         ttk.Label(row, text="目标").pack(side="left")
         self.target_choice = ttk.Combobox(row, state="readonly", width=24)
         self.target_choice.pack(side="left", padx=6)
-        for title, action in (("新会话", self.new), ("从当前报告新建", self.from_report)):
-            ttk.Button(row, text=title, command=action).pack(side="left", padx=3)
-        self.status = tk.StringVar(parent, value="选择目标并新建会话；有效会话默认允许主动采集。")
-        ttk.Label(parent, textvariable=self.status, wraplength=960).pack(fill="x", pady=5)
+        ttk.Button(row, text="新会话", command=self.new).pack(side="left", padx=3)
         self.context_status = AiContextStatus(parent)
         self.context_status.pack(fill="x", pady=(0, 5))
         # 先预留底部输入/操作区，最小窗口下由聊天正文承担高度收缩。
@@ -176,13 +173,6 @@ class AiChatPanel:
             self.error(exc)
             return None
 
-    def from_report(self):
-        report = self.owner.reports.get(self.owner.selected_report)
-        if report is None:
-            self.error(ValueError("请先在诊断与监控页选择历史报告"))
-            return
-        self.new(report)
-
     def send(self):
         try:
             if not self.selected and not self.new():
@@ -245,7 +235,6 @@ class AiChatPanel:
             self.output.configure(state="normal")
             self.output.delete("1.0", "end")
             self.output.configure(state="disabled")
-            self.status.set("选择目标并新建会话；有效会话默认允许主动采集。")
             self.send_button.configure(state="normal")
             return
         session = self.service.store.chat(self.selected)
@@ -260,10 +249,6 @@ class AiChatPanel:
             return
         same_session = self.revision is not None and self.revision[0] == self.selected
         self.revision = revision
-        self.status.set(f"批次：{session['run_id']} | 通道{session['target']['channel']} | {session['profile']['provider']}/{session['profile']['model']} | "
-                        f"{session['status']} | {collection['reason']}；有效会话开放本机/样机完整工具\n"
-                        f"真实诊断信息（含材料中的账号、密码）将发送至{session['profile']['provider']} / "
-                        f"{session['profile']['base_url']}；模型API密钥仅用于认证。")
         at_end = self.output.yview()[1] > 0.98
         top_index = self.output.index("@0,0")
         selection = tuple(str(index) for index in self.output.tag_ranges("sel")) if same_session else ()

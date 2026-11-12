@@ -231,8 +231,8 @@ class UsageConversationTests(unittest.TestCase):
                     panel.refresh()
                     root.update()
                     widget = panel.context_status
-                    self.assertIn("1,048,576", widget.capacity_text.get())
-                    self.assertIn("210", widget.usage_text.get())
+                    self.assertEqual(widget.status_text.get(),
+                                     "上下文容量：1,048,576 Token ｜ 当前上下文用量：210（0.02%）")
                     self.assertGreater(float(widget.progress.cget("value")), 0)
                     for child in (widget, widget.progress, panel.send_button, panel.input):
                         self.assertTrue(child.winfo_ismapped(),
@@ -245,10 +245,10 @@ class UsageConversationTests(unittest.TestCase):
             panel.refresh()
             panel.sessions.current(panel.ids.index(other))
             panel.choose()
-            self.assertIn("待下一次请求", panel.context_status.usage_text.get())
+            self.assertIn("待下一次请求", panel.context_status.status_text.get())
             panel.sessions.current(panel.ids.index(old))
             panel.choose()
-            self.assertIn("210", panel.context_status.usage_text.get())
+            self.assertIn("当前上下文用量：210", panel.context_status.status_text.get())
         finally:
             if dialog._poll_id:
                 root.after_cancel(dialog._poll_id)
@@ -259,28 +259,58 @@ class UsageConversationTests(unittest.TestCase):
 
 
 class UsageWidgetTests(unittest.TestCase):
-    def test_unknown_stale_overflow_and_reserves_have_unambiguous_display(self):
+    def test_compact_status_wraps_and_preserves_unknown_estimate_and_failure_states(self):
         gc.collect()
         root = tk.Tk()
         try:
             frame = AiContextStatus(root)
             frame.pack(fill="x")
-            apply_module_theme(root)
+            completed = {"state": "completed", "basis": "reply", "source": "api",
+                         "input_tokens": 5700, "output_tokens": 49, "total_tokens": 5749,
+                         "updated": "2026-11-12T12:29:44"}
+            for theme in ("vista", "clam"):
+                with self.subTest(theme=theme):
+                    ttk.Style(root).theme_use(theme)
+                    apply_module_theme(root)
+                    root.geometry("900x240")
+                    frame.show({"capacity": 1048576, "source": "模型接口（缓存）",
+                                "max_output": 4096, "snapshot": completed})
+                    root.update()
+                    self.assertEqual(frame.status_text.get(),
+                                     "上下文容量：1,048,576 Token ｜ 当前上下文用量：5,749（0.55%）")
+                    labels = [child for child in frame.winfo_children() if isinstance(child, ttk.Label)]
+                    self.assertEqual(labels, [frame.status_label])
+                    self.assertAlmostEqual(float(frame.progress.cget("value")), 5749 / 1048576 * 100)
+                    normal_height = frame.status_label.winfo_height()
+                    root.geometry("320x240")
+                    root.update()
+                    self.assertGreater(frame.status_label.winfo_height(), normal_height)
+                    self.assertLessEqual(frame.status_label.winfo_width(), frame.winfo_width())
+                    self.assertTrue(frame.progress.winfo_ismapped())
             sample = {"state": "completed", "basis": "reply", "source": "estimate",
                       "input_tokens": 100, "output_tokens": 20, "total_tokens": 120}
             frame.show({"capacity": 0, "max_output": 4096, "snapshot": sample})
-            self.assertNotIn("%", frame.usage_text.get())
-            self.assertIn("50轮", frame.capacity_text.get())
-            self.assertIn("估算", frame.usage_text.get())
+            self.assertEqual(frame.status_text.get(), "上下文容量：未知 ｜ 当前上下文用量：约 120")
             frame.show({"capacity": 100, "source": "手动填写", "max_output": 4096, "snapshot": sample})
-            self.assertIn("120.00%", frame.usage_text.get())
+            self.assertEqual(frame.status_text.get(), "上下文容量：100 Token ｜ 当前上下文用量：约 120（120.00%）")
             self.assertEqual(float(frame.progress.cget("value")), 100)
-            self.assertIn("不计入已用", frame.capacity_text.get())
+            requesting = dict(sample, state="requesting", basis="input", output_tokens=None, total_tokens=100)
+            frame.show({"capacity": 1000, "snapshot": requesting})
+            self.assertEqual(frame.status_text.get(),
+                             "上下文容量：1,000 Token ｜ 预计输入：约 100 Token（10.00%）；请求中")
+            for state, message in (("failed", "本轮失败"), ("cancelled", "本轮已取消")):
+                with self.subTest(state=state):
+                    frame.show({"capacity": 1048576, "snapshot": dict(completed, state=state)})
+                    self.assertIn("当前上下文用量：5,749（0.55%）", frame.status_text.get())
+                    self.assertIn(message + "，保留已有用量", frame.status_text.get())
             frame.show({"capacity": 100, "snapshot": sample, "stale": True})
-            self.assertIn("已过期", frame.usage_text.get())
+            self.assertIn("已过期", frame.status_text.get())
+            self.assertNotIn("%", frame.status_text.get())
             self.assertEqual(float(frame.progress.cget("value")), 0)
+            frame.show({"capacity": 1048576, "snapshot": {}})
+            self.assertEqual(frame.status_text.get(), "上下文容量：1,048,576 Token ｜ 待下一次请求更新")
             frame.show()
-            self.assertIn("选择会话", frame.capacity_text.get())
+            self.assertEqual(frame.status_text.get(), "上下文容量：选择会话后显示 ｜ 待下一次请求更新")
         finally:
             root.destroy()
             gc.collect()

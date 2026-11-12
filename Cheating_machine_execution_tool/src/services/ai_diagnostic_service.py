@@ -189,6 +189,7 @@ class AiDiagnosticService:
             # 本地快照不依赖API能力或网络，先保存再尝试云端。
             snapshot = {"job": job.id, "run_id": job.run_id, "channel": channel,
                         "question": job.question, "provider": profile.provider, "model": profile.model,
+                        "target": asdict(job.target),
                         "event": asdict(event) if event else None, "evidence": job.evidence,
                         "status": "已保存本地触发快照", "report": ""}
             snapshot = self.redactor.object(snapshot)

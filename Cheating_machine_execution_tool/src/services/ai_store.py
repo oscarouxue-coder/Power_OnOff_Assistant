@@ -147,6 +147,13 @@ class DiagnosticStore:
                             (identifier, datetime.now().isoformat(timespec="seconds"), json.dumps(payload, ensure_ascii=False)))
             self.db.commit()
 
+    def report(self, identifier):
+        with self.lock:
+            row = self.db.execute("SELECT payload FROM reports WHERE id=?", (identifier,)).fetchone()
+        if row is None:
+            raise ValueError("诊断报告不存在")
+        return json.loads(row[0])
+
     def reports(self):
         with self.lock:
             return [(r[0], r[1], json.loads(r[2])) for r in

@@ -112,7 +112,28 @@ class AiConversationService:
         self.store.append_chat(identifier, self.redactor.object(asdict(ConversationMessage(role, text, kind))))
         self.notify(identifier)
 
-    def create_session(self, target, profile, title="", report=None):
+    def create_session_from_report(self, report_id, profile, target=None, legacy_confirmed=False):
+        """只创建留存会话，不发送模型请求；旧报告必须明确关联当前目标。"""
+        try:
+            report = self.store.report(report_id)
+            snapshot = report.get("target")
+            if snapshot:
+                target = DiagnosticTarget(**snapshot)
+            elif (not legacy_confirmed or target is None or
+                  self.diagnostic.targets.get(target.channel) != target or not self.target_current(target)):
+                raise ValueError("旧报告缺少目标快照，请明确选择并确认同通道当前目标")
+            if target.channel != report.get("channel"):
+                raise ValueError("报告与所选通道不一致")
+            # 无批次的旧报告绝不默认为本次现场。
+            report = dict(report, run_id=report.get("run_id") or "historical:" + report_id)
+            identifier = self.create_session(target, profile, report=report, source_report_id=report_id)
+            self.emit(f"报告{report_id}已转入会话{identifier[:8]}，等待人工发送；未发起采集")
+            return identifier
+        except Exception as exc:
+            self.emit(f"报告{report_id}接手失败：{exc}")
+            raise
+
+    def create_session(self, target, profile, title="", report=None, source_report_id=""):
         if self.shutdown.is_set():
             raise RuntimeError("AI对话正在退出")
         if not profile or not profile.model.strip():
@@ -124,7 +145,7 @@ class AiConversationService:
         payload = {"id": identifier, "created": timestamp(), "title": title.strip() or f"通道{target.channel}排障",
                    "run_id": run_id, "target": asdict(target), "profile": asdict(profile),
                    "settings": self.context.target_settings(run_id, target.channel),
-                   "status": "可继续", "pending": None}
+                   "status": "可继续", "pending": None, "source_report_id": source_report_id}
         self.store.create_chat(self.redactor.object(payload))
         self.refresh_evidence(identifier)
         if report:

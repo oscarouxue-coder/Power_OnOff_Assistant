@@ -256,7 +256,8 @@ class SessionManagerTests(DeletionFixture, unittest.TestCase):
         self.assertEqual(self.panel.sessions.get(), "")
         self.assertEqual(self.panel.output.get("1.0", "end-1c"), "")
         self.assertEqual(self.panel.input.get("1.0", "end-1c"), "")
-        self.assertIn("新建会话", self.panel.status.get())
+        self.assertEqual(self.panel.context_status.status_text.get(),
+                         "上下文容量：选择会话后显示 ｜ 待下一次请求更新")
         self.assertIn("disabled", self.manager.delete_button.state())
         self.assertIn("disabled", self.manager.clear_button.state())
         self.assertNotIn("disabled", self.panel.send_button.state())

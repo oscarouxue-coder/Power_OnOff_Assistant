@@ -76,6 +76,8 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/services/ai_debug_service.py",
     "src/services/ai_diagnostic_service.py",
     "src/ui/ai_diagnostics_window.py",
+    "src/ui/ai_monitor_window.py",
+    "src/ui/ai_reports_window.py",
     "src/ui/ai_serial_bridge.py",
     "src/ui/ai_assistant_controller.py",
     "src/utils/ai_redaction.py",

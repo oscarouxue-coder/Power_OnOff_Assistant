@@ -10,6 +10,36 @@
 - 日常修改默认只运行相关检查：按影响范围执行必要的局部编译、相关专项测试及差异检查；纯文档只检查内容一致性、链接和差异格式，不运行代码测试。
 - 完整基线：仅在用户明确要求、提交代码前、标准打包（包括 `-CheckOnly`）或已验收功能结构调整时，进入主源码目录执行 `python scripts/verify_baseline.py`。局部行为或显示修改不因涉及已验收功能自动触发完整基线，原复验要求仍保留；详细规则见 [AGENTS.md](AGENTS.md) 和 [开发工作流 §5](.claude/skills/line-check-dev/SKILL.md#5-验证范围与完整基线触发条件)。
 
+## 跨电脑配置 Git 提交检查
+
+提交检查统一使用 **CPython 3.9.10 x64**，安装目录可以不同，不必修改系统默认 Python。首次在仓库根目录执行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Cheating_machine_execution_tool\scripts\install_git_hooks.ps1
+```
+
+钩子依次寻找：本仓库 `linecheck.pythonExecutable` 配置 → 已激活虚拟环境 → 仓库根目录的 `.venv` → 主源码目录的 `.venv` → `%LOCALAPPDATA%\LineCheckAssistant\build-env-py39` → `py -3.9` → PATH 中的 `python`、`python3`。已有虚拟环境无需先激活；自动搜索会跳过 Windows Store 占位入口、无法执行或版本/位数不符的候选。
+
+非标准位置或其它名称的已有环境，可单独指定（换成该电脑的实际路径）：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Cheating_machine_execution_tool\scripts\install_git_hooks.ps1 -PythonExecutable "C:\my-project-env\Scripts\python.exe"
+```
+
+脚本先验证解释器，再将绝对路径写入本仓库 `.git/config`，不会把本机路径提交到源码，也不会影响其它仓库。不带参数重新安装钩子会保留已有配置；指定路径失效或版本不符时会阻止提交并提示修正，不会悄悄换用其它环境。恢复自动识别：
+
+```powershell
+git config --local --unset linecheck.pythonExecutable
+```
+
+提交时显示实际 Python 路径、版本与位数，进入主源码目录执行原有完整基线；检查失败保留原始输出和退出码，阻止提交。钩子进程内使用 UTF-8，并将已有 TMPDIR/TEMP/TMP 的 Windows 短路径规范化为完整路径，避免临时工作目录文本比较不一致，不修改系统设置。也可以在仓库根目录直接验证入口，不创建提交：
+
+```powershell
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\Cheating_machine_execution_tool\scripts\run_git_pre_commit.ps1
+```
+
+出现 `Python was not found` 通常是系统命中了 Microsoft Store 占位入口。新入口会明确指出缺少可用的 CPython 3.9.10 x64，并给出指定路径的方法；不会自动安装 Python 或下载依赖。新电脑仍需先安装对应 Python 和项目依赖；需要标准锁定环境时按下节的 `-CheckOnly` 流程准备。若解释器已找到但缺依赖，应修复所选环境后重试，不能跳过提交检查。修改 PATH 后需重启编辑器，使其读取新环境；使用本仓库显式路径配置则不依赖 Python 的 PATH 设置。此优化只影响提交检查，打包标准及入口保持下节规定。
+
 ## 在另一台 Windows 电脑打包
 
 项目统一采用已由负责人确认异机正常运行的精简方式：独立CPython **3.9.10 x64**、固定`requirements-build.txt`依赖和PyInstaller **5.10.1**，排除NumPy/OpenBLAS、lxml、PyQt5，禁用外部UPX。17.23MiB是当前版本结果，后续体积可随功能变化。

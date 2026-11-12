@@ -8,12 +8,13 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from src.core.ai_client import DiagnosticModelClient
-from src.models.ai_diagnostics import PROVIDERS, ProviderProfile, DebugTriggerPolicy
+from src.models.ai_diagnostics import PROVIDERS, ProviderProfile
 from src.services.ai_store import profile_fingerprint
 from src.services.ai_context_budget import context_capacity, refresh_model_context
 from src.ui.window_paint import center_toplevel_on_parent
 from src.ui.module_theme import apply_module_theme, MODULE_BACKGROUND
-from src.utils.ai_output import format_diagnostic_evidence
+from src.ui.ai_monitor_window import AiMonitorWindow
+from src.ui.ai_reports_window import AiReportsWindow
 
 
 class AiDiagnosticsWindow:
@@ -22,12 +23,12 @@ class AiDiagnosticsWindow:
         self.background_color, self.foreground_color = background, foreground
         self.window = None
         self.profile = ProviderProfile()
-        self.selected_report = ""
+        self.case_report_id = ""
         self.selected_case = None
         self.background = set()
         self.background_stops = set()
         self.events = queue.Queue()
-        self.reports = {}
+        self.targets = ()
         self._poll_id = None
         self.new_profile_mode = True
         self.conversation = conversation
@@ -46,23 +47,35 @@ class AiDiagnosticsWindow:
         self.window.protocol("WM_DELETE_WINDOW", self.hide)
         book = ttk.Notebook(self.window)
         book.pack(fill="both", expand=True, padx=10, pady=10)
-        connection, diagnosis, cases = (ttk.Frame(book, padding=10) for _ in range(3))
-        for frame, title in ((connection, "模型接入"), (diagnosis, "诊断与监控"), (cases, "已确认案例")):
+        self.book = book
+        workspace, connection, cases = (ttk.Frame(book, padding=10) for _ in range(3))
+        self.workspace, self.cases_tab = workspace, cases
+        for frame, title in ((workspace, "排障工作台"), (connection, "模型接入"), (cases, "已确认案例")):
             book.add(frame, text=title)
+        self.monitor_status = tk.StringVar(self.window, value="自动监控：关闭")
+        self.report_status = tk.StringVar(self.window)
+        self.monitor_panel = AiMonitorWindow(self)
+        self.reports_panel = AiReportsWindow(self)
+        toolbar = ttk.Frame(workspace)
+        toolbar.pack(fill="x", pady=(0, 5))
+        ttk.Button(toolbar, text="自动监控", command=self.monitor_panel.open).pack(side="left")
+        ttk.Label(toolbar, textvariable=self.monitor_status).pack(side="left", padx=8)
+        ttk.Button(toolbar, text="诊断报告", command=self.reports_panel.open).pack(side="left", padx=4)
+        ttk.Label(toolbar, textvariable=self.report_status).pack(side="left", padx=8)
+        ttk.Button(toolbar, text="刷新目标", command=self.refresh_targets).pack(side="right")
         self._connection_tab(connection)
-        self._diagnosis_tab(diagnosis)
         self._cases_tab(cases)
         if self.conversation is not None:
             from src.ui.ai_chat_panel import AiChatPanel
-            chat = ttk.Frame(book, padding=10)
-            book.insert(0, chat, text="对话排障")
-            self.chat_panel = AiChatPanel(chat, self, self.conversation)
-            book.select(chat)
+            self.chat_panel = AiChatPanel(workspace, self, self.conversation)
+        else:
+            ttk.Label(workspace, text="对话服务未连接；仍可查看监控设置和报告。").pack(anchor="w")
+        book.select(workspace)
         self._apply_theme()
         center_toplevel_on_parent(self.window, self.master)
         self._reload_profiles()
         self.refresh_targets()
-        self._reload_reports()
+        self.reports_panel.reload()
         self._reload_cases()
         if self._poll_id is None:
             self._poll()
@@ -114,59 +127,9 @@ class AiDiagnosticsWindow:
         ttk.Label(parent, text="每次诊断固定使用启动时的厂商和模型；切换对下一次生效。\n模型列表不可用时可手填ID。不同区域的服务地址和密钥请按对应厂商账号配置。",
                   wraplength=900).pack(anchor="w", pady=10)
 
-    def _diagnosis_tab(self, parent):
-        row = ttk.Frame(parent)
-        row.pack(fill="x")
-        ttk.Label(row, text="本次目标").pack(side="left")
-        self.channel_choice = ttk.Combobox(row, state="readonly", width=30)
-        self.channel_choice.pack(side="left", padx=8)
-        ttk.Button(row, text="刷新目标", command=self.refresh_targets).pack(side="left")
-        self.monitor = tk.BooleanVar(self.window, value=False)
-        tk.Checkbutton(row, text="启用本次自动监控", variable=self.monitor, command=self._monitor_changed).pack(side="left", padx=12)
-        policy = self.service.store.setting("trigger_policy", {})
-        options = ttk.Frame(parent)
-        options.pack(fill="x", pady=8)
-        self.threshold = tk.StringVar(self.window, value=str(policy.get("threshold", 3)))
-        self.cooldown = tk.StringVar(self.window, value=str(policy.get("cooldown", 60)))
-        ttk.Label(options, text="连续异常次数").pack(side="left")
-        ttk.Spinbox(options, from_=1, to=20, width=5, textvariable=self.threshold).pack(side="left", padx=5)
-        ttk.Label(options, text="冷却（秒）").pack(side="left", padx=(12, 0))
-        ttk.Spinbox(options, from_=1, to=3600, width=6, textvariable=self.cooldown).pack(side="left", padx=5)
-        self.deep = tk.BooleanVar(self.window, value=policy.get("deep_enabled", True))
-        tk.Checkbutton(options, text="允许按条件深入采集", variable=self.deep).pack(side="left", padx=12)
-        filters = ttk.Frame(parent)
-        filters.pack(fill="x")
-        self.features = {}
-        for code, title in (("power", "开关机"), ("telnet", "Telnet"), ("wifi", "WiFi"), ("ping", "Ping")):
-            variable = tk.BooleanVar(self.window, value=code in policy.get("features", ["power", "telnet", "wifi", "ping"]))
-            self.features[code] = variable
-            tk.Checkbutton(filters, text=title, variable=variable).pack(side="left")
-        ttk.Label(filters, text="监控通道（逗号分隔，空为全部当前目标）").pack(side="left", padx=5)
-        self.channel_filter = tk.StringVar(self.window)
-        ttk.Entry(filters, textvariable=self.channel_filter, width=22).pack(side="left", fill="x", expand=True)
-        self.keywords = tk.StringVar(self.window, value=";".join(policy.get("keywords", [])))
-        self.codes = tk.StringVar(self.window, value=";".join(policy.get("error_codes", [])))
-        for title, variable in (("额外触发关键词（分号分隔）", self.keywords), ("错误码（分号分隔）", self.codes)):
-            frame = ttk.Frame(parent)
-            frame.pack(fill="x", pady=3)
-            ttk.Label(frame, text=title, width=30).pack(side="left")
-            ttk.Entry(frame, textvariable=variable).pack(side="left", fill="x", expand=True)
-        self.question = tk.Text(parent, height=3, wrap="word")
-        self.question.pack(fill="x", pady=8)
-        self.question.insert("1.0", "请分析当前目标的异常原因，并指出还需要哪些证据。")
-        actions = ttk.Frame(parent)
-        actions.pack(fill="x")
-        for title, action in (("仅问答/分析已有材料", lambda: self._submit(False)),
-                              ("诊断并按需采集", lambda: self._submit(True)),
-                              ("停止AI采集", self._cancel), ("刷新报告", self._reload_reports)):
-            ttk.Button(actions, text=title, command=action).pack(side="left", padx=(0, 7))
-        self.report_choice = ttk.Combobox(parent, state="readonly")
-        self.report_choice.pack(fill="x", pady=8)
-        self.report_choice.bind("<<ComboboxSelected>>", self._choose_report)
-        self.output = tk.Text(parent, wrap="word", state="disabled", height=12)
-        self.output.pack(fill="both", expand=True)
-
     def _cases_tab(self, parent):
+        self.case_source = tk.StringVar(self.window, value="未关联报告")
+        ttk.Label(parent, textvariable=self.case_source).pack(anchor="w", pady=(0, 6))
         self.case_list = ttk.Treeview(parent, columns=("id", "title", "active"), show="headings", height=6)
         for name, title, width in (("id", "编号", 60), ("title", "案例标题", 600), ("active", "参与检索", 100)):
             self.case_list.heading(name, text=title)
@@ -184,7 +147,7 @@ class AiDiagnosticsWindow:
             ttk.Entry(row, textvariable=variable).pack(side="left", fill="x", expand=True)
         row = ttk.Frame(parent)
         row.pack(fill="x", pady=10)
-        for title, action in (("从当前报告新建", self._new_case), ("人工确认/保存修订", self._confirm_case),
+        for title, action in (("新建案例", self._new_case), ("人工确认/保存修订", self._confirm_case),
                               ("停用/启用", self._toggle_case), ("删除案例", self._delete_case)):
             ttk.Button(row, text=title, command=action).pack(side="left", padx=(0, 8))
         ttk.Label(parent, text="只有人工确认的实际原因和复测结果才参与后续检索。AI猜测、重试自行恢复不等于根因已确认。",
@@ -360,9 +323,6 @@ class AiDiagnosticsWindow:
     def refresh_targets(self):
         try:
             self.targets = tuple(self.targets_provider())
-            self.channel_choice["values"] = [f"通道{t.channel} | {t.vlan} | {t.port}" for t in self.targets]
-            if self.targets and self.channel_choice.current() < 0:
-                self.channel_choice.current(0)
             if self.service.profile is not None:
                 self.service.configure(self.service.profile, self.targets)
             if self.chat_panel is not None:
@@ -371,81 +331,34 @@ class AiDiagnosticsWindow:
             self.targets = ()
             self.service.emit("[AI配置] 目标刷新失败：" + str(exc))
 
-    def _policy(self):
-        channels = tuple(int(x.strip()) for x in self.channel_filter.get().split(",") if x.strip()) or tuple(t.channel for t in self.targets)
-        threshold, cooldown = int(self.threshold.get()), int(self.cooldown.get())
-        if not 1 <= threshold <= 20 or not 1 <= cooldown <= 3600 or not set(channels) <= {t.channel for t in self.targets}:
-            raise ValueError("请检查通道范围、异常阈值（1–20）和冷却（1–3600秒）")
-        return DebugTriggerPolicy(channels, tuple(k for k, v in self.features.items() if v.get()), threshold,
-            cooldown, tuple(x.strip() for x in self.keywords.get().split(";") if x.strip()),
-            tuple(x.strip() for x in self.codes.get().split(";") if x.strip()), self.deep.get())
+    def continue_report(self, report_id, target=None, legacy_confirmed=False):
+        if self.chat_panel is None:
+            raise ValueError("对话服务未连接")
+        self.refresh_targets()
+        identifier = self.conversation.create_session_from_report(
+            report_id, self.service.profile, target=target, legacy_confirmed=legacy_confirmed)
+        self.chat_panel.selected = identifier
+        self.chat_panel.revision = None
+        self.chat_panel.refresh()
+        # 显式选择新会话的目标；历史目标不套用之前的目标下拉选择。
+        self.chat_panel.choose()
+        self.book.select(self.workspace)
+        self.window.deiconify()
+        self.window.lift()
+        return identifier
 
-    def _monitor_changed(self):
+    def case_from_report(self, report_id):
         try:
-            if self.monitor.get():
-                self.refresh_targets()
-                policy = self._policy()
-                if not policy.channels or self.service.profile is None:
-                    raise ValueError("请先保存接入配置并选择目标通道")
-                if not messagebox.askyesno("启用本次AI诊断", "本次允许对所选目标登录查询，并按触发条件进行临时Debug采集。\n始终禁止AI重启、上下电、升级和恢复出厂。\n真实诊断信息（含材料中的账号、密码）将发送至：" + self.service.profile.provider + " / " + self.service.profile.base_url,
-                                          parent=self.window):
-                    self.monitor.set(False)
-                    return
-                from dataclasses import asdict
-                self.service.trigger.policy = policy
-                self.service.store.set_setting("trigger_policy", asdict(policy))
-            self.service.enable_monitor(self.monitor.get())
-        except Exception as exc:
-            self.monitor.set(False)
-            self._error(exc)
-
-    def _submit(self, active):
-        try:
-            index = self.channel_choice.current()
-            if not 0 <= index < len(self.targets):
-                raise ValueError("请选择目标通道")
-            number = self.targets[index].channel
-            self.refresh_targets()
-            index = next((i for i, target in enumerate(self.targets) if target.channel == number), -1)
-            if index < 0:
-                raise ValueError("目标通道已变更，请重新选择")
-            self.channel_choice.current(index)
-            question = self.question.get("1.0", "end-1c").strip()
-            if not question:
-                raise ValueError("请填写问题")
-            if active and not messagebox.askyesno("诊断采集确认", "允许对当前目标按需登录查询？\nTelnet优先，连接不可用时回退目标串口；不允许AI重启DUT。", parent=self.window):
-                return
-            self.service.submit(question, self.targets[index].channel, "light" if active else "question")
-            self._show_text("已提交；诊断结果保存在本机报告中。")
+            self.service.store.report(report_id)
+            self._new_case()
+            self.case_report_id = report_id
+            self.case_source.set("来源报告：" + report_id)
+            self.service.emit("[AI案例] 从报告新建草稿：" + report_id)
+            self.book.select(self.cases_tab)
+            self.window.deiconify()
+            self.window.lift()
         except Exception as exc:
             self._error(exc)
-
-    def _cancel(self):
-        self.service.cancel()
-        self.service.emit("[AI诊断] 已请求停止，正在完成必要清理，原测试继续")
-
-    def _show_text(self, text):
-        self.output.configure(state="normal")
-        self.output.delete("1.0", "end")
-        self.output.insert("end", text)
-        self.output.configure(state="disabled")
-
-    def _reload_reports(self):
-        rows = self.service.store.reports()
-        self.report_ids = [row[0] for row in rows]
-        self.reports = {row[0]: row[2] for row in rows}
-        self.report_choice["values"] = [f"{created} | 通道{payload.get('channel')} | {payload.get('provider')} | {payload.get('status')}" for _, created, payload in rows]
-        if rows:
-            self.report_choice.current(0)
-            self._choose_report()
-
-    def _choose_report(self, _event=None):
-        index = self.report_choice.current()
-        if index >= 0:
-            self.selected_report = self.report_ids[index]
-            payload = self.reports[self.selected_report]
-            self._show_text(str(payload.get("report", "")) + "\n\n本地证据：\n"
-                            + format_diagnostic_evidence(payload.get("evidence", "")))
 
     def _reload_cases(self):
         for item in self.case_list.get_children():
@@ -459,11 +372,16 @@ class AiDiagnosticsWindow:
         if selected:
             self.selected_case = int(selected[0])
             row = self.cases[self.selected_case]
+            self.case_report_id = row["report_id"] or ""
+            self.case_source.set("来源报告：" + self.case_report_id if self.case_report_id else "未关联报告")
             for key, variable in self.case_fields.items():
                 variable.set(row[key])
 
     def _new_case(self):
+        self.case_list.selection_remove(*self.case_list.selection())
         self.selected_case = None
+        self.case_report_id = ""
+        self.case_source.set("未关联报告")
         for variable in self.case_fields.values():
             variable.set("")
 
@@ -471,7 +389,7 @@ class AiDiagnosticsWindow:
         try:
             if not messagebox.askyesno("人工确认案例", "确认这些字段是实际核实的原因、处理和复测结果，而非AI猜测？", parent=self.window):
                 return
-            self.service.confirm_case(self.selected_report, **{k: v.get() for k, v in self.case_fields.items()}, case_id=self.selected_case)
+            self.service.confirm_case(self.case_report_id, **{k: v.get() for k, v in self.case_fields.items()}, case_id=self.selected_case)
             self._reload_cases()
         except Exception as exc:
             self._error(exc)
@@ -521,9 +439,11 @@ class AiDiagnosticsWindow:
             except queue.Empty:
                 break
             if kind == "report":
-                self._reload_reports()
+                self.reports_panel.reload()
+                self.report_status.set("报告有更新")
             elif kind == "monitor_off":
-                self.monitor.set(False)
+                self.monitor_panel.enabled.set(False)
+                self.monitor_panel.update_status()
                 self.service.emit("[AI监控] " + payload)
             elif kind == "warning":
                 self.service.emit("[AI监控] " + payload)
@@ -532,6 +452,9 @@ class AiDiagnosticsWindow:
             self._poll_id = self.master.after(100, self._poll)
 
     def hide(self):
+        for panel in (self.monitor_panel, self.reports_panel):
+            if panel.window is not None and panel.window.winfo_exists():
+                panel.window.withdraw()
         self.window.withdraw()
 
     def begin_close(self):

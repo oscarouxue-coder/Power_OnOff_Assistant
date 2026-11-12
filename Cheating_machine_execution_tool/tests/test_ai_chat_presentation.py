@@ -67,37 +67,59 @@ class ChatPresentationTests(unittest.TestCase):
         self.root.update_idletasks()
         return self.panel.output.get("1.0", "end-1c")
 
-    def test_default_collection_buttons_disclosure_and_minimum_layout(self):
-        def buttons(widget):
-            return ([widget] if isinstance(widget, ttk.Button) else []) + [
-                button for child in widget.winfo_children() for button in buttons(child)]
+    def test_default_collection_buttons_without_status_banner_and_minimum_layout(self):
+        def widgets(widget):
+            return [widget] + [item for child in widget.winfo_children() for item in widgets(child)]
+
+        def assert_no_status_banner():
+            labels = [str(w.cget("text")) for w in widgets(self.panel.parent) if isinstance(w, ttk.Label)]
+            for fragment in ("批次：", "默认允许主动采集", "有效会话开放", "真实诊断信息",
+                             "模型API密钥", "目标已变更", "选择目标并新建会话"):
+                self.assertFalse(any(fragment in text for text in labels), fragment)
+            self.assertIs(self.panel.parent.winfo_children()[2], self.panel.context_status)
+
         for theme in ("vista", "clam"):
             with self.subTest(theme=theme):
                 ttk.Style(self.root).theme_use(theme)
                 self.root.geometry("940x660")
+                other = dict(self.session, id="s2", target={"channel": 2})
+                self.store.chats.return_value = [self.session, other]
+                self.store.chat.side_effect = {"s1": self.session, "s2": other}.__getitem__
+                self.panel.selected = "s1"
                 self.service.collection_status.return_value = {
                     "enabled": True, "capable": True, "reason": "默认允许主动采集"}
-                self.panel.render()
+                self.panel.refresh()
                 self.root.update()
-                items = buttons(self.panel.parent)
+                assert_no_status_banner()
+                items = [w for w in widgets(self.panel.parent) if isinstance(w, ttk.Button)]
                 titles = [b.cget("text") for b in items]
                 self.assertNotIn("授权本次会话", titles)
                 self.assertNotIn("结束授权", titles)
                 self.assertIn("停止本轮排查", titles)
-                self.assertIn("默认允许主动采集", self.panel.status.get())
-                self.assertIn("账号、密码", self.panel.status.get())
-                self.assertIn("https://example.test", self.panel.status.get())
-                for button in items:
-                    self.assertTrue(button.winfo_ismapped())
-                    self.assertLessEqual(button.winfo_rootx() + button.winfo_width(),
+                for widget in items + [self.panel.context_status, self.panel.context_status.status_label,
+                                       self.panel.context_status.progress,
+                                       self.panel.input, self.panel.output]:
+                    self.assertTrue(widget.winfo_ismapped())
+                    self.assertGreater(widget.winfo_height(), 1)
+                    self.assertLessEqual(widget.winfo_rootx() + widget.winfo_width(),
                                          self.root.winfo_rootx() + self.root.winfo_width())
-                    self.assertLessEqual(button.winfo_rooty() + button.winfo_height(),
+                    self.assertLessEqual(widget.winfo_rooty() + widget.winfo_height(),
                                          self.root.winfo_rooty() + self.root.winfo_height())
                 self.service.collection_status.return_value = {
                     "enabled": False, "capable": True, "reason": "目标已变更，仅分析留存材料"}
                 self.service.updates.get_nowait.side_effect = queue.Empty
                 self.panel.poll()
-                self.assertIn("目标已变更", self.panel.status.get())
+                assert_no_status_banner()
+                self.panel.sessions.current(self.panel.ids.index("s2"))
+                self.panel.choose()
+                self.assertEqual(self.panel.selected, "s2")
+                assert_no_status_banner()
+                self.store.chats.return_value = []
+                self.panel.refresh()
+                self.assertEqual(self.panel.selected, "")
+                assert_no_status_banner()
+                self.assertEqual(self.panel.context_status.status_text.get(),
+                                 "上下文容量：选择会话后显示 ｜ 待下一次请求更新")
                 self.service.send.assert_not_called()
 
     def test_metadata_time_format_and_body_storage_remain_exact(self):
@@ -179,7 +201,7 @@ class ChatPresentationTests(unittest.TestCase):
             self.panel.input.insert("1.0", "尚未发送的长草稿" * 100)
             self.panel.render()
             delete.assert_not_called()
-        self.assertIn("210", self.panel.context_status.usage_text.get())
+        self.assertIn("当前上下文用量：210", self.panel.context_status.status_text.get())
         self.assertEqual(self.panel.output.index("@0,0"), top)
         self.assertEqual(self.panel.output.get("sel.first", "sel.last"), selected)
         self.service.send.assert_not_called()
@@ -210,7 +232,7 @@ class ChatPresentationTests(unittest.TestCase):
         self.service.running["s1"] = threading.Event()
         self.rendered()
         self.assertGreaterEqual(self.panel.output.yview()[1], 0.98)
-        self.assertIn("等待你回复", self.panel.status.get())
+        self.assertIn("请确认LOS灯状态。", self.panel.output.get("1.0", "end-1c"))
         self.assertIn("disabled", self.panel.send_button.state())
         self.service.running.clear()
         self.rendered()

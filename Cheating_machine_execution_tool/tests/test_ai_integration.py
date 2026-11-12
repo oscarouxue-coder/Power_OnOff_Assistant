@@ -209,6 +209,8 @@ class UiTests(unittest.TestCase):
         self.service = Mock()
         self.service.store = self.store
         self.service.profile = None
+        self.service.trigger.policy = DebugTriggerPolicy()
+        self.service.trigger.enabled = False
         self.service.updates = __import__("queue").Queue()
         self.root = tk.Tk()
         self.root.withdraw()
@@ -218,6 +220,7 @@ class UiTests(unittest.TestCase):
     def tearDown(self):
         if self.dialog._poll_id:
             self.root.after_cancel(self.dialog._poll_id)
+        self.root.update_idletasks()
         if self.dialog.window is not None:
             self.dialog.window.destroy()
         self.root.destroy()
@@ -242,32 +245,32 @@ class UiTests(unittest.TestCase):
             "netsh wlan show interfaces": "系统上有 1 个接口：\r\n名称：VLAN101"}, ensure_ascii=False)}]
         payload = {"report": "已观察事实：正文正常", "evidence": json.dumps(evidence, ensure_ascii=False) + "\n串口现场"}
         self.store.save_report("readable", payload)
-        self.dialog._reload_reports()
-        shown = self.dialog.output.get("1.0", "end-1c")
+        self.dialog.reports_panel.open()
+        shown = self.dialog.reports_panel.output.get("1.0", "end-1c")
         self.assertIn("已观察事实：正文正常\n\n本地证据：\n[1] read_pc_environment", shown)
         self.assertIn("系统上有 1 个接口：\r\n名称：VLAN101", shown)
         self.assertTrue(shown.endswith("\n串口现场"))
         self.assertEqual(self.store.reports()[0][2], payload)
-        self.assertEqual(str(self.dialog.output["state"]), "disabled")
+        self.assertEqual(str(self.dialog.reports_panel.output["state"]), "disabled")
 
     def test_legacy_plain_report_evidence_remains_visible(self):
         self.store.save_report("legacy", {"report": "旧报告", "evidence": "绯荤粺涓婃湁\n原始日志"})
-        self.dialog._reload_reports()
-        self.assertTrue(self.dialog.output.get("1.0", "end-1c").endswith("绯荤粺涓婃湁\n原始日志"))
+        self.dialog.reports_panel.open()
+        self.assertTrue(self.dialog.reports_panel.output.get("1.0", "end-1c").endswith("绯荤粺涓婃湁\n原始日志"))
 
     def test_real_report_values_are_visible_and_old_aliases_remain_unchanged(self):
         material = json.dumps(DIAGNOSTIC_MATERIAL, ensure_ascii=False)
         self.store.save_report("real", {"report": material, "evidence": "历史占位符 <IP_1>"})
-        self.dialog._reload_reports()
-        shown = self.dialog.output.get("1.0", "end-1c")
+        self.dialog.reports_panel.open()
+        shown = self.dialog.reports_panel.output.get("1.0", "end-1c")
         self.assertIn(material, shown)
         self.assertIn("历史占位符 <IP_1>", shown)
 
     def test_monitor_confirmation_names_real_material_and_recipient(self):
         self.service.profile = ProviderProfile()
-        self.dialog.monitor.set(True)
-        with patch("src.ui.ai_diagnostics_window.messagebox.askyesno", return_value=False) as confirm:
-            self.dialog._monitor_changed()
+        self.dialog.monitor_panel.enabled.set(True)
+        with patch("src.ui.ai_monitor_window.messagebox.askyesno", return_value=False) as confirm:
+            self.dialog.monitor_panel.changed()
         text = confirm.call_args.args[1]
         self.assertIn("真实诊断信息（含材料中的账号、密码）", text)
         self.assertIn(self.service.profile.provider, text)
@@ -292,6 +295,7 @@ class UiTests(unittest.TestCase):
         self.assertEqual(self.store.key(second), "other-secret")
 
     def test_native_checkbuttons_default_monitor_off_and_threshold_three(self):
+        self.dialog.monitor_panel.open()
         widgets = []
         def visit(parent):
             for child in parent.winfo_children():
@@ -300,10 +304,12 @@ class UiTests(unittest.TestCase):
         visit(self.dialog.window)
         self.assertGreaterEqual(sum(w.winfo_class() == "Checkbutton" for w in widgets), 6)
         self.assertFalse(any(w.winfo_class() == "TCheckbutton" for w in widgets))
-        self.assertFalse(self.dialog.monitor.get())
-        self.assertEqual(self.dialog.threshold.get(), "3")
+        self.assertFalse(self.dialog.monitor_panel.enabled.get())
+        self.assertEqual(self.dialog.monitor_panel.threshold.get(), "3")
 
     def test_background_matches_test_item_configuration_including_all_tabs_and_native_checks(self):
+        self.dialog.monitor_panel.open()
+        self.dialog.reports_panel.open()
         from line_check_assistant.app import COLOR_BG
         self.assertEqual(self.dialog.window.cget("background"), COLOR_BG)
         style = __import__("tkinter.ttk", fromlist=["Style"]).Style(self.root)

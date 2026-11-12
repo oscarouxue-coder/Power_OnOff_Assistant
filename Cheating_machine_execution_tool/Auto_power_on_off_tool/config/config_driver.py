@@ -49,7 +49,7 @@ class OperationConfig():
     def read_ini_raw(self, section, option, path='./config/network_card_ip.ini'):
         # 增加编码格式，放置ini文件有中文而产生报错
         self.conf_01.read(path, encoding='utf-8')
-        value = self.conf.get(section, option)
+        value = self.conf_01.get(section, option)
         # if option == "device_url":
         #     print('读取config.ini里面的device_url值是：{}'.format(value))
         return value
