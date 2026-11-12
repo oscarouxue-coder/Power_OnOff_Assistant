@@ -1,5 +1,31 @@
 # 开发记录
 
+## 2026-11-12 - 验证并提交本机启动环境记录
+
+- 类型：状态更新
+- 背景：负责人要求提交已恢复的本机启动配置及文档，并指定Git身份oscarshiyan <oscarouxue@gmail.com>。
+- 完成内容：仅为当前仓库配置上述用户名和邮箱，核对原三份暂存文件；按提交门禁执行完整基线，同步最近验证记录。保留拉取前stash备份，不修改业务代码、测试或系统环境变量，不推送远端。
+- 修改文件：
+  - `.vscode/launch.json`（本机解释器入口）
+  - `PROJECT_STATUS.md`（本机环境及最近完整验证记录）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用仓库根`.venv_serial_upgrade/Scripts/python.exe`，设置进程内PYTHONUTF8=1和PYTHONIOENCODING=utf-8，执行scripts/verify_baseline.py；本机TEMP/TMP短路径统一为解析后的完整路径，再复验失败项与完整门禁。诊断运行仅在内存包装门禁的run_unittest以将原始输出保存到系统临时目录，全部原检查及返回值保持；提交仍执行原版pre-commit门禁，不跳过检查。
+- 验证结果：初轮完整门禁1项失败，详细输出定位到PowerShell工作目录完整路径与ADMINI~1短路径的文本断言不一致；进程内路径规范化后2项关联检查通过。中间一次完整运行仍返回1项失败，仅保留为失败记录；随后带完整输出的诊断门禁ALL CHECKS PASSED：1715项测试（2项既有可选检查跳过）、190项指定回归实际执行、134个源码编译及覆盖和全部协议不变量通过。git diff --cached --check通过；不扩展真实设备验收结论。
+- 后续待办：保留stash备份；远端推送由负责人另行安排。
+
+## 2026-11-12 - 解决本地记录阻塞拉取更新
+
+- 类型：文档
+- 背景：本地已暂存的启动环境记录与远端文档更新重叠，导致git pull为保护本地修改而中止。
+- 完成内容：使用stash备份原有三份已暂存修改，执行git pull --ff-only将main从cf28882更新到98c3195；恢复本机启动配置，合并两份文档的新增记录并保留原暂存状态。stash备份保留，未创建提交。
+- 修改文件：
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`（合并恢复原有本机环境记录）
+  - `.vscode/launch.json`（恢复原有本机启动配置）
+- 验证方法：逐字节核对文档保留全部远端内容及原本地新增段落，核对启动配置与stash中的原文件一致；执行git diff --cached --check、检查未合并文件及main与origin/main是否一致。
+- 验证结果：双方文档内容完整保留，启动配置与原本地版本一致；差异格式检查通过，无未合并文件，main与origin/main一致。本轮仅处理Git同步及文档，不运行代码测试、不启动程序、不打包。
+- 后续待办：原三份本地修改仍已暂存；备份标记为codex-backup-before-pull-2026-11-12，确认后可自行清理。
+
 ## 2026-11-12 - 开放AI本机与样机完整工具
 
 - 类型：功能
@@ -200,6 +226,19 @@
 - 验证方法：主源码目录使用`%LOCALAPPDATA%/LineCheckAssistant/build-env-py39/Scripts/python.exe`，设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`；运行`-I -X utf8 -m unittest discover -s tests -p "test_ai_conversation.py"`及`-I -X utf8 scripts/verify_baseline.py`。专项使用模拟HTTPS响应/设备、假网络接口/ICMP执行器、临时SQLite/文本文件及独立真实Tk控件，不读取真实模型密钥、不调用云端或DUT、不操作真实无线接口。Git差异及空白检查另行核对。
 - 验证结果：新增42项会话/证据/网络/真实Tk专项全部通过；144项AI测试纳入最终全量，完整基线ALL CHECKS PASSED：1603项测试、190项指定回归、125个源码编译/覆盖及全部协议不变量通过。完整verbose另确认2项既有浏览器模拟网页验收因未显式启用而跳过，指定回归均实际执行。独立Tk验证提问/等待/反馈、只读显示、历史目标继续分析及后台任务结束后发送按钮恢复，控制器退出验证后台线程结束后才关闭数据库。初轮1589项通过后补充了边界回归；中间门禁一次返回1项失败的截断汇总，随后保存完整verbose复核1603项通过，最终代码再运行完整门禁通过，不使用中间失败结果作通过证据。单独以-I运行全量发现首个旧测试缺少项目搜索路径，故完整verbose使用与门禁子进程一致的非-I unittest命令；未改测试门禁或旧测试。Git差异空白检查通过。
 - 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.16/§3复验真实厂商API、完整Windows交互及真实DUT。未打包、运行EXE、发布或提交，不升级原现场验收标签；不新增依赖，不修改本机配置或既有日志。
+
+## 2026-11-11 - 恢复本机源码启动环境
+
+- 类型：修改
+- 背景：源码入口无法运行；IDE默认解释器`.venv_serial_upgrade/Scripts/python.exe`不存在，终端`python`为无法执行的WindowsApps占位程序，且无`py`启动器。
+- 完成内容：① 从python.org下载安装包并确认Authenticode签名有效且签名人为Python Software Foundation，仅为当前用户安装CPython3.9.10 x64及Tcl/Tk，不修改PATH、不安装启动器。② 在仓库根创建已被Git忽略的`.venv_serial_upgrade/`，按既有`requirements-build.txt`安装全部锁定依赖（包含Windows pywifi所需comtypes），不修改业务代码或依赖清单。③ 为IDE的LineCheckAssistant启动配置显式指定该虚拟环境，保持原入口及工作目录；启用仓库既有基线提交钩子，同步本机运行入口。
+- 修改文件：
+  - `.vscode/launch.json`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe`运行`-m pip check`、导入`line_check_assistant.app.main / pywifi / comtypes`，以及`-X utf8 scripts\verify_baseline.py`（设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`）。通过`runpy.run_path('run_line_check_assistant.py', run_name='__main__')`执行真实入口；仅在验证进程中为Tk主循环安排1.2秒后销毁窗口并拦截启动警告，创建前后比较配置文件SHA256，不调用关闭时保存配置的业务回调。
+- 验证结果：pip check无依赖冲突，解释器确认为CPython3.9.10 x64，启动依赖全部导入成功；真实主窗口创建成功（1707×982），启动警告0个，检查完成自动关闭，配置文件SHA256均未变化。完整基线ALL CHECKS PASSED：1561项测试、190项指定回归、120个源码编译/覆盖及协议不变量全部通过。
+- 后续待办：无。源码启动环境已恢复；未操作设备、构建、运行打包EXE、发布或提交，不扩展现场验收结论。虚拟环境仅限本机，迁移时重新创建；直接使用完整解释器路径或IDE的LineCheckAssistant配置启动。
 
 ## 2026-11-11 - 取消AI诊断材料脱敏
 
