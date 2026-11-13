@@ -368,12 +368,13 @@ class UiTests(unittest.TestCase):
 
     def test_cancelled_ui_request_cannot_open_serial_later(self):
         bridge = AiSerialBridge(Mock(), Mock(), Mock())
-        future = __import__("concurrent.futures", fromlist=["Future"]).Future()
-        action = Mock()
-        future.cancel()
-        bridge.requests.put((future, action, None))
+        run = bridge.client.channel.new_run()
+        request = bridge.client.channel.post(run, 'acquire', (Mock(),))
+        run.cancel()
+        action = bridge.dispatcher.handlers['acquire'] = Mock()
         bridge.poll()
         action.assert_not_called()
+        self.assertTrue(request.done.is_set())
 
 
 if __name__ == "__main__":

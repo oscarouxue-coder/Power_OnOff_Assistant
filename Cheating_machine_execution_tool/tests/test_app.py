@@ -29,6 +29,7 @@ from line_check_assistant.app import (
     vlan_options_for_power_serial_port,
 )
 from line_check_assistant.config_store import ChannelConfig
+from src.models.onu_batch_delete import OnuBatchDeleteResult, OnuDeleteItemResult
 from line_check_assistant.network_ops import CommandResult, UnregisteredOnu
 from line_check_assistant.onu_registration_store import OnuRegistrationConfig
 from line_check_assistant.page_upgrade import PageUpgradeItemResult, PageUpgradeRequest
@@ -1794,6 +1795,35 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertNotIn("UbusHttpClient(", query_source + worker_source)
         self.assertNotIn("bbfdm.", query_source + worker_source)
 
+    def test_wan_clear_can_hide_selection_reminder_without_retaining_old_results(self):
+        window = SimpleNamespace(
+            _wan_connection_details={"old": object()},
+            wan_index_combo=Mock(),
+            wan_index_var=Mock(),
+            wan_query_status_var=Mock(),
+        )
+        for message in (None, "", "查询失败，请重试"):
+            with self.subTest(message=message):
+                window._wan_connection_details = {"old": object()}
+                DutConfigWindow.clear_wan_connections(window, message)
+                self.assertEqual(window._wan_connection_details, {})
+                window.wan_index_combo.configure.assert_called_with(values=())
+                window.wan_index_var.set.assert_called_with("")
+                expected = message if message is not None else "修改/删除时请先点击“查询现有 WAN”，再从下拉列表选择。"
+                window.wan_query_status_var.set.assert_called_with(expected)
+
+        window.clear_wan_connections = Mock()
+        window.clear_current_status = Mock()
+        window._reset_wifi_choice_options = Mock()
+        window._reset_voice_choice_options = Mock()
+        window._reset_tr069_capabilities = Mock()
+        DutConfigWindow._invalidate_status_after_target_selection_change(window)
+        window.clear_wan_connections.assert_called_once_with("")
+        self.assertEqual(window.clear_current_status.call_count, 6)
+        self.assertEqual(window._reset_wifi_choice_options.call_count, 2)
+        window._reset_voice_choice_options.assert_called_once_with()
+        window._reset_tr069_capabilities.assert_called_once_with()
+
     @patch("line_check_assistant.app.messagebox.showinfo")
     def test_finish_wan_query_populates_only_common_connections(self, showinfo):
         window = Mock()
@@ -3298,10 +3328,12 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn('text="生成预览并进入下一步"', open_source)
         self.assertIn('text="完整验证成功后执行 write（危险，仅本次有效）"', open_source)
         self.assertIn('"ONU 类型模板"', open_source)
-        self.assertIn(
+        self.assertNotIn(
             '"ONU 类型模板是 OLT 中的 onu-type 模板名称；自动保存上次填写值，仅为空时带入查询到的 ONU 型号。"',
             open_source,
         )
+        self.assertNotIn("注册会修改 OLT 当前配置；命令预览只读", open_source)
+        self.assertNotIn("列出目标 PON 口下所有已注册 ONU", open_source)
         self.assertNotIn('"ONU 型号"', open_source)
         self.assertIn('"上网VPort"', open_source)
         self.assertIn('"TR069 50→4。GEM与VPort必须1:1对应。"', open_source)
@@ -3321,9 +3353,9 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn('content.rowconfigure(3, weight=1)', open_source)
         self.assertIn('self.onu_notebook.grid(row=3, column=0, sticky="nsew")', open_source)
         self.assertIn('height=8', open_source)
-        self.assertIn('warning_label.grid(row=4, column=0', open_source)
-        self.assertIn('self.onu_query_status_label.grid(row=5, column=0', open_source)
-        self.assertIn('bottom_actions.grid(row=6, column=0', open_source)
+        self.assertNotIn('warning_label', open_source)
+        self.assertIn('self.onu_query_status_label.grid(row=4, column=0', open_source)
+        self.assertIn('bottom_actions.grid(row=5, column=0', open_source)
         self.assertNotIn('self.onu_notebook.pack(', open_source)
 
     def test_onu_registered_manage_tab_and_danger_button_present(self):
@@ -3366,13 +3398,10 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             serial_number="ZTEG12345678",
             onu_type="CXP-55",
         )
-        context = SimpleNamespace(
-            onu_registered_candidates=(candidate,),
-            onu_registered_candidate_var=Mock(get=Mock(return_value=candidate.display_text)),
-        )
+        context = SimpleNamespace(_selected_registered_onus=Mock(return_value=(candidate,)))
 
         self.assertIs(LineCheckAssistant._selected_registered_onu(context), candidate)
-        context.onu_registered_candidate_var.get.return_value = "其它"
+        context._selected_registered_onus.return_value = ()
         self.assertIsNone(LineCheckAssistant._selected_registered_onu(context))
 
     @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
@@ -3444,8 +3473,10 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         context = SimpleNamespace(
             onu_manage_query_running=True,
             onu_registered_candidates=(),
-            onu_registered_combo=Mock(),
-            onu_registered_candidate_var=Mock(),
+            onu_registered_list=Mock(),
+            onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C600)),
+            _current_onu_connection=Mock(return_value=OltConnection("192.0.2.1", "192.0.2.2", "test", "test")),
+            _current_onu_manage_pon_interface=Mock(return_value=candidate.pon_interface),
             onu_manage_delete_button=Mock(),
             onu_stop_button=Mock(),
             _set_onu_registration_action_buttons_state=Mock(),
@@ -3457,19 +3488,16 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             "查询到 1 个离线/非 working 的已注册 ONU，请选择要删除的一台",
             registered_onus=(candidate,),
         )
+        context.onu_registered_query_context = (OLT_FAMILY_C600, context._current_onu_connection(), candidate.pon_interface)
 
         LineCheckAssistant._complete_onu_manage_query(context, OLT_FAMILY_C600, "172.18.18.152", result)
 
         self.assertFalse(context.onu_manage_query_running)
         self.assertEqual(context.onu_registered_candidates, (candidate,))
-        context.onu_registered_combo.configure.assert_called_once_with(
-            values=(candidate.display_text,),
-            state="readonly",
-        )
-        context.onu_registered_candidate_var.set.assert_called_once_with("")
+        context.onu_registered_list.set_candidates.assert_called_once_with((candidate,))
         context.onu_manage_delete_button.configure.assert_called_once_with(state="disabled")
 
-    @patch("line_check_assistant.app.messagebox.askyesno", return_value=True)
+    @patch("line_check_assistant.app.confirm_batch_delete", return_value=True)
     @patch("line_check_assistant.app.threading.Thread")
     def test_onu_manage_delete_clicked_confirms_and_starts_worker(self, thread_class, askyesno):
         worker = thread_class.return_value
@@ -3488,8 +3516,11 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             onu_manage_query_running=False,
             onu_family_var=Mock(get=Mock(return_value=OLT_FAMILY_C600)),
             onu_registration_window=Mock(),
-            _selected_registered_onu=Mock(return_value=candidate),
+            _selected_registered_onus=Mock(return_value=(candidate,)),
+            onu_registered_candidates=(candidate,),
+            onu_registered_query_context=(OLT_FAMILY_C600, connection, candidate.pon_interface),
             _current_onu_connection=Mock(return_value=connection),
+            _current_onu_manage_pon_interface=Mock(return_value=candidate.pon_interface),
             _set_onu_query_status=Mock(),
             _set_onu_registration_action_buttons_state=Mock(),
             _onu_manage_delete_worker=Mock(),
@@ -3501,26 +3532,30 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         askyesno.assert_called_once()
         thread_class.assert_called_once_with(
             target=context._onu_manage_delete_worker,
-            args=(OLT_FAMILY_C600, connection, candidate),
+            args=(OLT_FAMILY_C600, connection, candidate.pon_interface, (candidate,)),
             daemon=True,
         )
         worker.start.assert_called_once_with()
 
-    def test_complete_onu_manage_delete_clears_candidates_on_success(self):
+    def test_complete_onu_manage_delete_retains_results_and_invalidates_snapshot(self):
         context = SimpleNamespace(
             onu_manage_delete_running=True,
+            onu_registered_list=Mock(),
             onu_stop_button=Mock(),
             _set_onu_registration_action_buttons_state=Mock(),
             _set_onu_query_status=Mock(),
             _log=Mock(),
             _clear_registered_candidates=Mock(),
         )
-        result = OnuOperationResult(True, "已删除 gpon_onu-1/1/5:55 并确认其重新回到未注册状态（未执行 write）")
+        candidate = RegisteredOnu(OLT_FAMILY_C600, "gpon_olt-1/1/5", "gpon_onu-1/1/5:55", 55, "working")
+        result = OnuBatchDeleteResult((OnuDeleteItemResult(candidate, "success", "已回读确认"),))
 
         LineCheckAssistant._complete_onu_manage_delete(context, OLT_FAMILY_C600, "172.18.18.152", result)
 
         self.assertFalse(context.onu_manage_delete_running)
-        context._clear_registered_candidates.assert_called_once_with()
+        context._clear_registered_candidates.assert_not_called()
+        context.onu_registered_list.show_results.assert_called_once_with(result)
+        self.assertIsNone(context.onu_registered_query_context)
         context._set_onu_query_status.assert_called_once()
 
     @patch("line_check_assistant.app.messagebox.showwarning")
@@ -5069,7 +5104,11 @@ class CurrentChannelSelectionTests(unittest.TestCase):
             "\n    internal_software_version_var.set(result.internal_software_version)", source
         )
         self.assertNotIn("\n    onu_compile_time_var.set(result.onu_compile_time)", source)
-        self.assertIn("查询结果只读，不自动保存", source)
+        self.assertNotIn("查询结果只读，不自动保存", source)
+        self.assertNotIn("查询将使用主界面当前选中通道", source)
+        self.assertIn('query_status_var = StringVar(value="")', source)
+        self.assertIn('show_query_status("查询成功', source)
+        self.assertIn('show_query_status("已复制查询结果', source)
         from src.services.device_project_info_service import DEVICEINFO_COMMAND, PROC_VERSION_COMMAND
         self.assertEqual(DEVICEINFO_COMMAND, "cat /etc/config/deviceinfo")
         self.assertEqual(PROC_VERSION_COMMAND, "cat /proc/version")

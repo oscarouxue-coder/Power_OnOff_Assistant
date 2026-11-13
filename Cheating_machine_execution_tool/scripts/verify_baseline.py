@@ -53,6 +53,7 @@ class CheckResult(NamedTuple):
 PY_COMPILE_FILES: tuple[str, ...] = (
     "src/ui/channel_list.py",
     "src/ui/module_theme.py",
+    "src/ui/application_icon.py",
     "src/models/ai_diagnostics.py",
     "src/models/ai_conversation.py",
     "src/models/ai_actions.py",
@@ -121,6 +122,13 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/ui/app_update_dialog.py",
     "src/ui/project_name_badge.py",
     "src/ui/serial_terminal.py",
+    "src/ui/tk_lifecycle.py",
+    "src/ui/pipeline_ui.py",
+    "src/utils/bounded_mailbox.py",
+    "src/models/serial_delivery.py",
+    "src/services/pipeline_runtime.py",
+    "src/services/serial_diagnostic_receiver.py",
+    "src/services/ai_serial_client.py",
     "src/ui/closable_notebook.py",
     "src/ui/dut_config_window.py",
     "src/ui/window_paint.py",
@@ -138,6 +146,9 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/ui/power_test_resume_menu.py",
     "src/services/power_test_log_service.py",
     "src/services/onu_batch_registration_service.py",
+    "src/services/onu_batch_delete_service.py",
+    "src/models/onu_batch_delete.py",
+    "src/ui/onu_registered_list.py",
     "src/services/onu_registration_service.py",
     "src/services/onu_command_edit_service.py",
     "src/ui/onu_command_editor.py",
@@ -200,6 +211,12 @@ PY_COMPILE_FILES: tuple[str, ...] = (
 # 关键已验收行为的回归用例。全量 unittest 必须实际执行这些 ID，避免测试文件或
 # 用例在重构时被静默删除 / 改名而使已验收边界失去保护。
 REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
+    "test_ui_lifecycle_runtime.MailboxTests.test_consumer_and_producer_never_wait_for_busy_mutex",
+    "test_ui_lifecycle_runtime.PipelineRuntimeTests.test_expired_request_never_executes_later",
+    "test_ui_lifecycle_runtime.PipelineRuntimeTests.test_actual_upgrade_entry_rejects_cancel_after_confirmation",
+    "test_ui_lifecycle_runtime.PipelineRuntimeTests.test_main_exit_polls_serial_completion_without_join_or_destroying_early",
+    "test_tk_lifecycle_process.TkLifecycleProcessTests.test_eight_readers_gc_close_reopen_and_complete_logs",
+    "test_serial_transport.SerialTransportTests.test_async_close_waits_for_inflight_callback_and_reserves_port",
     "test_wifi_connection_service.ConnectionServiceTests.test_same_ssid_requires_both_actual_bssids_and_pings_each_band",
     "test_wifi_connection_service.ConnectionServiceTests.test_unified_mode_runs_once_even_when_saved_band_flags_off",
     "test_wifi_connection_service.ConnectionServiceTests.test_other_dut_with_same_ssid_never_passes_and_keeps_retry_budget",
@@ -533,7 +550,8 @@ def run_unittest(project_root: Path) -> tuple[CheckResult, str]:
     output = proc.stdout + proc.stderr
     match = re.search(r"Ran (\d+) tests?", output)
     if proc.returncode != 0:
-        tail = "\n".join(output.strip().splitlines()[-5:])
+        # Preserve assertion/traceback evidence, rather than only FAILED totals.
+        tail = output[-16000:].strip()
         return CheckResult("unittest", False, f"non-zero exit; tail: {tail}"), output
     if match is None:
         return (

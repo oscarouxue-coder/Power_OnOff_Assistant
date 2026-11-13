@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import threading
 
 from src.services.ai_diagnostic_service import AiDiagnosticService
 from src.services.ai_conversation_service import AiConversationService
@@ -15,17 +14,18 @@ class AiAssistantController:
                  background="#eef2f5", foreground="#17202a", context=None, shared_busy=None):
         self.master = master
         self.bridge = AiSerialBridge(terminal, manager, busy, forbidden_port)
-        self.service = AiDiagnosticService(emit, self.bridge.acquire, self.bridge.read,
-                                           self.bridge.busy, manual_path=manual_path)
-        self.service.serial_status = self.bridge.serial_status
+        client = self.bridge.client
+        self.bridge.dispatcher.handlers['shared_busy'] = lambda request: shared_busy(request.args[0]) if shared_busy else False
+        self.bridge.dispatcher.handlers['target_current'] = lambda request: request.args[0] in tuple(targets())
+        self.service = AiDiagnosticService(emit, client.acquire, client.read,
+                                           client.busy, manual_path=manual_path)
+        self.service.serial_status = client.serial_status
         self.conversation = AiConversationService(self.service, context,
-            (lambda target: self.bridge.call_ui(lambda: shared_busy(target))) if shared_busy else None,
-            target_current=lambda target: (target in tuple(targets()) if threading.current_thread() is threading.main_thread()
-                                           else self.bridge.call_ui(lambda: target in tuple(targets()))))
+            client.shared_busy if shared_busy else None, target_current=client.target_current)
         self.service.conversation = self.conversation
         self.dialog = AiDiagnosticsWindow(master, self.service, targets, background, foreground,
                                           conversation=self.conversation)
-        terminal.diagnostic_observer = self.service.observe_serial
+        terminal.diagnostic_observer = self.service.serial_receiver
         self.terminal = terminal
         self.closing = False
         self.closed = False

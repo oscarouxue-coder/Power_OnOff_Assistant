@@ -38,7 +38,7 @@ a = Analysis(
     [str(project_root / 'run_line_check_assistant.py')],
     pathex=[str(project_root), str(project_root / 'Auto_power_on_off_tool')],
     binaries=[],
-    datas=[(str(project_root / 'line_check_assistant/packaging_assets/VERSION_INFO.txt'), '.'), (str(build_info), '.'), (str(project_root / 'line_check_assistant_README.md'), '.')],
+    datas=[(str(project_root / 'line_check_assistant/packaging_assets/VERSION_INFO.txt'), '.'), (str(build_info), '.'), (str(project_root / 'line_check_assistant_README.md'), '.'), (str(project_root / 'assets/icons/line_check_assistant_network_topology_v1.ico'), 'assets/icons')],
     hiddenimports=hiddenimports,
     hookspath=[str(project_root / 'line_check_assistant/packaging_hooks')],
     hooksconfig={},

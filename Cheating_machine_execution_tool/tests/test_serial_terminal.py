@@ -6,10 +6,12 @@ import sys
 import tempfile
 import tkinter as tk
 import unittest
+import time
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+from tk_test_windows import install_offscreen_windows
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -40,6 +42,7 @@ class QuietSerial:
 
 class SerialTerminalCloseTests(unittest.TestCase):
     def setUp(self):
+        install_offscreen_windows(self)
         gc.collect()
         self.addCleanup(self._collect_tk)
         self.temp = tempfile.TemporaryDirectory()
@@ -92,6 +95,15 @@ class SerialTerminalCloseTests(unittest.TestCase):
         book.event_generate("<ButtonPress-1>", x=x, y=y)
         book.event_generate("<ButtonRelease-1>", x=x, y=y)
         self.root.update()
+        self.wait_closes()
+
+    def wait_closes(self):
+        deadline = time.monotonic() + 2
+        while any(item.get('close_ticket') is not None for item in self.terminal.tabs.values()):
+            self.assertLess(time.monotonic(), deadline, 'asynchronous serial cleanup timed out')
+            self.root.update()
+            self.terminal._process_closes()
+            time.sleep(.001)
 
     def test_close_active_monitor_releases_only_target_and_flushes_log(self):
         self.assertEqual(self.terminal.open_all(), ())
@@ -164,6 +176,7 @@ class SerialTerminalCloseTests(unittest.TestCase):
         self.terminal.open_all()
         self.terminal.stop_all()
         self.assertTrue(self.terminal.close_tab("vlan101"))
+        self.wait_closes()
         self.assertNotIn("vlan101", self.terminal.tabs)
 
     def test_release_failure_keeps_tab_and_restores_subscription(self):
@@ -186,6 +199,7 @@ class SerialTerminalCloseTests(unittest.TestCase):
         self.terminal._append_pending_chunk("vlan101", "buffered old event")
         self.terminal._pending_dropped_chars["vlan101"] = 12
         self.assertTrue(self.terminal.close_tab("vlan101"))
+        self.wait_closes()
         self.assertNotIn("vlan101", self.terminal._pending_chunks)
         self.assertNotIn("vlan101", self.terminal._pending_char_counts)
         self.assertNotIn("vlan101", self.terminal._pending_dropped_chars)
@@ -201,6 +215,23 @@ class SerialTerminalCloseTests(unittest.TestCase):
         self.assertIn("new event", output)
         self.assertNotIn("old event", output)
 
+    def test_window_release_failure_can_be_retried_without_stuck_closing_flag(self):
+        self.terminal.open_all()
+        release = self.manager.release
+        failed = []
+        def once(owner, port, **kwargs):
+            if port == 'COM8' and not failed:
+                failed.append(True)
+                raise OSError('simulated release failure')
+            return release(owner, port, **kwargs)
+        with patch.object(self.manager, 'release', side_effect=once), patch('src.ui.serial_terminal.messagebox.showerror'):
+            self.terminal.close()
+            self.assertFalse(self.terminal._closing)
+            self.assertTrue(self.terminal.tabs['vlan101']['frame'].winfo_exists())
+            self.terminal.close()
+            self.wait_closes()
+            self.assertIsNone(self.terminal.window)
+
     def test_same_com_other_monitor_keeps_its_connection(self):
         self.terminal._ensure_tab("vlan102", "COM8")
         self.terminal.open_all()
@@ -210,6 +241,7 @@ class SerialTerminalCloseTests(unittest.TestCase):
         self.assertFalse(self.drivers["COM8"].closed)
         self.assertIn(other["subscriber"], session._subscribers)
         self.assertTrue(self.terminal.close_tab("vlan102"))
+        self.wait_closes()
         self.assertTrue(self.drivers["COM8"].closed)
 
     def test_click_label_selects_without_closing(self):
@@ -584,6 +616,7 @@ class SerialLogDirectoryTests(unittest.TestCase):
         from line_check_assistant.config_store import ChannelConfig
         from line_check_assistant.pipeline_window import PipelineWindow
 
+        install_offscreen_windows(self)
         root = tk.Tk()
         self.addCleanup(root.destroy)
         root.geometry("1100x850+50+50")

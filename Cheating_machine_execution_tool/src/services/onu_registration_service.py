@@ -10,6 +10,7 @@ from src.core.zte_olt_registered_query import RegisteredOnuQuerySession
 from src.core.zte_olt_telnet import (
     CLI_ERROR_RE,
     OltCommandError,
+    OltTelnetError,
     OperationCancelled,
     ZteOltTelnetSession,
 )
@@ -617,7 +618,7 @@ class OnuRegistrationService:
                         )
             check_cancelled()
             message = (
-                f"查询到 {len(enriched)} 个已注册 ONU，请选择要删除的一台"
+                f"查询到 {len(enriched)} 个已注册 ONU，请勾选要删除的目标"
                 if enriched
                 else "目标 PON 口未查询到已注册 ONU"
             )
@@ -656,7 +657,7 @@ class OnuRegistrationService:
         """删除明确指定的一台已注册 ONU（任意状态）：删除前身份复核、只删这一台、删除后回读验证。"""
         driver = driver_for_family(family)
         if candidate.family != family:
-            return OnuOperationResult(False, f"删除目标型号不匹配：{candidate.family} != {family}")
+            return OnuOperationResult(False, f"删除目标型号不匹配：{candidate.family} != {family}", error_kind="target")
         all_commands: list[str] = []
         all_outputs: list[str] = []
         session = self.session_type(
@@ -664,8 +665,11 @@ class OnuRegistrationService:
             logger=lambda text: self._log(family, text),
             cancel_event=cancel_event,
         )
+        deletion_attempted = False
+        connected = False
         try:
             session.connect()
+            connected = True
             if family == OLT_FAMILY_C300:
                 terminal = session.execute("terminal length 0")
                 all_commands.append("terminal length 0")
@@ -687,9 +691,13 @@ class OnuRegistrationService:
 
             self._log(family, f"删除目标 ONU：{candidate.onu_interface}（SN {current['serial_number']}）")
             delete_commands = driver.build_delete_commands(candidate)
-            delete_outputs = session.execute_many(delete_commands, timeout=25)
-            all_commands.extend(delete_commands)
-            all_outputs.extend(delete_outputs)
+            for command in delete_commands:
+                if cancel_event is not None and cancel_event.is_set():
+                    raise OperationCancelled("操作已停止")
+                all_commands.append(command)
+                if command.startswith("no onu "):
+                    deletion_attempted = True
+                all_outputs.append(session.execute(command, timeout=25))
 
             verify_command = driver.build_delete_identity_command(candidate)
             verify_output = session.execute(verify_command, timeout=20, fail_on_cli_error=False)
@@ -708,15 +716,26 @@ class OnuRegistrationService:
         except OperationCancelled as exc:
             session.best_effort_end()
             self._log(family, str(exc))
-            return OnuOperationResult(False, str(exc), output="\n\n".join(all_outputs), commands=tuple(all_commands))
+            return OnuOperationResult(False, str(exc), output="\n\n".join(all_outputs), commands=tuple(all_commands),
+                                      error_kind="cancelled", outcome_uncertain=deletion_attempted)
         except Exception as exc:
             session.best_effort_end()
             self._log(family, f"ONU 删除失败：{exc}")
+            if isinstance(exc, OltCommandError):
+                error_kind = "target"
+            elif isinstance(exc, (OltTelnetError, OSError)) or not connected:
+                error_kind = "transport"
+            elif isinstance(exc, RuntimeError):
+                error_kind = "target"
+            else:
+                error_kind = "unexpected"
             return OnuOperationResult(
                 False,
                 f"ONU 删除失败：{exc}",
                 output="\n\n".join(all_outputs),
                 commands=tuple(all_commands),
+                error_kind=error_kind,
+                outcome_uncertain=deletion_attempted,
             )
         finally:
             session.close()

@@ -615,12 +615,6 @@ class DutConfigWindow:
 
         outer = ttk.Frame(self.window, padding=18)
         outer.pack(fill="both", expand=True)
-        ttk.Label(outer, text="DUT配置", style="Header.TLabel").pack(anchor="w")
-        ttk.Label(
-            outer,
-            text="请勾选本次操作的 DUT",
-            style="Subtitle.TLabel",
-        ).pack(anchor="w", pady=(3, 12))
 
         self.notebook = ttk.Notebook(outer)
         self.notebook.pack(fill="both", expand=True)
@@ -1235,11 +1229,6 @@ class DutConfigWindow:
             form, 7, 0, "组播 VLAN ID：", self.wan_multicast_vlan_id_var,
             field_key="wan_multicast_vlan_id",
         )
-        self.wan_rule_hint_var = StringVar(value="")
-        ttk.Label(
-            form, textvariable=self.wan_rule_hint_var, style="Muted.TLabel",
-            justify="left", wraplength=1050,
-        ).grid(row=8, column=0, columnspan=8, sticky="w", padx=4, pady=(5, 0))
         self.wan_query_status_var = StringVar(
             value="修改/删除时请先点击“查询现有 WAN”，再从下拉列表选择。"
         )
@@ -1249,7 +1238,7 @@ class DutConfigWindow:
             style="Muted.TLabel",
             justify="left",
             wraplength=1050,
-        ).grid(row=9, column=0, columnspan=8, sticky="w", padx=4, pady=(2, 0))
+        ).grid(row=8, column=0, columnspan=8, sticky="w", padx=4, pady=(2, 0))
         self._wan_target_signature: tuple[tuple[str, ...], ...] = ()
         self._wan_connection_details: dict[str, DutWanConnectionInfo] = {}
         self._updating_wan_form = False
@@ -1279,7 +1268,7 @@ class DutConfigWindow:
         self.wan_index_combo.configure(values=())
         self.wan_index_var.set("")
         self.wan_query_status_var.set(
-            message or "修改/删除时请先点击“查询现有 WAN”，再从下拉列表选择。"
+            message if message is not None else "修改/删除时请先点击“查询现有 WAN”，再从下拉列表选择。"
         )
 
     def set_wan_connections(
@@ -1494,33 +1483,6 @@ class DutConfigWindow:
                 self._set_wan_field_visible(field_key, visible)
             self._wan_nat_widget.grid() if rules.show_router else self._wan_nat_widget.grid_remove()
 
-            if not rules.show_config:
-                hint = "删除仅按现有连接名/索引执行，不展示或使用其它 WAN 参数。"
-            elif not rules.show_router:
-                hint = (
-                    "桥接 IPTV 使用业务类型、业务 VLAN、可选组播 VLAN、优先级和端口绑定；"
-                    "默认绑定 LAN1（位掩码 1）。"
-                    if rules.show_multicast_vlan
-                    else "桥接 WAN 仅使用业务类型、VLAN、优先级和端口绑定；默认绑定 LAN1（位掩码 1）。"
-                )
-            else:
-                protocol = self.wan_ip_protocol_var.get()
-                address_hint = []
-                if rules.show_ipv4_selector:
-                    address_hint.append(f"IPv4 {ipv4_type}")
-                if rules.show_ipv6_selector:
-                    address_hint.append(f"IPv6 {ipv6_type}")
-                hint = (
-                    f"当前为 {access_type} {protocol}（{' + '.join(address_hint)}），"
-                    f"协议默认 MTU {rules.mtu_default}；动态地址不需要填写静态地址项。"
-                )
-                if access_type == "PPPoE":
-                    hint += " PPPoE 仅支持动态地址组合，需填写账号和密码。"
-                elif protocol == "IPv4+IPv6（双栈）":
-                    hint += " IPoE 双栈静态时 IPv4 与 IPv6 必须同时静态。"
-            if rules.show_multicast_vlan and rules.show_router:
-                hint += " IPTV 可选填写组播 VLAN ID；留空表示不单独配置组播 VLAN。"
-            self.wan_rule_hint_var.set(hint)
         finally:
             self._updating_wan_form = False
 
@@ -1674,15 +1636,6 @@ class DutConfigWindow:
             width=20,
         )
 
-        hint_var = StringVar(value="")
-        variables["hint"] = hint_var
-        ttk.Label(
-            form,
-            textvariable=hint_var,
-            style="Muted.TLabel",
-            justify="left",
-            wraplength=1120,
-        ).grid(row=3, column=0, columnspan=8, sticky="w", padx=4, pady=(5, 0))
         self._wifi_password_groups[feature] = (password_label, password_entry)
         self._wifi_choice_widgets[feature] = {
             "ssid_index": index_combo,
@@ -1730,11 +1683,9 @@ class DutConfigWindow:
         if security_mode == "None":
             password_label.grid_remove()
             password_entry.grid_remove()
-            security_hint = "开放网络不下发 WiFi 密码。"
         else:
             password_label.grid()
             password_entry.grid()
-            security_hint = "加密网络密码须为8–63个字符，或64位十六进制密钥。"
         dual_enabled = bool(variables["dual_band_enabled"].get())
         peer_radio_group = self._wifi_peer_radio_groups.get(feature)
         if peer_radio_group is not None:
@@ -1749,18 +1700,6 @@ class DutConfigWindow:
                 widget = self._wifi_choice_widgets.get(feature, {}).get(key)
                 if widget is not None:
                     widget.configure(values=options)
-        dual_hint = (
-            "已开启双频合一：名称和安全/AP参数同步；2.4G/5G信道、带宽和协议独立配置，"
-            "公共发射功率写入两个Radio。"
-            if dual_enabled
-            else "双频独立：只显示并修改当前频段Radio。"
-        )
-        increment_hint = (
-            "SSID递增已开启：名称须以数字结尾，并按已选DUT的目标表顺序逐台加1。"
-            if bool(variables["ssid_increment"].get())
-            else "SSID递增关闭：所有已选DUT使用同一名称。"
-        )
-        variables["hint"].set(f"{security_hint} {dual_hint} {increment_hint}")
 
     def _build_voice_tab(self, on_refresh, on_start, on_query, on_stop, on_close) -> None:
         tab = ttk.Frame(self.notebook, padding=12)
@@ -2350,7 +2289,7 @@ class DutConfigWindow:
         return "break"
 
     def _invalidate_status_after_target_selection_change(self) -> None:
-        self.clear_wan_connections("DUT窗口目标选择已变化，请重新查询现有 WAN。")
+        self.clear_wan_connections("")
         self.clear_current_status("telnet", "DUT窗口目标选择已变化，请重新查询当前Telnet状态。")
         self.clear_current_status("wan", "DUT窗口目标选择已变化，请重新查询当前WAN状态。")
         self.clear_current_status("voice", "DUT窗口目标选择已变化，请重新查询当前语音状态。")

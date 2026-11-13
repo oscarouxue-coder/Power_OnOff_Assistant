@@ -1,120 +1,77 @@
-"""诊断后台线程到现有串口窗口的主线程桥；不模拟键盘，不新建读线程。"""
+"""GUI-owned diagnostic handlers; workers receive only AiSerialClient."""
 from __future__ import annotations
-
-from concurrent.futures import Future
-import queue
 import threading
-import time
 import uuid
-
 from src.models.serial_models import SerialSettings
+from src.services.ai_serial_client import AiSerialClient, SerialLease
+from src.services.pipeline_runtime import PipelineDispatcher, PipelineUiError
 
 
 class AiSerialBridge:
-    def __init__(self, terminal, manager, busy, forbidden_port=lambda: ""):
+    def __init__(self, terminal, manager, busy, forbidden_port=lambda: ''):
         self.terminal, self.manager = terminal, manager
         self.busy_callback, self.forbidden_port = busy, forbidden_port
-        self.requests = queue.Queue(maxsize=32)
-        self.controls = {}
-        self.lock = threading.RLock()
+        self.client = AiSerialClient(manager)
+        self.requests = self.client.channel.requests
+        self.controls, self.lock = self.client.controls, self.client.lock
         self.closed = False
-        terminal.ai_debug_cancel = self.cancel_port
-
-    def call_ui(self, action, stop=None):
-        future = Future()
-        self.requests.put_nowait((future, action, stop))
-        deadline = time.monotonic() + 20
-        while not future.done():
-            if self.closed or (stop is not None and stop.is_set()) or time.monotonic() >= deadline:
-                future.cancel()
-                raise InterruptedError("主线程操作已取消或超时")
-            time.sleep(0.02)
-        return future.result()
+        self.dispatcher = PipelineDispatcher(self.client.channel)
+        self.dispatcher.handlers.update(busy=lambda request: self.busy_callback(request.args[0]),
+                                        acquire=self._acquire, restore=self._restore_status,
+                                        status=self._status)
+        terminal.ai_debug_cancel = self.client.cancel_port
 
     def poll(self):
-        for _ in range(20):
-            try:
-                future, action, stop = self.requests.get_nowait()
-            except queue.Empty:
-                break
-            if future.cancelled():
-                continue
-            if self.closed or (stop is not None and stop.is_set()):
-                future.set_exception(InterruptedError("串口诊断已取消"))
-                continue
-            if not future.set_running_or_notify_cancel():
-                continue
-            try:
-                future.set_result(action())
-            except Exception as exc:
-                future.set_exception(exc)
+        self.dispatcher.poll(20)
 
-    def busy(self, target):
-        return self.call_ui(lambda: self.busy_callback(target))
-
-    def acquire(self, target, stop):
-        def open_on_ui():
-            if self.busy_callback(target):
-                raise RuntimeError("目标设备正在执行操作，跳过串口主动采集")
-            if not target.port or target.port.upper() == self.forbidden_port().upper():
-                raise ValueError("目标串口不明确或与程控电源串口冲突")
-            existing = self.terminal.tabs.get(target.vlan.lower())
-            if existing and existing["session"] is not None and existing["port"].upper() != target.port.upper():
-                raise ValueError("已打开的目标标签与本次COM快照不一致")
-            if not self.manager.manual_writable(target.port):
-                raise RuntimeError("目标串口已被其它流程控制，只允许读取日志")
-            self.terminal.show([(target.vlan, target.port)])
-            if not self.terminal.open_monitor(target.vlan.lower(), raise_errors=True):
-                raise RuntimeError("目标串口打开失败")
-            owner = "ai-debug:" + uuid.uuid4().hex
-            session = self.manager.acquire_existing_control(owner, SerialSettings(target.port))
-            cancelled = threading.Event()
-            with self.lock:
-                self.controls[target.port.upper()] = (owner, cancelled)
-            self.terminal.tabs[target.vlan.lower()]["status"].set(
-                f"{target.port} AI Debug中，手动发送暂时锁定；日志继续记录")
-            return session, owner, cancelled
-        session, owner, cancelled = self.call_ui(open_on_ui, stop)
-
-        def release():
-            self.manager.release(owner, target.port)
-            with self.lock:
-                self.controls.pop(target.port.upper(), None)
-            try:
-                self.requests.put_nowait((Future(), lambda: self._restore_status(target), None))
-            except queue.Full:
-                pass
-        return session, release, cancelled
-
-    def _restore_status(self, target):
-        item = self.terminal.tabs.get(target.vlan.lower())
-        if item and item["session"] is not None:
-            item["status"].set(f"{target.port} 监控中，AI Debug已结束，日志继续记录")
-
-    def cancel_port(self, port):
+    def _acquire(self, request):
+        target = request.args[0]
+        if self.busy_callback(target):
+            raise RuntimeError('目标设备正在执行操作，跳过串口主动采集')
+        if not target.port or target.port.upper() == self.forbidden_port().upper():
+            raise ValueError('目标串口不明确或与程控电源串口冲突')
+        existing = self.terminal.tabs.get(target.vlan.lower())
+        if existing and existing['session'] is not None and existing['port'].upper() != target.port.upper():
+            raise ValueError('已打开的目标标签与本次COM快照不一致')
+        if not self.manager.manual_writable(target.port):
+            raise RuntimeError('目标串口已被其它流程控制，只允许读取日志')
+        if not request.admit():
+            raise PipelineUiError('串口诊断已取消')
+        self.terminal.show([(target.vlan, target.port)])
+        if not self.terminal.open_monitor(target.vlan.lower(), raise_errors=True):
+            raise RuntimeError('目标串口打开失败')
+        owner = 'ai-debug:' + uuid.uuid4().hex
+        session = self.manager.acquire_existing_control(owner, SerialSettings(target.port))
+        cancelled = threading.Event()
         with self.lock:
-            item = self.controls.get(port.upper())
-            if item:
-                item[1].set()
-                return True
-        return False
+            self.controls[target.port.upper()] = (owner, cancelled)
+        item = self.terminal.tabs[target.vlan.lower()]
+        item['status'].set(f'{target.port} AI Debug中，手动发送暂时锁定；日志继续记录')
+        return SerialLease(self.client, target, session, owner, cancelled, item.get('event_token'))
+
+    def _restore_status(self, request):
+        target, token = request.args
+        item = self.terminal.tabs.get(target.vlan.lower())
+        if (item and item['session'] is not None and item.get('event_token') is token
+                and self.manager.manual_writable(target.port)):
+            item['status'].set(f'{target.port} 监控中，AI Debug已结束，日志继续记录')
+
+    def _status(self, request):
+        target = request.args[0]
+        result = self.manager.diagnostic_state(target.port)
+        result['last_open_error'] = self.terminal.last_open_errors.get(target.port.upper(), '')
+        result['power_port_conflict'] = target.port.upper() == self.forbidden_port().upper()
+        return result
 
     def read(self, target):
-        session = self.manager.existing_session(SerialSettings(target.port)) if target.port else None
-        if session is None:
-            return "目标串口未打开，无实时串口输出；未为被动读取自动打开COM"
-        return session.peek_since(max(0, session.cursor() - 65536))
+        return self.client.read(target)
 
-    def serial_status(self, target):
-        def snapshot():
-            result = self.manager.diagnostic_state(target.port)
-            result["last_open_error"] = self.terminal.last_open_errors.get(target.port.upper(), "")
-            result["power_port_conflict"] = target.port.upper() == self.forbidden_port().upper()
-            return result
-        return self.call_ui(snapshot)
+    def acquire(self, target, stop):
+        return self.client.acquire(target, stop)
 
     def close(self):
         self.closed = True
-        with self.lock:
-            for _, cancel in self.controls.values():
-                cancel.set()
+        self.client.close()
+        self.dispatcher.poll(32)
+        self.dispatcher.dispose()
+        self.terminal.ai_debug_cancel = None

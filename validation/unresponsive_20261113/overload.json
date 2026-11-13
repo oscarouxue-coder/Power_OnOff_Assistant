@@ -1,0 +1,81 @@
+{
+  "seconds": 8.0,
+  "ports": 8,
+  "rate_per_port": 1000,
+  "block_bytes": 256,
+  "cycles": 8,
+  "max_heartbeat_gap": 0.3130000000819564,
+  "memory": [
+    {
+      "cycle": 1,
+      "rss": 56365056,
+      "history": 2201435,
+      "callbacks": 2
+    },
+    {
+      "cycle": 2,
+      "rss": 59047936,
+      "history": 3580301,
+      "callbacks": 2
+    },
+    {
+      "cycle": 3,
+      "rss": 61198336,
+      "history": 4844990,
+      "callbacks": 2
+    },
+    {
+      "cycle": 4,
+      "rss": 58966016,
+      "history": 5707997,
+      "callbacks": 2
+    },
+    {
+      "cycle": 5,
+      "rss": 59887616,
+      "history": 6332921,
+      "callbacks": 2
+    },
+    {
+      "cycle": 6,
+      "rss": 60366848,
+      "history": 6856716,
+      "callbacks": 2
+    },
+    {
+      "cycle": 7,
+      "rss": 60243968,
+      "history": 7007503,
+      "callbacks": 2
+    },
+    {
+      "cycle": 8,
+      "rss": 53243904,
+      "history": 22529,
+      "callbacks": 2
+    }
+  ],
+  "max_subscriptions": 8,
+  "display_drops": 56151,
+  "max_mailbox": 2000,
+  "max_pending_chars": 298511,
+  "errors": [],
+  "tk_finalizers": 97,
+  "wrong_tk_threads": [],
+  "snapshot_threads_correct": true,
+  "retained_closed_pipeline_windows": 0,
+  "elapsed": 8.093,
+  "total_records": 62845,
+  "log_integrity": {
+    "SIM1": true,
+    "SIM2": true,
+    "SIM3": true,
+    "SIM4": true,
+    "SIM5": true,
+    "SIM6": true,
+    "SIM7": true,
+    "SIM8": true
+  },
+  "remaining_sim_threads": [],
+  "passed": true
+}

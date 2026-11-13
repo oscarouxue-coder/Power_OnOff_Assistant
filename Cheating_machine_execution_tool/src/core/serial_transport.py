@@ -15,6 +15,13 @@ from src.models import SerialEvent, SerialSettings
 Subscriber = Callable[[SerialEvent], None]
 
 
+class SerialCloseTicket:
+    """Data-only completion; failures never transport a reader traceback to Tk."""
+    def __init__(self):
+        self.done = threading.Event()
+        self.error = ""
+
+
 def vlan_to_serial_port(vlan: str) -> str:
     normalized = (vlan or "").strip().lower()
     if not normalized.startswith("vlan") or not normalized[4:].isdigit():
@@ -51,6 +58,10 @@ class PySerialSession:
         self._subscribers: set[Subscriber] = set()
         self._stop = threading.Event()
         self._closed = False
+        self._close_lock = threading.Lock()
+        self._close_done = threading.Event()
+        self._close_started = False
+        self._closer_ident = None
         self._reader: threading.Thread | None = None
         self._log_handle = None
         self._rx_log_line_buffer = ""
@@ -99,6 +110,7 @@ class PySerialSession:
             self._subscribers.add(subscriber)
 
     def unsubscribe(self, subscriber: Subscriber) -> None:
+        # Keep the removed reference alive until after leaving the session lock.
         with self._condition:
             self._subscribers.discard(subscriber)
 
@@ -156,30 +168,48 @@ class PySerialSession:
         return False
 
     def close(self) -> None:
-        if self._closed:
+        with self._close_lock:
+            if self._close_done.is_set():
+                return
+            other_closer = self._close_started
+            same_closer = self._closer_ident == threading.get_ident()
+            self._close_started = True
+            if not other_closer:
+                self._closer_ident = threading.get_ident()
+        if other_closer:
+            if same_closer:
+                return  # a CLOSED subscriber may call close() idempotently
+            self._close_done.wait()
             return
-        self._closed = True
-        self._stop.set()
-        if self._serial is not None:
-            try:
-                cancel_read = getattr(self._serial, "cancel_read", None)
-                if cancel_read:
-                    cancel_read()
-            except Exception:
-                pass
-            try:
-                self._serial.close()
-            except Exception:
-                pass
-        with self._condition:
-            self._condition.notify_all()
-        if self._reader is not None and self._reader is not threading.current_thread():
-            self._reader.join(timeout=2)
-        self._flush_pending_rx_log_line()
-        self._emit("STATE", b"CLOSED", "串口已关闭")
-        if self._log_handle is not None:
-            self._log_handle.close()
-            self._log_handle = None
+        try:
+            self._closed = True
+            self._stop.set()
+            if self._serial is not None:
+                try:
+                    cancel_read = getattr(self._serial, "cancel_read", None)
+                    if cancel_read:
+                        cancel_read()
+                except Exception:
+                    pass
+                try:
+                    self._serial.close()
+                except Exception:
+                    pass
+            with self._condition:
+                self._condition.notify_all()
+            if self._reader is threading.current_thread():
+                raise RuntimeError('串口读线程不能同步关闭自身')
+            if self._reader is not None:
+                # Only background owners / close workers call this blocking API.
+                # Do not close the log under a still-executing reader callback.
+                self._reader.join()
+            self._flush_pending_rx_log_line()
+            self._emit("STATE", b"CLOSED", "串口已关闭")
+            if self._log_handle is not None:
+                self._log_handle.close()
+                self._log_handle = None
+        finally:
+            self._close_done.set()
 
     def _reader_loop(self) -> None:
         while not self._stop.is_set() and self._serial is not None:
@@ -269,6 +299,7 @@ class SerialSessionManager:
         self._sessions: dict[str, PySerialSession] = {}
         self._owners: dict[str, set[str]] = defaultdict(set)
         self._controllers: dict[str, str] = {}
+        self._closing: dict[str, SerialCloseTicket] = {}
 
     def acquire_monitor(self, owner: str, settings: SerialSettings, log_path: Path | None = None) -> PySerialSession:
         return self._acquire(owner, settings, log_path, control=False)
@@ -279,6 +310,8 @@ class SerialSessionManager:
     def _acquire(self, owner: str, settings: SerialSettings, log_path: Path | None, control: bool) -> PySerialSession:
         port = settings.port.upper()
         with self._lock:
+            if port in self._closing:
+                raise RuntimeError(f"串口 {port} 正在关闭，请等待日志收尾后重试")
             existing_controller = self._controllers.get(port)
             if control and existing_controller not in (None, owner):
                 raise RuntimeError(f"串口 {port} 正被升级流程占用")
@@ -292,9 +325,11 @@ class SerialSessionManager:
                 self._controllers[port] = owner
             return session
 
-    def release(self, owner: str, port: str) -> None:
+    def release(self, owner: str, port: str, *, wait: bool = True):
         key = port.upper()
         with self._lock:
+            if key in self._closing:
+                return self._closing[key]
             if self._controllers.get(key) == owner:
                 self._controllers.pop(key, None)
             self._owners[key].discard(owner)
@@ -302,8 +337,33 @@ class SerialSessionManager:
                 return
             session = self._sessions.pop(key, None)
             self._owners.pop(key, None)
+            ticket = SerialCloseTicket()
+            if session is not None:
+                self._closing[key] = ticket
         if session is not None:
+            if wait:
+                self._close_session(key, session, ticket)
+                if ticket.error:
+                    raise RuntimeError(ticket.error)
+            else:
+                threading.Thread(target=self._close_session, args=(key, session, ticket),
+                                 name=f"serial-close-{key}", daemon=True).start()
+        else:
+            ticket.done.set()
+        return ticket
+
+    def _close_session(self, key, session, ticket):
+        try:
             session.close()
+        except Exception as exc:
+            ticket.error = type(exc).__name__ + ': ' + str(exc)
+        finally:
+            with self._lock:
+                # A failed close remains reserved; reopening an unknown driver
+                # state could create a second reader on the physical port.
+                if not ticket.error:
+                    self._closing.pop(key, None)
+            ticket.done.set()
 
     def manual_writable(self, port: str) -> bool:
         with self._lock:
@@ -335,11 +395,25 @@ class SerialSessionManager:
                     "monitor_owners": sorted(self._owners.get(key, ())),
                     "control_owner": self._controllers.get(key, "")}
 
-    def shutdown_all(self) -> None:
+    def shutdown_all(self, *, wait: bool = True):
         with self._lock:
-            sessions = tuple(self._sessions.values())
+            sessions = tuple(self._sessions.items())
             self._sessions.clear()
             self._owners.clear()
             self._controllers.clear()
-        for session in sessions:
-            session.close()
+            work = []
+            for key, session in sessions:
+                ticket = SerialCloseTicket()
+                self._closing[key] = ticket
+                work.append((key, session, ticket))
+            tickets = tuple(self._closing.values())
+        for key, session, ticket in work:
+            if wait:
+                self._close_session(key, session, ticket)
+            else:
+                threading.Thread(target=self._close_session, args=(key, session, ticket),
+                                 name=f"serial-close-{key}", daemon=True).start()
+        if wait:
+            for ticket in tickets:
+                ticket.done.wait()
+        return tickets

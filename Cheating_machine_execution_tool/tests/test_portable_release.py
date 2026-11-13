@@ -262,6 +262,7 @@ class PortableReleaseBuildScriptTests(unittest.TestCase):
             self.assertIn((str(work / "BUILD_INFO.txt"), "."), settings["datas"])
             self.assertIn((str(relocated / "line_check_assistant/packaging_assets/VERSION_INFO.txt"), "."), settings["datas"])
             self.assertEqual(captured["exe"]["icon"], [str(relocated / "assets/icons/line_check_assistant_network_topology_v1.ico")])
+            self.assertIn((captured["exe"]["icon"][0], "assets/icons"), settings["datas"])
             self.assertFalse(captured["exe"]["console"])
             self.assertFalse(captured["exe"]["upx"])
             self.assertIn("PyQt5", (work / "BUILD_INFO.txt").read_text(encoding="utf-8"))

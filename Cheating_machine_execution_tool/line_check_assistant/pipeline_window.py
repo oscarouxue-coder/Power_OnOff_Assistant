@@ -17,6 +17,8 @@
 from __future__ import annotations
 
 import threading
+from copy import deepcopy
+import queue
 from tkinter import BooleanVar, Checkbutton, Frame, Label, StringVar, Toplevel, messagebox, ttk
 from typing import Any, Callable, Dict, List, Set
 
@@ -38,6 +40,8 @@ from src.services.telnet_post_login_confirmation_service import (
 )
 from src.ui.module_theme import MODULE_BACKGROUND, apply_module_theme
 from src.ui.window_paint import center_toplevel_on_parent
+from src.ui.tk_lifecycle import TkScope
+from src.services.pipeline_runtime import PipelineClient, PipelineLogSink, run_pipeline
 
 
 # 窗口入口仅保留三项，编排器原任务代码及其它能力继续兼容。
@@ -66,6 +70,9 @@ class PipelineWindow:
 
     def __init__(self, app: Any) -> None:
         self.app = app
+        self._scope = TkScope()
+        self._closed = False
+        self._run = None
         self.window: Toplevel = Toplevel(app)
         self.window.title("全流程执行")
         # 三项任务使用紧凑最小尺寸，仍通过原有入口恢复及保存窗口宽高。
@@ -145,7 +152,7 @@ class PipelineWindow:
         row.pack(fill="x", pady=(0, 6))
 
         # 所有子任务都由操作员按本次测试需要明确选择，避免打开窗口后误执行。
-        var = BooleanVar(value=self._default_checked(code))
+        var = self._scope.variable(BooleanVar, row, value=self._default_checked(code))
         self._check_vars[code] = var
 
         selector = Checkbutton(
@@ -163,8 +170,8 @@ class PipelineWindow:
         self._selection_controls[code] = selector
 
         # 缺项(红字)在上、summary(黑字)在下一行(用户 2026-07-20 反馈:红字提示更醒目)
-        summary_var = StringVar(value="(计算中...)")
-        missing_var = StringVar(value="")
+        summary_var = self._scope.variable(StringVar, row, value="(计算中...)")
+        missing_var = self._scope.variable(StringVar, row, value="")
         self._status_summary_vars[code] = summary_var
         self._status_missing_vars[code] = missing_var
         Label(
@@ -235,6 +242,9 @@ class PipelineWindow:
 
     def _build_context(self, unattended_execution: bool = False) -> PipelineContext:
         """构造 PipelineContext，并优先读取各配置窗口中的当前输入。"""
+        scope = getattr(self, '_scope', None)
+        if scope is not None:
+            scope.check()
         app = self.app
         channels = _get_attr(app, "channels", [])
         # 升级窗口编辑的是 Tk 变量；不能只读启动时加载的缓存，否则界面已填的
@@ -264,6 +274,10 @@ class PipelineWindow:
     # -- 开始 / 停止 -----------------------------------------------------
 
     def _on_start(self) -> None:
+        ui = self.app.__dict__.get('_pipeline_ui')
+        if ui is not None and not ui.idle():
+            messagebox.showwarning('全流程正在收尾', '请等待上一次后台任务安全退出后再开始。', parent=self.window)
+            return
         prepare_ai = getattr(self.app, "_prepare_ai_for_device_action", None)
         if callable(prepare_ai) and prepare_ai() is False:
             return
@@ -341,56 +355,49 @@ class PipelineWindow:
         self._set_running_ui(True)
         self._update_main_power_test_progress(0, 0)
         self._update_main_power_test_status("running")
-        # 启动后台线程
+        # Snapshot once on Tk; the worker never receives this window or app.
+        from src.ui.pipeline_ui import PipelineUiController
+        ui = self.app.__dict__.get('_pipeline_ui')
+        if ui is None:
+            ui = self.app._pipeline_ui = PipelineUiController(self.app)
+        run = ui.channel.new_run()
+        self._run = run
+        power_var = getattr(self.app, 'power_serial_var', None)
+        power_port = power_var.get() if power_var is not None else getattr(self.app, 'power_serial_port', '')
+        selected_onus = getattr(self.app, '_selected_unregistered_onus', None)
+        client = PipelineClient(ui.channel, run, str(power_port),
+                                deepcopy(selected_onus() if callable(selected_onus) else ()),
+                                bool(getattr(self.app, 'onu_preview_ready', False)))
+        ctx.app = client
+        ctx.channels = deepcopy(ctx.channels)
+        ctx.sample_upgrade_settings = deepcopy(ctx.sample_upgrade_settings)
+        ctx.onu_registration = deepcopy(ctx.onu_registration)
+        ctx.stop_event = run.stop
+        emit = PipelineLogSink(getattr(self.app, 'log_queue', queue.Queue()),
+                               [(ORCHESTRATOR_SUBTASK_LABELS[code], label)
+                                for code, label in WINDOW_SUBTASK_LABELS.items()])
         self._running_thread = threading.Thread(
-            target=self._run_pipeline_thread,
-            args=(selected,),
+            target=run_pipeline,
+            args=(ctx, selected, ui.channel, run, emit),
             daemon=True,
             name="pipeline-orchestrator",
         )
+        ui.register(self, run, self._running_thread)
         self._running_thread.start()
         self.window.withdraw()
         self._emit_to_main_log(
             "[全流程] 已开始后台执行，全流程配置窗口已自动隐藏；请在主界面查看状态或停止。"
         )
 
-    def _run_pipeline_thread(self, selected: Set[str]) -> None:
-        try:
-            ctx = self._build_context()
-            orchestrator = PipelineOrchestrator(ctx, self._emit_to_main_log)
-            self._orchestrator = orchestrator
-            if self._stop_requested:
-                orchestrator.request_stop()
-            results = orchestrator.run(selected)
-            self._invoke_on_main_thread(
-                lambda completed_results=results: self._on_pipeline_complete(
-                    completed_results
-                )
-            )
-        except PipelineError as exc:
-            self._invoke_on_main_thread(
-                lambda error=exc: self._on_pipeline_failed(error)
-            )
-        except Exception as exc:  # noqa: BLE001 - 后台线程异常需兜底
-            self._invoke_on_main_thread(
-                lambda error=exc: self._on_pipeline_failed(error)
-            )
-        finally:
-            self._orchestrator = None
-
-    def _invoke_on_main_thread(self, action) -> None:
-        """通过主程序既有 UI 队列执行 Tk 回调，兼容不带队列的最小测试替身。"""
-        invoke = getattr(self.app, "_invoke_pipeline_ui_action", None)
-        if callable(invoke):
-            invoke(action)
-            return
-        action()
-
     def is_running(self) -> bool:
         """返回后台全流程线程的真实存活状态。"""
-        return bool(self._running_thread and self._running_thread.is_alive())
+        run = getattr(self, '_run', None)
+        pending_cleanup = run is not None and any(not item['event'].is_set() for item in run.subtasks.values())
+        return bool((self._running_thread and self._running_thread.is_alive()) or pending_cleanup)
 
     def _on_pipeline_complete(self, results: List[SubTaskResult]) -> None:
+        if getattr(self, '_closed', False):
+            return
         self._set_running_ui(False)
         self._update_main_power_test_status(
             "stopped" if self._stop_requested else "completed"
@@ -417,6 +424,8 @@ class PipelineWindow:
         self._refresh_statuses()
 
     def _on_pipeline_failed(self, exc: Exception) -> None:
+        if getattr(self, '_closed', False):
+            return
         self._set_running_ui(False)
         self._update_main_power_test_status(
             "stopped" if self._stop_requested else "failed"
@@ -442,11 +451,19 @@ class PipelineWindow:
     def request_stop(self) -> bool:
         """供主界面停止按钮调用；返回是否已向当前编排器发出停止请求。"""
         if self._orchestrator is None:
-            if self._running_thread is None or not self._running_thread.is_alive():
+            if not PipelineWindow.is_running(self):
                 return False
         else:
             self._orchestrator.request_stop()
         self._stop_requested = True
+        run = getattr(self, '_run', None)
+        if run is not None:
+            run.cancel()
+            for code, name in (('sample_parameter_write', 'parameter_cancel_event'), ('onu_registration', 'onu_cancel_event')):
+                if code in run.subtasks:
+                    stop = self.app.__dict__.get(name)
+                    if stop is not None:
+                        stop.set()
         stop_upgrade = getattr(getattr(self, "app", None), "_stop_sample_upgrade", None)
         if callable(stop_upgrade):
             stop_upgrade(from_pipeline=True)
@@ -457,7 +474,7 @@ class PipelineWindow:
         return True
 
     def _on_close(self) -> None:
-        if self._running_thread and self._running_thread.is_alive():
+        if self.is_running():
             if not messagebox.askyesno(
                 "全流程执行正在进行",
                 "全流程仍在运行,确认关闭窗口?操作员在主程序后台线程可能继续运行。",
@@ -468,7 +485,28 @@ class PipelineWindow:
         if hasattr(self.app, "pipeline_window"):
             self.app.pipeline_window = None
         self.app._remember_module_window_size(self.window, "pipeline")
+        self._dispose()
+
+    def _dispose(self):
+        if self._closed:
+            return
+        self._scope.check()
+        self._closed = True
+        if self._run is not None:
+            if (not self._run.finished.is_set()
+                    or any(not item['event'].is_set() for item in self._run.subtasks.values())):
+                self._run.cancel()
+            self._run.detached = True
+        self.window.unbind('<FocusIn>')
         self.window.destroy()
+        self._scope.release()
+        for mapping in (self._check_vars, self._status_summary_vars, self._status_missing_vars,
+                        self._selection_controls, self._status_labels):
+            mapping.clear()
+        self._start_button = None
+        self._orchestrator = None
+        self.window = None
+        self.app = None
 
     # -- 辅助 -----------------------------------------------------------
 

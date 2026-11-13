@@ -1,5 +1,209 @@
 # 开发记录
 
+## 2026-11-13 - 验证串口优化提交前完整基线
+
+- 类型：测试
+- 背景：负责人要求本地Git提交并推送GitHub，备注为“优化串口大流量时导致程序卡死问题”；确认本次包含当前全部源码、测试和文档改动。
+- 完成内容：① 核对main分支、空暂存区和全部现有改动，将串口/全流程生命周期修复、ONU批量删除、统一图标、界面说明精简及相关测试、文档和验证证据共65个文件纳入本次提交。② 刷新origin后确认提交前本地与origin/main分歧为0/0。③ 通过标准Git检查入口运行完整基线，提交仍由既有pre-commit钩子复核，不绕过门禁；同步最新完整验证入口。
+- 修改文件：
+  - `DEVELOPMENT_LOG.md`（追加本轮提交前验证记录）
+  - `PROJECT_STATUS.md`（更新最新完整验证入口）
+- 验证方法：在主源码目录执行`powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\run_git_pre_commit.ps1`；执行`git fetch origin`、`git rev-list --left-right --count HEAD...origin/main`、`git diff --cached --check`及`git diff --quiet`。
+- 验证结果：CPython 3.9.10 x64完整基线`ALL CHECKS PASSED`，1937项测试、196项指定关键回归实际执行、153个源码编译/覆盖及全部协议不变量通过。提交前远端分歧为0/0，无未暂存差异；验证证据目录外的源码、测试和文档差异格式检查通过。历史证据`source_review.diff`包含补丁空行上下文的单空格，`initial_failed_summary.txt`及`intermediate_failed_summary.txt`各有一处原始输出行尾空格，保留证据原文，不将全仓差异格式检查表述为全绿。完整基线原始输出保存在本机临时目录`linecheck_commit_baseline_20261113.log`。本轮未修改业务实现、构建或运行交付EXE，也未新增Windows人工或真实设备验收结论。
+- 后续待办：按本次授权以指定备注提交并推送origin/main，核对远端与本地提交一致；Windows完整源码版人工复验、真实多串口/长时间及C300/C600新增路径待验收仍见ACCEPTANCE_BASELINE.md §3。
+
+## 2026-11-13 - 移除WiFi与项目信息固定说明
+
+- 类型：优化
+- 背景：负责人要求删除两张截图中的WiFi底部规则说明，以及项目信息页的只读、查询参数固定说明。
+- 完成内容：① 删除WiFi底部整段说明标签。② 删除项目信息页只读说明，查询状态初始为空且不占布局行，查询成功或复制后显示原动态反馈。③ 保留WiFi选项及保存、网卡失败规则、只读查询结果、手动输入与查询连接逻辑；同步操作员说明和既有相关测试断言。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`，将`tests`置于`sys.path`后运行`CurrentChannelSelectionTests`中的`test_telnet_and_wifi_tabs_use_chinese_field_labels`、`test_project_info_query_uses_current_channel_and_returns_to_ui_thread`、`test_project_info_tab_keeps_manual_versions_separate_from_read_only_query_results`；独立隐藏Tk核对状态初始不参与布局、查询及复制动态反馈、剪贴板内容与手动输入保持；AST核对目标固定文字不存在，局部`py_compile`和四文件`git diff --check`。
+- 验证结果：3项相关测试通过；独立Tk检查`PROJECT_INFO_DYNAMIC_STATUS_TK_OK`、静态检查`WIFI_PROJECT_HINT_REMOVAL_OK`、2文件编译和差异检查通过。首次通过`tests.test_app`指定用例因测试目录不可作为包导入而失败，改用既有测试目录导入方式后通过。本轮未运行完整基线，保留最近一次完整验证记录。
+- 后续待办：重启源码程序后目视确认两页布局；独立隐藏Tk不替代完整Windows人工复验。未打包、提交或操作设备。
+
+## 2026-11-13 - 移除测试项顶部固定说明
+
+- 类型：优化
+- 背景：负责人要求删除截图中以“每条命令可设置独立的重试次数”开头的固定文字说明。
+- 完成内容：移除测试项页顶部对应说明标签及其占用的行空间；保留命令、重试间隔、否定与多段期望配置及原执行逻辑。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录执行 `python -m py_compile line_check_assistant/app.py`；AST静态核对目标说明不存在，测试项标题、全局重试间隔与恢复默认入口保留；执行上述文件的 `git diff --check`。
+- 验证结果：局部编译及静态核对通过（`ORDER_HINT_REMOVAL_CHECK_OK`），差异格式检查通过。首次静态检查因PowerShell管道中文编码导致断言失败，改用Unicode转义后通过。本轮仅删除固定说明，未运行完整基线，保留最近一次完整验证记录。
+- 后续待办：重启源码程序后目视确认说明行已移除；未打包或提交。
+
+## 2026-11-13 - 统一窗口图标并提高资源清晰度
+
+- 类型：BUG 修复
+- 背景：原来只配置EXE文件图标，主窗口/子窗口没有运行时图标或任务栏应用标识；负责人确认实施源码计划，并追加提高图标清晰度。本轮保留已有工作区修改，不打包、不提交、不发布。
+- 完成内容：① 独立模块在创建Tk前设置`Aouxue.LineCheckAssistant`，创建后立即设置主窗口与Tk默认图标，已有、后创建、嵌套及重开子窗口继承；源码/冻结路径不依赖工作目录，缺失/损坏/API错误继续启动，在主日志就绪后一次性输出各项结果。② 使用内置imagegen保留原拓扑与心跳标记、改善边缘及对比；原ICO四帧全为PNG，当前Tk实际退回通用文件图标，新增无依赖Windows导出脚本生成10种尺寸，常用尺寸原生32位DIB、256为PNG。③ 打包加入运行时资源及图标模块门禁，核对嵌入资源与源码字节一致；新模块登记编译清单，既有窗口结构、事件、关闭、线程和业务语义保持。④ 同步操作员说明、当前状态、§2.17/§3验收边界及实施记录。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/application_icon.py`（新增）
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/assets/icons/line_check_assistant_network_topology_v1.png`
+  - `Cheating_machine_execution_tool/assets/icons/line_check_assistant_network_topology_v1.ico`
+  - `Cheating_machine_execution_tool/scripts/create_application_icon.ps1`（新增）
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_specs/LineCheckAssistant.spec`
+  - `Cheating_machine_execution_tool/scripts/verify_slim_package.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_application_icon.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_application_icon_package.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_portable_release.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `.claude/plans/application-icon.md`（新增）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录，使用独立CPython 3.9.10 x64，执行`python -X utf8 -m unittest discover -s tests -p 'test_application_icon*.py' -v`、`python -X utf8 -m unittest discover -s tests -p test_portable_release.py -v`、`python -X utf8 -m unittest discover -s tests -p test_app.py -v`；对修改的8个Python/spec文件执行`py_compile.compile(..., doraise=True)`；直接调用`check_py_compile_inventory(Path.cwd())`；执行本轮文件差异格式检查。准确解释器及图像提示词见`.claude/plans/application-icon.md`。
+- 验证结果：18项图标、10项打包、221项主程序相关检查，合计249项通过；8文件局部编译、153个源码清单覆盖通过。Windows独立限时进程确认4个窗口8个大小图标的ARGB与掩码和Windows加载同文件完全一致、任务栏标识回读正确，无新增窗口绑定/定时任务。System.Drawing导出复现一致，图标文件原生尺寸预览已检查。首轮临时路径/导入测试兼容问题及原全PNG ICO实际图案不一致已修正，最终相关专项通过。本轮未运行完整基线，保留最近一次完整验证记录；未生成或运行新EXE，未操作设备。
+- 后续待办：computer-use的`sky.list_windows()`因native pipe连接不可用失败，完整Windows源码程序标题栏/Alt+Tab/运行中任务栏目视仍待负责人确认；后续标准构建及目标电脑验证。旧固定项先核对快捷方式指向，不自动修改固定项或清理系统图标缓存；现有发布包保持原样。
+
+## 2026-11-13 - 移除DUT窗口内重复标题
+
+- 类型：优化
+- 背景：负责人要求删除截图红框中的“DUT配置”文字。
+- 完成内容：删除窗口内容区顶部的独立标题标签及其占用的行空间，保留窗口标题栏和六个配置标签页。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/dut_config_window.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录执行 `python -m py_compile src/ui/dut_config_window.py`；核对窗口标题保留、内容区标题已移除；执行本轮三个文件的 `git diff --check`。
+- 验证结果：局部 `py_compile`、标题保留/标签移除静态核对（`DUT_TITLE_CHECK_OK`）及三个文件差异格式检查均通过。本轮为单行显示调整，未运行完整基线，保留最近一次完整验证记录。
+- 后续待办：重启源码程序后目视确认标题行已移除；未打包、提交或操作设备。
+
+## 2026-11-13 - 修复串口与全流程线程生命周期
+
+- 类型：BUG 修复
+- 背景：负责人提供V1.2.9现场串口线程持Queue锁等待StringVar析构/Tcl、GUI等待同一锁的循环等待证据，确认在当前main `0ed92f4`实施源码修复，30秒未开始UI动作失效；本轮不打包、不提交、不操作现场进程或设备。标签v1.2.9不能代替当时完整构建工作区，未取得冻结归档；实际StringVar归属和析构触发仍未确认。
+- 完成内容：① 数据专用串口订阅/诊断接收器、2000条非阻塞有界显示邮箱、代次双端校验、主线程TkScope清理、旧轮询scope隔离、失败关闭重试，保持刷新预算/显示截断及完整原始落盘。② 最后所有者后台关闭，关闭中端口预留、读线程退出后尾行/文件收尾；GUI只轮询完成，不join。③ 全流程主线程快照和独立后台入口、编码数据UI请求、30秒排队失效、关闭/停止/异常完成、确认后实际准入、已准入子任务安全收尾及旧所有权标记清理；关闭完成配置窗口不破坏失败通道续跑，AI串口客户端不持UI且迟到恢复检查代次。④ 根窗口退出登记并轮询原有后台线程真实结束，保持GUI处理收尾；不修改全局GC/Tkinter析构、依赖或设备命令。⑤ 新增24项行为回归，危险挂起场景独立子进程限时；新增模块及6个关键回归登记门禁，失败保留断言栈；同步报告、状态、验收边界与操作员说明，保留同期用户改动。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/models/serial_delivery.py`（新增）
+  - `Cheating_machine_execution_tool/src/utils/bounded_mailbox.py`（新增）
+  - `Cheating_machine_execution_tool/src/ui/tk_lifecycle.py`（新增）
+  - `Cheating_machine_execution_tool/src/ui/pipeline_ui.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/pipeline_runtime.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_serial_client.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/serial_diagnostic_receiver.py`（新增）
+  - `Cheating_machine_execution_tool/src/core/serial_transport.py`
+  - `Cheating_machine_execution_tool/src/ui/serial_terminal.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_serial_bridge.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/services/ai_diagnostic_service.py`
+  - `Cheating_machine_execution_tool/src/services/pipeline_orchestrator.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`（仅本轮生命周期/线程登记/准入接线，保留同期ONU与说明调整）
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`（新增模块/必须执行回归及失败诊断，保留同期清单项）
+  - `Cheating_machine_execution_tool/tests/test_ui_lifecycle_runtime.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_tk_lifecycle_process.py`（新增）
+  - `Cheating_machine_execution_tool/tests/serial_lifecycle_stress.py`（新增；后续复用同期屏幕外辅助器）
+  - `Cheating_machine_execution_tool/tests/test_serial_terminal.py`
+  - `Cheating_machine_execution_tool/tests/test_serial_transport.py`
+  - `Cheating_machine_execution_tool/tests/test_pipeline_window.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_actions.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_integration.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/v129-unresponsive-fix.md`（新增）
+  - `UNRESPONSIVE_FIX_REPORT.md`（新增，含关键差异、验证与回退边界）
+  - `validation/unresponsive_20261113/`（新增，模拟JSON、源码/原始日志摘要和门禁/中间失败证据）
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`（§2.3与§3新增待复验，不升级现场标签）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`，将测试子进程TEMP/TMP/TMPDIR规范到`Path(tempfile.gettempdir()).resolve()`。运行相关专项及完整`scripts/verify_baseline.py`；运行`tests/serial_lifecycle_stress.py --seconds 600 --cycles 100 --rate 100`及`--seconds 8 --cycles 8 --rate 1000`，由父进程设置时长+90秒超时，只清理自建测试子进程；模拟输入逐行序号/摘要核对、Tk构造/访问/析构线程钩子、窗口弱引用、线程/订阅/after与RSS/历史缓存计数。执行本轮差异检查、文档链接/摘要清单核对，方法和产物见报告。
+- 验证结果：修改前160项专项通过；扩展447项通过（64.600秒），随后新增边界专项及最终完整门禁均通过。最终源码完整门禁连续两次ALL CHECKS PASSED：1919项测试、196项必须执行回归、152个源码编译/覆盖及全部协议不变量，最后一次86.735秒。十分钟8路/100轮压力600.062秒、478933条，8/8日志一致，1105次Tk变量析构均为主线程，心跳最大0.359秒、显示邮箱峰值1419/2000、待显示字符458091/524288；线程/关闭窗口残留0，预热后扣除活动历史的RSS均值增加约1.79MiB（门槛10MiB）。8路1000块/秒过载8.093秒、62845条，显示丢弃56151条、邮箱峰值2000，日志仍8/8一致，心跳最大0.313秒；最终短程及门禁内独立Tk子进程通过。中间失败与范围限制如实保留：重复stop已修正；一次1914项失败仅有旧门禁摘要、归因未确认，随后详细1916项及最终1919项通过；最初临时目录长短路径差异经规范环境解决。压力是未复现证据，不能证明彻底修复所有无响应。
+- 后续待办：负责人按§2.3/§3完成完整Windows可见交互、真实8路串口/长时间、停止/续跑/退出和便携版复验；独立隐藏/屏幕外Tk不代替这些验收。现有V1.2.9包和配置保持，未运行交付EXE、操作真实设备、构建、发布或提交；现场StringVar归属及具体析构触发仍待证据。
+
+## 2026-11-13 - 释放COM101残留进程占用
+
+- 类型：BUG 修复
+- 背景：负责人反馈程控电源上电时报`打开程控电源串口 COM101 失败：PermissionError(13, '拒绝访问。', None, 5)`，界面上未见其它程序使用该串口。
+- 完成内容：① 只读核对COM101设备状态为OK、ProblemCode为0，当前/全局DOS映射与SERIALCOMM均指向`\Device\ProlificSerial0`，不存在本次可见的映射不一致；原生独占打开复现Win32错误5。② 使用微软签名有效的Sysinternals Handle定位到`LineCheckAssistant.exe` PID 8592持有该设备句柄；路径为`F:\Aouxue\开关机工具\专文的开关机工具\LineCheckAssistant_portable_v1.2.9\LineCheckAssistant_portable\LineCheckAssistant.exe`，启动时间16:58:14，无主窗口，父进程60532已退出，该目录最新日志停留在19:08:44。③ 结束前再次校验PID、完整路径、启动时间、无主窗口及父进程已退出，仅结束该后台残留进程；未关闭其它测试实例、强制关闭单个句柄、重启设备、修改DOS映射或更改源代码。④ 连续三次以原生CreateFileW独占读写打开COM101并立即CloseHandle成功，未读写串口数据、未设置串口参数、未发送电源开关命令；复查COM101仍为OK，句柄扫描仅剩另一旧工具持有COM103。
+- 修改文件：
+  - `DEVELOPMENT_LOG.md`（仅追加本次环境修复记录）
+- 验证方法：`QueryDosDeviceW`核对`COM101`/`Global\COM101`并比对`HKLM\HARDWARE\DEVICEMAP\SERIALCOMM`；`Get-PnpDevice`/`Get-PnpDeviceProperty`核对指定USB实例；临时目录内签名有效的`handle64.exe -accepteula -nobanner -a Prolific`扫描设备句柄；`CreateFileW('\\.\COM101', GENERIC_READ | GENERIC_WRITE, 0, ..., OPEN_EXISTING, FILE_FLAG_OVERLAPPED, ...)`打开后立即关闭，重复3次；检查文档差异格式。本次原生探针结果保存在`C:\Users\Administrator\AppData\Local\Temp\codex-com101-diagnostic-20261113\result.json`。
+- 验证结果：修复前独占打开失败（Win32错误5），结束已确认残留进程后3/3次打开及关闭成功；当前/全局映射保持一致，COM101未再发现句柄占用，COM103原占用进程未结束。本轮仅修复本机环境并更新文档，未运行代码测试或完整基线，保留最近一次完整验证记录；未启动EXE、打包、提交或发布，不将串口可打开表述为实际电源执行或真实样机验收通过。
+- 后续待办：负责人在原操作窗口重试所需的程控电源操作；如同类问题再次出现，按实际持有进程继续定位退出清理原因，不将所有拒绝访问错误统一判断为驱动或映射故障。
+
+## 2026-11-13 - 将相关自动化测试窗口移出桌面
+
+- 类型：测试
+- 背景：负责人反馈运行自动化测试或完整基线时程序小窗口反复出现，确认实施测试专用屏幕外窗口方案，保留真实控件、布局和既有断言。
+- 完成内容：① 新增仅供测试使用的上下文工具，在真实Tk/Toplevel构造完成、首次映射前设置屏幕外位置；Windows使用整个虚拟桌面边界，兼容左侧/上方副屏，后续geometry/wm_geometry尺寸和位置请求仍限制在桌面外，查询与原生参数校验保持。② ONU列表/动态确认框、串口关闭与目录同步、全流程真实布局测试和独立生命周期压力子进程接入；不修改产品窗口、确认、持久化、设备命令或线程执行行为，不修改既有可见性/布局断言、不新增跳过。③ 通过Map/Configure采样保留曾进入桌面的违规证据并在正常测试/清理路径报错，避免Tk吞掉回调异常；弱引用管理窗口，异常/失败setUp时清理存活窗口、处理工具包空闲通知并恢复全部补丁，不保留已退休控制器。④ 压力测试报告增加受管窗口数量、采样数和违规列表，父测试核对至少10个窗口受管且无违规；新增5项工具回归，覆盖真实映射/尺寸/重开、原生装饰窗口矩形、多屏负原点模拟、异常及失败setUp清理、已销毁窗口违规仍使测试失败。
+- 修改文件：
+  - `Cheating_machine_execution_tool/tests/tk_test_windows.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_tk_test_windows.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_onu_registered_list.py`（仅接入工具，保留同期既有改动）
+  - `Cheating_machine_execution_tool/tests/test_serial_terminal.py`（仅接入工具，保留同期既有改动）
+  - `Cheating_machine_execution_tool/tests/test_pipeline_window.py`（仅接入工具，保留同期既有改动）
+  - `Cheating_machine_execution_tool/tests/serial_lifecycle_stress.py`（保留同期既有实现）
+  - `Cheating_machine_execution_tool/tests/test_tk_lifecycle_process.py`（保留同期既有断言）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`；将tests加入sys.path，TEMP/TMP/TMPDIR解析为完整临时目录，组合`unittest.defaultTestLoader.discover('tests', pattern=...)`的`test_onu_registered_list.py`、`test_pipeline_window.py`、`test_serial_terminal.py`、`test_tk_lifecycle_process.py`、`test_tk_test_windows.py`并运行；对本轮7个Python文件执行`py_compile.compile(..., doraise=True)`，检查本轮文件差异格式和新增文件行尾空白。先独立验证ONU真实布局/确认框，再组合验证全部相关测试。
+- 验证结果：最终`Ran 86 tests ... OK`，无跳过，7文件编译及差异格式检查通过。保留Vista/Clam、128台列表滚动与映射/可见性、确认/取消/回车默认取消、串口关闭重开及日志/线程清理断言；独立子进程8路模拟串口/8轮关闭重开通过。当前Windows桌面1920×1080下真实Tk窗口在屏幕外保持映射，重新显示仍在屏幕外，GetWindowRect核对包含装饰框的原生矩形；多屏负原点使用API结果模拟，未在实体多屏设备上复验。初次工具回归发现未首次update的失败setUp留下工具包主题空闲通知，已在上下文清理时先处理idle并复验消除；补充参数边界时误将Tk接受的`=`认作非法，修正新增测试预期、保留原生调用后最终复验通过。未做桌面截图/人工目视复验，不将坐标与映射检查表述为人工验收。未运行完整基线，保留最近一次完整验证记录；未启动交付EXE、操作真实设备、提交、打包或发布。
+- 后续待办：无本轮实现遗留；本次接入限定上述测试，其它测试窗口未批量调整。源码/真实样机验收状态保持；后续完整基线仍按既有触发规则执行。
+
+## 2026-11-13 - 移除指定界面说明文字
+
+- 类型：优化
+- 背景：负责人通过截图要求去除ONU注册、DUT配置及已注册ONU删除确认中的说明文字，并强调仅删除说明、不能影响功能；WAN状态栏确认仅移除窗口内目标勾选变化提醒，保留查询进度、结果和错误。
+- 完成内容：① 删除ONU注册底部、C600类型模板、已注册管理橙色说明及批量删除确认顶部整块红字；收拢布局行，保留危险标题、完整只读名单、确认/取消、回车默认取消。② 删除DUT顶部、WAN参数规则和两个WiFi页所有选项分支的规则文案及显示控件，仅去除提示文本生成；字段显隐、MTU、密码校验、双频、SSID递增及原trace绑定保持。③ WAN缓存清理允许显式空字符串，仅在窗口内目标勾选变化处隐藏提醒，未传参和非空状态显示保持；六页旧状态/能力清理不变。④ 更新既有文案/布局断言，新增1项实际缓存与空/默认/错误提示、六页状态失效接线回归；保留工作区既有未提交改动，未改core/services/models、设备命令、保存、线程或停止路径。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/src/ui/dut_config_window.py`
+  - `Cheating_machine_execution_tool/src/ui/onu_registered_list.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/tests/test_onu_registered_list.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录设置`PYTHONUTF8=1`和`PYTHONIOENCODING=utf-8`，使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`执行`-m unittest discover -s tests -p test_app.py`；以`unittest.defaultTestLoader.discover`组合`test_dut*.py`和`test_onu*.py`运行（将tests加入sys.path，TEMP/TMP/TMPDIR规范为临时目录绝对长路径）；对上述5个Python文件执行`-m py_compile`。临时验证脚本`C:\Users\Administrator\AppData\Local\Temp\lca_remove_hints_8ss7v07o\verify_hint_ui.py`在独立配置下装配现有ONU源码窗口和DUT窗口，仅执行控件/布局与变量联动检查；检查Vista/Clam下WAN DHCP/静态/PPPoE字段及MTU、目标变化清缓存与错误反馈、两个WiFi页密码和双频区域显隐/SSID递增、ONU原生write勾选与模板保存。比较本轮前临时快照及差异，执行本轮文件`git diff --check`和未跟踪ONU界面文件的差异格式检查。
+- 验证结果：`test_app.py`为`Ran 221 tests ... OK`，DUT/ONU专项为`Ran 271 tests ... OK`，合计492项无跳过；临时真实Tk脚本`Ran 2 tests ... OK`，覆盖Vista/Clam，5文件局部编译、接口签名不变、说明代码移除及差异格式检查通过。临时脚本初次假设缺详情的WAN结果必含“已查询”，以及第二主题刷新相同目标会重置手动取消，均与既有行为不符；只修正验证脚本的预期和前置选择，产品逻辑未因此修改。computer-use的`list_apps`报告`native pipe is unavailable (os error 2)`，重试及重置运行时后仍失败，未完成完整窗口截图/鼠标键盘目视复验。未运行完整基线，保留最近一次完整验证记录；未运行交付EXE、操作真实设备、提交、打包或发布。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.10/§2.13/§3复验完整Windows源码窗口显示；既有真实样机结论保持，本轮不新增设备验收。
+
+## 2026-11-13 - 增加已注册ONU批量删除
+
+- 类型：功能
+- 背景：负责人确认当前PON多选删除方案，单台失败记录后继续，连接故障或停止结束；实施中进一步要求全选/取消全选移至查询按钮右侧同排，并减小列表行距。
+- 完成内容：① 独立批量service、不可变逐台结果与原生多选UI；列表默认不选，显示身份/状态和已选数，滚动显示全部目标。按后续要求将两个选择按钮移至查询按钮右侧同排，不显示占位空结果行，收紧原生勾选行。② 可滚动只读完整名单统一危险确认，默认取消/回车取消，显示OLT/源IP/PON/数量/目标身份及在线业务中断风险，无write。③ 整批先校验型号/PON/接口/ID及重复目标；缺SN跳过，逐台独立会话复用单台身份复核、精确no onu与回读；身份/CLI/回读失败继续，登录/通信故障、超时、停止或未分类异常停止后续，不自动重试，下发后未验证标记结果待核实。单台结果新增带默认值的错误分类和不确定标记，现有调用兼容。④ 连接/型号/管理PON变化清空旧名单，查询异步结果再次核对上下文，确认后复核状态，运行锁定选择与相关连接/管理输入，最终保留逐台结果、清空勾选并要求重新查询。注册失败清理仍限单台且批量注册禁用清理，不接入全流程自动删除。⑤ 同步操作员说明、当前状态、验收状态/待确认清单和确认计划；保留同期AGENTS、串口、AI和全流程等其它工作区修改。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/models/onu_batch_delete.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/onu_batch_delete_service.py`（新增）
+  - `Cheating_machine_execution_tool/src/ui/onu_registered_list.py`（新增）
+  - `Cheating_machine_execution_tool/src/models/onu_registration_models.py`
+  - `Cheating_machine_execution_tool/src/services/onu_registration_service.py`（仅已注册查询提示和单台删除结果诊断/逐条保留命令）
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`（本轮仅ONU入口、装配、状态和回调）
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`（仅登记本轮3个新模块）
+  - `Cheating_machine_execution_tool/tests/test_onu_batch_delete.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_onu_batch_delete_app.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_onu_registered_list.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_app.py`（更新既有已注册管理断言）
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/registered-onu-batch-delete.md`（新增）
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`。将`tests`加入sys.path，TEMP/TMP/TMPDIR规范为`str(Path(tempfile.gettempdir()).resolve())`，组合`unittest.defaultTestLoader.discover('tests', pattern=...)`的`test_onu_*.py`、`test_app.py`、`test_pipeline_orchestrator.py`、`test_network_ops.py`并用TextTestRunner执行。对上述本轮11个Python文件运行`-m py_compile`；调用`check_py_compile_inventory`及`check_must_exist`/`check_must_not_exist`，单独核对3个新增ONU模块在`PY_COMPILE_FILES`；执行本轮文件`git diff --check`，核对文档入口与单台清理/批量删除边界。
+- 验证结果：最终`Ran 518 tests ... OK`，无跳过；其中新增32项（service 12、主程序桥接10、真实Tk UI 10）。双型号逐台成功/失败继续/缺SN/身份变化/CLI拒绝/回读失败/通信中断/停止/不确定结果/无write通过；Vista/Clam真实Tk核对128台滚动、原生Checkbutton、默认不选/锁定、完整只读确认名单、回车默认取消、查询旁同排按钮、紧凑行距及结果按需显示。11文件局部编译、3个ONU新模块清单登记及9项协议不变量检查通过；本轮差异与文档一致性检查通过。全仓清单覆盖检查被同期其它功能新增的6个未登记模块拦截：`src/models/serial_delivery.py`、`src/services/pipeline_runtime.py`、`src/services/serial_diagnostic_receiver.py`、`src/ui/pipeline_ui.py`、`src/ui/tk_lifecycle.py`、`src/utils/bounded_mailbox.py`，本轮未改动其实现或代为登记，不能表述全仓清单通过。文档更新初次PowerShell管道/直接临时脚本读取遇编码错误，均在首次写入前退出；改为明确UTF-8读取并compile/exec后完成且内容检查通过。未运行完整基线，保留此前2026-11-13完整1857项记录；未启动交付EXE、操作真实OLT、提交、打包或发布。
+- 后续待办：负责人重启Windows源码版复验按钮同排、紧凑列表和完整操作，并分别完成真实C300/C600批量删除验收，见ACCEPTANCE_BASELINE.md §2.10/§3；新增范围保持已实现未验收。其它并行功能完成时须补齐其编译清单，提交或打包前按既有门禁运行完整基线。
+
+## 2026-11-13 - 记录新功能操作入口设计偏好
+
+- 类型：文档
+- 背景：负责人要求后续新功能尽量减少固定按钮，优先考虑右键菜单等操作方式，并要求写入项目AGENTS.md。
+- 完成内容：① 在开发规则第22条记录按需显示操作入口的设计偏好。② 兼顾可发现性和操作便利性，允许常用或关键操作保留必要按钮；明确不据此批量调整已有界面，保留必要确认、风险提示和执行语义。
+- 修改文件：
+  - `AGENTS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：执行`git diff --check -- AGENTS.md DEVELOPMENT_LOG.md`，核对新增规则与负责人确认的偏好、开发记录及既有规则一致。
+- 验证结果：文档内容一致性及差异格式检查通过；本轮仅修改文档，未运行代码测试或完整基线，保留最近一次完整验证记录。现有界面、业务行为及验收状态未变。
+- 后续待办：无。
+
 ## 2026-11-13 - 验证AI优化提交前完整基线
 
 - 类型：测试

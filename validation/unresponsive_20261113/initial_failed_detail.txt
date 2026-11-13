@@ -1,0 +1,54 @@
+...................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................F.................................................................................................................................................................................................................................................................................................................................................................................................can't invoke "event" command: application has been destroyed
+    while executing
+"event generate $w <<ThemeChanged>>"
+    (procedure "ttk::ThemeChanged" line 6)
+    invoked from within
+"ttk::ThemeChanged"
+can't invoke "event" command: application has been destroyed
+    while executing
+"event generate $w <<ThemeChanged>>"
+    (procedure "ttk::ThemeChanged" line 6)
+    invoked from within
+"ttk::ThemeChanged"
+can't invoke "event" command: application has been destroyed
+    while executing
+"event generate $w <<ThemeChanged>>"
+    (procedure "ttk::ThemeChanged" line 6)
+    invoked from within
+"ttk::ThemeChanged"
+can't invoke "event" command: application has been destroyed
+    while executing
+"event generate $w <<ThemeChanged>>"
+    (procedure "ttk::ThemeChanged" line 6)
+    invoked from within
+"ttk::ThemeChanged"
+..............invalid command name "2691612970432_poll_result"
+    while executing
+"2691612970432_poll_result"
+    ("after" script)
+.................................................................................................................................................................................................................................................................................<unknown>:527: DeprecationWarning: invalid escape sequence \$
+<unknown>:529: DeprecationWarning: invalid escape sequence \$
+<unknown>:536: DeprecationWarning: invalid escape sequence \$
+......................<unknown>:527: DeprecationWarning: invalid escape sequence \$
+<unknown>:529: DeprecationWarning: invalid escape sequence \$
+<unknown>:536: DeprecationWarning: invalid escape sequence \$
+.......................................................................................................................................................................................................................................................................................................................................................Timeout waiting for traffic
+Resending packet DAT packet: block 1
+    data: 22 bytes on sessions <tftpy.TftpStates.TftpStateExpectACK object at 0x00000272DF9432B0>
+Forcefully closed session with 127.0.0.1
+..............................................................................................................ss..............................................................................................................
+======================================================================
+FAIL: test_main_exit_waits_for_update_cleanup_before_existing_shutdown (test_app_update_ui.AppUpdateUiTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_app_update_ui.py", line 189, in test_main_exit_waits_for_update_cleanup_before_existing_shutdown
+    context.power_test_resume_session.stop.assert_called_once()
+  File "C:\Python\Python39\lib\unittest\mock.py", line 886, in assert_called_once
+    raise AssertionError(msg)
+AssertionError: Expected 'stop' to have been called once. Called 2 times.
+Calls: [call(), call()].
+
+----------------------------------------------------------------------
+Ran 1903 tests in 85.119s
+
+FAILED (failures=1, skipped=2)

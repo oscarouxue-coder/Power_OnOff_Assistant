@@ -15,6 +15,7 @@ from PyInstaller.archive.readers import CArchiveReader
 
 REQUIRED_MODULES = (
     "line_check_assistant.app",
+    "src.ui.application_icon",
     "src.services.legacy_power_test_service",
     "src.services.power_test_resume_service",
     "src.services.serial_upgrade_service",
@@ -32,6 +33,7 @@ REQUIRED_MODULES = (
     "serial", "serial.serialwin32", "tftpy", "openpyxl", "xlrd", "tkinter",
 )
 REQUIRED_FILES = (
+    "assets/icons/line_check_assistant_network_topology_v1.ico",
     "tcl/init.tcl", "tk/tk.tcl", "_tcl_data/init.tcl", "_tk_data/tk.tcl",
     "VERSION_INFO.txt", "BUILD_INFO.txt", "python39.dll", "_socket.pyd",
     "_ssl.pyd", "_ctypes.pyd", "tcl86t.dll", "tk86t.dll", "certifi/cacert.pem",
@@ -55,6 +57,11 @@ def inspect_archive(exe: Path, excluded: list[str]) -> dict:
     expected_version = (source_root / "line_check_assistant/packaging_assets/VERSION_INFO.txt").read_bytes()
     if archive.extract("VERSION_INFO.txt") != expected_version:
         raise ValueError("Embedded VERSION_INFO.txt differs from the source version")
+    icon_name = "assets/icons/line_check_assistant_network_topology_v1.ico"
+    # Use the archive's original key (Windows may use backslashes).
+    icon_key = next(name for name in archive.toc if name.replace("\\", "/") == icon_name)
+    if archive.extract(icon_key) != (source_root / icon_name).read_bytes():
+        raise ValueError("Embedded application icon differs from the source icon")
     for package in excluded:
         prefix = package.lower()
         unwanted = [n for n in modules if n.lower() == prefix or n.lower().startswith(prefix + ".")]

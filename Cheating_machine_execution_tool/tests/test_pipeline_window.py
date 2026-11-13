@@ -148,38 +148,30 @@ class BuildContextRegressionTests(unittest.TestCase):
         self.assertNotIn("parent=self.window", complete_source)
         self.assertNotIn("parent=self.window", failed_source)
 
-    @patch("line_check_assistant.pipeline_window.PipelineOrchestrator")
+    @patch("src.services.pipeline_orchestrator.PipelineOrchestrator")
     def test_pipeline_thread_dispatches_completion_through_main_ui_queue(
         self, orchestrator_class
     ) -> None:
         """隐藏窗口后，完成回调必须走主程序 UI 队列，不能依赖 Toplevel.after。"""
-        from line_check_assistant.pipeline_window import PipelineWindow
-
-        results = [MagicMock()]
-        orchestrator = orchestrator_class.return_value
-        orchestrator.run.return_value = results
-        app = SimpleNamespace(
-            _invoke_pipeline_ui_action=MagicMock(
-                side_effect=lambda action: action()
-            )
-        )
-        context = PipelineWindow.__new__(PipelineWindow)
-        context.app = app
-        context._stop_requested = False
-        context._orchestrator = None
-        context._build_context = MagicMock(return_value=MagicMock())
-        context._emit_to_main_log = MagicMock()
-        context._on_pipeline_complete = MagicMock()
-        context._on_pipeline_failed = MagicMock()
-
-        context._run_pipeline_thread({"env_check"})
-
-        app._invoke_pipeline_ui_action.assert_called_once()
-        context._on_pipeline_complete.assert_called_once_with(results)
-        context._on_pipeline_failed.assert_not_called()
-        self.assertIsNone(context._orchestrator)
-        source = __import__("inspect").getsource(PipelineWindow._run_pipeline_thread)
-        self.assertNotIn("self.window.after", source)
+        import threading
+        from src.services.pipeline_runtime import PipelineChannel, run_pipeline
+        from src.ui.pipeline_ui import PipelineUiController
+        results = [SimpleNamespace(ok=True)]
+        orchestrator_class.return_value.run.return_value = results
+        app = SimpleNamespace()
+        controller = PipelineUiController(app)
+        run = controller.channel.new_run()
+        window = SimpleNamespace(_closed=False, _on_pipeline_complete=MagicMock(), _on_pipeline_failed=MagicMock())
+        context = SimpleNamespace()
+        thread = threading.Thread(target=run_pipeline, args=(context, {'env_check'}, controller.channel, run, lambda line: None))
+        controller.register(window, run, thread)
+        thread.start()
+        thread.join(1)
+        window._on_pipeline_complete.assert_not_called()
+        controller.poll()
+        window._on_pipeline_complete.assert_called_once_with(results)
+        window._on_pipeline_failed.assert_not_called()
+        self.assertTrue(run.finished.is_set())
 
     def test_main_stop_request_is_remembered_during_orchestrator_startup(self) -> None:
         """按钮刚启用但编排器尚未赋值时，停止请求不能丢失。"""
@@ -358,7 +350,7 @@ class SimplifiedPipelineTests(unittest.TestCase):
         window.window = MagicMock()
         window._running_thread = None
         window._check_vars = {code: MagicMock(get=MagicMock(return_value=True)) for code in selected}
-        window._build_context = MagicMock(return_value=SimpleNamespace(enabled_channels=[]))
+        window._build_context = MagicMock(return_value=SimpleNamespace(enabled_channels=[], channels=[], sample_upgrade_settings=None, onu_registration=None))
         window._set_running_ui = MagicMock()
         window._update_main_power_test_progress = MagicMock()
         window._update_main_power_test_status = MagicMock()
@@ -377,7 +369,12 @@ class SimplifiedPipelineTests(unittest.TestCase):
         ) as worker:
             window._on_start()
         compute.assert_called_once_with(window._build_context.return_value, WINDOW_SUBTASK_CODES)
-        self.assertEqual(worker.call_args.kwargs["args"], (set(WINDOW_SUBTASK_CODES),))
+        args = worker.call_args.kwargs['args']
+        self.assertEqual(args[1], set(WINDOW_SUBTASK_CODES))
+        from src.services.pipeline_runtime import PipelineClient, run_pipeline
+        self.assertIs(worker.call_args.kwargs['target'], run_pipeline)
+        self.assertIsInstance(args[0].app, PipelineClient)
+        self.assertIsNot(args[0].app, window.app)
         worker.return_value.start.assert_called_once_with()
         window.window.withdraw.assert_called_once_with()
         window._build_context.assert_called_once_with()
@@ -440,6 +437,8 @@ class SimplifiedPipelineTests(unittest.TestCase):
                 window.window.withdraw.assert_not_called()
 
     def test_real_tk_three_rows_native_controls_theme_and_minimum_size(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         import tkinter as tk
         from tkinter import ttk
         from line_check_assistant.pipeline_window import PipelineWindow, WINDOW_SUBTASK_CODES

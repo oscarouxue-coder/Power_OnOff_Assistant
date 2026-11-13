@@ -468,7 +468,7 @@ class SerialDiagnosticsTests(unittest.TestCase):
             terminal.show = Mock()
             terminal.tabs["vlan101"] = {"session": None, "port": "COM3"}
             bridge = AiSerialBridge(terminal, manager, lambda _: False)
-            bridge.call_ui = lambda action, stop=None: action()
+            self.addCleanup(bridge.close)
             with patch("src.ui.serial_terminal.messagebox.showerror") as popup:
                 with self.assertRaisesRegex(PermissionError, "WinError 5"):
                     bridge.acquire(replace(TARGET, port="COM3"), threading.Event())

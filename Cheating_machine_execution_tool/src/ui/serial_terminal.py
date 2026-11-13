@@ -17,6 +17,9 @@ from src.models import SerialSettings
 from src.ui.closable_notebook import ClosableNotebook
 from src.ui.window_paint import center_toplevel_on_parent
 from src.ui.module_theme import apply_module_theme
+from src.ui.tk_lifecycle import TkScope
+from src.utils.bounded_mailbox import BoundedMailbox
+from src.models.serial_delivery import SerialDelivery
 
 
 _DEFAULT_GEOMETRY = "1000x650"
@@ -65,7 +68,11 @@ class SerialTerminalWindow:
         self.notebook = None
         self.tabs = {}
         self.last_open_errors = {}
-        self.events: queue.Queue = queue.Queue(maxsize=2000)
+        self.events = BoundedMailbox(maxsize=2000)
+        self._scope = TkScope()
+        self._closing = False
+        self._deferred = {}
+        self._reported_drops = 0
         self._pending_chunks: dict[str, deque[str]] = {}
         self._pending_char_counts: dict[str, int] = {}
         self._pending_dropped_chars: dict[str, int] = {}
@@ -91,6 +98,9 @@ class SerialTerminalWindow:
         return str(target), ""
 
     def show(self, vlans: list[str | tuple[str, str]]) -> None:
+        self._scope.check()
+        if self._closing or self.master.__dict__.get('_app_closing', False):
+            return
         if self.window is not None and self.window.winfo_exists():
             self.window.deiconify()
             self.window.lift()
@@ -102,6 +112,7 @@ class SerialTerminalWindow:
         self.log_dir = self._restore_log_dir()
         self._log_dir_initialized = True
         self.window = Toplevel(self.master)
+        self._scope = TkScope()
         self.window.title("串口日志记录")
         # 优先恢复上次窗口位置+大小,无效时回退到默认尺寸
         saved_geometry = self._load_geometry()
@@ -113,7 +124,7 @@ class SerialTerminalWindow:
         ttk.Button(toolbar, text="打开全部", command=self.open_all).pack(side="left")
         ttk.Button(toolbar, text="停止全部", command=self.stop_all).pack(side="left", padx=8)
         # 右侧:日志目录选择(只读展示 + 浏览/打开文件夹)
-        self.log_dir_var = StringVar(value=str(self.log_dir))
+        self.log_dir_var = self._scope.variable(StringVar, self.window, value=str(self.log_dir))
         path_bar = Frame(toolbar)
         path_bar.pack(side="right")
         ttk.Label(path_bar, text="日志目录:").pack(side="left")
@@ -142,6 +153,7 @@ class SerialTerminalWindow:
         return int(match.group("x")) == 0 and int(match.group("y")) == 0
 
     def _ensure_tab(self, vlan: str, port: str = "") -> None:
+        self._scope.check()
         normalized = vlan.lower()
         resolved_port = (port or "").strip().upper() or vlan_to_serial_port(normalized)
         if normalized in self.tabs:
@@ -152,7 +164,8 @@ class SerialTerminalWindow:
                 self.notebook.tab(item["frame"], text=f"{normalized} / {resolved_port}")
             return
         frame = Frame(self.notebook)
-        status = StringVar(value=f"{resolved_port} 未打开")
+        scope = TkScope()
+        status = scope.variable(StringVar, frame, value=f"{resolved_port} 未打开")
         Label(frame, textvariable=status, anchor="w").pack(fill="x", padx=8, pady=5)
         output = Text(frame, wrap="word", state="disabled")
         output.pack(fill="both", expand=True, padx=8, pady=5)
@@ -172,11 +185,14 @@ class SerialTerminalWindow:
         ttk.Button(bottom, text="发送", command=lambda v=normalized: self.send(v)).pack(side="left", padx=(6, 0))
         ttk.Button(bottom, text="回车", command=lambda v=normalized: self.send(v, force_enter=True)).pack(side="left", padx=(6, 0))
         ttk.Button(bottom, text="清屏", command=lambda o=output: self.clear(o)).pack(side="left", padx=(6, 0))
-        self.tabs[normalized] = {"port": resolved_port, "frame": frame, "status": status, "output": output, "command": command, "owner": None, "session": None, "subscriber": None}
+        self.tabs[normalized] = {"scope": scope, "port": resolved_port, "frame": frame, "status": status, "output": output, "command": command, "owner": None, "session": None, "subscriber": None}
         self.notebook.add(frame, text=f"{normalized} / {resolved_port}")
 
     def open_monitor(self, vlan: str, *, raise_errors: bool = False) -> bool:
+        self._scope.check()
         item = self.tabs[vlan]
+        if self._closing or self.master.__dict__.get('_app_closing', False) or item.get('close_ticket') is not None:
+            return False
         if item["session"] is not None:
             return True
         try:
@@ -211,6 +227,9 @@ class SerialTerminalWindow:
         return tuple(failed)
 
     def attach_upgrade(self, vlan: str, session, log_path: Path, port: str = "") -> None:
+        self._scope.check()
+        if self.master.__dict__.get('_app_closing', False):
+            return
         opened_by_upgrade = self.window is None or not self.window.winfo_exists()
         if self.window is None or not self.window.winfo_exists():
             self.show([(vlan, port)])
@@ -227,17 +246,25 @@ class SerialTerminalWindow:
     def _make_subscriber(self, vlan: str, item: dict):
         # Each subscription has its own identity, even after stopping/reopening
         # the same VLAN. Reader callbacks already in flight cannot revive it.
-        token = object()
-        item["event_token"] = token
-        def receive(event):
-            observer = getattr(self, "diagnostic_observer", None)
-            if observer is not None:
-                try:
-                    observer(vlan, event)
-                except Exception:
-                    pass
-            self.events.put_nowait((vlan, event, token))
-        return receive
+        delivery = SerialDelivery(vlan, self.events, getattr(self, 'diagnostic_observer', None))
+        item['event_token'] = delivery
+        return delivery
+
+    @staticmethod
+    def _invalidate(item):
+        subscriber = item.get('subscriber')
+        if isinstance(subscriber, SerialDelivery):
+            subscriber.invalidate()
+        item['event_token'] = None
+
+    def _defer(self, key, action):
+        if key in self._deferred or self.window is None:
+            return
+        def invoke():
+            self._deferred.pop(key, None)
+            if self.window is not None:
+                action()
+        self._deferred[key] = self.window.after(100, invoke)
 
     def _on_tab_close(self, frame: str) -> None:
         for vlan, item in tuple(self.tabs.items()):
@@ -251,6 +278,10 @@ class SerialTerminalWindow:
         if item is None:
             return False
         vlan = vlan.lower()
+        self._scope.check()
+        if item.get('close_ticket') is not None:
+            item['close_remove'] = True
+            return True
         target = f"{vlan} / {item['port']}"
         self._log_close(f"请求关闭 {target}")
         try:
@@ -258,7 +289,7 @@ class SerialTerminalWindow:
                 cancel_debug = getattr(self, "ai_debug_cancel", None)
                 if cancel_debug is not None and cancel_debug(item["port"]):
                     self._log_close(f"取消 {target} 的AI Debug，等待清理后关闭")
-                    self.window.after(100, lambda: self.close_tab(vlan))
+                    self._defer(vlan, lambda: self.close_tab(vlan) if self.tabs.get(vlan) is item else None)
                     return False
                 self._log_close(f"跳过关闭 {target}：当前串口正在自动升级")
                 messagebox.showwarning(
@@ -266,28 +297,60 @@ class SerialTerminalWindow:
                 )
                 return False
             session, subscriber = item["session"], item["subscriber"]
+            self._invalidate(item)
             if session is not None and subscriber is not None:
                 session.unsubscribe(subscriber)
             try:
                 if item["owner"]:
-                    self.manager.release(item["owner"], item["port"])
+                    ticket = self.manager.release(item["owner"], item["port"], wait=False)
+                    item['close_ticket'] = ticket
+                    item['close_remove'] = True
             except Exception:
                 if session is not None and subscriber is not None:
-                    session.subscribe(subscriber)
+                    replacement = self._make_subscriber(vlan, item)
+                    item['subscriber'] = replacement
+                    session.subscribe(replacement)
                 raise
             item.update(owner=None, session=None, subscriber=None, event_token=None)
-            self.notebook.forget(item["frame"])
-            self.tabs.pop(vlan)
-            self._pending_chunks.pop(vlan, None)
-            self._pending_char_counts.pop(vlan, None)
-            self._pending_dropped_chars.pop(vlan, None)
-            item["frame"].destroy()
+            ticket = item.get('close_ticket')
+            if ticket is None or ticket.done.is_set():
+                if ticket is not None and ticket.error:
+                    raise RuntimeError(ticket.error)
+                self._remove_tab(vlan, item)
+            else:
+                item['status'].set(f"{item['port']} 正在关闭并保存日志")
         except Exception as exc:
             self._log_close(f"关闭失败 {target}：{exc}")
             messagebox.showerror("关闭串口失败", f"{target}\n{exc}", parent=self.window)
             return False
-        self._log_close(f"已关闭 {target} 的监控及标签，已保存日志保留")
         return True
+
+    def _remove_tab(self, vlan, item):
+        self.notebook.forget(item['frame'])
+        self.tabs.pop(vlan, None)
+        for mapping in (self._pending_chunks, self._pending_char_counts, self._pending_dropped_chars):
+            mapping.pop(vlan, None)
+        item['frame'].destroy()
+        item['scope'].release()
+        item['status'] = None
+        self._log_close(f"已关闭 {vlan} / {item['port']} 的监控及标签，已保存日志保留")
+
+    def _process_closes(self):
+        for vlan, item in tuple(self.tabs.items()):
+            ticket = item.get('close_ticket')
+            if ticket is None or not ticket.done.is_set():
+                continue
+            item.pop('close_ticket', None)
+            if ticket.error:
+                self._closing = False
+                item['status'].set(f"{item['port']} 关闭失败：{ticket.error}")
+                self._log_close(f"关闭失败 {vlan} / {item['port']}：{ticket.error}")
+            elif item.pop('close_remove', False):
+                self._remove_tab(vlan, item)
+            else:
+                item['status'].set(f"{item['port']} 已停止")
+        if self._closing and not self.tabs:
+            self._finish_close()
 
     def _log_close(self, message: str) -> None:
         if self._logger is not None:
@@ -303,6 +366,7 @@ class SerialTerminalWindow:
         return "break"
 
     def send(self, vlan: str, force_enter: bool = False) -> None:
+        self._scope.check()
         item = self.tabs[vlan]
         if item["session"] is None:
             self.open_monitor(vlan)
@@ -335,19 +399,35 @@ class SerialTerminalWindow:
         output.configure(state="disabled")
 
     def stop_all(self) -> None:
-        for item in self.tabs.values():
+        self._scope.check()
+        for item in tuple(self.tabs.values()):
+            if item.get('close_ticket') is not None:
+                continue
             cancel_debug = getattr(self, "ai_debug_cancel", None)
             if cancel_debug is not None:
                 cancel_debug(item["port"])
             if item["subscriber"] is not None and item["session"] is not None:
+                self._invalidate(item)
                 item["session"].unsubscribe(item["subscriber"])
             if item["owner"]:
-                self.manager.release(item["owner"], item["port"])
+                item['close_ticket'] = self.manager.release(item["owner"], item["port"], wait=False)
             item.update(owner=None, session=None, subscriber=None, event_token=None)
-            item["status"].set(f"{item['port']} 已停止")
+            ticket = item.get('close_ticket')
+            state = '正在停止并保存日志' if ticket is not None and not ticket.done.is_set() else '已停止'
+            item['status'].set(f"{item['port']} {state}")
 
-    def _poll(self) -> None:
+    def _poll(self, scope=None) -> None:
+        self._scope.check()
+        scope = scope or self._scope
+        if scope is not self._scope or scope.closed:
+            return
         self._after_id = None
+        self._process_closes()
+        if scope is not self._scope or scope.closed:
+            return
+        if self.events.dropped != self._reported_drops:
+            self._reported_drops = self.events.dropped
+            self._log_close(f"界面事件繁忙，累计合并/跳过 {self._reported_drops} 条显示事件，原始日志独立落盘")
         processed = 0
         deadline = time.monotonic() + _RENDER_TIME_BUDGET_SECONDS
         while processed < _RENDER_EVENTS_PER_TICK and time.monotonic() < deadline:
@@ -380,13 +460,14 @@ class SerialTerminalWindow:
             output.see(END)
             output.configure(state="disabled")
 
-        if self.window is not None and self.window.winfo_exists():
+        if scope is self._scope and not scope.closed and self.window is not None and self.window.winfo_exists():
             active_has_pending = active_vlan is not None and bool(self._pending_chunks.get(active_vlan))
             delay = _RENDER_ACTIVE_DELAY_MS if not self.events.empty() or active_has_pending else _RENDER_IDLE_DELAY_MS
-            self._after_id = self.window.after(delay, self._poll)
+            self._after_id = self.window.after(delay, lambda: self._poll(scope))
 
     def _on_tab_changed(self, _event=None) -> None:
         """切换到积压日志的 Tab 时立即安排一次渲染，不等待空闲轮询。"""
+        self._scope.check()
         if self.window is None or not self.window.winfo_exists():
             return
         if self._after_id is not None:
@@ -394,7 +475,8 @@ class SerialTerminalWindow:
                 self.window.after_cancel(self._after_id)
             except Exception:
                 pass
-        self._after_id = self.window.after(0, self._poll)
+        scope = self._scope
+        self._after_id = self.window.after(0, lambda: self._poll(scope))
 
     def _active_vlan(self) -> str | None:
         if self.notebook is None:
@@ -440,17 +522,38 @@ class SerialTerminalWindow:
             output.delete("1.0", f"{lines_to_remove + 1}.0")
 
     def close(self) -> None:
+        self._scope.check()
+        if self.window is None:
+            return
+        if self._closing:
+            self._process_closes()
+            return
         cancel_debug = getattr(self, "ai_debug_cancel", None)
         if cancel_debug is not None:
             pending = any([cancel_debug(item["port"]) for item in self.tabs.values()])
             if pending and self.window is not None:
-                self.window.after(100, self.close)
+                self._defer('window', self.close)
                 return
+        if any(not self.manager.manual_writable(item['port']) for item in self.tabs.values()):
+            messagebox.showwarning('串口被占用', '当前串口正在自动升级，升级结束后可关闭', parent=self.window)
+            return
+        self._closing = True
+        for identifier in self._deferred.values():
+            self.window.after_cancel(identifier)
+        self._deferred.clear()
+        for vlan in tuple(self.tabs):
+            if not self.close_tab(vlan):
+                self._closing = False
+        self._process_closes()
+
+    def _finish_close(self):
         if self._after_id and self.window is not None:
             self.window.after_cancel(self._after_id)
-        self.stop_all()
+        self._after_id = None
         if self.window is not None:
             self._save_state()
+            self.notebook.unbind('<<NotebookTabChanged>>')
+            self.notebook._on_close = None
             self.window.destroy()
         self.window = None
         self.notebook = None
@@ -459,6 +562,9 @@ class SerialTerminalWindow:
         self._pending_char_counts.clear()
         self._pending_dropped_chars.clear()
         self.log_dir_var = None
+        self._scope.release()
+        self.events.clear()
+        self._closing = False
         self._auto_opened_for_upgrade = False
         self._upgrade_batch_active = False
 

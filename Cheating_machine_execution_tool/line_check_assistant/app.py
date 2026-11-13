@@ -19,6 +19,9 @@ from src.ui.app_update_dialog import AppUpdateDialog, arrange_update_toolbar
 from src.ui.project_name_badge import ProjectNameBadge
 from src.ui.main_log_filter import ai_main_log_tag, format_main_log_message, is_ai_log_message, is_dut_log_message
 from src.ui.module_theme import apply_module_theme
+from src.ui.application_icon import apply_application_icon, set_taskbar_application_id
+from src.ui.onu_registered_list import RegisteredOnuList, confirm_batch_delete
+from src.services.onu_batch_delete_service import OnuBatchDeleteService
 from src.ui.channel_list import ChannelList
 from src.utils.wifi_log_summary import WifiLogSummary
 from src.ui.adapter_rename_dialog import offer_adapter_rename
@@ -192,7 +195,7 @@ MODULE_WINDOW_SIZE_SPECS = {
     "sample_parameter_writer": (980, 690, 860, 590),
     "onu_registration": (1000, 900, 1000, 900),
     "sample_upgrade": (820, 720, 820, 620),
-    "test_item_config": (960, 940, 960, 940),
+    "test_item_config": (960, 940, 960, 750),
     "pipeline": (920, 560, 880, 520),
 }
 
@@ -350,7 +353,9 @@ def _finish_pipeline_subtask_if_waiting(app, code: str, ok: bool, detail: str) -
 
 class LineCheckAssistant(Tk):
     def __init__(self) -> None:
+        icon_messages = set_taskbar_application_id()
         super().__init__()
+        icon_messages.extend(apply_application_icon(self))
         self.title(MAIN_WINDOW_TITLE)
         self.geometry("1200x780")
         self.minsize(1040, 700)
@@ -375,7 +380,9 @@ class LineCheckAssistant(Tk):
         self.log_queue: "queue.Queue[str]" = queue.Queue()
         # 全流程编排器在后台线程运行；涉及 Tk 窗口/确认框的子任务必须投回主线程，
         # 不能由编排线程直接操作 Toplevel。
-        self.pipeline_ui_task_queue: "queue.Queue[tuple]" = queue.Queue()
+        from src.ui.pipeline_ui import PipelineUiController
+        self._pipeline_ui = PipelineUiController(self)
+        self.pipeline_ui_task_queue = self._pipeline_ui.channel.requests
         self.dut_config_ui_queue: "queue.Queue[tuple]" = queue.Queue()
         self._pipeline_subtask_events: dict[str, threading.Event] = {}
         self._pipeline_subtask_results: dict[str, tuple[bool, str]] = {}
@@ -486,7 +493,7 @@ class LineCheckAssistant(Tk):
         self.onu_manage_slot_var = StringVar(value="1")
         self.onu_manage_pon_var = StringVar(value="1")
         self.onu_registered_candidates = ()
-        self.onu_registered_candidate_var = StringVar(value="")
+        self.onu_registered_query_context = None
         self.onu_manage_query_running = False
         self.onu_manage_delete_running = False
         self.onu_preview_ready = False
@@ -537,6 +544,8 @@ class LineCheckAssistant(Tk):
         self.log_path = LOG_DIR / f"line_check_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
         self._build_ui()
+        for message in icon_messages:
+            self._log(message)
         self._refresh_saved_project_name()
         self.bind(
             "<ButtonPress-1>", self._bring_main_window_to_front, add="+"
@@ -570,18 +579,57 @@ class LineCheckAssistant(Tk):
         pretest = getattr(self, "test_item_pretest_controls", None)
         if pretest is not None and not pretest.can_close():
             return
+        self._app_closing = True
+        ui = self.__dict__.get('_pipeline_ui')
+        if ui is not None:
+            ui.begin_close()
+        pipeline = self.__dict__.get('pipeline_window')
+        if pipeline is not None and pipeline.is_running():
+            pipeline.request_stop()
+        run = self.__dict__.get('_sample_upgrade_run')
+        if run is not None and not run.finished:
+            self._stop_sample_upgrade()
+        for name in ('parameter_cancel_event', 'onu_cancel_event'):
+            stop = self.__dict__.get(name)
+            if stop is not None:
+                stop.set()
+        session = self.__dict__.get('power_test_resume_session')
+        if session is not None:
+            session.stop()
         assistant = self.__dict__.get("ai_assistant")
         if assistant is not None and not assistant.prepare_app_close():
             self.after(100, self._on_app_close)
             return
-        session = getattr(self, "power_test_resume_session", None)
-        if session is not None:
-            session.stop()
         dut_cancel_event = getattr(self, "dut_config_cancel_event", None)
         if dut_cancel_event is not None:
             dut_cancel_event.set()
         updates = getattr(self, "app_update_dialog", None)
         if updates is not None and not updates.prepare_app_close(self._on_app_close):
+            return
+        if ((ui is not None and not ui.idle())
+                or (run is not None and run.thread is not None and run.thread.is_alive())
+                or any(value for name, value in self.__dict__.items()
+                       if isinstance(value, bool) and (name == 'running' or name.endswith('_running')))
+                or (session is not None and getattr(session, 'is_recovering', False) is True)
+                or any(worker.is_alive() for worker in self.__dict__.get('_background_workers', ()))):
+            self.after(100, self._on_app_close)
+            return
+        terminal = self.__dict__.get('serial_terminal')
+        if terminal is not None:
+            terminal.close()
+        manager = self.__dict__.get('serial_session_manager')
+        if manager is not None:
+            tickets = self.__dict__.get('_shutdown_serial_tickets')
+            if tickets is None:
+                tickets = self._shutdown_serial_tickets = manager.shutdown_all(wait=False)
+            if any(not ticket.done.is_set() for ticket in tickets):
+                self.after(100, self._on_app_close)
+                return
+            failures = [ticket.error for ticket in tickets if ticket.error]
+            if failures:
+                self._log('[串口日志] 退出收尾失败：' + '；'.join(failures))
+        if terminal is not None and terminal.window is not None:
+            self.after(100, self._on_app_close)
             return
         if updates is not None and updates.jobs:
             # 更新线程已退出；销毁日志控件前落盘本次收尾日志，按当前队列快照限量排空。
@@ -606,9 +654,8 @@ class LineCheckAssistant(Tk):
         except Exception:
             pass
         finally:
-            manager = getattr(self, "serial_session_manager", None)
-            if manager is not None:
-                manager.shutdown_all()
+            if ui is not None:
+                ui.dispose()
             self.destroy()
 
     def _cancel_pending_onu_registration_save(self) -> None:
@@ -631,33 +678,40 @@ class LineCheckAssistant(Tk):
 
     def _drain_pipeline_ui_tasks(self) -> None:
         """在 Tk 主线程执行全流程子任务提交动作（确认框 / 窗口 / 线程启动）。"""
-        for _index in range(8):
-            try:
-                action, completed, outcome = self.pipeline_ui_task_queue.get_nowait()
-            except queue.Empty:
-                break
-            try:
-                outcome["result"] = action()
-            except Exception as exc:  # noqa: BLE001 - 必须把主线程提交错误回传给编排器
-                outcome["error"] = exc
-            finally:
-                completed.set()
+        self._pipeline_ui.poll()
         try:
             self.after(50, self._drain_pipeline_ui_tasks)
         except Exception:
             # 主窗口销毁时不再继续调度。
             return
 
-    def _invoke_pipeline_ui_action(self, action) -> bool:
-        """后台编排线程同步提交一个主线程 UI 动作，并取得“是否真正启动”。"""
-        completed = threading.Event()
-        outcome: dict[str, object] = {}
-        self.pipeline_ui_task_queue.put((action, completed, outcome))
-        completed.wait()
-        error = outcome.get("error")
-        if error is not None:
-            raise error  # type: ignore[misc]
-        return bool(outcome.get("result"))
+    def _invoke_pipeline_ui_action(self, action, *, run=None, args=()) -> bool:
+        """UI callables stay on Tk; workers submit only coded data requests."""
+        if callable(action):
+            if threading.current_thread() is not threading.main_thread():
+                raise RuntimeError('后台UI动作必须使用动作代码和数据参数，禁止提交UI闭包')
+            return bool(action())
+        if run is None:
+            raise ValueError('界面动作缺少本次运行令牌')
+        return bool(self._pipeline_ui.channel.invoke(run, action, args))
+
+    def _remember_worker(self, thread) -> None:
+        """GUI owns handles until actual thread exit; never waits synchronously."""
+        workers = self.__dict__.setdefault('_background_workers', [])
+        workers[:] = [worker for worker in workers if worker.is_alive()]
+        workers.append(thread)
+
+    def _start_tracked_worker(self, thread) -> None:
+        LineCheckAssistant._remember_worker(self, thread)
+        thread.start()
+
+    def _pipeline_admit_action(self) -> bool:
+        """Recheck after modal dialogs, immediately before starting real work."""
+        if self.__dict__.get('_app_closing', False):
+            return False
+        ui = self.__dict__.get('_pipeline_ui')
+        request = ui.dispatcher.current if ui is not None else None
+        return request is None or request.admit()
 
     def _drain_dut_config_ui_tasks(self) -> None:
         """在 Tk 主线程更新 DUT 表格和批次结束状态。"""
@@ -699,6 +753,9 @@ class LineCheckAssistant(Tk):
         self._pipeline_subtask_events[code] = threading.Event()
 
     def _finish_pipeline_subtask(self, code: str, ok: bool, detail: str) -> None:
+        ui = self.__dict__.get('_pipeline_ui')
+        if ui is not None:
+            ui.complete_subtask(code, ok, detail)
         event = self._pipeline_subtask_events.get(code)
         if event is None:
             return
@@ -709,7 +766,10 @@ class LineCheckAssistant(Tk):
         event = self._pipeline_subtask_events.get(code)
         if event is None:
             raise RuntimeError(f"全流程子任务 {code} 未建立完成事件")
-        event.wait()
+        while not event.wait(.05):
+            ui = self.__dict__.get('_pipeline_ui')
+            if ui is not None and ui.channel.closed.is_set():
+                raise RuntimeError('主界面关闭，已提交操作结果待确认')
         ok, detail = self._pipeline_subtask_results.pop(code, (False, "未收到完成结果"))
         self._pipeline_subtask_events.pop(code, None)
         if not ok:
@@ -1514,6 +1574,9 @@ class LineCheckAssistant(Tk):
             )
             for target in preflight.targets
         ]
+        if not LineCheckAssistant._pipeline_admit_action(self):
+            self._log('[全流程] 写参启动请求已取消，未启动设备操作。')
+            return False
         self.parameter_write_running = True
         self.parameter_cancel_event = threading.Event()
         self.parameter_write_button.configure(state="disabled")
@@ -1525,6 +1588,7 @@ class LineCheckAssistant(Tk):
             args=(requests, parallel_count, self.parameter_cancel_event),
             daemon=True,
         )
+        LineCheckAssistant._remember_worker(self, thread)
         thread.start()
         return True
 
@@ -1893,6 +1957,12 @@ class LineCheckAssistant(Tk):
 
     def _bind_onu_registration_autosave(self) -> None:
         for variable in (
+            self.onu_family_var, self.onu_olt_ip_var, self.onu_source_ip_var,
+            self.onu_username_var, self.onu_password_var, self.onu_manage_shelf_var,
+            self.onu_manage_slot_var, self.onu_manage_pon_var,
+        ):
+            variable.trace_add("write", lambda *_args: self._clear_registered_candidates())
+        for variable in (
             self.onu_family_var,
             self.onu_olt_ip_var,
             self.onu_source_ip_var,
@@ -2183,6 +2253,7 @@ class LineCheckAssistant(Tk):
         title_label.grid(row=0, column=0, sticky="w")
 
         connection_frame = ttk.LabelFrame(content, text="OLT 连接")
+        self.onu_connection_frame = connection_frame
         connection_frame.grid(row=2, column=0, sticky="ew", pady=(0, 8))
         for column in (1, 3, 5):
             connection_frame.columnconfigure(column, weight=1)
@@ -2258,9 +2329,10 @@ class LineCheckAssistant(Tk):
         self.onu_manage_tab = manage_tab
         self.onu_notebook.add(manage_tab, text="4. 已注册管理")
         manage_tab.columnconfigure(0, weight=1)
-        manage_tab.rowconfigure(3, weight=1)
+        manage_tab.rowconfigure(2, weight=1)
 
         manage_scope_frame = ttk.LabelFrame(manage_tab, text="目标 PON 口（机框/槽位/PON）")
+        self.onu_manage_scope_frame = manage_scope_frame
         manage_scope_frame.grid(row=0, column=0, sticky="ew", pady=(0, 6))
         for column in (1, 3, 5):
             manage_scope_frame.columnconfigure(column, weight=1)
@@ -2287,39 +2359,10 @@ class LineCheckAssistant(Tk):
         )
         self.onu_manage_query_button.pack(side="left")
 
-        manage_candidate_row = Frame(manage_tab, background=COLOR_BG)
-        manage_candidate_row.grid(row=2, column=0, sticky="ew", pady=(0, 6))
-        Label(
-            manage_candidate_row,
-            text="选择要删除的已注册 ONU",
-            anchor="w",
-            background=COLOR_BG,
-        ).pack(side="left")
-        self.onu_registered_combo = ttk.Combobox(
-            manage_candidate_row,
-            textvariable=self.onu_registered_candidate_var,
-            values=(),
-            state="disabled",
-            width=62,
+        self.onu_registered_list = RegisteredOnuList(
+            manage_tab, self._on_registered_candidate_selected, actions_parent=manage_actions,
         )
-        self.onu_registered_combo.pack(side="left", fill="x", expand=True, padx=(8, 0))
-        self.onu_registered_combo.bind(
-            "<<ComboboxSelected>>",
-            self._on_registered_candidate_selected,
-        )
-
-        Label(
-            manage_tab,
-            text=(
-                "列出目标 PON 口下所有已注册 ONU（含在线 working）；删除在线 ONU 会立即中断其业务。"
-                "删除前会二次确认并重新核对接口与 SN，只删除明确选择的这一台，"
-                "删除后回读确认其回到未注册状态，且不执行 write。"
-            ),
-            justify="left",
-            anchor="nw",
-            foreground=COLOR_WARNING,
-            background=COLOR_BG,
-        ).grid(row=3, column=0, sticky="nsew", pady=(4, 6))
+        self.onu_registered_list.grid(row=2, column=0, sticky="nsew", pady=(0, 6))
 
         self.onu_manage_delete_button = ttk.Button(
             manage_tab,
@@ -2328,7 +2371,7 @@ class LineCheckAssistant(Tk):
             style="Danger.TButton",
             state="disabled",
         )
-        self.onu_manage_delete_button.grid(row=4, column=0, sticky="ew", pady=(0, 6))
+        self.onu_manage_delete_button.grid(row=3, column=0, sticky="ew", pady=(0, 6))
 
         discovery_tab.columnconfigure(0, weight=1)
         discovery_tab.rowconfigure(2, weight=1)
@@ -2555,11 +2598,6 @@ class LineCheckAssistant(Tk):
             highlightthickness=0,
             borderwidth=0,
         ).grid(row=1, column=6, columnspan=2, sticky="w", padx=10, pady=5)
-        ttk.Label(
-            c600_form,
-            text="ONU 类型模板是 OLT 中的 onu-type 模板名称；自动保存上次填写值，仅为空时带入查询到的 ONU 型号。",
-            style="Muted.TLabel",
-        ).grid(row=2, column=0, columnspan=8, sticky="w", padx=10, pady=(2, 0))
         Checkbutton(
             c600_form,
             text="完整验证成功后执行 write（危险，仅本次有效）",
@@ -2571,7 +2609,7 @@ class LineCheckAssistant(Tk):
             foreground=COLOR_TEXT,
             highlightthickness=0,
             borderwidth=0,
-        ).grid(row=3, column=0, columnspan=8, sticky="w", padx=10, pady=(2, 6))
+        ).grid(row=2, column=0, columnspan=8, sticky="w", padx=10, pady=(2, 6))
 
         mapping_frame = ttk.LabelFrame(self.onu_c600_config_frame, text="业务映射（每行 ServiceID,ONU侧VLAN[,网络侧VLAN]）")
         mapping_frame.pack(fill="both", expand=True, pady=(8, 0))
@@ -2644,14 +2682,6 @@ class LineCheckAssistant(Tk):
         )
         self.onu_register_button.pack(side="right")
 
-        warning_label = Label(
-            content,
-            text="注册会修改 OLT 当前配置；命令预览只读，业务参数请返回第二步修改；write 按本次授权独立保存。",
-            foreground=COLOR_WARNING,
-            background=COLOR_BG,
-        )
-        warning_label.grid(row=4, column=0, sticky="w", pady=(6, 0))
-
         self.onu_query_status_label = Label(
             content,
             textvariable=self.onu_query_status_var,
@@ -2665,7 +2695,7 @@ class LineCheckAssistant(Tk):
             pady=4,
             wraplength=760,
         )
-        self.onu_query_status_label.grid(row=5, column=0, sticky="ew", pady=(6, 0))
+        self.onu_query_status_label.grid(row=4, column=0, sticky="ew", pady=(6, 0))
         self.onu_query_status_label.bind(
             "<Configure>",
             lambda event: self.onu_query_status_label.configure(wraplength=max(280, event.width - 18)),
@@ -2701,7 +2731,7 @@ class LineCheckAssistant(Tk):
                 self.onu_preview_ready = False
 
         bottom_actions = Frame(content, background=COLOR_BG)
-        bottom_actions.grid(row=6, column=0, sticky="ew", pady=(8, 0))
+        bottom_actions.grid(row=5, column=0, sticky="ew", pady=(8, 0))
         self.onu_stop_button = ttk.Button(
             bottom_actions,
             text="停止",
@@ -2718,6 +2748,7 @@ class LineCheckAssistant(Tk):
         center_toplevel_on_parent(
             dialog, self, window_width=window_width, window_height=window_height
         )
+        apply_module_theme(dialog, COLOR_BG)
 
     def _on_onu_family_changed(self, _event=None) -> None:
         family = self.onu_family_var.get()
@@ -2778,11 +2809,15 @@ class LineCheckAssistant(Tk):
 
     def _clear_registered_candidates(self) -> None:
         self.onu_registered_candidates = ()
-        self.onu_registered_candidate_var.set("")
-        if hasattr(self, "onu_registered_combo"):
-            self.onu_registered_combo.configure(values=(), state="disabled")
+        self.onu_registered_query_context = None
+        widget = getattr(self, "onu_registered_list", None)
+        if widget is not None and widget.winfo_exists():
+            widget.set_candidates(())
         if hasattr(self, "onu_manage_delete_button"):
-            self.onu_manage_delete_button.configure(state="disabled")
+            try:
+                self.onu_manage_delete_button.configure(state="disabled")
+            except TclError:
+                pass  # 连接资料在 ONU 窗口关闭后仍可由其它入口更新。
 
     def _current_onu_manage_pon_interface(self) -> str:
         try:
@@ -2799,15 +2834,11 @@ class LineCheckAssistant(Tk):
         return f"gpon-olt_{shelf}/{slot}/{pon}"
 
     def _selected_registered_onu(self):
-        selected = self.onu_registered_candidate_var.get()
-        return next(
-            (
-                candidate
-                for candidate in self.onu_registered_candidates
-                if candidate.display_text == selected
-            ),
-            None,
-        )
+        selected = self._selected_registered_onus()
+        return selected[0] if len(selected) == 1 else None
+
+    def _selected_registered_onus(self):
+        return self.onu_registered_list.selected()
 
     def _on_c300_cleanup_toggle(self) -> None:
         enabled = (
@@ -2859,6 +2890,7 @@ class LineCheckAssistant(Tk):
             args=(connection, requests[0]),
             daemon=True,
         )
+        LineCheckAssistant._remember_worker(self, thread)
         thread.start()
 
     def _onu_cleanup_candidates_worker(self, connection: OltConnection, request) -> None:
@@ -2889,14 +2921,14 @@ class LineCheckAssistant(Tk):
         self._invalidate_onu_preview()
 
     def _on_registered_candidate_selected(self, _event=None) -> None:
-        has_selection = self._selected_registered_onu() is not None
+        has_selection = bool(self._selected_registered_onus()) and not LineCheckAssistant._onu_operation_is_running(self)
         if hasattr(self, "onu_manage_delete_button"):
             self.onu_manage_delete_button.configure(
                 state="normal" if has_selection else "disabled"
             )
 
     def _on_onu_manage_query_clicked(self) -> None:
-        if self.onu_manage_query_running or self.onu_manage_delete_running:
+        if LineCheckAssistant._onu_operation_is_running(self):
             return
         try:
             connection = self._current_onu_connection()
@@ -2925,6 +2957,7 @@ class LineCheckAssistant(Tk):
         self.onu_manage_query_running = True
         self.onu_cancel_event = threading.Event()
         self._clear_registered_candidates()
+        self.onu_registered_query_context = (family, connection, pon_interface)
         self._set_onu_query_status(f"正在只读查询 {pon_interface} 的已注册 ONU...", COLOR_WARNING)
         self._set_onu_registration_action_buttons_state("disabled")
         if hasattr(self, "onu_stop_button"):
@@ -2934,6 +2967,7 @@ class LineCheckAssistant(Tk):
             args=(family, connection, pon_interface),
             daemon=True,
         )
+        LineCheckAssistant._remember_worker(self, thread)
         thread.start()
 
     def _onu_manage_query_worker(self, family, connection, pon_interface) -> None:
@@ -2951,75 +2985,85 @@ class LineCheckAssistant(Tk):
             self._set_onu_query_status(result.message, COLOR_DANGER)
             self._clear_registered_candidates()
             return
+        try:
+            current = (self.onu_family_var.get(), self._current_onu_connection(), self._current_onu_manage_pon_interface())
+        except ValueError:
+            current = None
+        if self.onu_registered_query_context is None or self.onu_registered_query_context != current:
+            self._clear_registered_candidates()
+            self._set_onu_query_status("连接资料或 PON 已变化，请重新查询已注册 ONU", COLOR_WARNING)
+            return
         self.onu_registered_candidates = tuple(result.registered_onus)
-        values = tuple(candidate.display_text for candidate in self.onu_registered_candidates)
-        self.onu_registered_combo.configure(
-            values=values,
-            state="readonly" if values else "disabled",
-        )
-        self.onu_registered_candidate_var.set("")
+        self.onu_registered_list.set_candidates(self.onu_registered_candidates)
         if hasattr(self, "onu_manage_delete_button"):
             self.onu_manage_delete_button.configure(state="disabled")
-        self._set_onu_query_status(result.message, COLOR_SUCCESS if values else COLOR_WARNING)
+        self._set_onu_query_status(result.message, COLOR_SUCCESS if self.onu_registered_candidates else COLOR_WARNING)
         self._log(f"[ONU注册][{family}] 查询已注册 ONU：{host} - {result.message}")
 
     def _on_onu_manage_delete_clicked(self) -> None:
-        if self.onu_manage_delete_running or self.onu_manage_query_running:
+        if LineCheckAssistant._onu_operation_is_running(self):
             return
-        candidate = self._selected_registered_onu()
-        if candidate is None:
-            self._set_onu_query_status("请先查询并明确选择一台要删除的已注册 ONU", COLOR_DANGER)
+        candidates = tuple(self._selected_registered_onus())
+        if not candidates:
+            self._set_onu_query_status("请先查询并勾选要删除的已注册 ONU", COLOR_DANGER)
             messagebox.showwarning(
                 "未选择删除目标",
-                "请先在候选列表中选择一台已注册 ONU。",
+                "请先在候选列表中勾选已注册 ONU。",
                 parent=self.onu_registration_window,
             )
             return
         try:
             connection = self._current_onu_connection()
+            pon_interface = self._current_onu_manage_pon_interface()
         except ValueError as exc:
             self._set_onu_query_status(str(exc), COLOR_DANGER)
             messagebox.showwarning("连接参数错误", str(exc), parent=self.onu_registration_window)
             return
         family = self.onu_family_var.get()
-        confirmed = messagebox.askyesno(
-            "确认删除 ONU（危险）",
-            f"将删除 {candidate.onu_interface}（SN {candidate.serial_number or '未确认'}，状态 {candidate.state}）。\n"
-            "若为在线 working ONU，删除将立即中断其业务。\n"
-            "删除前会再次核对接口与 SN，且只删除这一台，删除后回读确认。\n"
-            "该操作不会执行 write。是否继续？",
-            parent=self.onu_registration_window,
-        )
+        context = (family, connection, pon_interface)
+        if self.onu_registered_query_context != context or any(candidate not in self.onu_registered_candidates for candidate in candidates):
+            self._clear_registered_candidates()
+            self._set_onu_query_status("删除目标已失效，请重新查询", COLOR_DANGER)
+            return
+        error = OnuBatchDeleteService.validate_targets(family, pon_interface, candidates)
+        if error:
+            self._set_onu_query_status(error, COLOR_DANGER)
+            return
+        confirmed = confirm_batch_delete(self.onu_registration_window, family, connection, pon_interface, candidates)
         if not confirmed:
+            return
+        if LineCheckAssistant._onu_operation_is_running(self) or self.onu_registered_query_context != context:
+            self._set_onu_query_status("确认期间目标或任务状态已变化，请重新查询", COLOR_WARNING)
             return
         self.onu_manage_delete_running = True
         self.onu_cancel_event = threading.Event()
-        self._set_onu_query_status(f"正在删除 {candidate.onu_interface}...", COLOR_WARNING)
+        self._set_onu_query_status(f"正在逐台删除 {len(candidates)} 台 ONU...", COLOR_WARNING)
         self._set_onu_registration_action_buttons_state("disabled")
         if hasattr(self, "onu_stop_button"):
             self.onu_stop_button.configure(state="normal")
         thread = threading.Thread(
             target=self._onu_manage_delete_worker,
-            args=(family, connection, candidate),
+            args=(family, connection, pon_interface, candidates),
             daemon=True,
         )
+        LineCheckAssistant._remember_worker(self, thread)
         thread.start()
 
-    def _onu_manage_delete_worker(self, family, connection, candidate) -> None:
-        result = OnuRegistrationService(logger=self._log).delete_registered_onu(
-            family, connection, candidate, self.onu_cancel_event
+    def _onu_manage_delete_worker(self, family, connection, pon_interface, candidates) -> None:
+        result = OnuBatchDeleteService(logger=self._log).delete(
+            family, connection, pon_interface, candidates, self.onu_cancel_event
         )
         self.after(0, lambda: self._complete_onu_manage_delete(family, connection.host, result))
 
     def _complete_onu_manage_delete(self, family, host, result) -> None:
         self.onu_manage_delete_running = False
+        self.onu_registered_list.show_results(result)
+        self.onu_registered_query_context = None
         self._set_onu_registration_action_buttons_state("normal")
         if hasattr(self, "onu_stop_button"):
             self.onu_stop_button.configure(state="disabled")
         self._set_onu_query_status(result.message, COLOR_SUCCESS if result.ok else COLOR_DANGER)
         self._log(f"[ONU注册][{family}] 删除已注册 ONU：{host} - {result.message}")
-        if result.ok:
-            self._clear_registered_candidates()
 
     def _go_to_onu_config_step(self) -> None:
         if not self._selected_unregistered_onus():
@@ -3206,6 +3250,7 @@ class LineCheckAssistant(Tk):
         if hasattr(self, "onu_stop_button"):
             self.onu_stop_button.configure(state="normal")
         thread = threading.Thread(target=self._onu_telnet_test_worker, args=(family, connection), daemon=True)
+        LineCheckAssistant._remember_worker(self, thread)
         thread.start()
 
     def _onu_telnet_test_worker(self, family: str, connection: OltConnection) -> None:
@@ -3253,6 +3298,7 @@ class LineCheckAssistant(Tk):
             args=(family, connection, kind),
             daemon=True,
         )
+        LineCheckAssistant._remember_worker(self, thread)
         thread.start()
 
     def _onu_template_query_worker(self, family: str, connection: OltConnection, kind: str) -> None:
@@ -3315,6 +3361,7 @@ class LineCheckAssistant(Tk):
             args=(family, connection, scope),
             daemon=True,
         )
+        LineCheckAssistant._remember_worker(self, thread)
         thread.start()
 
     def _onu_query_unregistered_worker(self, family: str, connection: OltConnection, scope: OnuDiscoveryScope) -> None:
@@ -3408,6 +3455,9 @@ class LineCheckAssistant(Tk):
             return False
 
         self._log(f"[ONU注册][{family}] 已确认 {len(command_plans)} 个目标、{len(commands)} 条命令快照，按本次业务参数回读验证")
+        if not LineCheckAssistant._pipeline_admit_action(self):
+            self._log('[全流程] ONU注册请求已取消，未启动设备操作。')
+            return False
         self.onu_register_running = True
         self.onu_cancel_event = threading.Event()
         self._set_onu_query_status(f"正在注册 {len(requests)} 个 {family} ONU...", COLOR_WARNING)
@@ -3426,6 +3476,7 @@ class LineCheckAssistant(Tk):
             ),
             daemon=True,
         )
+        LineCheckAssistant._remember_worker(self, thread)
         thread.start()
         return True
 
@@ -3498,6 +3549,7 @@ class LineCheckAssistant(Tk):
         if hasattr(self, "onu_stop_button"):
             self.onu_stop_button.configure(state="normal")
         thread = threading.Thread(target=self._onu_save_olt_configuration_worker, args=(family, connection), daemon=True)
+        LineCheckAssistant._remember_worker(self, thread)
         thread.start()
 
     def _onu_save_olt_configuration_worker(self, family: str, connection: OltConnection) -> None:
@@ -3635,14 +3687,18 @@ class LineCheckAssistant(Tk):
             )
         if hasattr(self, "onu_manage_query_button"):
             self.onu_manage_query_button.configure(state=state)
-        if hasattr(self, "onu_registered_combo"):
-            self.onu_registered_combo.configure(
-                state="readonly"
-                if state == "normal" and self.onu_registered_candidates
-                else "disabled"
-            )
+        if hasattr(self, "onu_registered_list"):
+            self.onu_registered_list.set_enabled(state == "normal")
+        for frame_name in ("onu_connection_frame", "onu_manage_scope_frame"):
+            frame = getattr(self, frame_name, None)
+            if frame is not None:
+                for widget in frame.winfo_children():
+                    if isinstance(widget, ttk.Entry):
+                        widget.configure(state=state)
+        if hasattr(self, "onu_password_entry"):
+            self.onu_password_entry.configure(state=state)
         if hasattr(self, "onu_manage_delete_button"):
-            delete_enabled = state == "normal" and self._selected_registered_onu() is not None
+            delete_enabled = state == "normal" and bool(self._selected_registered_onus())
             self.onu_manage_delete_button.configure(
                 state="normal" if delete_enabled else "disabled"
             )
@@ -3962,6 +4018,9 @@ class LineCheckAssistant(Tk):
         if getattr(self, "sample_upgrade_running", False):
             self._log("样机升级仍在运行或正在停止，未启动重复批次。")
             return False
+        if not LineCheckAssistant._pipeline_admit_action(self):
+            self._log('[全流程] 升级启动请求已取消，未启动设备操作。')
+            return False
         run = UpgradeRun(pipeline_owned="sample_upgrade" in getattr(self, "_pipeline_subtask_events", {}))
         self._sample_upgrade_run = run
         pipeline = getattr(self, "pipeline_window", None)
@@ -3972,6 +4031,7 @@ class LineCheckAssistant(Tk):
 
         run.thread = threading.Thread(target=worker, args=args, kwargs={"run": run}, daemon=True)
         try:
+            LineCheckAssistant._remember_worker(self, run.thread)
             run.thread.start()
         except Exception as exc:
             LineCheckAssistant._finish_upgrade_run(self, run, [], str(exc))
@@ -4672,7 +4732,7 @@ class LineCheckAssistant(Tk):
         window_width, window_height = self._restore_module_window_size(
             dialog, "test_item_config"
         )
-        dialog.minsize(960, 940)
+        dialog.minsize(960, 750)
         dialog.configure(background=COLOR_BG)
 
         content = Frame(dialog, padx=20, pady=18, background=COLOR_BG)
@@ -5102,18 +5162,6 @@ class LineCheckAssistant(Tk):
         interval_var = IntVar(value=order.command_fail_retry_interval_time or DEFAULT_COMMAND_FAIL_RETRY_INTERVAL)
         interval_var.trace_add("write", lambda *_a: mark_dirty())
         ttk.Spinbox(interval_container, from_=0, to=999, textvariable=interval_var, width=6).pack(side="left")
-
-        Label(
-            frame,
-            text=(
-                "每条命令可设置独立的重试次数；期望匹配默认正向，「否定」勾选后整段反向匹配；"
-                "多段用 && 拼接表示全部命中。"
-            ),
-            foreground=COLOR_MUTED,
-            background=COLOR_BG,
-            wraplength=880,
-            justify="left",
-        ).pack(anchor="w", pady=(0, 8))
 
         if telnet_supplier is not None:
             self.test_item_pretest_controls = PretestControls(
@@ -5603,18 +5651,6 @@ class LineCheckAssistant(Tk):
                             + frame.grid_slaves(row=3, column=0) + frame.grid_slaves(row=3, column=1))
         wifi_extra = WifiTestControls(frame, wifi, mark_dirty, wifi_band_controls, advanced_widgets, COLOR_BG)
 
-        Label(
-            frame,
-            text=(
-                "主控关闭时不执行 WiFi 测试；2.4G / 5G 选择会保留。"
-                "ONU 方案保存时统一小写；指定网卡后，运行电脑找不到该网卡会明确失败，不会改用其它网卡。"
-            ),
-            foreground=COLOR_MUTED,
-            background=COLOR_BG,
-            wraplength=560,
-            justify="left",
-        ).grid(row=7, column=0, columnspan=4, sticky="w", pady=(8, 0))
-
         frame.columnconfigure(1, weight=1)
         frame.columnconfigure(3, weight=1)
 
@@ -5715,7 +5751,7 @@ class LineCheckAssistant(Tk):
         def copy_query_result() -> None:
             self.clipboard_clear()
             self.clipboard_append(copy_target[0].get())
-            query_status_var.set("已复制查询结果到剪贴板。")
+            show_query_status("已复制查询结果到剪贴板。")
 
         copy_menu.add_command(label="复制全部", command=copy_query_result)
 
@@ -5742,15 +5778,13 @@ class LineCheckAssistant(Tk):
         read_only_result_field(8, "内部软件版本", queried_internal_software_version_var)
         read_only_result_field(9, "ONU 软件编译时间", queried_onu_compile_time_var)
 
-        query_status_var = StringVar(
-            value="查询将使用主界面当前选中通道，以及 Telnet 页当前填写的连接参数。"
-        )
+        query_status_var = StringVar(value="")
 
         def apply_query_result(result: DeviceProjectInfo) -> None:
             queried_software_version_var.set(result.software_version)
             queried_internal_software_version_var.set(result.internal_software_version)
             queried_onu_compile_time_var.set(result.onu_compile_time)
-            query_status_var.set("查询成功，结果仅供查看，不会覆盖手动输入或写入 INI。")
+            show_query_status("查询成功，结果仅供查看，不会覆盖手动输入或写入 INI。")
 
         ttk.Button(
             frame,
@@ -5761,22 +5795,18 @@ class LineCheckAssistant(Tk):
             style="Secondary.TButton",
         ).grid(row=10, column=1, sticky="w", pady=(10, 4))
 
-        Label(
-            frame,
-            text="查询结果只读，不自动保存",
-            foreground=COLOR_MUTED,
-            background=COLOR_BG,
-            wraplength=560,
-            justify="left",
-        ).grid(row=11, column=0, columnspan=2, sticky="w", pady=(6, 0))
-        Label(
+        query_status_label = Label(
             frame,
             textvariable=query_status_var,
             foreground=COLOR_MUTED,
             background=COLOR_BG,
             wraplength=560,
             justify="left",
-        ).grid(row=12, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        )
+
+        def show_query_status(text: str) -> None:
+            query_status_var.set(text)
+            query_status_label.grid(row=11, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
         frame.columnconfigure(1, weight=1)
 
@@ -5856,7 +5886,7 @@ class LineCheckAssistant(Tk):
             self.after(0, lambda: on_success(result))
 
         try:
-            threading.Thread(target=worker, daemon=True).start()
+            LineCheckAssistant._start_tracked_worker(self, threading.Thread(target=worker, daemon=True))
         except Exception:
             query_finished()
             raise
@@ -5885,7 +5915,9 @@ class LineCheckAssistant(Tk):
             pipeline = self.__dict__.get("pipeline_window")
             orchestrator = getattr(pipeline, "_orchestrator", None)
             session = self.__dict__.get("power_test_resume_session")
-            run_id = getattr(orchestrator, "diagnostic_run_id", None) or getattr(session, "run_id", None)
+            run_id = (getattr(orchestrator, "diagnostic_run_id", None)
+                      or getattr(getattr(pipeline, '_run', None), 'diagnostic_run_id', None)
+                      or getattr(session, "run_id", None))
             if run_id:
                 assistant.observe({"type": "diagnostic_start", "run_id": run_id})
 
@@ -5940,6 +5972,9 @@ class LineCheckAssistant(Tk):
             (request is None or getattr(request, "connect_wifi_enable", False)))
 
     def _prepare_ai_for_device_action(self) -> bool:
+        if self.__dict__.get('_app_closing', False):
+            self._log('[主界面] 程序正在退出，未启动新的设备任务。')
+            return False
         assistant = self.__dict__.get("ai_assistant")
         if assistant is None or assistant.service.prepare_device_action():
             return True
@@ -6188,12 +6223,12 @@ class LineCheckAssistant(Tk):
             f"[DUT配置] 开始批量开启 Telnet：{len(requests)} 台，"
             f"并行数 {parallel_count}。"
         )
-        threading.Thread(
+        LineCheckAssistant._start_tracked_worker(self, threading.Thread(
             target=self._dut_telnet_enable_worker,
             args=(requests, parallel_count, self.dut_config_cancel_event),
             name="dut-telnet-batch",
             daemon=True,
-        ).start()
+        ))
 
     def _dut_telnet_enable_worker(
         self,
@@ -6349,12 +6384,12 @@ class LineCheckAssistant(Tk):
             f"[DUT配置][WAN查询] 开始只读查询：{len(requests)} 台，"
             f"并行数 {parallel_count}；仅共同存在的连接会进入下拉列表。"
         )
-        threading.Thread(
+        LineCheckAssistant._start_tracked_worker(self, threading.Thread(
             target=self._dut_wan_query_worker,
             args=(requests, parallel_count, self.dut_config_cancel_event),
             name="dut-wan-query-batch",
             daemon=True,
-        ).start()
+        ))
 
     def _dut_wan_query_worker(
         self,
@@ -6551,7 +6586,7 @@ class LineCheckAssistant(Tk):
             f"[DUT配置][{feature_label}查询] 开始只读查询：{len(requests)} 台，"
             f"并行数 {parallel_count}{line_text}；不会下发配置命令。"
         )
-        threading.Thread(
+        LineCheckAssistant._start_tracked_worker(self, threading.Thread(
             target=self._dut_current_status_query_worker,
             args=(
                 feature, requests, line_index, ssid_index,
@@ -6559,7 +6594,7 @@ class LineCheckAssistant(Tk):
             ),
             name=f"dut-{feature}-status-query-batch",
             daemon=True,
-        ).start()
+        ))
 
     def _dut_current_status_query_worker(
         self,
@@ -6837,7 +6872,7 @@ class LineCheckAssistant(Tk):
                         f"[DUT配置][{feature_label}配置][SSID分配] "
                         f"{request.channel} / {request.vlan} → {request.settings.ssid}"
                     )
-        threading.Thread(
+        LineCheckAssistant._start_tracked_worker(self, threading.Thread(
             target=self._dut_advanced_config_worker,
             args=(
                 feature,
@@ -6848,7 +6883,7 @@ class LineCheckAssistant(Tk):
             ),
             name=f"dut-{feature}-batch",
             daemon=True,
-        ).start()
+        ))
 
     def _dut_advanced_config_worker(
         self,
@@ -7933,8 +7968,12 @@ class LineCheckAssistant(Tk):
         ):
             return
         self.power_serial_var.set(selected_com)
+        if not LineCheckAssistant._pipeline_admit_action(self):
+            self._log('[主界面] 上/下电启动请求已取消，未启动设备操作。')
+            return
         self.power_on_running = True
         thread = threading.Thread(target=self._power_on_worker, args=(selected_com, power_channels, power_action, wait_seconds), daemon=True)
+        LineCheckAssistant._remember_worker(self, thread)
         thread.start()
 
     def _open_power_control(self) -> None:
@@ -8226,6 +8265,7 @@ class LineCheckAssistant(Tk):
         self.running = True
         self.progress.configure(value=0, maximum=len(channels))
         thread = threading.Thread(target=self._check_worker, args=(channels,), daemon=True)
+        LineCheckAssistant._remember_worker(self, thread)
         thread.start()
 
     def _validate_channels(self, channels) -> str:

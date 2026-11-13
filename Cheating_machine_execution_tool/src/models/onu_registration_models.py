@@ -147,7 +147,7 @@ class C300CleanupCandidate:
 
 @dataclass(frozen=True)
 class RegisteredOnu:
-    """目标 PON 口下已注册、且可被操作员显式选择删除的离线 / 非 working ONU。"""
+    """目标 PON 口下已注册、可被操作员显式选择删除的 ONU。"""
 
     family: str
     pon_interface: str
@@ -207,3 +207,5 @@ class OnuOperationResult:
     cleanup_candidates: tuple[C300CleanupCandidate, ...] = ()
     registered_onus: tuple[RegisteredOnu, ...] = ()
     commands: tuple[str, ...] = ()
+    error_kind: str = ""
+    outcome_uncertain: bool = False

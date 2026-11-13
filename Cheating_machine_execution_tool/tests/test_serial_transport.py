@@ -1,6 +1,8 @@
 import os
 import sys
 import time
+import threading
+import queue
 import unittest
 from io import StringIO
 from unittest import mock
@@ -42,6 +44,54 @@ class FakeSerial:
 
 
 class SerialTransportTests(unittest.TestCase):
+    def test_async_close_waits_for_inflight_callback_and_reserves_port(self):
+        entered, release = threading.Event(), threading.Event()
+        class Driver(FakeSerial):
+            def __init__(self):
+                super().__init__()
+                self.input = queue.SimpleQueue()
+            @property
+            def in_waiting(self):
+                return 0
+            def read(self, _size):
+                try:
+                    return self.input.get(timeout=.02)
+                except queue.Empty:
+                    return b''
+            def cancel_read(self):
+                self.input.put(b'')
+        driver = Driver()
+        original = PySerialSession
+        manager = SerialSessionManager()
+        with TemporaryDirectory() as directory, mock.patch('src.core.serial_transport.PySerialSession',
+                side_effect=lambda settings, log_path=None: original(settings, log_path, lambda **kwargs: driver)):
+            session = manager.acquire_monitor('monitor', SerialSettings('SIM42'), Path(directory)/'log.txt')
+            def callback(event):
+                if event.direction == 'RX':
+                    entered.set()
+                    release.wait(3)
+            session.subscribe(callback)
+            driver.input.put(b'tail without newline')
+            try:
+                self.assertTrue(entered.wait(1))
+                start = time.monotonic()
+                ticket = manager.release('monitor', 'SIM42', wait=False)
+                self.assertLess(time.monotonic()-start, .1)
+                self.assertFalse(ticket.done.is_set())
+                self.assertIsNotNone(session._log_handle)
+                with self.assertRaisesRegex(RuntimeError, '正在关闭'):
+                    manager.acquire_monitor('new', SerialSettings('SIM42'))
+            finally:
+                release.set()
+            self.assertTrue(ticket.done.wait(2))
+            self.assertEqual(ticket.error, '')
+            self.assertIsNone(session._log_handle)
+            self.assertFalse(session._reader.is_alive())
+            saved = (Path(directory)/'log.txt').read_text(encoding='utf-8')
+            self.assertIn('RX tail without newline\n', saved)
+            self.assertIn('STATE 串口已关闭', saved)
+            manager.shutdown_all()
+
     def test_log_file_prefixes_every_serial_line_and_joins_split_rx_chunks(self):
         session = PySerialSession(SerialSettings("COM1"), serial_factory=lambda **_k: FakeSerial(**_k))
         session._log_handle = StringIO()

@@ -120,10 +120,10 @@ class SubTaskStatus:
 
 @dataclass
 class PipelineContext:
-    """编排器运行时上下文:主程序实例 + 各种 store + 通道列表。"""
+    """就绪计算使用主程序；后台运行注入不含Tk的客户端与配置快照。"""
 
     # 必填
-    app: Any                          # line_check_assistant.app.LineCheckAssistant 实例(避免循环 import)
+    app: Any                          # GUI就绪计算入口或后台数据客户端（兼容旧调用）
     channels: List[ChannelConfig]     # 已勾选通道
     sample_upgrade_settings: SampleUpgradeSettings
     onu_registration: OnuRegistrationConfig
@@ -588,7 +588,7 @@ class PipelineOrchestrator:
 
         app = self.ctx.app
         com = _get_attr(app, "power_serial_var", None)
-        com_value = com.get().strip() if com is not None and hasattr(com, "get") else ""
+        com_value = com.get().strip() if com is not None and hasattr(com, "get") else str(_get_attr(app, 'power_serial_port', '') or '').strip()
         if not com_value:
             self.emit("未选择程控电源 COM 口。请手动重启样机后，再进行后续子任务；不会向任何 COM 口下发指令。")
             return

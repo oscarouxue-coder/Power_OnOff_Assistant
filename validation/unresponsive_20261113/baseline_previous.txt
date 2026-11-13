@@ -1,0 +1,17 @@
+Project root: F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool
+
+  [OK  ] py_compile - 152 files compiled
+  [OK  ] compile_inventory - 152 source files covered
+  [OK  ] unittest - Ran 1919 tests
+  [OK  ] required_baseline_tests - 196 required tests executed
+  [OK  ] must_exist: bbfdm.operate - hit in src\core\dut_ubus_config.py (+1)
+  [OK  ] must_exist: tclinux_allinone - hit in src\core\tftp_transport.py (+1)
+  [OK  ] must_exist: 192.168.1.1 - hit in src\core\telnet_transport.py (+2)
+  [OK  ] must_exist: vlan_to_serial_port - hit in src\core\__init__.py (+5)
+  [OK  ] must_exist: MAX_PARALLEL_UPGRADES = 8 - hit in line_check_assistant\sample_upgrade_settings_store.py
+  [OK  ] must_exist: clamp_parallel_count - hit in line_check_assistant\app.py (+1)
+  [OK  ] must_exist: source_address=(bind_ip, 0) - hit in src\core\telnet_transport.py (+3)
+  [OK  ] must_exist: Device.Firewall.<X_SDMC_>Security.AccessCtrl - hit in src\core\ubus_enable_telnet.py
+  [OK  ] must_not_exist: 0.0.0.0 - absent from code lines of src/core/tftp_transport.py,src/core/telnet_transport.py
+
+ALL CHECKS PASSED

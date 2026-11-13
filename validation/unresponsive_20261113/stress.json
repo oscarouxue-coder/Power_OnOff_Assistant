@@ -1,0 +1,635 @@
+{
+  "seconds": 600.0,
+  "ports": 8,
+  "rate_per_port": 100,
+  "block_bytes": 256,
+  "cycles": 100,
+  "max_heartbeat_gap": 0.35900000017136335,
+  "memory": [
+    {
+      "cycle": 1,
+      "rss": 51589120,
+      "history": 1094961,
+      "callbacks": 2
+    },
+    {
+      "cycle": 2,
+      "rss": 54685696,
+      "history": 1992270,
+      "callbacks": 2
+    },
+    {
+      "cycle": 3,
+      "rss": 56037376,
+      "history": 2769516,
+      "callbacks": 2
+    },
+    {
+      "cycle": 4,
+      "rss": 56627200,
+      "history": 3382916,
+      "callbacks": 2
+    },
+    {
+      "cycle": 5,
+      "rss": 56844288,
+      "history": 3834774,
+      "callbacks": 2
+    },
+    {
+      "cycle": 6,
+      "rss": 58605568,
+      "history": 4146082,
+      "callbacks": 2
+    },
+    {
+      "cycle": 7,
+      "rss": 57511936,
+      "history": 4353448,
+      "callbacks": 2
+    },
+    {
+      "cycle": 8,
+      "rss": 51359744,
+      "history": 0,
+      "callbacks": 2
+    },
+    {
+      "cycle": 9,
+      "rss": 52912128,
+      "history": 1068074,
+      "callbacks": 2
+    },
+    {
+      "cycle": 10,
+      "rss": 56012800,
+      "history": 1992781,
+      "callbacks": 2
+    },
+    {
+      "cycle": 11,
+      "rss": 57212928,
+      "history": 2753131,
+      "callbacks": 2
+    },
+    {
+      "cycle": 12,
+      "rss": 58613760,
+      "history": 3372674,
+      "callbacks": 2
+    },
+    {
+      "cycle": 13,
+      "rss": 59711488,
+      "history": 3845780,
+      "callbacks": 2
+    },
+    {
+      "cycle": 14,
+      "rss": 60272640,
+      "history": 4151200,
+      "callbacks": 2
+    },
+    {
+      "cycle": 15,
+      "rss": 57942016,
+      "history": 4296098,
+      "callbacks": 2
+    },
+    {
+      "cycle": 16,
+      "rss": 51499008,
+      "history": 0,
+      "callbacks": 2
+    },
+    {
+      "cycle": 17,
+      "rss": 53760000,
+      "history": 1075242,
+      "callbacks": 2
+    },
+    {
+      "cycle": 18,
+      "rss": 55799808,
+      "history": 1991502,
+      "callbacks": 2
+    },
+    {
+      "cycle": 19,
+      "rss": 57876480,
+      "history": 2760300,
+      "callbacks": 2
+    },
+    {
+      "cycle": 20,
+      "rss": 58404864,
+      "history": 3378820,
+      "callbacks": 2
+    },
+    {
+      "cycle": 21,
+      "rss": 59764736,
+      "history": 3841430,
+      "callbacks": 2
+    },
+    {
+      "cycle": 22,
+      "rss": 61939712,
+      "history": 4143522,
+      "callbacks": 2
+    },
+    {
+      "cycle": 23,
+      "rss": 58130432,
+      "history": 4306856,
+      "callbacks": 2
+    },
+    {
+      "cycle": 24,
+      "rss": 52244480,
+      "history": 512,
+      "callbacks": 2
+    },
+    {
+      "cycle": 25,
+      "rss": 54194176,
+      "history": 1081898,
+      "callbacks": 2
+    },
+    {
+      "cycle": 26,
+      "rss": 56188928,
+      "history": 1997133,
+      "callbacks": 2
+    },
+    {
+      "cycle": 27,
+      "rss": 57712640,
+      "history": 2771819,
+      "callbacks": 2
+    },
+    {
+      "cycle": 28,
+      "rss": 58724352,
+      "history": 3378049,
+      "callbacks": 2
+    },
+    {
+      "cycle": 29,
+      "rss": 60731392,
+      "history": 3843987,
+      "callbacks": 2
+    },
+    {
+      "cycle": 30,
+      "rss": 62042112,
+      "history": 4145055,
+      "callbacks": 2
+    },
+    {
+      "cycle": 31,
+      "rss": 58179584,
+      "history": 4304293,
+      "callbacks": 2
+    },
+    {
+      "cycle": 32,
+      "rss": 51871744,
+      "history": 0,
+      "callbacks": 2
+    },
+    {
+      "cycle": 33,
+      "rss": 53968896,
+      "history": 1075242,
+      "callbacks": 2
+    },
+    {
+      "cycle": 34,
+      "rss": 56504320,
+      "history": 2002254,
+      "callbacks": 2
+    },
+    {
+      "cycle": 35,
+      "rss": 57704448,
+      "history": 2764140,
+      "callbacks": 2
+    },
+    {
+      "cycle": 36,
+      "rss": 59654144,
+      "history": 3387524,
+      "callbacks": 2
+    },
+    {
+      "cycle": 37,
+      "rss": 59994112,
+      "history": 3843478,
+      "callbacks": 2
+    },
+    {
+      "cycle": 38,
+      "rss": 63574016,
+      "history": 4148129,
+      "callbacks": 2
+    },
+    {
+      "cycle": 39,
+      "rss": 57790464,
+      "history": 4303016,
+      "callbacks": 2
+    },
+    {
+      "cycle": 40,
+      "rss": 52334592,
+      "history": 0,
+      "callbacks": 2
+    },
+    {
+      "cycle": 41,
+      "rss": 55025664,
+      "history": 1071656,
+      "callbacks": 2
+    },
+    {
+      "cycle": 42,
+      "rss": 57569280,
+      "history": 1999179,
+      "callbacks": 2
+    },
+    {
+      "cycle": 43,
+      "rss": 58765312,
+      "history": 2759785,
+      "callbacks": 2
+    },
+    {
+      "cycle": 44,
+      "rss": 60469248,
+      "history": 3374978,
+      "callbacks": 2
+    },
+    {
+      "cycle": 45,
+      "rss": 61505536,
+      "history": 3838357,
+      "callbacks": 2
+    },
+    {
+      "cycle": 46,
+      "rss": 62595072,
+      "history": 4144289,
+      "callbacks": 2
+    },
+    {
+      "cycle": 47,
+      "rss": 59154432,
+      "history": 4314791,
+      "callbacks": 2
+    },
+    {
+      "cycle": 48,
+      "rss": 53358592,
+      "history": 512,
+      "callbacks": 2
+    },
+    {
+      "cycle": 49,
+      "rss": 55631872,
+      "history": 1050153,
+      "callbacks": 2
+    },
+    {
+      "cycle": 50,
+      "rss": 58216448,
+      "history": 1978957,
+      "callbacks": 2
+    },
+    {
+      "cycle": 51,
+      "rss": 59785216,
+      "history": 2746475,
+      "callbacks": 2
+    },
+    {
+      "cycle": 52,
+      "rss": 61440000,
+      "history": 3368067,
+      "callbacks": 2
+    },
+    {
+      "cycle": 53,
+      "rss": 61640704,
+      "history": 3828373,
+      "callbacks": 2
+    },
+    {
+      "cycle": 54,
+      "rss": 64360448,
+      "history": 4144544,
+      "callbacks": 2
+    },
+    {
+      "cycle": 55,
+      "rss": 60739584,
+      "history": 4299172,
+      "callbacks": 2
+    },
+    {
+      "cycle": 56,
+      "rss": 53604352,
+      "history": 0,
+      "callbacks": 2
+    },
+    {
+      "cycle": 57,
+      "rss": 55255040,
+      "history": 1080362,
+      "callbacks": 2
+    },
+    {
+      "cycle": 58,
+      "rss": 58175488,
+      "history": 1999694,
+      "callbacks": 2
+    },
+    {
+      "cycle": 59,
+      "rss": 59854848,
+      "history": 2763628,
+      "callbacks": 2
+    },
+    {
+      "cycle": 60,
+      "rss": 61140992,
+      "history": 3387012,
+      "callbacks": 2
+    },
+    {
+      "cycle": 61,
+      "rss": 61575168,
+      "history": 3842965,
+      "callbacks": 2
+    },
+    {
+      "cycle": 62,
+      "rss": 65417216,
+      "history": 4155041,
+      "callbacks": 2
+    },
+    {
+      "cycle": 63,
+      "rss": 59879424,
+      "history": 4299943,
+      "callbacks": 2
+    },
+    {
+      "cycle": 64,
+      "rss": 53567488,
+      "history": 0,
+      "callbacks": 2
+    },
+    {
+      "cycle": 65,
+      "rss": 55713792,
+      "history": 1066794,
+      "callbacks": 2
+    },
+    {
+      "cycle": 66,
+      "rss": 58179584,
+      "history": 1999950,
+      "callbacks": 2
+    },
+    {
+      "cycle": 67,
+      "rss": 59834368,
+      "history": 2771308,
+      "callbacks": 2
+    },
+    {
+      "cycle": 68,
+      "rss": 61956096,
+      "history": 3380099,
+      "callbacks": 2
+    },
+    {
+      "cycle": 69,
+      "rss": 63889408,
+      "history": 3840402,
+      "callbacks": 2
+    },
+    {
+      "cycle": 70,
+      "rss": 62750720,
+      "history": 4144030,
+      "callbacks": 2
+    },
+    {
+      "cycle": 71,
+      "rss": 60686336,
+      "history": 4303524,
+      "callbacks": 2
+    },
+    {
+      "cycle": 72,
+      "rss": 53616640,
+      "history": 0,
+      "callbacks": 2
+    },
+    {
+      "cycle": 73,
+      "rss": 55660544,
+      "history": 1069866,
+      "callbacks": 2
+    },
+    {
+      "cycle": 74,
+      "rss": 58372096,
+      "history": 1991246,
+      "callbacks": 2
+    },
+    {
+      "cycle": 75,
+      "rss": 59756544,
+      "history": 2766956,
+      "callbacks": 2
+    },
+    {
+      "cycle": 76,
+      "rss": 60895232,
+      "history": 3379587,
+      "callbacks": 2
+    },
+    {
+      "cycle": 77,
+      "rss": 62431232,
+      "history": 3840661,
+      "callbacks": 2
+    },
+    {
+      "cycle": 78,
+      "rss": 63651840,
+      "history": 4140960,
+      "callbacks": 2
+    },
+    {
+      "cycle": 79,
+      "rss": 60837888,
+      "history": 4308391,
+      "callbacks": 2
+    },
+    {
+      "cycle": 80,
+      "rss": 53628928,
+      "history": 1536,
+      "callbacks": 2
+    },
+    {
+      "cycle": 81,
+      "rss": 55558144,
+      "history": 1076522,
+      "callbacks": 2
+    },
+    {
+      "cycle": 82,
+      "rss": 58449920,
+      "history": 1992523,
+      "callbacks": 2
+    },
+    {
+      "cycle": 83,
+      "rss": 60170240,
+      "history": 2761065,
+      "callbacks": 2
+    },
+    {
+      "cycle": 84,
+      "rss": 61718528,
+      "history": 3390338,
+      "callbacks": 2
+    },
+    {
+      "cycle": 85,
+      "rss": 61210624,
+      "history": 3837076,
+      "callbacks": 2
+    },
+    {
+      "cycle": 86,
+      "rss": 63414272,
+      "history": 4143777,
+      "callbacks": 2
+    },
+    {
+      "cycle": 87,
+      "rss": 60538880,
+      "history": 4306087,
+      "callbacks": 2
+    },
+    {
+      "cycle": 88,
+      "rss": 53592064,
+      "history": 0,
+      "callbacks": 2
+    },
+    {
+      "cycle": 89,
+      "rss": 55558144,
+      "history": 1075242,
+      "callbacks": 2
+    },
+    {
+      "cycle": 90,
+      "rss": 59043840,
+      "history": 1993292,
+      "callbacks": 2
+    },
+    {
+      "cycle": 91,
+      "rss": 60063744,
+      "history": 2770794,
+      "callbacks": 2
+    },
+    {
+      "cycle": 92,
+      "rss": 61833216,
+      "history": 3380866,
+      "callbacks": 2
+    },
+    {
+      "cycle": 93,
+      "rss": 62033920,
+      "history": 3841428,
+      "callbacks": 2
+    },
+    {
+      "cycle": 94,
+      "rss": 63127552,
+      "history": 4146592,
+      "callbacks": 2
+    },
+    {
+      "cycle": 95,
+      "rss": 60043264,
+      "history": 4301223,
+      "callbacks": 2
+    },
+    {
+      "cycle": 96,
+      "rss": 53972992,
+      "history": 0,
+      "callbacks": 2
+    },
+    {
+      "cycle": 97,
+      "rss": 55992320,
+      "history": 1068073,
+      "callbacks": 2
+    },
+    {
+      "cycle": 98,
+      "rss": 58634240,
+      "history": 1996109,
+      "callbacks": 2
+    },
+    {
+      "cycle": 99,
+      "rss": 60268544,
+      "history": 2759019,
+      "callbacks": 2
+    },
+    {
+      "cycle": 100,
+      "rss": 62382080,
+      "history": 3370883,
+      "callbacks": 2
+    }
+  ],
+  "max_subscriptions": 8,
+  "display_drops": 0,
+  "max_mailbox": 1419,
+  "max_pending_chars": 458091,
+  "errors": [],
+  "tk_finalizers": 1105,
+  "wrong_tk_threads": [],
+  "snapshot_threads_correct": true,
+  "retained_closed_pipeline_windows": 0,
+  "elapsed": 600.062,
+  "total_records": 478933,
+  "log_integrity": {
+    "SIM1": true,
+    "SIM2": true,
+    "SIM3": true,
+    "SIM4": true,
+    "SIM5": true,
+    "SIM6": true,
+    "SIM7": true,
+    "SIM8": true
+  },
+  "remaining_sim_threads": [],
+  "memory_growth_excluding_live_history": 1874233.8000000045,
+  "memory_growth_budget": 10485760,
+  "passed": true
+}

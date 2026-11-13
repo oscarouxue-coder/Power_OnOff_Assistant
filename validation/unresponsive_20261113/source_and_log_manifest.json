@@ -1,0 +1,178 @@
+{
+  "head": "0ed92f48fc1dc89e31611d11a0970d2e3bb2f7ca",
+  "v129_tag": "55fe6a14af65697e68228866b160df9831238142",
+  "python": "3.9.10 (tags/v3.9.10:f2f3f53, Jan 17 2022, 15:14:21) [MSC v.1929 64 bit (AMD64)]",
+  "bits": 64,
+  "files": {
+    "line_check_assistant/app.py": "4550486c4aa1201b8104968b75b0a9a417258d1b3f8c9eb1b5c66e52ff5387d5",
+    "line_check_assistant/pipeline_window.py": "550ae8ee47748b311a0998c108cab91d54dd5791d8fbacedac423d0e0f860774",
+    "src/core/serial_transport.py": "1846a5b116149c72661d5472e82c0a0b53ec23df8cda4e468efba4ef6c742b14",
+    "src/ui/serial_terminal.py": "550e8de9ca99dbd529b42b6a8a475001fd008c342b47dc07c8318be7c3bff5e0",
+    "src/ui/tk_lifecycle.py": "d402464df057cd00ce789704c07346044aebd381ca52ee2c14dbff515e262240",
+    "src/ui/pipeline_ui.py": "abc03f5d2fe12a45c78d22c1888ec1c32c1d94f73dfb213beb6d5e8d0238325c",
+    "src/ui/ai_serial_bridge.py": "372d769240414be0941711e4e9449def9b8faaca788f1d1e81515fc3b8c8ac08",
+    "src/ui/ai_assistant_controller.py": "57464cd97e4307d03412168b4085cdd5dc16abfa9d55b438077bd991ff587b03",
+    "src/services/pipeline_orchestrator.py": "6e8ae62fd3f7fb53c0caa146187356834f9b2cb102a669324e01612709ab2636",
+    "src/services/pipeline_runtime.py": "50a5d302b1d3141e62d87c07f91ffad80be45e9a35c6870f90fd20cb7aeeff0a",
+    "src/services/serial_diagnostic_receiver.py": "d1aca5483d8daef533ee8516b873c81d1d6d93148d1404c2eca7b0fc9f4678a0",
+    "src/services/ai_diagnostic_service.py": "daea61a4d2f6534e4a0071bebbbefb89bc65e0bbd3e5b2f1f504b9d1d65272ff",
+    "src/services/ai_serial_client.py": "6440bf49dd802de4b3a0971b4b7dddbfb78c5751652331bf326374fbe831afc8",
+    "src/models/serial_delivery.py": "58d77a75c853b1ab4d0f6991fcaa476fd1a06dbdd0379f01e185ff75ee173adb",
+    "src/utils/bounded_mailbox.py": "7b9d3c794d5280cb863bfa3d057c9cbda53b0a8df5997751adbd731ffc989acc",
+    "scripts/verify_baseline.py": "5664705720242e9b2af41fa8edb346d644fd449ec69df035d5323c1a607ce36b",
+    "tests/test_ui_lifecycle_runtime.py": "081a0c6c73ccd9263a9ac2fd4b08fecabc647c68723f4bb2000d6955af5f6fba",
+    "tests/test_tk_lifecycle_process.py": "5d49abb21ac2eac86518e9e61b1e876096b7c3c29dea6602ceb4f99f084f3759",
+    "tests/serial_lifecycle_stress.py": "ee653d14218e52c795f75d6cabd04c2a079bd43b71662a1a79f056b9196101bf",
+    "tests/test_serial_terminal.py": "10225838907c198bf0a6ddb60b8aff4119f90b67d88667db13f828217ec25754",
+    "tests/test_serial_transport.py": "e7f2b962c4b1cc0f57212daea00f0643302b3cbc1faf4232d37c1afedc59907c",
+    "tests/test_pipeline_window.py": "2c4ae87af1668946e3b6d688a8ea7f83a29c3b2f9aa5d7c1ae194865eecd3374",
+    "tests/test_ai_actions.py": "8bc68762fbb22bbe669bad895cd615595758461a06de5f418eddd388280efad7",
+    "tests/test_ai_integration.py": "dec351c56e4658b2fe6cbba15b99bc9f6cdf9178981b194eeec6805cc13b41c1",
+    "tests/tk_test_windows.py": "262040fa15ffa58e56a95f582b399ad95bc68eec78df80246d0aaed617c1c29d"
+  },
+  "simulations": {
+    "stress": {
+      "report": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\linecheck_unresponsive_600s\\stress.json",
+      "logs": [
+        {
+          "name": "vlan101_SIM1_20261113.log",
+          "bytes": 16761356,
+          "sha256": "25d3ae81cfc29eccf990ef042a3beeb5ee0ab872a187c807dea6254eef6ac9f8"
+        },
+        {
+          "name": "vlan102_SIM2_20261113.log",
+          "bytes": 16765836,
+          "sha256": "2339521f9c080d9ceba3d3dbd7a3f31e0419f1f8e45a71b66d0c2861508bf3ef"
+        },
+        {
+          "name": "vlan103_SIM3_20261113.log",
+          "bytes": 16763316,
+          "sha256": "ca905c5573c87d58c2415946c086ceb09e67a1edfe6012ca0101f4e9764bf18a"
+        },
+        {
+          "name": "vlan104_SIM4_20261113.log",
+          "bytes": 16762476,
+          "sha256": "e176b5b2b34dad767161a5395de1b4f082d4b8d3f87bf1122012423c4b134921"
+        },
+        {
+          "name": "vlan105_SIM5_20261113.log",
+          "bytes": 16763510,
+          "sha256": "7992da99750d46f16bff3469d40bd88afcdc7a1b796cb6a1fbc2b644391bc299"
+        },
+        {
+          "name": "vlan106_SIM6_20261113.log",
+          "bytes": 16768830,
+          "sha256": "e5684fdb65f8765f240b03ac5f4294fd905e1ff4f540084ce629a795764284ab"
+        },
+        {
+          "name": "vlan107_SIM7_20261113.log",
+          "bytes": 16751470,
+          "sha256": "20e4673c44e251ce238396780c458b15fe541cb59fcad7846e1803cc2fbaf390"
+        },
+        {
+          "name": "vlan108_SIM8_20261113.log",
+          "bytes": 16780958,
+          "sha256": "4d01cc0fd84ce393cd62f699deb3e23620b7bc1d919e52885120c5295bc6f97f"
+        }
+      ]
+    },
+    "overload": {
+      "report": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\linecheck_unresponsive_overload\\overload.json",
+      "logs": [
+        {
+          "name": "vlan101_SIM1_20261113.log",
+          "bytes": 2183138,
+          "sha256": "17fc75ae36d4325b62aaec0c1c545c6882497a8274bd5c8a8c5a0dbbf5674140"
+        },
+        {
+          "name": "vlan102_SIM2_20261113.log",
+          "bytes": 2200778,
+          "sha256": "415803c8bb19b1ce3e7f2a9617c856a749e26190d855501a54f4a89bd28d5e87"
+        },
+        {
+          "name": "vlan103_SIM3_20261113.log",
+          "bytes": 2196298,
+          "sha256": "4c3e32ffadd0b838b46f2e761b89369543798e66b6c238b050c4102870cca6f3"
+        },
+        {
+          "name": "vlan104_SIM4_20261113.log",
+          "bytes": 2200778,
+          "sha256": "ed4cfa863e4b9457eb9cca3a58ce030beb5666e3891bf1ea38c6cd27b5630053"
+        },
+        {
+          "name": "vlan105_SIM5_20261113.log",
+          "bytes": 2200778,
+          "sha256": "00ce039fdbb47eca1a12e1c37d7f9ec6cf4df2f52369c9e28bf66d085065543a"
+        },
+        {
+          "name": "vlan106_SIM6_20261113.log",
+          "bytes": 2192658,
+          "sha256": "53840629ac11d83f1a927effcae80e07b9caa5d20ad8a8b8f708211c9a0f85d0"
+        },
+        {
+          "name": "vlan107_SIM7_20261113.log",
+          "bytes": 2201338,
+          "sha256": "5647702b9466990cd56048f5b41a0bb4db6657ee6514bb9a091375c479232dac"
+        },
+        {
+          "name": "vlan108_SIM8_20261113.log",
+          "bytes": 2222812,
+          "sha256": "e86323086ec37b7782a51a897084438ce09188235e37f11ce54fd4bd9905834b"
+        }
+      ]
+    },
+    "final_smoke": {
+      "report": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\linecheck_unresponsive_final_smoke\\verified_source.json",
+      "logs": [
+        {
+          "name": "vlan101_SIM1_20261113.log",
+          "bytes": 137178,
+          "sha256": "b72ab2826090b282b2c0182749221b261d6b396b72c210c570ce7fed08d891c8"
+        },
+        {
+          "name": "vlan102_SIM2_20261113.log",
+          "bytes": 138298,
+          "sha256": "3e6832c6d3f01d4a845f39a0a9fed7e1fcf682addda349042c2ca5aa3778ab8e"
+        },
+        {
+          "name": "vlan103_SIM3_20261113.log",
+          "bytes": 139138,
+          "sha256": "7b75e175d8f9754f8dc2075f300219e0c753f2bdc9939f877684bc2a926ce7a1"
+        },
+        {
+          "name": "vlan104_SIM4_20261113.log",
+          "bytes": 136898,
+          "sha256": "7e8c0bac96b9316ac7026800a14d6ea1a2b9d3f37dabf58d0326346d8172fd22"
+        },
+        {
+          "name": "vlan105_SIM5_20261113.log",
+          "bytes": 138018,
+          "sha256": "1cb0c6b18c89899d7ab025fc0ad9c5149ba1ca715517af4f273332870cc97f7c"
+        },
+        {
+          "name": "vlan106_SIM6_20261113.log",
+          "bytes": 137738,
+          "sha256": "4f3e0b329f59b3dafb6c63d6242a0662f06fb5eafd993f93b043aaa5bc0e8db1"
+        },
+        {
+          "name": "vlan107_SIM7_20261113.log",
+          "bytes": 138298,
+          "sha256": "1cd76ad4549aeadce02706814fc643c48d318bb61d2486b1f0f2a3569dbccc67"
+        },
+        {
+          "name": "vlan108_SIM8_20261113.log",
+          "bytes": 139612,
+          "sha256": "745f3ffd682000572692504f4a81ac643c2dec2f581c4abfd3afd7035ad03a2f"
+        }
+      ]
+    }
+  },
+  "verification": {
+    "test_count": 1919,
+    "required_test_ids": 196,
+    "compile_inventory": 152,
+    "baseline_seconds": 86.735,
+    "baseline_passed": true,
+    "report": "baseline.txt"
+  }
+}
