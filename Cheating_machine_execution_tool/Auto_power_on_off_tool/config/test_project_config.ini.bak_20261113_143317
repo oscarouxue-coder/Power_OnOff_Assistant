@@ -1,0 +1,38 @@
+[telnet]
+request_url = http://192.168.29.1
+port = 23
+user = root
+password = t*hEQ#BHu7z%3n
+timeout = 10
+input_user_flag = ogin:
+input_password_flag = Password:
+login_success_flag = #
+login_after_input_str = sh
+telnet_need_enter_password_flag = 0
+telnet_no_user_password_flag = 0
+only_power_off_on = 0
+telnet_default_on = 1
+
+[order]
+ifconfig retry_times_5 = !00:00:00:00:00:00&&UP BROADCAST
+
+[connect_wifi]
+enable = 0
+test_2g_enable = 1
+test_5g_enable = 1
+product_solution = openwrt
+auth_mode = WPA2-PSK
+cipher = AES
+connection_test_mode = per_band
+security_source = auto
+wireless_ping_enable = 1
+wireless_ping_target = 8.8.8.8
+choose_wireless_card = 1
+wireless_card_name = Intel(R) Wi-Fi 7 BE200 320MHz
+
+[project_info]
+project_name = 基线NP7287XGS
+software_version = S13.75.01.001
+internal_software_version = T13.75.01.001
+onu_compile_time = Wed Jun 10 09:19:11 UTC 2026
+

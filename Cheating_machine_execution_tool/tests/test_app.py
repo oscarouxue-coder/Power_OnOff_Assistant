@@ -145,8 +145,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("self.parameter_writer_window", source[center_index:refresh_index])
         self.assertIn("window_width=680", source[center_index:refresh_index])
         self.assertIn("window_height=750", source[center_index:refresh_index])
-        self.assertIn("on_first_refresh=lambda", source[refresh_index:])
-        self.assertIn("已触发客户区首帧尺寸刷新", source[refresh_index:])
+        self.assertIn("schedule_toplevel_client_refresh(dialog)", source[refresh_index:])
+        self.assertNotIn("已触发客户区首帧尺寸刷新", source)
         self.assertNotIn("withdraw(", source)
         self.assertNotIn("after(0", source)
 
@@ -238,7 +238,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
 
         source = inspect.getsource(LineCheckAssistant._build_ui)
 
-        self.assertIn("self.channel_list = Listbox(", source)
+        self.assertIn("self.channel_list = ChannelList(", source)
         self.assertIn("width=34", source)
 
     def test_channel_list_right_click_menu_opens_selected_power_test_log(self):
@@ -2071,6 +2071,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         import inspect
 
         test_item_source = inspect.getsource(LineCheckAssistant._open_test_item_config)
+        dut_open_source = inspect.getsource(LineCheckAssistant._open_dut_config_module)
         dut_init_source = inspect.getsource(DutConfigWindow.__init__)
         dut_show_source = inspect.getsource(DutConfigWindow.show)
         first_show_source = test_item_source[
@@ -2091,7 +2092,8 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertIn("self.window.lift()", dut_show_source)
         self.assertIn("self.window.focus_force()", dut_show_source)
         self.assertIn("schedule_toplevel_client_refresh(", test_item_source)
-        self.assertIn("on_first_refresh=lambda", test_item_source)
+        self.assertNotIn("已触发客户区首帧尺寸刷新", test_item_source)
+        self.assertNotIn("已触发客户区首帧尺寸刷新", dut_open_source)
         self.assertIn("schedule_toplevel_client_refresh(", dut_init_source)
         self.assertIn("schedule_toplevel_client_refresh(self.window)", dut_show_source)
 

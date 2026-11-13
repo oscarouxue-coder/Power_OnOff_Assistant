@@ -7,6 +7,7 @@ import uuid
 from src.core.ai_local_executor import read_local_file, write_local_file, write_preview, file_snapshot, run_local_command
 from src.core.ai_serial_diagnostics import read_serial_status
 from src.models.ai_actions import ACTION_TOOLS, ActionAssessment, action_fingerprint, normalize_action
+from src.models.ai_permissions import ASK, AUTO, FULL
 from src.models.ai_conversation import timestamp
 from src.services.ai_store import profile_fingerprint
 
@@ -43,6 +44,9 @@ class AiActionService:
             self.invalidate(session["id"], "程序重启，旧操作不会自动执行", startup=True)
 
     def invalidate(self, identifier, reason, startup=False):
+        permissions = getattr(self.owner, "permissions", None)
+        if permissions is not None:
+            permissions.revoke(identifier, reason)
         changed = False
         with self.lock:
             for action in self.store.actions(identifier, INCOMPLETE_STATES):
@@ -86,7 +90,7 @@ class AiActionService:
                 raise ValueError("文件版本已变化，请重新读取、审查和确认")
             state = "approved" if approved else "rejected"
             self.store.change_action(action_id, ("waiting_approval",), state,
-                                     operator_decision=state, decided=timestamp())
+                                     operator_decision=state, approval_source="operator", decided=timestamp())
         self.owner.message(identifier, "user", f"{'批准本次操作' if approved else '拒绝本次操作'}：{action_id[:8]}", "action")
         self.owner.emit(f"操作员{state}：会话{identifier[:8]}，操作{action_id[:8]}，指纹={fingerprint}")
         self.owner.notify(identifier)
@@ -106,6 +110,10 @@ class AiActionService:
         action["fingerprint"] = action_fingerprint(action)
         self.store.save_action(self.redactor.object(action))
         return action
+
+    def _permission(self, identifier):
+        permissions = getattr(self.owner, "permissions", None)
+        return permissions.status(identifier) if permissions is not None else {"mode": AUTO, "grant_id": ""}
 
     def _wait_approval(self, action, stop):
         identifier = action["session_id"]
@@ -129,6 +137,7 @@ class AiActionService:
 
     def execute(self, identifier, name, params, target, stop, executor, review):
         self._eligible(identifier, stop)
+        permission = self._permission(identifier)
         if name in DEVICE_TOOLS and self.owner.diagnostic.busy(target):
             raise ValueError("目标正在执行设备操作，不抢占连接")
         if name == "read_serial_status":
@@ -147,41 +156,63 @@ class AiActionService:
             return result
         # 已登录的固定工具直接复用连接，不额外审查固定查询。
         login_needed = name in DEVICE_TOOLS and executor.transport is None
-        if name not in ACTION_TOOLS and not login_needed:
+        temporary_change = name in ("capture_packets", "follow_logs", "kernel_debug")
+        if name not in ACTION_TOOLS and not login_needed and not (permission["mode"] == ASK and temporary_change):
             return executor.execute(name, params, deep=True)
         action = self._prepare(identifier, name, params)
+        action.update(permission_mode=permission["mode"], authorization_id=permission["grant_id"],
+                      authorization_source="session_grant" if permission["mode"] == FULL else
+                                           "operator_required" if permission["mode"] == ASK else "risk_review",
+                      review_status="skipped_full_access" if permission["mode"] == FULL else "pending")
+        action["fingerprint"] = action_fingerprint(action)
+        self.store.change_action(action["id"], ("reviewing",), "reviewing", **{
+            k: action[k] for k in ("permission_mode", "authorization_id", "authorization_source", "review_status", "fingerprint")})
         dispatched = False
         try:
-            self.owner.emit(f"操作{action['id'][:8]}风险审查开始：{name}")
-            if name not in ACTION_TOOLS:
-                assessment = ActionAssessment("dangerous", "首次建立设备登录连接，需操作员确认目标与登录操作")
+            if permission["mode"] == FULL:
+                self.owner.emit(f"操作{action['id'][:8]}已跳过独立审查：完全访问，授权={permission['grant_id']}")
+                assessment = None
+            elif name not in ACTION_TOOLS:
+                assessment = ActionAssessment("dangerous", "首次设备登录或临时设备修改，需操作员确认目标与操作")
+                action["review_status"] = "fixed_policy"
             else:
+                self.owner.emit(f"操作{action['id'][:8]}风险审查开始：{name}")
                 try:
                     assessment = review(action)
+                    action["review_status"] = "completed"
                 except InterruptedError:
                     raise
                 except Exception as exc:
                     assessment = ActionAssessment("unknown", "风险审查失败，需人工确认：" + self.redactor.text(str(exc))[:1000])
+                    action["review_status"] = "failed"
             previous_unknown = any(a["id"] != action["id"] and a["name"] == name and a["params"] == action["params"]
                                    and a["state"] == "unknown" for a in self.store.actions(identifier))
             command = action["params"].get("command", "")
-            if assessment.risk != "blocked" and (login_needed or previous_unknown or _DANGEROUS.search(command)):
+            if assessment is None and previous_unknown:
+                assessment = ActionAssessment("dangerous", "此前同一操作结果待核实，重试须重新批准")
+            if assessment is not None and assessment.risk != "blocked" and (login_needed or previous_unknown or _DANGEROUS.search(command)):
                 assessment = ActionAssessment("dangerous", assessment.reason +
                     ("；包含首次设备登录" if login_needed else "") +
                     ("；此前同一操作结果待核实，重试须重新批准" if previous_unknown else "") +
                     ("；检测到须确认的设备/系统修改操作" if _DANGEROUS.search(command) else ""))
-            action["assessment"] = asdict(assessment)
-            self.store.change_action(action["id"], ("reviewing",), "reviewing", assessment=self.redactor.object(action["assessment"]))
-            self.owner.emit(f"操作{action['id'][:8]}审查结果：{self.redactor.dumps(action['assessment'])}")
-            if assessment.risk == "blocked":
+            action["assessment"] = asdict(assessment) if assessment is not None else None
+            self.store.change_action(action["id"], ("reviewing",), "reviewing",
+                                     assessment=self.redactor.object(action["assessment"]), review_status=action["review_status"])
+            if assessment is not None:
+                self.owner.emit(f"操作{action['id'][:8]}审查结果：{self.redactor.dumps(action['assessment'])}")
+            if assessment is not None and assessment.risk == "blocked":
                 return self._finish(action, "blocked", {"error": assessment.reason, "dispatched": False})
-            if assessment.risk != "ordinary":
+            needs_approval = permission["mode"] == ASK or previous_unknown or (assessment is not None and assessment.risk != "ordinary")
+            if needs_approval:
                 if not self._wait_approval(action, stop):
                     return {"action_id": action["id"], "status": "rejected_or_cancelled", "dispatched": False}
                 expected = ("approved",)
             else:
                 expected = ("reviewing",)
             self._eligible(identifier, stop)
+            current_permission = self._permission(identifier)
+            if (current_permission["mode"], current_permission["grant_id"]) != (permission["mode"], permission["grant_id"]):
+                raise InterruptedError("操作权限或完全访问授权已变化，本次未执行")
             with self.lock:
                 if stop.is_set():
                     raise InterruptedError("操作已取消")

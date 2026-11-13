@@ -10,7 +10,9 @@ from src.models.ai_diagnostics import ProviderProfile
 from src.ui.module_theme import apply_module_theme
 from src.ui.ai_context_status import AiContextStatus
 from src.ui.ai_action_approval import AiActionApproval
+from src.ui.ai_permission_control import AiPermissionControl
 from src.ui.ai_chat_status import AiChatStatus
+from src.ui.ai_chat_markdown import configure_markdown_tags, insert_markdown
 
 
 CHAT_FONT = "Microsoft YaHei UI"
@@ -76,8 +78,6 @@ class AiChatPanel:
         self.output.configure(yscrollcommand=scroll.set)
         self.input = tk.Text(composer, height=4, wrap="word", font=(CHAT_FONT, 11), padx=8, pady=6)
         self.input.pack(fill="x", pady=6)
-        self.action_approval = AiActionApproval(composer, self.service, self.owner.background_color)
-        self.action_approval.pack(fill="x", pady=(0, 5))
         self.input.bind("<Return>", lambda event: self.send())
         self.input.bind("<Alt-Return>", self._insert_newline)
         self.input.bind("<Control-Return>", lambda event: self.send())
@@ -87,8 +87,10 @@ class AiChatPanel:
         self.send_button.pack(side="left")
         for title, action in (("停止本轮排查", self.stop), ("导入文本日志", self.import_text), ("查看证据", self.evidence)):
             ttk.Button(row, text=title, command=action).pack(side="left", padx=5)
-        ttk.Label(composer, text="Enter发送，Alt+Enter换行",
-                  wraplength=960).pack(anchor="w", pady=5)
+        self.action_approval = AiActionApproval(row, self.service, self.owner.background_color)
+        self.action_approval.pack(side="left", padx=5)
+        self.permission_control = AiPermissionControl(row, self.service)
+        self.permission_control.pack(side="left", padx=(3, 0))
         self.refresh()
 
     def _configure_message_tags(self):
@@ -102,6 +104,7 @@ class AiChatPanel:
                                       font=(CHAT_FONT, size), spacing1=3, spacing2=3, spacing3=5)
         self.output.tag_configure("message_time", foreground="#65717f", font=(CHAT_FONT, 9))
         self.output.tag_configure("message_gap", font=(CHAT_FONT, 4), spacing3=6)
+        configure_markdown_tags(self.output, CHAT_FONT)
         self.output.tag_raise("sel")
 
     def error(self, exc):
@@ -249,6 +252,7 @@ class AiChatPanel:
 
     def render(self):
         self.action_approval.show(self.selected)
+        self.permission_control.show(self.selected)
         if not self.selected:
             self.context_status.show()
             self._show_status()
@@ -288,7 +292,10 @@ class AiChatPanel:
             start = self.output.index("end-1c")
             self.output.insert("end", f"{labels.get(role, role)} · ", ("header_" + style,))
             self.output.insert("end", format_chat_time(message["created"]) + "\n", ("message_time",))
-            self.output.insert("end", message["text"] + "\n", ("body_" + style,))
+            if role == "assistant":
+                insert_markdown(self.output, message["text"], "body_" + style)
+            else:
+                self.output.insert("end", message["text"] + "\n", ("body_" + style,))
             self.output.tag_add("message_" + style, start, "end-1c")
             self.output.insert("end", "\n", ("message_gap",))
         if len(selection) == 2:

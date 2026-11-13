@@ -26,6 +26,7 @@ class ActionAssessment:
 
 def action_fingerprint(action):
     fields = {k: action[k] for k in ("id", "session_id", "run_id", "target", "profile", "name", "params", "before")}
+    fields.update({key: action[key] for key in ("permission_mode", "authorization_id", "authorization_source") if key in action})
     return hashlib.sha256(json.dumps(fields, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
@@ -71,13 +72,13 @@ def normalize_action(name, params):
 
 def action_tool_schemas():
     definitions = (
-        ("run_local_command", "在本机当前Windows账号下执行PowerShell。AI独立审查风险，危险或不明须操作员批准；不可绕过设备/串口占用保护。",
+        ("run_local_command", "在本机当前Windows账号下执行PowerShell；按当前permission_mode审查/批准，不可绕过设备/串口占用保护。",
          {"command": {"type": "string"}, "cwd": {"type": "string"}, "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 1800}}, ["command"]),
         ("read_local_file", "有界读取本机文件为文本，不执行文件内容；二进制请使用命令工具处理。",
          {"path": {"type": "string"}, "offset_bytes": {"type": "integer", "minimum": 0}, "max_bytes": {"type": "integer", "minimum": 1, "maximum": OUTPUT_LIMIT}}, ["path"]),
-        ("write_local_file", "写入UTF-8文本文件，覆盖前提供差异并独立审查风险；父目录必须存在。",
+        ("write_local_file", "写入UTF-8文本文件，覆盖前记录差异，按当前permission_mode审查/批准；父目录必须存在。",
          {"path": {"type": "string"}, "content": {"type": "string"}}, ["path", "content"]),
-        ("run_dut_command", "向当前会话目标下发自定义Shell命令。复用锁源Telnet/共享串口；登录和危险操作须确认，已下发命令不自动重试或切通道重发。",
+        ("run_dut_command", "向当前会话目标下发自定义Shell命令。复用锁源Telnet/共享串口；按当前permission_mode批准登录和操作，已下发命令不自动重试或切通道重发。",
          {"command": {"type": "string"}, "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 1800}}, ["command"]),
         ("read_serial_status", "只读查询当前目标COM的实际枚举、PnP故障代码、驱动和程序内部占用；不打开COM，外部占用者无证据时为未知。", {}, []),
     )

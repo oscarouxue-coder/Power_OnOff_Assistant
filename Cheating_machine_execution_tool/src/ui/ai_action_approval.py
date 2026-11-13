@@ -14,10 +14,8 @@ class AiActionApproval(ttk.Frame):
         self.identifier, self.action = "", None
         self.window = None
         self.window_action = None
-        self.status = tk.StringVar(self, value="普通操作经AI审查自动执行；危险或不明操作需要批准。")
         self.button = ttk.Button(self, text="查看待确认操作", command=self.open, state="disabled")
         self.button.pack(side="left")
-        ttk.Label(self, textvariable=self.status, wraplength=640).pack(side="left", padx=8)
 
     def show(self, identifier=""):
         if self.identifier != identifier:
@@ -28,8 +26,6 @@ class AiActionApproval(ttk.Frame):
         except ValueError:
             self.action = None
         self.button.configure(state="normal" if self.action else "disabled")
-        self.status.set("等待操作员批准；请先核对目标与实际内容。" if self.action else
-                        "普通操作经AI审查自动执行；危险或不明操作需要批准。")
         if self.window is not None and self.window.winfo_exists():
             same = self.action is not None and self.window_action["id"] == self.action["id"]
             for button in (self.approve_button, self.reject_button):

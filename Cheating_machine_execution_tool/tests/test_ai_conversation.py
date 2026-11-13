@@ -119,7 +119,7 @@ class ConversationTests(unittest.TestCase):
                 history = self.requests[-1]["messages"]
                 instructions = history[0]["content"]
                 for rule in ("实际排障按需引用证据编号，区分确认事实与推测", "不受简单问答的句数限制",
-                             "仅使用注册工具", "危险操作必须经操作员批准具体操作", "未回复不是同意",
+                             "仅使用注册工具", "以程序本次提供的permission_mode和approval为准", "未回复不是同意",
                              "只使用本次请求提供的工具", "当前恢复正常不能反推故障当时正常",
                              "未执行线路Ping或其它连通性验证时，不得宣称线路连接正常"):
                     self.assertIn(rule, instructions)

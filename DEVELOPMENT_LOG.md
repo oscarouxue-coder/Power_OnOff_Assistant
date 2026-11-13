@@ -1,5 +1,178 @@
 # 开发记录
 
+## 2026-11-13 - 验证AI优化提交前完整基线
+
+- 类型：测试
+- 背景：负责人要求将当前改动提交本地Git并推送GitHub，提交备注为“优化ai功能”；按提交规则执行完整基线。
+- 完成内容：① 保留现有35个已暂存文件的提交范围，包含AI权限、回复排版、控件布局、主日志摘要、通道列表及既有配置/备份、测试和文档。② 使用仓库配置的CPython 3.9.10 x64，经标准Git检查入口在主源码目录执行完整`verify_baseline.py`；本地与`origin/main`提交前同步，无远端分歧。③ 更新本轮完整验证记录，提交继续由既有pre-commit钩子复核，不绕过门禁；提交备注按负责人要求，保留工作流要求的Co-Authored-By。
+- 修改文件：
+  - `DEVELOPMENT_LOG.md`（追加本轮验证记录）
+  - `PROJECT_STATUS.md`（更新最新完整验证入口）
+- 验证方法：在主源码目录执行`powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\scripts\run_git_pre_commit.ps1`；执行`git fetch origin`、`git rev-list --left-right --count HEAD...origin/main`、`git diff --cached --check`及`git diff --quiet`。
+- 验证结果：完整基线`ALL CHECKS PASSED`，1857项测试、190项指定关键回归实际执行、142个源码编译/覆盖及全部协议不变量通过；远端分歧为`0 0`，无未暂存差异。暂存差异检查仅报告既有`test_project_config.ini.bak_20261113_143317`第38行末尾空行，保留已暂存内容，其余无格式问题；本轮两份文档另行检查差异格式。未构建或运行交付EXE，未新增真实模型或设备验收结论。
+- 后续待办：按本次授权执行“优化ai功能”提交并推送`origin/main`，核对远端提交与本地一致；既有Windows完整源码版人工复验及真实模型/设备待办仍按ACCEPTANCE_BASELINE.md §3。
+
+## 2026-11-13 - 精简DUT主界面日志并保留完整文件
+
+- 类型：优化
+- 背景：负责人反馈WiFi查询的UBUS原始回包、完整能力列表和状态对象占据主界面多行，已确认仅精简DUT日志、保留实际命令/异常和完整文件的计划。
+- 完成内容：① 在既有主界面日志适配中按DUT前缀及明确格式隐藏WiFi原始回包、WiFi/双频Radio状态、WAN完整信息及语音/TR069完整状态，未知格式、多行诊断和新增后缀原样显示，不按长度或成功/失败关键词过滤。② 主程序_log将DUT原文完整写入本次日志文件，与界面显示分流；实际TX、登录/注销、配置返回结果、关键阶段、逐台成功/失败/跳过、重试和停止提示保持。当前参数仍在DUT窗口查看；AI原文/摘要及开关机WiFi三处共用摘要保持，不改core/service、设备命令、配置、队列或业务流程。③ 在既有日志专项新增8项DUT回归，覆盖18种已知详情、命令/异常/未知格式、真实core离线模拟查询、多通道混合AI/WiFi、完整落盘及Vista/Clam独立Tk显示/颜色。两项Tk日志测试清理时恢复主题后排空待处理事件，避免销毁窗口后ThemeChanged诊断输出。④ 同步操作员说明、状态、DUT新增显示边界和人工复核待办及确认计划，保留原设备验收结论与其它工作区改动。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/main_log_filter.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`（仅本轮DUT分类导入及_log落盘分流）
+  - `Cheating_machine_execution_tool/tests/test_main_log_filter.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/dut-main-log-summary.md`（新增）
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`，通过stdin将`tests`加入sys.path，进程TEMP/TMP/TMPDIR规范为`Path(tempfile.gettempdir()).resolve()`，运行`unittest.defaultTestLoader.discover('tests', pattern='test_main_log_filter.py')`并加入`test_app.CurrentChannelSelectionTests.test_drain_log_queue_limits_each_ui_tick_and_continues_when_backlogged`及`test_legacy_channel_cycle_start_log_uses_green_success_tag`，由TextTestRunner执行并按结果退出。运行`-m py_compile src/ui/main_log_filter.py line_check_assistant/app.py tests/test_main_log_filter.py`、本轮文件`git diff --check`及文档入口/内容一致性检查。
+- 验证结果：最终46项相关检查全部通过、无跳过，其中日志专项44项（8项新增DUT回归）、日志队列及原颜色2项。两种主题真实Tk Text验证隐藏详情不插入控件、命令/结果/错误和颜色/禁用态保持、原文仍完整保存。离线调用真实query_wifi_status，模拟2.4G/5G及双频查询产生的全部RX详情隐藏，原有查询结果和只读调用保持。首轮46项已通过但出现Tk主题销毁后的诊断输出，补齐两项相关测试的空闲事件清理后复跑46项通过且无该诊断。3个Python文件局部编译、本轮文件差异格式及文档一致性检查通过。未运行完整基线，保留既有2026-11-13完整1795项验证记录，不作为本轮结果；未启动完整主程序/交付EXE、操作真实设备、提交、打包或发布。
+- 后续待办：负责人重启Windows源码版核对主界面可读性、DUT当前状态和本次完整日志，见ACCEPTANCE_BASELINE.md §2.13/§3；独立Tk/离线模拟不替代完整主程序目视验收，原真实设备验收结论保持，现有交付包不含本轮调整。
+
+## 2026-11-13 - 优化AI回复段落与代码排版
+
+- 类型：优化
+- 背景：负责人反馈AI回复直接显示Markdown星号和反引号、段落层次不清，确认排版预览及独立UI模块实施计划；复制时使用可见文字，代码和路径保持准确。
+- 完成内容：① 新增轻量Markdown显示模块，以Tk Text标签实现ATX标题、`**粗体**`、行内代码、项目/编号列表、引用及反引号/波浪线围栏代码；标题13/12号、正文11号，代码等宽浅灰蓝底色，列表使用悬挂缩进，代码外连续空行压缩为一个。② 仅在现有对话面板接入AI回复及确认问题，新旧消息采用同一显示投影；用户输入、数据库、上下文、日志、证据和权限/设备行为保持，不增加依赖、固定提示或按钮。代码负载不解释内部标记，保留缩进、空格、制表符、空行及CRLF；不移除Windows路径中的反斜杠，视觉折行不插入换行。未支持/未闭合格式保留，不执行链接或HTML。③ 保留角色/问题/错误语义色、选区最高优先级、状态独立刷新、草稿、阅读锚点与底部跟随；新增模块纳入编译清单，保留已有工作区修改。④ 同步操作员说明、当前状态、AI验收边界/待确认项及确认计划。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_markdown.py`（新增）
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`（仅排版导入、样式与AI正文插入）
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_markdown.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`（新增2项排版接入与阅读状态回归）
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`（仅新增模块编译清单项）
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/ai-chat-markdown.md`（新增）
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`。通过stdin脚本将`tests`加入sys.path、TEMP/TMP/TMPDIR规范为`str(Path(tempfile.gettempdir()).resolve())`，组合`unittest.defaultTestLoader.discover('tests', pattern='test_ai_chat_markdown.py')`、`discover('tests', pattern='test_ai_chat_presentation.py')`、`loadTestsFromName('test_ai_session_deletion.SessionManagerTests')`及`loadTestsFromName('test_ai_conversation.ConversationTests.test_real_tk_chat_waiting_render_send_and_theme')`，以TextTestRunner运行并按成功状态退出；单独调用`check_py_compile_inventory(Path.cwd())`检查`passed`字段。执行`-m py_compile src/ui/ai_chat_markdown.py src/ui/ai_chat_panel.py scripts/verify_baseline.py tests/test_ai_chat_markdown.py tests/test_ai_chat_presentation.py`，检查本轮差异格式与文档入口。
+- 验证结果：最终`Ran 50 tests ... OK`，无跳过；其中新增排版专项13项、对话显示27项（新增2项）、会话管理9项、模拟完整提问/回答窗口1项。Vista/Clam真实Tk验证940×660布局、长路径软折行及实际剪贴板复制代码完整，验证语义色、字体/选区优先级、历史重开不改原文、新AI回复追加后阅读位置/选区/草稿保留及既有状态/快捷键/底部跟随；CRLF、Windows反斜杠路径及不支持/未闭合格式专项通过。5个Python文件局部编译通过，编译清单覆盖142个源码（仅覆盖检查，不是142个文件的本轮全量编译）。独立控件示例截图已目视检查，截图通过Windows System.Drawing完成，环境无Pillow，未新增依赖。清单验证首次调用误用不存在的`ok`属性，改用既有`passed`字段后通过，无需改动门禁实现。本轮文件差异格式与文档一致性检查通过；未运行完整基线，保留既有2026-11-13完整1795项验证记录，不作为本轮结果。未启动完整主程序/交付EXE、请求真实模型、操作真实设备、提交、打包或发布。
+- 后续待办：负责人重启Windows源码版复核新旧回复与确认问题的排版、长路径/命令复制和历史阅读，见ACCEPTANCE_BASELINE.md §2.16/§3；独立Tk及示例截图不替代完整主程序目视验收，现有交付包不含本轮调整。
+
+## 2026-11-13 - 精简主界面AI日志并保留完整文件
+
+- 类型：优化
+- 背景：负责人希望主界面AI日志简洁，已确认保留关键过程与结果、主日志文件继续完整记录AI原文的实施计划。
+- 完成内容：① 在既有主日志显示适配中按明确AI格式隐藏常规模型请求/成功、Token、容量和风险审查开始，容量失败/裁剪/重试保持；采集状态保留原因、权限与接收方，省略长说明和工具列表。② 待批准、执行、审查和结束JSON改为摘要，保留操作编号、名称/目标、实际状态、返回码、错误和待核实原因；失败stderr显示首行最多240字符，省略时注明完整输出所在文件。实际TX/登录内容、未知格式和解析失败原样保留，不把Shell返回当作业务成功。③ 主程序_log分别处理界面和落盘，AI原文经既有service密钥过滤后完整写文件，即使界面隐藏也保存；WiFi共用摘要、其它日志规则和显式颜色标签保持。操作结果按摘要状态着色，结果不明/取消/拦截不因输出中的“完成/成功”显示成功色。④ 在既有日志专项补充18项AI过滤、双接收端、密钥过滤、混合WiFi消息、JSON兼容和真实Tk回归，更新操作员说明、当前状态、AI验收状态/待确认清单及确认计划。保留已有及期间出现的其它工作区改动，不改AI业务或设备流程。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/main_log_filter.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`（仅本轮日志导入与_log接入）
+  - `Cheating_machine_execution_tool/tests/test_main_log_filter.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/ai-main-log-summary.md`（新增）
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`。通过stdin脚本将`tests`加入sys.path，将测试进程TEMP/TMP/TMPDIR规范为`Path(tempfile.gettempdir()).resolve()`，运行`unittest.defaultTestLoader.discover('tests', pattern='test_main_log_filter.py')`并加入`test_app.CurrentChannelSelectionTests.test_drain_log_queue_limits_each_ui_tick_and_continues_when_backlogged`及`test_legacy_channel_cycle_start_log_uses_green_success_tag`，由TextTestRunner执行并按结果退出。执行`-m py_compile src/ui/main_log_filter.py line_check_assistant/app.py tests/test_main_log_filter.py`和本轮文件的`git diff --check`，检查文档入口与差异。
+- 验证结果：最终38项相关检查全部通过，无跳过；其中日志专项36项（18项新增），原日志队列和颜色2项。Vista/Clam两种主题的独立真实Tk Text控件验证摘要、实际多行命令、未知结果警告色、禁用态以及隐藏日志/完整JSON的文件保存；模型密钥通过真实AiDiagnosticService.emit入口过滤。3个Python文件局部编译通过。本轮文件差异格式与文档入口检查通过；文档检查首轮因PowerShell管道默认编码改变中文断言字面量而失败，将该检查进程OutputEncoding显式设为UTF-8后通过，无需修改文档内容。全工作区差异检查发现既有本机`network_card_ip.ini`五条空配置赋值含行尾空格，本轮未修改。未运行完整基线，保留既有2026-11-13完整1795项验证记录，不作为本轮结果；未启动完整主程序/交付EXE、请求真实模型、操作真实设备、提交、打包或发布。
+- 后续待办：负责人重启Windows源码版人工目视复核主界面摘要与完整主日志文件，见ACCEPTANCE_BASELINE.md §2.16/§3；独立Tk不替代完整主程序人工验收，不扩大真实模型/DUT结论，现有交付包不含本轮调整。
+
+## 2026-11-13 - 去除首帧尺寸刷新日志
+
+- 类型：优化
+- 背景：负责人要求去除主界面关于“已触发客户区首帧尺寸刷新”的打印，并确认仅删除三处同类日志回调。
+- 完成内容：① 去除测试项配置、DUT配置和生成批量参数表的首帧尺寸刷新日志回调。② 保留窗口居中、刷新调用、20/120/360ms刷新时机、尺寸恢复及现有可选回调接口，其它日志保持。③ 调整已有主界面测试中的日志断言，继续验证窗口生命周期、刷新时机和几何恢复；保留工作区已有改动。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用仓库配置的`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`执行`-m py_compile line_check_assistant/app.py tests/test_app.py`及`-m unittest discover -s tests -p test_app.py -v`；使用`rg -n "已触发客户区首帧尺寸刷新" line_check_assistant src`检查程序源码，并执行`git diff --check`。
+- 验证结果：局部编译通过；主界面专项`Ran 220 tests ... OK`，包括窗口居中、生命周期、刷新时机和尺寸恢复回归；程序源码无该提示。本轮三个文件的`git diff --check -- Cheating_machine_execution_tool/line_check_assistant/app.py Cheating_machine_execution_tool/tests/test_app.py DEVELOPMENT_LOG.md`通过；全工作区差异检查发现既有`Auto_power_on_off_tool/config/network_card_ip.ini`第5–9行有行尾空格，本轮保留原样。本轮未运行完整基线，保留最近一次完整验证记录；未启动完整主程序或EXE、操作真实设备、提交、打包或发布。
+- 后续待办：无。
+
+## 2026-11-13 - 增加AI诊断三档操作权限
+
+- 类型：功能
+- 背景：负责人要求参考Codex增加请求批准、帮我批准和完全访问，并确认完全访问在一次危险范围授权后跳过独立模型审查，记住偏好但不跨重启恢复授权。
+- 完成内容：① 独立models/services/UI模块管理三档策略、偏好和内存授权，在查看待确认操作右侧增加下拉框，首次默认帮我批准；完全访问确认明确目标、本机文件/命令、危险操作范围及当前账号/非沙箱边界，取消保持原模式。② 请求批准逐项确认首次登录、通用命令、写文件和临时设备修改；帮我批准沿用独立审查、危险/不明/审查失败人工确认及禁止拦截；完全访问跳过独立审查并自动执行，审查状态明确记录跳过，不伪造普通风险结论。③ 授权仅在内存绑定会话/目标/模型/批次，停止、变化、重启或删除后不沿用；偏好及各会话模式复用现有设置/JSON存储，新建/恢复先按帮我批准生效并动态提示重新授权。运行/排队/待批准/清理期间禁止切换，执行前复核权限/指纹，保留文件版本、资源占用、锁源、停止、密钥过滤及不明结果重试须批准。④ 同步模型提示/工具描述及真实运行权限字段，主日志记录模式、授权、审查/跳过、下发和结果；自动监控及底层执行器保持。删除会话时清除内存授权，兼容旧数据和旧动作指纹。⑤ 新增21项权限专项，同步相关fixture/断言、源码编译清单、操作员说明、当前状态、验收边界及已确认实施计划；保留全部既有和并行工作区改动。
+- 修改文件：
+  - `.claude/plans/ai-permission-modes.md`（新增）
+  - `Cheating_machine_execution_tool/src/models/ai_permissions.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_permission_service.py`（新增）
+  - `Cheating_machine_execution_tool/src/ui/ai_permission_control.py`（新增）
+  - `Cheating_machine_execution_tool/src/models/ai_actions.py`
+  - `Cheating_machine_execution_tool/src/services/ai_action_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`（仅增补本轮三个源码编译项，保留原清单改动）
+  - `Cheating_machine_execution_tool/tests/test_ai_permissions.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_conversation.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_session_deletion.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用本仓库`linecheck.pythonExecutable`配置的CPython3.9.10 x64和`-X utf8`。通过stdin脚本将`tests`加入sys.path，将测试进程TMPDIR/TEMP/TMP规范为`Path(tempfile.gettempdir()).resolve()`后以`unittest.defaultTestLoader.discover`及`TextTestRunner`分轮运行`test_ai_permissions.py`、`test_ai_actions.py`、`test_ai_chat_presentation.py`、`test_ai_conversation.py`、`test_ai_session_deletion.py`、`test_ai_workspace.py`和`test_verify_baseline.py`；危险命令、DUT和模型请求均使用Mock。对本轮12个Python文件执行`py_compile.compile(..., doraise=True)`，单独调用`check_py_compile_inventory(Path.cwd())`；执行`git diff --check`及说明/链接/差异检查。
+- 验证结果：首轮相关检查通过；整理测试模块导入避免重复发现已有TestCase后，七组188项相关回归通过，无跳过。补充会话删除授权清理、请求批准写文件拒绝、执行前授权撤销及动态提示断言后，最终动作/对话/权限110项复验通过；会话删除/权限37项复验通过。新增权限专项最终为21项；真实Tk的Vista/Clam 940×660同排布局、模式显示、运行/清理禁用、默认拒绝确认及取消保留模式通过。两种模型协议下危险命令均模拟只执行一次且只有两次主模型请求，无独立审查请求；原帮我批准审查/批准/拒绝回归保持通过。12个Python文件局部编译及141个源码编译清单覆盖检查通过。本轮未运行完整基线，保留当前已记录的2026-11-13完整1795项验证，不能将其作为本轮结果；未启动完整主程序或交付EXE、请求真实模型、操作真实设备、提交、打包或发布。
+- 后续待办：负责人重启Windows源码版复验三档选择及完整交互，真实模型/设备依§2.16/§3确认；现有交付包不含本轮功能，离线模拟与独立Tk不升级现场验收结论。
+
+## 2026-11-13 - 恢复通道列表行距并保持平面外观
+
+- 类型：BUG 修复
+- 背景：上一轮将选中边框宽度改为0时，同时去掉了原生Listbox依赖该参数提供的上下留白，字号虽仍为13号，行高却由30像素缩为24像素。负责人确认恢复原疏松程度，采用独立控制行高的平面列表，并运行完整基线。
+- 完成内容：① 新增独立ChannelList显示组件，以Treeview绘制单列文字，行高为字体linespace+7，恢复原字体、文字尺寸、宽度、文字位置及上下留白；专用局部样式移除树形标记、原生选中图像和焦点图案，外围边框单独保持原焦点颜色，不引入依赖。② app.py仅替换列表装配和导入，保留channel_list及既有业务回调，兼容整数索引、END、增删、选行、文字区域命中、着色和滚动；程序化刷新不转发用户选行事件，补齐原Ctrl+Home/Ctrl+End行为，保留点击、双击、空格、方向键、滚轮和右键入口。③ 替换前先补原控件真实Tk特征测试，新旧组件运行相同交互契约，新增双主题实际像素及正常/最小主界面装配检查；新模块纳入编译清单，更新操作员说明、实施计划和交接/验收待办。④ 保留工作区既有AI界面、测试及文档修改，不改配置格式、设备命令或业务编排。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/channel_list.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_channel_list.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/channel-list-flat-spacing.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：从主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`执行`-m py_compile src/ui/channel_list.py line_check_assistant/app.py tests/test_channel_list.py tests/test_app.py scripts/verify_baseline.py`、`-m unittest discover -s tests -p test_channel_list.py -v`及`-m unittest discover -s tests -p test_resource_options.py -v`。专项复用真实主界面装配和原回调，隔离完整程序初始化、设备与本机配置；Windows GetDC/GetPixel读取实际控件像素，无截图依赖。完整基线直接执行同一解释器的`scripts/verify_baseline.py`：仅在验证子进程设置PYTHONUTF8/PYTHONIOENCODING，并按现有Git门禁规则将TMPDIR/TEMP/TMP规范化为`Path(tempfile.gettempdir()).resolve()`完整路径，保留原脚本、测试、门禁和退出码。最后执行`git diff --check`、源码差异及文档一致性检查。
+- 验证结果：替换前6项原控件特征测试通过；最终19项列表专项及11项资源选项专项全部通过、无跳过。Vista/Clam两主题对照原控件，13号字体、文字尺寸、宽度、文字内边距和原行距保持，本机行高30像素；两主题×三焦点状态实际像素均为列表原底色，1200×780与1040×700的16条完整通道文字、末行滚动及底部按钮通过。首次新增特征测试将ChannelConfig默认启用误作关闭，显式设置模拟通道enabled=False后原控件6项通过；后续补测发现原Ctrl+Home/Ctrl+End与Treeview默认键位不一致，已补兼容转发，最终19项通过。局部编译及完整基线`ALL CHECKS PASSED`：Ran 1795 tests、190项指定回归实际执行、138个源码编译/覆盖及全部协议不变量通过，保留此前1777项完整验证记录。差异格式和文档一致性检查通过；未启动完整主程序或交付EXE、连接设备、改写真实配置、提交、打包或发布。
+- 后续待办：负责人重启完整Windows源码版复核通道列表外观、键鼠交互及配置保存，见ACCEPTANCE_BASELINE.md §2.1/§3；独立控件检查不替代完整程序人工验收。现有交付包不含本轮修改。回退边界为组件、列表装配及对应测试/文档，不涉及业务层。最终差异检查另见新增的`src/models/ai_permissions.py`、`src/services/ai_permission_service.py`及本机`network_card_ip.ini`差异，本轮未覆盖或回退这些额外内容；上述完整基线结果对应运行时快照，不涵盖随后出现的额外改动。
+
+## 2026-11-13 - 去掉通道选中行绿色底色
+
+- 类型：优化
+- 背景：负责人确认仅去掉左侧通道列表选中行的绿色底色，保留列表及外围边框，并要求按确认计划实施。
+- 完成内容：① 将通道列表的`selectbackground`改为列表原背景`COLOR_SURFACE_SUBTLE`，`selectborderwidth`由3改为0，取消绿色底色及凸起选中边框。② 保留13号字体、选中及普通文字颜色、外围边框、通道选择/勾选/切换及右键菜单，不修改配置或业务执行。③ 同步操作员说明，移除不再适用的选中边框上下留白描述；保留工作区既有AI界面及文档修改。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：从主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -m py_compile line_check_assistant/app.py`编译。通过stdin将`tests`加入sys.path，用`unittest.defaultTestLoader.loadTestsFromNames`及`TextTestRunner(verbosity=2)`运行`test_app.CurrentChannelSelectionTests`中的`test_channel_selection_list_is_wide_enough_for_vlan_and_com_text`、`test_channel_list_right_click_menu_opens_selected_power_test_log`、`test_channel_list_blank_space_does_not_select_or_toggle`、`test_channel_list_real_row_keeps_click_and_double_click_behavior`及`test_channel_list_right_click_selects_the_clicked_row_before_showing_menu`。独立Tk检查通过stdin提取`_build_ui`中`channel_list`构造参数，在Vista/Clam主题各创建16行模拟通道，选中channel_14后依次聚焦列表、移至独立输入框、重新聚焦列表，断言选择保持、选中背景等于原背景、选中边框为0、文字及外围边框颜色不变；AST与HEAD对比仅允许本轮两项参数变化。执行`git diff --check`及文档一致性检查。
+- 验证结果：局部编译通过；5项既有通道列表专项全部通过、无跳过；独立Tk两主题共6组焦点/选中状态检查及AST等价检查通过；差异格式及文档一致性检查通过。本轮未运行完整基线，保留2026-11-12最近1777项完整验证记录；未启动完整主程序或交付EXE、连接设备、改写真实配置、提交、打包或发布。
+- 后续待办：负责人重启Windows源码版复核选中行外观；现有交付包不包含本轮源码调整，不以独立Tk检查替代完整主程序人工验收。
+
+## 2026-11-13 - 取消会话状态悬停提示
+
+- 类型：优化
+- 背景：负责人确认仅取消鼠标悬停时展开最新系统状态的提示框，保留“新会话”右侧单行状态，并要求按确认计划实施。
+- 完成内容：① 删除AiChatStatus悬停弹框、进入/离开及隐藏/销毁事件绑定、延时任务和相关清理方法，移除仅弹框使用的字体、边框颜色与主题导入。② 保留show接口、完整原文属性、status_output兼容引用、单行时间/字体/颜色/省略及更新行为；不改状态选取、数据库、聊天正文或业务执行。③ 将三项旧弹框专项替换为双主题无悬停弹框回归，同步操作员说明、项目状态及验收清单；保留工作区既有按钮布局与快捷键修改。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_status.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：从主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -m py_compile src/ui/ai_chat_status.py tests/test_ai_chat_presentation.py`及`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -m unittest discover -s tests -p test_ai_chat_presentation.py -v`。真实Tk专项在Vista/Clam两主题生成鼠标进入事件并等待450毫秒，核对无Toplevel、无悬停after任务、输入焦点/状态内容/原始消息保持；执行`git diff --check`并核对当前说明及验收条目。
+- 验证结果：两个Python文件编译通过；25项聊天显示/快捷键专项全部通过，无跳过，包含状态替换、会话切换/重开/空记录、窗口缩放省略、正文阅读位置/选区及草稿保持。首次运行24项通过，新增悬停专项在Vista主题的焦点断言失败；测试增加原生窗口激活稳定等待，并显式断言悬停前焦点位于输入框，随后完整专项25项通过，未为此修改产品焦点行为。差异格式及文档一致性检查通过。本轮未运行完整基线，保留2026-11-12最近1777项完整验证记录；未启动完整主程序或交付EXE、连接真实设备、改写真实配置、提交、打包或发布。
+- 后续待办：负责人重启Windows源码版核对鼠标悬停不再弹框及固定状态行显示；完整Windows人工和真实模型/设备验收仍沿用ACCEPTANCE_BASELINE.md §2.16/§3待确认范围，现有交付包不包含本轮修改。
+
+## 2026-11-13 - 精简AI提示并合并操作按钮行
+
+- 类型：优化
+- 背景：负责人要求移除AI排障工作台红框内的操作审查说明及快捷键固定提示，将“查看待确认操作”放到“查看证据”旁边，并确认按局部显示调整计划实施。
+- 完成内容：① 删除两处提示标签及原批准区的无用StringVar更新，不保留原行占位。② 既有操作确认组件放到“查看证据”右侧，同排显示五个按钮；保留按钮名称、启用条件、具体确认窗口、批准/拒绝、会话动态反馈和全部快捷键。③ 调整原快捷键测试的提示断言，新增真实Tk双主题最小窗口布局及确认按钮状态回归；同步操作员文档与实施计划，不修改service、设备命令或执行流程。
+- 修改文件：
+  - `.claude/plans/ai-chat-controls-layout.md`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_action_approval.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：从主源码目录使用Git配置指向的CPython3.9.10（`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`），执行`-m py_compile src/ui/ai_chat_panel.py src/ui/ai_action_approval.py tests/test_ai_chat_presentation.py`及`-m unittest discover -s tests -p test_ai_chat_presentation.py -v`。操作确认专项使用`-m unittest discover -s tests -p test_ai_actions.py -v`；首次出现临时目录长短路径差异后，通过stdin在Python测试进程中将`Path(tempfile.gettempdir()).resolve()`赋给TMPDIR/TEMP/TMP、清空`tempfile.tempdir`，再以`unittest.defaultTestLoader.discover('tests', pattern='test_ai_actions.py')`及`TextTestRunner(verbosity=2)`运行，按成功状态退出。执行`git diff --check`并核对操作员说明、按钮文案和路径。
+- 验证结果：3个Python文件编译通过；27项聊天显示/快捷键专项及37项操作确认相关专项最终全部通过，无跳过。新增布局回归通过Vista/Clam两主题940×660检查：五个按钮依次同排居中、互不重叠且完整可见，输入区仅保留输入框和按钮行，批准组件仅保留按钮，待确认启用/空会话禁用正确。原操作确认专项覆盖680×420确认窗、会话切换关闭、批准一次执行、拒绝/停止/失效不执行等行为。首次操作专项36项通过、1项因Python临时目录返回`ADMINI~1`而PowerShell输出`Administrator`失败；仅统一测试子进程的临时路径后37项通过，未修改产品逻辑或断言。差异格式和文档一致性检查通过。本轮未运行完整基线，保留2026-11-12最近1777项完整验证记录；未启动完整主程序或交付EXE、连接真实设备、改写真实配置、提交、打包或发布。
+- 后续待办：负责人重启Windows源码版复核完整程序布局；完整Windows人工与真实模型/设备验收仍沿用既有待确认范围，不以独立Tk和模拟数据更新验收结论。现有交付包不包含本轮显示调整。
+
 ## 2026-11-12 - 完成通道字号优化提交前验证
 
 - 类型：BUG 修复

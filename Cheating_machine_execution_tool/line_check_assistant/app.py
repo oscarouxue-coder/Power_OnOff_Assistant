@@ -17,15 +17,16 @@ from src.services.test_item_pretest_service import prepare_pretest_request
 from src.ui.test_item_pretest_controls import PretestControls
 from src.ui.app_update_dialog import AppUpdateDialog, arrange_update_toolbar
 from src.ui.project_name_badge import ProjectNameBadge
-from src.ui.main_log_filter import format_main_log_message
+from src.ui.main_log_filter import ai_main_log_tag, format_main_log_message, is_ai_log_message, is_dut_log_message
 from src.ui.module_theme import apply_module_theme
+from src.ui.channel_list import ChannelList
 from src.utils.wifi_log_summary import WifiLogSummary
 from src.ui.adapter_rename_dialog import offer_adapter_rename
 from src.services.adapter_rename_service import (
     adapter_has_numeric_suffix, adapter_rename_is_busy, synchronize_channel_adapter_names,
 )
 from pathlib import Path
-from tkinter import BooleanVar, Button, Canvas, Checkbutton, DoubleVar, END, Frame, IntVar, Label, Listbox, Menu, StringVar, TclError, Text, Tk, Toplevel, filedialog, messagebox, ttk
+from tkinter import BooleanVar, Button, Canvas, Checkbutton, DoubleVar, END, Frame, IntVar, Label, Menu, StringVar, TclError, Text, Tk, Toplevel, filedialog, messagebox, ttk
 
 from .config_store import ChannelConfig, ChannelConfigStore, DEFAULT_POWER_SERIAL_PORT, DEFAULT_SUBNET_MASK
 from .legacy_ui_defaults_store import LegacyUiDefaultsStore, TELNET_ENABLE_OPTION
@@ -893,21 +894,14 @@ class LineCheckAssistant(Tk):
         left = ttk.Frame(body, style="Surface.TFrame", padding=14)
         left.pack(side="left", fill="y", padx=(0, 14))
         ttk.Label(left, text="1  选择测试通道", style="CardTitle.TLabel", font=(FONT_FAMILY, 12, "bold")).pack(anchor="w")
-        self.channel_list = Listbox(
+        self.channel_list = ChannelList(
             left,
             width=34,
             height=16,
-            exportselection=False,
             font=CHANNEL_LIST_FONT,
             background=COLOR_SURFACE_SUBTLE,
             foreground=COLOR_TEXT,
-            selectbackground=COLOR_PRIMARY_SOFT,
             selectforeground=COLOR_PRIMARY_DARK,
-            selectborderwidth=3,
-            activestyle="none",
-            relief="flat",
-            borderwidth=0,
-            highlightthickness=1,
             highlightbackground=COLOR_BORDER,
             highlightcolor=COLOR_PRIMARY,
         )
@@ -1895,12 +1889,7 @@ class LineCheckAssistant(Tk):
             window_width=680,
             window_height=750,
         )
-        schedule_toplevel_client_refresh(
-            dialog,
-            on_first_refresh=lambda: self._log(
-                "[写样机参数][生成批量参数表] 已触发客户区首帧尺寸刷新"
-            ),
-        )
+        schedule_toplevel_client_refresh(dialog)
 
     def _bind_onu_registration_autosave(self) -> None:
         for variable in (
@@ -4893,12 +4882,7 @@ class LineCheckAssistant(Tk):
             window_width=window_width,
             window_height=window_height,
         )
-        schedule_toplevel_client_refresh(
-            dialog,
-            on_first_refresh=lambda: self._log(
-                "[测试项配置] 已触发客户区首帧尺寸刷新"
-            ),
-        )
+        schedule_toplevel_client_refresh(dialog)
 
     # -- 测试项配置：各 Tab 的具体构建 ------------------------------------
 
@@ -6045,9 +6029,6 @@ class LineCheckAssistant(Tk):
             on_query_wifi_5g=self._query_dut_wifi_5g_status,
             on_stop=self._stop_dut_telnet_enable,
             on_close=self._close_dut_config_module,
-            on_first_paint_refresh=lambda: self._log(
-                "[DUT配置] 已触发客户区首帧尺寸刷新"
-            ),
         )
         self._refresh_dut_config_targets()
         self._log(
@@ -8367,9 +8348,14 @@ class LineCheckAssistant(Tk):
         if summary is None:
             summary = self._wifi_log_summary = WifiLogSummary()
         display_message = format_main_log_message(message, summary)
+        ai_message = is_ai_log_message(message)
+        file_message = message if ai_message or is_dut_log_message(message) else display_message
         if display_message is not None:
             timestamp = datetime.now().strftime("%H:%M:%S")
-            tag = self._log_tag_for(message) if tag is None else tag
+            if tag is None:
+                tag = ai_main_log_tag(display_message) if ai_message else None
+                if tag is None:
+                    tag = self._log_tag_for(display_message if ai_message else message)
             self.log_text.configure(state="normal")
             self.log_text.insert(END, f"{timestamp}  ", "time")
             if tag:
@@ -8378,9 +8364,10 @@ class LineCheckAssistant(Tk):
                 self.log_text.insert(END, display_message + "\n")
             self.log_text.configure(state="disabled")
             self.log_text.see(END)
+        if file_message is not None:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with self.log_path.open("a", encoding="utf-8") as file:
-                file.write(f"{timestamp} {display_message}\n")
+                file.write(f"{timestamp} {file_message}\n")
 
 
 def main() -> None:

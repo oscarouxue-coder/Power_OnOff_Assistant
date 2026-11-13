@@ -45,7 +45,8 @@ class ChatPresentationTests(unittest.TestCase):
         self.store.chat.return_value = self.session
         self.store.chat_items.side_effect = lambda _id: self.messages
         self.store.chat_evidence.return_value = self.items
-        self.service = Mock(store=self.store, lock=threading.RLock(), running={})
+        self.service = Mock(store=self.store, lock=threading.RLock(), running={}, executors={})
+        self.service.permissions.status.return_value = {"mode": "auto_review"}
         self.service.collection_status.return_value = {"enabled": False, "capable": True, "reason": "历史批次仅分析留存材料"}
         self.service.context_status.return_value = {"capacity": 1048576, "source": "模型接口（缓存）",
                                                   "max_output": 4096, "snapshot": {}, "stale": False}
@@ -80,12 +81,55 @@ class ChatPresentationTests(unittest.TestCase):
     def test_enter_sends_once_and_does_not_insert_newline(self):
         labels = [str(widget.cget("text")) for widget in self.panel.input.master.winfo_children()
                   if isinstance(widget, ttk.Label)]
-        self.assertIn("Enter发送，Alt+Enter换行", labels)
+        self.assertNotIn("Enter发送，Alt+Enter换行", labels)
         self.panel.input.insert("1.0", "检查当前连接")
         self.press_input_key("<Return>")
         self.service.send.assert_called_once_with("s1", "检查当前连接")
         self.service.answer_question.assert_not_called()
         self.assertEqual(self.panel.input.get("1.0", "end-1c"), "")
+
+    def test_composer_buttons_share_one_row_without_static_hints_in_both_themes(self):
+        approval = self.panel.action_approval
+        row = self.panel.send_button.master
+        composer = self.panel.input.master
+        buttons = [widget for widget in row.winfo_children() if isinstance(widget, ttk.Button)]
+        buttons.append(approval.button)
+        self.assertEqual([button.cget("text") for button in buttons],
+                         ["发送 / 回答问题", "停止本轮排查", "导入文本日志", "查看证据", "查看待确认操作"])
+        self.assertIs(approval.master, row)
+        self.assertEqual(composer.pack_slaves(), [self.panel.input, row])
+        self.assertEqual(approval.winfo_children(), [approval.button])
+        self.assertEqual(row.pack_slaves(), buttons[:-1] + [approval, self.panel.permission_control])
+        for theme in ("vista", "clam"):
+            with self.subTest(theme=theme):
+                ttk.Style(self.root).theme_use(theme)
+                self.root.geometry("940x660")
+                self.service.actions.pending.return_value = None
+                approval.show("s1")
+                self.root.update()
+                choice = self.panel.permission_control.choice
+                self.assertEqual(choice.get(), "帮我批准")
+                self.assertTrue(choice.winfo_viewable())
+                self.assertGreaterEqual(choice.winfo_rootx(), approval.button.winfo_rootx() + approval.button.winfo_width())
+                self.assertLessEqual(choice.winfo_rootx() + choice.winfo_width(), self.root.winfo_rootx() + self.root.winfo_width())
+                self.assertIn("disabled", approval.button.state())
+                for index, button in enumerate(buttons):
+                    self.assertTrue(button.winfo_viewable())
+                    self.assertAlmostEqual(button.winfo_rooty() + button.winfo_height() / 2,
+                                           buttons[0].winfo_rooty() + buttons[0].winfo_height() / 2,
+                                           delta=1)
+                    self.assertLessEqual(button.winfo_rootx() + button.winfo_width(),
+                                         self.root.winfo_rootx() + self.root.winfo_width())
+                    self.assertLessEqual(button.winfo_rooty() + button.winfo_height(),
+                                         self.root.winfo_rooty() + self.root.winfo_height())
+                    if index:
+                        self.assertGreaterEqual(button.winfo_rootx(),
+                                                buttons[index - 1].winfo_rootx() + buttons[index - 1].winfo_width())
+                self.service.actions.pending.return_value = {"id": "fixture-action"}
+                approval.show("s1")
+                self.assertNotIn("disabled", approval.button.state())
+                approval.show("")
+                self.assertIn("disabled", approval.button.state())
 
     def test_alt_enter_inserts_one_newline_at_cursor_without_sending(self):
         self.panel.input.insert("1.0", "第一行第二行")
@@ -248,6 +292,41 @@ class ChatPresentationTests(unittest.TestCase):
         self.rendered()
         self.assertTrue(self.panel.output.tag_ranges("body_assistant"))
         self.assertFalse(self.panel.output.tag_ranges("body_error"))
+
+    def test_markdown_only_formats_ai_and_questions_without_writing_history(self):
+        source = "## 修改结果\n- **项目**：`NP7287XGS`\n```ini\n  name = NP7287XGS\n```"
+        self.add("user", source)
+        self.add("assistant", source)
+        self.add("assistant", "**请确认** `LOS` 状态", "question")
+        self.add("assistant", "**错误**：`连接失败`", "error")
+        before = copy.deepcopy(self.messages)
+        text = self.rendered()
+        self.assertEqual(text.count(source), 1)
+        self.assertIn("修改结果\n• 项目：NP7287XGS\n  name = NP7287XGS", text)
+        self.assertIn("请确认 LOS 状态", text)
+        self.assertTrue(self.panel.output.tag_ranges("body_question"))
+        self.assertTrue(self.panel.output.tag_ranges("body_error"))
+        self.assertEqual(self.messages, before)
+        self.store.append_chat.assert_not_called()
+        self.store.update_chat.assert_not_called()
+        self.panel.revision = None
+        self.assertEqual(self.rendered(), text)
+
+    def test_new_ai_markdown_message_preserves_history_selection_anchor_and_draft(self):
+        for number in range(30):
+            self.add("assistant", f"## 记录{number}\n- **路径** `C:/配置/test.ini`\n" + "诊断内容 " * 50)
+        self.rendered()
+        self.panel.output.yview_moveto(.25)
+        self.panel.output.tag_add("sel", "3.0", "3.8")
+        self.panel.input.insert("1.0", "保留草稿")
+        self.root.update_idletasks()
+        top = self.panel.output.index("@0,0")
+        selected = self.panel.output.get("sel.first", "sel.last")
+        self.add("assistant", "## 最新结果\n- **完成** `查询`")
+        self.rendered()
+        self.assertEqual(self.panel.output.index("@0,0"), top)
+        self.assertEqual(self.panel.output.get("sel.first", "sel.last"), selected)
+        self.assertEqual(self.panel.input.get("1.0", "end-1c"), "保留草稿")
 
     def test_system_messages_move_to_status_and_capacity_stays_hidden_without_storage_changes(self):
         self.add("system", "上下文容量：1048576 Token，来源=缓存", "context")
@@ -421,98 +500,38 @@ class ChatPresentationTests(unittest.TestCase):
         self.root.update()
         self.assertEqual(self.panel.status_output.get("1.0", "end-1c"), wide)
 
-    def test_status_hover_delay_full_original_scroll_selection_and_focus(self):
-        original = "原始\t输出\r\n" + "\n".join(f"行{i}：" + "完整内容 " * 40 for i in range(30))
+    def test_status_hover_does_not_open_popup_schedule_jobs_or_change_focus(self):
+        original = "original status " * 100
         self.add("system", original, "error")
         self.rendered()
-        self.root.update()
         component = self.panel.session_status
-        self.panel.input.focus_force()
-        self.root.update()
-        before_focus = self.root.focus_get()
-        with patch.object(component, "after", wraps=component.after) as after:
-            component._enter()
-            after.assert_called_once_with(400, component._show_tooltip)
-        self.assertIsNone(component.tooltip)
-        self.root.after(450, self.root.quit)
-        self.root.mainloop()
-        self.assertIsNotNone(component.tooltip)
-        self.assertIsNone(component.tooltip_job)
-        popup = component.tooltip
-        output = component.tooltip_text
-        self.assertEqual(output.get("1.0", "end-1c"), "状态 · 2026-11-11 23:38:41\n" + original)
-        self.assertLessEqual(output.cget("height"), 8)
-        self.assertEqual(str(output.cget("state")), "disabled")
-        self.assertEqual(output.cget("foreground"), "#b42318")
-        self.assertEqual(output.cget("background"), "#eef2f5")
-        self.assertIsNone(popup.grab_current())
-        self.assertEqual(self.root.focus_get(), before_focus)
-        self.assertLess(output.yview()[1], 1)
-        output.yview_moveto(1)
-        self.assertAlmostEqual(output.yview()[1], 1)
-        output.tag_add("sel", "3.0", "3.3")
-        self.assertEqual(output.get("sel.first", "sel.last"), "行0：")
-        self.assertGreaterEqual(popup.winfo_rootx(), popup.winfo_vrootx())
-        self.assertLessEqual(popup.winfo_rootx() + popup.winfo_width(),
-                             popup.winfo_vrootx() + popup.winfo_screenwidth())
-        self.assertLessEqual(popup.winfo_rooty() + popup.winfo_height(),
-                             popup.winfo_vrooty() + popup.winfo_screenheight())
-        # 未改变的轮询保留悬浮提示和其中选区，不改写原始消息。
-        self.rendered()
-        self.assertIs(component.tooltip, popup)
-        self.assertEqual(output.get("sel.first", "sel.last"), "行0：")
-        self.assertEqual(self.messages[-1]["text"], original)
-
-    def test_status_hover_move_between_line_and_tooltip_then_leave_cleans_up(self):
-        self.add("system", "可选择复制的完整状态", "progress")
-        self.rendered()
-        self.root.update()
-        component = self.panel.session_status
-        component._show_tooltip()
-        popup = component.tooltip
-        component._leave()
-        self.assertIsNotNone(component.hide_job)
-        with patch.object(component, "winfo_containing", return_value=component.tooltip_text):
-            component._cancel_job("hide_job")
-            component._hide_if_outside()
-        self.assertIs(component.tooltip, popup)
-        component._leave()
-        component._enter()
-        self.assertIsNone(component.hide_job)
-        self.assertIs(component.tooltip, popup)
-        with patch.object(component, "winfo_containing", return_value=None):
-            component._hide_if_outside()
-        self.assertIsNone(component.tooltip)
-        self.assertIsNone(component.tooltip_job)
-        self.assertIsNone(component.hide_job)
-        self.assertFalse(popup.winfo_exists())
-
-    def test_status_change_switch_unmap_and_destroy_clear_tooltip_and_timers(self):
-        self.add("system", "最新状态", "progress")
-        self.rendered()
-        self.root.update()
-        component = self.panel.session_status
-        component._enter()
-        pending = component.tooltip_job
-        self.add("system", "状态已更新", "recovery")
-        self.rendered()
-        self.assertIsNone(component.tooltip_job)
-        self.assertNotIn(pending, self.root.tk.call("after", "info"))
-        component._show_tooltip()
-        popup = component.tooltip
-        self.panel.selected = "s2"
-        self.rendered()
-        self.assertIsNone(component.tooltip)
-        self.assertFalse(popup.winfo_exists())
-        component._show_tooltip()
-        component._leave()
-        component.event_generate("<Unmap>")
-        self.assertIsNone(component.tooltip)
-        self.assertIsNone(component.hide_job)
-        component._enter()
-        pending = component.tooltip_job
-        component.destroy()
-        self.assertNotIn(pending, self.root.tk.call("after", "info"))
+        for theme in ("vista", "clam"):
+            with self.subTest(theme=theme):
+                ttk.Style(self.root).theme_use(theme)
+                # Let native window activation settle before checking hover focus.
+                self.root.after(100, self.root.quit)
+                self.root.mainloop()
+                self.panel.input.focus_force()
+                self.root.update()
+                before_focus = self.root.focus_get()
+                self.assertIs(before_focus, self.panel.input)
+                before_children = component.winfo_children()
+                before_text = self.panel.status_output.get("1.0", "end-1c")
+                self.assertEqual(self.panel.status_output.bind("<Enter>"), "")
+                self.assertEqual(self.panel.status_output.bind("<Leave>"), "")
+                with patch("src.ui.ai_chat_status.tk.Toplevel", wraps=tk.Toplevel) as popup, \
+                        patch.object(component, "after", wraps=component.after) as after:
+                    self.panel.status_output.event_generate("<Enter>")
+                    self.root.after(450, self.root.quit)
+                    self.root.mainloop()
+                    self.panel.status_output.event_generate("<Leave>")
+                    self.root.update()
+                    popup.assert_not_called()
+                    after.assert_not_called()
+                self.assertEqual(component.winfo_children(), before_children)
+                self.assertEqual(self.root.focus_get(), before_focus)
+                self.assertEqual(self.panel.status_output.get("1.0", "end-1c"), before_text)
+                self.assertEqual(self.messages[-1]["text"], original)
 
     def test_usage_only_refresh_does_not_rewrite_body_or_follow_unsent_input(self):
         for i in range(35):
