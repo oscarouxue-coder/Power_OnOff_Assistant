@@ -9,3 +9,4 @@ configobj>=5.0,<6
 psutil>=5.9,<8
 openpyxl>=3.1,<4
 xlrd>=2.0,<3
+websockets==15.0.1

@@ -84,8 +84,8 @@ class AiActionService:
         self._eligible(identifier)
         return next(iter(self.store.actions(identifier, ("waiting_approval",))), None)
 
-    def decide(self, identifier, action_id, fingerprint, approved):
-        """仅由操作员按钮调用；自然语言/模型工具不能伪造批准。"""
+    def decide(self, identifier, action_id, fingerprint, approved, *, operator_source="operator", operator_identity=""):
+        """仅由可信操作员入口调用；聊天或模型输出不能伪造具体操作批准。"""
         if type(approved) is not bool:
             raise ValueError("批准标记无效")
         # 实时目标查询可能等待Tk主线程，不能持有执行/确认共用锁。
@@ -102,7 +102,8 @@ class AiActionService:
                 raise ValueError("文件版本已变化，请重新读取、审查和确认")
             state = "approved" if approved else "rejected"
             self.store.change_action(action_id, ("waiting_approval",), state,
-                                     operator_decision=state, approval_source="operator", decided=timestamp())
+                                     operator_decision=state, approval_source=operator_source,
+                                     operator_identity=operator_identity, decided=timestamp())
         self.owner.message(identifier, "user", f"{'批准本次操作' if approved else '拒绝本次操作'}：{action_id[:8]}", "action")
         self.owner.emit(f"操作员{state}：会话{identifier[:8]}，操作{action_id[:8]}，指纹={fingerprint}")
         self.owner.notify(identifier)

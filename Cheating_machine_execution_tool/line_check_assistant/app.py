@@ -557,6 +557,7 @@ class LineCheckAssistant(Tk):
         self.after(50, self._drain_pipeline_ui_tasks)
         self.after(50, self._drain_dut_config_ui_tasks)
         self.protocol("WM_DELETE_WINDOW", self._on_app_close)
+        self.after(500, self._start_dingtalk_remote)
 
     def _maximize_window(self) -> None:
         try:
@@ -4804,6 +4805,7 @@ class LineCheckAssistant(Tk):
             notebook, message_push_values, mark_dirty,
             background=COLOR_BG, foreground=COLOR_TEXT, log=self._log,
             project_config_path=TEST_ITEM_CONFIG_PATH,
+            remote_setup=lambda: self._configure_dingtalk_remote(message_push_control),
         )
 
         button_bar = Frame(content, background=COLOR_BG)
@@ -5896,7 +5898,7 @@ class LineCheckAssistant(Tk):
         terminal = self.__dict__.get("serial_terminal")
         return terminal.get_log_directory() if terminal is not None else DEFAULT_LOG_DIR
 
-    def _open_ai_assistant(self) -> None:
+    def _open_ai_assistant(self, show=True) -> None:
         from src.ui.ai_assistant_controller import AiAssistantController
         from src.services.ai_evidence_context import AiEvidenceContext
         context = self.__dict__.setdefault("ai_evidence_context", AiEvidenceContext())
@@ -5910,9 +5912,11 @@ class LineCheckAssistant(Tk):
                 background=COLOR_BG, foreground=COLOR_TEXT,
                 context=context, shared_busy=self._ai_shared_network_busy,
                 on_monitor_status=self.ai_monitor_status_row.show,
+                app_dir=APP_DIR, project_config_path=TEST_ITEM_CONFIG_PATH,
             )
             self.ai_assistant = assistant
-        assistant.open()
+        if show:
+            assistant.open()
         if self.__dict__.get("power_test_running", False):
             pipeline = self.__dict__.get("pipeline_window")
             orchestrator = getattr(pipeline, "_orchestrator", None)
@@ -5922,6 +5926,34 @@ class LineCheckAssistant(Tk):
                       or getattr(session, "run_id", None))
             if run_id:
                 assistant.observe({"type": "diagnostic_start", "run_id": run_id})
+
+    def _start_dingtalk_remote(self):
+        if self.__dict__.get("_app_closing", False):
+            return
+        from src.services.dingtalk_remote_store import RemoteConfigStore
+        try:
+            config = RemoteConfigStore(APP_DIR).load()
+            if config["isolated"]:
+                self._open_ai_assistant(show=False)
+        except Exception:
+            self._log("[钉钉接入] 后台初始化失败，请在消息推送页检查配置（凭据省略）")
+
+    def _configure_dingtalk_remote(self, push_control=None):
+        from src.services.dingtalk_remote_store import RemoteConfigStore
+        from src.ui.dingtalk_setup_window import DingTalkSetupWindow
+        try:
+            config_store = RemoteConfigStore(APP_DIR)
+            if config_store.load()["isolated"] and self.__dict__.get("ai_assistant") is None:
+                self._open_ai_assistant(show=False)
+            parent = push_control.frame.winfo_toplevel() if push_control is not None else self
+            DingTalkSetupWindow(parent, config_store,
+                lambda: getattr(self.__dict__.get("ai_assistant"), "remote", None),
+                MessagePushConfigService(LEGACY_UI_DEFAULTS_CONFIG_PATH).load(), self._log,
+                LEGACY_UI_DEFAULTS_CONFIG_PATH,
+                on_saved=push_control.set_application_robot if push_control is not None else lambda config: None)
+        except Exception:
+            self._log("[钉钉接入] 配置窗口打开失败，请检查配置和访问权限")
+            messagebox.showerror("钉钉AI接入", "无法打开配置，请检查配置和访问权限。", parent=self)
 
     def _collect_ai_targets(self):
         from src.models.ai_diagnostics import DiagnosticTarget

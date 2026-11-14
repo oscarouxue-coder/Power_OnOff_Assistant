@@ -18,14 +18,16 @@ class AiPermissionService:
         return json.dumps({key: session[key] for key in ("id", "run_id", "target", "profile")},
                           sort_keys=True, ensure_ascii=False)
 
-    def initialize(self, identifier, new=False):
+    def initialize(self, identifier, new=False, default_mode=None):
         session = self.store.chat(identifier)
         preferred = self.store.setting("chat_permission_mode", AUTO) if new else session.get("permission_mode", AUTO)
+        if new and default_mode is not None:
+            preferred = default_mode
         preferred = normalize_permission(preferred)
         mode = AUTO if preferred == FULL else preferred
         self.store.update_chat(identifier, permission_mode=mode)
         remembered_full = normalize_permission(self.store.setting("chat_permission_mode", AUTO)) == FULL
-        if preferred == FULL or (mode == AUTO and remembered_full):
+        if preferred == FULL or (default_mode is None and mode == AUTO and remembered_full):
             self.owner.message(identifier, "system", "已记住完全访问偏好，本会话当前使用帮我批准；如需完全访问，请重新选择并确认授权。")
 
     def revoke(self, identifier, reason):

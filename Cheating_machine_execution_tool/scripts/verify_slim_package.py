@@ -16,6 +16,8 @@ from PyInstaller.archive.readers import CArchiveReader
 REQUIRED_MODULES = (
     "line_check_assistant.app",
     "src.ui.application_icon",
+    "src.services.dingtalk_remote_service", "src.core.dingtalk_stream",
+    "websockets.sync.client",
     "src.services.legacy_power_test_service",
     "src.services.power_test_resume_service",
     "src.services.serial_upgrade_service",

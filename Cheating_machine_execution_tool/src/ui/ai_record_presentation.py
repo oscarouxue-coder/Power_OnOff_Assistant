@@ -50,7 +50,8 @@ def record_detail(entry):
     return (f"{entry['title']}\n通道：{entry['channel']}\n"
             f"时间：{record_time(entry['created'])}\n"
             f"模型：{entry['provider']} / {entry['model']}\n"
-            f"状态：{entry['status']}\nID：{entry['id']}")
+            f"状态：{entry['status']}\nID：{entry['id']}" +
+            ("\n来源：" + entry["origin"] if entry.get("origin") else ""))
 
 
 class RecordTitleDialog(simpledialog.Dialog):

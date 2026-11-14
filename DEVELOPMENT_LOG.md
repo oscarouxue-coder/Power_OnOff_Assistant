@@ -1,5 +1,55 @@
 # 开发记录
 
+## 2026-11-14 - 验证并提交钉钉AI排障
+
+- 类型：测试
+- 背景：负责人要求创建一次本地Git提交，备注为“钉钉接入项目 AI 排障工作台”。
+- 完成内容：① 核对钉钉接入、项目AI库隔离、会话/权限集成及配套依赖、测试和文档，共28个相关文件；原有本机config.ini通知开关修改保留在工作区，不纳入本次提交。② 执行提交前完整基线，更新最近验证入口，保留既有实现与现场待验收记录。
+- 修改文件：
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+- 验证方法：执行`powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File Cheating_machine_execution_tool/scripts/run_git_pre_commit.ps1`，由标准入口在主源码目录执行完整`python scripts/verify_baseline.py`；核对暂存文件、`git diff --cached --check`和提交后Git状态；提交时由既有pre-commit钩子再次复核。
+- 验证结果：标准独立CPython3.9.10 x64完整基线`ALL CHECKS PASSED`，2134项测试、196项指定关键回归、168个源码编译/清单覆盖及协议不变量全部通过；提交前工作区差异格式检查通过。本轮不新增完整Windows、真实钉钉、模型或DUT验收结论。
+- 后续待办：各功能现场复验按ACCEPTANCE_BASELINE.md §2.16/§3保持；本轮仅创建本地提交，不推送、不打包、不发布，原有本机配置修改保留。
+
+## 2026-11-14 - 接入钉钉项目AI排障
+
+- 类型：功能
+- 背景：负责人确认每个独立挂测项目目录对应一个应用机器人，同机多个项目可在同群分别@对应机器人排障；统一测试通知，群全员可用，成员/通道会话独立，新会话默认帮我批准，本地可切三档，具体操作可在钉钉或本地批准。首版仅文字排障，不新增整套挂测开始/停止。
+- 完成内容：① 新增Stream协议适配，覆盖HTTPS连接注册、WSS、ACK、系统ping/disconnect、心跳、重连、停止和实例互斥；项目互斥先于打开AI数据库，应用凭据互斥先于接入。② 新增加密应用配置、五分钟绑定码/本地核对群、指定群全员启用确认及消息推送页入口；保存时同步测试通知Webhook/加签密钥与当前页面，保留推送开关、@所有人和其它配置，失败尝试同时回退两份配置。③ 项目目录路径派生独立数据身份，首次只读事务复制旧模型配置/密文凭据、所选模型与容量缓存；不复制旧会话/报告/案例、监控授权或恢复任务，旧历史独立只读查看，停用不切回旧库。④ 复用现有会话、三档权限、具体操作指纹/文件版本、目标/占用复核和停止/恢复链路；按机器人/群/成员/通道路由，模型/目标/批次变化新建有效会话，新钉钉会话不继承本地完全访问偏好。来源在列表详情保留，本地完全访问确认补充群会话发起人及外发边界。⑤ 独立收件/编排/回复线程和通知订阅；持久化去重后ACK，重启中断而不重放，运行中追加问题不静默排队。具体批准编号绑定发起人/动作指纹且十分钟单次有效，双端竞争只能一次成功，过期拒绝；超长内容要求本地核对。⑥ 回复按字节分段、节流，优先有效SessionWebhook，过期使用绑定群Webhook；外发过滤已知模型/机器人/设备凭据，密码选择标志不作为凭据，发送失败不重做工具。停用先在内存生效并清空旧编号/待发回复，磁盘失败仍停止本进程。⑦ 新增websockets 15.0.1锁定依赖、第三方声明及后续包模块门禁；登记7个源码编译清单，补充专项、操作员说明、计划、状态及验收入口。
+- 修改文件：
+  - `.claude/plans/dingtalk-ai-workspace.md`（新增）
+  - `Cheating_machine_execution_tool/src/models/dingtalk_remote.py`（新增）
+  - `Cheating_machine_execution_tool/src/core/dingtalk_stream.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_project_store.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/dingtalk_remote_store.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/dingtalk_remote_service.py`（新增）
+  - `Cheating_machine_execution_tool/src/ui/dingtalk_setup_window.py`（新增）
+  - `Cheating_machine_execution_tool/src/ui/ai_legacy_history.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_action_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_permission_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_record_titles.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_permission_control.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_record_presentation.py`
+  - `Cheating_machine_execution_tool/src/ui/message_push_tab.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_dingtalk_remote.py`（新增）
+  - `Cheating_machine_execution_tool/requirements.txt`
+  - `Cheating_machine_execution_tool/requirements-build.txt`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/scripts/verify_slim_package.py`
+  - `Cheating_machine_execution_tool/THIRD_PARTY_NOTICES.md`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录执行`python -m unittest discover -s tests -p test_dingtalk_remote.py -q`；分别运行`test_ai_permissions.py`、`test_ai_workspace.py`、`test_message_push_config.py`与`test_ai_session_deletion.py`专项。使用标准独立CPython3.9.10 x64环境，设置本进程TEMP/TMP/TMPDIR为`%LOCALAPPDATA%\Temp`后执行`python scripts/verify_baseline.py`；运行`python scripts/check_build_environment.py`、源码Python的websockets版本/连接参数导入检查；检查增量编译、编译清单、`git diff --check`及新增文件行尾空白。
+- 验证结果：新增40项离线专项通过，现有权限21项、工作台18项、消息推送23项和会话删除/管理18项分别通过；真实执行链路中危险命令全部Mock，覆盖不批准不下发、发起人批准后只执行一次及重复拒绝。首轮完整检查在旧轻量会话宿主缺少订阅属性时发生异常，并在管理窗口模态提示处停滞，已仅终止该测试子进程；补默认队列兼容及独立订阅锁后专项通过。中间两次完整基线分别2128项、2133项通过；最终标准独立CPython3.9.10 x64完整基线ALL CHECKS PASSED：2134项测试、196项指定关键回归、168个源码编译/清单覆盖及协议不变量全部通过，最终输出保留在%LOCALAPPDATA%/Temp/linecheck_dingtalk_baseline_complete.txt。标准独立依赖环境检查通过，源码及独立环境均安装websockets 15.0.1，连接API参数匹配；增量差异和新增文件空白检查通过。Vista/Clam独立真实Tk检查覆盖原生Checkbutton/背景/凭据留空、隐藏工作台后台初始化、同机两个项目独立数据库及实例保护/退出；不替代完整Windows源程序和真实钉钉/模型/DUT验收。完整基线后仅修正批准入口说明注释并补录文档，该文件局部编译及最终差异检查通过。
+- 后续待办：按操作员说明为各项目创建/发布应用并绑定实际群，完成ACCEPTANCE_BASELINE.md §2.16/§3现场清单。保留负责人原有config.ini修改；未配置或连接真实机器人，未发送真实群消息、未访问真实模型/DUT，未提交、推送、打包或发布，现有EXE未更新。
+
 ## 2026-11-14 - 验证并提交AI能力优化
 
 - 类型：测试

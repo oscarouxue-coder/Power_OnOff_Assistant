@@ -98,6 +98,8 @@ class AiConversationService:
         self.context_attempts = set()
         self.jobs = queue.Queue(maxsize=16)
         self.updates = queue.Queue(maxsize=200)
+        self.subscribers = set()
+        self.subscriber_lock = threading.RLock()
         self.shutdown = threading.Event()
         self.permissions = AiPermissionService(self)
         for session in self.store.chats():
@@ -119,6 +121,25 @@ class AiConversationService:
             self.updates.put_nowait(identifier)
         except queue.Full:
             pass  # 原文已保存，手动刷新仍可读取。
+        if not hasattr(self, "subscriber_lock"):
+            return  # 兼容既有只装配默认通知队列的轻量会话宿主。
+        with self.subscriber_lock:
+            subscribers = tuple(self.subscribers)
+        for subscriber in subscribers:
+            try:
+                subscriber.put_nowait(identifier)
+            except queue.Full:
+                pass  # 独立订阅者可从持久化记录补读，不抢UI通知。
+
+    def subscribe(self):
+        subscriber = queue.Queue(maxsize=200)
+        with self.subscriber_lock:
+            self.subscribers.add(subscriber)
+        return subscriber
+
+    def unsubscribe(self, subscriber):
+        with self.subscriber_lock:
+            self.subscribers.discard(subscriber)
 
     def message(self, identifier, role, text, kind="text"):
         self.store.append_chat(identifier, self.redactor.object(asdict(ConversationMessage(role, text, kind))))
@@ -145,7 +166,8 @@ class AiConversationService:
             self.emit(f"报告{report_id}接手失败：{exc}")
             raise
 
-    def create_session(self, target, profile, title="", report=None, source_report_id=""):
+    def create_session(self, target, profile, title="", report=None, source_report_id="", *,
+                       source=None, default_permission=None):
         if self.shutdown.is_set():
             raise RuntimeError("AI对话正在退出")
         if not profile or not profile.model.strip():
@@ -158,13 +180,15 @@ class AiConversationService:
                    "run_id": run_id, "target": asdict(target), "profile": asdict(profile),
                    "settings": self.context.target_settings(run_id, target.channel),
                    "status": "可继续", "pending": None, "source_report_id": source_report_id}
+        if source is not None:
+            payload["source"] = dict(source)
         self.store.create_chat(self.redactor.object(payload))
         self.refresh_evidence(identifier)
         if report:
             self.add_evidence(identifier, "历史报告", self.redactor.dumps(report), "历史报告，仅作排查材料")
         state = self.collection_status(identifier)
         self.message(identifier, "system", "会话已创建；" + state["reason"] + "。发送问题后按需采集。")
-        self.permissions.initialize(identifier, new=True)
+        self.permissions.initialize(identifier, new=True, default_mode=default_permission)
         self.emit(f"创建会话 {identifier[:8]}，批次={run_id}，通道={target.channel}，模型={profile.model}")
         return identifier
 

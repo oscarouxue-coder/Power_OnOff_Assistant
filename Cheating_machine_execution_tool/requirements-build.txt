@@ -24,6 +24,7 @@ psutil==5.9.5
 openpyxl==3.1.2
 et-xmlfile==1.1.0
 xlrd==2.0.2
+websockets==15.0.1
 pyinstaller==5.10.1
 pyinstaller-hooks-contrib==2023.2
 setuptools==58.1.0

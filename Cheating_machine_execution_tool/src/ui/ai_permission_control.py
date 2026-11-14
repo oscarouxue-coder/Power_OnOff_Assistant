@@ -29,10 +29,15 @@ class AiPermissionControl(ttk.Frame):
             mode = next(key for key, label in PERMISSION_LABELS.items() if label == self.choice.get())
             confirmed = False
             if mode == FULL:
-                target = self.service.store.chat(identifier)["target"]
+                session = self.service.store.chat(identifier)
+                target = session["target"]
+                source = session.get("source") or {}
+                origin = (f"钉钉会话发起人：{source.get('nickname', '')}\n"
+                          "授权后该成员在本会话内发来的目标将按完全访问执行，回复会发送到已绑定群。\n\n"
+                          if source.get("kind") == "dingtalk" else "")
                 confirmed = messagebox.askyesno(
                     "启用本会话完全访问", "允许AI在本会话用户目标范围内自动执行本机命令、读取/覆盖文件及当前样机命令。\n\n"
-                    f"当前目标：通道{target['channel']} | {target['vlan']} | {target['port']}\n"
+                    + origin + f"当前目标：通道{target['channel']} | {target['vlan']} | {target['port']}\n"
                     f"{target['bind_ip']} → {target['host']}:{target['telnet_port']}\n\n"
                     "包括设备登录、升级、重启、恢复出厂、供电控制、系统重启、网络/驱动修改及删除操作，"
                     "不再逐项确认，也不调用独立模型风险审查。\n\n"

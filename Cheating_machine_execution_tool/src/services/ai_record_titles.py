@@ -36,6 +36,8 @@ class AiRecordTitles:
                                 channel=row.get("target", {}).get("channel", ""),
                                 provider=profile.get("provider", ""), model=profile.get("model", ""),
                                 status=row.get("status", ""), cycle=0))
+            if (row.get("source") or {}).get("kind") == "dingtalk":
+                entries[-1]["origin"] = "钉钉 / " + row["source"].get("nickname", "") + " / " + row["source"].get("group", "")
         return entries
 
     def report_entries(self, rows):

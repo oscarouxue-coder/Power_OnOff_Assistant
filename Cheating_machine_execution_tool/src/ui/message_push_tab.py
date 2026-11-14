@@ -7,7 +7,8 @@ from src.services.message_push_config_service import send_test_message
 
 
 class MessagePushTab:
-    def __init__(self, notebook, values, mark_dirty, *, background, foreground, project_config_path, log=lambda message: None):
+    def __init__(self, notebook, values, mark_dirty, *, background, foreground, project_config_path,
+                 log=lambda message: None, remote_setup=None):
         self.log = log
         self.project_config_path = project_config_path
         self.running = False
@@ -37,9 +38,16 @@ class MessagePushTab:
                   row=4, column=0, columnspan=2, sticky="w", pady=(20, 0))
         self.test_button = ttk.Button(self.frame, text="发送测试消息", command=self.send_test)
         self.test_button.grid(row=5, column=0, sticky="w", pady=16)
+        if remote_setup is not None:
+            ttk.Button(self.frame, text="钉钉 AI 接入…", command=remote_setup).grid(row=6, column=0, sticky="w", pady=4)
         self.status = StringVar(master=self.frame, value="尚未测试")
         Label(self.frame, textvariable=self.status, background=background,
               foreground=foreground, wraplength=650, justify='left').grid(row=5, column=1, sticky='w')
+
+    def set_application_robot(self, config):
+        for key in ("webhook", "secret"):
+            self.variables[key].set(config[key])
+        self.status.set("测试通知已切换到应用机器人；请试发并在群中核对")
 
     def send_test(self):
         if self.running:
