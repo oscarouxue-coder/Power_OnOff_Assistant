@@ -15,6 +15,7 @@ import uuid
 
 from line_check_assistant.subprocess_window import hidden_window_kwargs
 from src.core.ai_debug_transport import DiagnosticTransport, DebugConnectionUnavailable
+from src.core.ai_pc_network import read_target_network
 from src.utils.ai_output import decode_pc_output
 
 
@@ -28,7 +29,7 @@ READ_COMMANDS = {
 
 def tool_schemas(deep=False):
     tools = [
-        {"name": "read_pc_environment", "description": "读取PC系统、权限、网卡/IP/路由及当前无线接口状态，不修改网络。", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}},
+        {"name": "read_pc_environment", "description": "读取PC系统、权限、目标网卡管理/链路/IPv4状态及路由、无线信息；源IP无效时优先查询，区分禁用、断线和地址问题；刷新后可重新尝试连接，不修改网络。", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}},
         {"name": "read_serial_log", "description": "被动读取本次目标已打开串口的近期输出，不发送命令。", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}},
         {"name": "read_dut_state", "description": "Telnet优先、串口回退读取目标DUT状态。", "parameters": {"type": "object", "properties": {"category": {"type": "string", "enum": list(READ_COMMANDS)}}, "required": ["category"], "additionalProperties": False}},
     ]
@@ -51,16 +52,31 @@ class DiagnosticToolExecutor:
         self.allow_read_fallback = True
         self.used = 0
         self.recovery_state = "无临时修改"
+        self.network_summary = None
+        self._connection_error = None
 
     def _connection(self):
         if self.transport is None:
+            if self._connection_error is not None:
+                if self.stop.is_set():
+                    raise InterruptedError("诊断已取消")
+                if self.busy(self.target):
+                    raise RuntimeError("目标正在执行设备操作，跳过主动采集")
+                message = ("本轮已确认源地址不可用，且首次Telnet/串口连接均失败，跳过重复连接；"
+                           "可重新查询read_pc_environment或下一轮重查。首次错误：" + self._connection_error)
+                self.emit("[AI采集] " + message)
+                raise DebugConnectionUnavailable(message)
             self.transport = self.transport_factory(self.target, self.stop, self.emit,
                                                     self.serial_acquire, self.busy)
             try:
                 self.transport.open()
-            except Exception:
+            except Exception as exc:
                 self.transport.close()
                 self.transport = None
+                if (isinstance(exc, DebugConnectionUnavailable) and self.network_summary is not None
+                        and self.network_summary.get("query_status") == "ok"
+                        and self.network_summary.get("source_usable") is False):
+                    self._connection_error = str(exc)
                 raise
             self._recover_pending()
         return self.transport
@@ -104,7 +120,9 @@ class DiagnosticToolExecutor:
             else:
                 result = self._temporary(name)
             self.emit(f"[AI采集] 完成：{name}")
-            return {"tool": name, "evidence": self.redactor.text(str(result))[:65536]}
+            # PC快照已在序列化前按字段缩减，禁止再截断JSON。
+            evidence = str(result) if name == "read_pc_environment" else self.redactor.text(str(result))[:65536]
+            return {"tool": name, "evidence": evidence}
         except InterruptedError:
             raise
         except Exception as exc:
@@ -112,6 +130,11 @@ class DiagnosticToolExecutor:
             return {"tool": name, "error": self.redactor.text(str(exc))}
 
     def pc_environment(self):
+        # 显式刷新即允许重新检查；失败/取消不得沿用上次的阻断结论。
+        self.network_summary = None
+        self._connection_error = None
+        if self.stop.is_set():
+            raise InterruptedError("诊断已取消")
         info = {"system": platform.platform(), "python": platform.python_version(),
                 "channel": self.target.channel, "vlan": self.target.vlan,
                 "configured_source": self.target.bind_ip, "configured_dut": self.target.host,
@@ -125,17 +148,50 @@ class DiagnosticToolExecutor:
         if os.name == "nt":
             import ctypes
             info["administrator"] = bool(ctypes.windll.shell32.IsUserAnAdmin())
+        self.network_summary = read_target_network(self.target, self.stop, self.emit)
+        info["target_network"] = self.network_summary
+        info["command_results"] = {}
+        raw_keys = []
+        if os.name == "nt":
             for args in (["ipconfig", "/all"], ["route", "print", "-4"], ["netsh", "wlan", "show", "interfaces"]):
                 if self.stop.is_set():
-                    break
-                self.emit("[AI采集] PC TX：" + " ".join(args))
-                result = subprocess.run(args, capture_output=True, timeout=20, **hidden_window_kwargs())
-                text, encoding = decode_pc_output(result.stdout)
-                info[" ".join(args)] = text[:65536]
-                status = "成功" if result.returncode == 0 else "失败"
-                self.emit(f"[AI采集] PC RX：{' '.join(args)}；{status}；返回码={result.returncode}；编码={encoding}"
-                          + ("；存在无法解码的字节" if encoding.endswith("/replace") else ""))
-        return self.redactor.dumps(info)
+                    raise InterruptedError("诊断已取消")
+                command = " ".join(args)
+                self.emit("[AI采集] PC TX：" + command)
+                raw_keys.append(command)
+                try:
+                    result = subprocess.run(args, capture_output=True, timeout=20, **hidden_window_kwargs())
+                    text, encoding = decode_pc_output(result.stdout)
+                    info[command] = text[:8192]
+                    details = {"returncode": result.returncode, "encoding": encoding,
+                               "original_chars": len(text), "truncated": len(text) > 8192}
+                    if result.returncode:
+                        error, _ = decode_pc_output(result.stderr or b"")
+                        details["error"] = error[:1500]
+                    info["command_results"][command] = details
+                    status = "成功" if result.returncode == 0 else "失败"
+                    self.emit(f"[AI采集] PC RX：{command}；{status}；返回码={result.returncode}；编码={encoding}"
+                              + ("；存在无法解码的字节" if encoding.endswith("/replace") else "")
+                              + ("；输出已截断，目标网卡摘要完整保留" if details["truncated"] else ""))
+                except InterruptedError:
+                    raise
+                except (OSError, subprocess.TimeoutExpired) as exc:
+                    info[command] = ""
+                    info["command_results"][command] = {"error": str(exc)[:1500], "truncated": False}
+                    self.emit(f"[AI采集] PC RX：{command}；失败：{exc}；保留目标网卡及其它查询结果")
+        if self.stop.is_set():
+            raise InterruptedError("诊断已取消")
+        # 按最终JSON长度计费，包含转义和模型密钥过滤后的实际长度。
+        encoded = self.redactor.dumps(info)
+        while len(encoded) > 65536 and any(info[key] for key in raw_keys):
+            key = max(raw_keys, key=lambda k: len(info[k]))
+            info[key] = info[key][:len(info[key]) // 2]
+            info["command_results"][key]["truncated"] = True
+            self.emit(f"[AI采集] PC RX：{key}；序列化预算截断，目标网卡摘要完整保留")
+            encoded = self.redactor.dumps(info)
+        if len(encoded) > 65536:
+            raise ValueError("PC快照关键字段超过65536字符，未返回截断JSON")
+        return encoded
 
     def _temporary(self, name):
         connection = self._connection()

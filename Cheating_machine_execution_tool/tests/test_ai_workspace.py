@@ -140,15 +140,20 @@ class WorkspaceTests(unittest.TestCase):
         self.store.save_report("r1", payload)
         panel = self.dialog.reports_panel
         panel.open()
-        with patch.object(self.dialog, "_error") as error:
+        with patch("src.ui.ai_reports_window.AiReportTargetDialog") as chooser:
+            chooser.return_value.show.return_value = None
             panel.continue_chat()
-            error.assert_called_once()
-        panel.legacy_target.current(0)
+            self.assertEqual(chooser.call_args.args[1], (TARGET,))
         before = len(self.store.chats())
-        with patch("src.ui.ai_reports_window.messagebox.askyesno", return_value=False):
+        with patch("src.ui.ai_reports_window.AiReportTargetDialog") as chooser, \
+                patch("src.ui.ai_reports_window.messagebox.askyesno", return_value=False) as confirm:
+            chooser.return_value.show.return_value = TARGET
             panel.continue_chat()
+            self.assertEqual(confirm.call_args.kwargs["default"], "no")
         self.assertEqual(len(self.store.chats()), before)
-        with patch("src.ui.ai_reports_window.messagebox.askyesno", return_value=True):
+        with patch("src.ui.ai_reports_window.AiReportTargetDialog") as chooser, \
+                patch("src.ui.ai_reports_window.messagebox.askyesno", return_value=True):
+            chooser.return_value.show.return_value = TARGET
             panel.continue_chat()
         self.assertEqual(len(self.store.chats()), before + 1)
         self.assertEqual(self.requests, [])

@@ -13,6 +13,8 @@ from src.ui.ai_action_approval import AiActionApproval
 from src.ui.ai_permission_control import AiPermissionControl
 from src.ui.ai_chat_status import AiChatStatus
 from src.ui.ai_chat_markdown import configure_markdown_tags, insert_markdown
+from src.services.ai_record_titles import AiRecordTitles
+from src.ui.ai_record_presentation import AiRecordActions, record_labels
 
 
 CHAT_FONT = "Microsoft YaHei UI"
@@ -44,12 +46,16 @@ class AiChatPanel:
         self.ids = []
         self.targets = ()
         self.session_manager = None
+        self.record_titles = AiRecordTitles(service.store, service.emit)
+        self.record_entries = {}
         row = ttk.Frame(parent)
         row.pack(fill="x", pady=3)
         ttk.Label(row, text="排障会话").pack(side="left")
         self.sessions = ttk.Combobox(row, state="readonly", width=65)
         self.sessions.pack(side="left", fill="x", expand=True, padx=6)
         self.sessions.bind("<<ComboboxSelected>>", self.choose)
+        self.record_actions = AiRecordActions(self.sessions, "chat", self.record_titles,
+            lambda: self.record_entries.get(self.selected), self.names_changed, self.owner.background_color)
         ttk.Button(row, text="刷新", command=self.refresh).pack(side="left")
         ttk.Button(row, text="管理会话", command=self.manage_sessions).pack(side="left", padx=(6, 0))
         row = ttk.Frame(parent)
@@ -85,7 +91,7 @@ class AiChatPanel:
         row.pack(fill="x")
         self.send_button = ttk.Button(row, text="发送 / 回答问题", command=self.send)
         self.send_button.pack(side="left")
-        for title, action in (("停止本轮排查", self.stop), ("导入文本日志", self.import_text), ("查看证据", self.evidence)):
+        for title, action in (("停止本轮排查", self.stop), ("导入文本日志", self.import_text)):
             ttk.Button(row, text=title, command=action).pack(side="left", padx=5)
         self.action_approval = AiActionApproval(row, self.service, self.owner.background_color)
         self.action_approval.pack(side="left", padx=5)
@@ -133,7 +139,10 @@ class AiChatPanel:
             self.selected = ""
             self.revision = None
             self.input.delete("1.0", "end")
-        self.sessions["values"] = [f"{format_chat_time(r['created'])} | {r['title']} | {r['profile']['model']} | {r['status']}" for r in rows]
+        entries = self.record_titles.chat_entries(rows)
+        self.record_entries = {entry["id"]: entry for entry in entries}
+        self.record_actions.hide()
+        self.sessions["values"] = record_labels(entries)
         if self.selected in self.ids:
             self.sessions.current(self.ids.index(self.selected))
         elif self.ids:
@@ -143,6 +152,11 @@ class AiChatPanel:
         else:
             self.sessions.set("")
         self.render()
+
+    def names_changed(self):
+        self.refresh()
+        if self.session_manager is not None and self.session_manager.window.winfo_exists():
+            self.session_manager.refresh()
 
     def manage_sessions(self):
         if self.session_manager is not None and self.session_manager.window.winfo_exists():

@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.core.ai_client import DiagnosticModelClient
-from src.models.ai_diagnostics import ProviderProfile, DebugTriggerPolicy
+from src.models.ai_diagnostics import ProviderProfile, DebugTriggerPolicy, MonitorStatus
 from src.services.ai_diagnostic_service import AiDiagnosticService
 from src.services.ai_debug_service import DiagnosticToolExecutor
 from src.services.ai_store import DiagnosticStore, profile_fingerprint
@@ -155,6 +155,27 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(result["configured_source"], TARGET.bind_ip)
         self.assertEqual(result["configured_subnet_mask"], TARGET.subnet_mask)
 
+    def test_automatic_report_receives_complete_target_network_summary(self):
+        from src.core.ai_pc_network import assess_adapters
+        from test_ai_pc_network import adapter
+        summary = assess_adapters(TARGET, [adapter(ip=None, admin=2)])
+        self.service.tool_factory = DiagnosticToolExecutor
+        with patch("src.services.ai_debug_service.read_target_network", return_value=summary), \
+             patch("src.services.ai_debug_service.platform.platform", return_value="Windows"), \
+             patch("src.services.ai_debug_service.subprocess.run",
+                   return_value=Mock(stdout=("IPv6" * 30000).encode(), stderr=b"", returncode=0)):
+            self.service.submit("源IP出现10049，请定位", 1, "question")
+            self.finish()
+        payload = self.requests[-1][2].request.call_args.kwargs["json"]
+        content = json.loads(payload["messages"][1]["content"])
+        info = json.loads(content["snapshot"][0]["evidence"])
+        self.assertEqual(info["target_network"]["status"], "disabled")
+        self.assertTrue(info["command_results"]["ipconfig /all"]["truncated"])
+        self.assertIn("只有明确的管理禁用状态", payload["messages"][0]["content"])
+        report = self.store.reports()[0][2]
+        saved = json.loads(report["evidence"].split("\n", 1)[0])
+        self.assertEqual(json.loads(saved[0]["evidence"])["target_network"], summary)
+
     def test_manual_material_survives_request_report_notifications_and_main_log(self):
         material = json.dumps(DIAGNOSTIC_MATERIAL, ensure_ascii=False)
         self.service.serial_read = lambda _t: material
@@ -211,6 +232,7 @@ class UiTests(unittest.TestCase):
         self.service.profile = None
         self.service.trigger.policy = DebugTriggerPolicy()
         self.service.trigger.enabled = False
+        self.service.monitor_status.side_effect = lambda: MonitorStatus(enabled=bool(self.service.trigger.enabled))
         self.service.updates = __import__("queue").Queue()
         self.root = tk.Tk()
         self.root.withdraw()
@@ -302,7 +324,9 @@ class UiTests(unittest.TestCase):
                 widgets.append(child)
                 visit(child)
         visit(self.dialog.window)
-        self.assertGreaterEqual(sum(w.winfo_class() == "Checkbutton" for w in widgets), 6)
+        self.assertGreaterEqual(sum(w.winfo_class() == "Checkbutton" for w in widgets), 5)
+        self.assertFalse(any(w.winfo_class() == "Checkbutton" and w.cget("text") == "允许按条件深入采集" for w in widgets))
+        self.assertEqual(tuple(self.dialog.monitor_panel.permission_choice["values"]), ("请求批准", "帮我批准", "完全访问"))
         self.assertFalse(any(w.winfo_class() == "TCheckbutton" for w in widgets))
         self.assertFalse(self.dialog.monitor_panel.enabled.get())
         self.assertEqual(self.dialog.monitor_panel.threshold.get(), "3")

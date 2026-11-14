@@ -89,6 +89,27 @@ class ConversationTests(unittest.TestCase):
         self.assertEqual(len(self.store.chat_items(self.id, group=True)), 2)
         self.assertNotIn("固定包括", CHAT_INSTRUCTIONS)
 
+    def test_chat_network_query_uses_same_summary_and_preserves_evidence(self):
+        from src.core.ai_pc_network import assess_adapters
+        from test_ai_pc_network import adapter
+        summary = assess_adapters(TARGET, [adapter(ip=None, admin=2)])
+        self.diag.tool_factory = DiagnosticToolExecutor
+        self.responses.extend([chat("", [call("read_pc_environment")]),
+                               chat("当前目标网卡已禁用，故障时状态仍以原日志为准。")])
+        with patch("src.services.ai_debug_service.read_target_network", return_value=summary), \
+             patch("src.services.ai_debug_service.platform.platform", return_value="Windows"), \
+             patch("src.services.ai_debug_service.subprocess.run",
+                   return_value=Mock(stdout=b"", stderr=b"", returncode=0)):
+            self.send("出现10049，帮我查本机网卡状态")
+        evidence = self.store.chat_evidence(self.id)
+        query = next(item for item in evidence if "read_pc_environment" in item["source"])
+        result = json.loads(query["text"])
+        self.assertEqual(json.loads(result["evidence"])["target_network"], summary)
+        payload = self.requests[-1]
+        self.assertIn("普通问答不额外采集", payload["messages"][0]["content"])
+        tool_result = next(item for item in payload["messages"] if item["role"] == "tool")
+        self.assertEqual(json.loads(json.loads(tool_result["content"])["evidence"])["target_network"], summary)
+
     def test_simple_question_policy_reaches_both_protocols(self):
         # 验证实际出站请求，不用模拟回复长度冒充真实模型遵循提示词的证据。
         for protocol, field in (("chat_completions", "messages"), ("responses", "input")):

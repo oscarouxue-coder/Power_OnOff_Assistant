@@ -43,6 +43,8 @@ class ChatPresentationTests(unittest.TestCase):
         self.store = Mock()
         self.store.chats.return_value = [self.session]
         self.store.chat.return_value = self.session
+        self.store.record_titles.return_value = {}
+        self.store.first_chat_question.return_value = ""
         self.store.chat_items.side_effect = lambda _id: self.messages
         self.store.chat_evidence.return_value = self.items
         self.service = Mock(store=self.store, lock=threading.RLock(), running={}, executors={})
@@ -95,7 +97,7 @@ class ChatPresentationTests(unittest.TestCase):
         buttons = [widget for widget in row.winfo_children() if isinstance(widget, ttk.Button)]
         buttons.append(approval.button)
         self.assertEqual([button.cget("text") for button in buttons],
-                         ["发送 / 回答问题", "停止本轮排查", "导入文本日志", "查看证据", "查看待确认操作"])
+                         ["发送 / 回答问题", "停止本轮排查", "导入文本日志", "查看待确认操作"])
         self.assertIs(approval.master, row)
         self.assertEqual(composer.pack_slaves(), [self.panel.input, row])
         self.assertEqual(approval.winfo_children(), [approval.button])
@@ -252,7 +254,7 @@ class ChatPresentationTests(unittest.TestCase):
         text = self.rendered()
         self.assertTrue(text.startswith("AI · 2026-11-11 23:38:41\n"))
         self.assertIn(original, text)
-        self.assertTrue(self.panel.sessions["values"][0].startswith("2026-11-11 23:38:41 |"))
+        self.assertTrue(self.panel.sessions["values"][0].startswith("显示验证 | 通道1 | 11-11 23:38:41 |"))
         self.panel.evidence()
         window = next(w for w in self.root.winfo_children() if isinstance(w, tk.Toplevel))
         def texts(widget):

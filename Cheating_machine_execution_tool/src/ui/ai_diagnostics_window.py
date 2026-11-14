@@ -52,14 +52,16 @@ class AiDiagnosticsWindow:
         self.workspace, self.cases_tab = workspace, cases
         for frame, title in ((workspace, "排障工作台"), (connection, "模型接入"), (cases, "已确认案例")):
             book.add(frame, text=title)
-        self.monitor_status = tk.StringVar(self.window, value="自动监控：关闭")
+        self.monitor_status = tk.StringVar(self.window)
         self.report_status = tk.StringVar(self.window)
         self.monitor_panel = AiMonitorWindow(self)
         self.reports_panel = AiReportsWindow(self)
         toolbar = ttk.Frame(workspace)
         toolbar.pack(fill="x", pady=(0, 5))
         ttk.Button(toolbar, text="自动监控", command=self.monitor_panel.open).pack(side="left")
-        ttk.Label(toolbar, textvariable=self.monitor_status).pack(side="left", padx=8)
+        self.monitor_status_label = ttk.Label(toolbar, textvariable=self.monitor_status)
+        self.monitor_status_label.pack(side="left", padx=8)
+        self.monitor_panel.update_status()
         ttk.Button(toolbar, text="诊断报告", command=self.reports_panel.open).pack(side="left", padx=4)
         ttk.Label(toolbar, textvariable=self.report_status).pack(side="left", padx=8)
         ttk.Button(toolbar, text="刷新目标", command=self.refresh_targets).pack(side="right")
@@ -192,6 +194,7 @@ class AiDiagnosticsWindow:
             self.service.profile = self.profile
         elif not self.profiles:
             self._fill_profile(ProviderProfile())
+        self.service.monitor.configuration_changed()
 
     def _choose_profile(self, _event=None):
         index = self.profile_choice.current()
@@ -439,12 +442,19 @@ class AiDiagnosticsWindow:
             except queue.Empty:
                 break
             if kind == "report":
+                # 已提交到UI队列的旧通知不能在报告删除后再提示有更新。
+                try:
+                    self.service.store.report(payload[0])
+                except ValueError:
+                    continue
                 self.reports_panel.reload()
                 self.report_status.set("报告有更新")
             elif kind == "monitor_off":
                 self.monitor_panel.enabled.set(False)
                 self.monitor_panel.update_status()
                 self.service.emit("[AI监控] " + payload)
+            elif kind == "monitor_action":
+                self.monitor_panel.update_status()
             elif kind == "warning":
                 self.service.emit("[AI监控] " + payload)
         if self.window is not None and self.window.winfo_exists():

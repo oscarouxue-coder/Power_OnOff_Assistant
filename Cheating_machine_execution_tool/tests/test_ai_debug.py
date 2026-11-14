@@ -162,6 +162,7 @@ class ToolTests(unittest.TestCase):
         results = [Mock(stdout=text.encode(encoding), returncode=0)
                    for text, encoding in zip(outputs, ("gbk", "gbk", "utf-8"))]
         with patch("src.services.ai_debug_service.platform.platform", return_value="Windows"), \
+             patch("src.services.ai_debug_service.read_target_network", return_value={"status": "unknown"}), \
              patch("ctypes.windll.kernel32.GetOEMCP", return_value=936), \
              patch("ctypes.windll.kernel32.GetACP", return_value=936), \
              patch("src.services.ai_debug_service.subprocess.run", side_effect=results) as run:
@@ -174,16 +175,18 @@ class ToolTests(unittest.TestCase):
         self.assertTrue(any("编码=utf-8" in c.args[0] for c in self.executor.emit.call_args_list))
 
     def test_pc_snapshot_truncates_characters_after_decode_and_logs_bad_bytes(self):
-        # 第65536个字节位于中文字符中间，不能先按字节截断再解码。
-        text = "a" * 65535 + "系统"
+        # 按字符保留前8192位，不能先按字节截断再解码；摘要不受原始文本长度影响。
+        text = "a" * 8191 + "系统"
         results = [Mock(stdout=text.encode("utf-8"), returncode=0),
-                   Mock(stdout=b"\x81", returncode=1), Mock(stdout=b"", returncode=0)]
+                   Mock(stdout=b"\x81", stderr=b"", returncode=1), Mock(stdout=b"", returncode=0)]
         with patch("src.services.ai_debug_service.platform.platform", return_value="Windows"), \
+             patch("src.services.ai_debug_service.read_target_network", return_value={"status": "unknown"}), \
              patch("ctypes.windll.kernel32.GetOEMCP", return_value=936), \
              patch("ctypes.windll.kernel32.GetACP", return_value=936), \
              patch("src.services.ai_debug_service.subprocess.run", side_effect=results):
             snapshot = json.loads(self.executor.pc_environment())
-        self.assertEqual(snapshot["ipconfig /all"], "a" * 65535 + "系")
+        self.assertEqual(snapshot["ipconfig /all"], "a" * 8191 + "系")
+        self.assertTrue(snapshot["command_results"]["ipconfig /all"]["truncated"])
         messages = "\n".join(c.args[0] for c in self.executor.emit.call_args_list)
         self.assertIn("返回码=1", messages)
         self.assertIn("存在无法解码的字节", messages)

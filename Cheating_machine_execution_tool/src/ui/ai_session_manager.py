@@ -5,6 +5,8 @@ from tkinter import messagebox, ttk
 from src.ui.ai_chat_panel import format_chat_time
 from src.ui.module_theme import apply_module_theme
 from src.ui.window_paint import center_toplevel_on_parent
+from src.services.ai_record_titles import AiRecordTitles
+from src.ui.ai_record_presentation import AiRecordActions, short_title
 
 
 class AiSessionManager:
@@ -12,6 +14,8 @@ class AiSessionManager:
         self.service, self.on_changed = service, on_changed
         self.rows = {}
         self.deleting = False
+        self.record_titles = AiRecordTitles(service.store, service.emit)
+        self.record_entries = {}
         self.window = tk.Toplevel(parent)
         self.window.title("管理排障会话")
         self.window.geometry("940x520")
@@ -37,6 +41,11 @@ class AiSessionManager:
         table.rowconfigure(0, weight=1)
         table.columnconfigure(0, weight=1)
         self.tree.bind("<<TreeviewSelect>>", self.selection_changed)
+        self.record_actions = AiRecordActions(self.tree, "chat", self.record_titles,
+            lambda: self.record_entries.get(self.tree.selection()[0])
+                    if len(self.tree.selection()) == 1 and not self.deleting else None,
+            self.renamed, background,
+            hovered=lambda event: self.record_entries.get(self.tree.identify_row(event.y)))
         self.status = tk.StringVar(self.window)
         ttk.Label(body, textvariable=self.status).pack(anchor="w", pady=8)
         buttons = ttk.Frame(body)
@@ -62,15 +71,22 @@ class AiSessionManager:
         with self.service.lock:
             busy = set(self.service.running) | set(self.service.executors)
         self.rows = {row["id"]: row for row in rows}
+        self.record_entries = {entry["id"]: entry for entry in self.record_titles.chat_entries(rows)}
+        self.record_actions.hide()
         children = self.tree.get_children()
         if children:
             self.tree.delete(*children)
         for row in rows:
             status = "排查 / 排队 / 清理中（不可删除）" if row["id"] in busy else row["status"]
             self.tree.insert("", "end", iid=row["id"], values=(format_chat_time(row["created"]),
-                             row["title"], row["target"]["channel"], row["profile"]["model"], status))
+                             short_title(self.record_entries[row["id"]]["title"]),
+                             row["target"]["channel"], row["profile"]["model"], status))
         self.tree.selection_set([identifier for identifier in selection if identifier in self.rows])
         self.selection_changed()
+
+    def renamed(self):
+        self.on_changed()
+        self.refresh()
 
     def selection_changed(self, event=None):
         self.delete_button.configure(state="normal" if self.tree.selection() and not self.deleting else "disabled")
@@ -95,7 +111,7 @@ class AiSessionManager:
     def _delete(self, identifiers):
         if self.deleting or not identifiers:
             return
-        summaries = [f"{format_chat_time(self.rows[i]['created'])} | {self.rows[i]['title']} | "
+        summaries = [f"{format_chat_time(self.rows[i]['created'])} | {self.record_entries[i]['title']} | "
                      f"通道{self.rows[i]['target']['channel']} | {self.rows[i]['profile']['model']}"
                      for i in identifiers]
         preview = "\n".join(summaries[:12])

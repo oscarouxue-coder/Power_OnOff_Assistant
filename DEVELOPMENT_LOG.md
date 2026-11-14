@@ -1,5 +1,266 @@
 # 开发记录
 
+## 2026-11-14 - 验证并提交AI能力优化
+
+- 类型：测试
+- 背景：负责人要求创建一次本地Git提交，备注为“优化ai能力1114”。
+- 完成内容：① 核对已有62个暂存文件及工作区无未暂存修改，按现有暂存范围提交AI监控授权、诊断证据、网络诊断、报告与会话交互、工具栏/图标、测试、文档、版本信息及本机配置。② 执行提交前完整基线并更新最近完整验证入口，保留各轮历史记录和验收状态；提交消息按项目规则保留Co-Authored-By署名。
+- 修改文件：
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+- 验证方法：主源码目录首次运行`python scripts/verify_baseline.py`；统一本进程TEMP/TMP/TMPDIR为完整路径后运行`python -m unittest discover -s tests -p test_ai_actions.py -v`；运行`powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/run_git_pre_commit.ps1`，由标准入口执行完整`verify_baseline.py`；检查暂存范围、差异格式和提交后Git状态，提交仍由既有pre-commit钩子复核。
+- 验证结果：首次全量2094项中1项因临时目录8.3短路径与子进程完整路径文本不同失败，其余通过（2项浏览器集成默认跳过）；统一测试进程临时路径后AI操作专项37项通过。标准入口使用独立CPython 3.9.10 x64，完整基线ALL CHECKS PASSED：2094项测试、196项指定关键回归、161个源码编译/清单覆盖及协议不变量全部通过。`git diff --cached --check`仅报告既有`network_card_ip.ini`与`test_project_config.ini`空配置值的7处行尾空格，保留配置原样；本轮文档差异格式通过。提交前main与已记录origin/main分歧0/0；不新增Windows或真实模型/样机验收结论。
+- 后续待办：各功能原Windows源码版及真实模型/样机待确认项保持；本轮仅本地提交，不推送、不打包、不发布。
+
+## 2026-11-14 - 取消启动图标成功日志
+
+- 类型：优化
+- 背景：负责人要求启动时不再打印任务栏标识、主窗口图标和子窗口默认图标的三条设置成功日志。
+- 完成内容：① 图标初始化成功时返回空消息列表，不再输出三条成功提示；实际任务栏标识设置、主窗口及子窗口默认图标设置、调用顺序和函数接口保持。② 保留资源/API/Tk失败及非Windows跳过提示，两次窗口图标设置仍独立执行，单次失败不阻止另一项。③ 调整已有成功、部分失败及原生Windows进程断言，确认成功静默且只返回实际失败消息；保留同期已有源码、配置和文档修改。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/application_icon.py`
+  - `Cheating_machine_execution_tool/tests/test_application_icon.py`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录运行`python -m py_compile src/ui/application_icon.py tests/test_application_icon.py`；设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`后运行`python -m unittest discover -s tests -p test_application_icon.py -v`；检查本轮三文件差异及`git diff --check -- Cheating_machine_execution_tool/src/ui/application_icon.py Cheating_machine_execution_tool/tests/test_application_icon.py DEVELOPMENT_LOG.md`。
+- 验证结果：2个Python文件局部编译通过，15项图标专项测试全部通过（0.691秒），覆盖成功静默、部分失败仍继续、资源异常、初始化顺序及独立Windows进程中的任务栏标识回读和原生图标继承；本轮三文件差异格式检查通过。未运行完整基线，保留最近完整验证记录；未启动完整主程序、未打包、未提交，现有EXE未更新。不改变既有验收状态。
+- 后续待办：负责人下次重启Windows源码版时核对启动日志不再出现上述三条成功提示。
+
+## 2026-11-14 - 合并串口与网卡刷新按钮
+
+- 类型：优化
+- 背景：负责人要求将主工具栏“刷新串口”和“刷新网卡”合并，并确认按钮文字为“刷新串口/网卡”。
+- 完成内容：① 工具栏仅保留一个刷新按钮，位于管理员状态与检查更新之间，沿用现有样式及自适应换行。② 新增简短UI回调，先调用原串口刷新、再调用原网卡刷新；保留原方法和其他调用入口，原有默认分组/显示全部、当前选择保留、枚举失败处理及日志不变，不保存配置、不打开串口或下发设备命令。③ 更新已有工具栏与资源候选回归，新增调用顺序、默认模式及双主题宽窄布局检查；串口枚举失败用例改为真实合并按钮触发，确认网卡仍刷新。④ 同步操作员说明、状态入口、验收边界和Windows待确认项，保留所有同期已有改动。
+- 修改文件：
+  - `.claude/plans/combined-resource-refresh.md`（新增）
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/tests/test_resource_options.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，运行`python -m py_compile line_check_assistant/app.py tests/test_app.py tests/test_resource_options.py`；分别运行`python -m unittest discover -s tests -p test_resource_options.py -v`和`python -m unittest discover -s tests -p test_app_update_ui.py -v`；将`tests`加入`sys.path`后执行`test_app.CurrentChannelSelectionTests`的`test_main_header_copy_is_removed_and_admin_status_moves_to_toolbar`、`test_combined_refresh_calls_serial_then_adapters_once`、`test_dut_config_toolbar_entry_is_next_to_serial_log`；检查本轮增量差异、文档按钮名称及`git diff --check`。
+- 验证结果：资源候选13项、更新/工具栏24项、主界面3项，共40项相关检查全部通过；3个Python文件局部编译通过。真实源码装配的独立Tk检查覆盖Vista/Clam和1040/1600宽度、按钮顺序/完整显示、默认分组和全部模式、原选择保留及枚举失败继续刷新网卡；系统枚举用Mock，不操作真实设备。首次README辅助替换因PowerShell管道中文编码导致匹配断言失败，未写入文件，改用UTF-8 apply_patch完成并核对。未运行完整基线，保留最近完整验证记录；未启动完整主程序、未打包、未提交，现有EXE未更新。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.1/§3目视复验合并按钮、宽窄布局及两种模式下的刷新与日志；不扩大既有真实设备验收结论。
+
+## 2026-11-14 - 接入自动监控独立三档授权
+
+- 类型：功能
+- 背景：负责人要求将自动监控“允许按条件深入采集”原位替换为AI诊断助手的授权下拉框；已确认使用同聊天的完整操作权限、监控独立设置，并以诊断和按需修复本次异常为目标。
+- 完成内容：① 原位置改为请求批准/帮我批准/完全访问，默认帮我批准，监控偏好独立记忆；应用/启用时确认所选全部通道、目标、模型和真实信息接收方，完全访问额外明确本机文件/命令和危险操作范围，默认取消。取消/校验失败保留原设置，排队/运行/待批准/清理时禁切等级，关闭监控始终可用；旧deep_enabled仅保留字段值及读取兼容，不再门控监控，原阈值/冷却/阶段保持。② 新增独立监控service和SQLite monitor_contexts，不创建隐藏聊天；现有操作service只增加可选上下文/下发前检查接口，复用三档审查、批准、指纹、文件版本、单次执行及结果记录，聊天默认行为与底层手动单次诊断固定工具边界保持。操作增加monitor来源及报告关联，同批次/目标/模型复用历史，不明结果跨诊断任务重试仍须批准。③ 完全访问仅内存绑定范围/批次，批次前启用绑定下一批次，正常诊断收尾保留同批次授权；关闭、主动停止、配置/批次变化和重启失效，记忆偏好不恢复授权。模型切换/删除入口同步检查监控绑定；重启取消未下发操作、执行中记录标为结果不明，不自动恢复。④ 自动异常任务按权限使用完整工具，先取证再必要修复和恢复验证；保留5轮主模型/10次工具（含本地两次快照）、锁源/目标、占用、停止、密钥过滤和临时恢复。通用命令/写文件在设备或共享资源占用时跳过，审查/人工等待后下发前再次检查；等待期间停止重新检查取消事件，避免误报失败。⑤ 动态状态增加待批准计数，点击工作台监控状态或监控窗口提示复用非模态操作详情，关闭不批准，批准/拒绝仅作用于本操作；不添加常驻按钮。主界面/工作台同步，关闭监控取消待执行和后续任务并显示收尾。⑥ 同步操作员说明、状态及验收基线§2.16/§3，新增源码登记编译清单，保留同期已有源码、配置及文档改动。
+- 修改文件：
+  - `.claude/plans/ai-monitor-permissions.md`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_monitor_service.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_action_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_diagnostic_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_store.py`
+  - `Cheating_machine_execution_tool/src/services/ai_trigger_service.py`
+  - `Cheating_machine_execution_tool/src/models/ai_actions.py`
+  - `Cheating_machine_execution_tool/src/models/ai_diagnostics.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_monitor_window.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_action_approval.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_monitor_status.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_monitor_permissions.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_ai_monitor_status.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_integration.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`；相关套件使用`python -c "import sys, unittest; sys.path.insert(0, 'tests'); names=['test_ai_monitor_permissions','test_ai_permissions','test_ai_actions','test_ai_integration','test_ai_workspace','test_ai_monitor_status','test_ai_trigger','test_ai_debug','test_ai_conversation']; suite=unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromName(n) for n in names); result=unittest.TextTestRunner(verbosity=1).run(suite); raise SystemExit(not result.wasSuccessful())"`。该测试进程另将TEMP/TMP设为`Join-Path $env:LOCALAPPDATA 'Temp'`，统一Windows长路径，不更改系统环境设置。存储/报告/证据专项用同一runner，names替换为`['test_ai_core','test_ai_report_deletion','test_ai_report_presentation','test_ai_evidence_analysis','test_ai_pc_network']`。对本轮12个业务源码、3个测试和基线脚本执行`python -m py_compile`，调用`python -c "from pathlib import Path; from scripts.verify_baseline import check_py_compile_inventory; result=check_py_compile_inventory(Path.cwd()); print(result); raise SystemExit(not result.passed)"`，检查本轮文件差异格式、新增文件空白及文档入口。
+- 验证结果：235项权限/操作/监控/触发/集成/工作台/对话相关检查全部通过（50.383秒），另105项核心存储/报告删除及排版/证据/网卡相关检查全部通过（9.303秒），合计340项，含26项新增监控授权专项。覆盖三档实际分支、审查失败/拒绝/取消、首次登录、完全访问危险操作Mock及跳过审查、不明结果跨任务重试、文件版本、审查期间占用变化、多通道隔离、授权失效/重启/首批次绑定、真实后台待批准取消、两种模型协议续接及报告关联、非模态详情点击和模型删除。Vista/Clam默认/最小窗口专项通过，原生勾选及模块背景保持；16文件局部编译、161个源码清单覆盖通过。前轮发现取消竞争、隐藏审批按钮影响全控件可见性检查，已分别补停止复核和不创建该常驻按钮；原原生勾选数量断言按移除一个勾选框调整，监控生命周期用例补当前真实批次及保留原测试运行状态的断言。原本机命令测试首次因临时目录短/长路径文本不同失败，统一测试进程临时路径后通过。辅助AST清单读取首次未处理带注解赋值，已改为调用既有清单检查函数并通过。本轮文件差异及新增文件空白检查通过；工作区既有本机INI行尾空白保留，未将其表述为本轮新增。未运行完整基线，保留最近完整验证记录；未启动完整主程序、未访问真实模型或DUT。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.16/§3复验三档界面、完整确认范围、待批准点击/拒绝/停止及占用冲突；真实模型诊断修复效果和危险设备操作由负责人选定目标并授权复验。未提交、打包或发布，现有EXE未更新。
+
+## 2026-11-14 - 优化会话与报告列表辨识
+
+- 类型：优化
+- 背景：负责人反馈排障会话列表均由时间、默认通道标题、模型和状态组成，记录相似难以区分，并要求同步优化诊断报告列表。已确认保留下拉框、主题置前、本地提取、右键重命名和悬停详情，显示名称不添加反引号。
+- 完成内容：① 新增独立名称service及局部展示模块；会话保留既有自定义标题，其余取首条用户提问，报告接手会话优先沿用来源报告主题；报告取触发事件描述/诊断问题，缺少材料使用通用名称，不推测故障根因。主题合并空白并去除反引号，列表超过24字省略，显示文字相同追加可区分短ID。② 两下拉显示主题、通道/报告轮次、月日时分秒和状态，悬停查看完整主题/时间、厂商/模型、状态及ID；管理列表使用相同主题并支持逐行悬停，报告管理增加主题列。③ 下拉右键重命名当前记录、管理窗口仅单选可改名；名称1至80字，单独按类型/ID存入settings，重启保留、后台报告生成不覆盖，取消不保存，保存时复核记录存在；模态期间固定原ID，删除时在既有事务内清理对应显示名称，主执行日志记录成功/取消/失败。④ 刷新/重命名保留原选择、草稿、正文位置和选区，原始正文/上下文/创建时间/排序及删除确认、忙碌保护和报告接手关联规则保持；无新增模型请求、采集、设备命令、依赖或常驻按钮。⑤ 新源码登记编译清单，新增21项临时SQLite/离线真实Tk专项，并同步操作员说明、状态及人工复验入口；保留全部同期已有改动。
+- 修改文件：
+  - `.claude/plans/ai-record-list-titles.md`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_record_titles.py`（新增）
+  - `Cheating_machine_execution_tool/src/ui/ai_record_presentation.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_store.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_reports_window.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_session_manager.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_report_manager.py`（既有未跟踪文件上的本轮修改）
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`（登记两个新源码模块）
+  - `Cheating_machine_execution_tool/tests/test_ai_record_titles.py`（新增21项）
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`（适配列表显示及Mock）
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`（§2.16/§3，保留原验收标签）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`、`PYTHONPATH=tests`，执行`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -m unittest test_ai_record_titles test_ai_chat_presentation test_ai_report_presentation test_ai_session_deletion test_ai_report_deletion test_ai_workspace test_ai_report_target_dialog test_ai_integration test_ai_core test_main_log_filter`；对本轮10个Python文件执行`py_compile.compile(..., doraise=True)`，调用`check_py_compile_inventory(Path.cwd())`；检查本轮文件`git diff --check`、新增文件行尾空白及文档入口一致性。名称存储测试仅使用临时数据库，界面测试使用离线模拟服务。
+- 验证结果：210项相关测试全部通过（35.315秒），含21项新增专项；覆盖旧/空/自定义会话、首条用户提问、来源报告及其独立删除回退、事件/问题/空报告、长主题及同名ID、反引号移除、1至80字边界、重启及后台更新不覆盖、删除事务与名称一并回滚、模态刷新固定ID/失效提示、取消不保存，以及选择/草稿/位置/选区与原始数据保持。Vista/Clam默认及最小报告/管理窗口、真实重命名弹窗取消/保存/背景及悬停销毁清理通过；10文件局部编译、160个源码清单覆盖和本轮差异/新增文件空白检查通过。首轮142项通过时，新增测试手动提前触发悬停回调遗留一条Tk定时脚本告警，已在测试中取消待执行模拟回调；扩展210项首次有1项新增轮次断言把无cycle事件也当作第12轮，修正测试条件后原范围210项全部通过，无该告警。computer-use初始化后`list_apps`返回`native pipe unavailable`，未取得完整主程序可见操作/截图；独立Tk不替代完整Windows人工或真实模型/DUT验收。本轮未运行完整基线，保留最近完整验证记录。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.16/§3复验真实列表、悬停与右键菜单、同名区分、改名取消/重启保持和后台生成，以及原报告接手/删除流程。未提交、打包、发布或访问真实模型/设备，既有交付包未更新。
+
+## 2026-11-14 - 增强样机稳定性诊断证据
+
+- 类型：功能
+- 背景：负责人希望程序内AI判断更准确、减少猜测，并明确优先卡死、重启及启动异常；已确认实施本轮方案，保留相关证据选择、有效资料匹配和选证日志，同时沿用现有取证、权限及监控触发。
+- 完成内容：① 新增独立只读证据整理service，按批次/通道隔离并优先首次故障、问题相关原文和最新状态，选取最多8份3500字符片段，提取最多32项panic/Oops/OOM/watchdog/启动/复位/上下电文本线索。长日志保留关键前后文和尾部、标注范围/省略；大量普通启动行不挤掉后续崩溃，完整原文沿用原存储。② 自动诊断本地快照/后续工具与对话初始材料/工具续接共用整理器；报告payload兼容增加dut_analysis，分别保留来源、行号、采集/日志/内核相对时间及缺失信息，不将文本线索自动确认根因。对话大工具输出保留实际状态/返回码/错误/下发状态，显式证据检索优先命中位置，避免总返回同一崩溃片段。③ 案例/操作员文档按英文词项/错误码、中文双字及稳定性相关词匹配，仅返回正向命中；仅已确认且启用案例参与，未命中文档不补前三节。主日志输出整理开始/完成/跳过、来源/隔离/省略/截断及资料命中数。④ 两入口共用故障核对规则，区分PC/样机、计划操作/未解释重启、故障时/当前恢复和不同时间轴；串口静默/网络失联、OOM/watchdog不单独升级卡死/整机重启/硬件结论，要求按实际系统/命令能力补只读检查，缺固件/匹配符号时说明限制。⑤ 不增加串口打开、订阅/持续采集、模型调用、工具或监控触发，不修改设备命令、登录批准、三档权限、占用/停止与测试判据；登记新源码并同步操作员说明、当前状态和现场复验入口，保留全部既有工作区改动。
+- 修改文件：
+  - `.claude/plans/ai-dut-stability-evidence.md`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_evidence_analysis.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_diagnostic_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_store.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`（仅登记新增service）
+  - `Cheating_machine_execution_tool/tests/test_ai_evidence_analysis.py`（新增29项）
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`（§2.16/§3）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`、`PYTHONPATH=tests`，使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`运行unittest发现`tests/test_ai_*.py`并加入`test_main_log_filter`；仅在验证进程内以`Path(tempfile.gettempdir()).resolve()`统一`TMPDIR/TEMP/TMP`及`tempfile.tempdir`的短/长路径。6个本轮Python文件执行`py_compile`，调用`check_py_compile_inventory(Path.cwd())`；检查本轮文件差异格式、新文件行尾空白及文档入口一致性。
+- 验证结果：475项AI与主日志相关测试最终全部通过（61.370秒），包含29项新增固定材料/集成专项；最后补入项目实际程控电源日志格式后，原29项专项再次全部通过（1.527秒）。覆盖正常上下电、panic/Oops与中部调用栈、大量启动行后崩溃、OOM无重启、watchdog初始化/超时、启动中断、空/失败串口取证、网络失联但串口正常、当前恢复、三类时间分离、批次/通道隔离、有界选取/线索、显式查询定位、长工具失败/下发状态、资料无匹配、已确认案例停用及设备凭据保留/模型密钥过滤。6文件局部编译、158个源码清单覆盖、本轮差异格式/新增文件空白与文档入口一致性检查通过。中途一次475项运行出现1项既有Clam悬停焦点断言失败（focus_get从Text变为None），原用例单独重跑通过（1.254秒），随后475项原范围重跑全部通过；本轮未修改相关UI或放宽该断言，未确定该次失焦原因，不以重跑结果替代负责人完整Windows人工复验。本轮未运行完整基线，保留最近完整验证记录。
+- 后续待办：负责人重启Windows源码版，以相同模型和同一组真实留存故障材料对照两个入口的诊断效果，核对无依据断言、故障层判断和下一步验证；计划上下电、panic/Oops、OOM无重启、watchdog、启动中断、串口断开、网络失联但串口正常、当前恢复等复验见ACCEPTANCE_BASELINE.md §2.16/§3。离线测试不替代真实模型、完整Windows操作或真实样机验收；本轮未提交、打包、发布或访问真实模型/DUT，现有交付包未更新。
+
+## 2026-11-14 - 补齐AI目标网卡取证与诊断收敛
+
+- 类型：优化
+- 背景：负责人通过故意禁用连接样机的网卡制造故障；原报告虽定位到WinError 10049及本机源IP失效，但没有直接管理状态证据，且PC快照在大量IPv6输出中截断。负责人确认同时优化自动诊断和对话排障，并批准本轮计划；通用排查记忆、案例检索及模型复核等后续建议未纳入本轮。
+- 完成内容：① 新增独立core固定PowerShell只读查询全部含隐藏网卡与活动IPv4，支持20秒超时/取消及本次查询进程清理；按已有目标实际别名精确匹配，源IP命中其它别名仅列候选，身份冲突不自动选卡。管理禁用、链路未接通、源IP缺失/地址未就绪、接口未找到、未知及查询失败分别输出；只以直接管理状态确认禁用，不将Down/10049等同禁用，不凭网卡就绪确认DUT可达。② 两入口复用原read_pc_environment，目标状态/身份/时间摘要优先保留，原PC命令分别限8192字符并记录返回码/编码/错误/截断，按最终过滤和转义后的JSON长度控制65536字符；不再直接切断PC环境JSON，单项命令失败不丢其它证据。③ 明确源IP不可用且首次Telnet/串口均连接失败后，仅在本任务缓存首次连接错误，后续依赖同连接的固定工具跳过重复等待；刷新PC环境（含刷新失败）或新任务允许重查，保留独立串口、原回退/占用/停止、对话登录批准及操作权限。④ 两入口提示规则要求先定位和引用直接依据、区分故障日志与当前快照，不展开无证据的VLAN数量/名称冲突；普通问答不增加采集。⑤ 新增32项专项/集成回归并登记源码清单，补齐操作员说明、当前状态及现场复验入口；保留全部既有工作区源码、文档、版本及本机配置改动。
+- 修改文件：
+  - `.claude/plans/ai-pc-network-diagnostics.md`（新增）
+  - `Cheating_machine_execution_tool/src/core/ai_pc_network.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_debug_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_diagnostic_service.py`（仅扩充诊断提示规则）
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`（仅扩充相关故障提示规则）
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`（仅登记新增core模块）
+  - `Cheating_machine_execution_tool/tests/test_ai_pc_network.py`（新增30项）
+  - `Cheating_machine_execution_tool/tests/test_ai_debug.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_integration.py`（新增1项）
+  - `Cheating_machine_execution_tool/tests/test_ai_conversation.py`（新增1项）
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`（§2.16/§3）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`、`PYTHONPATH=tests`，使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -`从标准输入运行`unittest.main(module=None, argv=['unittest', 'test_ai_pc_network', 'test_ai_debug', 'test_ai_integration', 'test_ai_conversation', 'test_ai_actions', 'test_ai_output', 'test_ai_core', 'test_ai_trigger'])`；运行前仅在该Python验证进程内用`GetLongPathNameW`展开TEMP/TMP并重置`tempfile.tempdir`，不修改系统环境。对本轮9个Python文件执行`py_compile.compile(..., doraise=True)`，运行`check_py_compile_inventory(Path.cwd())`，检查本轮文件差异格式、新文件行尾空白、文档入口和文件清单。本机另外仅执行新增固定只读查询，使用合成不匹配别名/保留测试地址核验完整枚举与分类，不启停网卡、不访问DUT或模型。
+- 验证结果：223项相关测试全部通过（32.939秒），含32项新增回归；覆盖状态区分、精确别名/源IP候选/冲突、地址状态、超时/取消/进程清理、超长及转义输出下JSON完整和摘要保留、模型密钥过滤/设备凭据保留、重复失败连接缓存与刷新、非网络/忙碌/取消不缓存、串口独立成功，以及实际自动报告/对话工具请求与存储保真。9文件局部编译、157个源码编译清单覆盖及本轮差异检查通过。本机固定只读脚本成功枚举70接口，合成目标正确返回adapter_not_found；不将此结果当作禁用网卡现场验收。首次80项运行中3项新测试因mock subprocess.run连带影响platform.platform查询而失败，补齐测试平台mock后通过；扩展223项首次运行有1项既有临时目录短/长路径断言失败，按上方方法仅修正验证进程环境后原测试通过，未修改产品或弱化既有断言。本轮未运行完整基线，保留最近完整验证记录。
+- 后续待办：负责人重启Windows源码版，在自动报告/对话排障中复现禁用/恢复，并对照断线、IP改错、接口缺失、身份冲突及查询失败，核对明确管理状态、当前/故障时证据区分、截断提示、原登录批准及重新采集后的连接重查。离线检查和本机枚举不替代真实模型效果、完整Windows操作或真实DUT验收；详见ACCEPTANCE_BASELINE.md §2.16/§3。本轮未提交、打包、发布或访问真实模型/DUT，现有交付包未更新。
+
+## 2026-11-14 - 优化诊断报告排版
+
+- 类型：优化
+- 背景：负责人要求诊断报告参考排障工作台排版，确认保留单页纵向阅读并将正文与证据分区。
+- 完成内容：① 报告阅读区采用微软雅黑11号正文、白色背景及局部间距，浅绿分析区和浅灰证据区使用独立标题；复用现有Markdown渲染，支持标题、粗体、列表、引用和代码，兼容旧报告独立成行的六类章节标题。② 证据沿用原格式化函数，以等宽字体保留符号、路径、缩进和现场输出，不解析Markdown；本地恢复失败/待人工处理文本保留，不将排版当作故障解决状态。③ 保留只读复制、刷新时当前报告/位置/选区、切换回顶部、空列表禁用及原接手/案例/删除流程；不改存储、提示词、模型请求或设备路径。④ 新增6项真实Tk离线排版专项，补齐文档及人工复验入口；保留同期其它源码、文档、版本及本机配置改动。
+- 修改文件：
+  - `.claude/plans/ai-report-presentation.md`（新增）
+  - `Cheating_machine_execution_tool/src/ui/ai_reports_window.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_report_presentation.py`（新增）
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`（§2.16/§3）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`、`PYTHONPATH=tests`，执行`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -m unittest test_ai_report_presentation test_ai_chat_markdown test_ai_workspace test_ai_report_deletion test_ai_report_target_dialog test_ai_integration`；对本轮2个Python文件执行`py_compile`，检查本轮文件差异格式、新文件行尾空白及文档一致性。
+- 验证结果：91项相关测试全部通过（18.563秒），含6项新增排版专项；覆盖Markdown/普通六类标题/代码内同名标题隔离、原始证据选择复制（含CRLF、路径、符号、制表符和空行）、恢复失败状态、空列表/空报告、刷新不重绘/更新保持阅读状态、切换回顶部，以及Vista/Clam默认920×620和最小760×480窗口布局/折行。原报告接手/删除/案例及嵌套证据集成回归通过，2文件局部编译、本轮差异/新增文件行尾空白及文档一致性检查通过。独立空白检查首次因PowerShell传递`python -c`时引号丢失而出现SyntaxError，改为标准输入传入等价检查后通过，未修改产品代码绕过检查。computer-use初始化可用但`list_apps`报`native pipe unavailable`，未取得完整Windows目视证据。本轮未运行完整基线，保留最近完整验证记录。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.16/§3完成完整界面人工复验；独立Tk与离线报告不代替真实模型/DUT验收。本轮未提交、打包或访问真实模型/设备，现有交付包未更新。
+
+## 2026-11-14 - 按需选择旧报告关联设备
+
+- 类型：优化
+- 背景：负责人指出诊断报告中的常驻设备下拉框用途不明确，接受“旧报告点击继续排查时再弹出设备选择，新报告直接按快照接手”的优化建议并要求执行。
+- 完成内容：① 移除报告窗口常驻目标下拉框及刷新逻辑，保留继续排查、案例和同期新增的报告删除入口。② 新增独立模态设备选择窗口，仅旧报告接手时按最新目标过滤同通道设备，分列显示通道/VLAN/串口/IP或主机，支持滚动、默认不选、取消优先，选择后沿用默认取消的关联确认。③ 无匹配目标提示并保留报告阅读，取消/关闭不创建会话；选择和确认期间固定来源报告ID，继续由既有service复核目标/报告有效性，不改变批次、权限、采集及模型请求规则。④ 主日志记录等待选择、取消、确认和失败，成功会话创建沿用原日志；登记新源码并同步操作员说明、当前状态和验收待确认项。
+- 修改文件：
+  - `.claude/plans/ai-report-target-on-demand.md`（新增）
+  - `Cheating_machine_execution_tool/src/ui/ai_report_target_dialog.py`（新增）
+  - `Cheating_machine_execution_tool/src/ui/ai_reports_window.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`（仅登记新UI模块）
+  - `Cheating_machine_execution_tool/tests/test_ai_report_target_dialog.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_ai_workspace.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_report_deletion.py`（保留删除断言，适配常驻下拉框移除）
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`（§2.16/§3）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`、`PYTHONPATH=tests`，执行`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -m unittest test_ai_report_target_dialog test_ai_workspace test_ai_report_deletion test_ai_conversation test_ai_integration test_main_log_filter`；对本轮6个Python文件执行`py_compile`，调用`check_py_compile_inventory(Path.cwd())`，检查本轮文件差异及新增文件行尾空白。
+- 验证结果：相关168项测试全部通过（26.112秒），包括9项新增专项，覆盖真实Tk模态选择/取消/关闭/默认不选及滚动、Vista/Clam最小布局/背景、新报告跳过选择、旧报告最新同通道过滤、无目标、弹窗刷新不串来源、目标变化/报告删除拒绝接手，及报告删除/对话/日志回归。6文件编译、156个源码编译清单覆盖、本轮差异/新增文件行尾空白及文档一致性检查通过。首次46项检查有2项主题最小布局断言失败，定位为列表先占满高度、底部按钮未映射；调整为先保留底部操作区再填充列表后，原断言和最终168项全部通过。临时文档检查首次因PowerShell管道中文编码导致搜索断言失败，改用等价Unicode转义后通过，未修改文档内容绕过检查。本轮未运行完整基线，保留最近完整验证记录。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.16/§3复验完整主程序交互；独立Tk和临时数据库不代替完整Windows人工或真实模型/DUT验收。未提交、打包或访问真实模型/设备，保留工作区同期其它源码、文档、版本及本机配置修改，现有交付包不含本轮调整。
+
+## 2026-11-14 - 移除查看证据按钮
+
+- 类型：修改
+- 背景：负责人要求移除AI排障工作台输入框下方的“查看证据”按钮，并确认按局部界面调整实施。
+- 完成内容：① 仅从操作行移除“查看证据”按钮，其余按钮按原顺序靠拢，不增加替代入口。② 保留证据采集、导入、保存和模型使用逻辑及原有证据显示方法，未修改service、数据库或报告流程。③ 更新既有按钮排列断言和操作员说明中的按钮顺序、操作定位及证据查看表述，保留工作区其它既有修改。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`、`PYTHONPATH=tests`，执行`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -m unittest test_ai_chat_presentation`；使用同一解释器对`src/ui/ai_chat_panel.py`和`tests/test_ai_chat_presentation.py`执行`-m py_compile`；对本轮4个文件执行`git diff --check`，检索操作员说明与按钮定义的一致性。
+- 验证结果：相关27项测试全部通过（3.519秒），覆盖Vista/Clam最小窗口操作行排列、快捷键、阅读状态及证据原文保持；2文件局部编译和本轮文件差异格式检查通过。本轮未运行完整基线，保留最近一次完整验证记录。
+- 后续待办：负责人重启Windows源码版后目视确认完整工作台按钮行；独立Tk专项不替代完整主程序人工复验。本轮未提交、打包或访问真实模型/设备，现有交付包保持原状。
+
+## 2026-11-14 - 增加诊断报告批量删除
+
+- 类型：功能
+- 背景：负责人指出诊断报告缺少删除入口，确认需要批量管理，并指定“删除报告…”放在“从此报告新建案例”右侧、旧报告目标选择框之前。
+- 完成内容：① 新增独立非模态报告管理窗口，默认选中当前报告，展示全部历史（不限最近100份），支持Ctrl/Shift多选、全选/取消、刷新、删除选中和清空全部；确认默认取消并提示不可撤销，清空固定点击时名单。② 诊断service在既有生命周期锁内检查stops/executors登记，排队/生成/清理中的任一报告整批拒绝；store事务仅删除reports行，失败整体回滚，已不存在项跳过计数。③ 保留会话及留存报告材料、案例及修订、原来源ID、原始日志和模型配置；主日志记录请求、成功、跳过或失败。④ 删除后同步报告查看窗口，未删除当前项保留阅读状态；删除当前项切换剩余最新报告，全空显示占位并禁用操作，忽略已删报告的待处理更新通知。⑤ 新模块登记编译清单并同步操作员说明、状态及验收待确认项；未调整诊断生成或监控执行流程，保留工作区同期AI监控状态和其它既有修改。
+- 修改文件：
+  - `.claude/plans/ai-report-batch-delete.md`（新增）
+  - `Cheating_machine_execution_tool/src/ui/ai_report_manager.py`（新增）
+  - `Cheating_machine_execution_tool/src/ui/ai_reports_window.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`（仅补过滤已删报告旧通知）
+  - `Cheating_machine_execution_tool/src/services/ai_store.py`
+  - `Cheating_machine_execution_tool/src/services/ai_diagnostic_service.py`（仅补报告删除接口及存活查询）
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`（仅登记新增报告管理模块）
+  - `Cheating_machine_execution_tool/tests/test_ai_report_deletion.py`（新增）
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`（§2.16/§3）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8`将`tests`置于`sys.path`后执行`unittest`模块`test_ai_report_deletion test_ai_workspace test_ai_integration test_ai_core test_ai_session_deletion`；对本轮7个Python文件执行`py_compile`，调用`check_py_compile_inventory(Path.cwd())`，并执行本轮文件`git diff --check`和新增文件行尾空白检查。
+- 验证结果：相关102项测试全部通过（17.412秒），含19项新增删除专项，覆盖122份报告、重启持久化、事务回滚、生命周期锁/整批拒绝、确认期间新增、失败保留选择、关联会话材料/案例修订保持及Vista/Clam最小窗口布局；7文件编译、155个源码编译清单覆盖及本轮文件差异/新增文件行尾空白检查通过。首次专项有1项测试材料缺少既有必需字段`run_id`，补全测试材料后通过，未修改或弱化生产证据校验。本轮未运行完整基线，保留最近一次完整验证记录。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.16/§3复验完整主程序按钮位置、批量交互及布局；独立Tk/离线SQLite不替代完整Windows人工或真实模型/设备验收。未提交、打包、发布或访问真实模型/设备，当前交付包不含本轮功能。
+
+## 2026-11-14 - 同步主界面AI监控状态
+
+- 类型：功能
+- 背景：负责人要求将AI自动监控状态显示在主界面开关机测试状态右侧，确认保留AI工作台原位置并同步显示诊断进度。
+- 完成内容：① service新增不可变运行快照，仅记录automatic任务的排队、执行和收尾；等待执行锁期间仍算排队，取消后直到原任务清理结束才移除，手动诊断/聊天不计入。② 复用controller既有主线程轮询和可选回调，同步主界面及AI工作台；隐藏窗口继续更新，新批次关闭以实际service状态为准，只有可见状态变化才打印主日志。③ 主界面默认显示已关闭；支持已开启待测试、监控中、诊断排队中、诊断中、收尾中和已关闭收尾中，结束后恢复空闲状态。④ 新局部UI模块负责AI显示及三列自适应折行，原开关机状态/进度标签仍在主程序装配，文字、样式和停止按钮语义保持。⑤ 新模块登记编译清单，补12项生命周期/隔离/主线程显示回归并同步文档；未改监控触发、设备命令、权限或测试执行规则。
+- 修改文件：
+  - `.claude/plans/ai-monitor-main-status.md`
+  - `Cheating_machine_execution_tool/src/models/ai_diagnostics.py`
+  - `Cheating_machine_execution_tool/src/services/ai_diagnostic_service.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_monitor_window.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_monitor_status.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_integration.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_monitor_status.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`、`PYTHONPATH=tests`，使用CPython3.9执行`python -m unittest test_ai_monitor_status test_ai_integration test_ai_workspace test_ai_conversation test_ai_trigger test_app`；对以上10个Python文件执行`py_compile`，调用`check_py_compile_inventory(Path.cwd())`检查新增源码登记；对本轮文件执行`git diff --check`并检查新增文件行尾空白。
+- 验证结果：相关346项测试全部通过（21.737秒），含12项新增专项；随后补充实际主程序字体/样式及各诊断阶段双处同步、无变化不重复日志断言，12项专项再次通过（2.200秒）。独立真实Tk检查Vista/Clam、800/560像素容器、长停止提示、状态垂直居中/不重叠及窗口隐藏/重开同步。10文件编译和154个源码编译清单覆盖检查通过。首次相关346项运行有1项主界面源码装配断言失败，保留原标签创建代码后原断言通过，未删除或弱化测试。全工作区差异检查另发现原有`network_card_ip.ini`四处空值行尾空格，本轮不改本机配置；本轮文件差异格式通过。本轮未运行完整基线，保留最近一次完整验证记录。
+- 补充复查：收尾时工作区同期出现AI报告管理相关修改，本轮保留该修改，不将其列为本轮实现内容；共享service/窗口相关125项测试再次全部通过（21.761秒）。10文件编译再次通过，编译清单覆盖随同期新增模块变为155个且检查通过，新增文件行尾空白及本轮文件差异格式检查通过。
+- 后续待办：负责人重启完整Windows源码版，按ACCEPTANCE_BASELINE.md §2.16/§3目视复验实际主窗口布局及监控状态；独立Tk和模拟任务不替代完整Windows人工或真实模型/DUT验收。未提交、打包或访问真实模型/设备，保留既有本机配置、版本/发布说明及文档工作区改动。
+
+## 2026-11-13 - 构建并发布V1.2.10
+
+- 类型：构建
+- 背景：负责人要求重新构建EXE并发布GitHub，纳入已推送的串口大流量及线程生命周期修复、ONU批量删除、统一图标、AI权限和界面优化。
+- 完成内容：① 更新V1.2.10版本及用户可见说明，按标准独立CPython3.9.10 x64、固定依赖/PyInstaller5.10.1入口构建至`Cheating_machine_execution_tool/dist/V1.2.10_slim_20261113/`。② 完整基线及实际EXE/PYZ、图标/Tcl/Tk四布局、原生依赖、排除项、ZIP CRC及哈希通过；149个冻结模块与源码一致，6份配置与临时脱敏生成结果一致，本机配置哈希保持。补充审计排除当前程序不再引用且未打包的`old_tool_automation`、`old_tool_config`两个旧GUI桥接，不改变标准门禁。③ 草稿只上传同次构建ZIP及ZIP SHA256，逐份核对大小/摘要后公开为Latest；匿名完整下载两个附件及真实源码更新检查/下载通过后，删除旧V1.2.9 Release及附件，保留全部旧标签和源码历史。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/VERSION_INFO.txt`
+  - `.claude/release_notes/v1.2.10.md`（新增）
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`（§2.15证据及§3交付待确认项）
+- 验证方法：在主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，本轮进程TEMP/TMP/TMPDIR规范为`Path(tempfile.gettempdir()).resolve()`，执行`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1 -OutputDirectory dist\V1.2.10_slim_20261113 -WorkDirectory build\V1.2.10_slim_20261113`。补充读取CArchive/PYZ并规范代码文件名后比对源码、临时生成脱敏配置与ZIP逐份比对；真实`AppUpdateService.check_for_update/download_update`核对V1.2.9发现新版及V1.2.10无更新。执行`git diff --check`与本机配置差异检查。证据位于`%TEMP%/linecheck_release_v1210_20261113/`（`build.log`、两次失败日志、`static_audit.json`、`release_state.json`及匿名下载文件）。
+- 验证结果：最终完整基线`ALL CHECKS PASSED`，153个源码编译/覆盖、1937项测试（2项既有跳过）、196项指定回归及协议不变量通过；`PACKAGE_ARCHIVE_OK`、`FROZEN_SOURCE_CONFIG_OK modules=149`、`DRAFT_ASSETS_SHA256_OK`、两个`ANONYMOUS_DOWNLOAD_SHA256_OK`、`SOURCE_UPDATE_CLIENT_OK`和`PUBLIC_LATEST_ONLY_RELEASE_OK`全部通过。第一次基线因临时目录短路径与长路径比较失败，规范本轮环境后消除；第二次为通道列表像素测试`focus_get()`为None，该用例单独连续3次通过，第三次完整基线通过。未修改业务代码、测试或门禁来绕过失败；失败断言未检查测试项配置窗口宽高。草稿`untagged`附件链接发布后不可用，重新读取正式链接后完成全部公开校验。
+- 产物摘要：EXE 19,418,964字节，SHA256 `d34d5d5a29c2537285f53e0a199f305e53b3b63c531e81a98a3432fb54e259c2`；ZIP 18,979,194字节，SHA256 `616f7dae89acfe7668719a595ad1e3dfaca5c94c4b6dd6ba74cf88592fb56a71`。完整EXE、便携目录、版本/构建说明、第三方声明、EXE/ZIP校验文件及构建报告保留本地。
+- GitHub发布：[LineCheckAssistant V1.2.10](https://github.com/oscarouxue-coder/Power_OnOff_Assistant/releases/tag/v1.2.10)，Release ID `444272345`，公开Latest且最终仅此一版，只有ZIP及ZIP SHA256两个附件；核验后删除V1.2.9 Release（ID `442744384`）。新标签指向既有远端main `b7e7111f79002b0cf5e07b5b71b2a1f63f1afeec`，未自动提交或推送本轮版本与文档。
+- 后续待办：未在当前PC运行新EXE；负责人在目标Windows电脑复验启动、完整交互、真实多串口/长时间、停止/续跑/退出、ONU批量删除及真实AI/模型工具操作，按ACCEPTANCE_BASELINE.md §2.3/§2.10/§2.15—§2.17/§3原范围复验，不将构建、模拟及公开下载证据升级为现场验收。
+
 ## 2026-11-13 - 验证串口优化提交前完整基线
 
 - 类型：测试

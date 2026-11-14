@@ -85,7 +85,7 @@ class DiagnosticTrigger:
                 word and word.casefold() in event.detail.casefold() for word in policy.keywords)
             if not final and not custom and state["count"] < policy.threshold:
                 return None
-            deep = policy.deep_enabled and (final or state["count"] >= policy.threshold + 1)
+            deep = final or state["count"] >= policy.threshold + 1
             level = "deep" if deep else "light"
             now = self.clock()
             upgrade = (final and not state["final"]) or (bool(state["level"]) and level == "deep" and state["level"] != "deep")

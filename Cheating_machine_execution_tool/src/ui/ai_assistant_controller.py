@@ -7,12 +7,16 @@ from src.services.ai_diagnostic_service import AiDiagnosticService
 from src.services.ai_conversation_service import AiConversationService
 from src.ui.ai_diagnostics_window import AiDiagnosticsWindow
 from src.ui.ai_serial_bridge import AiSerialBridge
+from src.ui.ai_monitor_status import monitor_presentation
 
 
 class AiAssistantController:
     def __init__(self, master, terminal, manager, targets, busy, forbidden_port, emit, manual_path,
-                 background="#eef2f5", foreground="#17202a", context=None, shared_busy=None):
+                 background="#eef2f5", foreground="#17202a", context=None, shared_busy=None,
+                 on_monitor_status=None):
         self.master = master
+        self.on_monitor_status = on_monitor_status
+        self.monitor_snapshot = None
         self.bridge = AiSerialBridge(terminal, manager, busy, forbidden_port)
         client = self.bridge.client
         self.bridge.dispatcher.handlers['shared_busy'] = lambda request: shared_busy(request.args[0]) if shared_busy else False
@@ -20,6 +24,8 @@ class AiAssistantController:
         self.service = AiDiagnosticService(emit, client.acquire, client.read,
                                            client.busy, manual_path=manual_path)
         self.service.serial_status = client.serial_status
+        self.service.target_current = client.target_current
+        self.service.shared_busy = client.shared_busy if shared_busy else client.busy
         self.conversation = AiConversationService(self.service, context,
             client.shared_busy if shared_busy else None, target_current=client.target_current)
         self.service.conversation = self.conversation
@@ -46,6 +52,18 @@ class AiAssistantController:
         self.after_id = None
         if not self.closed:
             self.bridge.poll()
+            snapshot = self.service.monitor_status()
+            if snapshot != self.monitor_snapshot:
+                previous = (monitor_presentation(self.monitor_snapshot)[0]
+                            if self.monitor_snapshot is not None else None)
+                self.monitor_snapshot = snapshot
+                text = monitor_presentation(snapshot)[0]
+                if text != previous:
+                    self.service.emit("[AI监控] 状态更新：" + text)
+                if self.on_monitor_status is not None:
+                    self.on_monitor_status(snapshot)
+                if self.dialog.window is not None:
+                    self.dialog.monitor_panel.update_status(snapshot)
             self.after_id = self.master.after(50, self._poll)
 
     def prepare_app_close(self):

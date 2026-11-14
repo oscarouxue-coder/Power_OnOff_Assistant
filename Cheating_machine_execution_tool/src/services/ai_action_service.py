@@ -1,4 +1,4 @@
-"""对话完整工具的风险审查、持久化授权和单次下发；不用于自动监控。"""
+"""完整工具的风险审查、持久化授权和单次下发；上下文由调用方提供。"""
 from dataclasses import asdict
 import re
 import threading
@@ -35,17 +35,27 @@ _DANGEROUS = re.compile(
 
 
 class AiActionService:
-    def __init__(self, conversation):
+    def __init__(self, conversation, contexts=None):
         self.owner = conversation
+        self.contexts = contexts
         self.store, self.redactor = conversation.store, conversation.redactor
         self.lock = threading.RLock()
         # 无论旧进程退出前是否批准，重启都不恢复执行。
-        for session in self.store.chats():
+        for session in (self.store.chats() if contexts is None else contexts.items()):
             self.invalidate(session["id"], "程序重启，旧操作不会自动执行", startup=True)
 
-    def invalidate(self, identifier, reason, startup=False):
+    def _context(self, identifier):
+        return self.store.chat(identifier) if self.contexts is None else self.contexts.get(identifier)
+
+    def _status(self, identifier, status):
+        if self.contexts is None:
+            self.store.update_chat(identifier, status=status)
+        else:
+            self.contexts.set_status(identifier, status)
+
+    def invalidate(self, identifier, reason, startup=False, revoke=True):
         permissions = getattr(self.owner, "permissions", None)
-        if permissions is not None:
+        if permissions is not None and revoke:
             permissions.revoke(identifier, reason)
         changed = False
         with self.lock:
@@ -64,6 +74,8 @@ class AiActionService:
         if stop is not None and stop.is_set():
             raise InterruptedError("操作已取消")
         state = self.owner.collection_status(identifier)
+        if stop is not None and stop.is_set():
+            raise InterruptedError("操作已取消")
         if not state["enabled"]:
             self.invalidate(identifier, state["reason"])
             raise ValueError(state["reason"])
@@ -96,7 +108,7 @@ class AiActionService:
         self.owner.notify(identifier)
 
     def _prepare(self, identifier, name, params):
-        session = self.store.chat(identifier)
+        session = self._context(identifier)
         normalized = normalize_action(name, params) if name in ACTION_TOOLS else dict(params)
         if self.redactor.object(normalized) != normalized:
             raise ValueError("操作参数包含模型API密钥，未记录或执行")
@@ -107,6 +119,8 @@ class AiActionService:
                   "run_id": session["run_id"], "target": session["target"],
                   "profile": profile_fingerprint(self.owner._profile(session)), "name": name,
                   "params": normalized, "before": before, "preview": preview, "state": "reviewing"}
+        if self.contexts is not None:
+            action.update(source="monitor", report_id=session["report_id"])
         action["fingerprint"] = action_fingerprint(action)
         self.store.save_action(self.redactor.object(action))
         return action
@@ -118,7 +132,7 @@ class AiActionService:
     def _wait_approval(self, action, stop):
         identifier = action["session_id"]
         self.store.change_action(action["id"], ("reviewing",), "waiting_approval")
-        self.store.update_chat(identifier, status="等待操作员批准")
+        self._status(identifier, "等待操作员批准")
         self.owner.message(identifier, "assistant", f"操作{action['id'][:8]}需要批准：{action['assessment']['reason']}\n"
                            "请点击“查看待确认操作”，核对实际内容后批准或拒绝。", "question")
         self.owner.emit(f"等待操作员批准：{self.redactor.dumps(action)}")
@@ -128,10 +142,10 @@ class AiActionService:
             if action_fingerprint(current) != action["fingerprint"]:
                 raise ValueError("保存的操作内容已变化，授权失效")
             if current["state"] == "approved":
-                self.store.update_chat(identifier, status="处理中")
+                self._status(identifier, "处理中")
                 return True
             if current["state"] in TERMINAL_STATES:
-                self.store.update_chat(identifier, status="处理中")
+                self._status(identifier, "处理中")
                 return False
             stop.wait(.2)
 
@@ -161,7 +175,7 @@ class AiActionService:
             return executor.execute(name, params, deep=True)
         action = self._prepare(identifier, name, params)
         action.update(permission_mode=permission["mode"], authorization_id=permission["grant_id"],
-                      authorization_source="session_grant" if permission["mode"] == FULL else
+                      authorization_source=("monitor_grant" if self.contexts is not None else "session_grant") if permission["mode"] == FULL else
                                            "operator_required" if permission["mode"] == ASK else "risk_review",
                       review_status="skipped_full_access" if permission["mode"] == FULL else "pending")
         action["fingerprint"] = action_fingerprint(action)
@@ -222,6 +236,8 @@ class AiActionService:
                 self.store.change_action(action["id"], expected, "executing", started=timestamp())
             if name in DEVICE_TOOLS and self.owner.diagnostic.busy(target):
                 raise ValueError("目标当前忙碌，本次未下发")
+            if self.contexts is not None:
+                self.contexts.before_dispatch(identifier, name, target, stop)
             self.owner.emit("实际执行操作：" + self.redactor.dumps(action))
             if name == "run_local_command":
                 dispatched = True
@@ -241,7 +257,7 @@ class AiActionService:
                           "notice": "命令返回Shell提示符；业务是否成功须依据实际输出或后续查询核对"}
                 state = "succeeded"
             else:
-                # 授权的是本次具体的登录及固定工具，不向自动监控开放通用命令。
+                # 本次批准同时覆盖首次登录与该固定工具。
                 dispatched = True
                 result = executor.execute(name, params, deep=True)
                 state = "failed" if "error" in result else "succeeded"

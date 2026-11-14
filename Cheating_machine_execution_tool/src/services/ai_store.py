@@ -7,7 +7,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import sqlite3
 import threading
 import uuid
@@ -15,6 +14,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from src.core.ai_credentials import WindowsCredentialCipher
 from src.models.ai_diagnostics import ProviderProfile
+from src.services.ai_evidence_analysis import match_score, query_terms
 
 
 def canonical_url(value):
@@ -63,6 +63,7 @@ class DiagnosticStore:
                 payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS chat_actions(id TEXT PRIMARY KEY, session_id TEXT NOT NULL,
                 state TEXT NOT NULL, payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS monitor_contexts(id TEXT PRIMARY KEY, payload TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS chat_actions_session ON chat_actions(session_id);
             CREATE INDEX IF NOT EXISTS chat_messages_session ON chat_messages(session_id,id);
             CREATE INDEX IF NOT EXISTS chat_groups_session ON chat_groups(session_id,id);
@@ -123,6 +124,33 @@ class DiagnosticStore:
             self.db.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (name, json.dumps(value, ensure_ascii=False)))
             self.db.commit()
 
+    def record_titles(self, kind):
+        prefix = "ai_display_title:" + kind + ":"
+        with self.lock:
+            return {name[len(prefix):]: json.loads(payload) for name, payload in self.db.execute(
+                "SELECT name,payload FROM settings WHERE name GLOB ?", (prefix + "*",))}
+
+    def rename_record(self, kind, identifier, title):
+        table = {"chat": "chat_sessions", "report": "reports"}.get(kind)
+        if table is None:
+            raise ValueError("不支持的记录类型")
+        with self.lock, self.db:
+            if self.db.execute("SELECT 1 FROM " + table + " WHERE id=?", (identifier,)).fetchone() is None:
+                raise ValueError("记录已不存在，请刷新列表")
+            self.db.execute("INSERT OR REPLACE INTO settings VALUES(?,?)",
+                            ("ai_display_title:" + kind + ":" + identifier,
+                             json.dumps(title, ensure_ascii=False)))
+
+    def first_chat_question(self, identifier):
+        # 索引按会话和消息ID读取，到首条用户提问即停止，不加载整个历史。
+        with self.lock:
+            for row in self.db.execute("SELECT payload FROM chat_messages WHERE session_id=? ORDER BY id",
+                                       (identifier,)):
+                message = json.loads(row[0])
+                if message.get("role") == "user" and str(message.get("text", "")).strip():
+                    return message["text"]
+        return ""
+
     def model_context(self, profile):
         return self.setting(self._model_context_key(profile.base_url, profile.model), 0)
 
@@ -154,10 +182,25 @@ class DiagnosticStore:
             raise ValueError("诊断报告不存在")
         return json.loads(row[0])
 
-    def reports(self):
+    def reports(self, limit=100):
+        if limit is not None and (type(limit) is not int or limit < 0):
+            raise ValueError("报告数量上限须为非负整数或None")
         with self.lock:
             return [(r[0], r[1], json.loads(r[2])) for r in
-                    self.db.execute("SELECT * FROM reports ORDER BY created DESC LIMIT 100")]
+                    self.db.execute("SELECT * FROM reports ORDER BY created DESC" +
+                                    (" LIMIT ?" if limit is not None else ""),
+                                    (limit,) if limit is not None else ())]
+
+    def delete_reports(self, identifiers):
+        identifiers = tuple(dict.fromkeys(identifiers))
+        if any(not isinstance(identifier, str) or not identifier for identifier in identifiers):
+            raise ValueError("请选择有效的报告ID")
+        with self.lock, self.db:
+            count = 0
+            for identifier in identifiers:
+                count += self.db.execute("DELETE FROM reports WHERE id=?", (identifier,)).rowcount
+                self.db.execute("DELETE FROM settings WHERE name=?", ("ai_display_title:report:" + identifier,))
+            return count
 
     def confirm_case(self, report_id, title, cause, solution, verification, scope, case_id=None):
         if not all(str(x).strip() for x in (title, cause, solution, verification, scope)):
@@ -182,8 +225,8 @@ class DiagnosticStore:
             self.db.row_factory = None
         if not query:
             return rows
-        terms = set(re.findall(r"[a-z0-9_.-]+|[\u4e00-\u9fff]{2,8}", query.casefold()))
-        ranked = [(sum(term in " ".join(str(v) for v in r.values()).casefold() for term in terms), r) for r in rows]
+        terms = query_terms(query)
+        ranked = [(match_score(" ".join(str(v) for v in r.values()), terms), r) for r in rows]
         return [r for score, r in sorted(ranked, key=lambda x: x[0], reverse=True) if score][:5]
 
     def update_case_state(self, case_id, delete=False):
@@ -244,6 +287,8 @@ class DiagnosticStore:
             for table in ("chat_messages", "chat_groups", "chat_evidence", "chat_actions"):
                 self.db.executemany("DELETE FROM " + table + " WHERE session_id=?", parameters)
             self.db.executemany("DELETE FROM chat_sessions WHERE id=?", parameters)
+            self.db.executemany("DELETE FROM settings WHERE name=?",
+                                [("ai_display_title:chat:" + identifier,) for identifier in identifiers])
         return len(identifiers)
 
     def append_chat(self, identifier, payload, group=False):
@@ -255,10 +300,39 @@ class DiagnosticStore:
 
     def save_action(self, action):
         with self.lock:
-            self.chat(action["session_id"])
+            if action.get("source") == "monitor":
+                context = self.monitor_context(action["session_id"])
+                if context["report_id"] != action["report_id"]:
+                    raise ValueError("监控任务或关联报告已变化")
+                self.report(action["report_id"])
+            else:
+                self.chat(action["session_id"])
             self.db.execute("INSERT INTO chat_actions VALUES(?,?,?,?)", (action["id"], action["session_id"],
                             action["state"], json.dumps(action, ensure_ascii=False)))
             self.db.commit()
+
+    def monitor_context(self, identifier):
+        with self.lock:
+            row = self.db.execute("SELECT payload FROM monitor_contexts WHERE id=?", (identifier,)).fetchone()
+        if row is None:
+            raise ValueError("监控操作上下文不存在")
+        return json.loads(row[0])
+
+    def monitor_contexts(self):
+        with self.lock:
+            return [json.loads(row[0]) for row in self.db.execute("SELECT payload FROM monitor_contexts")]
+
+    def save_monitor_context(self, payload):
+        with self.lock:
+            self.db.execute("INSERT OR REPLACE INTO monitor_contexts VALUES(?,?)",
+                            (payload["id"], json.dumps(payload, ensure_ascii=False)))
+            self.db.commit()
+
+    def save_monitor_settings(self, policy, mode):
+        with self.lock, self.db:
+            self.db.executemany("INSERT OR REPLACE INTO settings VALUES(?,?)", [
+                ("trigger_policy", json.dumps(policy, ensure_ascii=False)),
+                ("monitor_permission_mode", json.dumps(mode))])
 
     def actions(self, identifier, states=None):
         with self.lock:

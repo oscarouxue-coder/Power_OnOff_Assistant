@@ -35,7 +35,7 @@ def set_taskbar_application_id() -> list[str]:
             raise OSError(f"HRESULT=0x{result & 0xffffffff:08X}")
     except Exception as exc:
         return [f"[程序图标] 任务栏标识设置失败：{exc}；继续启动。"]
-    return [f"[程序图标] 任务栏标识设置成功：{APPLICATION_ID}"]
+    return []
 
 
 def apply_application_icon(window) -> list[str]:
@@ -70,6 +70,4 @@ def apply_application_icon(window) -> list[str]:
             apply()
         except (TclError, OSError) as exc:
             messages.append(f"[程序图标] {label}图标设置失败：{exc}；继续启动。")
-        else:
-            messages.append(f"[程序图标] {label}图标设置成功：{icon}")
     return messages

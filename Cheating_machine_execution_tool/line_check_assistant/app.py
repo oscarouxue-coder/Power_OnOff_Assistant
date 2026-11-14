@@ -939,8 +939,7 @@ class LineCheckAssistant(Tk):
         )
         self.check_updates_button.pack(side="right")
         self.app_update_dialog.bind_button(self.check_updates_button)
-        ttk.Button(toolbar_actions, text="刷新网卡", command=self._refresh_adapters, style="Secondary.TButton").pack(side="right", padx=(0, 8))
-        ttk.Button(toolbar_actions, text="刷新串口", command=self._refresh_power_serial_ports, style="Secondary.TButton").pack(side="right", padx=(0, 8))
+        ttk.Button(toolbar_actions, text="刷新串口/网卡", command=self._refresh_resources, style="Secondary.TButton").pack(side="right", padx=(0, 8))
         ttk.Label(
             toolbar_actions,
             text=admin_text,
@@ -1054,19 +1053,21 @@ class LineCheckAssistant(Tk):
         run_copy = ttk.Frame(run_card, style="Surface.TFrame")
         run_copy.pack(side="left", fill="x", expand=True)
         ttk.Label(run_copy, text="3  环境检查与开关机测试", style="CardTitle.TLabel", font=(FONT_FAMILY, 12, "bold")).pack(anchor="w")
-        power_test_status_row = ttk.Frame(run_copy, style="Surface.TFrame")
+        from src.ui.ai_monitor_status import AiMonitorStatusRow
+        power_test_status_row = AiMonitorStatusRow(run_copy, FONT_FAMILY)
         power_test_status_row.pack(fill="x", pady=(3, 8))
         self.power_test_status_label = ttk.Label(
             power_test_status_row,
             textvariable=self.power_test_status_var,
             style="PowerStatusIdle.TLabel",
         )
-        self.power_test_status_label.pack(side="left")
-        ttk.Label(
+        power_test_progress_label = ttk.Label(
             power_test_status_row,
             textvariable=self.power_test_progress_text_var,
             style="CardHint.TLabel",
-        ).pack(side="right", padx=(12, 0))
+        )
+        power_test_status_row.attach(self.power_test_status_label, power_test_progress_label)
+        self.ai_monitor_status_row = power_test_status_row
         self.progress = ttk.Progressbar(run_copy, mode="determinate", maximum=1, value=0)
         self.progress.pack(fill="x")
         self.power_test_channel_overview = ttk.Frame(run_copy, style="Surface.TFrame")
@@ -5908,6 +5909,7 @@ class LineCheckAssistant(Tk):
                 APP_DIR / "line_check_assistant_README.md",
                 background=COLOR_BG, foreground=COLOR_TEXT,
                 context=context, shared_busy=self._ai_shared_network_busy,
+                on_monitor_status=self.ai_monitor_status_row.show,
             )
             self.ai_assistant = assistant
         assistant.open()
@@ -7236,6 +7238,10 @@ class LineCheckAssistant(Tk):
             f"[网卡和串口] {mode}；网卡 {len(self._current_vlan_options())} 个，"
             f"通道 COM {len(self._current_channel_serial_options())} 个；当前选择保持不变。"
         )
+
+    def _refresh_resources(self) -> None:
+        self._refresh_power_serial_ports()
+        self._refresh_adapters()
 
     def _refresh_power_serial_ports(self) -> None:
         if self.show_all_resources_var.get():

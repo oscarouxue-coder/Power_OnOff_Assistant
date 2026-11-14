@@ -105,7 +105,7 @@ class ApplicationIconTests(unittest.TestCase):
             messages = icons.apply_application_icon(window)
         path = str(icons.application_icon_path())
         self.assertEqual(window.mock_calls, [call.iconbitmap(bitmap=path), call.iconbitmap(default=path)])
-        self.assertTrue(all("成功" in message for message in messages))
+        self.assertEqual(messages, [])
 
     def test_corrupt_icon_or_tk_error_does_not_abort_other_initialization(self):
         for effects in ([tk.TclError("bad ICO"), None], [None, tk.TclError("default failed")],
@@ -116,8 +116,12 @@ class ApplicationIconTests(unittest.TestCase):
                 with patch.object(icons.sys, "platform", "win32"):
                     messages = icons.apply_application_icon(window)
                 self.assertEqual(window.iconbitmap.call_count, 2)
-                self.assertEqual(len(messages), 2)
-                self.assertTrue(any("失败" in message for message in messages))
+                expected = [
+                    f"[程序图标] {label}图标设置失败：{error}；继续启动。"
+                    for label, error in zip(("主窗口", "子窗口默认"), effects)
+                    if error is not None
+                ]
+                self.assertEqual(messages, expected)
 
     def test_taskbar_id_is_stable_and_uses_wide_string_and_hresult(self):
         shell = Mock()
@@ -129,7 +133,7 @@ class ApplicationIconTests(unittest.TestCase):
         setter.assert_called_once_with("Aouxue.LineCheckAssistant")
         self.assertEqual(setter.argtypes, [ctypes.c_wchar_p])
         self.assertIs(setter.restype, ctypes.c_long)
-        self.assertIn("成功", messages[0])
+        self.assertEqual(messages, [])
 
     def test_windows_api_load_and_hresult_failures_are_nonfatal(self):
         shell = Mock()
@@ -221,7 +225,7 @@ class ApplicationIconTests(unittest.TestCase):
                     gdi.DeleteObject(info.color)
                     gdi.DeleteObject(info.mask)
 
-            assert all('成功' in msg for msg in set_taskbar_application_id())
+            assert set_taskbar_application_id() == []
             identity = ctypes.c_wchar_p()
             assert shell.GetCurrentProcessExplicitAppUserModelID(ctypes.byref(identity)) == 0
             try:
@@ -232,7 +236,7 @@ class ApplicationIconTests(unittest.TestCase):
                 root = tk.Tk()
                 existing = tk.Toplevel(root)
                 bindings = root.bind(), root.bind_all(), root.tk.call('after', 'info')
-                assert all('成功' in msg for msg in apply_application_icon(root))
+                assert apply_application_icon(root) == []
                 assert bindings == (root.bind(), root.bind_all(), root.tk.call('after', 'info'))
                 child = tk.Toplevel(root)
                 nested = tk.Toplevel(child)

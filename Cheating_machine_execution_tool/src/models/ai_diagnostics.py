@@ -57,7 +57,18 @@ class DebugTriggerPolicy:
     cooldown: int = 60
     keywords: tuple[str, ...] = ()
     error_codes: tuple[str, ...] = ()
-    deep_enabled: bool = True
+    deep_enabled: bool = True  # 旧配置兼容；自动监控不再用此字段限制采集。
+
+
+@dataclass(frozen=True)
+class MonitorStatus:
+    """只读运行快照；仅统计自动监控任务，不包含手动对话。"""
+    enabled: bool = False
+    run_active: bool = False
+    queued: int = 0
+    running: int = 0
+    cleaning: int = 0
+    waiting_approval: int = 0
 
 
 @dataclass(frozen=True)

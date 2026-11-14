@@ -8,14 +8,16 @@ from src.ui.module_theme import apply_module_theme
 
 
 class AiActionApproval(ttk.Frame):
-    def __init__(self, parent, service, background="#eef2f5"):
+    def __init__(self, parent, service, background="#eef2f5", show_button=True):
         super().__init__(parent)
         self.service, self.background = service, background
         self.identifier, self.action = "", None
         self.window = None
         self.window_action = None
-        self.button = ttk.Button(self, text="查看待确认操作", command=self.open, state="disabled")
-        self.button.pack(side="left")
+        self.button = None
+        if show_button:
+            self.button = ttk.Button(self, text="查看待确认操作", command=self.open, state="disabled")
+            self.button.pack(side="left")
 
     def show(self, identifier=""):
         if self.identifier != identifier:
@@ -25,7 +27,8 @@ class AiActionApproval(ttk.Frame):
             self.action = self.service.actions.pending(identifier) if identifier else None
         except ValueError:
             self.action = None
-        self.button.configure(state="normal" if self.action else "disabled")
+        if self.button is not None:
+            self.button.configure(state="normal" if self.action else "disabled")
         if self.window is not None and self.window.winfo_exists():
             same = self.action is not None and self.window_action["id"] == self.action["id"]
             for button in (self.approve_button, self.reject_button):

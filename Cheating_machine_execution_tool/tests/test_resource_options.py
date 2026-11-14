@@ -73,7 +73,7 @@ class ResourceOptionsTkTests(unittest.TestCase):
             "_selected_power_serial_port", "_current_channel_serial_options",
             "_current_vlan_options", "_vlan_adapter_options", "_read_all_serial_ports",
             "_update_resource_options", "_on_show_all_resources_changed",
-            "_refresh_power_serial_ports", "_refresh_adapters", "_on_power_serial_changed",
+            "_refresh_resources", "_refresh_power_serial_ports", "_refresh_adapters", "_on_power_serial_changed",
         )
         for name in methods:
             setattr(self.root, name, getattr(LineCheckAssistant, name).__get__(self.root))
@@ -107,6 +107,10 @@ class ResourceOptionsTkTests(unittest.TestCase):
             widget for widget in self.descendants(self.root)
             if isinstance(widget, Checkbutton) and widget.cget("text") == "显示所有网卡和串口"
         )
+        self.refresh_button = next(
+            widget for widget in self.descendants(self.root)
+            if isinstance(widget, ttk.Button) and widget.cget("text") == "刷新串口/网卡"
+        )
 
     def close_root(self):
         root, self.root = self.root, None
@@ -114,6 +118,7 @@ class ResourceOptionsTkTests(unittest.TestCase):
             root.app_update_dialog.close_window()
         root.destroy()
         self.checkbox = None
+        self.refresh_button = None
         del root
         # UI测试的Mock/绑定方法形成环，必须在主线程释放Tcl变量。
         gc.collect()
@@ -168,21 +173,62 @@ class ResourceOptionsTkTests(unittest.TestCase):
     def test_refresh_updates_both_serial_lists_and_adapters_without_losing_selection(self):
         self.enable_all()
         self.root.power_serial_var.set("COM1200")
-        with patch("line_check_assistant.app.list_serial_port_names", return_value=["COM77"]):
-            self.root._refresh_power_serial_ports()
-        with patch("line_check_assistant.app.list_adapter_display_names", return_value=["Ethernet77 [Up]"]):
-            self.root._refresh_adapters()
+        before = {key: {name: var.get() for name, var in variables.items()} for key, variables in self.root.channel_row_vars.items()}
+        with patch("line_check_assistant.app.list_serial_port_names", return_value=["COM77"]) as ports, \
+                patch("line_check_assistant.app.list_adapter_display_names", return_value=["Ethernet77 [Up]"]) as adapters:
+            self.refresh_button.invoke()
+        ports.assert_called_once_with()
+        adapters.assert_called_once_with()
         self.assertEqual(self.root.power_serial_var.get(), "COM1200")
         self.assertEqual(self.values(self.root.power_serial_combo), ("", "COM77"))
         for combos in self.root.channel_row_combos.values():
             self.assertEqual(self.values(combos["serial_port"]), ("COM77",))
             self.assertEqual(self.values(combos["vlan"]), ("Ethernet77 [Up]",))
         self.root._persist_config.assert_not_called()
+        after = {key: {name: var.get() for name, var in variables.items()} for key, variables in self.root.channel_row_vars.items()}
+        self.assertEqual(before, after)
+
+    def test_combined_refresh_preserves_default_group_and_selection(self):
+        before = {key: {name: var.get() for name, var in variables.items()} for key, variables in self.root.channel_row_vars.items()}
+        with patch("line_check_assistant.app.list_serial_port_names") as ports, \
+                patch("line_check_assistant.app.list_adapter_display_names", return_value=["VLAN102 [Up]", "Wi-Fi [Up]"]) as adapters:
+            self.refresh_button.invoke()
+        ports.assert_not_called()
+        adapters.assert_called_once_with()
+        self.assertEqual(self.root.power_serial_var.get(), "COM101")
+        self.assertIn("COM101", self.values(self.root.power_serial_combo))
+        for combos in self.root.channel_row_combos.values():
+            self.assertEqual(self.values(combos["serial_port"]), tuple(f"COM{n}" for n in range(1, 9)))
+            self.assertEqual(self.values(combos["vlan"]), ("VLAN102 [Up]",))
+        after = {key: {name: var.get() for name, var in variables.items()} for key, variables in self.root.channel_row_vars.items()}
+        self.assertEqual(before, after)
+        self.root._persist_config.assert_not_called()
+
+    def test_combined_refresh_toolbar_fits_wide_and_narrow_windows(self):
+        self.root.deiconify()
+        actions = self.refresh_button.master
+        update = self.root.check_updates_button
+        admin = next(widget for widget in actions.winfo_children() if isinstance(widget, ttk.Label))
+        style = ttk.Style(self.root)
+        for theme in ("vista", "clam"):
+            style.theme_use(theme)
+            for width in (1040, 1600):
+                with self.subTest(theme=theme, width=width):
+                    self.root.geometry(f"{width}x780")
+                    self.root.update()
+                    self.assertTrue(self.refresh_button.winfo_ismapped())
+                    self.assertGreaterEqual(self.refresh_button.winfo_width(), self.refresh_button.winfo_reqwidth())
+                    self.assertLessEqual(admin.winfo_rootx() + admin.winfo_width(), self.refresh_button.winfo_rootx())
+                    self.assertLessEqual(self.refresh_button.winfo_rootx() + self.refresh_button.winfo_width(), update.winfo_rootx())
+                    self.assertLessEqual(update.winfo_rootx() + update.winfo_width(), self.root.winfo_rootx() + self.root.winfo_width())
 
     def test_enumeration_failure_keeps_cache_and_empty_result_preserves_selection(self):
         self.enable_all()
-        with patch("line_check_assistant.app.list_serial_port_names", side_effect=OSError("模拟失败")):
-            self.root._refresh_power_serial_ports()
+        with patch("line_check_assistant.app.list_serial_port_names", side_effect=OSError("模拟失败")), \
+                patch("line_check_assistant.app.list_adapter_display_names", return_value=["Ethernet77 [Up]"]) as adapters:
+            self.refresh_button.invoke()
+        adapters.assert_called_once_with()
+        self.assertEqual(self.root.adapters, ["Ethernet77 [Up]"])
         self.assertEqual(self.root.all_serial_ports, ["COM2", "COM10", "COM1200"])
         self.assertTrue(any("枚举失败" in args.args[0] and "模拟失败" in args.args[0] for args in self.root._log.call_args_list))
         with patch("line_check_assistant.app.list_serial_port_names", return_value=[]):

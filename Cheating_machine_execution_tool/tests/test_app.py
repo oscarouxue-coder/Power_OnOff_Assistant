@@ -537,7 +537,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertLess(source.index(serial_entry), source.index(dut_entry))
 
     def test_main_header_copy_is_removed_and_admin_status_moves_to_toolbar(self):
-        """内容区不重复标题，管理员状态位于两个刷新按钮左侧。"""
+        """内容区不重复标题，管理员状态位于合并刷新按钮左侧。"""
         import inspect
 
         source = inspect.getsource(LineCheckAssistant._build_ui)
@@ -545,12 +545,26 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         self.assertNotIn('text="配置测试通道、完成自动上/下电并检查全部线路"', source)
         self.assertNotIn('text="运行步骤、检查结果和异常信息"', source)
         self.assertNotIn("title_area", source)
-        refresh_adapter = 'text="刷新网卡", command=self._refresh_adapters'
-        refresh_serial = 'text="刷新串口", command=self._refresh_power_serial_ports'
+        refresh = 'text="刷新串口/网卡", command=self._refresh_resources'
+        update = 'text="检查更新", command=self.app_update_dialog.open'
         admin_status = "text=admin_text"
-        self.assertLess(source.index(refresh_adapter), source.index(refresh_serial))
-        self.assertLess(source.index(refresh_serial), source.index(admin_status))
+        self.assertEqual(source.count(refresh), 1)
+        self.assertNotIn('text="刷新串口"', source)
+        self.assertNotIn('text="刷新网卡"', source)
+        self.assertLess(source.index(update), source.index(refresh))
+        self.assertLess(source.index(refresh), source.index(admin_status))
         self.assertIn('style="Success.TLabel" if admin_ok else "Danger.TLabel"', source)
+
+    def test_combined_refresh_calls_serial_then_adapters_once(self):
+        callbacks = Mock()
+        context = SimpleNamespace(
+            _refresh_power_serial_ports=callbacks.serial,
+            _refresh_adapters=callbacks.adapters,
+        )
+
+        LineCheckAssistant._refresh_resources(context)
+
+        self.assertEqual(callbacks.mock_calls, [call.serial(), call.adapters()])
 
     def test_main_window_title_includes_the_current_release_version(self):
         """Windows 标题栏必须显示工具名称及当前发布版本。"""
