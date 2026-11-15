@@ -7,6 +7,7 @@ from src.ui.module_theme import apply_module_theme
 from src.ui.window_paint import center_toplevel_on_parent
 from src.services.ai_record_titles import AiRecordTitles
 from src.ui.ai_record_presentation import AiRecordActions, short_title
+from src.models.ai_session_scope import target_label
 
 
 class AiSessionManager:
@@ -67,7 +68,7 @@ class AiSessionManager:
 
     def refresh(self):
         selection = self.tree.selection()
-        rows = self.service.store.chats()
+        rows = [row for row in self.service.store.chats() if not row.get("batch_parent")]
         with self.service.lock:
             busy = set(self.service.running) | set(self.service.executors)
         self.rows = {row["id"]: row for row in rows}
@@ -80,7 +81,7 @@ class AiSessionManager:
             status = "排查 / 排队 / 清理中（不可删除）" if row["id"] in busy else row["status"]
             self.tree.insert("", "end", iid=row["id"], values=(format_chat_time(row["created"]),
                              short_title(self.record_entries[row["id"]]["title"]),
-                             row["target"]["channel"], row["profile"]["model"], status))
+                             target_label(row), row["profile"]["model"], status))
         self.tree.selection_set([identifier for identifier in selection if identifier in self.rows])
         self.selection_changed()
 
@@ -112,7 +113,7 @@ class AiSessionManager:
         if self.deleting or not identifiers:
             return
         summaries = [f"{format_chat_time(self.rows[i]['created'])} | {self.record_entries[i]['title']} | "
-                     f"通道{self.rows[i]['target']['channel']} | {self.rows[i]['profile']['model']}"
+                     f"{target_label(self.rows[i])} | {self.rows[i]['profile']['model']}"
                      for i in identifiers]
         preview = "\n".join(summaries[:12])
         if len(summaries) > 12:

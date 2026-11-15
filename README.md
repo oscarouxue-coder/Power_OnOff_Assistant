@@ -68,6 +68,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant
 
 ## GitHub 发布附件
 
+标准构建同时生成全部人工确认案例及修订快照 `CONFIRMED_CASES.json`，包含停用记录，同一份快照随EXE和便携ZIP交付。来源为当前Windows用户的共用案例库及迁入的旧AI/项目库；导出失败阻止构建，空库可生成空快照。包校验核对EXE/ZIP内快照与构建快照一致并记录案例数、修订数及SHA256。目标电脑的AI服务启动后只补充新案例，保留本地修订、停用和删除结果；共用库位置与备份方法见操作员说明。不复制整个AI数据库，GitHub附件仍仅为以下两份。
+
 从2026-11-05确认后的下一次构建/发布开始，GitHub Release只上传同一次构建输出的两个文件：
 
 - `LineCheckAssistant_portable.zip`

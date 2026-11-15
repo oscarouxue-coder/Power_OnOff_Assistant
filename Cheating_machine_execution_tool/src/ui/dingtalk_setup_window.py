@@ -6,19 +6,26 @@ from src.ui.module_theme import apply_module_theme
 
 
 class DingTalkSetupWindow:
-    def __init__(self, parent, config_store, runtime_provider, push_values, emit, push_config_path, on_saved=lambda config: None):
+    def __init__(self, parent, config_store, runtime_provider, push_values, emit, push_config_path,
+                 on_saved=lambda config: None, *, embedded=False):
         self.config_store, self.runtime_provider, self.emit = config_store, runtime_provider, emit
         self.push_config_path, self.on_saved = push_config_path, on_saved
-        self.window = tk.Toplevel(parent)
-        self.window.title("钉钉 AI 接入")
-        self.window.geometry("840x430")
-        self.window.minsize(680, 420)
+        self.window = tk.Frame(parent) if embedded else tk.Toplevel(parent)
+        self.dialog_parent = self.window.winfo_toplevel()
+        self.after_id = None
+        self._paused, self._disposed = False, False
+        if not embedded:
+            self.window.title("钉钉 AI 接入")
+            self.window.geometry("840x430")
+            self.window.minsize(680, 420)
         self.window.columnconfigure(1, weight=1)
         try:
             self.saved = config_store.load()
         except ValueError as exc:
-            messagebox.showerror("配置读取失败", str(exc), parent=self.window)
             self.window.destroy()
+            if embedded:
+                raise
+            messagebox.showerror("配置读取失败", str(exc), parent=self.dialog_parent.master)
             return
         values = dict(self.saved)
         values["client_secret"] = ""
@@ -47,8 +54,10 @@ class DingTalkSetupWindow:
         self.code = ""
         self.candidate = None
         self.after_id = None
-        self.window.protocol("WM_DELETE_WINDOW", self.close)
-        apply_module_theme(self.window)
+        if not embedded:
+            self.window.protocol("WM_DELETE_WINDOW", self.close)
+        self.window.bind("<Destroy>", self._on_destroy, add="+")
+        apply_module_theme(self.dialog_parent)
         self.poll()
 
     def runtime(self):
@@ -59,7 +68,7 @@ class DingTalkSetupWindow:
 
     def error(self, exc):
         self.status.set(str(exc))
-        messagebox.showerror("钉钉接入未完成", str(exc), parent=self.window)
+        messagebox.showerror("钉钉接入未完成", str(exc), parent=self.dialog_parent)
 
     def save(self):
         try:
@@ -76,7 +85,7 @@ class DingTalkSetupWindow:
             self.on_saved(config)
             self.emit("[钉钉接入] 应用配置已加密保存；项目AI数据已初始化，旧库保留")
             self.status.set("已保存，可开始绑定群" if runtime else "已保存。请重启程序后绑定群；旧AI历史保持只读可查。")
-            messagebox.showinfo("配置已保存", self.status.get(), parent=self.window)
+            messagebox.showinfo("配置已保存", self.status.get(), parent=self.dialog_parent)
         except Exception as exc:
             self.error(exc)
 
@@ -95,7 +104,7 @@ class DingTalkSetupWindow:
             if not candidate:
                 raise ValueError("尚未收到当前绑定码，请先在目标群发送绑定消息")
             if not messagebox.askyesno("确认群绑定", f"项目仅接受以下群消息：\n{candidate['name']}\n"
-                    f"群ID：{candidate['group']}\n是否绑定？", parent=self.window, default="no"):
+                    f"群ID：{candidate['group']}\n是否绑定？", parent=self.dialog_parent, default="no"):
                 return
             runtime.confirm_binding(candidate)
             self.saved = self.config_store.load()
@@ -125,7 +134,7 @@ class DingTalkSetupWindow:
                     "默认帮我批准，普通操作独立审查后自动执行；危险或不明操作须具体批准。\n\n"
                     "工具可访问本机命令、文件及当前项目目标；本机系统操作可能影响同机其它项目。"
                     "排障回复会发送到本群。本地可为会话授权完全访问。\n是否启用？",
-                    parent=self.window, default="no"):
+                    parent=self.dialog_parent, default="no"):
                 self.enabled.set(False)
                 return
             runtime.enable(enabled)
@@ -135,6 +144,9 @@ class DingTalkSetupWindow:
             self.error(exc)
 
     def poll(self):
+        self.after_id = None
+        if self._paused or self._disposed:
+            return
         runtime = self.runtime_provider()
         if runtime:
             snapshot = runtime.snapshot()
@@ -150,13 +162,36 @@ class DingTalkSetupWindow:
                 self.status.set(snapshot["status"] + " | " + (runtime.config.get("group_name") or "尚未绑定群"))
         self.after_id = self.window.after(300, self.poll)
 
-    def close(self):
+    def suspend(self, cancel_binding=False):
+        self._paused = True
+        if self.after_id:
+            try:
+                self.window.after_cancel(self.after_id)
+            except tk.TclError:
+                pass
+            self.after_id = None
+        if not cancel_binding:
+            return
         runtime = self.runtime_provider()
         if self.code and runtime is not None and not runtime.config["enabled"]:
             try:
                 runtime.enable(False)
             except Exception:
                 self.emit("[钉钉接入] 取消绑定时设置保存失败，本进程已停止绑定")
-        if self.after_id:
-            self.window.after_cancel(self.after_id)
+            else:
+                self.emit("[钉钉接入] 界面关闭，已取消未完成群绑定")
+        self.code, self.candidate = "", None
+
+    def resume(self):
+        if not self._disposed and self.after_id is None:
+            self._paused = False
+            self.poll()
+
+    def _on_destroy(self, event):
+        if event.widget is self.window:
+            self.suspend()
+            self._disposed = True
+
+    def close(self):
+        self.suspend(cancel_binding=True)
         self.window.destroy()

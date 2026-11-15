@@ -197,6 +197,7 @@ MODULE_WINDOW_SIZE_SPECS = {
     "sample_upgrade": (820, 720, 820, 620),
     "test_item_config": (960, 940, 960, 750),
     "pipeline": (920, 560, 880, 520),
+    "power_test_channel_history": (760, 440, 560, 300),
 }
 
 
@@ -423,6 +424,7 @@ class LineCheckAssistant(Tk):
         self.dut_config_requests: list[DutTelnetEnableRequest] = []
         self.dut_config_validation_errors: dict[str, str] = {}
         self.test_item_config_window = None
+        self._message_push_control = None
         self.pipeline_window = None
         self.power_test_running = False
         self.power_test_status_var = StringVar(value="开关机测试状态：未运行")
@@ -558,6 +560,7 @@ class LineCheckAssistant(Tk):
         self.after(50, self._drain_dut_config_ui_tasks)
         self.protocol("WM_DELETE_WINDOW", self._on_app_close)
         self.after(500, self._start_dingtalk_remote)
+        self.after(600, self._start_feishu_remote)
 
     def _maximize_window(self) -> None:
         try:
@@ -581,6 +584,9 @@ class LineCheckAssistant(Tk):
         if pretest is not None and not pretest.can_close():
             return
         self._app_closing = True
+        feishu_notifications = self.__dict__.get("feishu_notifications")
+        if feishu_notifications is not None:
+            feishu_notifications.begin_close()
         ui = self.__dict__.get('_pipeline_ui')
         if ui is not None:
             ui.begin_close()
@@ -607,7 +613,8 @@ class LineCheckAssistant(Tk):
         updates = getattr(self, "app_update_dialog", None)
         if updates is not None and not updates.prepare_app_close(self._on_app_close):
             return
-        if ((ui is not None and not ui.idle())
+        if ((feishu_notifications is not None and not feishu_notifications.idle)
+                or (ui is not None and not ui.idle())
                 or (run is not None and run.thread is not None and run.thread.is_alive())
                 or any(value for name, value in self.__dict__.items()
                        if isinstance(value, bool) and (name == 'running' or name.endswith('_running')))
@@ -657,6 +664,8 @@ class LineCheckAssistant(Tk):
         finally:
             if ui is not None:
                 ui.dispose()
+            if self.__dict__.get("power_test_channel_history_window") is not None:
+                self._close_power_test_channel_history_window()
             self.destroy()
 
     def _cancel_pending_onu_registration_save(self) -> None:
@@ -4805,8 +4814,12 @@ class LineCheckAssistant(Tk):
             notebook, message_push_values, mark_dirty,
             background=COLOR_BG, foreground=COLOR_TEXT, log=self._log,
             project_config_path=TEST_ITEM_CONFIG_PATH,
-            remote_setup=lambda: self._configure_dingtalk_remote(message_push_control),
         )
+        self._message_push_control = message_push_control
+        def forget_message_push(event):
+            if event.widget is message_push_control.frame and self.__dict__.get("_message_push_control") is message_push_control:
+                self._message_push_control = None
+        message_push_control.frame.bind("<Destroy>", forget_message_push, add="+")
 
         button_bar = Frame(content, background=COLOR_BG)
         button_bar.pack(fill="x", side="bottom", anchor="e")
@@ -5913,6 +5926,7 @@ class LineCheckAssistant(Tk):
                 context=context, shared_busy=self._ai_shared_network_busy,
                 on_monitor_status=self.ai_monitor_status_row.show,
                 app_dir=APP_DIR, project_config_path=TEST_ITEM_CONFIG_PATH,
+                remote_tab_factory=self._build_ai_remote_management,
             )
             self.ai_assistant = assistant
         if show:
@@ -5936,24 +5950,56 @@ class LineCheckAssistant(Tk):
             if config["isolated"]:
                 self._open_ai_assistant(show=False)
         except Exception:
-            self._log("[钉钉接入] 后台初始化失败，请在消息推送页检查配置（凭据省略）")
+            self._log("[钉钉接入] 后台初始化失败，请在AI诊断助手的远程管理页检查配置（凭据省略）")
 
     def _configure_dingtalk_remote(self, push_control=None):
+        self._open_ai_assistant(show=False)
+        self.ai_assistant.dialog.open_remote("dingtalk")
+
+    def _build_ai_remote_management(self, parent):
         from src.services.dingtalk_remote_store import RemoteConfigStore
+        from src.services.feishu_remote_store import FeishuConfigStore
+        from src.ui.ai_remote_management_tab import RemoteManagementTab
         from src.ui.dingtalk_setup_window import DingTalkSetupWindow
-        try:
-            config_store = RemoteConfigStore(APP_DIR)
-            if config_store.load()["isolated"] and self.__dict__.get("ai_assistant") is None:
-                self._open_ai_assistant(show=False)
-            parent = push_control.frame.winfo_toplevel() if push_control is not None else self
-            DingTalkSetupWindow(parent, config_store,
+        from src.ui.feishu_setup_window import FeishuSetupWindow
+        return RemoteManagementTab(parent,
+            lambda host: DingTalkSetupWindow(host, RemoteConfigStore(APP_DIR),
                 lambda: getattr(self.__dict__.get("ai_assistant"), "remote", None),
                 MessagePushConfigService(LEGACY_UI_DEFAULTS_CONFIG_PATH).load(), self._log,
                 LEGACY_UI_DEFAULTS_CONFIG_PATH,
-                on_saved=push_control.set_application_robot if push_control is not None else lambda config: None)
+                on_saved=self._sync_ai_message_push, embedded=True),
+            lambda host: FeishuSetupWindow(host, FeishuConfigStore(APP_DIR),
+                lambda: getattr(self.__dict__.get("ai_assistant"), "feishu_remote", None),
+                self._feishu_notification_service(), self._log, embedded=True), self._log)
+
+    def _sync_ai_message_push(self, config):
+        control = self.__dict__.get("_message_push_control")
+        if control is not None and control.frame.winfo_exists():
+            control.set_application_robot(config)
+
+    def _feishu_notification_service(self):
+        from src.services.feishu_notifications import FeishuNotificationService
+        from src.services.feishu_remote_store import FeishuConfigStore
+        service = self.__dict__.get("feishu_notifications")
+        if service is None and not self.__dict__.get("_app_closing", False):
+            service = FeishuNotificationService(FeishuConfigStore(APP_DIR), TEST_ITEM_CONFIG_PATH, self._log)
+            self.feishu_notifications = service
+        return service
+
+    def _start_feishu_remote(self):
+        if self.__dict__.get("_app_closing", False):
+            return
+        from src.services.feishu_remote_store import FeishuConfigStore
+        try:
+            config = FeishuConfigStore(APP_DIR).load()
+            if config["isolated"]:
+                self._open_ai_assistant(show=False)
         except Exception:
-            self._log("[钉钉接入] 配置窗口打开失败，请检查配置和访问权限")
-            messagebox.showerror("钉钉AI接入", "无法打开配置，请检查配置和访问权限。", parent=self)
+            self._log("[飞书接入] 后台初始化失败，请在AI诊断助手的远程管理页检查配置（凭据省略）")
+
+    def _configure_feishu_remote(self, push_control=None):
+        self._open_ai_assistant(show=False)
+        self.ai_assistant.dialog.open_remote("feishu")
 
     def _collect_ai_targets(self):
         from src.models.ai_diagnostics import DiagnosticTarget
@@ -5988,6 +6034,11 @@ class LineCheckAssistant(Tk):
         return bool(run is not None and not getattr(run, "finished", True))
 
     def _observe_ai_power_event(self, message) -> None:
+        if message.get("type") == "test_notification":
+            notifications = self._feishu_notification_service()
+            if notifications is not None:
+                notifications.enqueue(message)
+            return
         from src.services.ai_evidence_context import AiEvidenceContext
         context = self.__dict__.get("ai_evidence_context")
         if context is None:
@@ -7649,8 +7700,11 @@ class LineCheckAssistant(Tk):
 
         window = Toplevel(self)
         self.power_test_channel_history_window = window
+        window.transient(self)
         window.minsize(560, 300)
-        window.geometry("760x440")
+        window_width, window_height = self._restore_module_window_size(
+            window, "power_test_channel_history"
+        )
         window.protocol("WM_DELETE_WINDOW", self._close_power_test_channel_history_window)
 
         container = ttk.Frame(window, style="Surface.TFrame", padding=12)
@@ -7692,7 +7746,10 @@ class LineCheckAssistant(Tk):
             command=self._close_power_test_channel_history_window,
             style="Secondary.TButton",
         ).pack(anchor="e", pady=(10, 0))
-        center_toplevel_on_parent(window, self, window_width=760, window_height=440)
+        apply_module_theme(window, COLOR_BG)
+        center_toplevel_on_parent(
+            window, self, window_width=window_width, window_height=window_height
+        )
         schedule_toplevel_client_refresh(window)
         self._refresh_power_test_channel_history_window()
 
@@ -7702,6 +7759,7 @@ class LineCheckAssistant(Tk):
         self.power_test_channel_history_window = None
         self.power_test_channel_history_text = None
         if window is not None and window.winfo_exists():
+            self._remember_module_window_size(window, "power_test_channel_history")
             window.destroy()
 
     def _refresh_power_test_channel_history_window(self) -> None:

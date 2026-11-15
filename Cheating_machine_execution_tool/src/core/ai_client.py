@@ -9,6 +9,7 @@ import threading
 import requests
 
 from src.models.ai_diagnostics import ModelReply
+from src.core.ai_stream import ModelStream
 from src.services.ai_store import canonical_url, profile_fingerprint
 
 
@@ -28,7 +29,7 @@ class DiagnosticModelClient:
         self.redactor.add_secrets((key,))
         self.session = session or requests.Session()
 
-    def _request(self, method, path, payload=None, stop=None):
+    def _request(self, method, path, payload=None, stop=None, on_text=None):
         if stop is not None and stop.is_set():
             raise InterruptedError("诊断已取消")
         url = canonical_url(self.profile.base_url) + "/" + path
@@ -48,14 +49,28 @@ class DiagnosticModelClient:
                                 429: "限流或额度不足"}.get(response.status_code, "服务请求失败")
                     raise ModelServiceError(f"{category}（HTTP {response.status_code}）")
                 chunks, size = [], 0
-                for chunk in response.iter_content(65536):
+                decoder = ModelStream(self.profile.protocol, lambda text: on_text(self.redactor.stream_text(text))) if on_text else None
+                streaming = None
+                for chunk in response.iter_content(1024 if decoder else 65536):
                     if stop is not None and stop.is_set():
                         raise InterruptedError("诊断已取消")
                     size += len(chunk)
                     if size > 4 * 1024 * 1024:
                         raise ModelServiceError("模型响应超过4 MiB限制")
-                    chunks.append(chunk)
-                result = json.loads(b"".join(chunks))
+                    if streaming is None:
+                        chunks.append(chunk)
+                        start = b"".join(chunks).lstrip()
+                        if not start:
+                            continue
+                        streaming = bool(decoder and not start.startswith(b"{"))
+                        if streaming:
+                            decoder.feed(b"".join(chunks))
+                            chunks.clear()
+                    elif streaming:
+                        decoder.feed(chunk)
+                    else:
+                        chunks.append(chunk)
+                result = decoder.result() if streaming else json.loads(b"".join(chunks))
                 if not isinstance(result, dict):
                     raise ModelServiceError("模型返回格式不正确")
                 if isinstance(result.get("base_resp"), dict) and result["base_resp"].get("status_code", 0):
@@ -63,7 +78,7 @@ class DiagnosticModelClient:
                 return result
             finally:
                 response.close()
-        except (requests.RequestException, ValueError) as exc:
+        except (requests.RequestException, ValueError, TypeError, KeyError) as exc:
             raise ModelServiceError("模型网络或响应解析失败：" + type(exc).__name__) from None
 
     @staticmethod
@@ -130,10 +145,13 @@ class DiagnosticModelClient:
         # 当前厂商思考字段仅供协议续接。
         return self.redactor.object(payload)
 
-    def complete(self, history, tools=(), stop=None):
+    def complete(self, history, tools=(), stop=None, on_text=None):
         profile = self.profile
+        payload = self.request_payload(history, tools)
+        if on_text is not None:
+            payload["stream"] = True
         response = self._request("POST", "responses" if profile.protocol == "responses" else "chat/completions",
-                                 self.request_payload(history, tools), stop)
+                                 payload, stop, on_text)
         calls = []
         if profile.protocol == "responses":
             output = response.get("output", [])
@@ -169,6 +187,9 @@ class DiagnosticModelClient:
         if self.profile.protocol == "responses":
             return {"type": "function_call_output", "call_id": call["id"], "output": text}
         return {"role": "tool", "tool_call_id": call["id"], "content": text}
+
+    def complete_stream(self, history, tools=(), stop=None, on_text=None):
+        return self.complete(history, tools, stop, on_text=on_text)
 
     def test_connection(self, stop=None):
         first = self.complete([{"role": "user", "content": "连接检查：请只回复 OK。"}], stop=stop)

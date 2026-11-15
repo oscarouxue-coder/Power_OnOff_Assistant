@@ -29,6 +29,17 @@ from test_ai_core import FakeCipher, FakeResponse, chat, call
 from test_ai_debug import TARGET
 
 
+def wait_panel(panel, service):
+    deadline = time.monotonic() + 5
+    while panel.routing and time.monotonic() < deadline:
+        panel.parent.update()
+        panel.poll()
+        time.sleep(.005)
+    assert not panel.routing, "路由未及时完成"
+    service.jobs.join()
+    panel.poll()
+
+
 class ConversationTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -46,6 +57,23 @@ class ConversationTests(unittest.TestCase):
                 if args[0] == "GET":
                     return FakeResponse({"data": getattr(self, "model_data", [])})
                 self.requests.append(kwargs["json"])
+                # 路由与排障为独立请求；各自使用独立离线响应队列。
+                messages = kwargs["json"].get("messages", [])
+                if messages and "你只识别用户本条消息" in messages[0].get("content", ""):
+                    if getattr(self, "route_replies", None):
+                        value = self.route_replies.popleft()
+                        if isinstance(value, Exception):
+                            raise value
+                        return FakeResponse(value)
+                    data = json.loads(messages[-1]["content"])
+                    current = data["current"]
+                    scope = current["scope"] if current else "device"
+                    channel = current["channel"] if current else (data["targets"][0]["channel"] if len(data["targets"]) == 1 else None)
+                    result = dict(intent="continue" if current else "switch", scope=scope, channel=channel,
+                                  question=data["message"], clarification="")
+                    if scope == "device" and channel is None:
+                        result.update(intent="clarify", clarification="请指定通道：" + "、".join(str(t["channel"]) for t in data["targets"]))
+                    return FakeResponse(chat(json.dumps(result, ensure_ascii=False)))
                 value = self.responses.popleft() if self.responses else chat("根据已有证据继续核对。")
                 if isinstance(value, Exception):
                     raise value
@@ -60,6 +88,8 @@ class ConversationTests(unittest.TestCase):
             return executor
         self.diag = AiDiagnosticService(self.logs.append, Mock(), lambda _t: "串口现场", lambda _t: False,
             self.store, client_factory=client_factory, tool_factory=tool_factory)
+        # 本组验证帮我批准路径；默认完全访问由权限专项单独覆盖。
+        self.store.set_setting("chat_permission_mode", "auto_review")
         self.context = AiEvidenceContext()
         self.context.observe({"type": "diagnostic_start", "run_id": "run1"})
         self.service = AiConversationService(self.diag, self.context)
@@ -426,33 +456,32 @@ class ConversationTests(unittest.TestCase):
             panel = dialog.chat_panel
             panel.selected = self.id
             panel.refresh()
-            panel.target_choice.current(0)
             self.responses.append(chat("", [call("ask_user", '{"question":"网线状态？","reason":"确认现场"}')]))
             panel.input.insert("1.0", "出现故障")
             panel.send()
-            self.service.jobs.join()
+            wait_panel(panel, self.service)
             panel.poll()
             self.assertIn("等待你回复", panel.sessions.get())
             self.assertIn("网线状态？", panel.output.get("1.0", "end"))
             self.assertEqual(str(panel.output.cget("state")), "disabled")
             panel.input.insert("1.0", "网线正常")
             panel.send()
-            self.service.jobs.join()
+            wait_panel(panel, self.service)
             panel.poll()
             self.assertIn("可继续", panel.sessions.get())
             dialog.targets_provider = lambda: (replace(TARGET, channel=2),)
             dialog.refresh_targets()
             panel.sessions.current(panel.ids.index(self.id))
             panel.choose()
-            self.assertEqual(panel.target_choice.current(), -1)
+            self.assertEqual(panel.current_target.cget("text"), "通道1")
             panel.input.insert("1.0", "继续分析旧通道故障")
             panel.send()
-            self.service.jobs.join()
+            wait_panel(panel, self.service)
             self.assertEqual(panel.selected, self.id)
             self.assertIn("继续分析旧通道故障", json.dumps(self.store.chat_items(self.id), ensure_ascii=False))
             self.service.running[self.id] = threading.Event()
             panel.render()
-            self.assertIn("disabled", panel.send_button.state())
+            self.assertNotIn("disabled", panel.send_button.state())
             self.service.running.pop(self.id)
             panel.render()
             self.assertNotIn("disabled", panel.send_button.state())

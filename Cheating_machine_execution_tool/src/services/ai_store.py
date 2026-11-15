@@ -36,7 +36,9 @@ def default_ai_data_dir():
 
 
 class DiagnosticStore:
-    def __init__(self, directory=None, cipher=None):
+    def __init__(self, directory=None, cipher=None, case_store=None):
+        # 显式注入共用库；临时/旧库实例仍可独立使用和只读迁移。
+        self.case_store = case_store
         self.directory = Path(directory) if directory is not None else default_ai_data_dir()
         self.directory.mkdir(parents=True, exist_ok=True)
         self.cipher = cipher or WindowsCredentialCipher()
@@ -75,6 +77,26 @@ class DiagnosticStore:
         with self.lock:
             return [ProviderProfile(**json.loads(r[0])) for r in
                     self.db.execute("SELECT payload FROM profiles ORDER BY rowid")]
+
+    def migrate_full_access_defaults(self):
+        """负责人确认的一次性权限迁移；不保存授权、不恢复旧操作。"""
+        from src.models.ai_permissions import FULL
+        with self.lock, self.db:
+            if self.setting("full_access_defaults_version", 0) >= 1:
+                return False
+            for identifier, raw in self.db.execute("SELECT id,payload FROM chat_sessions").fetchall():
+                session = json.loads(raw)
+                if (session.get("source") or {}).get("kind") not in (None, "local", "feishu"):
+                    continue
+                session["permission_mode"] = FULL
+                self.db.execute("UPDATE chat_sessions SET payload=? WHERE id=?",
+                                (json.dumps(session, ensure_ascii=False), identifier))
+            self.db.executemany("INSERT OR REPLACE INTO settings VALUES(?,?)", [
+                ("chat_permission_mode", json.dumps(FULL)),
+                ("feishu_chat_permission_mode", json.dumps(FULL)),
+                ("monitor_permission_mode", json.dumps(FULL)),
+                ("full_access_defaults_version", "1")])
+        return True
 
     def save_profile(self, profile, key=None):
         base = canonical_url(profile.base_url)
@@ -202,7 +224,10 @@ class DiagnosticStore:
                 self.db.execute("DELETE FROM settings WHERE name=?", ("ai_display_title:report:" + identifier,))
             return count
 
-    def confirm_case(self, report_id, title, cause, solution, verification, scope, case_id=None):
+    def confirm_case(self, report_id, title, cause, solution, verification, scope, case_id=None, expected_version=None):
+        if self.case_store is not None:
+            return self.case_store.confirm_case(report_id, title, cause, solution, verification, scope,
+                                                case_id=case_id, expected_version=expected_version)
         if not all(str(x).strip() for x in (title, cause, solution, verification, scope)):
             raise ValueError("确认案例需填写标题、实际原因、处理方法、复测结果和适用范围")
         values = (report_id, title, cause, solution, verification, scope)
@@ -218,6 +243,8 @@ class DiagnosticStore:
         return case_id
 
     def cases(self, query="", include_inactive=False):
+        if self.case_store is not None:
+            return self.case_store.cases(query, include_inactive)
         with self.lock:
             self.db.row_factory = sqlite3.Row
             rows = [dict(r) for r in self.db.execute("SELECT * FROM cases" +
@@ -229,7 +256,9 @@ class DiagnosticStore:
         ranked = [(match_score(" ".join(str(v) for v in r.values()), terms), r) for r in rows]
         return [r for score, r in sorted(ranked, key=lambda x: x[0], reverse=True) if score][:5]
 
-    def update_case_state(self, case_id, delete=False):
+    def update_case_state(self, case_id, delete=False, expected_version=None):
+        if self.case_store is not None:
+            return self.case_store.update_case_state(case_id, delete, expected_version)
         with self.lock:
             if delete:
                 self.db.execute("DELETE FROM cases WHERE id=?", (case_id,))
@@ -393,3 +422,5 @@ class DiagnosticStore:
     def close(self):
         with self.lock:
             self.db.close()
+        if self.case_store is not None:
+            self.case_store.close()

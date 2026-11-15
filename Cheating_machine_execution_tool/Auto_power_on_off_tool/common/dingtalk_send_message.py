@@ -10,7 +10,8 @@ import urllib
 from pathlib import Path
 
 from config.config_driver import OperationConfig
-from src.services.message_push_config_service import load_push_project_name
+from src.services.message_push_config_service import load_push_project_name, send_feishu_notification
+from src.core.webhook_target import detect_platform
 
 
 class DingTalk(object):
@@ -44,6 +45,14 @@ class DingTalk(object):
                 self.log(f'[消息推送] 正式发送失败：{exc}')
                 return exc
             dingtalk_config = self.cf.read_config_file('./config/config.ini', 'dingtalk_config')
+            try:
+                platform = detect_platform(dingtalk_config['webhook'])
+                if platform == 'feishu':
+                    send_feishu_notification(dingtalk_config, project_name, message, normal_flag, log=self.log)
+                    return True
+            except (ValueError, RuntimeError) as exc:
+                self.log(f'[消息推送] 正式发送失败：{exc}')
+                return exc
             remote_tool_name = self.cf.read_ini('remote_config', 'remote_tool_name',
                                                 path='./config/config.ini').strip()
             remote_identification_code = self.cf.read_ini('remote_config', 'remote_identification_code',

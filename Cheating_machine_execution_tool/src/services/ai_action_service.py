@@ -10,6 +10,7 @@ from src.models.ai_actions import ACTION_TOOLS, ActionAssessment, action_fingerp
 from src.models.ai_permissions import ASK, AUTO, FULL
 from src.models.ai_conversation import timestamp
 from src.services.ai_store import profile_fingerprint
+from src.models.ai_session_scope import session_scope
 
 
 REVIEW_INSTRUCTIONS = """你是独立的操作风险审查员，不是执行代理。仅审查给定操作，不执行工具。
@@ -73,6 +74,11 @@ class AiActionService:
     def _eligible(self, identifier, stop=None):
         if stop is not None and stop.is_set():
             raise InterruptedError("操作已取消")
+        tasks = getattr(self.owner, "tasks", None)
+        task = tasks.get(identifier) if isinstance(tasks, dict) else None
+        if task is not None and task.clock() - task.started >= task.max_seconds:
+            self.invalidate(identifier, "连续诊断时间预算结束，未开始的登录/查询已取消", revoke=False)
+            raise ValueError("连续诊断时间预算结束，未开始的登录/查询已取消")
         state = self.owner.collection_status(identifier)
         if stop is not None and stop.is_set():
             raise InterruptedError("操作已取消")
@@ -82,6 +88,8 @@ class AiActionService:
 
     def pending(self, identifier):
         self._eligible(identifier)
+        if self._context(identifier).get("scope") == "batch":
+            return next(iter(self.owner.batch.actions(identifier, ("waiting_approval",))), None)
         return next(iter(self.store.actions(identifier, ("waiting_approval",))), None)
 
     def decide(self, identifier, action_id, fingerprint, approved, *, operator_source="operator", operator_identity=""):
@@ -122,6 +130,8 @@ class AiActionService:
                   "params": normalized, "before": before, "preview": preview, "state": "reviewing"}
         if self.contexts is not None:
             action.update(source="monitor", report_id=session["report_id"])
+        else:
+            action["scope"] = session_scope(session)
         action["fingerprint"] = action_fingerprint(action)
         self.store.save_action(self.redactor.object(action))
         return action
@@ -151,7 +161,24 @@ class AiActionService:
             stop.wait(.2)
 
     def execute(self, identifier, name, params, target, stop, executor, review):
+        context = self._context(identifier)
+        if context.get("diagnosis_only"):
+            from src.models.ai_batch import READ_ONLY_TOOLS
+            if name not in READ_ONLY_TOOLS:
+                raise ValueError("连续诊断仅定位与建议，未执行修改或临时Debug")
+        if context.get("batch_read_only"):
+            from src.models.ai_batch import READ_ONLY_TOOLS
+            if name not in READ_ONLY_TOOLS:
+                raise ValueError("本批量阶段仅允许只读检查，未执行修改")
+        if context.get("batch_device_only") and name in ("run_local_command", "write_local_file"):
+            raise ValueError("本机共享修改须作为独立本机步骤执行，不逐台重复")
         self._eligible(identifier, stop)
+        scope = session_scope(self._context(identifier))
+        if scope in ("general", "batch") or (scope == "pc" and name not in (
+                "run_local_command", "read_local_file", "write_local_file")):
+            raise ValueError("该工具不属于当前会话范围，未执行")
+        if target is None and name in ("run_local_command", "write_local_file") and self.owner.scope_busy(None):
+            raise ValueError("设备或共享资源正在使用，跳过本机通用修改操作")
         permission = self._permission(identifier)
         if name in DEVICE_TOOLS and self.owner.diagnostic.busy(target):
             raise ValueError("目标正在执行设备操作，不抢占连接")
@@ -237,6 +264,8 @@ class AiActionService:
                 self.store.change_action(action["id"], expected, "executing", started=timestamp())
             if name in DEVICE_TOOLS and self.owner.diagnostic.busy(target):
                 raise ValueError("目标当前忙碌，本次未下发")
+            if target is None and name in ("run_local_command", "write_local_file") and self.owner.scope_busy(None):
+                raise ValueError("设备或共享资源当前忙碌，本机操作未下发")
             if self.contexts is not None:
                 self.contexts.before_dispatch(identifier, name, target, stop)
             self.owner.emit("实际执行操作：" + self.redactor.dumps(action))

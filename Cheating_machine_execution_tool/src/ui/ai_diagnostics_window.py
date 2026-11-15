@@ -18,13 +18,15 @@ from src.ui.ai_reports_window import AiReportsWindow
 
 
 class AiDiagnosticsWindow:
-    def __init__(self, master, service, targets_provider, background=MODULE_BACKGROUND, foreground="#17202a", conversation=None):
+    def __init__(self, master, service, targets_provider, background=MODULE_BACKGROUND, foreground="#17202a", conversation=None,
+                 *, remote_tab_factory=None):
         self.master, self.service, self.targets_provider = master, service, targets_provider
         self.background_color, self.foreground_color = background, foreground
         self.window = None
         self.profile = ProviderProfile()
         self.case_report_id = ""
         self.selected_case = None
+        self.case_version = None
         self.background = set()
         self.background_stops = set()
         self.events = queue.Queue()
@@ -33,12 +35,19 @@ class AiDiagnosticsWindow:
         self.new_profile_mode = True
         self.conversation = conversation
         self.chat_panel = None
+        self.remote_tab_factory = remote_tab_factory
+        self.remote_panel = None
 
     def open(self):
         if self.window is not None and self.window.winfo_exists():
+            self._reload_cases()
             self.window.deiconify()
             self.window.lift()
+            self._remote_tab_changed()
             return
+        if self.remote_panel is not None:
+            self.remote_panel.dispose()
+            self.remote_panel = None
         self.window = tk.Toplevel(self.master)
         self.window.configure(background=self.background_color)
         self.window.title("AI 诊断助手")
@@ -52,6 +61,8 @@ class AiDiagnosticsWindow:
         self.workspace, self.cases_tab = workspace, cases
         for frame, title in ((workspace, "排障工作台"), (connection, "模型接入"), (cases, "已确认案例")):
             book.add(frame, text=title)
+        self.remote_tab = ttk.Frame(book, padding=10)
+        book.add(self.remote_tab, text="远程管理")
         self.monitor_status = tk.StringVar(self.window)
         self.report_status = tk.StringVar(self.window)
         self.monitor_panel = AiMonitorWindow(self)
@@ -64,7 +75,6 @@ class AiDiagnosticsWindow:
         self.monitor_panel.update_status()
         ttk.Button(toolbar, text="诊断报告", command=self.reports_panel.open).pack(side="left", padx=4)
         ttk.Label(toolbar, textvariable=self.report_status).pack(side="left", padx=8)
-        ttk.Button(toolbar, text="刷新目标", command=self.refresh_targets).pack(side="right")
         if getattr(self, "project_isolated", False):
             menu = tk.Menu(toolbar, tearoff=False)
             from src.ui.ai_legacy_history import open_legacy_history
@@ -85,12 +95,30 @@ class AiDiagnosticsWindow:
         self.refresh_targets()
         self.reports_panel.reload()
         self._reload_cases()
+        book.bind("<<NotebookTabChanged>>", self._case_tab_changed, add="+")
+        book.bind("<<NotebookTabChanged>>", self._remote_tab_changed, add="+")
         if self._poll_id is None:
             self._poll()
 
     def _apply_theme(self):
         """窗口局部样式与测试项配置共用配色，不修改全局主题。"""
         apply_module_theme(self.window, self.background_color)
+
+    def _remote_tab_changed(self, _event=None):
+        if self.book.select() == str(self.remote_tab) and self.window.state() != "withdrawn":
+            if self.remote_panel is None and self.remote_tab_factory is not None:
+                self.remote_panel = self.remote_tab_factory(self.remote_tab)
+            if self.remote_panel is not None:
+                self.remote_panel.activate()
+        elif self.remote_panel is not None:
+            self.remote_panel.suspend()
+
+    def open_remote(self, platform):
+        self.open()
+        self.book.select(self.remote_tab)
+        self._remote_tab_changed()
+        if self.remote_panel is not None:
+            self.remote_panel.select_platform(platform)
 
     def _connection_tab(self, parent):
         toolbar = ttk.Frame(parent)
@@ -349,7 +377,7 @@ class AiDiagnosticsWindow:
         self.chat_panel.selected = identifier
         self.chat_panel.revision = None
         self.chat_panel.refresh()
-        # 显式选择新会话的目标；历史目标不套用之前的目标下拉选择。
+        # 显式选中报告会话，保留其历史目标快照。
         self.chat_panel.choose()
         self.book.select(self.workspace)
         self.window.deiconify()
@@ -376,11 +404,19 @@ class AiDiagnosticsWindow:
         for row in self.cases.values():
             self.case_list.insert("", "end", iid=str(row["id"]), values=(row["id"], row["title"], "是" if row["active"] else "否"))
 
+    def _case_tab_changed(self, _event=None):
+        if self.book.select() == str(self.cases_tab):
+            try:
+                self._reload_cases()
+            except Exception as exc:
+                self._error(exc)
+
     def _choose_case(self, _event=None):
         selected = self.case_list.selection()
         if selected:
             self.selected_case = int(selected[0])
             row = self.cases[self.selected_case]
+            self.case_version = row.get("version")
             self.case_report_id = row["report_id"] or ""
             self.case_source.set("来源报告：" + self.case_report_id if self.case_report_id else "未关联报告")
             for key, variable in self.case_fields.items():
@@ -389,6 +425,7 @@ class AiDiagnosticsWindow:
     def _new_case(self):
         self.case_list.selection_remove(*self.case_list.selection())
         self.selected_case = None
+        self.case_version = None
         self.case_report_id = ""
         self.case_source.set("未关联报告")
         for variable in self.case_fields.values():
@@ -396,23 +433,36 @@ class AiDiagnosticsWindow:
 
     def _confirm_case(self):
         try:
-            if not messagebox.askyesno("人工确认案例", "确认这些字段是实际核实的原因、处理和复测结果，而非AI猜测？", parent=self.window):
+            if not messagebox.askyesno("人工确认案例", "确认这些字段是实际核实的原因、处理和复测结果，而非AI猜测？\n保存至本机共用案例库，所有项目可用。", parent=self.window):
                 return
-            self.service.confirm_case(self.case_report_id, **{k: v.get() for k, v in self.case_fields.items()}, case_id=self.selected_case)
+            self.selected_case = self.service.confirm_case(self.case_report_id, **{k: v.get() for k, v in self.case_fields.items()},
+                                                           case_id=self.selected_case, expected_version=self.case_version)
             self._reload_cases()
+            if self.selected_case in self.cases:
+                self.case_list.selection_set(str(self.selected_case))
+                self._choose_case()
         except Exception as exc:
             self._error(exc)
 
     def _toggle_case(self):
         if self.selected_case is not None:
-            self.service.store.update_case_state(self.selected_case)
-            self._reload_cases()
+            try:
+                self.service.update_case_state(self.selected_case, expected_version=self.case_version)
+                self._reload_cases()
+                if self.selected_case in self.cases:
+                    self.case_list.selection_set(str(self.selected_case))
+                    self._choose_case()
+            except Exception as exc:
+                self._error(exc)
 
     def _delete_case(self):
-        if self.selected_case is not None and messagebox.askyesno("删除案例", "删除该案例及修订记录？", parent=self.window):
-            self.service.store.update_case_state(self.selected_case, delete=True)
-            self.selected_case = None
-            self._reload_cases()
+        if self.selected_case is not None and messagebox.askyesno("删除案例", "删除该共用案例及修订记录？此操作对本机所有项目生效。", parent=self.window):
+            try:
+                self.service.update_case_state(self.selected_case, delete=True, expected_version=self.case_version)
+                self._new_case()
+                self._reload_cases()
+            except Exception as exc:
+                self._error(exc)
 
     def _poll(self):
         self._poll_id = None
@@ -468,11 +518,15 @@ class AiDiagnosticsWindow:
             self._poll_id = self.master.after(100, self._poll)
 
     def hide(self):
+        if self.remote_panel is not None:
+            self.remote_panel.suspend(cancel_binding=True)
         for panel in (self.monitor_panel, self.reports_panel):
             if panel.window is not None and panel.window.winfo_exists():
                 panel.window.withdraw()
         self.window.withdraw()
 
     def begin_close(self):
+        if self.remote_panel is not None:
+            self.remote_panel.dispose()
         for stop in tuple(self.background_stops):
             stop.set()

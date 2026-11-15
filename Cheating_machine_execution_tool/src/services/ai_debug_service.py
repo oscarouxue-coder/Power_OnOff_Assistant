@@ -51,6 +51,7 @@ class DiagnosticToolExecutor:
         self.transport = None
         self.allow_read_fallback = True
         self.used = 0
+        self.max_operations = 10
         self.recovery_state = "无临时修改"
         self.network_summary = None
         self._connection_error = None
@@ -85,8 +86,8 @@ class DiagnosticToolExecutor:
         if self.stop.is_set():
             raise InterruptedError("诊断已取消")
         self.used += 1
-        if self.used > 10:
-            return {"error": "已达到10次采集上限"}
+        if self.used > self.max_operations:
+            return {"error": f"已达到{self.max_operations}次采集上限"}
         allowed = {item["name"]: item for item in tool_schemas(deep)}
         try:
             params = json.loads(arguments) if isinstance(arguments, str) else arguments

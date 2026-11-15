@@ -14,9 +14,13 @@ from PyInstaller.archive.readers import CArchiveReader
 
 
 REQUIRED_MODULES = (
+    "src.services.ai_case_store",
     "line_check_assistant.app",
     "src.ui.application_icon",
     "src.services.dingtalk_remote_service", "src.core.dingtalk_stream",
+    "src.services.feishu_remote_service", "src.services.feishu_notifications",
+    "src.ui.feishu_setup_window", "src.core.feishu_stream", "src.core.feishu_client",
+    "lark_oapi.ws.client", "lark_oapi.ws.pb.pbbp2_pb2", "httpx", "Crypto.Cipher.AES",
     "websockets.sync.client",
     "src.services.legacy_power_test_service",
     "src.services.power_test_resume_service",
@@ -35,6 +39,7 @@ REQUIRED_MODULES = (
     "serial", "serial.serialwin32", "tftpy", "openpyxl", "xlrd", "tkinter",
 )
 REQUIRED_FILES = (
+    "CONFIRMED_CASES.json",
     "assets/icons/line_check_assistant_network_topology_v1.ico",
     "tcl/init.tcl", "tk/tk.tcl", "_tcl_data/init.tcl", "_tk_data/tk.tcl",
     "VERSION_INFO.txt", "BUILD_INFO.txt", "python39.dll", "_socket.pyd",
@@ -94,6 +99,7 @@ def inspect_portable(exe: Path, portable_zip: Path) -> dict:
         root + name for name in (
             "LineCheckAssistant.exe", "LineCheckAssistant.exe.sha256.txt",
             "VERSION_INFO.txt", "BUILD_INFO.txt", "PORTABLE_README.txt", "THIRD_PARTY_NOTICES.md",
+            "CONFIRMED_CASES.json",
         )
     }
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -119,14 +125,32 @@ def inspect_portable(exe: Path, portable_zip: Path) -> dict:
     return {"zip_bytes": portable_zip.stat().st_size, "zip_sha256": actual, "zip_crc": "passed"}
 
 
+def inspect_case_snapshot(exe: Path, portable_zip: Path, snapshot: Path) -> dict:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from src.services.ai_case_store import SNAPSHOT_NAME, validate_snapshot
+    expected = snapshot.read_bytes()
+    payload = validate_snapshot(json.loads(expected.decode("utf-8")))
+    archive = CArchiveReader(str(exe))
+    if archive.extract(SNAPSHOT_NAME) != expected:
+        raise ValueError("Embedded case snapshot differs from the build snapshot")
+    with zipfile.ZipFile(portable_zip) as bundle:
+        if bundle.read("LineCheckAssistant_portable/" + SNAPSHOT_NAME) != expected:
+            raise ValueError("Portable case snapshot differs from the build snapshot")
+    return {"case_count": len(payload["cases"]),
+            "case_revision_count": sum(len(row["revisions"]) for row in payload["cases"]),
+            "case_snapshot_sha256": hashlib.sha256(expected).hexdigest()}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exe", required=True, type=Path)
     parser.add_argument("--zip", required=True, type=Path)
+    parser.add_argument("--case-snapshot", required=True, type=Path)
     parser.add_argument("--exclude", action="append", default=[])
     args = parser.parse_args()
     report = inspect_archive(args.exe, args.exclude)
     report.update(inspect_portable(args.exe, args.zip))
+    report.update(inspect_case_snapshot(args.exe, args.zip, args.case_snapshot))
     report.update({
         "python": platform.python_version(),
         "architecture": platform.machine(),

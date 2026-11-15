@@ -223,6 +223,7 @@ class UsageConversationTests(unittest.TestCase):
             self.send()
             dialog.open()
             panel = dialog.chat_panel
+            panel.selected = self.id
             dialog.window.geometry("940x660")
             for theme in ("vista", "clam"):
                 with self.subTest(theme=theme):

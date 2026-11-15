@@ -15,6 +15,7 @@ from src.models.ai_diagnostics import DiagnosticEvent, DiagnosticJob, MonitorSta
 from src.services.ai_debug_service import DiagnosticToolExecutor, tool_schemas
 from src.services.ai_event_adapter import PowerDiagnosticEvents
 from src.services.ai_store import DiagnosticStore, profile_fingerprint
+from src.services.ai_case_store import open_shared_cases
 from src.services.ai_trigger_service import DiagnosticTrigger
 from src.utils.ai_redaction import DiagnosticRedactor
 from src.services.serial_diagnostic_receiver import SerialDiagnosticReceiver
@@ -44,7 +45,9 @@ class AiDiagnosticService:
                  client_factory=DiagnosticModelClient, tool_factory=DiagnosticToolExecutor,
                  manual_path=None):
         self.emit_sink = emit
-        self.store = store or DiagnosticStore()
+        self.store = store if store is not None else DiagnosticStore(case_store=open_shared_cases(emit))
+        if self.store.migrate_full_access_defaults():
+            emit("[AI权限] 本地工作台、自动监控及飞书旧权限已一次性迁移为完全访问；后续手动选择继续保留，旧操作不重放")
         self.redactor = DiagnosticRedactor()
         self.trigger = DiagnosticTrigger()
         self.serial_acquire, self.serial_read, self.busy = serial_acquire, serial_read, busy
@@ -457,11 +460,24 @@ class AiDiagnosticService:
             self.emit(f"[AI报告] 删除失败，本次全部未删除：{exc}")
             raise
 
-    def confirm_case(self, report_id, title, cause, solution, verification, scope, case_id=None):
+    def confirm_case(self, report_id, title, cause, solution, verification, scope, case_id=None, expected_version=None):
         values = [self.redactor.text(value) for value in (title, cause, solution, verification, scope)]
-        identifier = self.store.confirm_case(report_id, *values, case_id=case_id)
+        try:
+            identifier = self.store.confirm_case(report_id, *values, case_id=case_id, expected_version=expected_version)
+        except Exception:
+            self.emit("[AI案例] 人工确认/修订失败，请检查输入或刷新案例列表")
+            raise
         self.emit(f"[AI案例] 已人工确认/修订案例#{identifier}")
         return identifier
+
+    def update_case_state(self, case_id, delete=False, expected_version=None):
+        action = "删除" if delete else "切换启用状态"
+        try:
+            self.store.update_case_state(case_id, delete=delete, expected_version=expected_version)
+        except Exception:
+            self.emit(f"[AI案例] {action}失败，案例#{case_id}；请刷新后重试")
+            raise
+        self.emit(f"[AI案例] {action}成功，案例#{case_id}")
 
     def begin_close(self):
         if self.conversation is not None:

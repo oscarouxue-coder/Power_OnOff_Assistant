@@ -1,12 +1,10 @@
 """对话排障页：收集输入、显示持久化会话及service异步进度。"""
-from dataclasses import asdict
 from datetime import datetime
 import queue
+import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from src.services.ai_store import profile_fingerprint
-from src.models.ai_diagnostics import ProviderProfile
 from src.ui.module_theme import apply_module_theme
 from src.ui.ai_context_status import AiContextStatus
 from src.ui.ai_action_approval import AiActionApproval
@@ -15,6 +13,8 @@ from src.ui.ai_chat_status import AiChatStatus
 from src.ui.ai_chat_markdown import configure_markdown_tags, insert_markdown
 from src.services.ai_record_titles import AiRecordTitles
 from src.ui.ai_record_presentation import AiRecordActions, record_labels
+from src.models.ai_session_scope import target_label
+from src.ui.ai_diagnostic_task_control import DiagnosticTaskControl
 
 
 CHAT_FONT = "Microsoft YaHei UI"
@@ -46,6 +46,11 @@ class AiChatPanel:
         self.ids = []
         self.targets = ()
         self.session_manager = None
+        self.route_results = queue.Queue()
+        self.routing = False
+        self.route_generation = 0
+        self.active_route = None
+        self.local_echoes = []
         self.record_titles = AiRecordTitles(service.store, service.emit)
         self.record_entries = {}
         row = ttk.Frame(parent)
@@ -56,14 +61,12 @@ class AiChatPanel:
         self.sessions.bind("<<ComboboxSelected>>", self.choose)
         self.record_actions = AiRecordActions(self.sessions, "chat", self.record_titles,
             lambda: self.record_entries.get(self.selected), self.names_changed, self.owner.background_color)
-        ttk.Button(row, text="刷新", command=self.refresh).pack(side="left")
+        ttk.Button(row, text="刷新会话", command=self.refresh).pack(side="left")
         ttk.Button(row, text="管理会话", command=self.manage_sessions).pack(side="left", padx=(6, 0))
         row = ttk.Frame(parent)
         row.pack(fill="x", pady=5)
-        ttk.Label(row, text="目标").pack(side="left")
-        self.target_choice = ttk.Combobox(row, state="readonly", width=24)
-        self.target_choice.pack(side="left", padx=6)
-        ttk.Button(row, text="新会话", command=self.new).pack(side="left", padx=3)
+        self.current_target = ttk.Label(row, text="普通问答")
+        self.current_target.pack(side="left", padx=6)
         self.session_status = AiChatStatus(row, background=self.owner.background_color, font_family=CHAT_FONT)
         self.session_status.pack(side="left", fill="x", expand=True, padx=(8, 0))
         self.status_output = self.session_status.output
@@ -91,6 +94,7 @@ class AiChatPanel:
         row.pack(fill="x")
         self.send_button = ttk.Button(row, text="发送 / 回答问题", command=self.send)
         self.send_button.pack(side="left")
+        self.task_control = DiagnosticTaskControl(self)
         for title, action in (("停止本轮排查", self.stop), ("导入文本日志", self.import_text)):
             ttk.Button(row, text=title, command=action).pack(side="left", padx=5)
         self.action_approval = AiActionApproval(row, self.service, self.owner.background_color)
@@ -117,25 +121,13 @@ class AiChatPanel:
         self.owner._error(exc)
 
     def refresh_targets(self):
-        number = self.targets[self.target_choice.current()].channel if 0 <= self.target_choice.current() < len(self.targets) else None
         self.targets = tuple(self.owner.targets)
-        self.target_choice["values"] = [f"通道{t.channel} | {t.vlan} | {t.port}" for t in self.targets]
-        if number is not None:
-            index = next((i for i, t in enumerate(self.targets) if t.channel == number), -1)
-        elif self.selected:
-            snapshot = self.service.store.chat(self.selected)["target"]
-            index = next((i for i, t in enumerate(self.targets) if asdict(t) == snapshot), -1)
-        else:
-            index = 0 if self.targets else -1
-        if index >= 0:
-            self.target_choice.current(index)
-        else:
-            self.target_choice.set("历史目标（仅分析留存材料）")
 
     def refresh(self):
-        rows = self.service.store.chats()
+        rows = [row for row in self.service.store.chats() if not row.get("batch_parent")]
         self.ids = [row["id"] for row in rows]
-        if self.selected and self.selected not in self.ids:
+        removed = bool(self.selected and self.selected not in self.ids)
+        if removed:
             self.selected = ""
             self.revision = None
             self.input.delete("1.0", "end")
@@ -145,7 +137,11 @@ class AiChatPanel:
         self.sessions["values"] = record_labels(entries)
         if self.selected in self.ids:
             self.sessions.current(self.ids.index(self.selected))
-        elif self.ids:
+        elif not self.routing and self.service.router.current() in self.ids:
+            self.sessions.current(self.ids.index(self.service.router.current()))
+            self.choose()
+            return
+        elif removed and self.ids:
             self.sessions.current(0)
             self.choose()
             return
@@ -170,25 +166,21 @@ class AiChatPanel:
 
     def choose(self, event=None):
         if 0 <= self.sessions.current() < len(self.ids):
+            self.route_generation += 1
             self.selected = self.ids[self.sessions.current()]
-            session = self.service.store.chat(self.selected)
-            index = next((i for i, t in enumerate(self.targets) if asdict(t) == session["target"]), -1)
-            if index >= 0:
-                self.target_choice.current(index)
-            else:
-                self.target_choice.set("历史目标（仅分析留存材料）")
+            self.service.router.select(self.selected)
             self.revision = None
             self.render()
 
-    def new(self, report=None):
+    def new(self, report=None, target=None):
+        """兼容调用入口；设备必须显式传入目标，界面不再默认选第一通道。"""
         try:
-            number = self.targets[self.target_choice.current()].channel if 0 <= self.target_choice.current() < len(self.targets) else None
             self.owner.refresh_targets()
-            index = next((i for i, t in enumerate(self.targets) if t.channel == number), -1)
-            if index < 0:
-                raise ValueError("请选择已配置目标；刷新后目标必须仍存在")
-            self.target_choice.current(index)
-            self.selected = self.service.create_session(self.targets[index], self.owner.service.profile, report=report)
+            if target is not None and target not in self.targets:
+                raise ValueError("目标已变化或未配置")
+            self.selected = self.service.create_session(target, self.owner.service.profile, report=report,
+                scope="device" if target else "general")
+            self.service.router.select(self.selected)
             self.revision = None
             self.refresh()
             return self.selected
@@ -207,29 +199,88 @@ class AiChatPanel:
 
     def send(self):
         try:
-            if not self.selected and not self.new():
+            if self.routing:
                 return "break"
-            self.owner.refresh_targets()
-            session = self.service.store.chat(self.selected)
-            current = self.owner.service.profile
-            index = self.target_choice.current()
-            if (not current or profile_fingerprint(current) != profile_fingerprint(
-                    ProviderProfile(**session["profile"]))
-                    or (0 <= index < len(self.targets) and asdict(self.targets[index]) != session["target"])):
-                if not self.new():
-                    return "break"
             text = self.input.get("1.0", "end-1c")
-            if self.service.store.chat(self.selected).get("pending"):
-                self.service.answer_question(self.selected, text)
-            else:
-                self.service.send(self.selected, text)
+            if not text.strip():
+                raise ValueError("请输入问题或切换目标的要求")
+            if len(text.strip()) > 32768:
+                raise ValueError("请输入1至32768字符；较长日志请导入文本材料")
+            profile = self.owner.service.profile
+            if not profile or not profile.model.strip():
+                raise ValueError("请先保存并选择模型配置")
+            self.route_generation += 1
+            generation = self.route_generation
+            message = dict(role="user", kind="text", text=self.service.redactor.text(text),
+                           created=datetime.now().astimezone().isoformat(), local_echo=generation)
+            echo = dict(generation=generation, origin=self.selected, original=text,
+                        message=message, binding=None, error=None, diagnosis_only=self.task_control.enabled)
+            # 重试替换同一条失败回显；界面投影不提前写入未知目标的会话。
+            replaced = [item for item in self.local_echoes
+                        if item["origin"] == self.selected and item["original"] == text]
+            self.local_echoes = [item for item in self.local_echoes if item not in replaced]
+            self.local_echoes.append(echo)
+            self.active_route = generation
+            self.routing = True
             self.input.delete("1.0", "end")
-            self.render()
+            self.send_button.configure(state="disabled")
+            # 只追加本条，避免发送回调查询数据库或重绘整段历史。
+            self.output.configure(state="normal")
+            for item in replaced:
+                ranges = self.output.tag_ranges("local_echo_" + str(item["generation"]))
+                for index in range(len(ranges) - 2, -1, -2):
+                    self.output.delete(ranges[index], ranges[index + 1])
+            self._insert_message(message)
+            self.output.configure(state="disabled")
+            self.output.see("end")
+            # 先让Tk绘制回显，再在主线程收集目标、启动后台识别。
+            self.parent.after_idle(lambda: self.parent.after(0, self._start_route, echo, profile))
         except Exception as exc:
             self.error(exc)
         return "break"
 
+    def _start_route(self, echo, profile):
+        generation = echo["generation"]
+        try:
+            if generation != self.route_generation:
+                raise InterruptedError("本条发送已取消")
+            self.owner.refresh_targets()
+
+            def selected(identifier):
+                # 此回调在后台运行；在用户消息入库前记录边界，不访问Tk。
+                count = sum(m["role"] == "user" for m in self.service.store.chat_items(identifier))
+                self.route_results.put((generation, "selected", (identifier, count), None))
+
+            def run():
+                try:
+                    result = self.service.router.send(echo["original"], profile, selected=echo["origin"],
+                        guard=lambda: generation == self.route_generation, on_selected=selected,
+                        diagnosis_only=echo.get("diagnosis_only", False))
+                    self.route_results.put((generation, "finished", result, None))
+                except Exception as exc:
+                    self.route_results.put((generation, "finished", None, exc))
+            threading.Thread(target=run, name="ai-local-session-route", daemon=True).start()
+        except Exception as exc:
+            self.route_results.put((generation, "finished", None, exc))
+
+    def _echo_messages(self, messages):
+        projection = []
+        for echo in self.local_echoes:
+            if echo["origin"] != self.selected:
+                continue
+            binding = echo["binding"]
+            persisted = echo.get("persisted", binding is not None and binding[0] == self.selected
+                                 and sum(m["role"] == "user" for m in messages) > binding[1])
+            if not persisted:
+                projection.append(echo["message"])
+            if echo["error"]:
+                projection.append(dict(role="system", kind="error", text=echo["error"],
+                                       created=echo["message"]["created"], local_echo=echo["generation"]))
+        return projection
+
     def stop(self):
+        self.route_generation += 1
+        self.service.router.cancel_source()
         if self.selected:
             self.service.stop(self.selected)
 
@@ -265,28 +316,27 @@ class AiChatPanel:
         self.session_status.show(self.selected, message, created)
 
     def render(self):
+        self.current_target.configure(text=target_label(self.service.store.chat(self.selected)) if self.selected else "普通问答")
         self.action_approval.show(self.selected)
         self.permission_control.show(self.selected)
         if not self.selected:
             self.context_status.show()
             self._show_status()
-            self.revision = None
-            self.output.configure(state="normal")
-            self.output.delete("1.0", "end")
-            self.output.configure(state="disabled")
-            self.send_button.configure(state="normal")
-            return
-        # 用量和系统状态独立刷新；不加入正文revision，避免破坏阅读位置和选区。
-        self.context_status.show(self.service.context_status(self.selected))
-        messages = self.service.store.chat_items(self.selected)
-        latest_status = next((message for message in reversed(messages) if message["role"] == "system"
-                              and not (message.get("kind") == "context"
-                                       and message["text"].startswith("上下文容量："))), None)
-        self._show_status(latest_status)
-        messages = [message for message in messages if message["role"] != "system"]
-        with self.service.lock:
-            running = self.selected in self.service.running
-        self.send_button.configure(state="disabled" if running else "normal")
+            messages = []
+        else:
+            # 用量和系统状态独立刷新；不加入正文revision，避免破坏阅读位置和选区。
+            self.context_status.show(self.service.context_status(self.selected))
+            messages = self.service.store.chat_items(self.selected)
+            latest_status = next((message for message in reversed(messages) if message["role"] == "system"
+                                  and not (message.get("kind") == "context"
+                                           and message["text"].startswith("上下文容量："))), None)
+            self._show_status(latest_status)
+        echoes = self._echo_messages(messages)
+        messages = [message for message in messages if message["role"] != "system"] + echoes
+        draft = self.service.draft_message(self.selected) if self.selected else None
+        if isinstance(draft, dict) and isinstance(draft.get("text"), str) and draft["text"]:
+            messages.append(draft)
+        self.send_button.configure(state="disabled" if self.routing else "normal", text=self.task_control.label())
         revision = (self.selected, tuple((m["role"], m.get("kind", "text"), m["created"], m["text"])
                                          for m in messages))
         if revision == self.revision:
@@ -298,20 +348,8 @@ class AiChatPanel:
         selection = tuple(str(index) for index in self.output.tag_ranges("sel")) if same_session else ()
         self.output.configure(state="normal")
         self.output.delete("1.0", "end")
-        labels = {"user": "你", "assistant": "AI", "system": "状态"}
         for message in messages:
-            role = message["role"]
-            kind = message.get("kind", "text")
-            style = kind if kind in ("question", "error") else (role if role in MESSAGE_COLORS else "system")
-            start = self.output.index("end-1c")
-            self.output.insert("end", f"{labels.get(role, role)} · ", ("header_" + style,))
-            self.output.insert("end", format_chat_time(message["created"]) + "\n", ("message_time",))
-            if role == "assistant":
-                insert_markdown(self.output, message["text"], "body_" + style)
-            else:
-                self.output.insert("end", message["text"] + "\n", ("body_" + style,))
-            self.output.tag_add("message_" + style, start, "end-1c")
-            self.output.insert("end", "\n", ("message_gap",))
+            self._insert_message(message)
         if len(selection) == 2:
             self.output.tag_add("sel", *selection)
         self.output.configure(state="disabled")
@@ -320,7 +358,55 @@ class AiChatPanel:
         else:
             self.output.yview(top_index)
 
+    def _insert_message(self, message):
+        labels = {"user": "你", "assistant": "AI", "system": "状态"}
+        role = message["role"]
+        kind = message.get("kind", "text")
+        style = kind if kind in ("question", "error") else (role if role in MESSAGE_COLORS else "system")
+        start = self.output.index("end-1c")
+        self.output.insert("end", f"{labels.get(role, role)} · ", ("header_" + style,))
+        self.output.insert("end", format_chat_time(message["created"]) + "\n", ("message_time",))
+        if role == "assistant":
+            insert_markdown(self.output, message["text"], "body_" + style)
+        else:
+            self.output.insert("end", message["text"] + "\n", ("body_" + style,))
+        self.output.tag_add("message_" + style, start, "end-1c")
+        self.output.insert("end", "\n", ("message_gap",))
+        if "local_echo" in message:
+            self.output.tag_add("local_echo_" + str(message["local_echo"]), start, "end-1c")
+
     def poll(self):
+        while True:
+            try:
+                generation, kind, result, error = self.route_results.get_nowait()
+            except queue.Empty:
+                break
+            if generation != self.active_route:
+                continue
+            echo = next(item for item in self.local_echoes if item["generation"] == generation)
+            if kind == "selected":
+                echo["binding"] = result
+                continue
+            self.active_route = None
+            self.routing = False
+            if error is not None:
+                # 固定失败时的入库结果；后续其它问题不能让失败原文误消失。
+                binding = echo["binding"]
+                try:
+                    echo["persisted"] = bool(binding and sum(m["role"] == "user" for m in
+                        self.service.store.chat_items(binding[0])) > binding[1])
+                except ValueError:
+                    echo["persisted"] = False
+                echo["error"] = "发送未完成：" + self.service.redactor.text(str(error))
+                if self.selected == echo["origin"] and not self.input.get("1.0", "end-1c"):
+                    self.input.insert("1.0", echo["original"])
+                if generation == self.route_generation and not isinstance(error, InterruptedError):
+                    self.error(error)
+            else:
+                self.local_echoes.remove(echo)
+                if generation == self.route_generation:
+                    self.selected = result["identifier"]
+            self.refresh()
         changed = False
         for _ in range(80):
             try:

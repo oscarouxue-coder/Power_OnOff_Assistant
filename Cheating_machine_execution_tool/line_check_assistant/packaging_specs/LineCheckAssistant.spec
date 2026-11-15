@@ -2,6 +2,7 @@
 # Standard entry: build_line_check_assistant.ps1 (environment + baseline + ZIP).
 from datetime import date
 from pathlib import Path
+import os
 import sys
 from PyInstaller.utils.hooks import collect_submodules
 
@@ -10,6 +11,10 @@ sys.path.insert(0, str(project_root))
 from scripts.check_build_environment import EXCLUDED_MODULES, check_environment
 
 check_environment(project_root)
+case_snapshot = Path(os.environ['LINECHECK_CASE_SNAPSHOT'])
+from src.services.ai_case_store import validate_snapshot
+import json
+validate_snapshot(json.loads(case_snapshot.read_text(encoding='utf-8')))
 build_info = Path(workpath) / "BUILD_INFO.txt"
 build_info.parent.mkdir(parents=True, exist_ok=True)
 build_info.write_text(
@@ -29,6 +34,7 @@ hiddenimports = ['requests_toolbelt.adapters.source', 'paramiko', 'ping3', 'pywi
 hiddenimports += collect_submodules('tftpy')
 hiddenimports += collect_submodules('openpyxl')
 hiddenimports += collect_submodules('xlrd')
+hiddenimports += ['lark_oapi.ws.client', 'lark_oapi.api.im.v1', 'httpcore._backends.sync']
 
 
 block_cipher = None
@@ -38,7 +44,7 @@ a = Analysis(
     [str(project_root / 'run_line_check_assistant.py')],
     pathex=[str(project_root), str(project_root / 'Auto_power_on_off_tool')],
     binaries=[],
-    datas=[(str(project_root / 'line_check_assistant/packaging_assets/VERSION_INFO.txt'), '.'), (str(build_info), '.'), (str(project_root / 'line_check_assistant_README.md'), '.'), (str(project_root / 'assets/icons/line_check_assistant_network_topology_v1.ico'), 'assets/icons')],
+    datas=[(str(project_root / 'line_check_assistant/packaging_assets/VERSION_INFO.txt'), '.'), (str(build_info), '.'), (str(case_snapshot), '.'), (str(project_root / 'line_check_assistant_README.md'), '.'), (str(project_root / 'assets/icons/line_check_assistant_network_topology_v1.ico'), 'assets/icons')],
     hiddenimports=hiddenimports,
     hookspath=[str(project_root / 'line_check_assistant/packaging_hooks')],
     hooksconfig={},

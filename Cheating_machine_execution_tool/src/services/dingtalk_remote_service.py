@@ -1,5 +1,7 @@
 """指定群的文字会话桥；复用现有排障/授权链路，不从模型文字批准操作。"""
 from dataclasses import asdict
+from src.services.ai_session_router import dispatch_remote
+from src.models.ai_session_scope import target_channel, target_label, session_scope
 import configparser
 import hashlib
 import json
@@ -53,6 +55,7 @@ class DingTalkRemoteService:
         self.sessions.update(s["id"] for s in self.store.chats() if (s.get("source") or {}).get("kind") == "dingtalk")
         self.local_only_approvals = set()
         self.stop_event = threading.Event()
+        self.routing_generation = 0
         self.outbox = queue.Queue(maxsize=128)
         self.updates = conversation.subscribe()
         self.worker = threading.Thread(target=self._loop, name="dingtalk-ai", daemon=True)
@@ -125,7 +128,9 @@ class DingTalkRemoteService:
         self.emit("指定群绑定成功，等待本地启用确认")
 
     def enable(self, enabled):
+        self.conversation.router.cancel_platform("dingtalk")
         with self.lock:
+            self.routing_generation += 1
             config = dict(self.config, enabled=bool(enabled))
             if enabled:
                 self.config_store.save(config)
@@ -221,6 +226,14 @@ class DingTalkRemoteService:
         return identifier
 
     def _existing(self, message, channel):
+        source = dict(kind="dingtalk", robot=message.robot, corp=message.corp, group=message.group, sender=message.sender)
+        active = self.conversation.router.current(source)
+        if active:
+            try:
+                self.store.chat(active)
+                return active
+            except ValueError:
+                pass
         key = json.dumps((message.robot, *self.identity(message), channel), ensure_ascii=False)
         route = self.mailbox.routes().get(key)
         if not route:
@@ -242,23 +255,18 @@ class DingTalkRemoteService:
         if kind in ("批准", "拒绝"):
             self._decide(message, value, kind == "批准")
             return
-        if kind == "通道":
-            channel, text = value
-            if channel not in self.conversation.diagnostic.targets:
-                raise ValueError("当前项目没有该有效目标通道")
-            self._selected(message, channel)
-            if not text:
-                self.reply(message, f"已切换到通道{channel}，后续问题沿用此通道", channel)
-                return
-            kind, value = "问题", text
-        if channel is None:
-            targets = tuple(self.conversation.diagnostic.targets)
-            if len(targets) != 1:
-                raise ValueError("请先指定通道，例如：通道3 检查断网原因")
-            channel = targets[0]
-            self._selected(message, channel)
+        if kind in ("问题", "通道", "新会话"):
+            generation = self.routing_generation
+            def allowed():
+                with self.lock:
+                    return (not self.stop_event.is_set() and generation == self.routing_generation
+                        and self.config["enabled"] and message.group == self.config["group"]
+                        and message.corp == self.config["corp"] and message.robot == self.config["robot_code"])
+            return dispatch_remote(self, message, kind, value, "dingtalk", allowed)
         if kind in ("停止", "状态"):
             identifier = self._existing(message, channel)
+            session = self.store.chat(identifier)
+            channel = target_channel(session) if session.get("target") else target_label(session)
             if kind == "停止":
                 self.conversation.stop(identifier)
                 self._forget_tokens(identifier)
@@ -268,21 +276,11 @@ class DingTalkRemoteService:
                 permission = self.conversation.permissions.status(identifier)
                 self.reply(message, session["status"] + "；权限：" + permission["label"], channel)
             return
-        identifier = self._session(message, channel, fresh=kind == "新会话")
-        if kind == "新会话":
-            self.reply(message, "已新建会话，默认帮我批准", channel)
-        else:
-            if identifier in self.conversation.running:
-                raise ValueError("本轮仍在排查，请等待或发送“停止”；本条问题未排队")
-            if self.store.chat(identifier).get("pending"):
-                self.conversation.answer_question(identifier, value)
-            else:
-                self.conversation.send(identifier, value)
-            self.reply(message, "已接收，开始排查", channel)
 
     def _forget_tokens(self, identifier):
+        related = self.conversation.batch.related(identifier) if hasattr(self.conversation, "batch") else [identifier]
         with self.lock:
-            self.tokens = {k: v for k, v in self.tokens.items() if v["session"] != identifier}
+            self.tokens = {k: v for k, v in self.tokens.items() if v["session"] not in related}
 
     def _decide(self, message, token, approved):
         with self.lock:
@@ -297,7 +295,7 @@ class DingTalkRemoteService:
             operator_source="dingtalk", operator_identity=json.dumps(self.identity(message)))
         with self.lock:
             self.tokens.pop(token, None)
-        self.reply(message, "已批准本次具体操作" if approved else "已拒绝本次操作", action["target"]["channel"])
+        self.reply(message, "已批准本次具体操作" if approved else "已拒绝本次操作", target_channel(action) if action.get("target") else target_label(action))
 
     def _publish(self):
         for key, (identifier, cursor) in self.mailbox.routes().items():
@@ -321,7 +319,7 @@ class DingTalkRemoteService:
                 if item.get("role") == "assistant" and "请点击“查看待确认操作”" in text:
                     pass
                 elif item.get("role") != "user" and item.get("kind") not in ("context", "action"):
-                    if not self.reply(message, text, session["target"]["channel"]):
+                    if not self.reply(message, text, target_channel(session) if session.get("target") else target_label(session)):
                         break
                 self.mailbox.route(key, identifier, index + 1)
             self._publish_approval(identifier, message)
@@ -330,7 +328,9 @@ class DingTalkRemoteService:
         with self.lock:
             self.tokens = {k: v for k, v in self.tokens.items()
                            if self.store.action(v["action"])["state"] == "waiting_approval"}
-        for action in self.store.actions(identifier, ("waiting_approval",)):
+        actions = (self.conversation.batch.actions(identifier, ("waiting_approval",))
+                   if session_scope(self.store.chat(identifier)) == "batch" else self.store.actions(identifier, ("waiting_approval",)))
+        for action in actions:
             if action["id"] in self.local_only_approvals:
                 continue
             with self.lock:
@@ -342,12 +342,12 @@ class DingTalkRemoteService:
                       f"回复“批准 {token}”或“拒绝 {token}”；仅发起人有效，十分钟内单次使用。")
             if len(detail.encode("utf-8")) > 30000:
                 if self.reply(message, "待批准操作内容过长，请在本地工作台核对完整内容后批准或拒绝。",
-                              action["target"]["channel"]):
+                              target_channel(action) if action.get("target") else target_label(action)):
                     self.local_only_approvals.add(action["id"])
                 continue
-            if self.reply(message, detail, action["target"]["channel"]):
+            if self.reply(message, detail, target_channel(action) if action.get("target") else target_label(action)):
                 with self.lock:
-                    self.tokens[token] = dict(session=identifier, action=action["id"],
+                    self.tokens[token] = dict(session=action["session_id"], action=action["id"],
                         fingerprint=action["fingerprint"], identity=self.identity(message), expires=self.clock() + 600)
 
     def _expire(self):
@@ -392,7 +392,7 @@ class DingTalkRemoteService:
             return True
         try:
             project = load_push_project_name(self.project_path)
-            header = f"项目：{project}" + (f" | 通道{channel}" if channel is not None else "")
+            header = f"项目：{project}" + ((f" | 通道{channel}" if isinstance(channel, int) else f" | {channel}") if channel is not None else "")
             header += " | " + message.nickname
             text = self._sanitize(header + "\n" + text)
             chunks = split_text(text)
@@ -458,6 +458,7 @@ class DingTalkRemoteService:
             self.stop_event.wait(self.send_interval)
 
     def begin_close(self):
+        self.conversation.router.cancel_platform("dingtalk")
         if self.stop_event.is_set():
             return
         self.stop_event.set()

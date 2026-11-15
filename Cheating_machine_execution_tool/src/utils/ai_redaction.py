@@ -31,5 +31,16 @@ class DiagnosticRedactor:
             return [self.object(v) for v in value]
         return self.text(value) if isinstance(value, str) else value
 
+    def stream_text(self, value):
+        """累计流文本暂扣可能尚未接收完整的密钥前缀，避免跨片泄漏。"""
+        with self._lock:
+            value = self.text(value)
+            hold = 0
+            for secret in self._secrets:
+                for size in range(1, min(len(secret), len(value) + 1)):
+                    if value.endswith(secret[:size]):
+                        hold = max(hold, size)
+            return self.text(value[:-hold] if hold else value)
+
     def dumps(self, value):
         return json.dumps(self.object(value), ensure_ascii=False)

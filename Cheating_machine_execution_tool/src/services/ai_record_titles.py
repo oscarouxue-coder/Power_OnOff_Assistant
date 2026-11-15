@@ -1,5 +1,6 @@
 """会话/报告的本地显示名称；不改正文、上下文或诊断任务。"""
 import re
+from src.models.ai_session_scope import target_label
 
 
 def clean_title(value):
@@ -22,7 +23,8 @@ class AiRecordTitles:
         for row in rows:
             identifier = row["id"]
             title = names.get(identifier) or clean_title(row.get("title"))
-            if not names.get(identifier) and (not title or re.fullmatch(r"通道\d+排障", title)):
+            if not names.get(identifier) and (not title or re.fullmatch(r"通道\d+排障", title)
+                                              or title in ("本机电脑排障", "普通问答", "多样机任务")):
                 title = ""
                 source = row.get("source_report_id")
                 if source:
@@ -33,11 +35,15 @@ class AiRecordTitles:
                 title = title or clean_title(self.store.first_chat_question(identifier)) or "新会话"
             profile = row.get("profile") or {}
             entries.append(dict(id=identifier, title=clean_title(title), created=row.get("created", ""),
-                                channel=row.get("target", {}).get("channel", ""),
+                                channel=(row.get("target") or {}).get("channel", ""), target_label=target_label(row),
                                 provider=profile.get("provider", ""), model=profile.get("model", ""),
                                 status=row.get("status", ""), cycle=0))
             if (row.get("source") or {}).get("kind") == "dingtalk":
                 entries[-1]["origin"] = "钉钉 / " + row["source"].get("nickname", "") + " / " + row["source"].get("group", "")
+            elif (row.get("source") or {}).get("kind") == "feishu":
+                source = row["source"]
+                entries[-1]["origin"] = ("飞书 / " + ("单聊" if source.get("chat_type") == "p2p" else "群聊")
+                                         + " / " + source.get("sender", "") + " / " + source.get("group", ""))
         return entries
 
     def report_entries(self, rows):

@@ -24,7 +24,7 @@ def short_title(value):
 def record_labels(entries):
     labels = []
     for entry in entries:
-        channel = f"通道{entry['channel']}"
+        channel = entry.get("target_label") or f"通道{entry['channel']}"
         if entry.get("cycle"):
             channel += f"·第{entry['cycle']}轮"
         labels.append(f"{short_title(entry['title'])} | {channel} | "
@@ -47,7 +47,7 @@ def record_labels(entries):
 def record_detail(entry):
     if not entry:
         return ""
-    return (f"{entry['title']}\n通道：{entry['channel']}\n"
+    return (f"{entry['title']}\n目标：{entry.get('target_label') or ('通道' + str(entry['channel']))}\n"
             f"时间：{record_time(entry['created'])}\n"
             f"模型：{entry['provider']} / {entry['model']}\n"
             f"状态：{entry['status']}\nID：{entry['id']}" +

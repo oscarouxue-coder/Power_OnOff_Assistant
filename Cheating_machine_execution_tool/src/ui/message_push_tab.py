@@ -8,7 +8,7 @@ from src.services.message_push_config_service import send_test_message
 
 class MessagePushTab:
     def __init__(self, notebook, values, mark_dirty, *, background, foreground, project_config_path,
-                 log=lambda message: None, remote_setup=None):
+                 log=lambda message: None, remote_setup=None, feishu_setup=None):
         self.log = log
         self.project_config_path = project_config_path
         self.running = False
@@ -19,7 +19,7 @@ class MessagePushTab:
                           for key, value in values.items()}
         self.frame.columnconfigure(1, weight=1)
         for row, (key, label) in enumerate((
-            ("dingtalk_flag", "启用钉钉推送"), ("webhook", "Webhook 地址"),
+            ("dingtalk_flag", "启用消息推送"), ("webhook", "Webhook 地址"),
             ("secret", "加签密钥"), ("at_all", "@所有人"),
         )):
             variable = self.variables[key]
@@ -38,8 +38,6 @@ class MessagePushTab:
                   row=4, column=0, columnspan=2, sticky="w", pady=(20, 0))
         self.test_button = ttk.Button(self.frame, text="发送测试消息", command=self.send_test)
         self.test_button.grid(row=5, column=0, sticky="w", pady=16)
-        if remote_setup is not None:
-            ttk.Button(self.frame, text="钉钉 AI 接入…", command=remote_setup).grid(row=6, column=0, sticky="w", pady=4)
         self.status = StringVar(master=self.frame, value="尚未测试")
         Label(self.frame, textvariable=self.status, background=background,
               foreground=foreground, wraplength=650, justify='left').grid(row=5, column=1, sticky='w')
@@ -56,7 +54,7 @@ class MessagePushTab:
         self.running = True
         self.test_button.configure(state='disabled')
         self.status.set('正在发送测试消息…')
-        self.log('[消息推送] 开始试发：POST https://oapi.dingtalk.com/robot/send（凭据省略），使用当前页面配置。')
+        self.log('[消息推送] 开始试发，使用当前页面配置并识别平台。')
         try:
             threading.Thread(target=self._send_worker, args=(values,), daemon=True).start()
         except Exception:
@@ -65,14 +63,14 @@ class MessagePushTab:
 
     def _send_worker(self, values):
         try:
-            send_test_message(values, self.project_config_path,
-                              log=lambda message: self.results.put((None, message)))
+            platform_name = send_test_message(values, self.project_config_path,
+                                              log=lambda message: self.results.put((None, message)))
         except (ValueError, RuntimeError) as exc:
             self.results.put((False, str(exc)))
         except Exception:
             self.results.put((False, '发送异常，结果未知；请检查群消息。'))
         else:
-            self.results.put((True, '发送成功（钉钉已接受），请在群中确认收到测试消息。'))
+            self.results.put((True, f'发送成功（{platform_name}已接受），请在群中确认收到测试消息。'))
 
     def _poll_result(self):
         try:

@@ -80,7 +80,8 @@ class MessagePushSendTests(unittest.TestCase):
             post.return_value.json.return_value = {'errcode': 0}
             for name in ('中文项目', '新的项目'):
                 self.project_path.write_text(f'[project_info]\nproject_name = {name}\n', encoding='utf-8')
-                send_test_message(dict(DEFAULTS, project_name='页面未保存值'), self.project_path)
+                send_test_message(dict(DEFAULTS, project_name='页面未保存值',
+                                       webhook='https://oapi.dingtalk.com/robot/send?access_token=demo'), self.project_path)
                 self.assertTrue(send.call_args.args[2].startswith(f'项目：{name}\n'))
                 self.assertNotIn('页面未保存值', send.call_args.args[2])
                 sender.webhook_send_message('旧项目', '详情')
@@ -226,6 +227,17 @@ class MessagePushConfigTests(unittest.TestCase):
         self.assertNotIn('private', str(caught.exception))
 
 
+class RemoteSetupNavigationTests(unittest.TestCase):
+    def test_legacy_entries_select_embedded_platform(self):
+        app = Mock()
+        for platform in ('dingtalk', 'feishu'):
+            with self.subTest(platform=platform):
+                app.reset_mock()
+                getattr(LineCheckAssistant, f'_configure_{platform}_remote')(app)
+                app._open_ai_assistant.assert_called_once_with(show=False)
+                app.ai_assistant.dialog.open_remote.assert_called_once_with(platform)
+
+
 class MessagePushWindowTests(unittest.TestCase):
     def setUp(self):
         self.root = tk.Tk()
@@ -289,6 +301,7 @@ class MessagePushWindowTests(unittest.TestCase):
                         if isinstance(w, ttk.Button)}
 
     def _close_test_root(self):
+        self.root.update_idletasks()
         self.root.destroy()
         self.root = None
         self.tab = None
@@ -299,8 +312,11 @@ class MessagePushWindowTests(unittest.TestCase):
         notebook = self.tab.frame.master
         self.assertEqual([notebook.tab(tab, 'text') for tab in notebook.tabs()],
                          ['Telnet', '测试项', 'WiFi', '项目信息', '开关机运行参数', '消息推送'])
+        self.assertNotIn('钉钉 AI 接入…', self.buttons)
+        self.assertNotIn('飞书 AI 接入…', self.buttons)
         checks = [w for w in self.tab.frame.winfo_children() if isinstance(w, tk.Checkbutton)]
         self.assertEqual(len(checks), 2)
+        self.assertEqual(checks[0].cget('text'), '启用消息推送')
         checks[0].invoke()
         self.tab.variables['secret'].set('new-secret')
         self.buttons['保存'].invoke()
@@ -311,6 +327,16 @@ class MessagePushWindowTests(unittest.TestCase):
         self.messages.askyesno.reset_mock()
         self.buttons['关闭'].invoke()
         self.messages.askyesno.assert_not_called()
+
+    def test_ai_save_syncs_only_robot_fields_and_keeps_unsaved_warning(self):
+        self.tab.variables['at_all'].set('1')
+        LineCheckAssistant._sync_ai_message_push(self.root, dict(webhook='application-hook', secret='application-secret'))
+        self.assertEqual(self.tab.capture(), dict(DEFAULTS, at_all='1', webhook='application-hook', secret='application-secret'))
+        self.service.save.assert_not_called()
+        self.buttons['关闭'].invoke()
+        self.messages.askyesno.assert_called_once()
+        self.assertIsNone(self.root._message_push_control)
+        LineCheckAssistant._sync_ai_message_push(self.root, dict(webhook='ignored', secret='ignored'))
 
     def test_project_badge_reads_saved_name_on_open_and_reload(self):
         self.root.project_name_badge.set_name.assert_called_with("")
@@ -373,7 +399,7 @@ class MessagePushWindowTests(unittest.TestCase):
             self.assertTrue(self.tab.running)
             self.store.save.assert_not_called()
             self.service.save.assert_not_called()
-        with patch('src.ui.message_push_tab.send_test_message') as send:
+        with patch('src.ui.message_push_tab.send_test_message', return_value='钉钉') as send:
             self.tab._send_worker(values)
             self.assertEqual(send.call_args.args, (values, self.tab.project_config_path))
         self.tab._poll_result()

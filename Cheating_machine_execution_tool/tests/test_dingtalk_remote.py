@@ -294,10 +294,37 @@ class RemoteConversationTests(unittest.TestCase):
         self.assertNotEqual(first, self.dispatch("新会话"))
         self.assertTrue(self.store.chat_items(first))
 
+    def test_pc_target_status_and_reply_use_original_scope_label(self):
+        decision = dict(intent="switch", scope="pc", channel=None, question="检查电脑", clarification="")
+        with patch.object(self.service.router, "_resolve", return_value=decision):
+            identifier = self.dispatch("只查这台电脑网络")
+        self.assertEqual(self.store.chat(identifier)["scope"], "pc")
+        self.remote._dispatch(replace(self.message, text="状态"))
+        self.remote._publish()
+        replies = [str(item) for item in list(self.remote.outbox.queue)]
+        self.assertTrue(any("本机电脑" in text for text in replies))
+        self.assertFalse(any("通道本机电脑" in text for text in replies))
+        self.assertEqual(self.store.chat(identifier)["permission_mode"], AUTO)
+
+    def test_new_session_keeps_background_route_and_does_not_stop_old_round(self):
+        first = self.dispatch("通道1 检查")
+        stopped = threading.Event()
+        self.service.running[first] = stopped
+        try:
+            second = self.dispatch("新会话")
+            self.assertNotEqual(first, second)
+            self.assertFalse(stopped.is_set())
+            self.assertTrue({first, second} <= {r[0] for r in self.remote.mailbox.routes().values()})
+        finally:
+            self.service.running.pop(first, None)
+
     def test_members_and_channels_are_isolated(self):
         self.diag.configure(self.profile, (TARGET, replace(TARGET, channel=2)))
-        with self.assertRaisesRegex(ValueError, "指定通道"):
-            self.remote._dispatch(replace(self.message, text="检查"))
+        self.remote._dispatch(replace(self.message, text="检查"))
+        general = self.store.chat(self.service.router.current(dict(kind="dingtalk", robot=self.message.robot,
+            corp=self.message.corp, group=self.message.group, sender=self.message.sender)))
+        self.assertEqual(general["scope"], "general")
+        self.assertIn("指定通道", self.store.chat_items(general["id"])[-1]["text"])
         first = self.dispatch("通道1 检查")
         second = self.dispatch("通道2 检查")
         self.assertNotEqual(first, second)
@@ -562,7 +589,7 @@ class SetupWindowTests(unittest.TestCase):
         from types import SimpleNamespace
         from src.ui.ai_assistant_controller import AiAssistantController
         from tk_test_windows import OffscreenTkWindows
-        with tempfile.TemporaryDirectory() as temporary, OffscreenTkWindows():
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {"LOCALAPPDATA": str(Path(temporary) / "user")}), OffscreenTkWindows():
             gc.collect()
             root = tk.Tk()
             controller = None
@@ -591,6 +618,12 @@ class SetupWindowTests(unittest.TestCase):
                 controller.service.store.set_setting("isolation_probe", "first-project")
                 self.assertIsNone(other.service.store.setting("isolation_probe"))
                 self.assertIsNot(controller.conversation, other.conversation)
+                identifier = controller.service.confirm_case("r", "共用标题", "实际原因", "处理", "复测", "范围")
+                self.assertEqual(other.service.store.cases()[0]["id"], identifier)
+                self.assertIsNotNone(controller.service.store.case_store)
+                self.assertIsNotNone(other.service.store.case_store)
+                self.assertEqual(other.service.store.case_store.directory,
+                                 Path(temporary) / "user" / "LineCheckAssistant" / "case_library")
                 controller._refresh_remote_targets()
                 self.assertEqual(tuple(controller.service.targets), (TARGET.channel,))
             finally:

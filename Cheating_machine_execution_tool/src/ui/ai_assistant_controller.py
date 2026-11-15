@@ -13,25 +13,41 @@ from src.ui.ai_monitor_status import monitor_presentation
 class AiAssistantController:
     def __init__(self, master, terminal, manager, targets, busy, forbidden_port, emit, manual_path,
                  background="#eef2f5", foreground="#17202a", context=None, shared_busy=None,
-                 on_monitor_status=None, app_dir=None, project_config_path=None):
+                 on_monitor_status=None, app_dir=None, project_config_path=None, remote_tab_factory=None):
         self.master = master
         self.on_monitor_status = on_monitor_status
         self.monitor_snapshot = None
         self.targets_provider = targets
         self.remote = None
+        self.feishu_remote = None
         self.project_lease = None
         self.remote_refresh = 0
         store = None
         remote_config = None
+        feishu_config = None
+        remote_values, feishu_values = None, None
         if app_dir is not None:
             from src.services.dingtalk_remote_store import RemoteConfigStore
+            from src.services.feishu_remote_store import FeishuConfigStore
             from src.services.ai_store import DiagnosticStore
             remote_config = RemoteConfigStore(app_dir)
-            if remote_config.load()["isolated"]:
+            feishu_config = FeishuConfigStore(app_dir)
+            try:
+                remote_values = remote_config.load()
+            except ValueError:
+                emit("[钉钉接入] 配置读取失败，该平台未启动（凭据省略）")
+            try:
+                feishu_values = feishu_config.load()
+            except ValueError:
+                emit("[飞书接入] 配置读取失败，该平台未启动（凭据省略）")
+            if ((remote_values and remote_values["isolated"]) or (feishu_values and feishu_values["isolated"])
+                    or ((remote_config.path.exists() or feishu_config.path.exists())
+                        and (remote_config.directory / "diagnostics.sqlite3").is_file())):
                 from src.core.dingtalk_stream import InstanceLease
                 self.project_lease = InstanceLease("project:" + str(remote_config.directory.resolve()))
                 self.project_lease.acquire()  # 打开数据库/初始化操作状态前就排除重复进程。
-                store = DiagnosticStore(remote_config.directory)
+                from src.services.ai_case_store import open_shared_cases
+                store = DiagnosticStore(remote_config.directory, case_store=open_shared_cases(emit))
         self.bridge = AiSerialBridge(terminal, manager, busy, forbidden_port)
         client = self.bridge.client
         self.bridge.dispatcher.handlers['shared_busy'] = lambda request: shared_busy(request.args[0]) if shared_busy else False
@@ -45,20 +61,36 @@ class AiAssistantController:
             client.shared_busy if shared_busy else None, target_current=client.target_current)
         self.service.conversation = self.conversation
         self.dialog = AiDiagnosticsWindow(master, self.service, targets, background, foreground,
-                                          conversation=self.conversation)
+                                          conversation=self.conversation, remote_tab_factory=remote_tab_factory)
         terminal.diagnostic_observer = self.service.serial_receiver
         self.terminal = terminal
         self.closing = False
         self.closed = False
         if store is not None and project_config_path is not None:
             from src.services.dingtalk_remote_service import DingTalkRemoteService
-            self.remote = DingTalkRemoteService(self.conversation, remote_config, project_config_path, project_guarded=True)
+            if remote_values is not None:
+                try:
+                    self.remote = DingTalkRemoteService(self.conversation, remote_config, project_config_path, project_guarded=True)
+                except Exception:
+                    self.service.emit("[钉钉接入] 服务初始化失败，该平台未启动（凭据省略）")
             self.dialog.project_isolated = True
-            if self.remote.config["enabled"]:
+            if self.remote is not None and self.remote.config["enabled"]:
                 try:
                     self.remote.start()
                 except Exception as exc:
                     self.service.emit("[钉钉接入] 启动失败：" + str(exc))
+            if feishu_values is not None:
+                from src.services.feishu_remote_service import FeishuRemoteService
+                try:
+                    self.feishu_remote = FeishuRemoteService(self.conversation, feishu_config, project_config_path,
+                                                             project_guarded=True)
+                except Exception:
+                    self.service.emit("[飞书接入] 服务初始化失败，该平台未启动（凭据省略）")
+                if self.feishu_remote is not None and self.feishu_remote.config["enabled"]:
+                    try:
+                        self.feishu_remote.start()
+                    except Exception:
+                        self.service.emit("[飞书接入] 启动失败，请检查实例占用及配置（凭据省略）")
         self.after_id = master.after(50, self._poll)
 
     def open(self):
@@ -76,7 +108,7 @@ class AiAssistantController:
         self.after_id = None
         if not self.closed:
             self.bridge.poll()
-            if getattr(self, "remote", None) is not None and not self.closing:
+            if (getattr(self, "remote", None) is not None or getattr(self, "feishu_remote", None) is not None) and not self.closing:
                 self._refresh_remote_targets()
             snapshot = self.service.monitor_status()
             if snapshot != self.monitor_snapshot:
@@ -112,7 +144,7 @@ class AiAssistantController:
         except Exception:
             if self.service.targets:
                 self.service.configure(self.service.profile, ())
-            self.service.emit("[钉钉接入] 当前项目目标读取失败，暂停目标操作，请在本地检查配置")
+            self.service.emit("[远程管理] 当前项目目标读取失败，暂停目标操作，请在本地检查配置")
 
     def prepare_app_close(self):
         if self.closed:
@@ -121,6 +153,8 @@ class AiAssistantController:
             self.closing = True
             if self.remote is not None:
                 self.remote.begin_close()
+            if getattr(self, "feishu_remote", None) is not None:
+                self.feishu_remote.begin_close()
             self.dialog.begin_close()
             self.service.begin_close()
             self.service.emit("[AI诊断] 程序退出，等待采集清理及网络请求结束")
@@ -128,6 +162,8 @@ class AiAssistantController:
                 or self.service.event_thread.is_alive() or self.conversation.worker.is_alive()):
             return False
         if self.remote is not None and not self.remote.idle:
+            return False
+        if getattr(self, "feishu_remote", None) is not None and not self.feishu_remote.idle:
             return False
         self.closed = True
         self.bridge.close()
@@ -142,6 +178,8 @@ class AiAssistantController:
         self.terminal.diagnostic_observer = None
         if self.remote is not None:
             self.remote.close()
+        if getattr(self, "feishu_remote", None) is not None:
+            self.feishu_remote.close()
         self.service.store.close()
         if self.project_lease is not None:
             self.project_lease.close()

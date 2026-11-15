@@ -89,7 +89,7 @@ class MonitorActionTests(unittest.TestCase):
         self.assertEqual(action["report_id"], self.job.id)
         self.assertEqual(action_fingerprint(action), action["fingerprint"])
         self.assertEqual(self.store.chats(), [])
-        self.assertEqual(self.store.setting("chat_permission_mode", ASK), ASK)
+        self.assertEqual(self.store.setting("chat_permission_mode"), FULL)
 
     @patch("src.services.ai_action_service.run_local_command")
     def test_ask_waits_for_button_and_approval_dispatches_once(self, run):
@@ -171,7 +171,8 @@ class MonitorActionTests(unittest.TestCase):
         self.start()
         self.service.enable_monitor(False)
         self.assertIsNone(self.monitor.grant)
-        self.assertEqual(self.monitor.mode, AUTO)
+        self.assertEqual(self.monitor.mode, FULL)
+        self.assertEqual(self.monitor.status(self.identifier)["mode"], AUTO)
         self.assertEqual(self.store.setting("monitor_permission_mode"), FULL)
 
     @patch("src.services.ai_action_service.run_local_command")
@@ -256,7 +257,7 @@ class MonitorActionTests(unittest.TestCase):
                     self.service.run_id = "new-run"
                     self.assertFalse(self.monitor.status(self.identifier)["enabled"])
                 self.assertIsNone(self.monitor.grant)
-                self.assertEqual(self.monitor.mode, AUTO)
+                self.assertEqual(self.monitor.mode, FULL)
                 self.monitor.finish(self.identifier)
 
     def test_restart_cancels_approved_and_marks_executing_unknown(self):
@@ -265,7 +266,7 @@ class MonitorActionTests(unittest.TestCase):
         action = self.monitor.actions._prepare(self.identifier, "run_local_command", {"command": "Get-Date"})
         self.store.change_action(action["id"], ("reviewing",), "executing")
         restored = AiMonitorService(self.service)
-        self.assertEqual(restored.mode, AUTO)
+        self.assertEqual(restored.mode, FULL)
         self.assertIsNone(restored.grant)
         self.assertEqual(self.store.action(action["id"])["state"], "unknown")
         self.assertEqual(self.store.chats(), [])
@@ -328,6 +329,31 @@ class MonitorProtocolTests(unittest.TestCase):
     stop_service = integration.ServiceTests.stop_service
     finish = integration.ServiceTests.finish
 
+    def test_default_full_keeps_monitor_off_and_reenable_creates_fresh_grant(self):
+        monitor = self.service.monitor
+        self.assertEqual(monitor.mode, FULL)
+        self.assertFalse(self.service.trigger.enabled)
+        self.assertIsNone(monitor.grant)
+        self.service.enable_monitor(True)
+        first = monitor.grant["id"]
+        self.service.enable_monitor(False)
+        self.assertEqual(monitor.mode, FULL)
+        self.assertIsNone(monitor.grant)
+        self.service.enable_monitor(True)
+        self.assertNotEqual(first, monitor.grant["id"])
+        self.assertEqual(self.requests, [])
+
+    def test_saved_full_while_disabled_and_lower_mode_survive_restart(self):
+        monitor = self.service.monitor
+        monitor.apply(self.profile, (TARGET,), DebugTriggerPolicy(channels=(1,)), FULL, False)
+        self.assertEqual(monitor.mode, FULL)
+        self.assertIsNone(monitor.grant)
+        self.assertFalse(self.service.trigger.enabled)
+        monitor.apply(self.profile, (TARGET,), DebugTriggerPolicy(channels=(1,)), ASK, False)
+        self.assertEqual(AiMonitorService(self.service).mode, ASK)
+        self.assertFalse(self.store.migrate_full_access_defaults())
+        self.assertEqual(self.store.setting("monitor_permission_mode"), ASK)
+
     def test_pre_batch_full_binds_first_run_and_new_batch_revokes(self):
         self.service.monitor.apply(self.profile, (TARGET,), DebugTriggerPolicy(channels=(1,)), FULL, True, True)
         grant = self.service.monitor.grant["id"]
@@ -343,7 +369,7 @@ class MonitorProtocolTests(unittest.TestCase):
         self.service.observe({"type": "diagnostic_start", "run_id": "second"})
         self.finish()
         self.assertFalse(self.service.trigger.enabled)
-        self.assertEqual(self.service.monitor.mode, AUTO)
+        self.assertEqual(self.service.monitor.mode, FULL)
         self.assertIsNone(self.service.monitor.grant)
 
     @patch("src.services.ai_action_service.run_local_command")
@@ -415,7 +441,7 @@ class MonitorUiTests(unittest.TestCase):
         panel = self.dialog.monitor_panel
         panel.open()
         self.assertEqual(tuple(panel.permission_choice["values"]), tuple(PERMISSION_LABELS.values()))
-        self.assertEqual(panel.permission.get(), "帮我批准")
+        self.assertEqual(panel.permission.get(), "完全访问")
         panel.permission.set("请求批准")
         panel._permission_selected()
         panel.update_status()
@@ -433,8 +459,9 @@ class MonitorUiTests(unittest.TestCase):
         panel.enabled.set(True)
         with patch("src.ui.ai_monitor_window.messagebox.askyesno", return_value=False) as confirm:
             panel.changed()
-        self.assertEqual(self.diag.monitor.mode, AUTO)
-        self.assertEqual(panel.permission.get(), "帮我批准")
+        self.assertEqual(self.diag.monitor.mode, FULL)
+        self.assertEqual(panel.permission.get(), "完全访问")
+        self.assertIsNone(self.diag.monitor.grant)
         text = confirm.call_args.args[1]
         for expected in ("通道1", "恢复出厂", "供电控制", "独立模型风险审查", "真实诊断信息"):
             self.assertIn(expected, text)
@@ -484,7 +511,7 @@ class MonitorUiTests(unittest.TestCase):
         with patch("src.ui.ai_diagnostics_window.messagebox.askyesno", return_value=True):
             self.dialog._delete_profile()
         self.assertFalse(self.diag.trigger.enabled)
-        self.assertEqual(self.diag.monitor.mode, AUTO)
+        self.assertEqual(self.diag.monitor.mode, FULL)
         self.assertIsNone(self.diag.monitor.grant)
 
 

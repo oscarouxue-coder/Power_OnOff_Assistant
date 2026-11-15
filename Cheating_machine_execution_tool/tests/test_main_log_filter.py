@@ -2,6 +2,7 @@
 from dataclasses import asdict
 import json
 import queue
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -508,7 +509,141 @@ def action_record(name='run_dut_command'):
                 preview=dict(after='file-body'), fingerprint='internal-fingerprint')
 
 
+def ai_process_messages():
+    return (
+        '[AI资料] 检索完成：已确认案例2，操作员章节3；未命中不补入无关资料',
+        '[AI证据] 开始整理本次目标证据与样机故障线索',
+        '[AI采集] 开始：read_dut_state，通道2',
+        '[AI采集] 完成：read_dut_state',
+        '[AI采集] 开始读取本机电脑环境；未绑定样机',
+        '[AI采集] 本机电脑环境读取完成；无目标网卡推断',
+        '[AI监控] 状态更新：AI自动监控：已关闭',
+        '[AI监控] 状态更新：AI自动监控：诊断中',
+        '[AI监控] 状态更新：AI自动监控：诊断排队中',
+        '[AI监控] 状态更新：AI自动监控：监控中',
+        '[AI监控] 状态更新：AI自动监控：已开启，待测试',
+        '[AI监控] 操作12345678独立风险审查请求；模型=model-v1',
+        '[AI监控] 操作12345678风险审查开始：run_local_command',
+        '[AI监控] 操作12345678已跳过独立审查：完全访问，授权=' + '12345678' * 4,
+        '[钉钉接入] 已接收群消息 message-1234，等待会话处理',
+        '[钉钉接入] 群成员会话已关联：12345678，通道2',
+        '[钉钉接入] 群回复发送成功（钉钉已接受）',
+        '[飞书接入] 已接收群聊消息 message-1234',
+        '[飞书接入] 已接收单聊消息 message-5678',
+        '[飞书接入] 飞书成员会话已关联：12345678，通道2',
+        '[飞书接入] 下发飞书回复：POST /open-apis/im/v1/messages（凭据省略）',
+        '[飞书接入] 飞书回复发送成功（接口已接受）',
+        '[飞书接入] 飞书回复跳过：本轮无临时修改；完整恢复记录保留本地',
+    )
+
+
+def ai_recorded_run():
+    """按负责人提供的39行界面日志还原事件结构，仅使用虚构目标、凭据和证据ID。"""
+    session = '会话12345678'
+    evidence = ('[AI对话] [AI证据] 完成：候选11，选取8，省略3，隔离0，截断4；'
+                '来源=example-id:工具/read_dut_state/example-call；another-id:用户目标澄清对话')
+    def collection(reason):
+        return ('[AI对话] ' + session + '采集状态：' + reason + '；权限=完全访问；'
+                '真实诊断信息（含材料中的账号、密码）发送至自定义 / https://example.test/v1；请求工具：run_dut_command')
+    messages = [
+        '[AI案例] 开始汇集旧库及项目库中的人工确认案例',
+        '[AI案例] 旧库导入完成：新增0，跳过0',
+        '[AI案例] 旧库导入完成：新增0，跳过0',
+        '[AI案例] 旧库汇集成功：新增0',
+        '[AI对话] 会话abcdef12完全访问暂未生效：目标或登录配置已变化，仅分析留存材料，请新建会话',
+        '[AI对话] ' + session + '完全访问暂未生效：目标或登录配置已变化，仅分析留存材料，请新建会话',
+        '[AI对话] 会话abcdef34完全访问暂未生效：普通问答未绑定排查目标，不执行工具',
+        '[AI对话] [飞书接入] 正在连接飞书（HTTPS注册 / WSS）',
+        '[AI对话] [飞书接入] 飞书长连接已连接',
+        '[AI对话] 路由续接' + session + '，目标=通道2',
+        '[AI对话] ' + session + '完全访问已自动生效；目标/模型/批次已校验，跳过独立审查',
+        '[AI对话] ' + session + '收到问题，进入排查队列；其它会话继续',
+        evidence, collection('默认允许主动采集'),
+    ]
+    for index in range(4):
+        action = action_record()
+        action['id'] = f'{index + 1:032x}'
+        messages.append(ai_json('实际执行操作', action))
+        if index == 0:
+            messages.extend((
+                '[AI Debug] 尝试 Telnet：通道2，源IP=192.0.2.2，目标=192.0.2.1:23',
+                '[AI Debug] TX 登录用户名：sample-user',
+                '[AI Debug] TX 登录密码：sample-password',
+                '[AI Debug] Telnet 登录成功',
+            ))
+        messages.extend((
+            '[AI Debug][Telnet] TX：echo "失败";\necho "这是命令正文"',
+            ai_json('操作' + action['id'][:8] + '结束', dict(action_state='succeeded',
+                    notice='命令返回Shell提示符；业务是否成功须依据实际输出或后续查询核对')),
+            evidence, collection('默认允许主动采集' if index < 3 else
+                                '本轮工具额度已用尽，仅根据已获得证据回答；可发送下一条消息继续'),
+        ))
+    messages.append('[AI对话] ' + session + '本轮结束；恢复状态：固定采集：无临时修改；'
+                    '本轮通用操作的实际变更不自动回滚，结果待核实的操作须人工核对。')
+    return messages
+
+
 class AiMainLogFilterTests(unittest.TestCase):
+    def test_normal_file_read_and_creation_details_hide_but_truncation_and_bad_json_remain(self):
+        for prefix in ('[AI对话] ', '[AI监控] '):
+            for body in (
+                '创建会话 12345678，批次=run-example，目标=本机电脑，模型=example-model',
+                '开始只读串口诊断：COM2',
+                '读取本机文件：' + json.dumps(dict(path='C:/example.txt', offset_bytes=0, max_bytes=65536)),
+                '文件读取完成：C:/example.txt，字节=123，截断=False',
+            ):
+                self.assertIsNone(format_main_log_message(prefix + body))
+            for body in ('文件读取完成：C:/example.txt，字节=123，截断=True',
+                         '读取本机文件：{"error": "读取失败"}', '读取本机文件：{"action_state": "succeeded"}',
+                         '读取本机文件：{损坏JSON'):
+                self.assertEqual(format_main_log_message(prefix + body), prefix + body)
+
+    def test_recorded_run_reduces_39_events_to_two_task_summaries(self):
+        messages = ai_recorded_run()
+        self.assertEqual(len(messages), 39)
+        shown = [text for message in messages if (text := format_main_log_message(message)) is not None]
+        self.assertEqual(shown, ['[AI对话] 会话12345678开始排查（已入队）',
+                                '[AI对话] 会话12345678本轮结束；通用操作不自动回滚，待核实结果请人工核对'])
+
+    def test_unknown_restrictions_and_failed_initialization_are_visible(self):
+        for message in (
+            '[AI对话] 会话12345678完全访问暂未生效：授权校验发生未知错误',
+            '[AI案例] 旧库导入失败，事务已回退',
+            '[AI案例] 共用库初始化失败，请检查案例库及快照；未回退至项目案例库',
+            '[AI对话] 会话12345678等待人工确认；不自动推测答案',
+            '[AI Debug] Telnet 不可用（超时），尝试目标串口；连接原因不代表根因',
+            '[AI网络检查] PC RX：route；返回码=1；编码=utf-8',
+            '[AI采集] PC RX：query；失败；返回码=1；编码=utf-8',
+            '[AI采集] PC RX：query；成功；返回码=0；编码=gbk/replace；存在无法解码的字节',
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(format_main_log_message(message), message)
+
+    def test_normal_finish_is_shortened_but_recovery_problems_are_preserved(self):
+        for prefix in ('[AI对话] ', '[AI监控] '):
+            for recovery in ('无临时修改', '已恢复，临时文件已清理', '已恢复/已停止本次采集进程'):
+                message = prefix + '会话12345678本轮结束；恢复状态：' + recovery
+                result = format_main_log_message(message)
+                self.assertEqual(result, prefix + '会话12345678本轮结束' +
+                                 ('；临时操作已恢复' if recovery != '无临时修改' else ''))
+            for recovery in ('恢复待完成', '采集进程已停止，临时文件待归档/清理', '未来新增恢复状态',
+                             '无临时修改\n后续恢复失败'):
+                message = prefix + '会话12345678本轮结束；恢复状态：' + recovery
+                self.assertEqual(format_main_log_message(message), message)
+
+    def test_succeeded_with_attention_is_shown_without_success_color(self):
+        for extra in (dict(error='恢复失败'), dict(stderr='清理告警\n详细内容'), dict(exit_code=7),
+                      dict(process_cleanup_confirmed=False), dict(status='timed_out'),
+                      dict(truncated=True), dict(dispatched=False), dict(notice='恢复待完成')):
+            for prefix in ('[AI对话]', '[AI监控]'):
+                message = ai_json('操作12345678结束', dict(action_state='succeeded', **extra)).replace('[AI对话]', prefix, 1)
+                with self.subTest(message=message):
+                    result = format_main_log_message(message)
+                    self.assertIsNotNone(result)
+                    self.assertIn(ai_main_log_tag(result), ('warning', 'error'))
+                    if 'stderr' in extra:
+                        self.assertIn('标准错误=清理告警', result)
+
     def test_routine_messages_are_hidden(self):
         for body in (
             '会话12345678请求模型（第2次交互）；估算输入1234 Token',
@@ -521,9 +656,59 @@ class AiMainLogFilterTests(unittest.TestCase):
             '会话12345678上下文容量：未知容量：最近50轮 / 100000字符',
             '会话12345678独立风险审查请求；模型=model-v1，估算输入240 Token',
             '操作12345678风险审查开始：run_dut_command',
+            '会话12345678开始采集：read_dut_state，目标=通道2 / 192.168.1.1',
+            '会话12345678工具完成：read_dut_state',
+            '会话12345678工具完成：run_local_command',
+            '操作12345678已跳过独立审查：完全访问，授权=' + '12345678' * 4,
+            '开始识别对话目标；仅发送目标标识和最近对话，不执行操作',
         ):
             with self.subTest(body=body):
                 self.assertIsNone(format_main_log_message('[AI对话] ' + body))
+
+    def test_known_collection_monitor_and_remote_details_hide_direct_and_wrapped(self):
+        for message in ai_process_messages():
+            for prefix in ('', '[AI对话] '):
+                with self.subTest(message=message, prefix=prefix):
+                    self.assertTrue(is_ai_log_message(prefix + message))
+                    self.assertIsNone(format_main_log_message(prefix + message))
+
+    def test_detail_rules_preserve_unknown_extensions_multiline_and_device_echo(self):
+        for message in ai_process_messages():
+            for prefix in ('', '[AI对话] '):
+                for suffix in ('；新格式警告', '\n后续处理失败'):
+                    original = prefix + message + suffix
+                    with self.subTest(message=original):
+                        self.assertEqual(format_main_log_message(original), original)
+            original = '[AI Debug][telnet] RX：' + message
+            self.assertEqual(format_main_log_message(original), original)
+            original = '[旧工具Logs][INFO] ' + message
+            self.assertFalse(is_ai_log_message(original))
+            self.assertEqual(format_main_log_message(original), original)
+
+    def test_monitor_attention_and_remote_connection_binding_approval_errors_survive(self):
+        for message in (
+            '[AI监控] 状态更新：AI自动监控：待批准（1）',
+            '[AI监控] 状态更新：AI自动监控：收尾中',
+            '[AI监控] 状态更新：AI自动监控：已关闭，收尾中',
+            '[AI监控] 已关闭，原测试继续',
+            '[AI监控] 开始诊断与修复：通道2，权限=full',
+            '[AI采集] 跳过/失败：read_dut_state；目标正在占用',
+            '[AI采集] 完成：future_tool',
+            '[AI证据] 跳过：无本次目标材料：候选0，选取0，省略0，隔离0，截断0；来源=无',
+            '[钉钉接入] 已停止',
+            '[钉钉接入] 指定群绑定成功，等待本地启用确认',
+            '[钉钉接入] 连接中断或鉴权失败，等待重连（凭据省略）',
+            '[钉钉接入] 群回复发送失败或结果未知，请在本地工作台核对；不会重新执行排障工具',
+            '[飞书接入] 飞书连接已停止',
+            '[飞书接入] 已收到群绑定申请，等待本机核对群ID',
+            '[飞书接入] 批准编号已过期，本操作已拒绝',
+            '[飞书接入] 飞书连接失败或断开，稍后重连（凭据省略）',
+            '[飞书接入] 飞书回复发送失败或结果未知，请在本地核对；不会重新执行排障工具',
+            '[飞书接入] 跳过未授权聊天或未启用类型的消息',
+        ):
+            for prefix in ('', '[AI对话] '):
+                with self.subTest(message=message, prefix=prefix):
+                    self.assertEqual(format_main_log_message(prefix + message), prefix + message)
 
     def test_collection_summary_keeps_reason_permission_and_recipient(self):
         original = ('[AI对话] 会话12345678采集状态：目标已失效，只分析留存材料；权限=帮我批准；'
@@ -551,13 +736,19 @@ class AiMainLogFilterTests(unittest.TestCase):
             with self.subTest(body=body):
                 self.assertEqual(format_main_log_message(message), message)
 
-    def test_command_login_and_non_chat_ai_text_are_opaque(self):
+    def test_command_and_login_payloads_are_hidden_even_with_failure_words(self):
         for message in (
             '[AI Debug][telnet] TX：echo 请求模型；模型请求成功',
             '[AI对话] [AI执行] PC TX（cwd=C:/work，超时=60秒）：echo 最近请求用量\nWrite-Output 失败',
             '[AI Debug] TX 登录用户名：会话12345678模型请求成功',
             '[AI对话] [AI Debug] TX 登录密码：请求工具：secret',
             '[AI网络检查] PC TX：ping -n 4 192.168.1.1',
+        ):
+            with self.subTest(message=message):
+                self.assertIsNone(format_main_log_message(message))
+
+    def test_attention_and_other_modules_remain_visible(self):
+        for message in (
             '[AI采集] 恢复待完成；下次连接核查，禁止通过重启恢复',
             '[AI诊断] 开始：通道2，厂商/模型，light',
             '[AI诊断] 完成，报告已保存；AI原因假设尚未人工确认',
@@ -574,27 +765,47 @@ class AiMainLogFilterTests(unittest.TestCase):
         result = format_main_log_message(ai_json('等待操作员批准', action_record()))
         self.assertEqual(result, '[AI对话] 等待操作员批准：run_dut_command；操作12345678；原因=首次设备登录，请确认目标')
 
-    def test_execution_summary_identifies_target_or_local_path(self):
+    def test_valid_actual_operations_are_hidden(self):
         for name in ('run_dut_command', 'run_local_command', 'write_local_file', 'read_serial_status'):
             with self.subTest(name=name):
                 result = format_main_log_message(ai_json('实际执行操作', action_record(name)))
-                self.assertIn(name + '；操作12345678', result)
-                self.assertIn('通道2；目标=192.168.1.1' if name == 'run_dut_command' else '本机', result)
-                if name == 'read_serial_status':
-                    self.assertIn('串口=COM2', result)
-                self.assertNotIn('file-body', result)
-                self.assertNotIn('internal-fingerprint', result)
-                self.assertNotIn('device-password', result)
+                self.assertIsNone(result)
 
     def test_review_keeps_risk_and_reason_without_json(self):
-        for risk in ('ordinary', 'dangerous', 'unknown', 'blocked'):
+        for risk in ('dangerous', 'unknown', 'blocked'):
             result = format_main_log_message(ai_json('操作12345678审查结果', dict(risk=risk, reason='清理尚未完成')))
             self.assertEqual(result, f'[AI对话] 操作12345678审查结果：{risk}；原因=清理尚未完成')
-            self.assertEqual(ai_main_log_tag(result), '' if risk == 'ordinary' else 'warning')
+            self.assertEqual(ai_main_log_tag(result), 'warning')
+
+    def test_ordinary_review_is_hidden_for_chat_and_monitor_only_after_valid_parsing(self):
+        for prefix in ('[AI对话] ', '[AI监控] '):
+            for value in (dict(risk='ordinary', reason='只读查询'), dict(risk='ordinary'),
+                          dict(risk='ordinary', reason=None)):
+                message = prefix + '操作12345678审查结果：' + json.dumps(value, ensure_ascii=False)
+                with self.subTest(message=message):
+                    if isinstance(value.get('reason'), str):
+                        self.assertIsNone(format_main_log_message(message))
+                    else:
+                        self.assertEqual(format_main_log_message(message), message)
+
+    def test_monitor_action_summary_keeps_approval_and_uncertainty(self):
+        for event, value, expected, tag in (
+            ('等待操作员批准', action_record(), '原因=首次设备登录，请确认目标', None),
+            ('操作12345678审查结果', dict(risk='dangerous', reason='需要确认'), 'dangerous；原因=需要确认', 'warning'),
+            ('操作12345678结束', dict(action_state='unknown', process_cleanup_confirmed=False), '结果待核实', 'warning'),
+            ('操作12345678结束', dict(action_state='failed', error='连接失败'), '错误=连接失败', 'error'),
+        ):
+            message = ai_json(event, value).replace('[AI对话]', '[AI监控]', 1)
+            with self.subTest(message=message):
+                result = format_main_log_message(message)
+                self.assertTrue(result.startswith('[AI监控] '))
+                self.assertIn(expected, result)
+                self.assertNotIn('file-body', result)
+                self.assertEqual(ai_main_log_tag(result), tag)
 
     def test_result_preserves_status_exit_error_and_uncertainty(self):
         for state, label, color in (
-            ('succeeded', '执行完成', 'success'), ('failed', '执行失败', 'error'),
+            ('succeeded', '执行完成', 'warning'), ('failed', '执行失败', 'error'),
             ('unknown', '结果待核实', 'warning'), ('cancelled', '已取消', 'warning'),
             ('blocked', '已拦截', 'warning'), ('rejected', '已拒绝', 'warning'),
         ):
@@ -611,10 +822,7 @@ class AiMainLogFilterTests(unittest.TestCase):
     def test_dut_shell_return_does_not_claim_business_success(self):
         notice = '命令返回Shell提示符；业务是否成功须依据实际输出或后续查询核对'
         result = format_main_log_message(ai_json('操作12345678结束', dict(action_state='succeeded', notice=notice, output='raw-shell-output')))
-        self.assertIn(notice, result)
-        self.assertNotIn('执行成功', result)
-        self.assertNotIn('业务成功', result)
-        self.assertNotIn('raw-shell-output', result)
+        self.assertIsNone(result)
 
     def test_failure_summary_includes_errors_and_cleanup_warning(self):
         result = format_main_log_message(ai_json('操作12345678结束', dict(action_state='failed', error='未下发，连接失败',
@@ -660,13 +868,49 @@ class AiMainLogPersistenceTests(unittest.TestCase):
         self.assertEqual(self.context.log_text.mock_calls, [])
         self.assertEqual(self.context.log_path.read_text(encoding='utf-8')[20:], message + '\n')
 
+    def test_recorded_run_preserves_every_raw_event_and_multiline_command_in_file(self):
+        messages = ai_recorded_run()
+        for message in messages:
+            LineCheckAssistant._log(self.context, message)
+        saved = self.context.log_path.read_text(encoding='utf-8')
+        saved = re.sub(r'(?m)^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ', '', saved)
+        self.assertEqual(saved, ''.join(message + '\n' for message in messages))
+        rendered = [call.args[1].rstrip('\n') for call in self.context.log_text.insert.call_args_list
+                    if len(call.args) < 3 or call.args[2] != 'time']
+        self.assertEqual(rendered, ['[AI对话] 会话12345678开始排查（已入队）',
+                                   '[AI对话] 会话12345678本轮结束；通用操作不自动回滚，待核实结果请人工核对'])
+
+    def test_all_hidden_process_messages_and_ordinary_reviews_are_saved_verbatim(self):
+        messages = [prefix + message for message in ai_process_messages() for prefix in ('', '[AI对话] ')]
+        messages += [ai_json('操作12345678审查结果', dict(risk='ordinary', reason='只读查询'))]
+        messages += [messages[-1].replace('[AI对话]', '[AI监控]', 1)]
+        for message in messages:
+            LineCheckAssistant._log(self.context, message)
+        self.assertEqual(self.context.log_text.mock_calls, [])
+        saved = self.context.log_path.read_text(encoding='utf-8').splitlines()
+        self.assertEqual([line[20:] for line in saved], messages)
+
     def test_summary_and_full_json_are_written_to_separate_sinks(self):
-        message = ai_json('实际执行操作', action_record('write_local_file'))
+        message = ai_json('等待操作员批准', action_record('write_local_file'))
         LineCheckAssistant._log(self.context, message)
         expected = format_main_log_message(message)
-        self.context.log_text.insert.assert_any_call('end', expected + '\n')
+        self.context.log_text.insert.assert_any_call('end', expected + '\n', 'warning')
         self.assertEqual(self.context.log_path.read_text(encoding='utf-8')[20:], message + '\n')
         self.assertIn('file-body', self.context.log_path.read_text(encoding='utf-8'))
+
+    def test_monitor_summary_preserves_raw_operation_json_and_warning_color(self):
+        operation = ai_json('实际执行操作', action_record('write_local_file')).replace('[AI对话]', '[AI监控]', 1)
+        result = ai_json('操作12345678结束', dict(action_state='unknown', stdout='完整输出\n第二行',
+                        process_cleanup_confirmed=False)).replace('[AI对话]', '[AI监控]', 1)
+        for message in (operation, result):
+            LineCheckAssistant._log(self.context, message)
+        saved = self.context.log_path.read_text(encoding='utf-8').splitlines()
+        self.assertEqual([line[20:] for line in saved], [operation, result])
+        self.assertIsNone(format_main_log_message(operation))
+        self.context.log_text.insert.assert_any_call('end', format_main_log_message(result) + '\n', 'warning')
+        shown = str(self.context.log_text.insert.call_args_list)
+        self.assertNotIn('file-body', shown)
+        self.assertNotIn('第二行', shown)
 
     def test_result_color_comes_from_state_and_explicit_tag_wins(self):
         message = ai_json('操作12345678结束', dict(action_state='unknown', stdout='成功：完成'))
@@ -699,7 +943,8 @@ class AiMainLogPersistenceTests(unittest.TestCase):
         self.assertEqual(saved, messages[1:4] + [format_main_log_message(messages[4])])
         rendered = [call.args[1].rstrip('\n') for call in self.context.log_text.insert.call_args_list
                     if len(call.args) < 3 or call.args[2] != 'time']
-        self.assertEqual(rendered, [format_main_log_message(message) for message in messages[2:]])
+        self.assertEqual(rendered, [text for message in messages[2:]
+                                   if (text := format_main_log_message(message)) is not None])
 
     def test_real_tk_both_themes_render_summary_and_preserve_full_file(self):
         import tkinter as tk
@@ -712,8 +957,11 @@ class AiMainLogPersistenceTests(unittest.TestCase):
         self.addCleanup(root.update_idletasks)
         self.addCleanup(lambda: style.theme_use(original_theme))
         hidden = '[AI对话] 会话12345678最近请求用量：输入12，输出3，合计15 Token；接口返回'
+        hidden_details = ai_process_messages()
         result = ai_json('操作12345678结束', dict(action_state='unknown', stdout='完整输出：成功', notice='结果待核实'))
+        monitor_result = result.replace('[AI对话]', '[AI监控]', 1)
         command = '[AI对话] [AI Debug][telnet] TX：echo 请求模型\nprintf 完成'
+        tasks = (ai_recorded_run()[11], ai_recorded_run()[-1])
         for theme in ('vista', 'clam'):
             with self.subTest(theme=theme):
                 style.theme_use(theme)
@@ -721,18 +969,24 @@ class AiMainLogPersistenceTests(unittest.TestCase):
                 self.addCleanup(widget.destroy)
                 widget.tag_configure('warning', foreground='#c07000')
                 self.context.log_text = widget
-                for message in (hidden, result, command):
+                for message in (hidden,) + hidden_details + (result, monitor_result, command) + tasks:
                     LineCheckAssistant._log(self.context, message)
                 root.update_idletasks()
                 shown = widget.get('1.0', 'end-1c')
                 self.assertNotIn('最近请求用量', shown)
                 self.assertNotIn('完整输出：成功', shown)
+                for message in hidden_details:
+                    self.assertNotIn(message, shown)
                 self.assertIn(format_main_log_message(result), shown)
-                self.assertIn(command, shown)
+                self.assertIn(format_main_log_message(monitor_result), shown)
+                self.assertNotIn(command, shown)
+                for message in tasks:
+                    self.assertIn(format_main_log_message(message), shown)
                 self.assertIn('warning', widget.tag_names('1.10'))
+                self.assertIn('warning', widget.tag_names('2.10'))
                 self.assertEqual(widget.cget('state'), 'disabled')
         saved = self.context.log_path.read_text(encoding='utf-8')
-        for message in (hidden, result, command):
+        for message in (hidden,) + hidden_details + (result, monitor_result, command) + tasks:
             self.assertEqual(saved.count(message), 2)
 
 

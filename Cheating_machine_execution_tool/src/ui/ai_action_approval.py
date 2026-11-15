@@ -5,6 +5,7 @@ from tkinter import ttk, messagebox
 from tkinter.scrolledtext import ScrolledText
 
 from src.ui.module_theme import apply_module_theme
+from src.models.ai_session_scope import target_label
 
 
 class AiActionApproval(ttk.Frame):
@@ -49,9 +50,10 @@ class AiActionApproval(ttk.Frame):
         window.minsize(680, 420)
         window.transient(self.winfo_toplevel())
         window.protocol("WM_DELETE_WINDOW", self.close)
-        target = action["target"]
-        ttk.Label(window, text=f"通道{target['channel']} | {target['vlan']} | {target['port']} | "
-                  f"{target['bind_ip']} → {target['host']}:{target['telnet_port']}\n"
+        target = action.get("target")
+        description = (f"通道{target['channel']} | {target['vlan']} | {target['port']} | "
+                       f"{target['bind_ip']} → {target['host']}:{target['telnet_port']}" if target else target_label(action))
+        ttk.Label(window, text=description + "\n" +
                   f"操作：{action['name']} | 编号：{action['id'][:8]}\n"
                   f"原因：{action['assessment']['reason']}", wraplength=800).pack(fill="x", padx=12, pady=10)
         controls = ttk.Frame(window)

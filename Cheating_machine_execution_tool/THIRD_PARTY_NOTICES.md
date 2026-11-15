@@ -15,6 +15,11 @@ This file records the direct runtime dependencies declared in `requirements.txt`
 - xlrd 2.x — BSD-3-Clause License, Copyright (c) 2005-2024 Python Excel Team.
 - comtypes 1.x (Windows Wi-Fi dependency) — MIT License.
 - websockets 15.0.1 (DingTalk Stream transport, Python 3.9 compatible) — BSD-3-Clause License.
+- lark-oapi 1.7.5 (Feishu application-bot transport) — MIT License.
+- PyCryptodome 3.23.0 (Feishu SDK dependency) — BSD-2-Clause / public-domain components; see its bundled LICENSE.rst.
+- HTTPX 0.28.1 and httpcore 1.0.9 — BSD-3-Clause License.
+- h11 0.16.0 — MIT License.
+- AnyIO 4.12.1, exceptiongroup 1.3.1 and typing-extensions 4.16.0 — MIT License / Python Software Foundation License (typing-extensions).
 
 The isolated slim packaging environment is pinned in `requirements-build.txt`, including transitive dependencies and the PyInstaller toolchain. Its actual installed versions and archive checks are recorded in `PACKAGING_REPORT.json` beside each build. The slim profile excludes NumPy/OpenBLAS, lxml and PyQt5; the current legacy power-test entry uses the existing headless compatibility layer. This does not remove features from the application source.
 

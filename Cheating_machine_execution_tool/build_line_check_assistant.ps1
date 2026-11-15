@@ -37,10 +37,12 @@ $portableZip = Join-Path $distDir "LineCheckAssistant_portable.zip"
 $portableZipChecksum = Join-Path $distDir "LineCheckAssistant_portable.zip.sha256.txt"
 $packageVerifier = Join-Path $projectRoot "scripts\verify_slim_package.py"
 $buildInfo = Join-Path $buildDir "LineCheckAssistant\BUILD_INFO.txt"
+$caseSnapshot = Join-Path $buildDir "CONFIRMED_CASES.json"
 
 $savedPythonPath = $env:PYTHONPATH
 $savedPythonHome = $env:PYTHONHOME
 $savedPythonUtf8 = $env:PYTHONUTF8
+$savedCaseSnapshot = $env:LINECHECK_CASE_SNAPSHOT
 
 Push-Location $projectRoot
 try {
@@ -64,6 +66,10 @@ try {
     if (-not (Test-Path -LiteralPath $applicationIcon -PathType Leaf)) {
         throw "Application icon is missing: $applicationIcon"
     }
+
+    & $PythonExecutable -I -X utf8 (Join-Path $projectRoot "scripts\export_ai_cases.py") --output $caseSnapshot
+    if ($LASTEXITCODE -ne 0) { throw "Confirmed case snapshot export failed; packaging is blocked" }
+    $env:LINECHECK_CASE_SNAPSHOT = $caseSnapshot
 
     & $PythonExecutable -I -X utf8 -m PyInstaller `
         --noconfirm `
@@ -123,6 +129,7 @@ try {
     }
     Copy-Item -LiteralPath $versionInfo -Destination (Join-Path $portableDir "VERSION_INFO.txt") -Force
     Copy-Item -LiteralPath $buildInfo -Destination (Join-Path $portableDir "BUILD_INFO.txt") -Force
+    Copy-Item -LiteralPath $caseSnapshot -Destination (Join-Path $portableDir "CONFIRMED_CASES.json") -Force
     if (Test-Path -LiteralPath $thirdPartyNotice) {
         Copy-Item -LiteralPath $thirdPartyNotice -Destination (Join-Path $portableDir "THIRD_PARTY_NOTICES.md") -Force
     }
@@ -152,7 +159,7 @@ try {
         -Value "$zipHash *LineCheckAssistant_portable.zip" `
         -Encoding Ascii
 
-    & $PythonExecutable -I -X utf8 $packageVerifier --exe $exePath --zip $portableZip @auditArgs
+    & $PythonExecutable -I -X utf8 $packageVerifier --exe $exePath --zip $portableZip --case-snapshot $caseSnapshot @auditArgs
     if ($LASTEXITCODE -ne 0) { throw "Package archive verification failed" }
 
     Write-Host "Local build artifacts (retained for verification): $distDir"
@@ -172,5 +179,6 @@ finally {
     $env:PYTHONPATH = $savedPythonPath
     $env:PYTHONHOME = $savedPythonHome
     $env:PYTHONUTF8 = $savedPythonUtf8
+    $env:LINECHECK_CASE_SNAPSHOT = $savedCaseSnapshot
     Pop-Location
 }

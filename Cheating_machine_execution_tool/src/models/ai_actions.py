@@ -28,6 +28,7 @@ def action_fingerprint(action):
     fields = {k: action[k] for k in ("id", "session_id", "run_id", "target", "profile", "name", "params", "before")}
     fields.update({key: action[key] for key in ("permission_mode", "authorization_id", "authorization_source") if key in action})
     fields.update({key: action[key] for key in ("source", "report_id") if key in action})
+    fields.update({"scope": action["scope"]} if "scope" in action else {})
     return hashlib.sha256(json.dumps(fields, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 

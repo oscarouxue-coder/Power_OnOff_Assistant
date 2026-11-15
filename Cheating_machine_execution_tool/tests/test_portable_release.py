@@ -251,7 +251,9 @@ class PortableReleaseBuildScriptTests(unittest.TestCase):
             work = relocated / "build/check/LineCheckAssistant"
             spec = spec_dir / "LineCheckAssistant.spec"
             spec.write_bytes((PROJECT_ROOT / "line_check_assistant/packaging_specs/LineCheckAssistant.spec").read_bytes())
-            with patch.dict(sys.modules, modules), patch.object(sys, "path", sys.path.copy()), patch.object(checker, "check_environment", return_value={}) as verify:
+            snapshot = relocated / "CONFIRMED_CASES.json"
+            snapshot.write_text('{"schema_version":1,"cases":[]}', encoding="utf-8")
+            with patch.dict(os.environ, {"LINECHECK_CASE_SNAPSHOT": str(snapshot)}), patch.dict(sys.modules, modules), patch.object(sys, "path", sys.path.copy()), patch.object(checker, "check_environment", return_value={}) as verify:
                 runpy.run_path(str(spec), init_globals={"SPECPATH": str(spec_dir), "workpath": str(work), "Analysis": analysis, "PYZ": lambda *a, **k: "pyz", "EXE": executable})
             verify.assert_called_once_with(relocated)
             args, settings = captured["analysis"]
@@ -260,6 +262,7 @@ class PortableReleaseBuildScriptTests(unittest.TestCase):
             self.assertEqual(settings["excludes"], ["numpy", "lxml", "PyQt5"])
             self.assertEqual(settings["hookspath"], [str(relocated / "line_check_assistant/packaging_hooks")])
             self.assertIn((str(work / "BUILD_INFO.txt"), "."), settings["datas"])
+            self.assertIn((str(snapshot), "."), settings["datas"])
             self.assertIn((str(relocated / "line_check_assistant/packaging_assets/VERSION_INFO.txt"), "."), settings["datas"])
             self.assertEqual(captured["exe"]["icon"], [str(relocated / "assets/icons/line_check_assistant_network_topology_v1.ico")])
             self.assertIn((captured["exe"]["icon"][0], "assets/icons"), settings["datas"])

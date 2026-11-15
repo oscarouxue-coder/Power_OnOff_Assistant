@@ -4,7 +4,7 @@ import gc
 import json
 import tkinter as tk
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import test_ai_conversation as conversation_fixtures
 from test_ai_debug import TARGET
@@ -42,12 +42,38 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_workspace_is_only_manual_entry_and_auxiliary_windows_are_lazy(self):
         self.assertEqual([self.dialog.book.tab(t, "text") for t in self.dialog.book.tabs()],
-                         ["排障工作台", "模型接入", "已确认案例"])
+                         ["排障工作台", "模型接入", "已确认案例", "远程管理"])
         self.assertIsNone(self.dialog.monitor_panel.window)
         self.assertIsNone(self.dialog.reports_panel.window)
         self.assertFalse(hasattr(self.dialog, "question"))
         self.assertFalse(hasattr(self.dialog, "_submit"))
         self.assertFalse(hasattr(self.dialog.chat_panel, "from_report"))
+
+    def test_remote_tab_is_lazy_reused_and_hiding_only_cancels_binding(self):
+        remote = Mock()
+        self.dialog.remote_tab_factory = Mock(return_value=remote)
+        self.assertIsNone(self.dialog.remote_panel)
+        self.assertEqual(self.dialog.book.select(), str(self.dialog.workspace))
+        self.dialog.open_remote("feishu")
+        self.root.update()
+        self.dialog.remote_tab_factory.assert_called_once_with(self.dialog.remote_tab)
+        remote.select_platform.assert_called_with("feishu")
+        self.dialog.book.select(self.dialog.workspace)
+        self.root.update()
+        remote.suspend.assert_called_with()
+        with patch.object(self.service, "stop") as stop, patch.object(self.diag, "cancel") as cancel:
+            self.dialog.hide()
+            remote.suspend.assert_called_with(cancel_binding=True)
+            self.assertEqual(self.dialog.window.state(), "withdrawn")
+            self.dialog.open_remote("dingtalk")
+            self.root.update()
+            self.dialog.remote_tab_factory.assert_called_once()
+            remote.select_platform.assert_called_with("dingtalk")
+            self.dialog.begin_close()
+            remote.dispose.assert_called_once_with()
+            stop.assert_not_called()
+            cancel.assert_not_called()
+        self.assertEqual(self.requests, [])
 
     def test_windows_reopen_non_modal_and_close_does_not_cancel_tasks(self):
         with patch.object(self.diag, "cancel") as cancel, patch.object(self.service, "stop") as stop:
@@ -86,7 +112,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(session["target"], asdict(target))
         self.assertEqual(session["source_report_id"], "r1")
         self.assertEqual(session["run_id"], "run1")
-        self.assertEqual(self.dialog.chat_panel.target_choice.current(), 1)
+        self.assertEqual(self.dialog.chat_panel.current_target.cget("text"), "通道2")
         self.assertEqual(self.dialog.book.select(), str(self.dialog.workspace))
         self.assertTrue(self.service.authorized(identifier))
         self.assertIn("故障时证据", self.store.chat_evidence(identifier)[-1]["text"])
@@ -114,7 +140,7 @@ class WorkspaceTests(unittest.TestCase):
         identifier = self.dialog.continue_report("r1")
         self.dialog.chat_panel.input.insert("1.0", "继续分析该报告")
         self.dialog.chat_panel.send()
-        self.service.jobs.join()
+        conversation_fixtures.wait_panel(self.dialog.chat_panel, self.service)
         self.assertEqual(self.dialog.chat_panel.selected, identifier)
         self.assertIn("故障时证据", json.dumps(self.requests[-1], ensure_ascii=False))
         names = {t["function"]["name"] for t in self.requests[-1]["tools"]}
@@ -126,7 +152,7 @@ class WorkspaceTests(unittest.TestCase):
         identifier = self.dialog.continue_report("r1")
         self.dialog.chat_panel.input.insert("1.0", "分析故障时材料")
         self.dialog.chat_panel.send()
-        self.service.jobs.join()
+        conversation_fixtures.wait_panel(self.dialog.chat_panel, self.service)
         self.assertEqual(self.dialog.chat_panel.selected, identifier)
         names = {t["function"]["name"] for t in self.requests[-1]["tools"]}
         self.assertNotIn("run_local_command", names)
@@ -248,6 +274,56 @@ class WorkspaceTests(unittest.TestCase):
         self.dialog._new_case()
         self.assertEqual(self.dialog.case_report_id, "")
 
+    def test_shared_case_refresh_keeps_draft_and_stale_save_cannot_overwrite(self):
+        from pathlib import Path
+        from src.services.ai_case_store import SharedCaseStore
+        self.store.case_store = SharedCaseStore(Path(self.temp.name) / "shared")
+        other = SharedCaseStore(Path(self.temp.name) / "shared")
+        self.addCleanup(other.close)
+        identifier = other.confirm_case("r1", "原案例", "原因", "处理", "复测", "范围")
+        self.dialog._reload_cases()
+        self.dialog.case_list.selection_set(str(identifier))
+        self.dialog._choose_case()
+        self.dialog.case_fields["cause"].set("尚未保存的草稿")
+        version = self.dialog.case_version
+        other.confirm_case("r1", "其它项目修订", "新原因", "新处理", "复测", "范围", case_id=identifier)
+        self.dialog.book.select(self.dialog.cases_tab)
+        self.dialog._case_tab_changed()
+        self.assertEqual(self.dialog.case_fields["cause"].get(), "尚未保存的草稿")
+        self.assertEqual(self.dialog.case_version, version)
+        with patch("src.ui.ai_diagnostics_window.messagebox.askyesno", return_value=True), patch.object(self.dialog, "_error") as error:
+            self.dialog._confirm_case()
+        self.assertIn("刷新", str(error.call_args.args[0]))
+        self.assertEqual(other.cases()[0]["cause"], "新原因")
+        self.assertEqual(self.dialog.case_fields["cause"].get(), "尚未保存的草稿")
+        self.dialog.case_list.selection_set(str(identifier))
+        self.dialog._choose_case()
+        self.assertEqual(self.dialog.case_fields["cause"].get(), "新原因")
+        self.dialog.case_fields["cause"].set("重新核实")
+        with patch("src.ui.ai_diagnostics_window.messagebox.askyesno", return_value=True):
+            self.dialog._confirm_case()
+        self.assertEqual(other.cases()[0]["cause"], "重新核实")
+        self.assertTrue(any("修订失败" in line for line in self.logs))
+
+    def test_shared_case_state_changes_are_logged_and_stale_delete_keeps_case(self):
+        from pathlib import Path
+        from src.services.ai_case_store import SharedCaseStore
+        self.store.case_store = SharedCaseStore(Path(self.temp.name) / "shared")
+        identifier = self.diag.confirm_case("r1", "案例", "原因", "处理", "复测", "范围")
+        self.dialog._reload_cases()
+        self.dialog.case_list.selection_set(str(identifier))
+        self.dialog._choose_case()
+        self.dialog._toggle_case()
+        self.assertFalse(self.store.cases())
+        self.assertEqual(self.dialog.case_version, 2)
+        self.assertTrue(any("切换启用状态成功" in line for line in self.logs))
+        self.store.update_case_state(identifier)  # another window changed it
+        with patch("src.ui.ai_diagnostics_window.messagebox.askyesno", return_value=True), patch.object(self.dialog, "_error") as error:
+            self.dialog._delete_case()
+        self.assertTrue(error.called)
+        self.assertEqual(len(self.store.cases()), 1)
+        self.assertTrue(any("删除失败" in line for line in self.logs))
+
     def test_monitor_scope_is_independent_and_stops_do_not_cross(self):
         monitor = self.dialog.monitor_panel
         monitor.channels.set("2")
@@ -256,7 +332,7 @@ class WorkspaceTests(unittest.TestCase):
             monitor.changed()
         self.assertEqual(self.diag.trigger.policy.channels, (2,))
         self.assertTrue(self.diag.trigger.enabled)
-        self.assertEqual(self.dialog.chat_panel.target_choice.current(), 0)
+        self.assertFalse(hasattr(self.dialog.chat_panel, "target_choice"))
         with patch.object(self.service, "cancel_all") as cancel_all, patch.object(self.diag, "cancel") as cancel:
             monitor.enabled.set(False)
             monitor.changed()

@@ -1,10 +1,12 @@
 """对话显示专项：真实Tk、模拟只读数据，无API/设备或真实用户数据库。"""
 import copy
+from contextlib import contextmanager
 import gc
 import queue
 from pathlib import Path
 import sys
 import threading
+import time
 import tkinter as tk
 from tkinter import ttk
 import unittest
@@ -48,17 +50,29 @@ class ChatPresentationTests(unittest.TestCase):
         self.store.chat_items.side_effect = lambda _id: self.messages
         self.store.chat_evidence.return_value = self.items
         self.service = Mock(store=self.store, lock=threading.RLock(), running={}, executors={})
+        self.service.redactor.text.side_effect = lambda text: text
         self.service.permissions.status.return_value = {"mode": "auto_review"}
         self.service.collection_status.return_value = {"enabled": False, "capable": True, "reason": "历史批次仅分析留存材料"}
         self.service.context_status.return_value = {"capacity": 1048576, "source": "模型接口（缓存）",
                                                   "max_output": 4096, "snapshot": {}, "stale": False}
         self.owner = Mock(window=self.root, background_color="#eef2f5", targets=())
+        self.owner.service.profile = ProviderProfile(id="keyboard-fixture", **self.session["profile"])
+        self.service.router.current.return_value = "s1"
+        def route(text, profile, **kwargs):
+            kwargs["on_selected"]("s1")
+            if self.session.get("pending"):
+                self.service.answer_question("s1", text)
+            else:
+                self.service.send("s1", text)
+            return dict(identifier="s1")
+        self.service.router.send.side_effect = route
         frame = ttk.Frame(self.root)
         frame.pack(fill="both", expand=True)
         self.panel = AiChatPanel(frame, self.owner, self.service)
         self.root.update_idletasks()
 
     def tearDown(self):
+        ChatPresentationTests.wait_route(self)
         self.root.destroy()
         del self.panel, self.owner, self.root
         gc.collect()
@@ -79,6 +93,212 @@ class ChatPresentationTests(unittest.TestCase):
         self.root.update()
         self.panel.input.event_generate(sequence)
         self.root.update()
+        self.wait_route()
+
+    def wait_route(self):
+        deadline = time.monotonic() + 3
+        while self.panel.routing and time.monotonic() < deadline:
+            self.root.update()
+            self.panel.poll()
+            time.sleep(.005)
+        self.panel.poll()
+
+    @contextmanager
+    def held_route(self, *, error=None, identifier="s1", persist=False):
+        entered, release = threading.Event(), threading.Event()
+
+        def route(text, profile, **kwargs):
+            kwargs["on_selected"](identifier)
+            if persist:
+                self.add("user", text.strip())
+            entered.set()
+            if not release.wait(3):
+                raise RuntimeError("测试同步超时")
+            if not kwargs["guard"]():
+                raise InterruptedError("本条发送已取消")
+            if error is not None:
+                raise error
+            if not persist:
+                self.add("user", text.strip())
+            return dict(identifier=identifier)
+
+        with patch.object(self.service.router, "send", side_effect=route) as send:
+            try:
+                yield entered, send
+            finally:
+                release.set()
+                self.wait_route()
+
+    def start_held_send(self, text, entered):
+        self.panel.input.insert("1.0", text)
+        self.panel.send()
+        self.root.update()
+        self.assertTrue(entered.wait(1))
+
+    def test_send_echo_is_immediate_silent_and_does_not_read_store_or_refresh_targets(self):
+        with self.held_route() as (entered, send):
+            self.panel.input.insert("1.0", "立即显示的问题")
+            with patch.object(self.store, "chat_items", wraps=self.store.chat_items) as read, \
+                    patch.object(self.panel.output, "delete", wraps=self.panel.output.delete) as delete:
+                start = time.perf_counter()
+                self.panel.send()
+                elapsed = time.perf_counter() - start
+                self.assertLess(elapsed, .1)
+                self.assertIn("立即显示的问题", self.panel.output.get("1.0", "end-1c"))
+                self.assertEqual(self.panel.input.get("1.0", "end-1c"), "")
+                self.owner.refresh_targets.assert_not_called()
+                read.assert_not_called()
+                delete.assert_not_called()
+                send.assert_not_called()
+            self.root.update()
+            self.assertTrue(entered.wait(1))
+            self.panel.poll()
+            for hint in ("正在识别目标", "待发送"):
+                self.assertNotIn(hint, self.panel.output.get("1.0", "end-1c"))
+                self.assertNotIn(hint, self.panel.status_output.get("1.0", "end-1c"))
+            self.assertIn("disabled", self.panel.send_button.state())
+            self.panel.send()
+            self.assertEqual(send.call_count, 1)
+        self.assertEqual(self.panel.output.get("1.0", "end-1c").count("立即显示的问题"), 1)
+
+    def test_first_send_echo_survives_poll_until_session_is_resolved(self):
+        self.panel.selected = ""
+        self.panel.render()
+        with self.held_route() as (entered, _):
+            self.start_held_send("首次发送", entered)
+            self.panel.poll()
+            self.assertEqual(self.panel.selected, "")
+            self.assertEqual(self.panel.output.get("1.0", "end-1c").count("首次发送"), 1)
+        self.assertEqual(self.panel.selected, "s1")
+        self.assertEqual(self.panel.output.get("1.0", "end-1c").count("首次发送"), 1)
+
+    def test_persisted_message_replaces_echo_before_route_returns(self):
+        with self.held_route(persist=True) as (entered, _):
+            self.start_held_send("同文的新问题", entered)
+            self.panel.poll()
+            self.assertTrue(self.panel.routing)
+            self.assertEqual(self.panel.output.get("1.0", "end-1c").count("同文的新问题"), 1)
+        self.assertEqual(self.panel.output.get("1.0", "end-1c").count("同文的新问题"), 1)
+
+    def test_identical_old_question_is_not_mistaken_for_this_send(self):
+        self.add("user", "相同问题")
+        self.panel.render()
+        with self.held_route() as (entered, _):
+            self.start_held_send("相同问题", entered)
+            self.panel.poll()
+            self.assertEqual(self.panel.output.get("1.0", "end-1c").count("相同问题"), 2)
+        self.assertEqual(self.panel.output.get("1.0", "end-1c").count("相同问题"), 2)
+
+    def test_success_keeps_new_draft_even_when_it_equals_sent_text(self):
+        with self.held_route() as (entered, _):
+            self.start_held_send("再次编辑相同文字", entered)
+            self.panel.input.insert("1.0", "再次编辑相同文字")
+        self.assertEqual(self.panel.input.get("1.0", "end-1c"), "再次编辑相同文字")
+
+    def test_failure_keeps_new_draft_and_copyable_original_with_error(self):
+        with self.held_route(error=ValueError("模拟网络失败")) as (entered, _):
+            self.start_held_send("  失败原文\n  保留缩进\n", entered)
+            self.panel.input.insert("1.0", "新草稿")
+        self.assertEqual(self.panel.input.get("1.0", "end-1c"), "新草稿")
+        rendered = self.panel.output.get("1.0", "end-1c")
+        self.assertIn("  失败原文\n  保留缩进\n", rendered)
+        self.assertIn("发送未完成：模拟网络失败", rendered)
+        self.assertNotIn("disabled", self.panel.send_button.state())
+
+    def test_retry_replaces_failed_echo_immediately_without_duplicate_or_old_error(self):
+        with self.held_route(error=ValueError("本轮失败")) as (entered, _):
+            self.start_held_send("重试原问题", entered)
+        with self.held_route() as (entered, _):
+            self.panel.send()
+            output = self.panel.output.get("1.0", "end-1c")
+            self.assertEqual(output.count("重试原问题"), 1)
+            self.assertNotIn("本轮失败", output)
+            self.root.update()
+            self.assertTrue(entered.wait(1))
+        self.assertEqual(self.panel.output.get("1.0", "end-1c").count("重试原问题"), 1)
+
+    def test_later_success_does_not_hide_previous_failed_original(self):
+        with self.held_route(error=ValueError("本轮失败")) as (entered, _):
+            self.start_held_send("保留失败原文", entered)
+            self.panel.input.insert("1.0", "另一个问题")
+        with self.held_route() as (entered, _):
+            self.panel.send()
+            self.root.update()
+            self.assertTrue(entered.wait(1))
+        self.assertIn("保留失败原文", self.panel.output.get("1.0", "end-1c"))
+        self.assertIn("另一个问题", self.panel.output.get("1.0", "end-1c"))
+
+    def test_target_refresh_failure_restores_draft_and_clears_busy_state(self):
+        self.owner.refresh_targets.side_effect = ValueError("目标准备失败")
+        self.panel.input.insert("1.0", "准备前原文")
+        self.panel.send()
+        self.wait_route()
+        self.assertEqual(self.panel.input.get("1.0", "end-1c"), "准备前原文")
+        self.assertIn("发送未完成：目标准备失败", self.panel.output.get("1.0", "end-1c"))
+        self.assertFalse(self.panel.routing)
+        self.service.router.send.assert_not_called()
+
+    def test_echo_applies_existing_secret_filter_without_persisting_it(self):
+        self.service.redactor.text.side_effect = lambda text: text.replace("fixture-secret", "[已隐藏]")
+        with self.held_route(error=ValueError("fixture-secret拒绝")) as (entered, _):
+            self.start_held_send("问题fixture-secret", entered)
+            self.assertIn("问题[已隐藏]", self.panel.output.get("1.0", "end-1c"))
+        rendered = self.panel.output.get("1.0", "end-1c")
+        self.assertNotIn("fixture-secret", rendered)
+        self.assertIn("发送未完成：[已隐藏]拒绝", rendered)
+        self.store.append_chat.assert_not_called()
+
+    def test_stop_before_launch_restores_original_without_starting_router(self):
+        self.panel.input.insert("1.0", "停止前的问题")
+        self.panel.send()
+        self.panel.stop()
+        self.wait_route()
+        self.service.router.send.assert_not_called()
+        self.assertEqual(self.panel.input.get("1.0", "end-1c"), "停止前的问题")
+        self.assertIn("发送未完成", self.panel.output.get("1.0", "end-1c"))
+        self.owner._error.assert_not_called()
+
+    def test_switch_during_route_does_not_attach_echo_or_restore_draft_to_other_session(self):
+        with self.held_route() as (entered, _):
+            self.start_held_send("原会话的问题", entered)
+            self.panel.ids.append("s2")
+            self.panel.sessions["values"] = ["一", "二"]
+            self.panel.sessions.current(1)
+            self.panel.choose()
+            self.panel.input.insert("1.0", "其它会话草稿")
+            self.assertNotIn("原会话的问题", self.panel.output.get("1.0", "end-1c"))
+            # 保留另一会话，避免fixture刷新把它当作已删除。
+            self.store.chats.return_value.append(dict(self.session, id="s2"))
+        self.assertEqual(self.panel.selected, "s2")
+        self.assertEqual(self.panel.input.get("1.0", "end-1c"), "其它会话草稿")
+        self.assertNotIn("原会话的问题", self.panel.output.get("1.0", "end-1c"))
+        self.owner._error.assert_not_called()
+
+    def test_late_success_does_not_switch_selection_or_erase_new_draft(self):
+        self.panel.active_route = 10
+        self.panel.routing = True
+        self.panel.route_generation = 11
+        self.panel.local_echoes.append(dict(generation=10, origin="old", original="旧问题"))
+        self.panel.input.insert("1.0", "保留新草稿")
+        self.panel.route_results.put((9, "finished", dict(identifier="unrelated"), None))
+        self.panel.poll()
+        self.assertTrue(self.panel.routing)
+        self.panel.route_results.put((10, "finished", dict(identifier="old"), None))
+        self.panel.poll()
+        self.assertEqual(self.panel.selected, "s1")
+        self.assertEqual(self.panel.input.get("1.0", "end-1c"), "保留新草稿")
+        self.assertFalse(self.panel.routing)
+
+    def test_local_validation_failure_keeps_input_without_creating_echo(self):
+        for text in ("x" * 32769, "   "):
+            with self.subTest(length=len(text)):
+                self.panel.input.delete("1.0", "end")
+                self.panel.input.insert("1.0", text)
+                self.panel.send()
+                self.assertEqual(self.panel.input.get("1.0", "end-1c"), text)
+                self.assertFalse(self.panel.local_echoes)
+                self.assertFalse(self.panel.routing)
+        self.service.router.send.assert_not_called()
 
     def test_enter_sends_once_and_does_not_insert_newline(self):
         labels = [str(widget.cget("text")) for widget in self.panel.input.master.winfo_children()
@@ -97,7 +317,7 @@ class ChatPresentationTests(unittest.TestCase):
         buttons = [widget for widget in row.winfo_children() if isinstance(widget, ttk.Button)]
         buttons.append(approval.button)
         self.assertEqual([button.cget("text") for button in buttons],
-                         ["发送 / 回答问题", "停止本轮排查", "导入文本日志", "查看待确认操作"])
+                         ["发送 / 回答问题 ▾", "停止本轮排查", "导入文本日志", "查看待确认操作"])
         self.assertIs(approval.master, row)
         self.assertEqual(composer.pack_slaves(), [self.panel.input, row])
         self.assertEqual(approval.winfo_children(), [approval.button])
@@ -188,6 +408,7 @@ class ChatPresentationTests(unittest.TestCase):
         self.service.send.reset_mock()
         self.panel.input.insert("1.0", "点击发送")
         self.panel.send_button.invoke()
+        self.wait_route()
         self.service.send.assert_called_once_with("s1", "点击发送")
         self.assertEqual(self.panel.input.get("1.0", "end-1c"), "")
 
@@ -394,7 +615,7 @@ class ChatPresentationTests(unittest.TestCase):
             self.service.running["s1"] = threading.Event()
             self.service.collection_status.return_value["reason"] = "目标已变更，仅分析材料"
             self.rendered()
-            self.assertIn("disabled", self.panel.send_button.state())
+            self.assertNotIn("disabled", self.panel.send_button.state())
             self.add("system", "本轮恢复状态：无临时修改", "recovery")
             self.service.running.clear()
             self.session["status"] = "可继续"
@@ -469,11 +690,11 @@ class ChatPresentationTests(unittest.TestCase):
                     delete.assert_not_called()
                 self.assertEqual(status.get("sel.first", "sel.last"), "状态")
                 row = status.master.master
-                new_button = next(w for w in row.winfo_children()
-                                  if isinstance(w, ttk.Button) and w.cget("text") == "新会话")
-                self.assertGreaterEqual(status.winfo_rootx(), new_button.winfo_rootx() + new_button.winfo_width())
-                controls_height = max(w.winfo_reqheight() for w in row.winfo_children()
-                                      if w is not status.master)
+                self.assertFalse(any(isinstance(w, ttk.Button) and w.cget("text") == "新会话"
+                                     for w in row.winfo_children()))
+                target = self.panel.current_target
+                self.assertGreaterEqual(status.winfo_rootx(), target.winfo_rootx() + target.winfo_width())
+                controls_height = max(w.winfo_reqheight() for w in row.winfo_children())
                 self.assertLessEqual(status.master.winfo_height(), controls_height)
                 self.assertEqual(row.winfo_height(), controls_height)
                 self.assertGreater(status.winfo_width(), 100)
@@ -586,7 +807,7 @@ class ChatPresentationTests(unittest.TestCase):
         self.rendered()
         self.assertGreaterEqual(self.panel.output.yview()[1], 0.98)
         self.assertIn("请确认LOS灯状态。", self.panel.output.get("1.0", "end-1c"))
-        self.assertIn("disabled", self.panel.send_button.state())
+        self.assertNotIn("disabled", self.panel.send_button.state())
         self.service.running.clear()
         self.rendered()
         self.assertNotIn("disabled", self.panel.send_button.state())

@@ -1,4 +1,4 @@
-"""钉钉配置编辑与显式试发服务；异常不包含凭据。"""
+"""群机器人配置编辑、自动平台识别与发送服务；异常不包含凭据。"""
 from __future__ import annotations
 
 import configparser
@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Mapping
 
 from src.core.dingtalk_robot import send_text
+from src.core.feishu_robot import send_text as send_feishu_text
+from src.core.webhook_target import detect_platform, PLATFORM_NAMES, SAFE_ENDPOINTS
 
 
 DEFAULTS = {"dingtalk_flag": "0", "webhook": "", "secret": "", "at_all": "0"}
@@ -29,14 +31,28 @@ def load_push_project_name(config_path: Path, *, log=lambda message: None) -> st
     return name
 
 
-def send_test_message(values: Mapping[str, object], project_config_path: Path, *, log=lambda message: None) -> None:
+def send_test_message(values: Mapping[str, object], project_config_path: Path, *, log=lambda message: None) -> str:
     """显式试发使用页面快照，不保存配置，不受自动推送开关限制。"""
     values = MessagePushConfigService.validate(values)
     project_name = load_push_project_name(project_config_path, log=log)
-    log('[消息推送] 下发测试消息：POST https://oapi.dingtalk.com/robot/send（凭据省略）。')
-    send_text(values['webhook'], values['secret'],
-              f'项目：{project_name}\nLineCheckAssistant 消息推送测试：收到此消息表示钉钉机器人推送正常。',
-              at_all=values['at_all'] == '1')
+    platform = detect_platform(values['webhook'])
+    name = PLATFORM_NAMES[platform]
+    log(f'[消息推送] 已识别{name}；下发测试消息：POST {SAFE_ENDPOINTS[platform]}（凭据省略）。')
+    sender = send_feishu_text if platform == 'feishu' else send_text
+    sender(values['webhook'], values['secret'],
+           f'项目：{project_name}\nLineCheckAssistant 消息推送测试：收到此消息表示{name}机器人推送正常。',
+           at_all=values['at_all'] == '1')
+    return name
+
+
+def send_feishu_notification(values, project_name, message, normal_flag=0, *, log=lambda message: None):
+    """旧正式通知入口的飞书分支；不读取或附加远程客户端凭据。"""
+    result = '挂测开关机完成' if normal_flag else '挂测开关机出现异常'
+    log(f'[消息推送] 已识别飞书；下发正式消息：POST {SAFE_ENDPOINTS["feishu"]}。')
+    send_feishu_text(values['webhook'], values.get('secret', ''),
+                     f'项目：{project_name}\n{result}\n{message}',
+                     at_all=str(values.get('at_all', '0')).strip() == '1')
+    log('[消息推送] 正式发送成功（飞书已接受）。')
 
 
 class MessagePushConfigService:

@@ -7,9 +7,20 @@ import re
 from src.utils.wifi_log_summary import WifiLogSummary
 
 
-_AI_PREFIX = re.compile(r'^\[AI(?:诊断|对话|监控|配置|案例|界面| Debug|采集|执行|网络检查)\](?= |\[)')
+_AI_PREFIX = re.compile(r'^\[(?:AI(?:诊断|对话|监控|配置|案例|界面| Debug|采集|执行|网络检查|资料|证据)'
+                        r'|钉钉接入|飞书接入)\](?= |\[)')
 _CHAT = '[AI对话] '
+_MONITOR = '[AI监控] '
 _SESSION = r'会话[0-9a-f]{8}'
+_COLLECTION_TOOL = (r'(?:read_test_evidence|read_pc_environment|read_serial_log|read_dut_state|'
+                    r'read_network_state|probe_connectivity|capture_packets|follow_logs|kernel_debug)')
+_QUIET_COLLECTION_REASONS = (
+    '默认允许主动采集', '本机电脑独立排障，仅开放本机工具',
+    '普通问答未绑定排查目标，不执行工具', '历史批次仅分析留存材料，请为当前批次新建会话',
+    '目标或登录配置已变化，仅分析留存材料，请新建会话', '模型配置已变更或删除，请新建会话',
+    '模型未通过工具能力验证，仅分析已有材料',
+    '本轮工具额度已用尽，仅根据已获得证据回答；可发送下一条消息继续',
+)
 _ROUTINE = tuple(re.compile(pattern) for pattern in (
     _SESSION + r'请求模型（第\d+次交互）；估算输入\d+ Token',
     _SESSION + r'模型请求成功',
@@ -19,19 +30,77 @@ _ROUTINE = tuple(re.compile(pattern) for pattern in (
                r'输入按UTF-8字节保守估算，输出预留\d+ Token及5%余量)',
     _SESSION + r'独立风险审查请求；模型=[^\r\n]+，估算输入\d+ Token',
     r'操作[0-9a-f]{8}风险审查开始：\w+',
+    _SESSION + r'开始采集：' + _COLLECTION_TOOL + r'，目标=[^；\r\n]+',
+    _SESSION + r'工具完成：(?:' + _COLLECTION_TOOL + r'|run_local_command|run_dut_command|'
+               r'read_local_file|write_local_file|read_serial_status|update_diagnostic_plan)',
+    _SESSION + r'连续诊断计划更新：\[[^\r\n]*\]',
+    _SESSION + r'收到诊断补充；下一安全检查点采用，不授予新操作权限',
+    _SESSION + r'已采用\d+条诊断补充，原始记录保留',
+    _SESSION + r'跳过重复诊断检查：\w+，证据=[0-9a-f]{32}',
+    r'操作[0-9a-f]{8}已跳过独立审查：完全访问，授权=[0-9a-f]{32}',
+    r'开始识别对话目标；仅发送目标标识和最近对话，不执行操作',
+    r'路由(?:新建|续接)' + _SESSION + r'，目标=(?:通道\d+|本机电脑|普通问答)',
+    _SESSION + r'完全访问已自动生效；目标/模型/批次已校验，跳过独立审查',
+    _SESSION + r'完全访问暂未生效：(?:' + '|'.join(map(re.escape, _QUIET_COLLECTION_REASONS)) + r')',
+    r'创建会话 [0-9a-f]{8}，批次=[^，\r\n]*，目标=(?:通道\d+|本机电脑|普通问答)，模型=[^；\r\n]+',
+    r'文件读取完成：[^，\r\n]+，字节=\d+，截断=False',
+    r'开始只读串口诊断：COM\d+',
+))
+# 已知正常整行才收起；TX后的命令/登录值是不透明载荷，可包含换行或“失败”等字样。
+_AI_DETAILS = tuple(re.compile(pattern) for pattern in (
+    r'\[AI资料\] 检索完成：已确认案例\d+，操作员章节\d+；未命中不补入无关资料',
+    r'\[AI证据\] 开始整理本次目标证据与样机故障线索',
+    r'\[AI证据\] 完成：候选\d+，选取\d+，省略\d+，隔离\d+，截断\d+；来源=[^\r\n]+',
+    r'\[AI案例\] 开始(?:汇集旧库及项目库中的人工确认案例|导入随包案例快照)',
+    r'\[AI案例\] [^；\r\n]+导入完成：新增\d+，跳过\d+',
+    r'\[AI案例\] 旧库汇集成功：新增\d+',
+    r'\[AI采集\] 开始：' + _COLLECTION_TOOL + r'，通道\d+',
+    r'\[AI采集\] 完成：' + _COLLECTION_TOOL,
+    r'\[AI采集\] 开始读取本机电脑环境；未绑定样机',
+    r'\[AI采集\] 本机电脑环境读取完成；无目标网卡推断',
+    r'\[AI监控\] 状态更新：AI自动监控：(?:已关闭|诊断中|诊断排队中|监控中|已开启，待测试)',
+    r'\[AI监控\] 操作[0-9a-f]{8}独立风险审查请求；模型=[^；\r\n]+',
+    r'\[AI监控\] 操作[0-9a-f]{8}(?:风险审查开始：\w+|已跳过独立审查：完全访问，授权=[0-9a-f]{32})',
+    r'\[钉钉接入\] 已接收群消息 [^\r\n]{1,12}，等待会话处理',
+    r'\[钉钉接入\] 群成员会话已关联：[0-9a-f]{8}，通道\d+',
+    r'\[钉钉接入\] 群回复发送成功（钉钉已接受）',
+    r'\[飞书接入\] 已接收(?:群聊|单聊)消息 [^\r\n]{1,12}',
+    r'\[飞书接入\] 飞书成员会话已关联：[0-9a-f]{8}，通道\d+',
+    r'\[飞书接入\] 下发飞书回复：POST /open-apis/im/v1/messages（凭据省略）',
+    r'\[飞书接入\] 飞书回复发送成功（接口已接受）',
+    r'\[飞书接入\] 飞书回复跳过：本轮无临时修改；完整恢复记录保留本地',
+    r'\[飞书接入\] (?:正在连接飞书（HTTPS注册 / WSS）|飞书长连接已连接)',
+    r'\[钉钉接入\] (?:正在连接|已连接)',
+    r'\[AI Debug\] 尝试 Telnet：通道\d+，源IP=[^，\r\n]+，目标=[^:\r\n]+:\d+',
+    r'\[AI Debug\] Telnet 登录成功',
+    r'\[AI Debug\] 已复用通道\d+ COM\d+，Shell已确认',
+    r'\[AI Debug\] TX 登录(?:用户名|密码)：[\s\S]*',
+    r'\[AI Debug\]\[(?:Telnet|telnet|串口|serial)\] TX：[\s\S]*',
+    r'\[AI(?:采集|网络检查)\] PC TX：[\s\S]*',
+    r'\[AI执行\] PC TX（cwd=[^\r\n]+，超时=\d+秒）：[\s\S]*',
+    r'\[AI(?:采集|网络检查)\] PC RX：[^；\r\n]+；(?:成功；)?返回码=0；编码=[\w.-]+',
 ))
 _COLLECTION = re.compile(
-    r'(?P<state>' + _SESSION + r'采集状态：[^\r\n]+?；权限=[^；\r\n]+)；'
+    r'(?P<state>' + _SESSION + r'采集状态：(?P<reason>[^\r\n]+?)；权限=[^；\r\n]+)；'
     r'真实诊断信息（含材料中的账号、密码）发送至(?P<recipient>[^\r\n]+?)；请求工具：[^\r\n]+')
+_CHAT_START = re.compile(r'(?P<session>' + _SESSION + r')收到问题，进入排查队列；其它会话继续')
+_CHAT_FINISH = re.compile(
+    r'(?P<session>' + _SESSION + r')本轮结束；恢复状态：(?P<fixed>固定采集：)?'
+    r'(?P<recovery>无临时修改|已恢复，临时文件已清理|已恢复/已停止本次采集进程)'
+    r'(?P<notice>；本轮通用操作的实际变更不自动回滚，结果待核实的操作须人工核对。)?')
 _JSON_EVENT = re.compile(
-    r'(?P<event>等待操作员批准|实际执行操作|操作[0-9a-f]{8}(?:审查结果|结束))：(?P<payload>.*)', re.S)
+    r'(?P<event>读取本机文件|等待操作员批准|实际执行操作|操作[0-9a-f]{8}(?:审查结果|结束))：(?P<payload>.*)', re.S)
 _ACTION_STATES = {
     'succeeded': ('执行完成', 'success'), 'failed': ('执行失败', 'error'),
     'unknown': ('结果待核实', 'warning'), 'cancelled': ('已取消', 'warning'),
     'blocked': ('已拦截', 'warning'), 'rejected': ('已拒绝', 'warning'),
 }
-_RESULT = re.compile(r'^\[AI对话\] 操作[0-9a-f]{8}结束：[^；\r\n]+（(?P<state>\w+)）(?:；|$)')
-_REVIEW = re.compile(r'^\[AI对话\] 操作[0-9a-f]{8}审查结果：(?P<risk>ordinary|dangerous|unknown|blocked)；')
+_NORMAL_ACTION_NOTICES = (
+    '命令返回Shell提示符；业务是否成功须依据实际输出或后续查询核对',
+    '停止/超时只清理本次进程，不代表其已产生的系统或设备变更已回滚',
+)
+_RESULT = re.compile(r'^\[AI(?:对话|监控)\] 操作[0-9a-f]{8}结束：[^；\r\n]+（(?P<state>\w+)）(?:；|$)')
+_REVIEW = re.compile(r'^\[AI(?:对话|监控)\] 操作[0-9a-f]{8}审查结果：(?P<risk>ordinary|dangerous|unknown|blocked)；')
 _DUT_PREFIX = re.compile(r'^\[DUT配置\](?= |\[)')
 _DUT_MESSAGE = re.compile(r'^\[DUT配置\](?:\[[^\]\r\n]+\])* (?P<body>[^\r\n]*)')
 _DUT_DETAILS = tuple(re.compile(pattern) for pattern in (
@@ -65,6 +134,15 @@ def ai_main_log_tag(message: str) -> str | None:
         return 'error'
     if '；进程清理未确认' in message:
         return 'warning'
+    if result['state'] == 'succeeded':
+        exit_code = re.search(r'；返回码=(-?\d+)', message)
+        status = re.search(r'；进程状态=([^；\r\n]+)', message)
+        notice = message.partition('；说明=')[2]
+        if (any(text in message for text in ('；标准错误=', '；原始输出已截断', '；未下发操作命令'))
+                or exit_code is not None and int(exit_code[1]) != 0
+                or status is not None and status[1] not in ('completed', 'succeeded')
+                or notice and notice not in _NORMAL_ACTION_NOTICES):
+            return 'warning'
     state = _ACTION_STATES.get(result['state'])
     return state[1] if state else None
 
@@ -110,33 +188,67 @@ def _action_summary(event: str, value: dict) -> str | None:
         parts.append('未下发操作命令')
     if value.get('process_cleanup_confirmed') is False:
         parts.append('进程清理未确认')
-    if state == 'failed' and isinstance(value.get('stderr'), str) and value['stderr'].strip():
+    if state in ('failed', 'succeeded') and isinstance(value.get('stderr'), str) and value['stderr'].strip():
         error = value['stderr'].strip()
         first = error.splitlines()[0][:240]
-        parts.append('错误=' + first + ('…（完整输出见主日志文件）' if first != error else ''))
+        parts.append(('错误=' if state == 'failed' else '标准错误=') + first
+                     + ('…（完整输出见主日志文件）' if first != error else ''))
     if value.get('truncated') is True:
         parts.append('原始输出已截断')
     return '；'.join(parts)
 
 
 def _format_ai_message(message: str) -> str | None:
-    # 实际TX/登录信息等其它AI前缀作为不透明文本保留，禁止按正文关键词过滤。
-    if not message.startswith(_CHAT):
+    prefix = next((p for p in (_CHAT, _MONITOR) if message.startswith(p)), None)
+    body = message[len(prefix):] if prefix else message
+    if any(pattern.fullmatch(candidate) for pattern in _AI_DETAILS for candidate in (message, body)):
+        return None
+    if prefix is None:
         return message
-    body = message[len(_CHAT):]
     if any(pattern.fullmatch(body) for pattern in _ROUTINE):
         return None
+    start = _CHAT_START.fullmatch(body)
+    if start:
+        return prefix + start['session'] + '开始排查（已入队）'
+    finish = _CHAT_FINISH.fullmatch(body)
+    if finish and bool(finish['fixed']) == bool(finish['notice']):
+        result = prefix + finish['session'] + '本轮结束'
+        if finish['recovery'] != '无临时修改':
+            result += '；临时操作已恢复'
+        if finish['notice']:
+            result += '；通用操作不自动回滚，待核实结果请人工核对'
+        return result
     collection = _COLLECTION.fullmatch(body)
     if collection:
-        return _CHAT + collection['state'] + '；发送至=' + collection['recipient']
+        if collection['reason'] in _QUIET_COLLECTION_REASONS:
+            return None
+        return prefix + collection['state'] + '；发送至=' + collection['recipient']
     event = _JSON_EVENT.fullmatch(body)
     if event:
         try:
             value = json.loads(event['payload'])
             if isinstance(value, dict):
+                if event['event'] == '读取本机文件':
+                    if (set(value) == {'path', 'offset_bytes', 'max_bytes'}
+                            and isinstance(value['path'], str) and type(value['offset_bytes']) is int
+                            and value['offset_bytes'] >= 0 and type(value['max_bytes']) is int and value['max_bytes'] > 0):
+                        return None
+                    return message
                 result = _action_summary(event['event'], value)
                 if result is not None:
-                    return _CHAT + result
+                    if event['event'] == '实际执行操作':
+                        return None
+                    if event['event'].endswith('审查结果') and value['risk'] == 'ordinary':
+                        return None
+                    if (event['event'].endswith('结束') and value.get('action_state') == 'succeeded'
+                            and not value.get('error') and not value.get('stderr')
+                            and value.get('exit_code') in (None, 0)
+                            and value.get('status') in (None, 'completed', 'succeeded')
+                            and value.get('notice') in (None, '') + _NORMAL_ACTION_NOTICES
+                            and value.get('process_cleanup_confirmed') is not False
+                            and value.get('dispatched') is not False and value.get('truncated') is not True):
+                        return None
+                    return prefix + result
         except (ValueError, TypeError):
             pass  # 损坏或新格式原样可见，不能因显示摘要丢失异常。
     return message

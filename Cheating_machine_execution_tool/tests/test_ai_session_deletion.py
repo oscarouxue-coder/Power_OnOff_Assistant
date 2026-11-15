@@ -17,6 +17,7 @@ from src.models.ai_diagnostics import ProviderProfile
 from src.services.ai_conversation_service import AiConversationService
 from src.services.ai_action_service import AiActionService
 from src.services.ai_permission_service import AiPermissionService
+from src.services.ai_session_router import AiSessionRouter
 from src.services.ai_evidence_context import AiEvidenceContext
 from src.services.ai_store import DiagnosticStore, profile_fingerprint
 from src.ui.ai_chat_panel import AiChatPanel
@@ -50,8 +51,10 @@ class DeletionFixture:
         self.service.context = AiEvidenceContext()
         self.service.permissions = AiPermissionService(self.service)
         self.service.actions = AiActionService(self.service)
+        self.service.router = AiSessionRouter(self.service)
         self.add_session("s1")
         self.add_session("s2")
+        self.service.router.select("s2")
 
     def add_session(self, identifier):
         self.store.create_chat({"id": identifier, "created": "2026-11-12T12:30:00+08:00",
@@ -244,7 +247,7 @@ class SessionManagerTests(DeletionFixture, unittest.TestCase):
             self.manager.delete_selected()
         self.assertEqual(self.panel.selected, "s1")
         self.assertEqual(self.panel.input.get("1.0", "end-1c"), "")
-        self.assertEqual(self.panel.target_choice.current(), 1)
+        self.assertEqual(self.panel.current_target.cget("text"), "通道2")
         self.assertIn("故障s1", self.panel.output.get("1.0", "end-1c"))
         self.assertNotIn("故障s2", self.panel.output.get("1.0", "end-1c"))
 

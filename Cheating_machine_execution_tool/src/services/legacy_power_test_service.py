@@ -1143,6 +1143,8 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
                 initialize_power=False,
             )
         legacy_worker.dingtalk.log = logger.info
+        from src.services.feishu_notifications import TestNotificationProxy
+        legacy_worker.dingtalk = TestNotificationProxy(legacy_worker.dingtalk, message_queue.put)
         if request.communication_method == "telnet":
             from src.models.wifi_test_models import WifiTestOptions
             legacy_worker.wifi_scheduler = PowerTestWifiScheduler(
@@ -1205,6 +1207,7 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
         reported_ready = set()
 
         def run_channel(channel: LegacyPowerChannel, completed=0, attempt=0) -> None:
+            legacy_worker.dingtalk.set_channel(channel.number)
             if control_queue is not None:
                 message_queue.local.channel = channel.number
                 message_queue.local.attempt = attempt

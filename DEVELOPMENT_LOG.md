@@ -1,5 +1,400 @@
 # 开发记录
 
+## 2026-11-15 - 验证并提交AI工作区改动
+
+- 类型：测试
+- 背景：负责人要求创建一次本地Git提交，由AI总结备注；经核对存在多项相互依赖的同期改动，负责人明确选择“提交当前全部源码、测试和文档改动，排除本机配置”。
+- 完成内容：① 核对分支、暂存区、工作区及改动来源，将95个源码、测试、方案、依赖/构建脚本和文档文件纳入本次提交，涵盖连续诊断、流式协作、多样机任务、飞书接入、共用案例库、会话/权限/Webhook及界面日志优化。② 本机`Auto_power_on_off_tool/config/config.ini`保持原样，不纳入暂存，校验内容哈希未变化；build/dist/logs/.venv不纳入。③ 标准Git检查入口执行完整基线并全部通过，同步项目最新完整验证记录；提交备注为“完善AI连续排障、飞书接入与多样机任务”，正文概括功能，保留项目要求的Co-Authored-By。④ 仅本地提交，既有pre-commit钩子继续复核，不推送、不打包、不发布，不升级Windows/真实模型/平台/设备验收结论。
+- 修改文件：
+  - `DEVELOPMENT_LOG.md`（本轮提交与验证记录）
+  - `PROJECT_STATUS.md`（最新完整验证及交接说明）
+  - 同期功能文件清单见本次提交的95个文件及下方各条实施记录；本轮除上述两份记录外不新增功能修改。
+- 验证方法：主源码目录运行`powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/run_git_pre_commit.ps1`，由既有入口解析独立CPython3.9.10 x64并执行`python scripts/verify_baseline.py`；执行`git diff --cached --check`，核对暂存文件集合、配置排除及配置SHA256未变化。实际提交仍由`.githooks/pre-commit`复核完整基线，完成后检查实际提交哈希、提交文件及工作区。
+- 验证结果：标准独立环境完整基线全部通过，2382项全量测试、196项指定关键回归、188个源码编译/清单覆盖及协议不变量通过，`ALL CHECKS PASSED`，exit 0。95文件暂存范围与授权一致，差异格式检查通过，暂存区不含本机配置，工作区仅保留该配置的既有修改。下方各轮“未提交/未运行完整基线”保留当时事实，本轮完整记录以本条和PROJECT_STATUS.md顶部为准。
+- 后续待办：本轮无推送、打包或新增现场验收；既有Windows可见交互、真实模型/远程平台及DUT待验收项目继续按ACCEPTANCE_BASELINE.md §2.16/§3处理。
+
+## 2026-11-15 - 实现AI连续诊断与流式协作
+
+- 类型：功能
+- 背景：负责人希望程序AI诊断助手具备类似Agent的自主连续排障体验，确认优先覆盖本机和当前设备，定位原因并给建议，不自动修复；随后批准实施连续排障、任务记忆、过程展示、运行中补充与流式回复计划。
+- 完成内容：① 新增独立任务模块，最多24轮取证模型交互、48次工具请求、10分钟，在安全检查点检查预算，可追加一次无工具总结；重复取证用已有证据响应，连续三次失败、重复结果或空检索收束。固定执行器原10次默认保持，连续诊断按任务预算适配。② 本地发送按钮右键/Alt+↓提供连续诊断、常规对话和查看进展入口，默认仍为常规对话；模式偏好独立持久化，按钮动态显示模式，不增加固定说明/按钮，不修改原三档权限。进展使用可复用、居中、统一背景的只读滚动窗口。首轮覆盖本机或单个设备，多样机、远程及监控沿用原流程。③ 连续诊断工具列表和执行层共同限制只读取证，完全访问也不开放通用命令、文件写入、抓包/跟踪/内核Debug；原设备登录审批、目标/批次/模型复核、锁源和占用/停止保护保持，超时撤销未批准登录。④ 持久化目标、步骤、引用本会话证据的模型观察笔记、实际检查及用户纠正；原始证据与完整协议组留存，长任务请求仅保留最近两组完整交互和任务记忆。笔记不升级根因，空结论显示失败，不宣称已给建议。⑤ 运行中可接收最多8条/65536字符补充，下一安全节点采用并跳过旧回复中尚未开始的检查；停止/异常保留原文，重启仅标中断、不自动执行。⑥ 增加Chat Completions/Responses有界SSE解码，工具参数碎片不执行，完整结果才入库/调用工具，流式正文仅本机预览；保留协议reasoning原文但不展示。API密钥跨片前缀暂扣过滤，兼容忽略stream而返回JSON的服务，流失败不自动重发。⑦ 详情留在日志，主界面收起计划/补充等正常细节，保留预算/无进展收束及异常；同步方案、操作员说明、状态和验收待办，保留既有未提交改动。
+- 修改文件：
+  - `.claude/plans/ai-continuous-diagnosis.md`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_diagnostic_task.py`（新增）
+  - `Cheating_machine_execution_tool/src/core/ai_stream.py`（新增）
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostic_task_control.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_action_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_debug_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_session_router.py`
+  - `Cheating_machine_execution_tool/src/core/ai_client.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/src/ui/main_log_filter.py`
+  - `Cheating_machine_execution_tool/src/utils/ai_redaction.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_diagnostic_task.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_session_router.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录用仓库外`%LOCALAPPDATA%/LineCheckAssistant/feishu-validation-py39/Scripts/python.exe`（CPython3.9.10 x64），设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，tests加入sys.path，TEMP/TMP/TMPDIR及tempfile.tempdir统一到解析后的临时目录。在`OffscreenTkWindows()`内用`unittest.defaultTestLoader.loadTestsFromNames`运行`test_ai_conversation`、`test_ai_workspace`、`test_ai_permissions`、`test_ai_monitor_permissions`、`test_ai_chat_presentation`、`test_ai_context_budget`、`test_ai_context_usage`、`test_ai_session_router`、`test_ai_batch`、`test_ai_core`、`test_ai_debug`、`test_ai_diagnostic_task`、`test_ai_session_deletion`、`test_ai_monitor_status`、`test_ai_integration`、`test_main_log_filter`、`test_dingtalk_remote`、`test_feishu_remote`。进展窗口及批准预算收尾后复跑新增专项、聊天显示/路由、权限和主日志5组；空结论与进展状态最后调整后复跑新增专项。15个本轮Python文件执行`py_compile.compile(..., doraise=True)`，调用`check_py_compile_inventory(Path.cwd())`，执行本轮文件差异格式与方案/文档一致性检查。
+- 验证结果：相关组合552项全部通过（101.344秒，197个离屏Tk窗口）；进展窗口等收尾后的5组176项通过（20.236秒，55个离屏Tk窗口）；最终新增专项24项通过（10.419秒，7个离屏Tk窗口）。15文件局部编译及188个主源码编译清单覆盖检查通过。首轮相关组合323项中既有首次发送时序测试在单次root.update后未及时进入后台而失败，单独复跑通过；改为有界泵送Tk事件后，后续相关组合全部通过。新增测试覆盖12次连续取证/13轮模型交互及完整协议留存、执行层只读、计划引用、重复/无进展/预算、补充/停止/重启、待批准登录预算取消、本机范围、两协议流及碎片/断流/密钥过滤、UI菜单/预览/滚动进展。未运行完整基线，保留最近完整验证记录；未提交、打包或发布，未连接真实模型/平台/设备，现有EXE未更新。
+- 后续待办：负责人重启Windows源码版按ACCEPTANCE_BASELINE.md §2.16/§3复验发送模式、右键/键盘菜单、进展窗口、流式阅读/复制、补充纠正、停止与历史续接；真实两协议模型兼容及诊断效果、DUT首次登录/只读查询/占用/锁源/停止由负责人现场确认。离线/离屏结果不替代这些验收，不扩大既有设备验收结论。
+
+## 2026-11-15 - 支持AI多样机任务与结果续查
+
+- 类型：功能
+- 背景：负责人反馈“3台样机是否都能ping通”及“逐台检查”反复被要求先选一台，确认实施通用多样机任务：同一对话汇总、沿用三档权限、独立失败继续、先全部检查再处理异常，检查不自动扩展修复。
+- 完成内容：① 扩展共享路由的batch范围、通道集合及失败/剩余目标引用，兼容旧单台返回；明确通道列表和目标澄清续接走完整表达，数量不一致在对话内追问，候选变化拦截。② 新增独立任务模型和编排service，父会话无设备执行工具，子会话继续使用现有单目标执行器、全局串行互斥及有界队列；最多4阶段，默认先检查全部再处理异常，本机共享步骤只执行一次。③ 简单Ping直接复用源IP/接口绑定的固定4包探测，依据实际时延列表区分可达、零回包及检查失败；完成全部Ping后补只读异常证据，通用任务从实际工具结果形成逐台表，再由无工具模型汇总差异，失败保留表和证据。④ 检查阶段限制修改工具，父目标集合及父授权纳入子授权校验；本地、钉钉、飞书具体批准仍对应原子操作和成员，父对话聚合待批准信息，停止整批、清除相关远程编号。⑤ 单台独立失败继续，共享/清理异常暂停；清理需无待恢复记录并人工确认后才可继续，未知操作不重发。保存逐阶段进度，继续跳过已完成阶段；多台人工问题按通道回答，内部子会话隐藏、证据按通道投影、随父删除，重启清除待执行请求，人工选中历史仅分析材料。⑥ 保留同时进行的连续诊断改动，兼容轻量宿主无drafts及发送关键字参数；同步操作员说明、项目状态和验收待办。
+- 修改文件：
+  - `.claude/plans/ai-batch-tasks.md`（新增）
+  - `Cheating_machine_execution_tool/src/models/ai_batch.py`（新增）
+  - `Cheating_machine_execution_tool/src/models/ai_session_scope.py`
+  - `Cheating_machine_execution_tool/src/services/ai_batch_service.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_session_router.py`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_action_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_permission_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_record_titles.py`
+  - `Cheating_machine_execution_tool/src/services/dingtalk_remote_service.py`
+  - `Cheating_machine_execution_tool/src/services/feishu_remote_service.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_permission_control.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_session_manager.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_batch.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_ai_session_router.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录，使用仓库外`%LOCALAPPDATA%/LineCheckAssistant/feishu-validation-py39/Scripts/python.exe -X utf8`（CPython3.9.10 x64）；TEMP/TMP/TMPDIR及tempfile.tempdir统一为`Path(tempfile.gettempdir()).resolve()`，将tests加入sys.path。用`OffscreenTkWindows()`组合运行`test_ai_batch`、`test_ai_session_router`、`test_ai_conversation`、`test_ai_actions`、`test_ai_permissions`、`test_dingtalk_remote`、`test_feishu_remote`、`test_ai_session_deletion`、`test_ai_workspace`、`test_ai_chat_presentation`、`test_ai_context_usage`、`test_ai_record_titles`、`test_ai_monitor_permissions`、`test_ai_monitor_status`并断言离屏。对本轮16个Python文件执行局部py_compile，调用`check_py_compile_inventory(Path.cwd())`，检查本轮差异格式和文档一致性。针对并行变化的执行/审查源码追加8模块专项（含`test_ai_diagnostic_task`），记录验证前后SHA256变化。
+- 验证结果：最终大组合436项通过（111.477秒，193个离屏Tk窗口），包含新增32项批量专项；当前执行/审查源码追加243项通过（77.218秒，56个离屏Tk窗口），该轮生产源码哈希未变化。并行连续诊断专项另14项通过（2.030秒）。16文件局部编译、188个源码编译清单覆盖和差异格式检查通过。早期17项专项中剩余目标中文“两”未命中快捷续查，补齐后通过；大组合早期267项、扩展434/435项通过后，工作区连续诊断接口变化导致一轮435项中2项失败/9项错误，分别为旧mock未接收新关键字、旧按钮文字及轻量宿主无drafts，兼容后得到上述最终结果。243项期间仅批量测试文件增加主线程GC清理，以避免Tk变量在后台析构；随后单独复查32项批量专项全部通过（13.916秒），无上述析构异常。所有模型、Ping、设备连接及平台回复均使用隔离模拟，未操作真实设备。本轮未运行完整基线，保留最近一次完整验证记录；未提交、打包或发布，现有EXE未更新。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.16/§3复验三台样机、真实模型、钉钉/飞书收发及完整Windows交互；检查实际出口、批量修改/批准、停止/恢复、失败/剩余续查、跨样机差异和原始证据。自动化不替代现场结论，不扩大既有设备验收范围。
+
+## 2026-11-15 - 精简AI工作台刷新按钮
+
+- 类型：修改
+- 背景：负责人要求移除AI诊断助手顶部“刷新目标”按钮，并将排障会话旁的“刷新”改为“刷新会话”。
+- 完成内容：① 仅移除工作台顶部按钮，保留目标刷新方法以及打开窗口、发送消息等原有调用。② 会话按钮仅调整文字，仍调用原有refresh方法。③ 同步操作员说明，保留工作区原有未提交改动；其它窗口的刷新按钮不变。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用仓库外`%LOCALAPPDATA%/LineCheckAssistant/feishu-validation-py39/Scripts/python.exe -X utf8`，将tests加入sys.path，TEMP/TMP/TMPDIR及tempfile.tempdir统一到解析后的临时目录。两个修改的Python文件执行`py_compile.compile(..., doraise=True)`；在`OffscreenTkWindows()`内以`unittest.defaultTestLoader.loadTestsFromNames(('test_ai_workspace', 'test_ai_chat_presentation'))`运行既有专项，并附加不写入仓库的一次性隔离Tk检查：遍历工作台按钮，核对移除/改名；Vista/Clam下分别检查1080×780及940×660按钮可见、宽度充足且无越界；调用“刷新会话”确认读取会话列表、保留当前选择及草稿；改变模拟目标后调用原refresh_targets方法确认窗口与聊天面板同步，断言没有模型请求。执行本轮四个文件的`git diff --check`及文档一致性检查。
+- 验证结果：63项全部通过（14.652秒，含62项既有专项与1项一次性检查），92个离屏Tk窗口；2文件局部编译通过，差异格式及文档一致性检查通过。本轮未运行完整基线，保留最近一次完整验证记录；未提交、打包或发布，未连接真实模型/设备，现有EXE未更新。
+- 后续待办：重启Windows源码版确认顶部不再显示“刷新目标”、会话按钮显示“刷新会话”，并核对实际窗口布局。离屏检查不替代完整主程序可见交互，不改变既有验收状态及真实设备边界。
+
+## 2026-11-15 - 记住历史窗口宽高并保持主界面上层
+
+- 类型：优化
+- 背景：负责人要求“重试/失败历史”窗口记住上次关闭时的宽高，并确认该窗口仅保持在主界面上层；点击主界面仍能查看历史，不需要系统级置顶。
+- 完成内容：① 复用现有模块尺寸状态文件，新增`power_test_channel_history`记录，各通道共用、跨程序重启恢复；默认760×440、最小560×300，恢复后按实际尺寸居中。② 关闭按钮、右上角关闭、测试重启自动关闭与主程序正常退出，统一在销毁前保存；已打开窗口切换通道不重置尺寸，沿用状态容错和屏幕尺寸限制。③ 使用`transient(self)`建立主窗口所属关系，保持非模态，不增加操作锁定、系统级置顶或固定按钮；应用局部背景主题，保留历史内容、滚动和动态刷新。④ 增加7项离屏Tk专项，覆盖各关闭入口、跨通道/应用实例恢复、窗口复用、状态损坏、保存失败及父窗口关系。同步方案、操作员说明、项目状态和验收边界/待确认项，保留其它未提交改动。
+- 修改文件：
+  - `.claude/plans/power-test-history-window-state.md`（新增）
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_window_size_state.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用仓库外`%LOCALAPPDATA%/LineCheckAssistant/feishu-validation-py39/Scripts/python.exe -X utf8`（CPython3.9.10 x64），将`tests`加入`sys.path`，TEMP/TMP/TMPDIR及tempfile.tempdir统一到`Path(tempfile.gettempdir()).resolve()`。对上述2个Python文件执行`py_compile.compile(..., doraise=True)`；通过`unittest.defaultTestLoader.loadTestsFromNames`组合运行`test_window_size_state`、`test_power_test_wifi_history`、`test_app_update_ui`，以及`test_app.CurrentChannelSelectionTests`中的全部`test_power_test_channel_*`、主界面升层/非模态契约/两项退出保存测试，另加`test_ui_lifecycle_runtime.PipelineRuntimeTests`中的三项主程序退出收尾检查。组合在`OffscreenTkWindows()`中运行并执行`assert_offscreen()`；新窗口测试使用临时状态文件，不访问真实设备或启动完整应用。执行本轮7个文件的`git diff --check`和方案/文档一致性检查。
+- 验证结果：窗口尺寸专项11项通过（含新增7项，0.384秒）；最终相关组合66项全部通过（1.618秒，32个外层记录的离屏Tk窗口），2文件局部编译通过。窗口拥有主窗口关系、未启用系统级置顶、无模态锁定，历史内容与复用得到验证。差异格式及文档一致性检查通过。本轮未运行完整基线，保留最近一次完整验证记录；未提交、打包或发布，现有EXE未更新。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.12/§3核对可见窗口层级、主界面输入焦点、其它软件切换、主界面最小化/恢复以及完整重启后的宽高恢复；离屏Tk不替代Windows可见交互或原有真实样机异常路径验收。
+
+## 2026-11-15 - 收紧主界面AI日志为任务摘要
+
+- 类型：优化
+- 背景：负责人提供实际界面日志，反馈上一轮仍打印过多AI信息；39行界面记录主要为案例初始化、历史资格、证据来源/统计、重复采集状态及逐项操作。负责人追加确认实际命令、登录过程和正常逐项完成均从主界面收起，详情留在本次主日志文件。
+- 完成内容：① 在既有显示过滤模块收起正常案例初始化、会话创建/路由、自动授权及已知资格提示、平台正常连接、证据来源/选取/截断统计、正常采集状态/额度；命令/登录和正常逐项操作结果收起，待批准、需要用户回答、错误/拦截/未知结果、停止与恢复待完成保持。② 排查入队显示简短开始提示，本轮正常结束缩短且不声称成功；正常临时恢复显示已恢复，通用操作不自动回滚及待核实需人工核对的提醒保留，未知恢复状态原样显示。③ 对话/监控共用规则，真实TX载荷按不透明文本隐藏，允许换行和“失败”等正文；文件读取仅收起可识别参数及未截断完成，未知格式/解析失败保持。④ 完成状态若伴随错误、非零返回码、标准错误、未知进程状态/说明、截断、未下发或清理未确认继续显示并使用错误/警告色，标准错误保留首行摘要。⑤ 新增7项专项并更新既有显示断言，用虚构目标、凭据和证据ID还原39个事件，不复制现场凭据到测试；完整落盘及Vista/Clam验证保持。仅调整显示及专项测试，不改采集/权限/批准/服务收发/设备执行/状态栏。同步操作员说明、项目状态及验收条目，保留工作区同期其它AI改动。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/main_log_filter.py`
+  - `Cheating_machine_execution_tool/tests/test_main_log_filter.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用仓库外`%LOCALAPPDATA%/LineCheckAssistant/feishu-validation-py39/Scripts/python.exe`（CPython3.9.10 x64）；PowerShell的`OutputEncoding`显式设为UTF-8，设置`PYTHONUTF8=1`、`tests`加入`sys.path`，TEMP/TMP/TMPDIR及tempfile.tempdir统一到`Path(tempfile.gettempdir()).resolve()`。在`OffscreenTkWindows()`中以`unittest.defaultTestLoader.loadTestsFromNames(('test_main_log_filter', 'test_ai_integration', 'test_ai_monitor_status', 'test_dingtalk_remote', 'test_feishu_remote'))`运行组合并断言离屏；最后收紧异常文件参数判断后复跑完整`test_main_log_filter`。两个改动Python文件执行`py_compile.compile(..., doraise=True)`。只读回放本次实际主日志02:26:59至02:28:06的AI事件，断言只剩开始/结束两条；本轮6个文件执行`git diff --check`及文档一致性检查。
+- 验证结果：相关组合203项通过（33.784秒，49个离屏Tk窗口）；最后专项58项通过，2个离屏Tk窗口，两个Python文件局部编译通过。现场文件原有71个AI事件经显示过滤后仅2条，脱敏39事件用例同样仅2条；隐藏事件/多行命令、JSON、凭据及输出完整落盘，Vista/Clam中的任务摘要、错误/警告色和未知结果显示通过。首轮57项中1项旧无颜色断言失败，改用待批准事件后应为既有警告色，已修正断言；首个只读回放脚本因PowerShell管道编码导致中文正则解析失败，改为显式UTF-8后成功，未修改原始日志。差异格式检查通过；未运行完整基线，保留最近完整验证记录，未提交/打包/发布，未连接真实平台/模型/设备，现有EXE未更新。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.16/§3复核任务摘要、待批准/异常/恢复及完整文件记录。只读日志回放和离屏Tk不替代完整Windows目视或真实平台/模型/DUT验收，不扩大既有设备验收范围。
+
+## 2026-11-15 - 优化排障工作台发送即时反馈
+
+- 类型：优化
+- 背景：负责人反馈回车发送约一秒后才显示。现有发送虽已后台识别目标，但用户消息入库、显示及输入框清空均等待识别返回；模拟旧路径确认发送回调约1ms，识别等待期间没有消息回显且草稿仍留在输入框。负责人确认只优化即时反馈，识别过程静默，不显示“正在识别目标”“待发送”等过程提示。
+- 完成内容：① 本地校验后直接追加用户消息并清空输入框，不查询会话库或重绘完整历史；Tk获得绘制机会后再在主线程准备目标并启动原后台路由。② 临时回显仅在内存，复用既有on_selected回调记录入库前的用户消息数量，正式记录替换回显，不误匹配同文历史；保留既有密钥过滤，不改变服务接口、数据库、路由/权限/执行锁或设备命令与日志。③ 失败动态标错并保留可复制原文（含缩进/换行）；仍在原会话且输入框为空时恢复原文，已有新草稿（包括与已发文字相同的新草稿）保持。失败时固定入库结果，防止后续其它消息使失败原文误消失；同文重试替换失败回显。④ 请求代次与活动请求分别校验，重复发送拦截保持；停止、切换及迟到结果不抢回选择、不清空新草稿，取消不新增错误弹窗。⑤ 增加14项真实Tk/受控阻塞路由专项，调整两个既有测试等待入口以处理Tk延后启动事件；同步方案、操作员说明、项目状态与验收待办，保留其它未提交改动。
+- 修改文件：
+  - `.claude/plans/ai-chat-immediate-send.md`（新增）
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_conversation.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_session_router.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用仓库外`%LOCALAPPDATA%/LineCheckAssistant/feishu-validation-py39/Scripts/python.exe -X utf8`（CPython3.9.10 x64），将`tests`加入`sys.path`，TEMP/TMP/TMPDIR及tempfile.tempdir统一到`Path(tempfile.gettempdir()).resolve()`。对上述4个Python文件执行`py_compile.compile(..., doraise=True)`；在`OffscreenTkWindows()`内用`unittest.defaultTestLoader.loadTestsFromNames(('test_ai_chat_presentation', 'test_ai_workspace', 'test_ai_session_router', 'test_ai_conversation', 'test_ai_session_deletion', 'test_ai_context_usage'))`组合运行并调用`assert_offscreen()`。另以100条约2600行历史内容和10次受控阻塞路由模拟，计时发送回调及随后一次`root.update()`，断言路由返回前已回显/清空、静默显示及完成后消息仅一条；与本轮前文件快照比对改动边界，执行本轮文件`git diff --check`及新增方案空白/文档一致性检查。
+- 验证结果：最终组合172项全部通过（33.818秒），117个离屏Tk窗口；覆盖即时静默显示（回调断言100ms内）、首次发送、正式记录先入库、同文历史/重试、失败和后续问题、新草稿、目标准备失败、停止、会话切换、迟到成功、凭据过滤及原键盘/布局/阅读选区。初步专项37项通过；前一轮171项组合有1项既有Clam悬停焦点断言失败（focus_get为None），该项单独复查通过，最终172项组合复跑通过，未改该焦点测试。性能模拟10次发送回调中位1.09ms/最大1.46ms，随后一次Tk更新中位5.08ms/最大6.87ms；这些是隔离模拟耗时，不作为完整主程序现场测量。4文件局部编译、差异格式与文档检查通过。本轮未运行完整基线，保留最近一次完整验证记录；未提交、打包或发布，未连接真实模型/设备，现有EXE未更新。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.16/§3复验真实发送手感、首次/历史消息、后台慢响应、失败/新草稿、停止/切换及宽窄窗口。离屏Tk与模拟路由不替代完整Windows可见交互或真实模型/DUT验收，后台识别及模型回答耗时保持现状。
+
+## 2026-11-15 - 精简主界面AI与远程收发日志
+
+- 类型：优化
+- 背景：负责人要求精简主界面AI日志，确认保留关键节点与异常，同时收起钉钉/飞书AI正常收发过程；详细原文继续保留在本次主日志文件。
+- 完成内容：① 只修改既有日志显示过滤模块，按明确前缀和完整正常格式收起资料检索、证据整理开始、已知逐项采集开始/完成、工具完成、普通风险审查结果和逐操作免审说明，保留任务开始/结束、采集权限及接收方摘要、证据选取/截断摘要、实际命令与登录信息。② 监控普通排队/诊断/监控状态不再刷屏，待批准、停止、收尾与恢复保持；两处状态显示及service事件不变。③ 钉钉/飞书普通收消息、关联会话、回复发送/成功及飞书无临时修改回复跳过不再显示，连接结果、启停、绑定、批准、断线重连和异常继续可见，兼容直接前缀及AI对话嵌套前缀。④ 对话与监控共用操作JSON摘要及实际结果颜色，保留重要操作、错误、返回码及待核实/清理未确认信息；主日志仍完整保存现有密钥过滤后的原文。⑤ 增加7项专项用例并扩展原有审查及Vista/Clam验证，覆盖未知扩展、多行异常、设备回显、不混用WiFi/DUT落盘规则、监控JSON原文/警告色及远程接入细节。同步操作员说明、项目状态及验收边界/待确认项，保留其它未提交改动。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/main_log_filter.py`
+  - `Cheating_machine_execution_tool/tests/test_main_log_filter.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用仓库外`%LOCALAPPDATA%/LineCheckAssistant/feishu-validation-py39/Scripts/python.exe`（CPython3.9.10 x64），设置`PYTHONUTF8=1`、将`tests`加入`sys.path`，TEMP/TMP/TMPDIR及tempfile.tempdir统一到`Path(tempfile.gettempdir()).resolve()`；对上述2个Python文件执行`py_compile.compile(..., doraise=True)`。在`OffscreenTkWindows()`中以`unittest.defaultTestLoader.loadTestsFromNames(('test_main_log_filter', 'test_ai_integration', 'test_ai_monitor_status', 'test_dingtalk_remote', 'test_feishu_remote'))`组合运行相关检查，并调用`assert_offscreen()`。对本轮6个文件执行`git diff --check`，检查文档显示规则与验收入口一致性。
+- 验证结果：最终组合196项全部通过（30.566秒），包含日志专项51项，49个离屏Tk窗口，Vista/Clam显示与文件原文验证通过；2文件局部编译、差异格式检查通过。首轮日志专项50项中，未知扩展测试有4个子场景暴露来源/模型字段匹配过宽；保留证据整理完成摘要并收紧监控模型字段匹配后通过，随后补充监控原始操作JSON落盘及双主题警告色验证，最终得到上述结果。未运行完整基线，保留最近一次完整验证记录；未提交、打包或发布，未连接真实平台/模型/设备，现有EXE未更新。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.16/§3复核主界面刷屏改善、两处监控状态同步、关键提示/命令/异常及完整文件记录。离屏Tk与模拟服务不替代完整Windows目视或真实平台/模型/DUT验收，不扩大既有设备验收范围。
+
+## 2026-11-15 - 迁移AI接入到远程管理页签
+
+- 类型：修改
+- 背景：负责人要求把测试项配置中的钉钉/飞书AI接入移至AI诊断助手，并将原远程管理页改回消息推送；方案阶段明确两套配置直接嵌入钉钉/飞书子页签，隐藏AI助手时取消未完成群绑定。
+- 完成内容：① AI助手原三个页签之后新增远程管理，独立UI模块按需装配钉钉/飞书完整表单；默认仍工作台，远程管理默认钉钉，重复进入复用并保留草稿。② 两套表单新增可选嵌入模式，兼容原独立窗口；确认框归属AI顶层窗口，飞书输入区右键菜单继续可用，使用局部背景和原生Checkbutton。③ 页签离开/隐藏暂停刷新，重开单实例恢复，控件销毁清理定时器；隐藏只取消未完成绑定，已启用远程AI/通知与其它任务继续，程序退出沿原服务收尾。④ 测试项配置第六页改回消息推送并移除两按钮；钉钉保存仍同步磁盘Webhook/密钥，已打开推送页只同步这两项并保留其它输入、原保存/重载/未保存提醒，关闭时清除页面引用。⑤ 单平台配置异常独立动态提示，重新进入可重试，错误日志不回显凭据；原接入方法兼容为定位对应子页签。⑥ 同步操作员说明、状态、验收待办及编译清单，保留工作区其它功能和本机配置改动。
+- 修改文件：
+  - `.claude/plans/ai-remote-management-tabs.md`（新增）
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_remote_management_tab.py`（新增）
+  - `Cheating_machine_execution_tool/src/ui/dingtalk_setup_window.py`
+  - `Cheating_machine_execution_tool/src/ui/feishu_setup_window.py`
+  - `Cheating_machine_execution_tool/src/ui/message_push_tab.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_remote_management.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_ai_workspace.py`
+  - `Cheating_machine_execution_tool/tests/test_message_push_config.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用仓库外`%LOCALAPPDATA%/LineCheckAssistant/feishu-validation-py39/Scripts/python.exe`（CPython3.9.10 x64），设置`PYTHONUTF8=1`，将`tests`加入`sys.path`，TEMP/TMP/TMPDIR及tempfile.tempdir统一到`Path(tempfile.gettempdir()).resolve()`；在`OffscreenTkWindows()`中以unittest组合运行`test_ai_remote_management`、`test_message_push_config`、`test_webhook_push`、`test_ai_workspace`、`test_dingtalk_remote`、`test_feishu_remote`、`test_feishu_stream`、`test_ai_monitor_status`、`test_ai_integration`、`test_ai_conversation`，并调用`assert_offscreen()`。11个改动Python文件逐个`py_compile.compile(..., doraise=True)`；单独执行`verify_baseline.check_py_compile_inventory(Path.cwd())`并断言`passed`，未执行完整基线。对本轮跟踪文件执行`git diff --check`，检查新增/未跟踪文件末尾换行、尾随空白及操作员入口一致性。
+- 验证结果：最终组合276项全部通过（64.466秒），覆盖嵌入与懒加载、草稿/定时器生命周期、失败重试与凭据过滤、群绑定取消及启用服务保持、确认取消/弹窗归属、飞书输入区右键、双窗口同步，以及原平台会话/批准/通知、监控和工作台回归。Vista/Clam下880×560的独立嵌入容器控件布局通过，原940×660工作台及辅助窗口检查继续通过；11文件局部编译、183个源码编译清单覆盖和差异检查通过。首轮相关54项通过；扩展测试时新用例漏模拟飞书确认框导致等待，已停止本轮测试进程、补齐双平台messagebox模拟后运行上述最终组合，无真实平台/模型/设备请求。文档编辑脚本两次因PowerShell中文管道编码失败且写入前中止，改用补丁及显式UTF-8后完成。未提交、打包或发布，本轮未运行完整基线，保留最近一次完整验证记录。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.11/§2.16/§3核对完整可见交互、保存重开、双窗口联动、绑定取消及已启用服务保持；真实平台收发/模型/DUT继续沿原范围复验。独立离屏Tk与模拟服务不替代现场验收，现有EXE未更新。
+
+## 2026-11-15 - 通过对话自动管理排查目标与会话
+
+- 类型：功能
+- 背景：负责人反馈对话不能修改当前排查目标，要求移除本地目标下拉框及新会话按钮；确认本地/钉钉/飞书统一支持、优先续接匹配会话、普通问答先对话再明确目标、新增本机电脑独立排障。切换后原任务继续后台运行，保持既有串行执行，新任务排队。
+- 完成内容：① 新增共享路由service，明确通道指令快捷匹配，其余对话用无工具模型请求识别；程序校验当前有效通道、范围、来源身份、模型及批次，失败不改投旧目标。目标歧义在对话内追问，用户只回答“通道1”也会带上原始问题继续，描述作为未验证材料留存。② 会话增加general/pc/device范围，旧记录缺省device；普通问答无执行工具，本机电脑仅提供本机环境/网络/命令/文件能力，不构造假通道或设备连接。范围纳入授权和操作指纹，执行端再次校验，本机通用修改在设备或共享资源忙碌时跳过。③ 本地移除两个控件，保留会话列表、管理及动态目标/状态；发送异步识别，运行中可切换/另开，失败保留草稿，修复首次路由期间后台刷新提前选中造成结果过期的竞态。④ 三入口身份/目标/配置隔离，新建与复用保留旧记录；人工选中的历史会话继续仅分析原材料，报告接手确认保持。⑤ 钉钉/飞书保留原控制指令及具体编号批准，新增成员活动会话和旧映射兼容；同目标另开仍保留旧回复游标，后台回复/批准始终标识原目标。原任务不因切换停止，不改变全局执行锁；排队状态明确，停用/退出取消识别，三档权限偏好保持。⑥ 同步列表、权限及删除/批准窗口对本机与问答范围的显示；日志记录识别、新建、复用、追问、排队、实际工具命令及成功/跳过/失败。⑦ 新增26项路由专项及4项远程范围/后台路由回归，更新已移除控件和异步发送的旧测试契约，保留原有工作区与本机配置改动。
+- 修改文件：
+  - `.claude/plans/ai-conversation-target-routing.md`（新增）
+  - `Cheating_machine_execution_tool/src/models/ai_session_scope.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_session_router.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_pc_conversation.py`（新增）
+  - `Cheating_machine_execution_tool/src/models/ai_actions.py`
+  - `Cheating_machine_execution_tool/src/models/dingtalk_remote.py`
+  - `Cheating_machine_execution_tool/src/models/feishu_remote.py`（本轮在既有未提交文件上修改）
+  - `Cheating_machine_execution_tool/src/services/ai_action_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_permission_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_record_titles.py`
+  - `Cheating_machine_execution_tool/src/services/dingtalk_remote_service.py`
+  - `Cheating_machine_execution_tool/src/services/feishu_remote_service.py`（本轮在既有未提交文件上修改）
+  - `Cheating_machine_execution_tool/src/ui/ai_action_approval.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_permission_control.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_record_presentation.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_session_manager.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`（补充本轮新增源码及工作区同期新增远程管理子页签的编译清单，不修改该子页签内容）
+  - `Cheating_machine_execution_tool/tests/test_ai_session_router.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_context_usage.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_conversation.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_session_deletion.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_workspace.py`
+  - `Cheating_machine_execution_tool/tests/test_dingtalk_remote.py`
+  - `Cheating_machine_execution_tool/tests/test_feishu_remote.py`（本轮在既有未提交文件上修改）
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用仓库外`%LOCALAPPDATA%/LineCheckAssistant/feishu-validation-py39/Scripts/python.exe -X utf8`（CPython3.9.10 x64），本进程设置`PYTHONUTF8=1`，把tests加入sys.path，TEMP/TMP/TMPDIR和tempfile.tempdir统一到解析后的绝对临时目录。在`OffscreenTkWindows()`中组合运行unittest discover：`test_ai*.py`、`test_dingtalk_remote.py`、`test_feishu_remote.py`、`test_main_log_filter.py`；补充澄清续查及配置变化场景后，再运行`test_ai_session_router.py`、`test_ai_conversation.py`、`test_ai_workspace.py`、`test_dingtalk_remote.py`、`test_feishu_remote.py`，最后重跑路由专项。对本轮27个Python文件执行py_compile；仅调用verify_baseline的check_py_compile_inventory检查新增源码覆盖；检查差异格式、新文件尾随空白和文档/路径一致性。
+- 验证结果：相关AI组合682项通过（104.831秒）；补充场景后的最终专项205项通过（51.183秒）；最后的路由专项26项通过（5.708秒）。覆盖两种模型协议、无目标问答、本机范围执行拦截、歧义/纯目标回答续查、模型无效格式/越权工具、配置变化、身份隔离、历史材料、排队及后台回复、首次发送刷新竞态和Vista/Clam最小窗口。首轮失败来自旧控件、同步发送、首次自动选择及模型请求次数的旧测试契约；按新交互更新并补充回归后通过。27文件局部编译、183个源码编译清单覆盖、新文件空白及差异检查通过；末轮为工作区同期新增的远程管理子页签补齐清单登记，未修改该模块内容。本轮未运行完整基线，保留最近完整验证记录；未执行真实模型/群消息/设备命令，未提交、打包或发布，现有EXE未更新。
+- 后续待办：负责人重启源码程序，按ACCEPTANCE_BASELINE.md §2.16/§3完成完整Windows可见界面、真实模型目标识别、钉钉/飞书群聊与单聊、DUT和本机操作的现场复验；本轮模拟模型/工具和离屏Tk不升级真实验收结论。
+
+## 2026-11-15 - 默认启用本地与飞书AI完全访问
+
+- 类型：修改
+- 背景：负责人要求本地AI与飞书AI默认完全访问，并确认覆盖自动监控；首次统一迁移旧权限，此后保留手动降级。确认自动监控继续默认关闭，启用保留范围确认，钉钉权限策略保持。
+- 完成内容：① 存储层事务化迁移本地/飞书旧会话及监控权限，版本标记确保仅执行一次，失败全部回滚；无需改表，不触发或重放旧操作。② 本地、飞书、监控偏好独立；手动降级持久保留，钉钉新会话继续固定默认帮我批准。③ 分离所选权限与有效授权，兼容增加preferred_mode状态字段；有效本地/飞书会话初始化及下一次用户发送时校验并创建进程内新授权，停止、目标/模型/批次变化撤销旧授权；状态读取不重授权，历史/无效目标不因偏好获得采集资格。④ 监控保持关闭默认值和启用范围/危险操作/真实信息接收方确认；关闭时保存完全访问偏好，重新启用校验新授权。⑤ 更新权限下拉、模型权限描述、飞书帮助/启用确认和新会话回复、主执行日志及动态生效/失效反馈，保留原占用、锁源、指纹、文件版本、停止、清理及结果不明重试须具体批准的保护。⑥ 新增10项回归，显式指定原审批测试的低权限模式，保留工作区已有飞书/共用案例库/Webhook及本机配置等改动，按矩阵同步文档。
+- 修改文件：
+  - `.claude/plans/ai-full-access-defaults.md`（新增）
+  - `Cheating_machine_execution_tool/src/models/ai_permissions.py`
+  - `Cheating_machine_execution_tool/src/models/feishu_remote.py`
+  - `Cheating_machine_execution_tool/src/services/ai_store.py`
+  - `Cheating_machine_execution_tool/src/services/ai_diagnostic_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_permission_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_monitor_service.py`
+  - `Cheating_machine_execution_tool/src/services/feishu_remote_service.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_permission_control.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_monitor_window.py`
+  - `Cheating_machine_execution_tool/src/ui/feishu_setup_window.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_conversation.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_permissions.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_monitor_permissions.py`
+  - `Cheating_machine_execution_tool/tests/test_feishu_remote.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用仓库外`%LOCALAPPDATA%/LineCheckAssistant/feishu-validation-py39/Scripts/python.exe`（CPython3.9.10 x64），本进程设置`PYTHONUTF8=1`，将`tests`加入sys.path，TEMP/TMP/TMPDIR及tempfile.tempdir统一到`Path(tempfile.gettempdir()).resolve()`；在`OffscreenTkWindows()`中组合运行`test_ai_permissions`、`test_ai_monitor_permissions`、`test_feishu_remote`、`test_dingtalk_remote`、`test_ai_conversation`、`test_ai_actions`、`test_ai_workspace`、`test_ai_integration`并断言离屏。对本轮15个Python文件逐个`py_compile.compile(..., doraise=True)`；单独执行`verify_baseline.check_py_compile_inventory(Path.cwd())`并核对`passed`字段。检查本轮差异格式、新增文件末尾空白及文档入口。
+- 验证结果：最终组合295项全部通过（75.852秒），覆盖迁移一次性/事务回滚、降级持久化、重启新授权和旧执行标记unknown不重放、停止后刷新不重授权及下次发送恢复、历史目标拒绝、偏好隔离、群/单聊默认完全访问跳过独立审查、监控默认关闭与重新启用、权限显示、三档原审批及各项执行保护。首次可追溯组合116项有2项旧默认值假设失败；分别明确审批测试使用AUTO并更新独立默认断言后，294项组合通过，再补权限偏好显示与动态生效状态后最终295项通过。15文件局部编译、179个源码编译清单覆盖及差异检查通过。本轮未运行完整基线，保留最近完整验证记录；未提交、打包、发布，未连接真实飞书/模型/DUT，危险命令全部Mock。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.16/§3复验可见界面、一次性迁移及后续降级、真实飞书群聊/单聊、模型与设备执行。当前运行进程需重启加载修改，现有EXE未更新；离屏Tk、模拟模型/危险命令不升级现场验收结论。
+
+## 2026-11-15 - 优化飞书回复富文本排版
+
+- 类型：优化
+- 背景：负责人希望飞书回复参考本地排障工作台排版，避免直接显示加粗和代码标记；不再每轮发送“本轮恢复状态：无临时修改”的独立消息。负责人后续明确状态与批准提示也使用富文本排版。
+- 完成内容：① 飞书应用群聊/单聊回复改为post富文本，AI正文及状态统一Markdown，完整围栏代码转原生代码块，未闭合代码原文保留；项目/通道/成员独立标题，单段不显示[1/1]，多段才编号。② 状态/权限分段，批准消息展示加粗原因、操作、JSON参数代码块及批准/拒绝编号，原发起人/指纹/过期/单次执行规则保持。③ 仅省略system/recovery精确“本轮恢复状态：无临时修改”（允许首尾空白），正常推进游标；本地记录及实际恢复结果、恢复失败/待完成、通用操作不自动回滚和待核实警告保持，不误删AI正文或其它类型同文。④ 复用现有输出模块生成显示投影，长回复优先段落/行边界、超长行按字符分段，代码负载保真；按requests真实ASCII转义后的完整请求大小控制28000字节预算，API额外校验30000字节上限。⑤ 保留外发凭据过滤、发送失败不重做工具及聊天代次/队列容量保护，拦截大小写与换行/制表符变体的@标签；原测试通知继续send_text。⑥ 补充12项回归，保留工作区已有飞书接入、共用案例库、Webhook及本机配置等改动，按矩阵同步文档。
+- 修改文件：
+  - `.claude/plans/feishu-reply-format.md`（新增）
+  - `Cheating_machine_execution_tool/src/core/feishu_client.py`
+  - `Cheating_machine_execution_tool/src/services/feishu_output.py`
+  - `Cheating_machine_execution_tool/src/services/feishu_remote_service.py`
+  - `Cheating_machine_execution_tool/tests/test_feishu_remote.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用仓库外`%LOCALAPPDATA%/LineCheckAssistant/feishu-validation-py39/Scripts/python.exe`（CPython3.9.10 x64），本进程设置`PYTHONUTF8=1`，通过标准输入将`tests`加入`sys.path`，TEMP/TMP/TMPDIR与tempfile.tempdir统一到`Path(tempfile.gettempdir()).resolve()`；在`OffscreenTkWindows()`中以unittest组合运行`test_feishu_remote`、`test_feishu_stream`、`test_dingtalk_remote`、`test_ai_conversation`，并调用`assert_offscreen()`。四个Python文件执行`py_compile.compile(..., doraise=True)`；导入`verify_baseline.py`单独执行`check_py_compile_inventory(Path.cwd())`并断言返回对象的`passed`字段，未运行完整基线。对本轮跟踪文档执行`git diff --check`，对全部本轮文件（含未跟踪源码/计划）检查末尾换行、尾随空白及文档入口一致性。
+- 验证结果：最终组合161项全部通过（43.023秒），其中飞书服务专项61项，包含12项本轮新增回归；覆盖截图Ping正文、富文本默认状态、批准参数JSON保真及编号、中文/特殊字符请求大小、长行/多段代码、未闭合围栏、外发凭据/@标签、精确恢复筛选及游标、队列容量/旧代次、双平台隔离与失败不重放。四文件局部编译、179个源码编译清单覆盖及本轮差异/文档检查通过。首次60项专项自身通过后，外层验证脚本误用不存在的`assert_all_offscreen`，后续组合改用真实`assert_offscreen()`并通过；清单检查脚本一度误读`ok`字段，按实际`passed`字段重新检查通过，均未修改业务实现。本轮未运行完整基线，保留最近完整验证记录；未提交、打包、发布，未发送真实飞书消息或访问模型/设备。
+- 后续待办：负责人重启Windows源码版，在飞书桌面端和手机端按ACCEPTANCE_BASELINE.md §2.16/§3核对显示、长代码复制、状态/批准、普通恢复消息省略及风险提示保留；原真实飞书/模型/DUT待验收项保持，现有EXE未更新。
+
+## 2026-11-15 - 按Webhook自动适配钉钉与飞书
+
+- 类型：功能
+- 背景：负责人希望远程管理现有Webhook和加签密钥输入同时支持飞书，并确认根据两个平台不同的地址前置自动适配，无需新增平台选择控件。
+- 完成内容：① 新增独立地址识别及飞书自定义机器人底层模块，严格解析HTTPS域名/路径，阻止不支持的地址；飞书使用秒级时间戳、HMAC-SHA256/Base64、文本和@all，十秒超时、拒绝重定向、不自动重试，异常不回显原始凭据或远端正文。② 保留[dingtalk_config]四字段、默认值、保存/重载及允许空配置；UI原位改为“启用消息推送”，试发使用页面快照并返回实际平台，继续走后台队列，不保存、不受自动推送开关限制。③ 旧正式通知入口仅增加飞书分支，保留钉钉原发送路径/消息/返回语义，飞书发送已保存项目名、完成/异常及测试详情，不读取/附加远程客户端字段；旧飞书应用通知和AI接入各自保持。④ 主日志记录识别平台、脱敏POST、成功/失败/跳过，新增模块加入编译清单；同步方案、操作员说明、状态及验收待办，保留原有工作区改动和本机配置。
+- 修改文件：
+  - `.claude/plans/webhook-auto-platform.md`（新增）
+  - `Cheating_machine_execution_tool/src/core/webhook_target.py`（新增）
+  - `Cheating_machine_execution_tool/src/core/feishu_robot.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/message_push_config_service.py`
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/common/dingtalk_send_message.py`
+  - `Cheating_machine_execution_tool/src/ui/message_push_tab.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_webhook_push.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_message_push_config.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用仓库外`%LOCALAPPDATA%/LineCheckAssistant/feishu-validation-py39/Scripts/python.exe`（CPython3.9.10 x64），本进程设置`PYTHONUTF8=1`，通过Python标准输入将`tests`加入`sys.path`，TEMP/TMP/TMPDIR及tempfile.tempdir统一到`Path(tempfile.gettempdir()).resolve()`；在`OffscreenTkWindows()`中组合运行unittest discover的`test_webhook_push.py`、`test_message_push_config.py`、`test_dingtalk_remote.py`、`test_feishu_remote.py`并断言离屏。对本轮8个Python文件逐个`py_compile.compile(..., doraise=True)`；导入`verify_baseline.py`单独执行`check_py_compile_inventory(Path.cwd())`，对本轮文件执行`git diff --check`及源码/文档差异检查，并扫描新增文件末尾空白。
+- 验证结果：新增15项专项单独通过；最终组合133项全部通过（21.394秒），覆盖真实签名请求体、无密钥、@all、非白名单/伪装地址、错误码/HTTP/超时/响应异常、无重试、配置往返、项目名读取、正式完成/异常、失败返回及Tk快照平台显示。首轮新测试HTTP响应Mock遗漏上下文管理方法导致14个子场景报错，补齐测试替身后全部通过，未改变业务实现；组合测试出现既有Tk销毁后的ThemeChanged提示，未影响断言及通过结果。8文件局部编译、179个源码编译清单覆盖及差异检查通过。本轮未运行完整基线，保留最近完整验证记录；未提交、打包、发布，未发送真实群消息或访问模型/设备。
+- 后续待办：负责人按ACCEPTANCE_BASELINE.md §2.11/§3复验Windows源码版可见界面、保存重开、钉钉/飞书真实签名及@所有人、正式完成/异常和独立飞书应用通知开关。现有EXE未更新，本轮模拟HTTP/离屏Tk不升级现场验收结论。
+
+## 2026-11-14 - 修复钉钉飞书接入窗口重复打开
+
+- 类型：BUG 修复
+- 背景：连续点击钉钉或飞书AI接入按钮会创建多个配置窗口，各自持有输入及状态轮询，容易造成配置混淆。负责人确认每个平台各保留一个窗口，允许两平台同时打开。
+- 完成内容：① 主程序分别保留两个接入窗口实例，重复点击时恢复、置前并聚焦已有窗口，不重新加载配置，保留未保存输入及原轮询。② 窗口关闭或父窗口销毁后允许重新创建；创建失败或构造器返回已销毁窗口时不保留无效实例。③ 保持现有保存、绑定、开关确认及关闭清理流程；补充6项真实Tk入口回归和操作员说明，保留既有工作区改动。
+- 修改文件：
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_message_push_config.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用仓库外`%LOCALAPPDATA%/LineCheckAssistant/feishu-validation-py39/Scripts/python.exe`，设置本进程`PYTHONUTF8=1`，将`tests`加入`sys.path`，先单独运行`test_message_push_config.RemoteSetupWindowReuseTests`。再将TEMP/TMP/TMPDIR及tempfile.tempdir统一到`Path(tempfile.gettempdir()).resolve()`，在`OffscreenTkWindows()`中以unittest组合运行`test_message_push_config`、`test_dingtalk_remote`、`test_feishu_remote`，并断言窗口离屏；对两个修改的Python文件执行`python -m py_compile`，检查本轮四个文件的`git diff --check`及差异内容。
+- 验证结果：新增6项全部通过；相关组合118项全部通过（19.447秒），覆盖双平台独立复用、未保存输入及单轮询保留、恢复/置前/聚焦调用、关闭取消轮询及重新创建、父窗口销毁重开、构造失败重试和已销毁实例不缓存。两个文件局部编译、差异格式检查通过。组合运行出现既有Tk窗口销毁后的ThemeChanged提示，未影响测试结果及离屏断言。本轮未运行完整基线，保留最近完整验证记录；未提交、打包、发布，未访问真实钉钉/飞书、模型或设备。
+- 后续待办：重启Windows源码版，人工复验连续点击两个入口、最小化恢复、窗口前置及未保存输入保留；本轮真实Tk测试使用屏幕外窗口，不作为可见桌面人工验收。现有EXE未更新，不改变既有AI及设备验收状态。
+
+## 2026-11-14 - 接入飞书AI排障与独立测试通知
+
+- 类型：功能
+- 背景：负责人确认增加飞书AI及通知，与钉钉同时启用；支持指定群内@和应用可用范围内所有企业成员单聊；通知分别开关，只发项目/通道/结果，不附远程客户端信息。
+- 完成内容：① 新增独立飞书事件模型、官方SDK长连接适配、加密配置/收件/路由、群及单聊服务、通知及窗口模块，保留原钉钉实现和兼容入口。② 群绑定五分钟编号及本机核对；群排障/单聊排障/测试通知三个原生开关默认关闭，单聊启用明确确认应用全员工具调用及原单聊回复范围。秘密留空保留、DPAPI和原子替换；切换应用清群绑定，保存前等待清理。③ 两平台共用项目AI工作台及同期共用案例库入口，旧库和本机配置保持；飞书单独配置也能选择项目库，项目互斥先于数据库，App ID单独互斥。会话按平台/应用/企业/聊天类型/聊天/人员/通道隔离，新会话默认帮我批准；沿用风险审查、操作指纹/文件版本、设备/共享占用和停止保护。④ 持久化后ACK、重投去重、重启不重放；停用代次拦截旧入箱和旧回复，群/单聊分别取消会话，批准绑定发起人及原聊天，十分钟单次有效，本地竞争只能成功一次。回复过滤已知凭据、分段和限速，失败不重做工具；长连接独立循环，注册/发消息有界超时，SDK原始票据日志关闭，支持重连及退出清理。⑤ 旧通知对象增加代理，先将不含旧正文的结果事件交付主程序独立通知队列，再原样调用钉钉并返回原结果；覆盖Telnet/SSH，项目名每次读取已保存磁盘值。通知停用写盘失败先阻断本进程自动外发。⑥ 固定lark-oapi1.7.5及Python3.9兼容依赖，补第三方声明、源码编译清单及后续实际包/PYZ门禁；同步操作员说明、状态、验收和计划。
+- 修改文件：
+  - `.claude/plans/feishu-ai-workspace.md`
+  - `Cheating_machine_execution_tool/src/models/feishu_remote.py`
+  - `Cheating_machine_execution_tool/src/core/feishu_client.py`
+  - `Cheating_machine_execution_tool/src/core/feishu_stream.py`
+  - `Cheating_machine_execution_tool/src/services/feishu_remote_store.py`
+  - `Cheating_machine_execution_tool/src/services/feishu_remote_service.py`
+  - `Cheating_machine_execution_tool/src/services/feishu_notifications.py`
+  - `Cheating_machine_execution_tool/src/services/feishu_output.py`
+  - `Cheating_machine_execution_tool/src/ui/feishu_setup_window.py`
+  - `Cheating_machine_execution_tool/src/ui/message_push_tab.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_permission_control.py`
+  - `Cheating_machine_execution_tool/src/services/ai_record_titles.py`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_feishu_remote.py`
+  - `Cheating_machine_execution_tool/tests/test_feishu_stream.py`
+  - `Cheating_machine_execution_tool/requirements.txt`
+  - `Cheating_machine_execution_tool/requirements-build.txt`
+  - `Cheating_machine_execution_tool/THIRD_PARTY_NOTICES.md`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/scripts/verify_slim_package.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_specs/LineCheckAssistant.spec`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：仓库外`%LOCALAPPDATA%/LineCheckAssistant/feishu-validation-py39`隔离CPython3.9.10 x64安装更新后的`requirements-build.txt`，执行`python scripts/check_build_environment.py`与`python -m pip check`。通过Python标准输入将TEMP/TMP/TMPDIR及tempfile.tempdir统一到`Path(tempfile.gettempdir()).resolve()`，在`OffscreenTkWindows`中用unittest discover组合运行飞书、SDK、钉钉、消息推送、旧开关机/初始化/续跑、AI权限/操作/工作台/会话删除/记录标题及全流程相关专项；另运行`python -m unittest discover -s tests -p test_portable_release.py -q`。末轮复验`test_feishu_remote.py`、`test_feishu_stream.py`、`test_dingtalk_remote.py`、`test_message_push_config.py`。18个相关Python文件局部py_compile及空白扫描、check_py_compile_inventory、spec语法和本轮git差异检查。
+- 验证结果：组合343项相关回归全部通过，另10项便携交付专项通过；末轮119项全部通过，其中飞书49项业务/集成及7项真实SDK离线专项共56项。覆盖实际AI操作链：未批准不下发，发起人批准后Mock命令仅一次，重复/跨聊天/跨平台拒绝；SDK真实Protobuf分片/ACK200、持久化失败ACK500、不支持事件、重连、停用重开新循环、请求中停止后不建连接；Vista/Clam原生三开关、背景、秘密留空和单聊全员确认；完整通知事件进入主程序且无需AI模型。首轮专项分别暴露指纹测试场景混用、配置类Mock影响静态校验，拆分场景并改用类方法校验后通过；首轮343项有1项因Windows临时目录8.3短路径与子进程长路径不同失败，统一进程临时路径后通过，未修改旧执行器。合并UI回归有既有窗口销毁后的ThemeChanged提示，不影响测试结果和离屏断言，不升级完整可见Windows验收。18文件编译/空白、177个源码清单覆盖及spec语法通过；隔离依赖环境BUILD_ENVIRONMENT_OK、pip check无损坏依赖。本轮未运行完整基线，保留最近完整验证记录；未配置真实应用或发送真实飞书/钉钉消息，未访问真实模型/DUT，未提交、推送、打包或发布。
+- 后续待办：按操作员说明配置并发布各项目飞书企业自建应用，完成ACCEPTANCE_BASELINE.md §2.16/§3的Windows可见界面、真实群/单聊/通知、双平台及模型/设备现场复验；后续标准构建再核验实际EXE/PYZ/ZIP，现有EXE未更新。保留页签改名、本机config.ini及同期共用案例库/便携快照等其它工作区改动。
+
+## 2026-11-14 - 接入共用案例库及随包快照
+
+- 类型：功能
+- 背景：负责人确认“已确认案例”采用同一Windows用户各项目共用案例库，发布时携带当前全部案例、停用状态及修订历史；升级仅补充新案例，本地修改/停用/删除优先。只读检查当前默认AI库案例及修订均为0，未发现项目隔离库；允许空案例快照，不造示例。
+- 完成内容：① 新增独立SQLite案例库及原接口代理，运行时默认AI服务和项目隔离工作台均接入用户`case_library/cases.sqlite3`；会话/报告/配置/权限原隔离保持。旧库只读汇集，来源路径身份与原ID派生稳定UUID，保留修订、停用及来源报告ID，原库不清理。② 跨进程SQLite事务、版本校验及删除UUID标记防止陈旧编辑覆盖、迁移/升级复活；案例页打开时刷新，冲突保留输入，重新选择后可修订；确认和删除提示明确本机所有项目共用，主日志记录迁移/导入、新建/修订、状态/删除及失败，不打印案例正文。③ 标准构建先导出一次版本化JSON案例快照，同一字节文件进入EXE和ZIP；仅导出案例字段和修订，不复制运行AI数据库。导出失败阻止打包；新版AI服务自动导入、只补充新UUID，保留本地内容/状态/删除；损坏快照回退本次导入且明确失败，不静默使用项目案例库。④ 归档门禁补案例模块/资源和快照结构、数量、SHA256及EXE/ZIP/构建快照一致性；本需求不新增第三方依赖，既有打包/发布门禁与两个附件约定保持。⑤ 同步操作员说明、便携说明、导航、计划、状态及验收边界；保留消息页更名、本机配置及同期飞书等其它工作区改动。
+- 修改文件：
+  - `.claude/plans/shared-ai-cases.md`（新增）
+  - `.claude/plans/dingtalk-ai-workspace.md`
+  - `Cheating_machine_execution_tool/src/services/ai_case_store.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_store.py`
+  - `Cheating_machine_execution_tool/src/services/ai_diagnostic_service.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/scripts/export_ai_cases.py`（新增）
+  - `Cheating_machine_execution_tool/scripts/verify_slim_package.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/build_line_check_assistant.ps1`
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_specs/LineCheckAssistant.spec`
+  - `Cheating_machine_execution_tool/tests/test_ai_case_store.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_ai_workspace.py`
+  - `Cheating_machine_execution_tool/tests/test_dingtalk_remote.py`
+  - `Cheating_machine_execution_tool/tests/test_portable_release.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/PORTABLE_README.txt`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用CPython3.9.10，设置本进程`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`，TEMP/TMP规范为`Join-Path $env:LOCALAPPDATA 'Temp'`。Python将`tests`加入`sys.path`后，在`OffscreenTkWindows()`上下文以`unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromName(n) for n in names)`运行`names=['test_ai_case_store','test_ai_core','test_ai_workspace','test_ai_integration','test_ai_report_deletion','test_ai_session_deletion','test_ai_evidence_analysis','test_dingtalk_remote','test_portable_release','test_application_icon_package']`。对本轮5个业务源码、3个脚本、4个测试及spec执行`python -m py_compile`，核对本轮业务源码在`PY_COMPILE_FILES`内；用PowerShell `Parser.ParseFile`检查构建脚本语法，检查本轮差异格式、新文件行尾和文档入口。
+- 验证结果：最终相关206项全部通过（35.421秒），含19项案例专项及2项新增真实Tk案例页检查；覆盖真实第二进程共享读写、同版本并发写只允许一次成功、两个实际隔离Controller共用案例而设置独立、默认服务使用用户共用库、只读源文件字节不变、全部修订/停用保留、重复导入/本地修改/删除防复活、事务失败回退、损坏库/快照报错及草稿保留。隔离Python `-I -X utf8`实际运行导出CLI成功，EXE归档阅读器Mock及真实ZIP检查确认同一快照、一致性失败拦截、数量和哈希；未构建或执行真实新EXE。13文件局部编译、本轮源码清单及PowerShell语法检查通过，本轮差异/新文件空白检查通过。前轮185项、补充后204项及损坏库补充专项18项亦通过，最终206项为本轮最终检查，不累加重复测试。未运行完整基线，保留最近完整验证记录。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.16/§3复验多项目案例修改/停用/删除与冲突交互；下次正式构建继续执行完整基线及实际归档门禁，在其它电脑核对随包导入/升级，不在打包电脑运行新EXE。源码回退不自动同步共用库新增记录回旧库，旧原件仍保留，备份与边界见计划及操作员说明。本轮未提交、打包、发布，现有EXE未更新，不新增真实模型/DUT验收结论。
+
+## 2026-11-14 - 将消息推送页签更名为远程管理
+
+- 类型：修改
+- 背景：负责人要求将测试项配置窗口中的“消息推送”名称改为“远程管理”。
+- 完成内容：① 仅调整第六页标题及模块说明，同步现有页签顺序断言。② 更新操作员文档、项目状态和验收基线中的页面入口名称，保留原验收状态。③ 页内功能、配置字段、消息内容、日志和执行逻辑保持原样，保留负责人原有本机config.ini修改。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/message_push_tab.py`
+  - `Cheating_machine_execution_tool/tests/test_message_push_config.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录通过Python标准输入，在`OffscreenTkWindows`上下文中执行`unittest.defaultTestLoader.discover('tests', pattern='test_message_push_config.py')`并检查结果；执行`python -m py_compile src/ui/message_push_tab.py tests/test_message_push_config.py`；对本轮六个文件执行`git diff --check`并核对差异。
+- 验证结果：23项消息推送专项全部通过；真实Tk控件断言确认第六页为“远程管理”，原生开关、保存、重载、未保存提醒及手动试发相关回归通过；两文件局部编译和本轮差异格式检查通过。本轮未运行完整基线，保留最近完整验证记录；未提交、打包、发送真实钉钉消息或访问真实设备。
+- 后续待办：完整Windows源码版可见界面复验及既有真实钉钉验收仍由负责人确认；现有EXE未更新。
+
 ## 2026-11-14 - 验证并提交钉钉AI排障
 
 - 类型：测试
