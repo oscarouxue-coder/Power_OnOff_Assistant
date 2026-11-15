@@ -87,7 +87,7 @@ class FeishuSetupWindow:
             self.saved = config
             self.variables["app_secret"].set("")
             self.emit("[飞书接入] 应用凭据已加密保存；项目AI数据已初始化，原钉钉配置保持")
-            self.status.set("已保存，可绑定群或启用单聊" if runtime else "已保存。请重启程序后绑定群或启用单聊。旧AI历史保持只读可查。")
+            self.status.set("已保存，可绑定群或启用单聊" if runtime else "已保存。请重启程序后绑定群或启用单聊。")
             messagebox.showinfo("配置已保存", self.status.get(), parent=self.dialog_parent)
         except Exception as exc:
             self.error(exc)

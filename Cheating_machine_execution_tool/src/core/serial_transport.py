@@ -10,6 +10,7 @@ from typing import Callable, Iterable, Optional
 import serial
 
 from src.models import SerialEvent, SerialSettings
+from src.core.transport_observation import register_session, retire_session
 
 
 Subscriber = Callable[[SerialEvent], None]
@@ -66,6 +67,7 @@ class PySerialSession:
         self._log_handle = None
         self._rx_log_line_buffer = ""
         self.error: Exception | None = None
+        register_session(self, "serial", settings.port)
 
     def open(self) -> None:
         if self._serial is not None:
@@ -210,6 +212,7 @@ class PySerialSession:
                 self._log_handle = None
         finally:
             self._close_done.set()
+            retire_session(self)
 
     def _reader_loop(self) -> None:
         while not self._stop.is_set() and self._serial is not None:
@@ -392,6 +395,7 @@ class SerialSessionManager:
         with self._lock:
             key = port.upper()
             return {"port": key, "opened_in_program": key in self._sessions,
+                    "closing_in_program": key in self._closing,
                     "monitor_owners": sorted(self._owners.get(key, ())),
                     "control_owner": self._controllers.get(key, "")}
 

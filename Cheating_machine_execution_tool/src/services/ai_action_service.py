@@ -11,6 +11,7 @@ from src.models.ai_permissions import ASK, AUTO, FULL
 from src.models.ai_conversation import timestamp
 from src.services.ai_store import profile_fingerprint
 from src.models.ai_session_scope import session_scope
+from src.core.ai_debug_transport import DebugSessionInvalid
 
 
 REVIEW_INSTRUCTIONS = """你是独立的操作风险审查员，不是执行代理。仅审查给定操作，不执行工具。
@@ -140,6 +141,24 @@ class AiActionService:
         permissions = getattr(self.owner, "permissions", None)
         return permissions.status(identifier) if permissions is not None else {"mode": AUTO, "grant_id": ""}
 
+    def _local_resources_busy(self, target):
+        """Host commands/writes have no reliable per-DUT resource boundary."""
+        diagnostic = self.owner.diagnostic
+        host_busy = getattr(diagnostic, "host_busy", None)
+        if callable(host_busy) and host_busy():
+            return True
+        if target is not None and diagnostic.busy(target):
+            return True
+        scope_busy = getattr(self.owner, "scope_busy", None)
+        if callable(scope_busy) and scope_busy(None):
+            return True
+        targets = getattr(diagnostic, "targets", {})
+        candidates = tuple(targets.values()) if isinstance(targets, dict) else ()
+        if target is not None and target not in candidates:
+            candidates += (target,)
+        shared_busy = getattr(diagnostic, "shared_busy", diagnostic.busy)
+        return any(diagnostic.busy(item) or shared_busy(item) for item in candidates)
+
     def _wait_approval(self, action, stop):
         identifier = action["session_id"]
         self.store.change_action(action["id"], ("reviewing",), "waiting_approval")
@@ -177,7 +196,8 @@ class AiActionService:
         if scope in ("general", "batch") or (scope == "pc" and name not in (
                 "run_local_command", "read_local_file", "write_local_file")):
             raise ValueError("该工具不属于当前会话范围，未执行")
-        if target is None and name in ("run_local_command", "write_local_file") and self.owner.scope_busy(None):
+        if name in ("run_local_command", "write_local_file") and self._local_resources_busy(target):
+            self.owner.emit("占用保护：设备或共享资源正在使用，本机通用操作未执行")
             raise ValueError("设备或共享资源正在使用，跳过本机通用修改操作")
         permission = self._permission(identifier)
         if name in DEVICE_TOOLS and self.owner.diagnostic.busy(target):
@@ -264,8 +284,8 @@ class AiActionService:
                 self.store.change_action(action["id"], expected, "executing", started=timestamp())
             if name in DEVICE_TOOLS and self.owner.diagnostic.busy(target):
                 raise ValueError("目标当前忙碌，本次未下发")
-            if target is None and name in ("run_local_command", "write_local_file") and self.owner.scope_busy(None):
-                raise ValueError("设备或共享资源当前忙碌，本机操作未下发")
+            if name in ("run_local_command", "write_local_file") and self._local_resources_busy(target):
+                raise ValueError("设备或共享资源当前被占用，本机操作未下发")
             if self.contexts is not None:
                 self.contexts.before_dispatch(identifier, name, target, stop)
             self.owner.emit("实际执行操作：" + self.redactor.dumps(action))
@@ -290,9 +310,13 @@ class AiActionService:
                 # 本次批准同时覆盖首次登录与该固定工具。
                 dispatched = True
                 result = executor.execute(name, params, deep=True)
-                state = "failed" if "error" in result else "succeeded"
+                if result.get("session_invalid"):
+                    dispatched = result["dispatched"]
+                state = "unknown" if result.get("session_invalid") and dispatched else "failed" if "error" in result else "succeeded"
             return self._finish(action, state, dict(result, dispatched=dispatched))
         except Exception as exc:
+            if isinstance(exc, DebugSessionInvalid):
+                dispatched = exc.dispatched
             state = "unknown" if dispatched else "cancelled" if isinstance(exc, InterruptedError) else "failed"
             result = self._finish(action, state, {"error": self.redactor.text(str(exc)), "dispatched": dispatched,
                          "notice": "执行结果待核实，不自动重试或声明回滚" if dispatched else "未下发操作命令"})

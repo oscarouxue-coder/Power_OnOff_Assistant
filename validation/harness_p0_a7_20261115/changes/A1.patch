@@ -1,0 +1,340 @@
+diff --git a/Cheating_machine_execution_tool/src/services/ai_action_service.py b/Cheating_machine_execution_tool/src/services/ai_action_service.py
+--- a/Cheating_machine_execution_tool/src/services/ai_action_service.py
++++ b/Cheating_machine_execution_tool/src/services/ai_action_service.py
+@@ -140,6 +140,24 @@
+         permissions = getattr(self.owner, "permissions", None)
+         return permissions.status(identifier) if permissions is not None else {"mode": AUTO, "grant_id": ""}
+ 
++    def _local_resources_busy(self, target):
++        """Host commands/writes have no reliable per-DUT resource boundary."""
++        diagnostic = self.owner.diagnostic
++        host_busy = getattr(diagnostic, "host_busy", None)
++        if callable(host_busy) and host_busy():
++            return True
++        if target is not None and diagnostic.busy(target):
++            return True
++        scope_busy = getattr(self.owner, "scope_busy", None)
++        if callable(scope_busy) and scope_busy(None):
++            return True
++        targets = getattr(diagnostic, "targets", {})
++        candidates = tuple(targets.values()) if isinstance(targets, dict) else ()
++        if target is not None and target not in candidates:
++            candidates += (target,)
++        shared_busy = getattr(diagnostic, "shared_busy", diagnostic.busy)
++        return any(diagnostic.busy(item) or shared_busy(item) for item in candidates)
++
+     def _wait_approval(self, action, stop):
+         identifier = action["session_id"]
+         self.store.change_action(action["id"], ("reviewing",), "waiting_approval")
+@@ -177,7 +195,8 @@
+         if scope in ("general", "batch") or (scope == "pc" and name not in (
+                 "run_local_command", "read_local_file", "write_local_file")):
+             raise ValueError("该工具不属于当前会话范围，未执行")
+-        if target is None and name in ("run_local_command", "write_local_file") and self.owner.scope_busy(None):
++        if name in ("run_local_command", "write_local_file") and self._local_resources_busy(target):
++            self.owner.emit("占用保护：设备或共享资源正在使用，本机通用操作未执行")
+             raise ValueError("设备或共享资源正在使用，跳过本机通用修改操作")
+         permission = self._permission(identifier)
+         if name in DEVICE_TOOLS and self.owner.diagnostic.busy(target):
+@@ -264,8 +283,8 @@
+                 self.store.change_action(action["id"], expected, "executing", started=timestamp())
+             if name in DEVICE_TOOLS and self.owner.diagnostic.busy(target):
+                 raise ValueError("目标当前忙碌，本次未下发")
+-            if target is None and name in ("run_local_command", "write_local_file") and self.owner.scope_busy(None):
+-                raise ValueError("设备或共享资源当前忙碌，本机操作未下发")
++            if name in ("run_local_command", "write_local_file") and self._local_resources_busy(target):
++                raise ValueError("设备或共享资源当前被占用，本机操作未下发")
+             if self.contexts is not None:
+                 self.contexts.before_dispatch(identifier, name, target, stop)
+             self.owner.emit("实际执行操作：" + self.redactor.dumps(action))
+diff --git a/Cheating_machine_execution_tool/line_check_assistant/app.py b/Cheating_machine_execution_tool/line_check_assistant/app.py
+--- a/Cheating_machine_execution_tool/line_check_assistant/app.py
++++ b/Cheating_machine_execution_tool/line_check_assistant/app.py
+@@ -5924,6 +5924,7 @@
+                 APP_DIR / "line_check_assistant_README.md",
+                 background=COLOR_BG, foreground=COLOR_TEXT,
+                 context=context, shared_busy=self._ai_shared_network_busy,
++                host_busy=lambda: self._ai_target_busy(None),
+                 on_monitor_status=self.ai_monitor_status_row.show,
+                 app_dir=APP_DIR, project_config_path=TEST_ITEM_CONFIG_PATH,
+                 remote_tab_factory=self._build_ai_remote_management,
+@@ -6022,6 +6023,8 @@
+         )):
+             return True
+         if self.__dict__.get("power_test_running", False):
++            if target is None:
++                return True  # Host commands cannot be scoped to only the AI-selected DUTs.
+             session = self.__dict__.get("power_test_resume_session")
+             if session is None:
+                 return True
+diff --git a/Cheating_machine_execution_tool/src/core/serial_transport.py b/Cheating_machine_execution_tool/src/core/serial_transport.py
+--- a/Cheating_machine_execution_tool/src/core/serial_transport.py
++++ b/Cheating_machine_execution_tool/src/core/serial_transport.py
+@@ -392,6 +392,7 @@
+         with self._lock:
+             key = port.upper()
+             return {"port": key, "opened_in_program": key in self._sessions,
++                    "closing_in_program": key in self._closing,
+                     "monitor_owners": sorted(self._owners.get(key, ())),
+                     "control_owner": self._controllers.get(key, "")}
+ 
+diff --git a/Cheating_machine_execution_tool/src/services/ai_serial_client.py b/Cheating_machine_execution_tool/src/services/ai_serial_client.py
+--- a/Cheating_machine_execution_tool/src/services/ai_serial_client.py
++++ b/Cheating_machine_execution_tool/src/services/ai_serial_client.py
+@@ -40,6 +40,9 @@
+ 
+     def shared_busy(self, target):
+         return self.call('shared_busy', target)
++
++    def host_busy(self):
++        return self.call('host_busy', None)
+ 
+     def target_current(self, target):
+         return self.call('target_current', target)
+diff --git a/Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py b/Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py
+--- a/Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py
++++ b/Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py
+@@ -13,7 +13,7 @@
+ class AiAssistantController:
+     def __init__(self, master, terminal, manager, targets, busy, forbidden_port, emit, manual_path,
+                  background="#eef2f5", foreground="#17202a", context=None, shared_busy=None,
+-                 on_monitor_status=None, app_dir=None, project_config_path=None, remote_tab_factory=None):
++                 on_monitor_status=None, app_dir=None, project_config_path=None, remote_tab_factory=None, host_busy=None):
+         self.master = master
+         self.on_monitor_status = on_monitor_status
+         self.monitor_snapshot = None
+@@ -51,12 +51,14 @@
+         self.bridge = AiSerialBridge(terminal, manager, busy, forbidden_port)
+         client = self.bridge.client
+         self.bridge.dispatcher.handlers['shared_busy'] = lambda request: shared_busy(request.args[0]) if shared_busy else False
++        self.bridge.dispatcher.handlers['host_busy'] = lambda request: bool(host_busy()) if host_busy else False
+         self.bridge.dispatcher.handlers['target_current'] = lambda request: request.args[0] in tuple(targets())
+         self.service = AiDiagnosticService(emit, client.acquire, client.read,
+                                            client.busy, manual_path=manual_path, store=store)
+         self.service.serial_status = client.serial_status
+         self.service.target_current = client.target_current
+         self.service.shared_busy = client.shared_busy if shared_busy else client.busy
++        self.service.host_busy = client.host_busy if host_busy else lambda: False
+         self.conversation = AiConversationService(self.service, context,
+             client.shared_busy if shared_busy else None, target_current=client.target_current)
+         self.service.conversation = self.conversation
+diff --git a/Cheating_machine_execution_tool/src/ui/ai_serial_bridge.py b/Cheating_machine_execution_tool/src/ui/ai_serial_bridge.py
+--- a/Cheating_machine_execution_tool/src/ui/ai_serial_bridge.py
++++ b/Cheating_machine_execution_tool/src/ui/ai_serial_bridge.py
+@@ -16,7 +16,7 @@
+         self.controls, self.lock = self.client.controls, self.client.lock
+         self.closed = False
+         self.dispatcher = PipelineDispatcher(self.client.channel)
+-        self.dispatcher.handlers.update(busy=lambda request: self.busy_callback(request.args[0]),
++        self.dispatcher.handlers.update(busy=lambda request: self._busy(request.args[0]),
+                                         acquire=self._acquire, restore=self._restore_status,
+                                         status=self._status)
+         terminal.ai_debug_cancel = self.client.cancel_port
+@@ -24,9 +24,22 @@
+     def poll(self):
+         self.dispatcher.poll(20)
+ 
++    def _busy(self, target):
++        if self.busy_callback(target):
++            return True
++        state = self.manager.diagnostic_state(target.port)
++        if state.get('closing_in_program') is True:
++            return True
++        owner = state.get('control_owner', '')
++        if not owner:
++            return False  # Passive monitor owners do not prevent shared diagnostics.
++        with self.lock:
++            lease = self.controls.get(target.port.upper())
++        return not (lease and lease[0] == owner and not lease[1].is_set())
++
+     def _acquire(self, request):
+         target = request.args[0]
+-        if self.busy_callback(target):
++        if self._busy(target):
+             raise RuntimeError('目标设备正在执行操作，跳过串口主动采集')
+         if not target.port or target.port.upper() == self.forbidden_port().upper():
+             raise ValueError('目标串口不明确或与程控电源串口冲突')
+diff --git a/Cheating_machine_execution_tool/tests/test_ai_resource_guard.py b/Cheating_machine_execution_tool/tests/test_ai_resource_guard.py
+new file mode 100644
+--- /dev/null
++++ b/Cheating_machine_execution_tool/tests/test_ai_resource_guard.py
+@@ -0,0 +1,157 @@
++"""A1: simulated execution only; no host command, COM or DUT is accessed."""
++from pathlib import Path
++from unittest.mock import Mock, patch
++import unittest
++
++import test_ai_actions as action_fixture
++import test_ai_conversation as conversation_fixture
++from test_ai_core import chat
++from test_ai_debug import TARGET
++from src.models.ai_permissions import ASK, AUTO, FULL
++from src.models.ai_actions import ActionAssessment
++from src.ui.ai_serial_bridge import AiSerialBridge
++import threading
++import time
++from types import SimpleNamespace
++
++
++class LocalResourceGuardTests(unittest.TestCase):
++    setUp = action_fixture.ActionServiceTests.setUp
++    execute = action_fixture.ActionServiceTests.execute
++
++    def test_device_bound_local_command_is_blocked_in_all_permission_modes(self):
++        for mode in (ASK, AUTO, FULL):
++            with self.subTest(mode=mode):
++                self.owner.permissions = Mock()
++                self.owner.permissions.status.return_value = {"mode": mode, "grant_id": "test"}
++                self.owner.scope_busy = Mock(return_value=True)
++                with patch("src.services.ai_action_service.run_local_command") as run, patch.object(self.service, "_wait_approval", return_value=False):
++                    with self.assertRaises(ValueError):
++                        self.execute()
++                    run.assert_not_called()
++                    self.review.assert_not_called()
++
++    def test_bound_file_write_is_blocked_without_changing_file(self):
++        path = Path(self.temp) / "keep.txt"
++        path.write_text("original", encoding="utf-8")
++        self.owner.diagnostic.busy.return_value = True
++        with self.assertRaises(ValueError):
++            self.execute("write_local_file", {"path": str(path), "content": "changed"})
++        self.assertEqual(path.read_text(encoding="utf-8"), "original")
++
++    def test_shared_resource_alone_blocks_bound_command(self):
++        self.owner.diagnostic.shared_busy = Mock(return_value=True)
++        with patch("src.services.ai_action_service.run_local_command") as run:
++            with self.assertRaises(ValueError):
++                self.execute()
++            run.assert_not_called()
++
++    def test_host_busy_blocks_even_when_ai_target_subset_is_idle(self):
++        self.owner.diagnostic.host_busy = Mock(return_value=True)
++        self.owner.diagnostic.targets = {}
++        self.owner.scope_busy = Mock(return_value=False)
++        with patch("src.services.ai_action_service.run_local_command") as run:
++            with self.assertRaises(ValueError): self.execute()
++            run.assert_not_called()
++
++    def test_host_snapshot_detects_power_test_without_ai_target_selection(self):
++        from line_check_assistant.app import LineCheckAssistant
++        app = SimpleNamespace(power_test_running=True, power_test_resume_session=None)
++        self.assertTrue(LineCheckAssistant._ai_target_busy(app, None))
++
++    def test_busy_state_is_rechecked_after_review(self):
++        self.owner.scope_busy = Mock(side_effect=[False, True])
++        with patch("src.services.ai_action_service.run_local_command") as run:
++            result = self.execute()
++        self.review.assert_called_once()
++        run.assert_not_called()
++        self.assertFalse(result["dispatched"])
++
++    def test_busy_state_is_rechecked_after_specific_approval(self):
++        self.owner.scope_busy = Mock(return_value=False)
++        def approve(action, stop):
++            self.owner.scope_busy.return_value = True
++            self.store.change_action(action["id"], ("reviewing",), "approved")
++            return True
++        self.review.return_value = ActionAssessment("dangerous", "test")
++        with patch.object(self.service, "_wait_approval", side_effect=approve), patch("src.services.ai_action_service.run_local_command") as run:
++            result = self.execute()
++        run.assert_not_called()
++        self.assertFalse(result["dispatched"])
++
++    def test_read_local_file_remains_available_when_device_busy(self):
++        path = Path(self.temp) / "evidence.txt"
++        path.write_text("historical evidence", encoding="utf-8")
++        self.owner.diagnostic.busy.return_value = True
++        self.owner.scope_busy = Mock(return_value=True)
++        result = self.execute("read_local_file", {"path": str(path)})
++        self.assertEqual(result["text"], "historical evidence")
++        self.owner.scope_busy.assert_not_called()
++
++    def test_idle_bound_local_command_keeps_existing_execution(self):
++        self.owner.scope_busy = Mock(return_value=False)
++        with patch("src.services.ai_action_service.run_local_command", return_value={"status": "completed", "exit_code": 0, "process_cleanup_confirmed": True}) as run:
++            self.assertEqual(self.execute()["action_state"], "succeeded")
++        run.assert_called_once()
++
++
++
++class SerialResourceGuardTests(unittest.TestCase):
++    def test_host_busy_snapshot_runs_on_dispatcher_owner_thread(self):
++        bridge = AiSerialBridge(Mock(), Mock(), lambda _: False)
++        result, threads = [], []
++        bridge.dispatcher.handlers['host_busy'] = lambda request: threads.append(threading.get_ident()) or True
++        worker = threading.Thread(target=lambda: result.append(bridge.client.host_busy()))
++        worker.start()
++        try:
++            deadline = time.monotonic()+2
++            while not result and time.monotonic() < deadline:
++                bridge.poll(); time.sleep(.001)
++            self.assertEqual(result, [True])
++            self.assertEqual(threads, [threading.get_ident()])
++        finally:
++            bridge.close(); worker.join(3)
++        self.assertFalse(worker.is_alive())
++
++    def test_controller_and_closing_guards_preserve_passive_and_own_lease(self):
++        manager = Mock()
++        bridge = AiSerialBridge(Mock(), manager, lambda _: False)
++        self.addCleanup(bridge.dispatcher.dispose)
++        for owner, closing, expected in (("", False, False), ("upgrade", False, True), ("", True, True), ("ai-debug:test", False, False)):
++            manager.diagnostic_state.return_value = {"control_owner": owner, "closing_in_program": closing}
++            bridge.controls[TARGET.port.upper()] = ("ai-debug:test", threading.Event())
++            with self.subTest(owner=owner, closing=closing): self.assertEqual(bridge._busy(TARGET), expected)
++        bridge.controls[TARGET.port.upper()][1].set()
++        self.assertTrue(bridge._busy(TARGET))
++
++
++class ReadOnlyDuringBusyTests(unittest.TestCase):
++    setUp = conversation_fixture.ConversationTests.setUp
++    stop_services = conversation_fixture.ConversationTests.stop_services
++    send = conversation_fixture.ConversationTests.send
++
++    def test_historical_evidence_search_is_available_when_device_busy(self):
++        self.diag.busy = Mock(return_value=True)
++        self.service.add_evidence(self.id, "history", "WAN evidence log")
++        result = self.service.search(self.id, "WAN")
++        self.assertGreater(result["matched"], 0)
++        self.diag.serial_acquire.assert_not_called()
++
++    def test_material_only_analysis_is_available_when_device_busy(self):
++        self.diag.busy = Mock(return_value=True)
++        self.responses.append(chat("Material analysis only"))
++        session = self.send("Explain the supplied history")
++        self.assertEqual(session["status"], "可继续")
++        self.diag.serial_acquire.assert_not_called()
++
++    def test_question_report_can_finish_without_active_dut_commands(self):
++        self.diag.busy = Mock(return_value=True)
++        self.responses.append(chat("Report from passive evidence"))
++        identifier = self.diag.submit("Explain existing evidence", TARGET.channel, level="question")
++        self.diag.jobs.join()
++        self.assertEqual(self.store.report(identifier)["status"], "完成")
++        self.diag.serial_acquire.assert_not_called()
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/Cheating_machine_execution_tool/tests/test_ai_actions.py b/Cheating_machine_execution_tool/tests/test_ai_actions.py
+--- a/Cheating_machine_execution_tool/tests/test_ai_actions.py
++++ b/Cheating_machine_execution_tool/tests/test_ai_actions.py
+@@ -463,6 +463,7 @@
+     def test_bridge_preserves_original_open_error_without_modal_popup(self):
+         with tempfile.TemporaryDirectory() as temporary:
+             manager = Mock()
++            manager.diagnostic_state.return_value = {"control_owner": "", "closing_in_program": False}
+             manager.acquire_monitor.side_effect = PermissionError("COM3 Access is denied (WinError 5)")
+             terminal = SerialTerminalWindow(Mock(), manager, Path(temporary), Path(temporary) / "settings.json")
+             terminal.show = Mock()
+diff --git a/Cheating_machine_execution_tool/tests/test_ai_permissions.py b/Cheating_machine_execution_tool/tests/test_ai_permissions.py
+--- a/Cheating_machine_execution_tool/tests/test_ai_permissions.py
++++ b/Cheating_machine_execution_tool/tests/test_ai_permissions.py
+@@ -174,6 +174,7 @@
+         self.owner.diagnostic.busy.return_value = True
+         with self.assertRaisesRegex(ValueError, "抢占"):
+             self.execute("run_dut_command", {"command": "reboot"})
++        self.owner.diagnostic.busy.return_value = False  # Test the independent secret guard on an eligible resource.
+         with self.assertRaisesRegex(ValueError, "API密钥"):
+             self.execute(params={"command": "echo model-secret"})
+         self.executor._connection.assert_not_called()

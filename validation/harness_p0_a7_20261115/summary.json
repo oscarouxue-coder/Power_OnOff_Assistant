@@ -1,0 +1,98 @@
+[
+  {
+    "channels": 8,
+    "elapsed_seconds": 3601.061999999918,
+    "samples": 63,
+    "rss_start_bytes": 28590080,
+    "rss_peak_sampled_bytes": 102174720,
+    "rss_after_release_bytes": 27136000,
+    "history_before_release_bytes": 77559585,
+    "pending_rx_chars_peak_sampled": 0,
+    "history_bytes_per_second_ols": 21544.829704680553,
+    "rss_bytes_per_second_ols": 19645.577890803368,
+    "source_bytes": 77559585,
+    "received_bytes": 77559585,
+    "disk_log_bytes": 85951087,
+    "text_and_lifecycle_checks_passed": true,
+    "raw_byte_fidelity_accepted": false,
+    "remaining_threads": [],
+    "retained_sessions": 0,
+    "projections": [
+      {
+        "hours": 72,
+        "history_gib": 5.200896281239761,
+        "rss_gib_linear_estimate": 4.769045737847903,
+        "status": "trend_estimate_only_not_tested"
+      },
+      {
+        "hours": 168,
+        "history_gib": 12.135424656226112,
+        "rss_gib_linear_estimate": 11.092271272426355,
+        "status": "trend_estimate_only_not_tested"
+      }
+    ],
+    "unavailable_history_samples": 0,
+    "channel_history_mib_per_hour_ols": {
+      "1": 9.2451057318868,
+      "2": 9.24513969951026,
+      "3": 9.245028643045238,
+      "4": 9.253684695227733,
+      "5": 9.24798799417727,
+      "6": 9.244920680735675,
+      "7": 9.241580210802784,
+      "8": 9.244855011135277
+    }
+  },
+  {
+    "channels": 16,
+    "elapsed_seconds": 3602.0779999997467,
+    "samples": 63,
+    "rss_start_bytes": 29298688,
+    "rss_peak_sampled_bytes": 172343296,
+    "rss_after_release_bytes": 28254208,
+    "history_before_release_bytes": 155113572,
+    "pending_rx_chars_peak_sampled": 0,
+    "history_bytes_per_second_ols": 43085.47148613372,
+    "rss_bytes_per_second_ols": 36821.76262879334,
+    "source_bytes": 155113572,
+    "received_bytes": 155113572,
+    "disk_log_bytes": 171895886,
+    "text_and_lifecycle_checks_passed": true,
+    "raw_byte_fidelity_accepted": false,
+    "remaining_threads": [],
+    "retained_sessions": 0,
+    "projections": [
+      {
+        "hours": 72,
+        "history_gib": 10.400781602790449,
+        "rss_gib_linear_estimate": 8.916016259587588,
+        "status": "trend_estimate_only_not_tested"
+      },
+      {
+        "hours": 168,
+        "history_gib": 24.268490406511045,
+        "rss_gib_linear_estimate": 20.767655899649682,
+        "status": "trend_estimate_only_not_tested"
+      }
+    ],
+    "unavailable_history_samples": 0,
+    "channel_history_mib_per_hour_ols": {
+      "1": 9.245315259173328,
+      "2": 9.24524472712644,
+      "3": 9.244624510154752,
+      "4": 9.244921254989778,
+      "5": 9.242268261392836,
+      "6": 9.24488878856694,
+      "7": 9.240702342378993,
+      "8": 9.244963903436554,
+      "9": 9.244870987231732,
+      "10": 9.249918142421189,
+      "11": 9.244798744999349,
+      "12": 9.245440666602873,
+      "13": 9.245440666602873,
+      "14": 9.247947651403022,
+      "15": 9.245440666602873,
+      "16": 9.245440666602873
+    }
+  }
+]

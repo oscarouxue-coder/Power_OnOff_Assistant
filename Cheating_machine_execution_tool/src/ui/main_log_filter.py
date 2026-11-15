@@ -42,6 +42,7 @@ _ROUTINE = tuple(re.compile(pattern) for pattern in (
     r'路由(?:新建|续接)' + _SESSION + r'，目标=(?:通道\d+|本机电脑|普通问答)',
     _SESSION + r'完全访问已自动生效；目标/模型/批次已校验，跳过独立审查',
     _SESSION + r'完全访问暂未生效：(?:' + '|'.join(map(re.escape, _QUIET_COLLECTION_REASONS)) + r')',
+    _SESSION + r'完全访问暂未生效：批量目标配置已变化，停止执行',
     r'创建会话 [0-9a-f]{8}，批次=[^，\r\n]*，目标=(?:通道\d+|本机电脑|普通问答)，模型=[^；\r\n]+',
     r'文件读取完成：[^，\r\n]+，字节=\d+，截断=False',
     r'开始只读串口诊断：COM\d+',
@@ -101,6 +102,16 @@ _NORMAL_ACTION_NOTICES = (
 )
 _RESULT = re.compile(r'^\[AI(?:对话|监控)\] 操作[0-9a-f]{8}结束：[^；\r\n]+（(?P<state>\w+)）(?:；|$)')
 _REVIEW = re.compile(r'^\[AI(?:对话|监控)\] 操作[0-9a-f]{8}审查结果：(?P<risk>ordinary|dangerous|unknown|blocked)；')
+_SERIAL_RESULT = re.compile(r'^\[AI(?:对话|监控)\] COM\d+ 串口诊断完成；')
+_INVALID_CONNECTION = ('命令已下发但连接失效，执行结果待核实；'
+                       '未自动切换通道或重新登录，请重新请求查询并确认新连接')
+_SHORT_CONNECTION = '连接失效，已下发结果待核实；不自动重试，请重新查询确认连接'
+_COLLECTION_FAILURE = re.compile(
+    r'(?P<head>\[AI采集\] 跳过/失败：' + _COLLECTION_TOOL + r'|'
+    + _SESSION + r'工具跳过/失败：' + _COLLECTION_TOOL + r')；' + re.escape(_INVALID_CONNECTION))
+_TEXT_FAILURE = re.compile(
+    r'(?P<head>操作[0-9a-f]{8}结束：(?:执行失败（failed）|结果待核实（unknown）))；错误='
+    + re.escape(_INVALID_CONNECTION) + r'(?P<undispatched>；(?:说明=)?未下发操作命令){0,2}')
 _DUT_PREFIX = re.compile(r'^\[DUT配置\](?= |\[)')
 _DUT_MESSAGE = re.compile(r'^\[DUT配置\](?:\[[^\]\r\n]+\])* (?P<body>[^\r\n]*)')
 _DUT_DETAILS = tuple(re.compile(pattern) for pattern in (
@@ -126,6 +137,13 @@ def is_dut_log_message(message: str) -> bool:
 
 def ai_main_log_tag(message: str) -> str | None:
     """结果状态优先于输出正文中的成功/失败字样；其它行沿用既有颜色规则。"""
+    if _SERIAL_RESULT.match(message):
+        if any(text in message for text in ('；串口枚举失败', '；PnP查询失败', '；打开错误=')):
+            return 'error'
+        if any(text in message for text in ('；未枚举到目标', '；PnP异常=', '；控制占用',
+                                            '；正在关闭', '；电源串口冲突', '；内部占用状态未知')):
+            return 'warning'
+        return ''  # 只读查询完成不代表串口可打开或设备健康。
     result = _RESULT.match(message)
     if result is None:
         review = _REVIEW.match(message)
@@ -145,6 +163,60 @@ def ai_main_log_tag(message: str) -> str | None:
             return 'warning'
     state = _ACTION_STATES.get(result['state'])
     return state[1] if state else None
+
+
+def _serial_summary(value: dict) -> str | None:
+    """只压缩已知串口快照；未知结构保留原文，查询错误不展开命令/驱动JSON。"""
+    known = {'configured_com', 'ports', 'pnp', 'external_owner', 'internal', 'notice',
+             'enumerated', 'enumeration_error', 'pnp_error'}
+    internal_keys = {'port', 'opened_in_program', 'closing_in_program', 'monitor_owners',
+                     'control_owner', 'last_open_error', 'power_port_conflict', 'notice'}
+    port, internal = value.get('configured_com'), value.get('internal')
+    if (set(value) - known or not isinstance(port, str) or not re.fullmatch(r'COM\d+', port, re.I)
+            or not isinstance(internal, dict)
+            or set(internal) - internal_keys
+            or not isinstance(internal.get('port', port), str)
+            or internal.get('port', port).upper() != port.upper()
+            or any(key in internal and type(internal[key]) is not bool
+                   for key in ('opened_in_program', 'closing_in_program', 'power_port_conflict'))
+            or internal.get('notice') not in (None, '', '未接入内部占用快照')
+            or value.get('notice') not in (None, '', '管理员身份不排除访问限制；设备存在也不等于可打开。查询不打开COM。')
+            or not all(isinstance(value.get(key), list) and all(isinstance(item, dict) for item in value[key])
+                       for key in ('ports', 'pnp'))
+            or ('enumerated' in value and type(value['enumerated']) is not bool)
+            or ('enumerated' not in value and 'enumeration_error' not in value)):
+        return None
+    parts = [port.upper() + ' 串口诊断完成']
+    if 'enumeration_error' in value:
+        parts.append('串口枚举失败（详情见主日志文件）')
+    else:
+        parts.append('已枚举' if value['enumerated'] else '未枚举到目标')
+    if internal.get('opened_in_program') is True:
+        parts.append('程序内已打开')
+    if internal.get('closing_in_program') is True:
+        parts.append('正在关闭')
+    if internal.get('control_owner'):
+        parts.append('控制占用')
+    if internal.get('power_port_conflict') is True:
+        parts.append('电源串口冲突')
+    if internal.get('notice'):
+        parts.append('内部占用状态未知')
+    if internal.get('last_open_error'):
+        error = internal['last_open_error']
+        if not isinstance(error, str):
+            return None
+        first = error.splitlines()[0][:120] if error.splitlines() else ''
+        parts.append('打开错误=' + first + ('…（详情见主日志文件）' if first != error else ''))
+    if 'pnp_error' in value:
+        parts.append('PnP查询失败（详情见主日志文件）')
+    abnormal = sum(item.get('present') is False or item.get('problem_code') not in (None, 0)
+                   or item.get('status') not in (None, '', 'OK') for item in value['pnp'])
+    if abnormal:
+        parts.append(f'PnP异常={abnormal}项（详情见主日志文件）')
+    external = value.get('external_owner')
+    if external not in (None, '', '未知'):
+        return None  # 当前生产者不识别外部占用者；新格式不能擅自解释。
+    return '；'.join(parts)
 
 
 def _action_summary(event: str, value: dict) -> str | None:
@@ -183,7 +255,11 @@ def _action_summary(event: str, value: dict) -> str | None:
     parts = [f'{event}：{_ACTION_STATES[state][0]}（{state}）']
     for key, label in (('status', '进程状态'), ('exit_code', '返回码'), ('error', '错误'), ('notice', '说明')):
         if value.get(key) is not None:
-            parts.append(f'{label}={value[key]}')
+            if key == 'notice' and (value[key] == value.get('error')
+                                   or value[key] == '未下发操作命令' and value.get('dispatched') is False):
+                continue
+            content = _SHORT_CONNECTION if key == 'error' and value[key] == _INVALID_CONNECTION else value[key]
+            parts.append(f'{label}={content}')
     if value.get('dispatched') is False:
         parts.append('未下发操作命令')
     if value.get('process_cleanup_confirmed') is False:
@@ -203,8 +279,22 @@ def _format_ai_message(message: str) -> str | None:
     body = message[len(prefix):] if prefix else message
     if any(pattern.fullmatch(candidate) for pattern in _AI_DETAILS for candidate in (message, body)):
         return None
+    failure = _COLLECTION_FAILURE.fullmatch(body)
+    if failure:
+        return (prefix or '') + failure['head'] + '；' + _SHORT_CONNECTION
     if prefix is None:
         return message
+    text_failure = _TEXT_FAILURE.fullmatch(body)
+    if text_failure:
+        return (prefix + text_failure['head'] + '；错误=' + _SHORT_CONNECTION
+                + ('；未下发操作命令' if text_failure['undispatched'] else ''))
+    if body.startswith('串口诊断完成：'):
+        try:
+            value = json.loads(body[len('串口诊断完成：'):])
+            result = _serial_summary(value) if isinstance(value, dict) else None
+            return prefix + result if result is not None else message
+        except (ValueError, TypeError):
+            return message
     if any(pattern.fullmatch(body) for pattern in _ROUTINE):
         return None
     start = _CHAT_START.fullmatch(body)

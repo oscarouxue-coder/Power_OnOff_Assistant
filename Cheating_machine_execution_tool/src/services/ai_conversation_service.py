@@ -602,7 +602,7 @@ class AiConversationService:
             executor = self.diagnostic.tool_factory(target, stop, self.diagnostic.emit, self.store, self.redactor,
                                                     self.diagnostic.serial_acquire, self.diagnostic.serial_read,
                                                     self.diagnostic.busy) if target else PcConversationExecutor(stop, self.diagnostic.emit)
-            executor.allow_read_fallback = False  # 新连接重新走具体登录确认；自动监控仍保留原回退。
+            executor.allow_read_fallback = False  # 兼容设置；所有入口均禁止命令失败后跨协议重放。
             if task:
                 executor.max_operations = task.max_calls
         except Exception:

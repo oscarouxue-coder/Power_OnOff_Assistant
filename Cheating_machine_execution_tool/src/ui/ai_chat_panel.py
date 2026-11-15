@@ -65,7 +65,9 @@ class AiChatPanel:
         ttk.Button(row, text="管理会话", command=self.manage_sessions).pack(side="left", padx=(6, 0))
         row = ttk.Frame(parent)
         row.pack(fill="x", pady=5)
-        self.current_target = ttk.Label(row, text="普通问答")
+        # 直接设置标签颜色，保留模块主题下当前目标的局部强调。
+        self.current_target = ttk.Label(row, text="普通问答", font=(CHAT_FONT, 11, "bold"),
+                                        background="#dbeafe", foreground="#174b80", padding=(8, 4))
         self.current_target.pack(side="left", padx=6)
         self.session_status = AiChatStatus(row, background=self.owner.background_color, font_family=CHAT_FONT)
         self.session_status.pack(side="left", fill="x", expand=True, padx=(8, 0))

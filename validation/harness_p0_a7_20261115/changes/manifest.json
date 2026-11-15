@@ -1,0 +1,75 @@
+{
+  "source_base": "5c21027",
+  "order": [
+    "A1",
+    "A2",
+    "A7"
+  ],
+  "reverse_order": [
+    "A7",
+    "A2",
+    "A1"
+  ],
+  "files": {
+    "A1": [
+      "Cheating_machine_execution_tool/src/services/ai_action_service.py",
+      "Cheating_machine_execution_tool/line_check_assistant/app.py",
+      "Cheating_machine_execution_tool/src/core/serial_transport.py",
+      "Cheating_machine_execution_tool/src/services/ai_serial_client.py",
+      "Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py",
+      "Cheating_machine_execution_tool/src/ui/ai_serial_bridge.py",
+      "Cheating_machine_execution_tool/tests/test_ai_resource_guard.py",
+      "Cheating_machine_execution_tool/tests/test_ai_actions.py",
+      "Cheating_machine_execution_tool/tests/test_ai_permissions.py"
+    ],
+    "A2": [
+      "Cheating_machine_execution_tool/src/core/ai_debug_transport.py",
+      "Cheating_machine_execution_tool/src/services/ai_debug_service.py",
+      "Cheating_machine_execution_tool/src/services/ai_action_service.py",
+      "Cheating_machine_execution_tool/src/services/ai_conversation_service.py",
+      "Cheating_machine_execution_tool/tests/test_ai_shell_guard.py",
+      "Cheating_machine_execution_tool/tests/test_ai_debug.py",
+      "Cheating_machine_execution_tool/tests/test_ai_resource_guard.py"
+    ],
+    "A7": [
+      "Cheating_machine_execution_tool/src/core/transport_observation.py",
+      "Cheating_machine_execution_tool/src/services/transport_history_monitor.py",
+      "Cheating_machine_execution_tool/src/core/serial_transport.py",
+      "Cheating_machine_execution_tool/src/core/telnet_transport.py",
+      "Cheating_machine_execution_tool/line_check_assistant/app.py",
+      "Cheating_machine_execution_tool/src/ui/serial_terminal.py",
+      "Cheating_machine_execution_tool/scripts/verify_baseline.py",
+      "Cheating_machine_execution_tool/tests/test_transport_history_monitor.py",
+      "Cheating_machine_execution_tool/tests/transport_history_stress.py",
+      "Cheating_machine_execution_tool/scripts/report_transport_history.py"
+    ]
+  },
+  "isolated_phase_checks": [
+    {
+      "stage": "A1",
+      "pattern": "test_ai_resource_guard.py",
+      "exit_code": 0
+    },
+    {
+      "stage": "A2",
+      "pattern": "test_ai_shell_guard.py",
+      "exit_code": 0
+    },
+    {
+      "stage": "A2",
+      "pattern": "test_ai_debug.py",
+      "exit_code": 0
+    },
+    {
+      "stage": "A2",
+      "pattern": "test_ai_resource_guard.py",
+      "exit_code": 0
+    },
+    {
+      "stage": "A7",
+      "pattern": "test_transport_history_monitor.py",
+      "exit_code": 0
+    }
+  ],
+  "note": "Source patches only; do not apply again to the already modified worktree. Shared documentation is separate."
+}

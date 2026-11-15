@@ -1,0 +1,16 @@
+{
+  "reverse_order": [
+    "A7",
+    "A2",
+    "A1"
+  ],
+  "owned_changes_reversible": true,
+  "current_worktree_roundtrip_exact_ignoring_eol": true,
+  "concurrent_changes_preserved": [
+    "Cheating_machine_execution_tool/scripts/verify_baseline.py",
+    "Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py"
+  ],
+  "checked_files": 22,
+  "config_touched": false,
+  "final_shutdown_adjustment_included": true
+}

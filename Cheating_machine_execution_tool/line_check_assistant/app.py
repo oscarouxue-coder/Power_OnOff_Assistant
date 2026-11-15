@@ -561,6 +561,9 @@ class LineCheckAssistant(Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_app_close)
         self.after(500, self._start_dingtalk_remote)
         self.after(600, self._start_feishu_remote)
+        from src.services.transport_history_monitor import TransportHistoryMonitor
+        self.transport_history_monitor = TransportHistoryMonitor(LOG_DIR / "resource_monitor", self.log_queue.put)
+        self.transport_history_monitor.start()
 
     def _maximize_window(self) -> None:
         try:
@@ -639,8 +642,14 @@ class LineCheckAssistant(Tk):
         if terminal is not None and terminal.window is not None:
             self.after(100, self._on_app_close)
             return
-        if updates is not None and updates.jobs:
-            # 更新线程已退出；销毁日志控件前落盘本次收尾日志，按当前队列快照限量排空。
+        history_monitor = self.__dict__.get('transport_history_monitor')
+        if history_monitor is not None:
+            history_monitor.begin_close()
+            if not history_monitor.idle:
+                self.after(100, self._on_app_close)
+                return
+        if history_monitor is not None or (updates is not None and updates.jobs):
+            # 后台观察/更新线程已退出；销毁控件前按队列快照排空最后的收尾日志。
             pending_logs = self.log_queue.qsize()
             for _ in range((pending_logs + MAIN_LOG_EVENTS_PER_TICK - 1) // MAIN_LOG_EVENTS_PER_TICK):
                 self._drain_log_queue()
@@ -5924,6 +5933,7 @@ class LineCheckAssistant(Tk):
                 APP_DIR / "line_check_assistant_README.md",
                 background=COLOR_BG, foreground=COLOR_TEXT,
                 context=context, shared_busy=self._ai_shared_network_busy,
+                host_busy=lambda: self._ai_target_busy(None),
                 on_monitor_status=self.ai_monitor_status_row.show,
                 app_dir=APP_DIR, project_config_path=TEST_ITEM_CONFIG_PATH,
                 remote_tab_factory=self._build_ai_remote_management,
@@ -6022,6 +6032,8 @@ class LineCheckAssistant(Tk):
         )):
             return True
         if self.__dict__.get("power_test_running", False):
+            if target is None:
+                return True  # Host commands cannot be scoped to only the AI-selected DUTs.
             session = self.__dict__.get("power_test_resume_session")
             if session is None:
                 return True

@@ -706,6 +706,42 @@ class ChatPresentationTests(unittest.TestCase):
                     self.assertLessEqual(widget.winfo_rooty() + widget.winfo_height(),
                                          self.root.winfo_rooty() + self.root.winfo_height())
 
+    def test_current_target_badge_survives_module_theme_and_scope_changes(self):
+        from src.ui.module_theme import apply_module_theme
+
+        scenarios = (
+            ({"scope": "device", "target": {"channel": 1}}, "通道1"),
+            ({"scope": "batch", "target": None,
+              "batch_targets": [{"channel": n} for n in (1, 2, 7)]}, "通道1、2、7（批量）"),
+            ({"scope": "pc", "target": None}, "本机电脑"),
+            ({"scope": "general", "target": None}, "普通问答"),
+        )
+        for theme in ("vista", "clam"):
+            ttk.Style(self.root).theme_use(theme)
+            for geometry in ("1040x760", "940x660"):
+                self.root.geometry(geometry)
+                for session, label in scenarios:
+                    with self.subTest(theme=theme, geometry=geometry, label=label):
+                        self.session.update(session)
+                        self.rendered()
+                        apply_module_theme(self.root)
+                        self.root.update()
+                        target, status = self.panel.current_target, self.panel.status_output
+                        self.assertEqual(target.cget("text"), label)
+                        self.assertEqual(str(target.cget("background")), "#dbeafe")
+                        self.assertEqual(str(target.cget("foreground")), "#174b80")
+                        self.assertEqual(target.tk.splitlist(target.cget("font")),
+                                         ("Microsoft YaHei UI", "11", "bold"))
+                        self.assertEqual(tuple(int(str(value)) for value in target.cget("padding")), (8, 4))
+                        self.assertGreaterEqual(status.winfo_rootx(),
+                                                target.winfo_rootx() + target.winfo_width())
+                        self.assertGreater(status.winfo_width(), 100)
+                        self.assertTrue(target.winfo_viewable())
+                        self.assertLessEqual(target.winfo_rooty() + target.winfo_height(),
+                                             self.root.winfo_rooty() + self.root.winfo_height())
+        self.store.append_chat.assert_not_called()
+        self.store.update_chat.assert_not_called()
+
     def test_status_resize_recomputes_ellipsis_and_keeps_full_original(self):
         self.add("system", "逐字核对原始状态中文ABCDE" * 25, "recovery")
         self.rendered()

@@ -41,6 +41,9 @@ class AiSerialClient:
     def shared_busy(self, target):
         return self.call('shared_busy', target)
 
+    def host_busy(self):
+        return self.call('host_busy', None)
+
     def target_current(self, target):
         return self.call('target_current', target)
 

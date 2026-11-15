@@ -1,9 +1,11 @@
 """离线钉钉项目接入回归；网络、模型和危险命令均隔离。"""
 from dataclasses import asdict, replace
+from contextlib import closing
 import json
 import os
 from pathlib import Path
 import queue
+import sqlite3
 import sys
 import tempfile
 import threading
@@ -16,7 +18,7 @@ from src.core.dingtalk_stream import DingTalkStream, InstanceLease, valid_sessio
 from src.models.dingtalk_remote import RemoteMessage, command, BOT_TOPIC
 from src.models.ai_actions import ActionAssessment
 from src.models.ai_permissions import ASK, AUTO, FULL
-from src.services.ai_project_store import initialize_project, legacy_records, project_directory
+from src.services.ai_project_store import initialize_project, project_directory
 from src.services.ai_store import DiagnosticStore
 from src.services.dingtalk_remote_store import RemoteConfigStore, RemoteMailbox
 from src.services.dingtalk_remote_service import DingTalkRemoteService, split_text
@@ -89,8 +91,10 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(new.reports(), [])
         finally:
             new.close()
-        records = legacy_records(legacy / "diagnostics.sqlite3")
-        self.assertTrue(any("旧问题" in body for _, body in records))
+        with closing(sqlite3.connect((legacy / "diagnostics.sqlite3").resolve().as_uri() + "?mode=ro", uri=True)) as old:
+            message = old.execute("SELECT payload FROM chat_messages WHERE session_id=?", ("old",)).fetchone()
+            self.assertEqual(json.loads(message[0])["text"], "旧问题")
+            self.assertEqual(old.execute("SELECT COUNT(*) FROM reports").fetchone()[0], 1)
         self.assertEqual(original, (legacy / "diagnostics.sqlite3").read_bytes())
 
     def test_configure_updates_notification_webhook_preserving_flags_and_other_sections(self):
@@ -586,6 +590,7 @@ class SetupWindowTests(unittest.TestCase):
     def test_hidden_controller_is_project_scoped_guarded_before_database_and_closes(self):
         import gc
         import tkinter as tk
+        from tkinter import ttk
         from types import SimpleNamespace
         from src.ui.ai_assistant_controller import AiAssistantController
         from tk_test_windows import OffscreenTkWindows
@@ -626,6 +631,23 @@ class SetupWindowTests(unittest.TestCase):
                                  Path(temporary) / "user" / "LineCheckAssistant" / "case_library")
                 controller._refresh_remote_targets()
                 self.assertEqual(tuple(controller.service.targets), (TARGET.channel,))
+                for theme in ("vista", "clam"):
+                    with self.subTest(theme=theme):
+                        ttk.Style(root).theme_use(theme)
+                        controller.dialog.open()
+                        controller.dialog.window.geometry("940x660")
+                        root.update()
+                        toolbar = controller.dialog.workspace.winfo_children()[0]
+                        self.assertEqual([w.cget("text") for w in toolbar.winfo_children()
+                                          if isinstance(w, ttk.Button)], ["诊断报告", "自动监控"])
+                        self.assertFalse(any(isinstance(w, ttk.Menubutton) for w in toolbar.winfo_children()))
+                        sessions = controller.dialog.chat_panel.sessions
+                        self.assertEqual([w.cget("text") for w in sessions.master.winfo_children()
+                                          if isinstance(w, ttk.Button)], ["刷新会话", "管理会话"])
+                        self.assertEqual([controller.dialog.book.tab(t, "text")
+                                          for t in controller.dialog.book.tabs()],
+                                         ["排障工作台", "模型接入", "已确认案例", "远程管理"])
+                        controller.dialog.hide()
             finally:
                 for instance in (controller, other):
                     if instance is not None:

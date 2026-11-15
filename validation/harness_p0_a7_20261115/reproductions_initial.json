@@ -1,0 +1,30 @@
+[
+  {
+    "case": "test_shared_resource_alone_blocks_bound_command",
+    "old_revision": "5c21027",
+    "failed_as_expected": true,
+    "failures": 1,
+    "errors": 0
+  },
+  {
+    "case": "test_busy_state_is_rechecked_after_review",
+    "old_revision": "5c21027",
+    "failed_as_expected": true,
+    "failures": 1,
+    "errors": 0
+  },
+  {
+    "case": "test_boot_after_serial_login_prevents_first_command",
+    "old_revision": "5c21027",
+    "failed_as_expected": true,
+    "failures": 1,
+    "errors": 0
+  },
+  {
+    "case": "test_post_dispatch_timeout_is_not_replayed",
+    "old_revision": "5c21027",
+    "failed_as_expected": false,
+    "failures": 0,
+    "errors": 1
+  }
+]

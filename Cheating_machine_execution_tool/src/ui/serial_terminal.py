@@ -200,6 +200,8 @@ class SerialTerminalWindow:
             owner = f"terminal:{id(self)}:{vlan}:{item['port']}"
             path = build_serial_log_path(self.log_dir, vlan, item["port"])
             session = self.manager.acquire_monitor(owner, SerialSettings(item["port"]), path)
+            from src.core.transport_observation import label_session
+            label_session(session, vlan=vlan)
             subscriber = self._make_subscriber(vlan, item)
             session.subscribe(subscriber)
             item.update(owner=owner, session=session, subscriber=subscriber)

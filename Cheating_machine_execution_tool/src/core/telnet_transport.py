@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Iterable, Optional, Union
 
 from .bind_socket import ip_is_bindable_locally
+from .transport_observation import register_session, retire_session
 
 
 Marker = Union[bytes, str]
@@ -106,6 +107,7 @@ class TelnetSession:
         if self.log_path is not None:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             self._log_handle = self.log_path.open("a", encoding="utf-8", errors="replace")
+        register_session(self, "telnet", f"{bind_ip}->{device_host}:{device_port}")
         self._emit(b"STATE", "Telnet 已连接".encode("utf-8"))
 
     def _open_socket(self) -> None:
@@ -249,6 +251,7 @@ class TelnetSession:
             except OSError:
                 pass
             self._log_handle = None
+        retire_session(self)
 
     def _display(self, data: bytes) -> str:
         # 操作员要求明文显示所有下发/回显内容,不再按 known_secrets 脱敏。

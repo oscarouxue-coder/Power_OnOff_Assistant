@@ -1,0 +1,216 @@
+{
+  "svg_xml_valid": [
+    "channels8\\rss_history.svg",
+    "channels8\\channel_history.svg",
+    "channels16\\rss_history.svg",
+    "channels16\\channel_history.svg"
+  ],
+  "local_report_links": [
+    {
+      "from": "REPORT.md",
+      "to": "REPORT.html",
+      "exists": true
+    },
+    {
+      "from": "REPORT.md",
+      "to": "IMPLEMENTATION.md",
+      "exists": true
+    },
+    {
+      "from": "REPORT.md",
+      "to": "VALIDATION_SCOPE.md",
+      "exists": true
+    },
+    {
+      "from": "REPORT.md",
+      "to": "changes/manifest.json",
+      "exists": true
+    },
+    {
+      "from": "REPORT.md",
+      "to": "channels8/rss_history.svg",
+      "exists": true
+    },
+    {
+      "from": "REPORT.md",
+      "to": "channels8/channel_history.svg",
+      "exists": true
+    },
+    {
+      "from": "REPORT.md",
+      "to": "channels8/samples.csv",
+      "exists": true
+    },
+    {
+      "from": "REPORT.md",
+      "to": "channels8/result.json",
+      "exists": true
+    },
+    {
+      "from": "REPORT.md",
+      "to": "channels16/rss_history.svg",
+      "exists": true
+    },
+    {
+      "from": "REPORT.md",
+      "to": "channels16/channel_history.svg",
+      "exists": true
+    },
+    {
+      "from": "REPORT.md",
+      "to": "channels16/samples.csv",
+      "exists": true
+    },
+    {
+      "from": "REPORT.md",
+      "to": "channels16/result.json",
+      "exists": true
+    },
+    {
+      "from": "REPORT.md",
+      "to": "logging_probes.json",
+      "exists": true
+    },
+    {
+      "from": "REPORT.md",
+      "to": "static_checks.json",
+      "exists": true
+    },
+    {
+      "from": "REPORT.md",
+      "to": "IMPLEMENTATION.md",
+      "exists": true
+    },
+    {
+      "from": "IMPLEMENTATION.md",
+      "to": "REPORT.html",
+      "exists": true
+    },
+    {
+      "from": "IMPLEMENTATION.md",
+      "to": "VALIDATION_SCOPE.md",
+      "exists": true
+    },
+    {
+      "from": "IMPLEMENTATION.md",
+      "to": "changes/manifest.json",
+      "exists": true
+    },
+    {
+      "from": "IMPLEMENTATION.md",
+      "to": "changes/reverse_checks.json",
+      "exists": true
+    },
+    {
+      "from": "IMPLEMENTATION.md",
+      "to": "reproductions.json",
+      "exists": true
+    },
+    {
+      "from": "IMPLEMENTATION.md",
+      "to": "new_tests_current.txt",
+      "exists": true
+    },
+    {
+      "from": "IMPLEMENTATION.md",
+      "to": "related_tests_final.txt",
+      "exists": true
+    },
+    {
+      "from": "IMPLEMENTATION.md",
+      "to": "shutdown_checks.txt",
+      "exists": true
+    },
+    {
+      "from": "IMPLEMENTATION.md",
+      "to": "related_tests_merged.txt",
+      "exists": true
+    },
+    {
+      "from": "IMPLEMENTATION.md",
+      "to": "static_checks.json",
+      "exists": true
+    },
+    {
+      "from": "IMPLEMENTATION.md",
+      "to": "logging_probes.json",
+      "exists": true
+    },
+    {
+      "from": "REPORT.html",
+      "to": "channels8/samples.csv",
+      "exists": true
+    },
+    {
+      "from": "REPORT.html",
+      "to": "channels8/result.json",
+      "exists": true
+    },
+    {
+      "from": "REPORT.html",
+      "to": "channels8/samples.jsonl",
+      "exists": true
+    },
+    {
+      "from": "REPORT.html",
+      "to": "channels16/samples.csv",
+      "exists": true
+    },
+    {
+      "from": "REPORT.html",
+      "to": "channels16/result.json",
+      "exists": true
+    },
+    {
+      "from": "REPORT.html",
+      "to": "channels16/samples.jsonl",
+      "exists": true
+    },
+    {
+      "from": "REPORT.html",
+      "to": "reproductions.json",
+      "exists": true
+    },
+    {
+      "from": "REPORT.html",
+      "to": "related_tests_final.txt",
+      "exists": true
+    },
+    {
+      "from": "REPORT.html",
+      "to": "REPORT.md",
+      "exists": true
+    },
+    {
+      "from": "REPORT.html",
+      "to": "IMPLEMENTATION.md",
+      "exists": true
+    },
+    {
+      "from": "REPORT.html",
+      "to": "VALIDATION_SCOPE.md",
+      "exists": true
+    },
+    {
+      "from": "REPORT.html",
+      "to": "related_tests_merged.txt",
+      "exists": true
+    },
+    {
+      "from": "REPORT.html",
+      "to": "new_tests_current.txt",
+      "exists": true
+    },
+    {
+      "from": "REPORT.html",
+      "to": "shutdown_checks.txt",
+      "exists": true
+    }
+  ],
+  "long_runs_complete": true,
+  "raw_byte_fidelity_accepted": false,
+  "current_related_combination_all_passed": false,
+  "note": "Current 785-test combination contains 2 UI order subtest failures from concurrent toolbar reorder. See REPORT.md.",
+  "owned_source_and_patch_hashes_still_match": true,
+  "checked_at": "2026-11-15T17:40:22.179610+08:00"
+}

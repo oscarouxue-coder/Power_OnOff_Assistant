@@ -174,6 +174,7 @@ class PermissionActionsTests(unittest.TestCase):
         self.owner.diagnostic.busy.return_value = True
         with self.assertRaisesRegex(ValueError, "抢占"):
             self.execute("run_dut_command", {"command": "reboot"})
+        self.owner.diagnostic.busy.return_value = False  # Test the independent secret guard on an eligible resource.
         with self.assertRaisesRegex(ValueError, "API密钥"):
             self.execute(params={"command": "echo model-secret"})
         self.executor._connection.assert_not_called()

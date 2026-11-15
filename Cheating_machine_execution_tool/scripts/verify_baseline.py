@@ -51,6 +51,8 @@ class CheckResult(NamedTuple):
 # 1. py_compile 文件清单(以 `ACCEPTANCE_BASELINE.md §0` + 当前 `src/` / `line_check_assistant/`
 #    下全部 .py 为准;新增 .py 后必须手工补到本列表)。
 PY_COMPILE_FILES: tuple[str, ...] = (
+    "src/core/transport_observation.py",
+    "src/services/transport_history_monitor.py",
     "src/ui/channel_list.py",
     "src/ui/module_theme.py",
     "src/ui/application_icon.py",
@@ -97,7 +99,6 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/services/dingtalk_remote_store.py",
     "src/services/dingtalk_remote_service.py",
     "src/ui/dingtalk_setup_window.py",
-    "src/ui/ai_legacy_history.py",
     "src/services/ai_record_titles.py",
     "src/ui/ai_record_presentation.py",
     "src/services/ai_trigger_service.py",

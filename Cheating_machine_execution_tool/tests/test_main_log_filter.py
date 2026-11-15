@@ -583,7 +583,112 @@ def ai_recorded_run():
     return messages
 
 
+def serial_snapshot(**updates):
+    value = dict(configured_com='COM16', ports=[dict(port='COM16', description='sample port')],
+                 pnp=[dict(name='sample (COM16)', present=True, status='OK', problem_code=0)],
+                 external_owner='未知', enumerated=True,
+                 internal=dict(port='COM16', opened_in_program=True, closing_in_program=False,
+                               monitor_owners=['sample-monitor'], control_owner='', last_open_error='',
+                               power_port_conflict=False),
+                 notice='管理员身份不排除访问限制；设备存在也不等于可打开。查询不打开COM。')
+    value.update(updates)
+    return value
+
+
+INVALID_CONNECTION = ('命令已下发但连接失效，执行结果待核实；'
+                      '未自动切换通道或重新登录，请重新请求查询并确认新连接')
+
+
 class AiMainLogFilterTests(unittest.TestCase):
+    def test_serial_snapshot_is_one_line_for_chat_and_monitor(self):
+        for prefix in ('[AI对话] ', '[AI监控] '):
+            message = prefix + '串口诊断完成：' + json.dumps(serial_snapshot(), ensure_ascii=False)
+            result = format_main_log_message(message)
+            self.assertEqual(result, prefix + 'COM16 串口诊断完成；已枚举；程序内已打开')
+            self.assertEqual(ai_main_log_tag(result), '')
+            self.assertNotIn('可打开', result)
+
+    def test_serial_errors_and_occupancy_stay_visible_with_attention_colors(self):
+        cases = (
+            (dict(enumerated=False), {}, '未枚举到目标', 'warning'),
+            (dict(enumeration_error='sample enumeration error'), {}, '串口枚举失败', 'error'),
+            (dict(pnp_error=dict(stdout='raw-query-output', status='timed_out')), {}, 'PnP查询失败', 'error'),
+            ({}, dict(last_open_error='Access denied\n' + 'details' * 100), '打开错误=Access denied', 'error'),
+            ({}, dict(control_owner='other-controller'), '控制占用', 'warning'),
+            ({}, dict(closing_in_program=True), '正在关闭', 'warning'),
+            ({}, dict(power_port_conflict=True), '电源串口冲突', 'warning'),
+            (dict(internal=dict(notice='未接入内部占用快照')), {}, '内部占用状态未知', 'warning'),
+            (dict(pnp=[dict(name='other (COM20)', status='Error', problem_code=10)]), {}, 'PnP异常=1项', 'warning'),
+        )
+        for updates, internal, expected, tag in cases:
+            with self.subTest(expected=expected):
+                value = serial_snapshot(**updates)
+                value['internal'].update(internal)
+                message = '[AI对话] 串口诊断完成：' + json.dumps(value, ensure_ascii=False)
+                result = format_main_log_message(message)
+                self.assertIn(expected, result)
+                self.assertNotIn('\n', result)
+                self.assertNotIn('raw-query-output', result)
+                self.assertNotIn('details', result)
+                self.assertEqual(ai_main_log_tag(result), tag)
+        # 枚举异常没有enumerated字段，同样能摘要。
+        value = serial_snapshot(enumeration_error='sample error')
+        del value['enumerated']
+        self.assertIn('串口枚举失败', format_main_log_message(ai_json('串口诊断完成', value)))
+
+    def test_serial_unknown_and_malformed_snapshots_preserve_original(self):
+        for value in ([], {}, serial_snapshot(future_error='unknown failure'),
+                      serial_snapshot(ports=None), serial_snapshot(pnp=[None]),
+                      serial_snapshot(enumerated='False'), serial_snapshot(configured_com='COM16\n错误'),
+                      serial_snapshot(external_owner='new-format-owner'),
+                      serial_snapshot(notice='新格式异常'),
+                      serial_snapshot(internal=dict(port=None)),
+                      serial_snapshot(internal=dict(port='COM20', opened_in_program=True)),
+                      serial_snapshot(internal=dict(future_error='unknown failure')),
+                      serial_snapshot(internal=dict(opened_in_program='False'))):
+            message = ai_json('串口诊断完成', value)
+            self.assertEqual(format_main_log_message(message), message)
+        for tail in ('{损坏JSON', json.dumps(serial_snapshot()) + '\n后续失败'):
+            message = '[AI对话] 串口诊断完成：' + tail
+            self.assertEqual(format_main_log_message(message), message)
+
+    def test_connection_failure_shortens_only_known_event_and_exact_reason(self):
+        heads = ('[AI采集] 跳过/失败：read_dut_state',
+                 '[AI对话] [AI采集] 跳过/失败：read_dut_state',
+                 '[AI对话] 会话12345678工具跳过/失败：read_dut_state',
+                 '[AI监控] 会话12345678工具跳过/失败：read_dut_state')
+        for head in heads:
+            message = head + '；' + INVALID_CONNECTION
+            result = format_main_log_message(message)
+            self.assertEqual(result, head + '；连接失效，已下发结果待核实；不自动重试，请重新查询确认连接')
+            for suffix in ('；新格式异常', '\n后续失败'):
+                self.assertEqual(format_main_log_message(message + suffix), message + suffix)
+
+    def test_action_summary_deduplicates_notice_without_changing_state(self):
+        for prefix in ('[AI对话] ', '[AI监控] '):
+            for state in ('failed', 'unknown'):
+                message = prefix + '操作12345678结束：' + json.dumps(dict(action_state=state,
+                    error=INVALID_CONNECTION, notice='未下发操作命令', dispatched=False), ensure_ascii=False)
+                result = format_main_log_message(message)
+                self.assertEqual(result.count('未下发操作命令'), 1)
+                self.assertIn('（' + state + '）', result)
+                self.assertIn('已下发结果待核实；不自动重试', result)
+                self.assertEqual(ai_main_log_tag(result), 'error')
+        message = ai_json('操作12345678结束', dict(action_state='failed', error='sample error', notice='sample error'))
+        self.assertEqual(format_main_log_message(message).count('sample error'), 1)
+
+    def test_already_formatted_failure_replay_is_shortened_and_idempotent(self):
+        for prefix in ('[AI对话] ', '[AI监控] '):
+            message = (prefix + '操作12345678结束：执行失败（failed）；错误=' + INVALID_CONNECTION
+                       + '；说明=未下发操作命令；未下发操作命令')
+            result = format_main_log_message(message)
+            self.assertIn('错误=连接失效，已下发结果待核实；不自动重试', result)
+            self.assertEqual(result.count('未下发操作命令'), 1)
+            self.assertEqual(format_main_log_message(result), result)
+            self.assertEqual(ai_main_log_tag(result), 'error')
+            for suffix in ('；新格式异常', '\n后续失败'):
+                self.assertEqual(format_main_log_message(message + suffix), message + suffix)
+
     def test_normal_file_read_and_creation_details_hide_but_truncation_and_bad_json_remain(self):
         for prefix in ('[AI对话] ', '[AI监控] '):
             for body in (
@@ -608,6 +713,9 @@ class AiMainLogFilterTests(unittest.TestCase):
     def test_unknown_restrictions_and_failed_initialization_are_visible(self):
         for message in (
             '[AI对话] 会话12345678完全访问暂未生效：授权校验发生未知错误',
+            '[AI对话] 会话12345678完全访问暂未生效：批量目标配置已变化，停止执行；授权校验异常',
+            '[AI对话] 会话12345678完全访问暂未生效：批量目标配置已变化，停止执行\n实际执行失败',
+            '[AI对话] 会话12345678批量目标配置已变化，未执行',
             '[AI案例] 旧库导入失败，事务已回退',
             '[AI案例] 共用库初始化失败，请检查案例库及快照；未回退至项目案例库',
             '[AI对话] 会话12345678等待人工确认；不自动推测答案',
@@ -868,6 +976,39 @@ class AiMainLogPersistenceTests(unittest.TestCase):
         self.assertEqual(self.context.log_text.mock_calls, [])
         self.assertEqual(self.context.log_path.read_text(encoding='utf-8')[20:], message + '\n')
 
+    def test_serial_and_connection_replay_preserves_all_raw_events(self):
+        messages = [
+            '[AI采集] 跳过/失败：read_dut_state；' + INVALID_CONNECTION,
+            ai_json('操作12345678结束', dict(action_state='failed', error=INVALID_CONNECTION,
+                                          notice='未下发操作命令', dispatched=False)),
+            ai_json('串口诊断完成', serial_snapshot()),
+            '[AI对话] 会话12345678本轮结束；恢复状态：固定采集：无临时修改；'
+            '本轮通用操作的实际变更不自动回滚，结果待核实的操作须人工核对。',
+        ]
+        for message in messages:
+            LineCheckAssistant._log(self.context, message)
+        saved = self.context.log_path.read_text(encoding='utf-8').splitlines()
+        self.assertEqual([line[20:] for line in saved], messages)
+        rendered = [call.args[1].rstrip('\n') for call in self.context.log_text.insert.call_args_list
+                    if len(call.args) < 3 or call.args[2] != 'time']
+        self.assertEqual(rendered, [format_main_log_message(message) for message in messages])
+        self.assertNotIn('sample port', ''.join(rendered))
+        self.assertIn('sample port', '\n'.join(saved))
+        self.assertEqual(len(rendered), 4)  # 不合并不同采集/操作事件。
+
+    def test_batch_permission_notices_are_hidden_and_saved_verbatim(self):
+        messages = [
+            '[AI对话] 会话' + identifier + '完全访问暂未生效：批量目标配置已变化，停止执行'
+            for identifier in ('b4f26feb', '5f2f2b34', '12345678')
+        ]
+        for message in messages:
+            with self.subTest(message=message):
+                self.assertIsNone(format_main_log_message(message))
+                LineCheckAssistant._log(self.context, message)
+        self.assertEqual(self.context.log_text.mock_calls, [])
+        saved = self.context.log_path.read_text(encoding='utf-8').splitlines()
+        self.assertEqual([line[20:] for line in saved], messages)
+
     def test_recorded_run_preserves_every_raw_event_and_multiline_command_in_file(self):
         messages = ai_recorded_run()
         for message in messages:
@@ -962,14 +1103,20 @@ class AiMainLogPersistenceTests(unittest.TestCase):
         monitor_result = result.replace('[AI对话]', '[AI监控]', 1)
         command = '[AI对话] [AI Debug][telnet] TX：echo 请求模型\nprintf 完成'
         tasks = (ai_recorded_run()[11], ai_recorded_run()[-1])
+        serial = ai_json('串口诊断完成', serial_snapshot())
+        serial_error = ai_json('串口诊断完成', serial_snapshot(pnp_error='sample PnP error'))
+        failure = ai_json('操作12345678结束', dict(action_state='failed', error=INVALID_CONNECTION,
+                                                dispatched=False, notice='未下发操作命令'))
+        messages = (hidden,) + hidden_details + (result, monitor_result, command) + tasks + (serial, serial_error, failure)
         for theme in ('vista', 'clam'):
             with self.subTest(theme=theme):
                 style.theme_use(theme)
                 widget = tk.Text(root, state='disabled')
                 self.addCleanup(widget.destroy)
                 widget.tag_configure('warning', foreground='#c07000')
+                widget.tag_configure('error', foreground='#b00020')
                 self.context.log_text = widget
-                for message in (hidden,) + hidden_details + (result, monitor_result, command) + tasks:
+                for message in messages:
                     LineCheckAssistant._log(self.context, message)
                 root.update_idletasks()
                 shown = widget.get('1.0', 'end-1c')
@@ -984,9 +1131,15 @@ class AiMainLogPersistenceTests(unittest.TestCase):
                     self.assertIn(format_main_log_message(message), shown)
                 self.assertIn('warning', widget.tag_names('1.10'))
                 self.assertIn('warning', widget.tag_names('2.10'))
+                self.assertIn(format_main_log_message(serial), shown)
+                self.assertNotIn('sample port', shown)
+                self.assertNotIn('sample PnP error', shown)
+                self.assertIn('error', widget.tag_names(widget.search('PnP查询失败', '1.0')))
+                self.assertIn('error', widget.tag_names(widget.search('连接失效，已下发结果待核实', '1.0')))
+                self.assertEqual(shown.count('未下发操作命令'), 1)
                 self.assertEqual(widget.cget('state'), 'disabled')
         saved = self.context.log_path.read_text(encoding='utf-8')
-        for message in (hidden,) + hidden_details + (result, monitor_result, command) + tasks:
+        for message in messages:
             self.assertEqual(saved.count(message), 2)
 
 

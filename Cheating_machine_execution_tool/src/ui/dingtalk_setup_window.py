@@ -84,7 +84,7 @@ class DingTalkSetupWindow:
                 runtime.config = config
             self.on_saved(config)
             self.emit("[钉钉接入] 应用配置已加密保存；项目AI数据已初始化，旧库保留")
-            self.status.set("已保存，可开始绑定群" if runtime else "已保存。请重启程序后绑定群；旧AI历史保持只读可查。")
+            self.status.set("已保存，可开始绑定群" if runtime else "已保存。请重启程序后绑定群。")
             messagebox.showinfo("配置已保存", self.status.get(), parent=self.dialog_parent)
         except Exception as exc:
             self.error(exc)

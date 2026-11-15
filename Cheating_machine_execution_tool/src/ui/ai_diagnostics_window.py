@@ -69,18 +69,12 @@ class AiDiagnosticsWindow:
         self.reports_panel = AiReportsWindow(self)
         toolbar = ttk.Frame(workspace)
         toolbar.pack(fill="x", pady=(0, 5))
+        ttk.Button(toolbar, text="诊断报告", command=self.reports_panel.open).pack(side="left", padx=(0, 4))
         ttk.Button(toolbar, text="自动监控", command=self.monitor_panel.open).pack(side="left")
         self.monitor_status_label = ttk.Label(toolbar, textvariable=self.monitor_status)
         self.monitor_status_label.pack(side="left", padx=8)
         self.monitor_panel.update_status()
-        ttk.Button(toolbar, text="诊断报告", command=self.reports_panel.open).pack(side="left", padx=4)
         ttk.Label(toolbar, textvariable=self.report_status).pack(side="left", padx=8)
-        if getattr(self, "project_isolated", False):
-            menu = tk.Menu(toolbar, tearoff=False)
-            from src.ui.ai_legacy_history import open_legacy_history
-            menu.add_command(label="查看旧AI历史（只读）", command=lambda: open_legacy_history(self.window))
-            history = ttk.Menubutton(toolbar, text="历史", menu=menu)
-            history.pack(side="right", padx=4)
         self._connection_tab(connection)
         self._cases_tab(cases)
         if self.conversation is not None:

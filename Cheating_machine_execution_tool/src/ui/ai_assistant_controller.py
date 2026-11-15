@@ -13,7 +13,7 @@ from src.ui.ai_monitor_status import monitor_presentation
 class AiAssistantController:
     def __init__(self, master, terminal, manager, targets, busy, forbidden_port, emit, manual_path,
                  background="#eef2f5", foreground="#17202a", context=None, shared_busy=None,
-                 on_monitor_status=None, app_dir=None, project_config_path=None, remote_tab_factory=None):
+                 on_monitor_status=None, app_dir=None, project_config_path=None, remote_tab_factory=None, host_busy=None):
         self.master = master
         self.on_monitor_status = on_monitor_status
         self.monitor_snapshot = None
@@ -51,12 +51,14 @@ class AiAssistantController:
         self.bridge = AiSerialBridge(terminal, manager, busy, forbidden_port)
         client = self.bridge.client
         self.bridge.dispatcher.handlers['shared_busy'] = lambda request: shared_busy(request.args[0]) if shared_busy else False
+        self.bridge.dispatcher.handlers['host_busy'] = lambda request: bool(host_busy()) if host_busy else False
         self.bridge.dispatcher.handlers['target_current'] = lambda request: request.args[0] in tuple(targets())
         self.service = AiDiagnosticService(emit, client.acquire, client.read,
                                            client.busy, manual_path=manual_path, store=store)
         self.service.serial_status = client.serial_status
         self.service.target_current = client.target_current
         self.service.shared_busy = client.shared_busy if shared_busy else client.busy
+        self.service.host_busy = client.host_busy if host_busy else lambda: False
         self.conversation = AiConversationService(self.service, context,
             client.shared_busy if shared_busy else None, target_current=client.target_current)
         self.service.conversation = self.conversation
@@ -73,7 +75,6 @@ class AiAssistantController:
                     self.remote = DingTalkRemoteService(self.conversation, remote_config, project_config_path, project_guarded=True)
                 except Exception:
                     self.service.emit("[钉钉接入] 服务初始化失败，该平台未启动（凭据省略）")
-            self.dialog.project_isolated = True
             if self.remote is not None and self.remote.config["enabled"]:
                 try:
                     self.remote.start()

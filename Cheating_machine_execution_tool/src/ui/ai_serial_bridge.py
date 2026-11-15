@@ -16,7 +16,7 @@ class AiSerialBridge:
         self.controls, self.lock = self.client.controls, self.client.lock
         self.closed = False
         self.dispatcher = PipelineDispatcher(self.client.channel)
-        self.dispatcher.handlers.update(busy=lambda request: self.busy_callback(request.args[0]),
+        self.dispatcher.handlers.update(busy=lambda request: self._busy(request.args[0]),
                                         acquire=self._acquire, restore=self._restore_status,
                                         status=self._status)
         terminal.ai_debug_cancel = self.client.cancel_port
@@ -24,9 +24,22 @@ class AiSerialBridge:
     def poll(self):
         self.dispatcher.poll(20)
 
+    def _busy(self, target):
+        if self.busy_callback(target):
+            return True
+        state = self.manager.diagnostic_state(target.port)
+        if state.get('closing_in_program') is True:
+            return True
+        owner = state.get('control_owner', '')
+        if not owner:
+            return False  # Passive monitor owners do not prevent shared diagnostics.
+        with self.lock:
+            lease = self.controls.get(target.port.upper())
+        return not (lease and lease[0] == owner and not lease[1].is_set())
+
     def _acquire(self, request):
         target = request.args[0]
-        if self.busy_callback(target):
+        if self._busy(target):
             raise RuntimeError('目标设备正在执行操作，跳过串口主动采集')
         if not target.port or target.port.upper() == self.forbidden_port().upper():
             raise ValueError('目标串口不明确或与程控电源串口冲突')

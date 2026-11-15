@@ -463,6 +463,7 @@ class SerialDiagnosticsTests(unittest.TestCase):
     def test_bridge_preserves_original_open_error_without_modal_popup(self):
         with tempfile.TemporaryDirectory() as temporary:
             manager = Mock()
+            manager.diagnostic_state.return_value = {"control_owner": "", "closing_in_program": False}
             manager.acquire_monitor.side_effect = PermissionError("COM3 Access is denied (WinError 5)")
             terminal = SerialTerminalWindow(Mock(), manager, Path(temporary), Path(temporary) / "settings.json")
             terminal.show = Mock()

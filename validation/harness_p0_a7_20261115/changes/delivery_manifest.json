@@ -1,0 +1,111 @@
+{
+  "source_base": "5c21027",
+  "current_head": "5c210277a0ad71375957a51be2434f1fa8871754",
+  "files": [
+    {
+      "file": "Cheating_machine_execution_tool/line_check_assistant/app.py",
+      "sha256": "488fa5998030259e185d6a35a8652729902015b45ddf6c6b1340927a124d20ef"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/scripts/report_transport_history.py",
+      "sha256": "d7a51830458303d4775487832f5b980d907062b6e60a35d6b121f880957f217c"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/scripts/verify_baseline.py",
+      "sha256": "b49515dbd232fd693d67c58c8b8312eb29ab85a810230d257661aec13b39be47"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/src/core/ai_debug_transport.py",
+      "sha256": "40f79fac16aea03cfadb754c5689b42fe2936a98220af6aca76f8bea972855d4"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/src/core/serial_transport.py",
+      "sha256": "5da21d0a6b1fc650648cf7816a2c2ee88502eb91f2ace5713dfe0583167c4f80"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/src/core/telnet_transport.py",
+      "sha256": "91aeb87f1f70337f9efca2caa98cafaa39198d83e1f9141977210cce3b321129"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/src/core/transport_observation.py",
+      "sha256": "e0dc49895ec72c66460b49d1fbbdf477123ecdbc34d7e17e864ed68c8224f38c"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/src/services/ai_action_service.py",
+      "sha256": "1b084c6f85748576e6d137534d0ce0e26c13b6b9c709939c74d61a86cacaa1a6"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/src/services/ai_conversation_service.py",
+      "sha256": "7db54e5ec414f1ea57d008bc0781eb51e46e3d634f7b55b413f0b334e28fb142"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/src/services/ai_debug_service.py",
+      "sha256": "8380e093d0ba1d746c546462e9a22ad51c078dfe6cb6c5da50a214a7776b9d49"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/src/services/ai_serial_client.py",
+      "sha256": "f7dbffaabf499b262ccba24848d680aa716f9b31e3db29c8e795cae7d43e1b4a"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/src/services/transport_history_monitor.py",
+      "sha256": "f11886ab45ffd2bb904db8a8a89e5bd618a266f9bd7168b14c9278c043f3df1b"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py",
+      "sha256": "5bab1cfa7a9f517bae1fdeb727893d3475381ec88f45c0dc268ab0d6720c8373"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/src/ui/ai_serial_bridge.py",
+      "sha256": "5fcd41dd6bdd7c64194987006e957bc466563d61ca5f5c43e50c884e84be38b9"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/src/ui/serial_terminal.py",
+      "sha256": "7996e4442801249e70cedc89856eb6b3c5ca0973b3997cd52481c90bce1f963c"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/tests/test_ai_actions.py",
+      "sha256": "2e237b32659d1d0fa5eca2fe9b439c2b2f30de12fa97762fbec2ac5bad9e9fd9"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/tests/test_ai_debug.py",
+      "sha256": "b462a31ad44d3794b09616d1a9e7574b288b0a05258c25136f479585bc291c2c"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/tests/test_ai_permissions.py",
+      "sha256": "28cb31f0b876a075bbe5dcb7dd8a3d17d046eb62b4dcf1db46a398be167a046e"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/tests/test_ai_resource_guard.py",
+      "sha256": "397ca85e0c4e244bba4e7597b8492aae55b3a92b42925a39eba4ee20ba3d0f97"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/tests/test_ai_shell_guard.py",
+      "sha256": "fae3329073d72e2ef3f6f0751e99142eed8709143622402a9f1f79bcd1dbbe10"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/tests/test_transport_history_monitor.py",
+      "sha256": "7d6f0b6d60007751e0b69e1143bcef1eb8e98ecb2a5044e6ad9e4b64ab075789"
+    },
+    {
+      "file": "Cheating_machine_execution_tool/tests/transport_history_stress.py",
+      "sha256": "e09f9475ef03796ee54ce7617935d1292f55beac518c3b8f4d5592f291851a5b"
+    }
+  ],
+  "patches": [
+    {
+      "file": "A1.patch",
+      "sha256": "1ea4d30512a549eb4e9d8108f3af785f62a511f92097659b3b51dd09b6cb5758"
+    },
+    {
+      "file": "A2.patch",
+      "sha256": "d91a1085bc965ba49a2c62e4afd5ba6076fc8a89d984f3ad0bd381dd8ecd4438"
+    },
+    {
+      "file": "A7.patch",
+      "sha256": "943f1732409b5f5fbc5deb6eec37fa5b554d2fd46fae3b90ec90eaa25a78a8b7"
+    }
+  ],
+  "owned_diff_check_passed": true,
+  "no_index_mutations": true,
+  "note": "Hashes capture current shared worktree; controller and compile inventory also contain concurrent unrelated changes. Patches only contain owned changes."
+}

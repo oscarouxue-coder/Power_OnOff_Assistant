@@ -1,0 +1,184 @@
+{
+  "compiled_changed_files": [
+    "Cheating_machine_execution_tool/line_check_assistant/app.py",
+    "Cheating_machine_execution_tool/scripts/report_transport_history.py",
+    "Cheating_machine_execution_tool/scripts/verify_baseline.py",
+    "Cheating_machine_execution_tool/src/core/ai_debug_transport.py",
+    "Cheating_machine_execution_tool/src/core/serial_transport.py",
+    "Cheating_machine_execution_tool/src/core/telnet_transport.py",
+    "Cheating_machine_execution_tool/src/core/transport_observation.py",
+    "Cheating_machine_execution_tool/src/services/ai_action_service.py",
+    "Cheating_machine_execution_tool/src/services/ai_conversation_service.py",
+    "Cheating_machine_execution_tool/src/services/ai_debug_service.py",
+    "Cheating_machine_execution_tool/src/services/ai_serial_client.py",
+    "Cheating_machine_execution_tool/src/services/transport_history_monitor.py",
+    "Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py",
+    "Cheating_machine_execution_tool/src/ui/ai_serial_bridge.py",
+    "Cheating_machine_execution_tool/src/ui/serial_terminal.py",
+    "Cheating_machine_execution_tool/tests/test_ai_actions.py",
+    "Cheating_machine_execution_tool/tests/test_ai_debug.py",
+    "Cheating_machine_execution_tool/tests/test_ai_permissions.py",
+    "Cheating_machine_execution_tool/tests/test_ai_resource_guard.py",
+    "Cheating_machine_execution_tool/tests/test_ai_shell_guard.py",
+    "Cheating_machine_execution_tool/tests/test_transport_history_monitor.py",
+    "Cheating_machine_execution_tool/tests/transport_history_stress.py"
+  ],
+  "checks": [
+    {
+      "name": "compile_inventory",
+      "passed": true,
+      "detail": "189 source files covered"
+    },
+    {
+      "name": "must_exist: bbfdm.operate",
+      "passed": true,
+      "detail": "hit in src\\core\\dut_ubus_config.py (+1)"
+    },
+    {
+      "name": "must_exist: tclinux_allinone",
+      "passed": true,
+      "detail": "hit in src\\core\\tftp_transport.py (+1)"
+    },
+    {
+      "name": "must_exist: 192.168.1.1",
+      "passed": true,
+      "detail": "hit in src\\core\\telnet_transport.py (+2)"
+    },
+    {
+      "name": "must_exist: vlan_to_serial_port",
+      "passed": true,
+      "detail": "hit in src\\core\\__init__.py (+5)"
+    },
+    {
+      "name": "must_exist: MAX_PARALLEL_UPGRADES = 8",
+      "passed": true,
+      "detail": "hit in line_check_assistant\\sample_upgrade_settings_store.py"
+    },
+    {
+      "name": "must_exist: clamp_parallel_count",
+      "passed": true,
+      "detail": "hit in line_check_assistant\\app.py (+1)"
+    },
+    {
+      "name": "must_exist: source_address=(bind_ip, 0)",
+      "passed": true,
+      "detail": "hit in src\\core\\telnet_transport.py (+3)"
+    },
+    {
+      "name": "must_exist: Device.Firewall.<X_SDMC_>Security.AccessCtrl",
+      "passed": true,
+      "detail": "hit in src\\core\\ubus_enable_telnet.py"
+    },
+    {
+      "name": "must_not_exist: 0.0.0.0",
+      "passed": true,
+      "detail": "absent from code lines of src/core/tftp_transport.py,src/core/telnet_transport.py"
+    }
+  ],
+  "io_functions": [
+    {
+      "file": "src/core/serial_transport.py",
+      "function": "_reader_loop",
+      "ast_unchanged": true
+    },
+    {
+      "file": "src/core/serial_transport.py",
+      "function": "_display",
+      "ast_unchanged": true
+    },
+    {
+      "file": "src/core/serial_transport.py",
+      "function": "_emit",
+      "ast_unchanged": true
+    },
+    {
+      "file": "src/core/serial_transport.py",
+      "function": "_write_timestamped_log_event",
+      "ast_unchanged": true
+    },
+    {
+      "file": "src/core/serial_transport.py",
+      "function": "_drain_complete_rx_log_lines_locked",
+      "ast_unchanged": true
+    },
+    {
+      "file": "src/core/serial_transport.py",
+      "function": "_flush_pending_rx_log_line",
+      "ast_unchanged": true
+    },
+    {
+      "file": "src/core/serial_transport.py",
+      "function": "_flush_pending_rx_log_line_locked",
+      "ast_unchanged": true
+    },
+    {
+      "file": "src/core/serial_transport.py",
+      "function": "_write_timestamped_log_line_locked",
+      "ast_unchanged": true
+    },
+    {
+      "file": "src/core/telnet_transport.py",
+      "function": "_reader_loop",
+      "ast_unchanged": true
+    },
+    {
+      "file": "src/core/telnet_transport.py",
+      "function": "_display",
+      "ast_unchanged": true
+    },
+    {
+      "file": "src/core/telnet_transport.py",
+      "function": "_emit",
+      "ast_unchanged": true
+    },
+    {
+      "file": "src/core/telnet_transport.py",
+      "function": "write",
+      "ast_unchanged": true
+    },
+    {
+      "file": "src/core/telnet_transport.py",
+      "function": "send_line",
+      "ast_unchanged": true
+    }
+  ],
+  "protected_files": [
+    {
+      "file": "src/services/legacy_power_test_service.py",
+      "content_unchanged_ignoring_eol": true
+    },
+    {
+      "file": "src/services/power_test_resume_service.py",
+      "content_unchanged_ignoring_eol": true
+    },
+    {
+      "file": "Auto_power_on_off_tool/clients/ssh.py",
+      "content_unchanged_ignoring_eol": true
+    },
+    {
+      "file": "Auto_power_on_off_tool/test_case/power_on_off_ssh.py",
+      "content_unchanged_ignoring_eol": true
+    },
+    {
+      "file": "src/utils/ai_redaction.py",
+      "content_unchanged_ignoring_eol": true
+    },
+    {
+      "file": "src/models/ai_permissions.py",
+      "content_unchanged_ignoring_eol": true
+    },
+    {
+      "file": "src/services/ai_permission_service.py",
+      "content_unchanged_ignoring_eol": true
+    },
+    {
+      "file": "src/services/ai_store.py",
+      "content_unchanged_ignoring_eol": true
+    }
+  ],
+  "reverse_patches_verified": true,
+  "config_sha256": "EA4DE4D05AA1D11A94D7A48CF7481783A2E396DFC38B899761DA4A155D4A6250",
+  "config_matches_original": true,
+  "checked_at": "2026-11-15T17:19:57.468797+08:00",
+  "scope": "22 owned Python files compiled in memory, inventory and protocol grep only; not full baseline. Current shared worktree includes concurrent UI changes."
+}

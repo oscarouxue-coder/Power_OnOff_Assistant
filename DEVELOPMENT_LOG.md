@@ -1,5 +1,148 @@
 # 开发记录
 
+## 2026-11-15 - 汇总全部改动并完成本地提交检查
+
+- 类型：测试 / 状态更新
+- 背景：负责人要求将当前已更改的所有文件合并为一次本地Git提交，并由实施者总结备注；本次范围包含两份本机配置及新增验证材料。
+- 完成内容：核对并暂存144个文件，涵盖AI资源占用/Shell会话保护、接收历史只读监测及8/16路一小时模拟证据、AI长日志精简、当前通道强调、诊断报告按钮前移和旧历史入口移除。提交备注为“完善AI执行安全保护、历史监测与排障界面”。首轮完整基线发现Vista/Clam下同一旧按钮顺序断言失败，按已记录的按钮前移需求仅同步测试期望为“诊断报告 → 自动监控”，不调整产品实现；实际提交仍由既有pre-commit钩子复核。
+- 本轮额外修改文件：
+  - `Cheating_machine_execution_tool/tests/test_dingtalk_remote.py`
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+- 验证方法：主源码目录执行`powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/run_git_pre_commit.ps1`，由标准独立CPython3.9.10 x64运行完整`python -X utf8 scripts/verify_baseline.py`；修正断言后使用同一解释器执行`python -X utf8 -m unittest discover -s tests -p test_dingtalk_remote.py -v`，再运行完整基线；提交前核对暂存范围及差异格式。
+- 验证结果：首轮2430项测试中仅上述两个主题子用例失败；修正后钉钉专项42项全部通过，完整基线复验2430项测试、196项指定关键回归、189个源码编译/清单覆盖及协议不变量全部通过，输出`ALL CHECKS PASSED`。源码、配置与文档的暂存差异格式检查通过；3份历史补丁归档的空白上下文被`git diff --cached --check`识别为行尾空白，保留原始补丁以维持应用/回退证据，排除这些补丁后的检查通过。下方各轮“未提交/未运行完整基线”及组合失败描述保留当时事实，当前提交前状态以本条为准。
+- 后续待办：本轮仅本地提交，不推送、打包、发布或连接真实模型/平台/设备；现有EXE及Windows/真实样机待验收边界保持，按`ACCEPTANCE_BASELINE.md §2.16/§3`继续现场复验。
+
+## 2026-11-15 - A7接收历史只读监测及8/16路一小时专项
+
+- 类型：监测增强与专项验证（A1/A2/A7第三批）
+- 背景：负责人同意运行时与专项报告方案，要求完整区分实际接收、内存、磁盘文本、字节保真及写入异常，不直接改变接收和日志机制；8/16路各真实运行一小时、60秒采样，72/168小时只做趋势估算。
+- 完成内容：新增弱引用data-only观察器和独立后台采样器，记录history容量/对象大小、半行缓冲、RSS、累计推导接收量、文件大小/所在卷剩余空间及可见采集状态，输出JSONL和主执行日志异常提示；transport关闭不做监测文件IO，主窗口退出异步收尾并保留末次监测日志。接收/解码/打印/写盘13个核心方法与起点AST一致，不裁剪history、不轮转删除日志、不改变原错误传播和业务判据。运行时received_bytes注明来自append-only history长度，last_flush_confirmed保持null；压力工具另有独立输入/驱动计数、摘要和文本序号核对。
+- 修改文件：`src/core/transport_observation.py`、`src/services/transport_history_monitor.py`（新增）；`src/core/serial_transport.py`、`src/core/telnet_transport.py`、`src/ui/serial_terminal.py`、`line_check_assistant/app.py`（监测装配与收尾）；`scripts/verify_baseline.py`（两模块登记，保留同期旧历史删除）；新增`tests/test_transport_history_monitor.py`、`tests/transport_history_stress.py`、`scripts/report_transport_history.py`。同步`PLAN.md`、`.claude/plans/ai-harness-p0-a7.md`、`AI_HARNESS_COMPATIBILITY.md`、操作员说明、当前状态及验收边界；完整22个Python文件及独立A1/A2/A7补丁见`validation/harness_p0_a7_20261115/changes/manifest.json`。
+- 验证方法：独立CPython3.9.10 x64，模拟串口队列、真实文件写入、可复现OpenWrt风格连续/突发/空闲负载；8/16路各一个隔离子进程顺序运行3600秒。结束停产排空、正常关闭后比较输入/驱动/内存原始SHA256、文本记录和规范化内容SHA256、句柄/线程/弱引用。报告入口`python -B scripts/report_transport_history.py --output ../validation/harness_p0_a7_20261115`；命令参数、版本及验收限制见专项报告。
+- 实测结果：8路3601.062秒、16路3602.078秒，各63份样本；接收/内存77,559,585与155,113,572字节，磁盘文本85,951,087与171,895,886字节；364,818与729,606条记录均零缺失、零重复/乱序，各摘要一致，残留会话/线程为零。RSS开始/采样峰值/释放后分别27.266/97.441/25.879MiB和27.941/164.359/26.945MiB；history增长73.97/147.92MiB每小时，RSS拟合67.45/126.42MiB每小时。168小时history外推12.14/24.27GiB，仅趋势估算，未运行该时长。完整数据、RSS/history与逐通道SVG/CSV在`validation/harness_p0_a7_20261115/REPORT.html`和`REPORT.md`；8路早期观测版本与16路最终观测版本边界见`VALIDATION_SCOPE.md`。
+- 其它检查：A7新增11项；当前A1/A2/A7新增共39项全部通过，末次关闭日志专项组合60项通过。完成实现时30组777项通过（110.683秒、130个离屏窗口）；随后其它会话调整旧历史和诊断报告按钮，合并当前工作区再次运行785项（109.270秒、131个离屏窗口）有2个失败子用例：钉钉隐藏窗口在Vista/Clam主题仍断言旧按钮顺序。实际已按同期任务前移诊断报告，未恢复其产品代码或修改其测试；当前组合不能标为全通过。原始失败及所有阶段日志保留。22文件编译、189源码登记覆盖、协议不变量、8业务/权限文件不变、分批应用和回退往返检查通过；个人配置SHA256不变。未运行完整基线、未提交/推送/打包、未连接真实模型/设备或结束用户原有进程。
+- 未修复风险：UTF-8跨块文本替换、1MiB无换行尾部落盘前积累、串口写错退出读线程却未设置session.error、Telnet部分写错被吞等探针均真实复现；**字节保真未通过**，不能以本次ASCII文本一致掩盖。监测只能发现可见线程停止/潜在停写，不能确认flush、取得被吞掉的错误或补回日志。下一轮优先完整RX二进制归档、索引和可靠写错/磁盘不足告警，验收后再设计绝对游标兼容的有界内存及磁盘补读；A3/A8保持不改并等待确认。可见Windows、现场Router/ONU与老化并行复验仍按ACCEPTANCE_BASELINE §2.3/§2.16/§3待负责人确认。
+
+## 2026-11-15 - 前移排障工作台诊断报告按钮
+
+- 类型：优化
+- 背景：负责人要求将排障工作台顶部“诊断报告”按钮移动到“自动监控”按钮左侧，并确认实施方案。
+- 完成内容：工具栏顺序调整为“诊断报告 → 自动监控 → AI自动监控状态 → 报告状态”，首个按钮左侧不额外留白、右侧保留4像素间距；原按钮回调、状态更新、主题和监控语义保持。同步操作员说明中的入口位置，保留工作区已有修改。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用`..\.venv_serial_upgrade\Scripts\python.exe -X utf8 -`，在`tests/tk_test_windows.py::OffscreenTkWindows`中运行`test_ai_monitor_status`、`test_ai_workspace`及进程内临时工具栏检查；检查Vista/Clam、1080×780和940×660布局无重叠、两个按钮打开对应窗口、隐藏重开顺序保持且监控仍关闭。执行修改源码的`py_compile.compile(..., doraise=True)`及本轮三个文件的`git diff --check`。
+- 验证结果：33项现有专项测试通过；临时工具栏检查首次因PowerShell管道中文编码变成问号而失败，设置UTF-8后单独重跑通过（18次离屏窗口检查），产品实现无需调整。局部编译及差异格式检查通过。本轮未运行完整基线，保留最近完整验证记录；未提交、打包或连接真实模型/设备，现有EXE未更新。
+- 后续待办：重启Windows源码版后目视确认按钮排列；离屏Tk检查不替代完整Windows人工验收。
+
+## 2026-11-15 - 移除AI旧历史入口及实现
+
+- 类型：修改
+- 背景：负责人要求移除AI诊断助手右上角“历史”按钮以及对应实现，并确认实施方案。
+- 完成内容：①删除旧历史菜单、独立窗口、专用读取函数及无用显示标记，移除编译清单登记。②清理钉钉/飞书配置保存反馈中的旧历史可查提示，保留重启要求。③旧数据库不删除或改写；项目隔离、模型配置只读迁移和共用案例迁移保持，当前会话/报告/案例管理入口保持。④迁移测试改为直接只读核对旧消息、报告和数据库字节不变；扩展真实项目隔离控制器的Vista/Clam、940×660、隐藏重开及会话入口检查，并核对两平台保存提示。⑤同步操作员说明、当前状态、验收待确认项与既有钉钉方案，保留已有工作区改动。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_legacy_history.py`（删除）
+  - `Cheating_machine_execution_tool/src/services/ai_project_store.py`
+  - `Cheating_machine_execution_tool/src/ui/dingtalk_setup_window.py`
+  - `Cheating_machine_execution_tool/src/ui/feishu_setup_window.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`（仅移除旧历史模块登记）
+  - `Cheating_machine_execution_tool/tests/test_dingtalk_remote.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_remote_management.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/dingtalk-ai-workspace.md`
+  - `.claude/plans/remove-ai-legacy-history.md`（新增）
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用独立CPython3.9.10环境，通过`python -X utf8 -`在`OffscreenTkWindows`中运行`unittest.defaultTestLoader.loadTestsFromName`装载的`test_ai_workspace`、`test_dingtalk_remote`、`test_feishu_remote`、`test_ai_remote_management`、`test_ai_case_store`；对5个修改源码、编译脚本和2个测试文件执行`py_compile.compile(..., doraise=True)`，调用`check_py_compile_inventory(Path.cwd())`并逐项检查`PY_COMPILE_FILES`路径存在；检查专用模块/函数/标记及旧入口提示残留，执行本轮文件的`git diff --check`。
+- 验证结果：先对旧产品实现运行扩展后的项目隔离控制器用例，Vista/Clam均因历史按钮仍存在而按预期失败；删除后156项专项全部通过（33.545秒），69个离屏窗口检查通过，无失败/错误/跳过。8个文件编译、189个源码编译清单覆盖和全部登记路径存在检查通过；首次校验辅助脚本误用检查结果的`ok`属性，改为实际`passed`属性后复核通过，产品代码无需调整。专用实现、调用及提示无残留；文档中的旧轮次记录保留。差异格式检查通过。本轮未运行完整基线，保留最近完整验证记录；未提交、打包或连接真实模型/平台/设备，现有EXE未更新。
+- 后续待办：负责人重启Windows源码版后按ACCEPTANCE_BASELINE §2.16/§3目视复验按钮移除、其它入口、窗口隐藏重开与保存提示；离屏Tk及临时SQLite结果不替代现场验收。
+
+## 2026-11-15 - 突出排障工作台当前通道标识
+
+- 类型：优化
+- 背景：负责人反馈排障工作台状态行左侧通道说明不够醒目，选择浅蓝底方案并确认效果预览后要求实施。
+- 完成内容：原目标标签改为浅蓝底`#dbeafe`、深蓝字`#174b80`、微软雅黑UI 11号加粗，内边距为左右8/上下4像素；通过标签自身选项保留模块主题下的局部强调。单通道、批量通道、本机电脑和普通问答沿用现有目标文本与切换逻辑；右侧状态显示和业务执行保持。同步操作员说明，补充主题应用后及目标范围变化的专项检查。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录通过`python -X utf8 -`在进程内使用`tests/tk_test_windows.py::OffscreenTkWindows`包裹`unittest.defaultTestLoader.discover('tests', pattern='test_ai_chat_presentation.py')`并检查窗口离屏；执行`python -X utf8 -m py_compile src/ui/ai_chat_panel.py tests/test_ai_chat_presentation.py`及本轮四个文件的`git diff --check`。
+- 验证结果：42项界面专项全部通过（新增1项，覆盖Vista/Clam、1040×760与940×660、四种目标共16种组合），41个离屏窗口无越界至桌面；模块主题应用后颜色、字体、留白及目标文字正确，目标标签与状态文字不重叠，右侧状态保留可用宽度。相关编译和差异格式检查通过。首轮新增断言直接将Tk的Tcl_Obj内边距转换为整数导致错误，修正为先转字符串后复验全部通过；产品实现无需调整。本轮未运行完整基线，保留最近一次完整验证记录；未提交、打包或连接真实模型/设备，现有EXE未更新。
+- 后续待办：重启Windows源码版后由负责人目视复验通道标识效果；独立Tk检查和效果预览不替代完整Windows人工验收，既有设备验收状态保持。
+
+## 2026-11-15 - 压缩AI串口快照与重复失败说明
+
+- 类型：优化
+- 背景：负责人提供主界面日志，串口诊断展开全部端口/PnP/驱动JSON，断线操作结果重复显示“未下发操作命令”。确认只压缩当前长日志、工具结果保留一行，已经隐藏的正常工具提示继续隐藏。
+- 完成内容：①现有显示过滤层将已知串口快照压为端口/枚举/内部打开等事实摘要，保留查询和打开错误、占用、关闭、冲突及PnP异常数量；正常查询不显示设备健康成功色。②缩短已知连接失效原因，保留结果待核实、不自动重试及重新查询要求，兼容原始操作JSON与已格式化的同类文本。③同一操作结果内重复说明去重，不合并不同事件、不改下发/执行状态。未知结构、异常扩展及损坏JSON保留原文，完整日志文件和密钥过滤保持。④同步操作员说明、当前状态及§2.16/§3待验收范围。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/main_log_filter.py`
+  - `Cheating_machine_execution_tool/tests/test_main_log_filter.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录执行`python -X utf8 -m unittest discover -s tests -p test_main_log_filter.py`和`python -X utf8 -m py_compile src/ui/main_log_filter.py tests/test_main_log_filter.py`；附件去掉界面时间前缀后通过`LineCheckAssistant._log`回放至Mock界面和临时主日志文件，逐行比较原文落盘，核对4条事件及单行串口摘要；执行本轮6个文件的`git diff --check`并检查文档职责/内容一致性。
+- 验证结果：66项日志专项全部通过（新增7项，扩展Vista/Clam独立真实Tk文本/颜色/原文落盘检查），编译通过；附件4行回放通过，串口事件由23733字符缩为30字符，重复未下发说明只出现一次，原文落盘完全一致。首次附件回放遇PowerShell管道编码及已格式化操作文本边界，已分别使用进程内UTF-8和精确格式匹配修正后复验通过。差异格式及文档一致性检查通过。本轮未运行完整基线，保留最近完整验证记录；未提交、打包或连接真实模型/设备。
+- 后续待办：完整Windows源码版重启后的人工目视复验待负责人确认，不升级既有真实模型/平台/DUT验收状态，现有EXE未更新。
+
+## 2026-11-15 - 收起批量历史会话权限提示
+
+- 类型：优化
+- 背景：负责人反馈每次启动出现历史批量会话“完全访问暂未生效：批量目标配置已变化，停止执行”提示，并确认主界面始终收起该类提示、原始文件日志继续保留。
+- 完成内容：在现有主界面日志适配中增加精确整行匹配，适用于不同会话编号；仅收起该权限状态提示，原始日志落盘、权限校验、目标失效拦截及执行流程保持。补充实际反馈中两个会话及其它编号的显示/落盘验证，扩展异常后缀、多行失败和实际批量拦截消息的保留检查。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/main_log_filter.py`
+  - `Cheating_machine_execution_tool/tests/test_main_log_filter.py`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录执行`python -m unittest discover -s tests -p test_main_log_filter.py -v`、`python -m py_compile src/ui/main_log_filter.py tests/test_main_log_filter.py`，并在仓库根检查本轮三个文件的`git diff --check`。
+- 验证结果：59项日志专项测试全部通过，包含主程序日志入口的原文落盘/界面静默及既有两种主题的独立Tk检查；相关编译和差异格式检查通过。本轮未运行完整基线，保留最近一次完整验证记录；未提交、未打包，现有EXE未更新。
+- 后续待办：完整Windows源码版启动目视确认待负责人复验；不涉及真实模型、平台或设备操作，既有验收状态保持。
+
+## 2026-11-15 - 复核DUT重启后的诊断Shell
+
+- 类型：BUG 修复
+- 背景：负责人审核A2后要求防止已登录诊断会话在DUT重启、Boot、重新登录、EOF或结果未知时继续下发；保持既有协议、权限及业务判据。
+- 完成内容：①发送前复核当前Shell、连接、停止与占用，失效后关闭AI连接或仅释放AI串口租约；cleanup不绕过会话/资源保护，恢复未确认保留记录。②新增带dispatched标记的会话异常，区分未下发和已下发待核实；发送失败、超时和不带明确状态的连接错误均禁止本轮继续查询或跨协议重放。建立连接前的Telnet失败回退串口仍保留，既有allow_read_fallback属性兼容保留但不能授权命令失败后重发。③登录TX日志在提示复核后输出，保持现有凭据显示策略，不把否决的登录资料记录为已下发。④历史dmesg/logread内的启动文字不当作新重启，空登录标记/已登录免认证目标保持可用。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/core/ai_debug_transport.py`
+  - `Cheating_machine_execution_tool/src/services/ai_debug_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_action_service.py`（A2结果标记，与A1分段）
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`（兼容设置注释）
+  - `Cheating_machine_execution_tool/tests/test_ai_shell_guard.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_debug.py`（旧固定查询断线重发断言替换为更强的禁止重放回归；不属于指定基线ID）
+  - `Cheating_machine_execution_tool/tests/test_ai_resource_guard.py`（A2发送前否决状态）
+  - `ACCEPTANCE_BASELINE.md`、操作员说明及方案（A1/A2边界和待验收）
+- 验证方法：独立CPython3.9.10、临时数据库/模拟连接；运行`test_ai_shell_guard`、`test_ai_debug`及30组相关AI/协议/挂测接口/Tk/远程测试，在OffscreenTkWindows中执行；隔离加载HEAD旧实现执行复现，见`validation/harness_p0_a7_20261115/reproductions.json`。
+- 验证结果：A2新增13项、既有诊断24项通过；最终相关组合777项全部通过（110.683秒，130个离屏窗口），无失败/错误/跳过。4项旧版复现均按预期失败；完整日志见`related_tests_final.txt`。首轮620项中的2失败3错误经修正错误提示和测试前提/模拟状态、计时及模块名后复验通过，原日志保留。未运行完整基线，不替代Windows/真实模型/DUT验收，未提交或打包。
+- 后续待办：负责人按ACCEPTANCE_BASELINE §2.16/§3复验厂商提示、真实重启/断线和恢复待完成。远端在最后检查之后瞬时重启仍有物理竞态；不能宣称绝对消除或已完成现场验收。
+
+## 2026-11-15 - 加固AI本机操作占用保护
+
+- 类型：BUG 修复
+- 背景：负责人确认A1复现：设备会话的本机通用命令/写入未经过与本机会话一致的占用检查，要求既有老化任务优先且只读分析可继续。
+- 完成内容：①公共操作服务在准备前和实际下发前统一检查整机、目标和共享资源；主线程host_busy快照覆盖AI只绑定部分目标、其它通道仍挂测的情况，不在worker读取Tk。②串口桥复用现有控制权和关闭状态，阻挡其它控制流程，保留被动监控共享与AI自身有效租约。③完全访问不绕过占用，批准等待期间转忙仍不下发；不改权限默认/迁移及PASS/FAIL。④只读文件、历史检索、材料分析、问题报告及被动串口继续可用；作用范围不明的通用本机命令即使无害也保守阻挡，不擅自放宽。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/services/ai_action_service.py`（A1公共检查，与A2分段）
+  - `Cheating_machine_execution_tool/src/services/ai_serial_client.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_serial_bridge.py`
+  - `Cheating_machine_execution_tool/src/core/serial_transport.py`（仅A1关闭状态查询字段，与A7分段）
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`（host_busy入口，与A7装配分段）
+  - `Cheating_machine_execution_tool/tests/test_ai_resource_guard.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_actions.py`（模拟管理器状态补全）
+  - `Cheating_machine_execution_tool/tests/test_ai_permissions.py`（将独立密钥保护测试前提与忙碌保护分开）
+  - `ACCEPTANCE_BASELINE.md`、操作员说明及方案（A1/A2边界和待验收）
+- 验证方法：独立CPython3.9.10下运行`python -B -m unittest discover -s tests -p test_ai_resource_guard.py`，原始执行器全Mock；并执行本轮30组相关回归。用HEAD旧代码隔离加载验证占用及审查期间转忙复现。
+- 验证结果：A1专项15项通过，最终相关组合777项全部通过；实际命令、文件修改、设备连接的拦截断言通过。主线程快照、其它通道忙碌、三档权限、共享/串口控制、批准后转忙及只读路径均覆盖。未运行完整基线，保留既有完整记录；未连接真实设备/模型，未提交/推送/打包，现有EXE未更新。
+- 后续待办：Windows源码版及真实DUT按§3复验。A7两组一小时模拟验证另条记录，不将进行中的测试计为通过。
+
 ## 2026-11-15 - 验证并提交AI工作区改动
 
 - 类型：测试

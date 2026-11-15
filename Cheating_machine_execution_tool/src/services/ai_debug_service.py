@@ -14,7 +14,7 @@ import time
 import uuid
 
 from line_check_assistant.subprocess_window import hidden_window_kwargs
-from src.core.ai_debug_transport import DiagnosticTransport, DebugConnectionUnavailable
+from src.core.ai_debug_transport import DiagnosticTransport, DebugConnectionUnavailable, DebugSessionInvalid
 from src.core.ai_pc_network import read_target_network
 from src.utils.ai_output import decode_pc_output
 
@@ -49,14 +49,17 @@ class DiagnosticToolExecutor:
         self.serial_acquire, self.serial_read, self.busy = serial_acquire, serial_read, busy
         self.transport_factory = transport_factory
         self.transport = None
-        self.allow_read_fallback = True
+        self.allow_read_fallback = True  # Legacy attribute; never permits replay after command failure.
         self.used = 0
         self.max_operations = 10
         self.recovery_state = "无临时修改"
         self.network_summary = None
         self._connection_error = None
+        self._invalid_session_error = None
 
     def _connection(self):
+        if self._invalid_session_error:
+            raise DebugSessionInvalid(self._invalid_session_error)
         if self.transport is None:
             if self._connection_error is not None:
                 if self.stop.is_set():
@@ -108,16 +111,12 @@ class DiagnosticToolExecutor:
                 try:
                     result = connection.command(READ_COMMANDS[params["category"]])
                 except DebugConnectionUnavailable as exc:
-                    if connection.kind != "Telnet":
-                        raise
-                    if not self.allow_read_fallback:
-                        connection.close()
-                        self.transport = None
-                        raise DebugConnectionUnavailable(
-                            f"{exc}；未自动切换通道或重新登录，请重新请求查询并确认新连接") from exc
-                    self.emit("[AI Debug] Telnet只读查询连接失效，回退串口核查；临时修改不自动重发")
-                    connection.fallback_serial()
-                    result = connection.command(READ_COMMANDS[params["category"]])
+                    # Unannotated failures are uncertain too. A fixed read is not
+                    # permission to replay bytes on a different (possibly boot) console.
+                    self._invalid_session_error = f"{exc}；未自动切换通道或重新登录，请重新请求查询并确认新连接"
+                    connection.close()
+                    self.transport = None
+                    raise DebugSessionInvalid(self._invalid_session_error, getattr(exc, "dispatched", True)) from exc
             else:
                 result = self._temporary(name)
             self.emit(f"[AI采集] 完成：{name}")
@@ -128,7 +127,10 @@ class DiagnosticToolExecutor:
             raise
         except Exception as exc:
             self.emit(f"[AI采集] 跳过/失败：{name}；{self.redactor.text(str(exc))}")
-            return {"tool": name, "error": self.redactor.text(str(exc))}
+            result = {"tool": name, "error": self.redactor.text(str(exc))}
+            if isinstance(exc, DebugSessionInvalid):
+                result.update(dispatched=exc.dispatched, session_invalid=True)
+            return result
 
     def pc_environment(self):
         # 显式刷新即允许重新检查；失败/取消不得沿用上次的阻断结论。

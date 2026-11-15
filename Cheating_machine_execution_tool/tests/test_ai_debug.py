@@ -137,14 +137,16 @@ class TransportTests(unittest.TestCase):
         transport.close()
         self.assertFalse(session.closed)
 
-    def test_only_registered_reads_can_retry_on_serial_after_telnet_breaks(self):
+    def test_registered_read_after_unknown_telnet_error_never_replays_on_serial(self):
         transport = Mock(kind="Telnet")
         transport.command.side_effect = [DebugConnectionUnavailable("lost"), "safe read"]
         executor = DiagnosticToolExecutor(TARGET, FastStop(), Mock(), Mock(), DiagnosticRedactor(), Mock(), Mock())
         executor.transport = transport
         result = executor.execute("read_dut_state", {"category": "system"})
-        transport.fallback_serial.assert_called_once()
-        self.assertIn("safe read", result["evidence"])
+        transport.fallback_serial.assert_not_called()
+        self.assertTrue(result["session_invalid"])
+        self.assertTrue(result["dispatched"])
+        self.assertIn("确认新连接", result["error"])
 
 
 class ToolTests(unittest.TestCase):

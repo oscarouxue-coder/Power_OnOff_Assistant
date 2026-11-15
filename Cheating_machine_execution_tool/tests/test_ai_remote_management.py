@@ -172,12 +172,13 @@ class RemoteManagementTests(unittest.TestCase):
         self.root._sync_ai_message_push.assert_called_once_with(self.stores["dingtalk"].configure.return_value)
         self.assertEqual(ding.variables["client_secret"].get(), "")
         self.assertIs(self.messages.showinfo.call_args.kwargs["parent"], self.root)
-        self.assertIn("重启", ding.status.get())
+        self.assertEqual(ding.status.get(), "已保存。请重启程序后绑定群。")
         feishu = self.management.panels["feishu"]
         feishu.variables["app_secret"].set("app-secret")
         feishu.save()
         self.stores["feishu"].configure.assert_called_once()
         self.assertEqual(feishu.variables["app_secret"].get(), "")
+        self.assertEqual(feishu.status.get(), "已保存。请重启程序后绑定群或启用单聊。")
         self.notifications.enqueue.assert_not_called()
 
     def test_embedded_enable_cancellation_keeps_switches_off_and_uses_ai_parent(self):

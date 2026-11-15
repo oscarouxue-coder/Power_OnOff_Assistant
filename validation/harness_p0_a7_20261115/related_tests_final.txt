@@ -1,0 +1,824 @@
+test_bound_file_write_is_blocked_without_changing_file (test_ai_resource_guard.LocalResourceGuardTests) ... ok
+test_busy_state_is_rechecked_after_review (test_ai_resource_guard.LocalResourceGuardTests) ... ok
+test_busy_state_is_rechecked_after_specific_approval (test_ai_resource_guard.LocalResourceGuardTests) ... ok
+test_device_bound_local_command_is_blocked_in_all_permission_modes (test_ai_resource_guard.LocalResourceGuardTests) ... ok
+test_host_busy_blocks_even_when_ai_target_subset_is_idle (test_ai_resource_guard.LocalResourceGuardTests) ... ok
+test_host_snapshot_detects_power_test_without_ai_target_selection (test_ai_resource_guard.LocalResourceGuardTests) ... ok
+test_idle_bound_local_command_keeps_existing_execution (test_ai_resource_guard.LocalResourceGuardTests) ... ok
+test_preflight_veto_is_not_reported_as_dispatched (test_ai_resource_guard.LocalResourceGuardTests) ... ok
+test_read_local_file_remains_available_when_device_busy (test_ai_resource_guard.LocalResourceGuardTests) ... ok
+test_shared_resource_alone_blocks_bound_command (test_ai_resource_guard.LocalResourceGuardTests) ... ok
+test_historical_evidence_search_is_available_when_device_busy (test_ai_resource_guard.ReadOnlyDuringBusyTests) ... ok
+test_material_only_analysis_is_available_when_device_busy (test_ai_resource_guard.ReadOnlyDuringBusyTests) ... ok
+test_question_report_can_finish_without_active_dut_commands (test_ai_resource_guard.ReadOnlyDuringBusyTests) ... ok
+test_controller_and_closing_guards_preserve_passive_and_own_lease (test_ai_resource_guard.SerialResourceGuardTests) ... ok
+test_host_busy_snapshot_runs_on_dispatcher_owner_thread (test_ai_resource_guard.SerialResourceGuardTests) ... ok
+test_already_logged_in_no_auth_target_with_empty_login_markers (test_ai_shell_guard.ShellGuardTests) ... ok
+test_boot_after_serial_login_prevents_first_command (test_ai_shell_guard.ShellGuardTests) ... ok
+test_boot_during_response_invalidates_session (test_ai_shell_guard.ShellGuardTests) ... ok
+test_cleanup_does_not_bypass_boot_or_busy_guard (test_ai_shell_guard.ShellGuardTests) ... ok
+test_historical_boot_text_in_completed_output_is_not_reboot (test_ai_shell_guard.ShellGuardTests) ... ok
+test_invalid_session_does_not_trigger_fixed_read_serial_fallback (test_ai_shell_guard.ShellGuardTests) ... ok
+test_login_preflight_veto_does_not_log_credentials_as_sent (test_ai_shell_guard.ShellGuardTests) ... ok
+test_normal_queries_and_cancelled_cleanup_keep_compatibility (test_ai_shell_guard.ShellGuardTests) ... ok
+test_post_dispatch_timeout_is_not_replayed (test_ai_shell_guard.ShellGuardTests) ... ok
+test_relogin_and_closed_connection_prevent_command (test_ai_shell_guard.ShellGuardTests) ... ok
+test_send_failure_marks_unknown_and_blocks_next_attempt (test_ai_shell_guard.ShellGuardTests) ... ok
+test_unannotated_transport_error_blocks_remaining_queries_this_round (test_ai_shell_guard.ShellGuardTests) ... ok
+test_unknown_prompt_never_sends_wakeup (test_ai_shell_guard.ShellGuardTests) ... ok
+test_background_monitor_stops_with_final_sample (test_transport_history_monitor.HistoryMonitorTests) ... ok
+test_busy_history_lock_is_skipped_instead_of_blocking (test_transport_history_monitor.HistoryMonitorTests) ... ok
+test_file_size_and_partial_line_are_not_claimed_as_byte_fidelity (test_transport_history_monitor.HistoryMonitorTests) ... ok
+test_growth_and_closed_totals_do_not_double_count (test_transport_history_monitor.HistoryMonitorTests) ... ok
+test_main_close_waits_for_monitor_without_joining_on_ui_thread (test_transport_history_monitor.HistoryMonitorTests) ... ok
+test_monitor_thread_start_failure_does_not_abort_application (test_transport_history_monitor.HistoryMonitorTests) ... ok
+test_monitor_write_failure_is_reported_and_does_not_escape (test_transport_history_monitor.HistoryMonitorTests) ... ok
+test_reader_failure_and_file_stat_failure_are_visible (test_transport_history_monitor.HistoryMonitorTests) ... ok
+test_reads_lengths_without_consuming_or_rewriting_history (test_transport_history_monitor.HistoryMonitorTests) ... ok
+test_registry_does_not_retain_retired_sessions (test_transport_history_monitor.HistoryMonitorTests) ... ok
+test_transport_close_observation_performs_no_filesystem_io (test_transport_history_monitor.HistoryMonitorTests) ... ok
+test_cancelled_request_does_not_contact_service (test_ai_core.ClientTests) ... ok
+test_connection_check_requires_tool_call_and_result_round_trip (test_ai_core.ClientTests) ... ok
+test_deepseek_and_minimax_tool_history_preserved (test_ai_core.ClientTests) ... ok
+test_http_errors_do_not_expose_raw_service_response_or_key (test_ai_core.ClientTests) ... ok
+test_model_list_unsupported_reports_error_without_overwriting_model (test_ai_core.ClientTests) ... ok
+test_plain_text_fake_tool_is_never_executed (test_ai_core.ClientTests) ... ok
+test_real_material_and_auth_only_key_across_both_protocol_tool_round_trips (test_ai_core.ClientTests) ... ok
+test_responses_preserves_reasoning_and_function_call_ids (test_ai_core.ClientTests) ... ok
+test_tool_incompatibility_downgrades_question_only (test_ai_core.ClientTests) ... ok
+test_diagnostic_fields_and_nested_credentials_keep_real_values (test_ai_core.RedactionTests) ... ok
+test_ip_and_subnet_mask_are_never_replaced_by_aliases (test_ai_core.RedactionTests) ... ok
+test_only_registered_model_keys_are_removed_from_values_and_keys (test_ai_core.RedactionTests) ... ok
+test_real_dpapi_round_trip_and_binding (test_ai_core.RedactionTests) ... ok
+test_canonical_url_rejects_credentials_queries_and_plain_http (test_ai_core.StoreTests) ... ok
+test_endpoint_change_invalidates_key_and_verified_capability (test_ai_core.StoreTests) ... ok
+test_incomplete_case_is_not_confirmed (test_ai_core.StoreTests) ... ok
+test_key_and_model_changes_invalidate_capability_and_stale_test (test_ai_core.StoreTests) ... ok
+test_missing_model_allowed_for_refresh_and_no_key_in_settings (test_ai_core.StoreTests) ... ok
+test_only_confirmed_active_cases_are_retrieved_and_can_be_revised_deleted (test_ai_core.StoreTests) ... ok
+test_profiles_and_credentials_are_isolated_and_recovered (test_ai_core.StoreTests) ... ok
+test_recovery_record_persists_until_restored (test_ai_core.StoreTests) ... ok
+test_existing_config_mismatch_or_upgrade_lock_is_rejected (test_ai_debug.SerialSharingTests) ... ok
+test_existing_control_shares_connection_and_releases_only_ai_owner (test_ai_debug.SerialSharingTests) ... ok
+test_multiple_subscribers_receive_identical_rx_even_with_control_owner (test_ai_debug.SerialSharingTests) ... ok
+test_passive_bridge_read_works_while_upgrade_has_control (test_ai_debug.SerialSharingTests) ... ok
+test_debug_state_is_restored_on_cancellation (test_ai_debug.ToolTests) ... ok
+test_disconnect_keeps_pending_recovery_without_reboot (test_ai_debug.ToolTests) ... ok
+test_light_level_cannot_invoke_temporary_changes (test_ai_debug.ToolTests) ... ok
+test_malicious_recovery_record_does_not_execute (test_ai_debug.ToolTests) ... ok
+test_passive_serial_log_does_not_connect_or_test_busy (test_ai_debug.ToolTests) ... ok
+test_pc_snapshot_decodes_mixed_encodings_and_preserves_device_password (test_ai_debug.ToolTests) ... ok
+test_pc_snapshot_truncates_characters_after_decode_and_logs_bad_bytes (test_ai_debug.ToolTests) ... ok
+test_process_that_does_not_stop_keeps_recovery_pending (test_ai_debug.ToolTests) ... ok
+test_restore_only_task_unique_process_not_killall (test_ai_debug.ToolTests) ... ok
+test_schemas_never_expose_command_or_target_parameter (test_ai_debug.ToolTests) ... ok
+test_successful_packet_capture_is_local_only_and_remote_files_are_cleaned (test_ai_debug.ToolTests) ... ok
+test_tool_call_budget_is_enforced (test_ai_debug.ToolTests) ... ok
+test_unknown_and_injected_commands_never_reach_transport (test_ai_debug.ToolTests) ... ok
+test_boot_or_ambiguous_serial_prompt_never_gets_wakeup_or_commands (test_ai_debug.TransportTests) ... ok
+test_busy_dut_does_not_fallback_or_connect (test_ai_debug.TransportTests) ... ok
+test_connection_failure_falls_back_to_existing_serial_without_closing_it (test_ai_debug.TransportTests) ... ok
+test_login_log_contains_actual_username_password_and_sent_commands (test_ai_debug.TransportTests) ... ok
+test_registered_read_after_unknown_telnet_error_never_replays_on_serial (test_ai_debug.TransportTests) ... ok
+test_serial_window_cancel_stops_commands_but_keeps_monitor (test_ai_debug.TransportTests) ... ok
+test_telnet_preferred_locked_source_no_serial_open (test_ai_debug.TransportTests) ... ok
+test_only_complete_conversation_exposes_commands (test_ai_actions.ActionModelsTests) ... ok
+test_review_is_strict_and_does_not_extract_json_from_instructions (test_ai_actions.ActionModelsTests) ... ok
+test_target_injection_invalid_timeout_and_parameters_are_rejected (test_ai_actions.ActionModelsTests) ... ok
+test_action_records_deleted_atomically_with_conversation (test_ai_actions.ActionServiceTests) ... ok
+test_blocked_operation_has_no_approval_path (test_ai_actions.ActionServiceTests) ... ok
+test_changed_target_or_model_revokes_pending_operation (test_ai_actions.ActionServiceTests) ... ok
+test_custom_command_disconnect_never_falls_back_or_repeats (test_ai_actions.ActionServiceTests) ... ok
+test_dangerous_waits_approval_then_executes_once_and_rejects_duplicate (test_ai_actions.ActionServiceTests) ... ok
+test_device_busy_does_not_even_open_connection (test_ai_actions.ActionServiceTests) ... ok
+test_file_version_changed_before_approval_is_not_overwritten (test_ai_actions.ActionServiceTests) ... ok
+test_first_device_login_needs_approval_and_reused_connection_does_not (test_ai_actions.ActionServiceTests) ... ok
+test_modified_saved_parameters_cannot_use_old_approval (test_ai_actions.ActionServiceTests) ... ok
+test_ordinary_command_automatically_executes_once_with_real_params (test_ai_actions.ActionServiceTests) ... ok
+test_read_and_write_files_filter_keys_and_record_actual_results (test_ai_actions.ActionServiceTests) ... ok
+test_rejected_operation_is_never_dispatched (test_ai_actions.ActionServiceTests) ... ok
+test_restart_invalidates_pending_and_marks_started_operation_uncertain (test_ai_actions.ActionServiceTests) ... ok
+test_review_failure_requires_manual_confirmation (test_ai_actions.ActionServiceTests) ... ok
+test_serial_status_queries_do_not_acquire_or_open_serial (test_ai_actions.ActionServiceTests) ... ok
+test_stop_invalidates_pending_permission (test_ai_actions.ActionServiceTests) ... ok
+test_ui_eligibility_check_never_holds_confirmation_lock (test_ai_actions.ActionServiceTests) ... ok
+test_uncertain_command_retry_requires_new_approval (test_ai_actions.ActionServiceTests) ... ok
+test_chinese_stdout_stderr_working_directory_and_exit_code (test_ai_actions.LocalExecutorTests) ... ok
+test_output_is_bounded_and_truncation_is_reported (test_ai_actions.LocalExecutorTests) ... ok
+test_stop_before_launch_does_not_execute (test_ai_actions.LocalExecutorTests) ... ok
+test_stop_during_execution_cleans_job (test_ai_actions.LocalExecutorTests) ... ok
+test_timeout_kills_descendant_before_it_can_write_marker (test_ai_actions.LocalExecutorTests) ... ok
+test_independent_risk_review_and_execution_continue_both_protocols (test_ai_actions.ActionConversationTests) ... ok
+test_new_batch_cancels_pending_action_and_old_approval_is_rejected (test_ai_actions.ActionConversationTests) ... ok
+test_restarted_service_cancels_saved_approval_without_running_it (test_ai_actions.ActionConversationTests) ... ok
+test_review_usage_uses_same_budget_and_keys_are_not_sent_in_material (test_ai_actions.ActionConversationTests) ... ok
+test_stop_while_waiting_approval_completes_protocol_and_does_not_execute (test_ai_actions.ActionConversationTests) ... ok
+test_both_telnet_and_serial_connection_errors_reach_caller (test_ai_actions.SerialDiagnosticsTests) ... ok
+test_bridge_preserves_original_open_error_without_modal_popup (test_ai_actions.SerialDiagnosticsTests) ... ok
+test_full_conversation_read_failure_requires_new_login_instead_of_silent_fallback (test_ai_actions.SerialDiagnosticsTests) ... ok
+test_internal_snapshot_is_readonly_and_keeps_ownership (test_ai_actions.SerialDiagnosticsTests) ... ok
+test_pnp_problem_code_driver_and_missing_port_do_not_infer_external_owner (test_ai_actions.SerialDiagnosticsTests) ... ok
+test_approval_window_themes_minimum_layout_session_switch_and_cancel (test_ai_actions.ApprovalUiTests) ... ok
+test_ask_file_write_rejection_preserves_file (test_ai_permissions.PermissionActionsTests) ... ok
+test_ask_ordinary_waits_for_specific_approval (test_ai_permissions.PermissionActionsTests) ... ok
+test_ask_temporary_change_waits_even_on_existing_connection (test_ai_permissions.PermissionActionsTests) ... ok
+test_busy_confirmation_and_invalid_mode_rejected (test_ai_permissions.PermissionActionsTests) ... ok
+test_full_busy_and_secret_guards (test_ai_permissions.PermissionActionsTests) ... ok
+test_full_dangerous_command_skips_review_and_logs_grant (test_ai_permissions.PermissionActionsTests) ... ok
+test_full_first_login_is_automatic (test_ai_permissions.PermissionActionsTests) ... ok
+test_full_unknown_result_retry_still_requires_approval (test_ai_permissions.PermissionActionsTests) ... ok
+test_full_write_preserves_version_guard (test_ai_permissions.PermissionActionsTests) ... ok
+test_grant_binding_and_runtime_eligibility_revoke (test_ai_permissions.PermissionActionsTests) ... ok
+test_readonly_remains_direct_in_all_modes (test_ai_permissions.PermissionActionsTests) ... ok
+test_restart_does_not_restore_grant_for_running_task (test_ai_permissions.PermissionActionsTests) ... ok
+test_revoked_full_grant_cannot_dispatch_prepared_action (test_ai_permissions.PermissionActionsTests) ... ok
+test_stop_revokes_grant_but_keeps_preference (test_ai_permissions.PermissionActionsTests) ... ok
+test_full_confirmation_cancel_and_confirm (test_ai_permissions.PermissionControlTests) ... ok
+test_revoked_full_preference_stays_visible_without_reauthorizing (test_ai_permissions.PermissionControlTests) ... ok
+test_running_cleanup_and_empty_session_disable_switching (test_ai_permissions.PermissionControlTests) ... ok
+test_session_modes_display_without_changing_preference (test_ai_permissions.PermissionControlTests) ... ok
+test_default_full_restarts_with_new_grant_but_never_replays_old_action (test_ai_permissions.PermissionConversationTests) ... ok
+test_delete_forgets_grant_without_changing_other_session (test_ai_permissions.PermissionConversationTests) ... ok
+test_feishu_preference_does_not_change_local_or_dingtalk_defaults (test_ai_permissions.PermissionConversationTests) ... ok
+test_full_runtime_and_no_review_in_both_protocols (test_ai_permissions.PermissionConversationTests) ... ok
+test_lower_permission_survives_restart_and_invalid_target_cannot_rearm (test_ai_permissions.PermissionConversationTests) ... ok
+test_new_batch_and_stop_revoke_full_access (test_ai_permissions.PermissionConversationTests) ... ok
+test_preference_and_sessions_are_separate (test_ai_permissions.PermissionConversationTests) ... ok
+test_stopped_session_rearms_only_on_next_user_send (test_ai_permissions.PermissionConversationTests) ... ok
+test_failed_migration_rolls_back_sessions_and_marker (test_ai_permissions.PermissionMigrationTests) ... ok
+test_migration_once_preserves_subsequent_choices_and_dingtalk (test_ai_permissions.PermissionMigrationTests) ... ok
+test_ask_temporary_change_waits_on_existing_connection (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_ask_waits_for_button_and_approval_dispatches_once (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_auto_ordinary_reviews_and_never_creates_chat (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_busy_apply_and_invalid_full_leave_settings_unchanged (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_busy_blocks_generic_modification_even_with_full_access (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_first_login_in_auto_needs_approval_full_does_not (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_full_dangerous_skips_review_with_monitor_grant (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_full_unknown_retry_across_jobs_still_needs_approval (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_independent_review_uses_verified_model_and_no_tools (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_legacy_deep_disabled_no_longer_limits_monitor_tools (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_multi_channel_scopes_are_separate_and_stale_fingerprint_rejected (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_network_probe_uses_target_batch_settings (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_readonly_file_direct_and_write_version_guard_survives (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_resource_change_during_review_prevents_dispatch (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_restart_cancels_approved_and_marks_executing_unknown (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_review_failure_waits_and_rejection_never_dispatches (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_stop_wakes_approval_and_revokes_full_preference_retained (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_target_model_and_batch_changes_revoke (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_background_pending_cancel_does_not_dispatch_or_touch_chat (test_ai_monitor_permissions.MonitorProtocolTests) ... ok
+test_default_full_keeps_monitor_off_and_reenable_creates_fresh_grant (test_ai_monitor_permissions.MonitorProtocolTests) ... ok
+test_full_monitor_tool_execution_both_protocols_and_report (test_ai_monitor_permissions.MonitorProtocolTests) ... ok
+test_pre_batch_full_binds_first_run_and_new_batch_revokes (test_ai_monitor_permissions.MonitorProtocolTests) ... ok
+test_saved_full_while_disabled_and_lower_mode_survive_restart (test_ai_monitor_permissions.MonitorProtocolTests) ... ok
+test_deleted_model_revokes_idle_full_monitor (test_ai_monitor_permissions.MonitorUiTests) ... ok
+test_dropdown_replaces_checkbox_and_permission_is_independent (test_ai_monitor_permissions.MonitorUiTests) ... ok
+test_full_cancel_keeps_active_mode_and_confirmation_contains_scope (test_ai_monitor_permissions.MonitorUiTests) ... ok
+test_pending_click_opens_nonmodal_detail_and_rejection_is_specific (test_ai_monitor_permissions.MonitorUiTests) ... ok
+test_pending_disables_dropdown_without_new_fixed_button (test_ai_monitor_permissions.MonitorUiTests) ... ok
+test_automatic_monitor_sends_real_context_and_device_credentials (test_ai_integration.ServiceTests) ... ok
+test_automatic_report_receives_complete_target_network_summary (test_ai_integration.ServiceTests) ... ok
+test_case_confirmation_preserves_device_credentials_and_filters_only_model_key (test_ai_integration.ServiceTests) ... ok
+test_disabled_monitor_never_calls_model_but_serial_context_is_available (test_ai_integration.ServiceTests) ... ok
+test_manual_job_freezes_provider_and_saves_report_without_model_key (test_ai_integration.ServiceTests) ... ok
+test_manual_material_survives_request_report_notifications_and_main_log (test_ai_integration.ServiceTests) ... ok
+test_missing_key_still_preserves_local_snapshot (test_ai_integration.ServiceTests) ... ok
+test_monitor_triggers_third_attempt_and_not_credentials_or_duplicates (test_ai_integration.ServiceTests) ... ok
+test_new_batch_requires_rearming_monitor (test_ai_integration.ServiceTests) ... ok
+test_old_run_and_resume_does_not_reuse_retry_counts (test_ai_integration.ServiceTests) ... ok
+test_operator_device_action_cancels_ai_and_waits_for_active_transport_cleanup (test_ai_integration.ServiceTests) ... ok
+test_service_does_not_hold_tk_objects_for_worker_thread_collection (test_ai_integration.ServiceTests) ... ok
+test_snapshots_keep_real_addresses_mask_and_subnet_relationship (test_ai_integration.ServiceTests) ... ok
+test_split_serial_preserves_device_password_and_filters_model_key_after_joining (test_ai_integration.ServiceTests) ... ok
+test_temporary_report_fields_survive_model_error (test_ai_integration.ServiceTests) ... ok
+test_ai_window_remains_non_modal_and_hide_does_not_destroy (test_ai_integration.UiTests) ... ok
+test_background_matches_test_item_configuration_including_all_tabs_and_native_checks (test_ai_integration.UiTests) ... ok
+test_cancelled_ui_request_cannot_open_serial_later (test_ai_integration.UiTests) ... ok
+test_legacy_plain_report_evidence_remains_visible (test_ai_integration.UiTests) ... ok
+test_module_theme_preserves_global_styles_status_color_and_checkbox_semantics (test_ai_integration.UiTests) ... ok
+test_monitor_confirmation_names_real_material_and_recipient (test_ai_integration.UiTests) ... ok
+test_native_checkbuttons_default_monitor_off_and_threshold_three (test_ai_integration.UiTests) ... ok
+test_profile_round_trip_preserves_each_provider_and_never_shows_key (test_ai_integration.UiTests) ... ok
+test_real_report_values_are_visible_and_old_aliases_remain_unchanged (test_ai_integration.UiTests) ... ok
+test_report_selection_formats_nested_evidence_without_changing_saved_report (test_ai_integration.UiTests) ... ok
+test_vendor_and_model_are_separate_and_custom_model_is_editable (test_ai_integration.UiTests) ... ok
+test_vendor_selection_restores_saved_model_and_keeps_separate_credentials (test_ai_integration.UiTests) ... ok
+test_active_question_waits_and_reply_is_correlated (test_ai_conversation.ConversationTests) ... ok
+test_api_failure_retains_user_message_and_allows_followup (test_ai_conversation.ConversationTests) ... ok
+test_batch_change_cancels_queued_collection_before_api_request (test_ai_conversation.ConversationTests) ... ok
+test_blank_reply_keeps_question_pending (test_ai_conversation.ConversationTests) ... ok
+test_busy_device_query_is_skipped_without_telnet_connection (test_ai_conversation.ConversationTests) ... ok
+test_changed_profile_requires_new_session (test_ai_conversation.ConversationTests) ... ok
+test_chat_network_query_uses_same_summary_and_preserves_evidence (test_ai_conversation.ConversationTests) ... ok
+test_context_trim_keeps_whole_protocol_groups_and_first_question (test_ai_conversation.ConversationTests) ... ok
+test_controller_close_waits_for_both_workers_then_closes_store (test_ai_conversation.ConversationTests) ... ok
+test_conversation_brevity_does_not_change_formal_report_instructions (test_ai_conversation.ConversationTests) ... ok
+test_default_collection_allows_deep_and_stop_keeps_next_round_enabled (test_ai_conversation.ConversationTests) ... ok
+test_delete_during_executor_close_is_rejected_until_cleanup_finishes (test_ai_conversation.ConversationTests) ... ok
+test_delete_queued_stopped_round_waits_for_worker_completion (test_ai_conversation.ConversationTests) ... ok
+test_diagnostic_and_detailed_followups_keep_boundaries_in_request (test_ai_conversation.ConversationTests) ... ok
+test_duplicate_tool_ids_reject_whole_batch_and_do_not_poison_followup (test_ai_conversation.ConversationTests) ... ok
+test_existing_history_does_not_disable_wifi_tools_in_either_protocol (test_ai_conversation.ConversationTests) ... ok
+test_exit_cancels_queued_collection_and_disables_default (test_ai_conversation.ConversationTests) ... ok
+test_fault_is_in_initial_context_even_after_many_normal_events (test_ai_conversation.ConversationTests) ... ok
+test_followup_contains_previous_question_answer_and_correction (test_ai_conversation.ConversationTests) ... ok
+test_import_text_can_be_searched_near_start_and_is_not_executed (test_ai_conversation.ConversationTests) ... ok
+test_live_target_change_after_model_request_skips_collection (test_ai_conversation.ConversationTests) ... ok
+test_model_key_filtered_in_first_message_but_device_values_retained (test_ai_conversation.ConversationTests) ... ok
+test_model_round_limit_sends_no_tools_on_fifth_round (test_ai_conversation.ConversationTests) ... ok
+test_new_batch_revokes_and_old_session_keeps_only_old_evidence (test_ai_conversation.ConversationTests) ... ok
+test_oversized_or_binary_import_does_not_add_evidence (test_ai_conversation.ConversationTests) ... ok
+test_question_and_independent_log_query_finish_before_waiting (test_ai_conversation.ConversationTests) ... ok
+test_readonly_rejects_unregistered_device_calls (test_ai_conversation.ConversationTests) ... ok
+test_real_tk_chat_waiting_render_send_and_theme (test_ai_conversation.ConversationTests) ... ok
+test_responses_protocol_question_continues_with_matching_tool_result (test_ai_conversation.ConversationTests) ... ok
+test_restart_preserves_history_and_revalidates_default_collection (test_ai_conversation.ConversationTests) ... ok
+test_restart_rejects_changed_target_and_unverified_model (test_ai_conversation.ConversationTests) ... ok
+test_simple_question_policy_reaches_both_protocols (test_ai_conversation.ConversationTests) ... ok
+test_sqlite_reopen_preserves_chat_and_old_reports (test_ai_conversation.ConversationTests) ... ok
+test_stop_queued_job_does_not_call_api (test_ai_conversation.ConversationTests) ... ok
+test_stopping_active_collection_still_closes_executor (test_ai_conversation.ConversationTests) ... ok
+test_success_event_does_not_cancel_manual_conversation (test_ai_conversation.ConversationTests) ... ok
+test_target_changed_before_tool_execution_revokes_and_skips (test_ai_conversation.ConversationTests) ... ok
+test_tool_limit_stops_execution_after_ten (test_ai_conversation.ConversationTests) ... ok
+test_unverified_model_cannot_authorize_active_operations (test_ai_conversation.ConversationTests) ... ok
+test_bounded_cache_does_not_grow_forever (test_ai_conversation.EvidenceTests) ... ok
+test_late_open_receives_preexisting_channel_events_and_exact_file (test_ai_conversation.EvidenceTests) ... ok
+test_new_run_and_stale_attempt_are_isolated (test_ai_conversation.EvidenceTests) ... ok
+test_result_file_registration_preserves_bytes_and_forwarding (test_ai_conversation.EvidenceTests) ... ok
+test_busy_shared_card_skips_without_sending (test_ai_conversation.NetworkTests) ... ok
+test_cancelled_network_query_does_not_spawn (test_ai_conversation.NetworkTests) ... ok
+test_cancelling_native_query_terminates_only_owned_process (test_ai_conversation.NetworkTests) ... ok
+test_command_injection_is_rejected (test_ai_conversation.NetworkTests) ... ok
+test_readonly_command_uses_fixed_args_and_decodes_chinese (test_ai_conversation.NetworkTests) ... ok
+test_source_address_disappears_before_probe_skips (test_ai_conversation.NetworkTests) ... ok
+test_unknown_wireless_identity_does_not_choose_first_adapter (test_ai_conversation.NetworkTests) ... ok
+test_wired_probe_selects_exact_source_and_interface (test_ai_conversation.NetworkTests) ... ok
+test_wireless_probe_uses_only_configured_card_and_target (test_ai_conversation.NetworkTests) ... ok
+test_wireless_without_valid_ipv4_skips_without_waiting_or_sending (test_ai_conversation.NetworkTests) ... ok
+test_ask_user_waits_then_preserves_plan_when_answered (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_budget_requests_final_advice_without_additional_tools (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_diagnosis_hides_and_blocks_modifications_even_with_full_access (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_duplicate_failure_is_not_executed_again_and_task_concludes (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_empty_final_response_does_not_claim_diagnostic_advice (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_inflight_supplement_skips_unstarted_checks_and_is_used_next_round (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_memory_plan_and_quoted_evidence_survive_next_request (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_more_than_five_rounds_and_ten_calls_without_protocol_loss (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_pc_scope_uses_only_pc_tools_and_preserves_other_permissions (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_restart_marks_task_interrupted_and_does_not_replay_queries (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_stop_keeps_supplement_and_never_resumes_automatically (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_time_budget_cancels_unapproved_login_without_connecting (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_chat_stream_assembles_fragmented_tools_and_reasoning (test_ai_diagnostic_task.StreamTests) ... ok
+test_json_only_provider_is_accepted_without_resubmitting (test_ai_diagnostic_task.StreamTests) ... ok
+test_responses_stream_uses_completed_canonical_output (test_ai_diagnostic_task.StreamTests) ... ok
+test_split_model_key_never_appears_in_previews (test_ai_diagnostic_task.StreamTests) ... ok
+test_stop_closes_stream_without_finalizing_tools (test_ai_diagnostic_task.StreamTests) ... ok
+test_truncated_stream_never_returns_executable_calls (test_ai_diagnostic_task.StreamTests) ... ok
+test_menu_sends_diagnostic_task_and_progress_is_on_demand (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_stream_preview_is_not_persisted_and_final_text_replaces_it (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_task_progress_does_not_pollute_main_log_summary (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_budgets_duplicate_checks_and_supplement_invalidation (test_ai_diagnostic_task.TaskUnitTests) ... ok
+test_different_queries_with_no_new_evidence_also_stop (test_ai_diagnostic_task.TaskUnitTests) ... ok
+test_plan_requires_existing_evidence_and_keeps_observations_separate (test_ai_diagnostic_task.TaskUnitTests) ... ok
+test_actual_ping_dataclass_shape_is_used (test_ai_batch.BatchModelTests) ... ok
+test_strict_stage_validation (test_ai_batch.BatchModelTests) ... ok
+test_batch_parent_has_no_generic_action_executor (test_ai_batch.BatchTests) ... ok
+test_batch_permission_binding_contains_all_targets (test_ai_batch.BatchTests) ... ok
+test_changed_config_between_targets_stops_remaining (test_ai_batch.BatchTests) ... ok
+test_child_authorization_invalidated_by_parent_grant_change (test_ai_batch.BatchTests) ... ok
+test_clarification_then_one_by_one_preserves_original_request (test_ai_batch.BatchTests) ... ok
+test_count_mismatch_and_invalid_channel_dispatch_nothing (test_ai_batch.BatchTests) ... ok
+test_count_mismatch_asks_and_explicit_answer_resumes_original (test_ai_batch.BatchTests) ... ok
+test_cross_device_summary_uses_current_tool_results_without_tools (test_ai_batch.BatchTests) ... ok
+test_delete_parent_removes_children (test_ai_batch.BatchTests) ... ok
+test_explicit_channel_list_has_no_first_channel_fallback (test_ai_batch.BatchTests) ... ok
+test_full_access_runs_each_requested_device_operation_once (test_ai_batch.BatchTests) ... ok
+test_historical_parent_analysis_has_no_tools (test_ai_batch.BatchTests) ... ok
+test_independent_probe_error_does_not_mark_success_or_stop_next (test_ai_batch.BatchTests) ... ok
+test_model_cannot_dispatch_tools_in_plan (test_ai_batch.BatchTests) ... ok
+test_multiple_human_questions_require_target_and_preserve_others (test_ai_batch.BatchTests) ... ok
+test_parent_approval_targets_child_and_stop_cancels_whole_batch (test_ai_batch.BatchTests) ... ok
+test_plain_inspection_cannot_gain_mutation_tools_from_bad_planner (test_ai_batch.BatchTests) ... ok
+test_raw_evidence_available_on_parent_with_channel_identity (test_ai_batch.BatchTests) ... ok
+test_read_only_stage_filters_mutation_and_execution_guard_blocks_it (test_ai_batch.BatchTests) ... ok
+test_resume_does_not_replay_completed_stage (test_ai_batch.BatchTests) ... ok
+test_service_restart_does_not_replay_saved_batch (test_ai_batch.BatchTests) ... ok
+test_shared_pc_step_runs_once_and_cleanup_failure_pauses (test_ai_batch.BatchTests) ... ok
+test_shared_wireless_busy_pauses_without_ping (test_ai_batch.BatchTests) ... ok
+test_sources_do_not_share_parent_or_children (test_ai_batch.BatchTests) ... ok
+test_stages_check_all_before_failed_only_diagnosis (test_ai_batch.BatchTests) ... ok
+test_stop_cancels_remaining_and_continue_uses_only_remaining (test_ai_batch.BatchTests) ... ok
+test_three_same_ip_targets_ping_with_separate_sources_and_one_parent (test_ai_batch.BatchTests) ... ok
+test_unknown_result_excluded_from_retry_failures (test_ai_batch.BatchTests) ... ok
+test_unreachable_continues_and_rechecks_only_failure (test_ai_batch.BatchTests) ... ok
+test_workbench_shows_parent_and_channel_evidence_without_child_entries (test_ai_batch.BatchTests) ... ok
+test_ambiguous_target_asks_without_collecting (test_ai_session_router.RouterTests) ... ok
+test_bare_target_answer_resumes_original_problem_once (test_ai_session_router.RouterTests) ... ok
+test_changed_configuration_during_resolution_does_not_create_or_send (test_ai_session_router.RouterTests) ... ok
+test_clarification_carries_only_user_description_to_device (test_ai_session_router.RouterTests) ... ok
+test_disabled_entry_cancels_before_session_creation (test_ai_session_router.RouterTests) ... ok
+test_explicit_new_creates_separate_session (test_ai_session_router.RouterTests) ... ok
+test_first_send_refresh_does_not_invalidate_route_or_keep_sent_draft (test_ai_session_router.RouterTests) ... ok
+test_general_question_with_no_targets_uses_no_tools_or_dut_executor (test_ai_session_router.RouterTests) ... ok
+test_implicit_remote_followup_after_target_change_gets_current_snapshot (test_ai_session_router.RouterTests) ... ok
+test_invalid_model_route_never_sends_old_target (test_ai_session_router.RouterTests) ... ok
+test_mention_of_other_channel_keeps_current (test_ai_session_router.RouterTests) ... ok
+test_model_cannot_execute_tools_during_route (test_ai_session_router.RouterTests) ... ok
+test_natural_language_com_port_resolves_and_preserves_user_text (test_ai_session_router.RouterTests) ... ok
+test_pc_busy_prevents_local_generic_operation (test_ai_session_router.RouterTests) ... ok
+test_pc_device_call_rejected_in_execution_service (test_ai_session_router.RouterTests) ... ok
+test_pc_session_is_independent_and_tools_exclude_device (test_ai_session_router.RouterTests) ... ok
+test_pc_snapshot_has_no_fake_device_identity (test_ai_session_router.RouterTests) ... ok
+test_queued_switch_does_not_stop_previous_session (test_ai_session_router.RouterTests) ... ok
+test_route_json_protocol_supports_responses (test_ai_session_router.RouterTests) ... ok
+test_router_shutdown_cancels_and_idle_tracks_recognition (test_ai_session_router.RouterTests) ... ok
+test_scope_participates_in_authorization_binding (test_ai_session_router.RouterTests) ... ok
+test_scope_tools_work_for_both_protocols (test_ai_session_router.RouterTests) ... ok
+test_selected_historical_session_stays_material_only (test_ai_session_router.RouterTests) ... ok
+test_source_identity_never_reuses_other_members_or_platforms (test_ai_session_router.RouterTests) ... ok
+test_switch_reuses_latest_matching_target_and_preserves_history (test_ai_session_router.RouterTests) ... ok
+test_unknown_channel_never_falls_back_to_first (test_ai_session_router.RouterTests) ... ok
+test_automatic_followup_tool_returns_updated_dut_index (test_ai_evidence_analysis.AutomaticIntegrationTests) ... ok
+test_automatic_request_and_report_preserve_panic_outside_original_tail (test_ai_evidence_analysis.AutomaticIntegrationTests) ... ok
+test_knowledge_returns_only_matching_manual_sections_and_active_cases (test_ai_evidence_analysis.AutomaticIntegrationTests) ... ok
+test_chat_request_contains_middle_panic_recovery_and_evidence_references (test_ai_evidence_analysis.ConversationIntegrationTests) ... ok
+test_chinese_evidence_search_ranks_relevant_middle_and_excludes_other_scope (test_ai_evidence_analysis.ConversationIntegrationTests) ... ok
+test_model_key_filtered_but_device_credentials_preserved_in_new_context (test_ai_evidence_analysis.ConversationIntegrationTests) ... ok
+test_new_long_tool_output_keeps_panic_for_next_request_and_raw_storage (test_ai_evidence_analysis.ConversationIntegrationTests) ... ok
+test_boot_interruption_reports_last_observed_phase_without_inventing_failure (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_clock_fields_and_historical_timing_are_separate (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_earlier_question_relevant_record_is_not_replaced_by_recent_noise (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_empty_serial_and_failed_read_are_not_available_serial_evidence (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_explicit_search_can_reach_later_text_after_many_crash_signals (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_first_generic_abnormal_event_survives_many_new_normal_items (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_first_panic_in_middle_and_latest_recovery_survive_selection (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_global_timeline_cap_preserves_late_crash_after_normal_boot_records (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_json_tool_body_is_unwrapped_for_line_references (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_long_command_output_keeps_failure_and_dispatch_status (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_missing_serial_and_network_failure_do_not_prove_hang_or_reboot (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_network_loss_with_live_serial_does_not_create_crash_signal (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_no_material_emits_skip_and_missing_information (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_normal_power_cycle_is_an_operation_clue_not_a_crash (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_oom_without_boot_does_not_assert_system_restarted (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_other_run_and_channel_never_appear (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_plain_small_evidence_and_model_credential_material_are_not_rewritten (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_question_terms_match_chinese_and_stability_aliases (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_repeated_boot_lines_do_not_hide_later_panic_and_stack (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_serial_side_channel_can_be_recognized_without_calling_it_a_new_capture (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_timeline_and_excerpts_are_bounded_under_repeated_boot_output (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_watchdog_initialization_is_not_a_fault_but_timeout_is_a_clue (test_ai_evidence_analysis.EvidenceTests) ... ok
+test_budget_covers_output_margin_tools_prefix_and_current (test_ai_context_budget.ContextBudgetTests) ... ok
+test_character_boundary_counts_serialized_protocol (test_ai_context_budget.ContextBudgetTests) ... ok
+test_context_error_classification_never_exposes_server_text (test_ai_context_budget.ContextBudgetTests) ... ok
+test_current_tool_chain_is_never_split_and_history_halves (test_ai_context_budget.ContextBudgetTests) ... ok
+test_known_capacity_has_no_round_or_character_cap (test_ai_context_budget.ContextBudgetTests) ... ok
+test_manual_priority_cache_isolation_and_restart (test_ai_context_budget.ContextBudgetTests) ... ok
+test_model_metadata_fields_and_id_only_compatibility (test_ai_context_budget.ContextBudgetTests) ... ok
+test_old_profile_and_context_only_change_keep_fingerprint (test_ai_context_budget.ContextBudgetTests) ... ok
+test_unknown_keeps_latest_50_whole_groups (test_ai_context_budget.ContextBudgetTests) ... ok
+test_utf8_estimate_for_chinese_and_english_and_both_protocols (test_ai_context_budget.ContextBudgetTests) ... ok
+test_automatic_discovery_and_metadata_reuse (test_ai_context_budget.ContextConversationTests) ... ok
+test_budget_failure_preserves_full_question_without_posting (test_ai_context_budget.ContextConversationTests) ... ok
+test_budget_rechecked_after_tool_growth_preserves_result (test_ai_context_budget.ContextConversationTests) ... ok
+test_cancel_between_context_retries_stops_requesting (test_ai_context_budget.ContextConversationTests) ... ok
+test_context_retry_after_tool_does_not_reexecute_it (test_ai_context_budget.ContextConversationTests) ... ok
+test_existing_session_uses_changed_capacity_without_losing_authorization (test_ai_context_budget.ContextConversationTests) ... ok
+test_non_context_service_error_does_not_retry (test_ai_context_budget.ContextConversationTests) ... ok
+test_responses_protocol_context_retry_preserves_call_ids (test_ai_context_budget.ContextConversationTests) ... ok
+test_retry_exhaustion_has_three_requests_and_retains_current (test_ai_context_budget.ContextConversationTests) ... ok
+test_server_retry_halves_history_and_preserves_original_groups (test_ai_context_budget.ContextConversationTests) ... ok
+test_tk_context_field_source_save_and_reload_in_both_themes (test_ai_context_budget.ContextConversationTests) ... ok
+test_two_retry_limit_is_shared_across_all_interactions (test_ai_context_budget.ContextConversationTests) ... ok
+test_unknown_context_shows_fallback_and_single_message_limit_unchanged (test_ai_context_budget.ContextConversationTests) ... ok
+test_both_protocols_tool_results_refresh_then_save_latest_response_not_sum (test_ai_context_usage.UsageConversationTests) ... ok
+test_cancel_keeps_completed_usage_and_restart_recovers_it_without_recomputing (test_ai_context_usage.UsageConversationTests) ... ok
+test_capacity_output_model_changes_expire_usage_but_new_request_replaces_it (test_ai_context_usage.UsageConversationTests) ... ok
+test_old_session_unknown_capacity_and_budget_failure_do_not_invent_actual_usage (test_ai_context_usage.UsageConversationTests) ... ok
+test_real_dialog_minimum_layout_and_session_switch (test_ai_context_usage.UsageConversationTests) ... ok
+test_request_estimate_is_published_before_response_and_capacity_is_not_a_chat_message (test_ai_context_usage.UsageConversationTests) ... ok
+test_restart_marks_interrupted_request_cancelled_and_recovers_previous_result (test_ai_context_usage.UsageConversationTests) ... ok
+test_retry_reestimates_trimmed_request_and_failure_keeps_completed_usage (test_ai_context_usage.UsageConversationTests) ... ok
+test_both_protocols_use_input_plus_output_without_summing_billing_metadata (test_ai_context_usage.UsageMathTests) ... ok
+test_failed_retries_keep_one_previous_completed_snapshot (test_ai_context_usage.UsageMathTests) ... ok
+test_missing_or_malformed_usage_estimates_both_sides_including_tool_arguments (test_ai_context_usage.UsageMathTests) ... ok
+test_zero_usage_is_valid_and_reserves_are_not_used_tokens (test_ai_context_usage.UsageMathTests) ... ok
+test_compact_status_wraps_and_preserves_unknown_estimate_and_failure_states (test_ai_context_usage.UsageWidgetTests) ... ok
+test_async_close_waits_for_inflight_callback_and_reserves_port (test_serial_transport.SerialTransportTests) ... ok
+test_log_file_prefixes_every_serial_line_and_joins_split_rx_chunks (test_serial_transport.SerialTransportTests) ... ok
+test_manager_locks_manual_writer_while_upgrade_controls_port (test_serial_transport.SerialTransportTests) ... ok
+test_peek_since_returns_decoded_text_from_cursor (test_serial_transport.SerialTransportTests)
+peek_since 返回从指定游标到当前的全部解码文本,不消费历史。 ... ok
+test_single_reader_matches_marker_across_chunks_and_close_is_idempotent (test_serial_transport.SerialTransportTests) ... ok
+test_vlan_mapping_and_default_settings (test_serial_transport.SerialTransportTests) ... ok
+test_cancel_or_failed_selection_does_not_change_or_notify (test_serial_terminal.SerialLogDirectoryTests) ... ok
+test_choosing_directory_updates_current_value_saves_and_notifies (test_serial_terminal.SerialLogDirectoryTests) ... ok
+test_invalid_saved_directory_uses_default_without_creating_it (test_serial_terminal.SerialLogDirectoryTests) ... ok
+test_new_monitor_uses_selected_directory_existing_monitor_keeps_session (test_serial_terminal.SerialLogDirectoryTests) ... ok
+test_save_failure_still_keeps_current_selection_and_notifies (test_serial_terminal.SerialLogDirectoryTests) ... ok
+test_saved_directory_is_read_before_window_opens_without_side_effects (test_serial_terminal.SerialLogDirectoryTests) ... ok
+test_source_windows_sync_immediately_and_confirmation_uses_same_directory (test_serial_terminal.SerialLogDirectoryTests)
+真实 Tk 两窗口交互，替代目录选择对话框；不创建主应用或打开串口。 ... ok
+test_click_label_selects_without_closing (test_serial_terminal.SerialTerminalCloseTests) ... ok
+test_close_active_monitor_releases_only_target_and_flushes_log (test_serial_terminal.SerialTerminalCloseTests) ... ok
+test_close_icon_survives_window_reopen_and_clam_theme (test_serial_terminal.SerialTerminalCloseTests) ... ok
+test_close_inactive_unopened_tab_preserves_selection (test_serial_terminal.SerialTerminalCloseTests) ... ok
+test_close_last_tab_keeps_window_and_show_restores_tabs (test_serial_terminal.SerialTerminalCloseTests) ... ok
+test_drag_off_close_and_release_without_press_do_not_close (test_serial_terminal.SerialTerminalCloseTests) ... ok
+test_old_subscription_events_cannot_enter_reopened_vlan (test_serial_terminal.SerialTerminalCloseTests) ... ok
+test_press_one_close_release_on_another_does_not_close (test_serial_terminal.SerialTerminalCloseTests) ... ok
+test_release_failure_keeps_tab_and_restores_subscription (test_serial_terminal.SerialTerminalCloseTests) ... ok
+test_same_com_other_monitor_keeps_its_connection (test_serial_terminal.SerialTerminalCloseTests) ... ok
+test_stopped_tab_can_close (test_serial_terminal.SerialTerminalCloseTests) ... ok
+test_unknown_or_repeated_close_is_safe (test_serial_terminal.SerialTerminalCloseTests) ... ok
+test_upgrade_blocks_close_and_allows_it_after_control_release (test_serial_terminal.SerialTerminalCloseTests) ... ok
+test_upgrade_only_subscription_is_protected (test_serial_terminal.SerialTerminalCloseTests) ... ok
+test_window_release_failure_can_be_retried_without_stuck_closing_flag (test_serial_terminal.SerialTerminalCloseTests) ... ok
+test_attach_upgrade_keeps_explicit_channel_port_in_terminal_tab (test_serial_terminal.SerialTerminalPersistenceTests) ... ok
+test_command_entry_return_binding_triggers_send (test_serial_terminal.SerialTerminalPersistenceTests)
+模拟给命令输入框 bind 的 <Return> 回调：被触发时应等价于点击发送按钮。 ... ok
+test_finish_upgrade_logs_closes_only_auto_opened_window (test_serial_terminal.SerialTerminalPersistenceTests) ... ok
+test_on_command_return_invokes_send_and_returns_break (test_serial_terminal.SerialTerminalPersistenceTests) ... ok
+test_only_default_top_left_geometry_is_recentred (test_serial_terminal.SerialTerminalPersistenceTests) ... ok
+test_open_all_opens_every_current_tab_and_returns_failures (test_serial_terminal.SerialTerminalPersistenceTests) ... ok
+test_poll_batches_high_frequency_events_by_vlan_and_yields_to_ui (test_serial_terminal.SerialTerminalPersistenceTests) ... ok
+test_poll_renders_only_active_tab_and_buffers_other_tabs (test_serial_terminal.SerialTerminalPersistenceTests) ... ok
+test_restore_log_dir_shows_error_when_default_directory_cannot_be_created (test_serial_terminal.SerialTerminalPersistenceTests) ... ok
+test_save_state_shows_error_when_state_file_is_not_writable (test_serial_terminal.SerialTerminalPersistenceTests) ... ok
+test_serial_log_path_includes_vlan_port_and_open_date (test_serial_terminal.SerialTerminalPersistenceTests) ... ok
+test_trim_display_removes_old_lines_beyond_limit (test_serial_terminal.SerialTerminalPersistenceTests) ... ok
+test_close_is_idempotent (test_telnet_transport.TelnetSessionTests) ... ok
+test_constructor_rejects_ip_that_is_not_bindable (test_telnet_transport.TelnetSessionTests) ... ok
+test_constructor_with_loopback_succeeds_and_cursor_returns_zero (test_telnet_transport.TelnetSessionTests) ... ok
+test_open_socket_error_hint_when_bind_ip_equals_device_host (test_telnet_transport.TelnetSessionTests)
+2026-07-18:bind_ip 与 device_host 相同时,Telnet 连接失败错误消息应附加 hint, ... ok
+test_open_socket_error_no_hint_when_bind_ip_differs_from_device_host (test_telnet_transport.TelnetSessionTests)
+bind_ip 与 device_host 不同时,错误消息不应附加 hint,保持原行为。 ... ok
+test_peek_since_displays_plaintext_known_secrets (test_telnet_transport.TelnetSessionTests) ... ok
+test_probe_binds_requested_source_ip_and_closes_immediately (test_telnet_transport.TelnetSessionTests) ... ok
+test_probe_rejects_source_ip_that_is_not_bindable (test_telnet_transport.TelnetSessionTests) ... ok
+test_wait_for_any_matches_marker_in_received_bytes (test_telnet_transport.TelnetSessionTests) ... ok
+test_write_then_send_line_pushed_through_socket (test_telnet_transport.TelnetSessionTests) ... ok
+test_eight_readers_gc_close_reopen_and_complete_logs (test_tk_lifecycle_process.TkLifecycleProcessTests) ... ok
+test_consumer_and_producer_never_wait_for_busy_mutex (test_ui_lifecycle_runtime.MailboxTests) ... ok
+test_fifo_capacity_and_drops (test_ui_lifecycle_runtime.MailboxTests) ... ok
+test_receiver_invalidates_and_does_not_own_window (test_ui_lifecycle_runtime.MailboxTests) ... ok
+test_retired_poll_cannot_register_in_reopened_window (test_ui_lifecycle_runtime.MailboxTests) ... ok
+test_actual_upgrade_entry_rejects_cancel_after_confirmation (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_admitted_action_reports_cancellation_without_replay (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_build_context_rejects_worker_before_reading_any_tk_input (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_cancel_during_confirmation_prevents_admission (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_cancel_pending_and_close_release_waiters (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_cancelled_pipeline_waits_for_admitted_subtask_cleanup_before_restart (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_closed_subscriber_can_reenter_close_without_hanging (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_closing_completed_window_preserves_failed_channel_resume_token (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_discarded_acquisition_releases_resource_after_running_cancel (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_error_transfer_does_not_keep_ui_traceback (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_exit_checks_actual_thread_after_running_flag_clears (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_expired_request_never_executes_later (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_main_exit_keeps_gui_alive_for_existing_background_task (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_main_exit_polls_serial_completion_without_join_or_destroying_early (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_main_thread_query_executes_inline_without_queuing (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_stop_keeps_cleanup_notification_deliverable (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_subtask_start_exception_completes_and_clears_ownership (test_ui_lifecycle_runtime.PipelineRuntimeTests) ... ok
+test_both_options_off_skips_both_commands (test_sample_parameter_service.SampleParameterPipelineOptionTests)
+两个选项都关闭 → 不发 ppctl clear / AGING_STATE,15 项写参仍全部成功。 ... ok
+test_clear_parameters_default_off_does_not_send_ppctl_clear (test_sample_parameter_service.SampleParameterPipelineOptionTests)
+clear_parameters 默认 False → 不发 ppctl clear,主日志出现"关闭，跳过"。 ... ok
+test_clear_parameters_on_sends_ppctl_clear (test_sample_parameter_service.SampleParameterPipelineOptionTests)
+clear_parameters=True → 发 ppctl clear,主日志不再出现"关闭，跳过"。 ... ok
+test_exit_aging_off_skips_aging_state (test_sample_parameter_service.SampleParameterPipelineOptionTests)
+exit_aging 默认 False → 不发 AGING_STATE=1,主日志出现"关闭，跳过"。 ... ok
+test_exit_aging_on_sends_aging_state_before_clear_and_writes (test_sample_parameter_service.SampleParameterPipelineOptionTests)
+exit_aging=True + clear_parameters=True → 顺序:AGING_STATE → clear → 15 项 set。 ... ok
+test_cleanup_emits_both_tx_lines_even_when_firstboot_fails (test_sample_parameter_service.SampleParameterServiceCleanupFailureTests) ... ok
+test_cleanup_reports_factory_mode_failure_when_step_one_fails (test_sample_parameter_service.SampleParameterServiceCleanupFailureTests) ... ok
+test_cleanup_success_log_unchanged_when_both_steps_succeed (test_sample_parameter_service.SampleParameterServiceCleanupFailureTests) ... ok
+test_cancel_before_start_does_not_enter_factory_mode (test_sample_parameter_service.SampleParameterServiceTests) ... ok
+test_factory_session_swap_exception_reports_failure (test_sample_parameter_service.SampleParameterServiceTests) ... ok
+test_factory_session_swap_new_session_is_used_for_second_login (test_sample_parameter_service.SampleParameterServiceTests) ... ok
+test_factory_session_swap_returns_none_abandons_before_second_login (test_sample_parameter_service.SampleParameterServiceTests) ... ok
+test_failed_readback_retries_then_reports_failure_and_cleans_up (test_sample_parameter_service.SampleParameterServiceTests) ... ok
+test_ppctl_clear_runs_after_factory_relogin_not_before (test_sample_parameter_service.SampleParameterServiceTests) ... ok
+test_preflight_rejects_duplicate_and_incomplete_records (test_sample_parameter_service.SampleParameterServiceTests) ... ok
+test_write_reads_back_all_values_and_displays_plaintext (test_sample_parameter_service.SampleParameterServiceTests) ... ok
+test_boot_login_and_factory_reset_preserve_send_timing_order (test_serial_upgrade_service.SerialUpgradeControllerTests) ... ok
+test_boot_login_uses_one_second_gap_between_username_and_enter (test_serial_upgrade_service.SerialUpgradeControllerTests)
+回归：boot 登录每条指令间应留出 1 秒缓冲，避免贴在一起导致密码错位。 ... ok
+test_final_login_does_not_accept_hash_inside_wrong_password_echo (test_serial_upgrade_service.SerialUpgradeControllerTests)
+密码回显内含 # 时，必须等待真实结果，不能误判后继续恢复出厂。 ... ok
+test_final_system_shell_prompt_ignores_password_echo_with_hash (test_serial_upgrade_service.SerialUpgradeControllerTests) ... ok
+test_full_package_upgrade_tftp_put_continues_when_power_port_is_empty (test_serial_upgrade_service.SerialUpgradeControllerTests) ... ok
+test_full_package_upgrade_tftp_put_power_cycles_before_existing_flow (test_serial_upgrade_service.SerialUpgradeControllerTests)
+回归保护:Tftp Put 首轮与传输后未自动 reset 时均复用当前通道上下电。 ... ok
+test_full_package_upgrade_tftp_put_propagates_power_cycle_failure (test_serial_upgrade_service.SerialUpgradeControllerTests)
+回归保护:Tftp Put 前置下电 + 上电失败时,直接返回失败结果,不进入 reboot 流程。 ... ok
+test_full_package_upgrade_tftp_put_runs_full_flow_after_power_cycle (test_serial_upgrade_service.SerialUpgradeControllerTests)
+勾选恢复出厂时，Tftp Put 保留 120 秒等待及最终系统登录。 ... ok
+test_login_boot_clean_timeout_does_not_salvage (test_serial_upgrade_service.SerialUpgradeControllerTests)
+Tftp指令：超时但响应无乱码 → 不盲发,避免误伤正常延迟场景。 ... ok
+test_login_boot_garbled_salvage_without_shell_falls_through_to_retry (test_serial_upgrade_service.SerialUpgradeControllerTests)
+Tftp指令：乱码回显 + 盲发密码后无 shell → 走 continue 常规重试。 ... ok
+test_login_boot_recovers_when_serial_port_is_closed_mid_flow (test_serial_upgrade_service.SerialUpgradeControllerTests)
+回归:串口在 login_boot 期间被关闭(例如 COM 口被拔除),必须返回失败而非抛出未捕获异常。 ... ok
+test_login_boot_rejects_password_received_before_username_submission (test_serial_upgrade_service.SerialUpgradeControllerTests)
+首轮 UserName/Password 同时出现时不能填写任何凭据。 ... ok
+test_login_boot_salvages_after_garbled_username_echo (test_serial_upgrade_service.SerialUpgradeControllerTests)
+Tftp指令：用户名回显含 UTF-8 替换标记时,盲发密码一次,命中 shell 提示符即成功。 ... ok
+test_login_boot_waits_for_password_after_username_enter_using_fresh_cursor (test_serial_upgrade_service.SerialUpgradeControllerTests)
+回归：不能用用户名输入前缓存中的 Password: 提前发送密码。 ... ok
+test_parallel_power_cycle_coordinator_closes_supplies_on_close (test_serial_upgrade_service.SerialUpgradeControllerTests)
+coordinator.close() 关闭所有持有过的 supply。 ... ok
+test_parallel_power_cycle_coordinator_serializes_shared_power_port (test_serial_upgrade_service.SerialUpgradeControllerTests)
+两个并发 power_on_channel 仍被串行化（同 COM 共享一个 lock）。 ... ok
+test_parallel_power_cycle_coordinator_skips_empty_power_port (test_serial_upgrade_service.SerialUpgradeControllerTests) ... ok
+test_parallel_tftp_command_limits_running_workers_and_continues_after_failure (test_serial_upgrade_service.SerialUpgradeControllerTests) ... ok
+test_parallel_tftp_put_limits_running_workers_and_continues_after_failure (test_serial_upgrade_service.SerialUpgradeControllerTests) ... ok
+test_parallel_tftp_put_rejects_other_transfer_method (test_serial_upgrade_service.SerialUpgradeControllerTests) ... ok
+test_post_tftp_boot_marker_sends_reset_once (test_serial_upgrade_service.SerialUpgradeControllerTests) ... ok
+test_prepare_tftp_network_reports_timeout_when_ip_never_becomes_bindable (test_serial_upgrade_service.SerialUpgradeControllerTests) ... ok
+test_prepare_tftp_network_waits_for_bindable_ip_before_strict_server (test_serial_upgrade_service.SerialUpgradeControllerTests) ... ok
+test_restore_factory_logs_command_only_when_it_is_sent (test_serial_upgrade_service.SerialUpgradeControllerTests) ... ok
+test_tftp_command_branch_invokes_programmable_power_supply (test_serial_upgrade_service.SerialUpgradeControllerTests)
+Tftp指令(样机主动拉固件)链路必须由程控电源上电驱动。 ... ok
+test_tftp_command_branch_releases_boot_worker_immediately_after_power_cycle_returns (test_serial_upgrade_service.SerialUpgradeControllerTests)
+回归：开启帧后的 1 秒稳定在电源调用内完成，返回后不再补等 10 秒或 1 秒。 ... ok
+test_tftp_command_does_not_retry_on_first_attempt_success (test_serial_upgrade_service.SerialUpgradeControllerTests)
+首次尝试即检测到 done + write 时只发一条命令,不打印重试日志。 ... ok
+test_tftp_command_does_not_retry_when_arp_marker_missing_u_boot_prompt (test_serial_upgrade_service.SerialUpgradeControllerTests)
+仅有 ARP 失败标记但样机未返回 U-Boot>(卡在 Loading)→ 不重试。 ... ok
+test_tftp_command_does_not_retry_without_arp_marker (test_serial_upgrade_service.SerialUpgradeControllerTests)
+peek_since 不含 ARP 失败模式 → 不重试,直接返回超时失败。 ... ok
+test_tftp_command_requires_done_and_write_stage_result (test_serial_upgrade_service.SerialUpgradeControllerTests) ... ok
+test_tftp_command_retries_on_arp_failure_then_succeeds (test_serial_upgrade_service.SerialUpgradeControllerTests)
+首次命中 ARP 失败 + U-Boot>,第二次成功:共发 2 次命令,第 1 次后 sleep 1 秒。 ... ok
+test_tftp_command_retries_three_times_then_fails (test_serial_upgrade_service.SerialUpgradeControllerTests)
+3 次尝试都遇 ARP 失败 → 失败。共发 3 条命令,2 次 sleep。 ... ok
+test_tftp_command_skips_retry_log_when_on_output_not_provided (test_serial_upgrade_service.SerialUpgradeControllerTests)
+不传 on_output 时,即使命中 ARP 失败也不会抛异常,只是不打印日志。 ... ok
+test_tftp_put_boot_login_keeps_password_cursor_before_username_write (test_serial_upgrade_service.SerialUpgradeControllerTests)
+回归：Password: 在用户名写入后立刻到达时，不能因新游标而漏检。 ... ok
+test_tftp_put_boot_login_keeps_shell_cursor_before_password_write (test_serial_upgrade_service.SerialUpgradeControllerTests)
+回归：ECNT> 在密码写入后立刻到达时，不能因新游标而漏检。 ... ok
+test_tftp_put_clean_timeout_still_fails_without_salvage (test_serial_upgrade_service.SerialUpgradeControllerTests)
+Tftp Put：超时但响应无乱码 → 立即失败,无盲发。 ... ok
+test_tftp_put_post_tftp_reset_does_not_repeat_power_cycle (test_serial_upgrade_service.SerialUpgradeControllerTests)
+检测到自动 reset 时，Tftp Put 保持单次首轮上下电。 ... ok
+test_tftp_put_salvages_after_garbled_username_echo (test_serial_upgrade_service.SerialUpgradeControllerTests)
+Tftp Put：用户名回显含 UTF-8 替换标记时,盲发密码一次,命中 shell 提示符即成功。 ... ok
+test_tftp_put_starts_waiting_for_username_immediately_after_power_cycle_returns (test_serial_upgrade_service.SerialUpgradeControllerTests)
+Tftp Put 的开启帧后 1 秒稳定由电源调用完成，返回后立即发送回车。 ... ok
+test_wait_for_boot_login_does_not_declare_success_on_orphan_prompt (test_serial_upgrade_service.SerialUpgradeControllerTests)
+回归：wait_for_boot_login 不能仅凭残余的 # / > 直接宣告 boot 已就绪。 ... ok
+test_wait_for_boot_login_returns_failure_if_no_user_prompt_ever_appears (test_serial_upgrade_service.SerialUpgradeControllerTests)
+回归:即便看到 # / >,若始终不出现 user/password 提示符,必须返回失败而不是误判成功。 ... ok
+test_build_log_path_returns_per_channel_path (test_test_item_execution_service.BuildLogPathTests) ... ok
+test_constants_have_sensible_defaults (test_test_item_execution_service.TestItemExecutionConstantsTests) ... ok
+test_empty_expected_passes_by_default (test_test_item_execution_service.TestItemExecutionEmptyExpectedTests) ... ok
+test_log_path_parent_created (test_test_item_execution_service.TestItemExecutionFileTests) ... ok
+test_login_user_prompt_missing_raises (test_test_item_execution_service.TestItemExecutionLoginFailureTests)
+模拟样机不返回 ogin: → 应抛 RuntimeError「登录超时:未收到用户名提示符」。 ... ok
+test_commands_run_in_order (test_test_item_execution_service.TestItemExecutionMultiCommandTests) ... ok
+test_per_segment_negate_mixed (test_test_item_execution_service.TestItemExecutionNegationTests)
+!A&&B&&!C 三段: result 应不含 A/C、含 B。 ... ok
+test_channel_not_enabled_raises (test_test_item_execution_service.TestItemExecutionNetworkFailureTests) ... ok
+test_missing_device_manage_ip_raises (test_test_item_execution_service.TestItemExecutionNetworkFailureTests) ... ok
+test_missing_network_card_ip_raises (test_test_item_execution_service.TestItemExecutionNetworkFailureTests) ... ok
+test_network_prepare_failure_raises (test_test_item_execution_service.TestItemExecutionNetworkFailureTests) ... ok
+test_empty_post_login_value_sends_enter_before_first_test_command (test_test_item_execution_service.TestItemExecutionPostLoginTests) ... ok
+test_other_success_prompt_skips_post_login_command (test_test_item_execution_service.TestItemExecutionPostLoginTests) ... ok
+test_post_login_command_precedes_first_test_command (test_test_item_execution_service.TestItemExecutionPostLoginTests) ... ok
+test_post_login_send_failure_stops_test_commands_and_closes_session (test_test_item_execution_service.TestItemExecutionPostLoginTests) ... ok
+test_retry_succeeds_on_second_attempt (test_test_item_execution_service.TestItemExecutionSingleCommandTests) ... ok
+test_single_command_match_fail_after_all_retries (test_test_item_execution_service.TestItemExecutionSingleCommandTests) ... ok
+test_single_command_match_success (test_test_item_execution_service.TestItemExecutionSingleCommandTests) ... ok
+test_all_targets_validated_before_any_network_operation (test_test_item_pretest.PretestServiceTests) ... ok
+test_cancel_during_login_prevents_command (test_test_item_pretest.PretestServiceTests) ... ok
+test_cancel_during_post_login_wait_prevents_pretest_command (test_test_item_pretest.PretestServiceTests) ... ok
+test_channels_are_sequential_and_bound_to_snapshot (test_test_item_pretest.PretestServiceTests) ... ok
+test_disconnect_during_response_is_failure_and_stops_device (test_test_item_pretest.PretestServiceTests) ... ok
+test_empty_post_login_value_sends_enter_before_pretest (test_test_item_pretest.PretestServiceTests) ... ok
+test_empty_targets_commands_and_invalid_port_rejected (test_test_item_pretest.PretestServiceTests) ... ok
+test_input_snapshot_does_not_change_when_page_changes (test_test_item_pretest.PretestServiceTests) ... ok
+test_login_failure_closes_session_and_continues_next_device (test_test_item_pretest.PretestServiceTests) ... ok
+test_negation_and_multiple_segments_are_preserved (test_test_item_pretest.PretestServiceTests) ... ok
+test_no_expected_is_unchecked_not_passed (test_test_item_pretest.PretestServiceTests) ... ok
+test_once_only_failure_continues_and_retry_settings_unchanged (test_test_item_pretest.PretestServiceTests) ... ok
+test_post_login_command_precedes_pretest_and_does_not_count_as_test (test_test_item_pretest.PretestServiceTests) ... ok
+test_post_login_send_failure_stops_current_device_and_continues_next (test_test_item_pretest.PretestServiceTests) ... ok
+test_silent_response_times_out_once_then_continues (test_test_item_pretest.PretestServiceTests) ... ok
+test_stop_after_first_result_sends_no_later_command_or_device (test_test_item_pretest.PretestServiceTests) ... ok
+test_stop_during_response_retains_output_and_closes (test_test_item_pretest.PretestServiceTests) ... ok
+test_close_requests_stop_and_waits_for_log_drain (test_test_item_pretest.PretestUiTests) ... ok
+test_declined_confirmation_never_starts_worker (test_test_item_pretest.PretestUiTests) ... ok
+test_double_start_blocked_and_events_drained_before_finish (test_test_item_pretest.PretestUiTests) ... ok
+test_explicit_color_and_file_log_are_consistent (test_test_item_pretest.PretestUiTests) ... ok
+test_main_capture_uses_checked_channels_and_current_page (test_test_item_pretest.PretestUiTests) ... ok
+test_worker_failure_always_queues_completion (test_test_item_pretest.PretestUiTests) ... ok
+test_channel_progress_parser_keeps_independent_round_and_stage (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_command_retry_failure_and_retry_success_logs_report_channel_states (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_cycle_progress_ignores_unselected_channel_and_clamps_total (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_cycle_progress_uses_slowest_selected_channel (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_cycle_start_confirms_previous_cycle_for_power_only_mode (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_duplicate_or_old_cycle_start_does_not_clear_current_retry (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_duplicate_or_previous_cycle_normal_logs_do_not_clear_new_failure (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_final_channel_failure_overrides_normal_and_rejects_late_success (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_headless_onu_config_uses_all_wifi_profile_fields (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_history_error_parser_ignores_normal_and_unattributed_logs (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_history_extracts_full_command_exception (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_history_extracts_ping_error (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_history_extracts_telnet_connection_retry (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_log_filter_keeps_operator_signals_and_key_results (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_normal_cycle_and_start_logs_report_explicit_channel_states (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_normal_cycle_restores_only_selected_channel_and_keeps_failure_history (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_parent_forwards_legacy_logs_and_waits_for_result (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_parent_records_extra_errors_before_dedup_with_channel_cycles (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_parent_reports_complete_per_channel_retry_and_failure_history (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_power_frame_is_rendered_in_execution_log_format (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_prepare_request_loads_old_start_all_settings_without_gui (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_prepare_request_rejects_empty_power_com (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_prepare_request_rejects_selected_wifi_card_without_name (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_result_file_forwarder_ignores_unrelated_binary_files (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_result_file_success_line_is_forwarded_without_changing_file (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_service_does_not_import_or_construct_old_gui_entry (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_whitespace_normal_log_uses_same_progress_and_stale_guard (test_legacy_power_test_service.LegacyPowerTestServiceTests) ... ok
+test_attention_and_other_modules_remain_visible (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_collection_summary_keeps_reason_permission_and_recipient (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_command_and_login_payloads_are_hidden_even_with_failure_words (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_detail_rules_preserve_unknown_extensions_multiline_and_device_echo (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_dut_shell_return_does_not_claim_business_success (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_failure_summary_includes_errors_and_cleanup_warning (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_known_collection_monitor_and_remote_details_hide_direct_and_wrapped (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_long_single_line_stderr_has_explicit_detail_location (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_malformed_json_missing_fields_and_new_states_fall_back (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_monitor_action_summary_keeps_approval_and_uncertainty (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_monitor_attention_and_remote_connection_binding_approval_errors_survive (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_normal_file_read_and_creation_details_hide_but_truncation_and_bad_json_remain (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_normal_finish_is_shortened_but_recovery_problems_are_preserved (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_ordinary_review_is_hidden_for_chat_and_monitor_only_after_valid_parsing (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_recorded_run_reduces_39_events_to_two_task_summaries (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_result_preserves_status_exit_error_and_uncertainty (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_review_keeps_risk_and_reason_without_json (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_routine_messages_are_hidden (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_succeeded_with_attention_is_shown_without_success_color (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_unknown_formats_and_errors_are_preserved (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_unknown_restrictions_and_failed_initialization_are_visible (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_valid_actual_operations_are_hidden (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_wait_approval_is_summarized_without_file_contents (test_main_log_filter.AiMainLogFilterTests) ... ok
+test_all_hidden_process_messages_and_ordinary_reviews_are_saved_verbatim (test_main_log_filter.AiMainLogPersistenceTests) ... ok
+test_hidden_ai_message_is_saved_without_touching_ui (test_main_log_filter.AiMainLogPersistenceTests) ... ok
+test_mixed_sequence_keeps_hidden_ai_raw_and_wifi_summary (test_main_log_filter.AiMainLogPersistenceTests) ... ok
+test_model_secret_stays_filtered_before_display_and_file (test_main_log_filter.AiMainLogPersistenceTests) ... ok
+test_monitor_summary_preserves_raw_operation_json_and_warning_color (test_main_log_filter.AiMainLogPersistenceTests) ... ok
+test_real_tk_both_themes_render_summary_and_preserve_full_file (test_main_log_filter.AiMainLogPersistenceTests) ... ok
+test_recorded_run_preserves_every_raw_event_and_multiline_command_in_file (test_main_log_filter.AiMainLogPersistenceTests) ... ok
+test_result_color_comes_from_state_and_explicit_tag_wins (test_main_log_filter.AiMainLogPersistenceTests) ... ok
+test_summary_and_full_json_are_written_to_separate_sinks (test_main_log_filter.AiMainLogPersistenceTests) ... ok
+test_commands_results_and_all_failure_stages_remain_visible (test_main_log_filter.DutMainLogFilterTests) ... ok
+test_known_details_are_hidden_for_each_channel (test_main_log_filter.DutMainLogFilterTests) ... ok
+test_real_core_query_logs_are_filtered_without_changing_query_results (test_main_log_filter.DutMainLogFilterTests) ... ok
+test_unknown_formats_multiline_and_nested_prefix_are_preserved (test_main_log_filter.DutMainLogFilterTests) ... ok
+test_hidden_details_are_saved_verbatim_without_touching_ui (test_main_log_filter.DutMainLogPersistenceTests) ... ok
+test_interleaved_channels_ai_and_wifi_keep_separate_file_rules (test_main_log_filter.DutMainLogPersistenceTests) ... ok
+test_multiline_command_error_and_explicit_tag_are_preserved_in_both_sinks (test_main_log_filter.DutMainLogPersistenceTests) ... ok
+test_real_tk_both_themes_keep_commands_colors_and_raw_file (test_main_log_filter.DutMainLogPersistenceTests) ... ok
+test_channels_bands_cycles_and_same_cycle_resume_do_not_mix (test_main_log_filter.MainLogFilterTests) ... ok
+test_connections_and_partial_ping_emit_only_after_final_success (test_main_log_filter.MainLogFilterTests) ... ok
+test_credentials_are_opaque_plaintext_even_with_filter_keywords (test_main_log_filter.MainLogFilterTests) ... ok
+test_errors_retries_cancel_skip_and_unknown_messages_survive (test_main_log_filter.MainLogFilterTests) ... ok
+test_known_normal_details_are_hidden (test_main_log_filter.MainLogFilterTests) ... ok
+test_no_success_after_zero_ping_guard_failure_or_cancellation (test_main_log_filter.MainLogFilterTests) ... ok
+test_other_logs_and_dut_queries_are_unchanged (test_main_log_filter.MainLogFilterTests) ... ok
+test_queue_only_reports_contention_and_actual_wait (test_main_log_filter.MainLogFilterTests) ... ok
+test_retries_reset_pending_result_and_keep_actual_attempt (test_main_log_filter.MainLogFilterTests) ... ok
+test_unified_and_ping_disabled (test_main_log_filter.MainLogFilterTests) ... ok
+test_warning_error_and_multiline_unknown_are_not_hidden (test_main_log_filter.MainLogFilterTests) ... ok
+test_explicit_tag_and_other_log_text_remain_intact (test_main_log_filter.MainLogPersistenceTests) ... ok
+test_hidden_messages_touch_neither_ui_nor_disk (test_main_log_filter.MainLogPersistenceTests) ... ok
+test_real_forwarded_credentials_are_plaintext_in_ui_and_file_on_resume (test_main_log_filter.MainLogPersistenceTests) ... ok
+test_real_service_ping_guard_retry_keeps_three_sinks_and_fresh_ping_result (test_main_log_filter.MainLogPersistenceTests) ... ok
+test_real_service_scan_recovery_keeps_three_sinks_and_attempt_number_consistent (test_main_log_filter.MainLogPersistenceTests) ... ok
+test_three_sinks_match_and_raw_ipc_is_unchanged (test_main_log_filter.MainLogPersistenceTests) ... ok
+test_visible_message_uses_same_summary_on_disk_and_keeps_error_color (test_main_log_filter.MainLogPersistenceTests) ... ok
+test_cancel_before_execution_releases_tracking_without_diagnosing (test_ai_monitor_status.MonitorServiceTests) ... ok
+test_enabled_run_end_and_new_batch_states (test_ai_monitor_status.MonitorServiceTests) ... ok
+test_failures_leave_no_running_or_queued_state (test_ai_monitor_status.MonitorServiceTests) ... ok
+test_local_snapshots_and_full_queue_do_not_leave_queued_state (test_ai_monitor_status.MonitorServiceTests) ... ok
+test_manual_diagnostic_job_and_chat_do_not_count (test_ai_monitor_status.MonitorServiceTests) ... ok
+test_multiple_channels_and_cancelled_queue_are_aggregated (test_ai_monitor_status.MonitorServiceTests) ... ok
+test_queued_until_execution_lock_then_running_and_cleaning (test_ai_monitor_status.MonitorServiceTests) ... ok
+test_cancel_monitor_confirmation_keeps_both_locations_disabled (test_ai_monitor_status.MonitorUiTests) ... ok
+test_parallel_layout_preserves_full_text_in_both_themes_and_narrow_width (test_ai_monitor_status.MonitorUiTests) ... ok
+test_two_locations_sync_while_hidden_and_after_reopen (test_ai_monitor_status.MonitorUiTests) ... ok
+test_unchanged_snapshot_does_not_refresh_main_view (test_ai_monitor_status.MonitorUiTests) ... ok
+test_all_states_and_priority (test_ai_monitor_status.PresentationTests) ... ok
+test_ack_only_after_admission_and_retry_on_storage_failure (test_dingtalk_remote.ProtocolTests) ... ok
+test_parse_identity_and_control_grammar (test_dingtalk_remote.ProtocolTests) ... ok
+test_rejects_private_non_at_non_text_or_missing_identity (test_dingtalk_remote.ProtocolTests) ... ok
+test_same_instance_or_application_cannot_connect_twice (test_dingtalk_remote.ProtocolTests) ... ok
+test_session_url_validation_and_error_does_not_expose_secret (test_dingtalk_remote.ProtocolTests) ... ok
+test_stream_connect_stop_and_no_credential_logging (test_dingtalk_remote.ProtocolTests) ... ok
+test_system_ping_echoes_opaque_and_disconnect_is_recognized (test_dingtalk_remote.ProtocolTests) ... ok
+test_unicode_split_respects_byte_boundary (test_dingtalk_remote.ProtocolTests) ... ok
+test_binding_requires_local_confirmation_and_expires (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_busy_message_is_not_queued_and_stop_keeps_test_running (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_changed_robot_cannot_reuse_old_full_session_or_reply_context (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_disabling_cancels_pending_and_revokes_tokens (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_disabling_stops_even_when_configuration_cannot_be_saved (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_expired_approval_rejects_unchanged_action (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_expiry_rejects_action_and_parameter_change_invalidates_token (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_independent_subscription_does_not_consume_workbench_notifications (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_local_and_remote_approval_cannot_both_succeed (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_members_and_channels_are_isolated (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_new_session_keeps_background_route_and_does_not_stop_old_round (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_only_requester_can_approve_and_audit_keeps_identity (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_other_group_corp_robot_disabled_and_duplicate_are_not_admitted (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_password_boolean_flags_do_not_corrupt_ips_or_approval_codes (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_pc_target_status_and_reply_use_original_scope_label (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_project_header_and_credentials_are_filtered_only_at_group_outlet (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_remote_approval_dispatches_real_action_chain_exactly_once (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_remote_default_is_auto_even_when_desktop_remembers_other_modes (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_reply_failure_never_repeats_model_or_tools (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_same_sender_followup_and_new_session_preserve_history (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_stream_to_model_to_reply_duplicate_message_executes_once (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_target_model_or_batch_change_creates_new_valid_session (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_hidden_controller_is_project_scoped_guarded_before_database_and_closes (test_dingtalk_remote.SetupWindowTests) ... ok
+test_setup_native_checkbutton_and_module_theme_vista_clam (test_dingtalk_remote.SetupWindowTests) ... ok
+test_config_secrets_are_encrypted_and_round_trip (test_dingtalk_remote.StoreTests) ... ok
+test_configure_rejects_unsafe_webhook_before_writing (test_dingtalk_remote.StoreTests) ... ok
+test_configure_updates_notification_webhook_preserving_flags_and_other_sections (test_dingtalk_remote.StoreTests) ... ok
+test_enabling_requires_binding_and_credentials (test_dingtalk_remote.StoreTests) ... ok
+test_full_inbox_does_not_ack_as_admitted (test_dingtalk_remote.StoreTests) ... ok
+test_initialize_copies_models_only_and_is_idempotent (test_dingtalk_remote.StoreTests) ... ok
+test_invalid_or_other_user_cipher_does_not_fallback_to_plaintext (test_dingtalk_remote.StoreTests) ... ok
+test_mailbox_deduplicates_and_never_replays_after_restart (test_dingtalk_remote.StoreTests) ... ok
+test_notification_write_failure_rolls_back_both_configurations (test_dingtalk_remote.StoreTests) ... ok
+test_project_identity_uses_directory_and_is_stable (test_dingtalk_remote.StoreTests) ... ok
+test_expired_token_refreshes_and_bot_identity_is_trusted_api_result (test_feishu_remote.ApiTests) ... ok
+test_http_and_platform_errors_do_not_disclose_credentials (test_feishu_remote.ApiTests) ... ok
+test_oversized_post_rejected_before_any_network_request (test_feishu_remote.ApiTests) ... ok
+test_post_serialization_blocks_mentions_without_mutating_input (test_feishu_remote.ApiTests) ... ok
+test_rejected_token_refreshes_on_next_request_without_replaying_send (test_feishu_remote.ApiTests) ... ok
+test_token_cached_and_requests_have_bounded_timeout_no_redirects (test_feishu_remote.ApiTests) ... ok
+test_actual_action_chain_requires_approval_and_executes_exactly_once (test_feishu_remote.ConversationTests) ... ok
+test_approval_bound_to_sender_chat_and_platform_and_once_only (test_feishu_remote.ConversationTests) ... ok
+test_binding_requires_local_confirmation_and_expiry (test_feishu_remote.ConversationTests) ... ok
+test_default_full_group_and_direct_skip_review_with_separate_grants (test_feishu_remote.ConversationTests) ... ok
+test_deleted_history_does_not_block_reenable (test_feishu_remote.ConversationTests) ... ok
+test_dingtalk_and_feishu_share_workbench_but_not_sessions_or_approval_tokens (test_feishu_remote.ConversationTests) ... ok
+test_disabling_group_preserves_direct_conversations_and_dingtalk (test_feishu_remote.ConversationTests) ... ok
+test_dm_all_application_users_need_no_individual_pairing (test_feishu_remote.ConversationTests) ... ok
+test_dm_group_member_channel_and_app_routing_are_independent (test_feishu_remote.ConversationTests) ... ok
+test_expired_unchanged_approval_rejects_original_action (test_feishu_remote.ConversationTests) ... ok
+test_fingerprint_change_and_expired_token_cannot_approve_revised_action (test_feishu_remote.ConversationTests) ... ok
+test_followup_reuses_session_and_batch_change_starts_new_session (test_feishu_remote.ConversationTests) ... ok
+test_full_queue_rejects_all_parts_and_old_generation_is_not_sent (test_feishu_remote.ConversationTests) ... ok
+test_local_and_remote_cannot_approve_same_action_twice (test_feishu_remote.ConversationTests) ... ok
+test_multiple_targets_require_explicit_channel (test_feishu_remote.ConversationTests) ... ok
+test_new_remote_session_full_even_desktop_ask_and_sources_visible (test_feishu_remote.ConversationTests) ... ok
+test_new_session_retains_background_publishing_route (test_feishu_remote.ConversationTests) ... ok
+test_notification_disable_takes_effect_in_memory_if_save_fails (test_feishu_remote.ConversationTests) ... ok
+test_other_group_tenant_and_duplicates_are_not_admitted (test_feishu_remote.ConversationTests) ... ok
+test_p2p_only_config_pins_first_trusted_enterprise (test_feishu_remote.ConversationTests) ... ok
+test_pc_target_status_and_reply_keep_source_scope (test_feishu_remote.ConversationTests) ... ok
+test_plain_recovery_skipped_and_cursor_advanced_without_changing_history (test_feishu_remote.ConversationTests) ... ok
+test_recovery_warnings_errors_and_assistant_quotes_are_still_published (test_feishu_remote.ConversationTests) ... ok
+test_reply_destination_and_external_credential_filter (test_feishu_remote.ConversationTests) ... ok
+test_send_failure_never_replays_model_or_tools (test_feishu_remote.ConversationTests) ... ok
+test_stale_queued_command_cannot_execute_after_disable_reenable (test_feishu_remote.ConversationTests) ... ok
+test_status_and_approval_are_formatted_and_preserve_exact_parameters (test_feishu_remote.ConversationTests) ... ok
+test_stop_keeps_project_testing_and_busy_question_not_queued (test_feishu_remote.ConversationTests) ... ok
+test_stream_model_reply_duplicate_receipt_executes_once (test_feishu_remote.ConversationTests) ... ok
+test_feishu_only_hidden_controller_shares_project_store_and_waits_for_both_platforms (test_feishu_remote.IntegrationTests) ... ok
+test_notification_event_reaches_main_service_without_ai_or_model (test_feishu_remote.IntegrationTests) ... ok
+test_setup_native_switches_theme_secret_and_single_chat_confirmation (test_feishu_remote.IntegrationTests) ... ok
+test_group_mention_removed_and_dm_needs_no_mention (test_feishu_remote.MessageTests) ... ok
+test_only_exact_control_commands_are_accepted (test_feishu_remote.MessageTests) ... ok
+test_other_bot_unmentioned_bot_sender_and_wrong_application_rejected (test_feishu_remote.MessageTests) ... ok
+test_disable_reenable_discards_queued_old_notification (test_feishu_remote.NotificationTests) ... ok
+test_disabled_dingtalk_or_failed_dingtalk_does_not_block_feishu_event (test_feishu_remote.NotificationTests) ... ok
+test_duplicate_event_sends_once (test_feishu_remote.NotificationTests) ... ok
+test_in_process_disable_blocks_automatic_queue_even_if_disk_still_enabled (test_feishu_remote.NotificationTests) ... ok
+test_independent_notification_switch_and_explicit_test_bypass (test_feishu_remote.NotificationTests) ... ok
+test_missing_saved_project_prevents_network (test_feishu_remote.NotificationTests) ... ok
+test_only_saved_project_channel_and_result_sent_no_remote_credentials (test_feishu_remote.NotificationTests) ... ok
+test_proxy_channel_context_is_thread_local (test_feishu_remote.NotificationTests) ... ok
+test_proxy_preserves_original_return_and_never_copies_old_body (test_feishu_remote.NotificationTests) ... ok
+test_code_payload_survives_multiple_posts_and_fence_like_content (test_feishu_remote.ReplyFormatTests) ... ok
+test_oversized_metadata_fails_without_truncating_it (test_feishu_remote.ReplyFormatTests) ... ok
+test_ping_reply_has_separate_title_and_native_markdown (test_feishu_remote.ReplyFormatTests) ... ok
+test_serialized_size_accounts_for_unicode_escapes_and_oversized_lines (test_feishu_remote.ReplyFormatTests) ... ok
+test_status_uses_native_markdown_by_default (test_feishu_remote.ReplyFormatTests) ... ok
+test_unclosed_fence_is_literal_and_matching_close_is_whole_line (test_feishu_remote.ReplyFormatTests) ... ok
+test_atomic_save_failure_preserves_previous_file (test_feishu_remote.StoreTests) ... ok
+test_bad_cipher_fails_closed_without_plaintext_fallback (test_feishu_remote.StoreTests) ... ok
+test_configure_blank_secret_preserves_value_and_app_change_resets_binding (test_feishu_remote.StoreTests) ... ok
+test_credentials_cannot_change_while_enabled_or_notification_enabled (test_feishu_remote.StoreTests) ... ok
+test_defaults_off_and_secret_encrypted_round_trip (test_feishu_remote.StoreTests) ... ok
+test_group_and_notification_require_binding_but_p2p_does_not (test_feishu_remote.StoreTests) ... ok
+test_invalid_config_does_not_write (test_feishu_remote.StoreTests) ... ok
+test_mailbox_dedup_and_restart_do_not_replay_pending_operations (test_feishu_remote.StoreTests) ... ok
+
+----------------------------------------------------------------------
+Ran 777 tests in 110.683s
+
+OK
+RESULT 777 0 0 0 elapsed 110.89000000059605 offscreen 130

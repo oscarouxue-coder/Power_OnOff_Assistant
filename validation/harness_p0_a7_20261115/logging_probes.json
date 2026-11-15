@@ -1,0 +1,31 @@
+{
+  "utf8_split": {
+    "input_bytes": 8,
+    "original_text_preserved": false,
+    "replacement_present": true,
+    "byte_fidelity_passed": false
+  },
+  "no_newline": {
+    "offered_to_line_writer_bytes": 1048576,
+    "pending_chars": 1048576,
+    "written_chars_before_close": 0,
+    "note": "Line-writer-only probe; no physical driver. Tail remains in RAM until a flush boundary.",
+    "written_chars_after_explicit_tail_flush": 1048600
+  },
+  "serial_disk_failure": {
+    "escaped_reader_loop_exception": [
+      "OSError"
+    ],
+    "reader_stopped": true,
+    "history_bytes": 7,
+    "receive_error_recorded": false,
+    "observed_write_status": "reader_stopped_unexpectedly",
+    "exact_writer_error_available_to_monitor": false,
+    "note": "Read-only monitor detects stopped acquisition; it does not repair the original writer or recover the lost line."
+  },
+  "telnet_disk_failure": {
+    "writer_error_escaped_emit": false,
+    "existing_error_suppressed": true,
+    "note": "No socket created. Exact suppressed writer error cannot be obtained by read-only sampling."
+  }
+}
