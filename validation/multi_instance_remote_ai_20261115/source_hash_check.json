@@ -1,0 +1,7 @@
+{
+  "files": 364,
+  "changed": [
+    "src/services/capability_ai_data_service.py",
+    "tests/test_capability_ai_data.py"
+  ]
+}

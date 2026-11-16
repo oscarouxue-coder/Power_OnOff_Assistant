@@ -512,6 +512,9 @@ class AiDiagnosticsWindow:
             self._poll_id = self.master.after(100, self._poll)
 
     def hide(self):
+        manager = getattr(getattr(getattr(self, "chat_panel", None), "task_control", None), "capability_manager", None)
+        if manager is not None:
+            manager.hide()
         if self.remote_panel is not None:
             self.remote_panel.suspend(cancel_binding=True)
         for panel in (self.monitor_panel, self.reports_panel):
@@ -520,6 +523,9 @@ class AiDiagnosticsWindow:
         self.window.withdraw()
 
     def begin_close(self):
+        manager = getattr(getattr(getattr(self, "chat_panel", None), "task_control", None), "capability_manager", None)
+        if manager is not None:
+            manager.close()
         if self.remote_panel is not None:
             self.remote_panel.dispose()
         for stop in tuple(self.background_stops):

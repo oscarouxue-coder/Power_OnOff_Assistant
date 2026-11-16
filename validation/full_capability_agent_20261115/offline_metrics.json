@@ -1,0 +1,69 @@
+{
+  "mode": "offline Fake; no real model/DUT/network",
+  "iterations": 50,
+  "real_model_latency": null,
+  "schema_cold_ms": 0.07890000000002062,
+  "schema_cached_median_ms": 0.030399999999985994,
+  "schema_cached_p95_ms": 0.032300000000012874,
+  "job_submit_median_ms": 4.724400000000017,
+  "job_total_median_ms": 30.736600000000003,
+  "job_total_p95_ms": 31.72799999999998,
+  "fake_job_successes": 50,
+  "fake_job_success_rate": 1.0,
+  "engine_calls": 50,
+  "schema_discovery_model_calls": 0,
+  "resources_before": {
+    "rss_bytes": 32575488,
+    "threads": 4,
+    "handles": 182
+  },
+  "resources_after": {
+    "rss_bytes": 33587200,
+    "threads": 4,
+    "handles": 182
+  },
+  "resources_closed": {
+    "rss_bytes": 33370112,
+    "threads": 4,
+    "handles": 183
+  },
+  "fake_aging_overlap": {
+    "progress_ticks": 65,
+    "continued_after_model_stop": true,
+    "baseline_ticks": 33,
+    "baseline_seconds": 0.5093139999999998,
+    "load_ticks": 32,
+    "load_seconds": 0.5002301,
+    "load_iterations": 1717,
+    "baseline_ticks_per_second": 64.79303533772881,
+    "load_ticks_per_second": 63.97056074794379,
+    "resources_before": {
+      "rss_bytes": 33308672,
+      "threads": 5,
+      "handles": 189
+    },
+    "resources_after": {
+      "rss_bytes": 33398784,
+      "threads": 5,
+      "handles": 189
+    }
+  },
+  "limitations": [
+    "Fake image is small and engine has no flash duration",
+    "Real model/platform/long aging latency remains unmeasured"
+  ],
+  "fake_agent_scenario": {
+    "actual_model_requests": 2,
+    "turn": {
+      "first_response_seconds": 0.01600000075995922,
+      "model_calls": 2,
+      "tool_calls": 1,
+      "tool_failures": 0,
+      "total_seconds": 0.06300000008195639,
+      "kind": "agent_turn",
+      "tool_failure_rate": 0.0
+    },
+    "discovery_tool_calls": 0
+  },
+  "explicit_channel_route_model_calls": 0
+}

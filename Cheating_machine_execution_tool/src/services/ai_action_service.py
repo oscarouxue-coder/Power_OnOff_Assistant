@@ -101,6 +101,8 @@ class AiActionService:
         self._eligible(identifier)
         with self.lock:
             action = self.store.action(action_id)
+            if action.get("local_only") and operator_source not in ("operator", "local"):
+                raise ValueError("此操作涉及新增资源范围，只允许本地负责人审阅；远程入口不能自行扩权")
             if (action["session_id"] != identifier or fingerprint != action.get("fingerprint")
                     or action_fingerprint(action) != fingerprint):
                 raise ValueError("操作内容或目标已变化，旧确认无效")
@@ -120,6 +122,8 @@ class AiActionService:
     def _prepare(self, identifier, name, params):
         session = self._context(identifier)
         normalized = normalize_action(name, params) if name in ACTION_TOOLS else dict(params)
+        if (session.get("source") or {}).get("gateway_instance_id") and name in ("run_local_command", "write_local_file", "run_dut_command"):
+            raise ValueError("统一接入首批仅开放经本地审核的Capability，不开放通用命令/文件写入")
         if self.redactor.object(normalized) != normalized:
             raise ValueError("操作参数包含模型API密钥，未记录或执行")
         before, preview = {}, {}
@@ -134,6 +138,8 @@ class AiActionService:
         else:
             action["scope"] = session_scope(session)
         action["fingerprint"] = action_fingerprint(action)
+        if (session.get("source") or {}).get("gateway_instance_id"):
+            action["gateway_request_id"] = session.get("gateway_request_id", "")
         self.store.save_action(self.redactor.object(action))
         return action
 
@@ -192,6 +198,10 @@ class AiActionService:
         if context.get("batch_device_only") and name in ("run_local_command", "write_local_file"):
             raise ValueError("本机共享修改须作为独立本机步骤执行，不逐台重复")
         self._eligible(identifier, stop)
+        if getattr(self.owner.diagnostic, "capability_runtime", None) is not None and name in (
+                "run_local_command", "write_local_file", "run_dut_command"):
+            from src.models.capabilities import CapabilityError
+            raise CapabilityError("controlled_capability_required", "已切换受控业务入口：请使用文件/本机固定查询、样机状态工具、正式业务或本地审阅模板；不能通过任意Shell绕过保护")
         scope = session_scope(self._context(identifier))
         if scope in ("general", "batch") or (scope == "pc" and name not in (
                 "run_local_command", "read_local_file", "write_local_file")):

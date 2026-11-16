@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable, Iterable, List, Optional
 
 from .subprocess_window import hidden_window_kwargs
+from src.core.host_resource_lock import guard_adapter
 
 
 @dataclass
@@ -682,6 +683,7 @@ def _list_adapters_with_ipconfig() -> List[AdapterInfo]:
     return _unique_adapters(adapters)
 
 
+@guard_adapter(CommandResult)
 def set_static_ip(adapter_alias: str, ip_address: str, subnet_mask: str) -> CommandResult:
     adapter_alias = adapter_alias_from_display(adapter_alias)
     if not adapter_alias:
@@ -715,6 +717,7 @@ def set_static_ip(adapter_alias: str, ip_address: str, subnet_mask: str) -> Comm
     return CommandResult(False, f"设置网卡静态 IP 失败：{output.strip() or result.returncode}", output)
 
 
+@guard_adapter(CommandResult)
 def enable_adapter(adapter_alias: str) -> CommandResult:
     adapter_alias = adapter_alias_from_display(adapter_alias)
     if not adapter_alias:
@@ -853,6 +856,7 @@ def launch_old_tool(tool_path: Path) -> CommandResult:
         return CommandResult(False, f"启动旧软件失败：{exc}")
 
 
+@guard_adapter(CommandResult)
 def prepare_network_for_sample(
     adapter_alias: str,
     network_card_ip: str,

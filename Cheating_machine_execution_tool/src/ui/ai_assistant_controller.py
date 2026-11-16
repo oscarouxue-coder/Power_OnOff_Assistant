@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 
 from src.services.ai_diagnostic_service import AiDiagnosticService
 from src.services.ai_conversation_service import AiConversationService
@@ -21,6 +22,13 @@ class AiAssistantController:
         self.remote = None
         self.feishu_remote = None
         self.project_lease = None
+        self.gateway_runtime = None
+        if app_dir is not None:
+            import os
+            gateway_slot = os.environ.get("LINECHECK_GATEWAY_SLOT", "")
+            if gateway_slot:
+                from src.services.remote_gateway_runtime import RemoteGatewayRuntime
+                self.gateway_runtime = RemoteGatewayRuntime(app_dir, int(gateway_slot))
         self.remote_refresh = 0
         store = None
         remote_config = None
@@ -40,7 +48,9 @@ class AiAssistantController:
                 feishu_values = feishu_config.load()
             except ValueError:
                 emit("[飞书接入] 配置读取失败，该平台未启动（凭据省略）")
-            if ((remote_values and remote_values["isolated"]) or (feishu_values and feishu_values["isolated"])
+            if self.gateway_runtime is not None:
+                store = self.gateway_runtime.open_store(app_dir, emit)
+            elif ((remote_values and remote_values["isolated"]) or (feishu_values and feishu_values["isolated"])
                     or ((remote_config.path.exists() or feishu_config.path.exists())
                         and (remote_config.directory / "diagnostics.sqlite3").is_file())):
                 from src.core.dingtalk_stream import InstanceLease
@@ -62,13 +72,41 @@ class AiAssistantController:
         self.conversation = AiConversationService(self.service, context,
             client.shared_busy if shared_busy else None, target_current=client.target_current)
         self.service.conversation = self.conversation
+        self.capability_bridge = None
+        if (app_dir is not None and hasattr(master, "channels") and hasattr(master, "serial_session_manager")
+                and os.environ.get('LINECHECK_DISABLE_CAPABILITIES') != '1'):
+            from src.ui.capability_ui_bridge import CapabilityUiBridge
+            from src.services.capability_service import CapabilityService
+            from src.services.ai_capability_adapter import AiCapabilityAdapter
+            from src.services.ai_project_store import project_directory
+            from src.services.firmware_upgrade_validation_service import inspect_upgrade_network
+            self.capability_bridge = CapabilityUiBridge(master)
+            data = self.capability_bridge.client
+            business_directory = (self.gateway_runtime.identity.directory if self.gateway_runtime else project_directory(app_dir)) / "business"
+            self.capabilities = CapabilityService(business_directory, manager,
+                data.snapshot, data.admissible, lambda requests: inspect_upgrade_network(requests, emit), emit,
+                released=data.released, tool_root=app_dir, onu_configuration=data.onu_snapshot, channel_commit=data.commit_channels,
+                settings_commit=data.commit_settings)
+            self.capability_bridge.channel_configuration = getattr(self.capabilities, 'channel_configuration', None)
+            self.capability_bridge.settings_configuration = getattr(self.capabilities, 'settings', None)
+            self.conversation.capabilities = AiCapabilityAdapter(self.conversation, self.capabilities)
+            if 'ai_data' in self.capabilities.enabled_modules:
+                from src.services.capability_ai_data_service import AiDataCapabilities
+                self.capabilities.ai_data = AiDataCapabilities(self.capabilities, self.conversation)
+            if 'extensions' in self.capabilities.enabled_modules:
+                self.capabilities.extensions.restore()
+            self.service.capability_runtime = self.capabilities
+        elif app_dir is not None and os.environ.get('LINECHECK_DISABLE_CAPABILITIES') == '1':
+            emit('[能力目录] 已按本机启动配置停用业务Agent接入；原GUI入口保持')
         self.dialog = AiDiagnosticsWindow(master, self.service, targets, background, foreground,
                                           conversation=self.conversation, remote_tab_factory=remote_tab_factory)
         terminal.diagnostic_observer = self.service.serial_receiver
         self.terminal = terminal
         self.closing = False
         self.closed = False
-        if store is not None and project_config_path is not None:
+        if self.gateway_runtime is not None:
+            self.gateway_runtime.attach(self.conversation, project_config_path)
+        if store is not None and project_config_path is not None and self.gateway_runtime is None:
             from src.services.dingtalk_remote_service import DingTalkRemoteService
             if remote_values is not None:
                 try:
@@ -109,7 +147,10 @@ class AiAssistantController:
         self.after_id = None
         if not self.closed:
             self.bridge.poll()
-            if (getattr(self, "remote", None) is not None or getattr(self, "feishu_remote", None) is not None) and not self.closing:
+            if getattr(self, "capability_bridge", None) is not None:
+                self.capability_bridge.poll()
+            if (getattr(self, "remote", None) is not None or getattr(self, "feishu_remote", None) is not None
+                    or getattr(self, "gateway_runtime", None) is not None) and not self.closing:
                 self._refresh_remote_targets()
             snapshot = self.service.monitor_status()
             if snapshot != self.monitor_snapshot:
@@ -150,8 +191,15 @@ class AiAssistantController:
     def prepare_app_close(self):
         if self.closed:
             return True
+        capabilities = getattr(self, "capabilities", None)
+        if capabilities is not None:
+            capabilities.jobs.begin_close()
+            if not capabilities.jobs.idle:
+                return False
         if not self.closing:
             self.closing = True
+            if getattr(self, "gateway_runtime", None) is not None:
+                self.gateway_runtime.begin_close()
             if self.remote is not None:
                 self.remote.begin_close()
             if getattr(self, "feishu_remote", None) is not None:
@@ -166,7 +214,15 @@ class AiAssistantController:
             return False
         if getattr(self, "feishu_remote", None) is not None and not self.feishu_remote.idle:
             return False
+        if getattr(self, "gateway_runtime", None) is not None and not self.gateway_runtime.idle:
+            return False
         self.closed = True
+        if capabilities is not None:
+            observations = getattr(capabilities, 'observations', None)
+            if observations is not None:
+                observations.close_all()
+            capabilities.jobs.close()
+            self.capability_bridge.close()
         self.bridge.close()
         if self.after_id:
             self.master.after_cancel(self.after_id)
@@ -181,6 +237,8 @@ class AiAssistantController:
             self.remote.close()
         if getattr(self, "feishu_remote", None) is not None:
             self.feishu_remote.close()
+        if getattr(self, "gateway_runtime", None) is not None:
+            self.gateway_runtime.close()
         self.service.store.close()
         if self.project_lease is not None:
             self.project_lease.close()

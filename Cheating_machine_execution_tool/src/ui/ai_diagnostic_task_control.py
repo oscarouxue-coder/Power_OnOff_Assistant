@@ -16,6 +16,10 @@ class DiagnosticTaskControl:
         self.menu.add_command(label="切换为连续诊断（仅定位与建议）", command=lambda: self.changed(True))
         self.menu.add_separator()
         self.menu.add_command(label="查看本会话排查进展", command=self.show_progress)
+        self.capability_manager = None
+        if getattr(panel.service, "capabilities", None) is not None:
+            self.menu.add_separator()
+            self.menu.add_command(label="业务任务与受控扩展…", command=self.show_capabilities)
         panel.send_button.bind("<Button-3>", self.popup)
         panel.send_button.bind("<Alt-Down>", self.popup)
 
@@ -29,6 +33,12 @@ class DiagnosticTaskControl:
         finally:
             self.menu.grab_release()
         return "break"
+
+    def show_capabilities(self):
+        from src.ui.capability_management import CapabilityManagement
+        if self.capability_manager is None:
+            self.capability_manager = CapabilityManagement(self.panel)
+        self.capability_manager.open()
 
     def changed(self, enabled):
         self.enabled = enabled

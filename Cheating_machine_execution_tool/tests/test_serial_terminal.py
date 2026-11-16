@@ -105,6 +105,135 @@ class SerialTerminalCloseTests(unittest.TestCase):
             self.terminal._process_closes()
             time.sleep(.001)
 
+    def render_log(self, text, vlan="vlan101"):
+        self.terminal._append_pending_chunk(vlan, text)
+        self.terminal._poll()
+        self.root.update()
+
+    def test_vertical_scrollbar_tracks_view_and_survives_resize_in_both_themes(self):
+        output = self.terminal.tabs["vlan101"]["output"]
+        scrollbar, = [child for child in output.master.winfo_children()
+                      if isinstance(child, tk.ttk.Scrollbar)]
+        style = tk.ttk.Style(self.root)
+        for theme in ("vista", "clam"):
+            if theme not in style.theme_names():
+                continue
+            with self.subTest(theme=theme):
+                style.theme_use(theme)
+                self.terminal.clear(output)
+                self.root.update()
+                self.render_log("".join(f"line {i}\n" for i in range(300)))
+                self.assertEqual(output.cget("wrap"), "word")
+                self.assertEqual(str(scrollbar.cget("orient")), "vertical")
+                self.assertTrue(scrollbar.winfo_ismapped())
+                self.assertAlmostEqual(scrollbar.get()[1], 1.0)
+                callback = output.tk.splitlist(scrollbar.cget("command"))
+                output.tk.call(*callback, "moveto", 0.25)
+                self.root.update()
+                self.assertAlmostEqual(scrollbar.get()[0], output.yview()[0])
+                self.assertLess(output.yview()[1], 1.0)
+                output.tk.call(*callback, "scroll", 1, "pages")
+                self.root.update()
+                self.assertGreater(output.yview()[0], 0.25)
+                before_wheel = output.yview()[0]
+                output.event_generate("<MouseWheel>", delta=120)
+                self.root.update()
+                self.assertLess(output.yview()[0], before_wheel)
+                self.terminal.window.geometry("1200x750")
+                self.root.update()
+                self.assertGreater(output.winfo_width(), 100)
+                self.assertEqual(scrollbar.winfo_height(), output.winfo_height())
+                self.assertLessEqual(output.winfo_rootx() + output.winfo_width(),
+                                     scrollbar.winfo_rootx())
+
+    def test_new_logs_follow_bottom_but_preserve_scrolled_reading_position(self):
+        output = self.terminal.tabs["vlan101"]["output"]
+        self.render_log("".join(f"line {i}\n" for i in range(300)))
+        self.assertAlmostEqual(output.yview()[1], 1.0)
+        self.render_log("latest at bottom\n")
+        self.assertAlmostEqual(output.yview()[1], 1.0)
+        output.yview_moveto(0.25)
+        self.root.update()
+        top = output.index("@0,0")
+        for index in range(3):
+            self.render_log(f"incoming {index}\n")
+            self.assertEqual(output.index("@0,0"), top)
+            self.assertLess(output.yview()[1], 1.0)
+        output.yview_moveto(1.0)
+        self.root.update()
+        self.render_log("follow resumed\n")
+        self.assertAlmostEqual(output.yview()[1], 1.0)
+        self.assertEqual(str(output.cget("state")), "disabled")
+
+    def test_wrapped_line_reading_position_survives_append(self):
+        output = self.terminal.tabs["vlan101"]["output"]
+        self.render_log(("wrapped words " * 100 + "\n") * 80)
+        output.yview_moveto(0.3)
+        self.root.update()
+        top = output.index("@0,0")
+        top_box = output.dlineinfo(top)
+        self.render_log("new line\n")
+        self.assertEqual(output.index("@0,0"), top)
+        self.assertEqual(output.dlineinfo(top), top_box)
+
+    def test_trimming_preserves_surviving_text_and_clamps_removed_history(self):
+        output = self.terminal.tabs["vlan101"]["output"]
+        self.render_log("".join(f"line {i}\n" for i in range(4900)))
+        output.yview_moveto(0.4)
+        self.root.update()
+        top = output.get("@0,0", "@0,0 lineend")
+        self.render_log("".join(f"new {i}\n" for i in range(200)))
+        self.assertEqual(output.get("@0,0", "@0,0 lineend"), top)
+        self.assertLessEqual(int(output.index("end-1c").split(".")[0]), 5000)
+        output.yview_moveto(0.0)
+        self.root.update()
+        self.render_log("".join(f"next {i}\n" for i in range(100)))
+        self.assertEqual(output.index("@0,0"), "1.0")
+        self.assertAlmostEqual(output.yview()[0], 0.0)
+        output.yview_moveto(1.0)
+        self.root.update()
+        self.render_log("tail after trim\n")
+        self.assertAlmostEqual(output.yview()[1], 1.0)
+
+    def test_tab_switch_keeps_independent_scroll_positions_with_buffered_logs(self):
+        first = self.terminal.tabs["vlan101"]
+        second = self.terminal.tabs["vlan102"]
+        self.render_log("".join(f"first {i}\n" for i in range(300)))
+        first["output"].yview_moveto(0.25)
+        self.root.update()
+        top = first["output"].index("@0,0")
+        self.terminal.notebook.select(second["frame"])
+        self.root.update()
+        self.render_log("".join(f"second {i}\n" for i in range(300)), "vlan102")
+        self.render_log("first while hidden\n")
+        self.assertIn("vlan101", self.terminal._pending_chunks)
+        self.terminal.notebook.select(first["frame"])
+        self.root.update()
+        self.assertEqual(first["output"].index("@0,0"), top)
+        self.assertIn("first while hidden", first["output"].get("1.0", "end"))
+        self.assertAlmostEqual(second["output"].yview()[1], 1.0)
+
+    def test_clear_and_recreated_tab_resume_following_with_scrollbar(self):
+        output = self.terminal.tabs["vlan101"]["output"]
+        self.render_log("old\n" * 300)
+        output.yview_moveto(0.2)
+        self.root.update()
+        self.terminal.clear(output)
+        self.root.update()
+        self.assertEqual(output.yview(), (0.0, 1.0))
+        self.render_log("after clear\n" * 100)
+        self.assertAlmostEqual(output.yview()[1], 1.0)
+        self.assertTrue(self.terminal.close_tab("vlan101"))
+        self.terminal.show([("vlan101", "COM8")])
+        item = self.terminal.tabs["vlan101"]
+        self.terminal.notebook.select(item["frame"])
+        self.root.update()
+        self.render_log("reopened\n" * 100)
+        self.assertIsNot(item["output"], output)
+        self.assertAlmostEqual(item["output"].yview()[1], 1.0)
+        self.assertTrue(any(isinstance(child, tk.ttk.Scrollbar)
+                            for child in item["output"].master.winfo_children()))
+
     def test_close_active_monitor_releases_only_target_and_flushes_log(self):
         self.assertEqual(self.terminal.open_all(), ())
         first = self.terminal.tabs["vlan101"]["session"]
@@ -361,6 +490,8 @@ class SerialTerminalPersistenceTests(unittest.TestCase):
         window.winfo_exists.return_value = True
         terminal.window = window
         outputs = {vlan: Mock() for vlan in ("vlan137", "vlan138", "vlan139")}
+        for output in outputs.values():
+            output.yview.return_value = (0.0, 1.0)
         terminal.tabs = {vlan: {"output": output} for vlan, output in outputs.items()}
         for index in range(150):
             vlan = ("vlan137", "vlan138", "vlan139")[index % 3]
@@ -393,6 +524,8 @@ class SerialTerminalPersistenceTests(unittest.TestCase):
         terminal.notebook = notebook
         active_output = Mock()
         inactive_output = Mock()
+        active_output.yview.return_value = (0.0, 1.0)
+        inactive_output.yview.return_value = (0.0, 1.0)
         terminal.tabs = {
             "vlan137": {"frame": active_frame, "output": active_output},
             "vlan138": {"frame": inactive_frame, "output": inactive_output},

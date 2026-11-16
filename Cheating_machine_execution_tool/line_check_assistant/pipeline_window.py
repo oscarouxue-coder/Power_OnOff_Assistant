@@ -347,6 +347,9 @@ class PipelineWindow:
         if not proceed:
             return
         # 锁定按钮
+        from src.ui.capability_ui_bridge import gui_business_available
+        if not gui_business_available(self.app):
+            return
         previous_session = getattr(self.app, 'power_test_resume_session', None)
         if previous_session is not None:
             previous_session.stop()

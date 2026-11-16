@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import threading
+import time
 
 from src.models.ai_session_scope import session_scope, source_identity, target_channel, target_label
 from src.services.ai_store import profile_fingerprint
@@ -12,6 +13,7 @@ from src.services.ai_store import profile_fingerprint
 ROUTE_INSTRUCTIONS = """你只识别用户本条消息的会话意图，不回答排障问题，不执行工具。
 返回且仅返回JSON：{"intent":"continue|switch|new|clarify","scope":"general|pc|device|batch",
 "channel":整数或null,"channels":[批量目标通道整数],"selection":"all|failed|remaining",
+"workflow":"diagnostic|business",
 "question":"待发送的用户原问题或空串","clarification":"需追问的问题或空串"}。
 general为普通问答；pc为本机电脑独立排障；device只能使用给定有效通道。
 有当前会话时普通追问及人工问题回答默认continue原范围。普通知识问答无需切换设备或采集。
@@ -19,6 +21,8 @@ general为普通问答；pc为本机电脑独立排障；device只能使用给�
 同时要求多个对象、全部或逐台检查时使用batch，channels填写明确的有效目标集合；channel为null。
 全部默认当前给定有效通道；逐台是执行方式，不是目标歧义。续查失败/不通的用selection=failed，剩余用remaining。
 当前batch的普通追问沿用batch及其channels；人工问题回答保留原文，不拆分或自动重试。
+明确要求多通道升级、供电、挂测、写参或其它正式业务时workflow为business，由业务服务执行整个目标集合；检查/分析用diagnostic。
+当前workflow为business时，普通任务进展追问保持business，不转为逐台诊断；workflow不授予任何执行权限。
 目标确实不明或只给重复IP不能唯一定位时clarify；不要擅自选择第一个或扩大为全部。
 非batch时channels为空，selection=all。提到其他通道不代表同时要求操作它们。
 仅切换而没有排障问题时question为空；带问题时保留完整用户意图，不添加命令或隐含授权。
@@ -70,9 +74,24 @@ class AiSessionRouter:
             return None
 
     def _resolve(self, text, current, targets, profile, stop, fresh):
+        if getattr(self.owner, 'capabilities', None) is not None:
+            from src.services.ai_business_batch_route import fast_business_batch
+            business = fast_business_batch(text, current, targets, fresh)
+            if business:
+                return business
         batch = self.owner.batch.fast_route(text, current, targets, fresh)
         if batch:
+            if (current or {}).get('capability_business_batch') and batch['intent'] in ('continue', 'new'):
+                batch['workflow'] = 'business'
+            pending = (current or {}).get('routing_pending') or {}
+            if pending.get('workflow') == 'business' and not re.search('分析|排查|不要|停止', text):
+                batch['workflow'] = 'business'
             return batch
+        # Explicit single-channel business requests avoid an extra intent-model round trip.
+        if not fresh and re.match(r"^(?:请|帮我|麻烦|给我)", text.strip()) and re.search(r"升级|固件|上电|下电|挂测|写入参数", text):
+            numbers = re.findall(r"通道\s*(\d{1,2})(?!\d)", text)
+            if len(numbers) == 1 and int(numbers[0]) in {t.channel for t in targets}:
+                return dict(intent="switch", scope="device", channel=int(numbers[0]), question=text, clarification="")
         # 完整控制表达才走快捷路径；日志中的号码不能命中。
         match = re.fullmatch(r"(?:请)?(?:(?:切换到|切到|改查|切回|继续排查|排查|检查)\s*)?通道\s*(\d{1,4})(?:\s+([\s\S]*))?", text)
         if match and not re.match(r"^(?:[、,，和及与]|通道\s*\d)", (match[2] or "").strip()):
@@ -94,9 +113,11 @@ class AiSessionRouter:
             for m in self.owner.store.chat_items(current["id"]) if m["role"] in ("user", "assistant")][-6:]
         payload = dict(message=text, current=None if not current else dict(
             scope=session_scope(current), channel=target_channel(current),
+            workflow='business' if current.get('capability_business_batch') or (current.get('routing_pending') or {}).get('workflow') == 'business' else 'diagnostic',
             channels=[t["channel"] for t in current.get("batch_targets", [])],
             clarifying_target=bool(current.get("routing_pending"))), targets=candidates, history=history)
         client = self.owner.diagnostic.client_factory(profile, key, self.owner.redactor)
+        route_started = time.monotonic()
         try:
             self.owner.emit("开始识别对话目标；仅发送目标标识和最近对话，不执行操作")
             reply = client.complete([dict(role="system", content=ROUTE_INSTRUCTIONS),
@@ -108,13 +129,18 @@ class AiSessionRouter:
             except (TypeError, ValueError):
                 raise ValueError("目标识别未返回有效JSON，本条未执行，请重新描述目标") from None
             required = {"intent", "scope", "channel", "question", "clarification"}
-            if (not isinstance(result, dict) or not required <= set(result) or set(result) - required - {"channels", "selection"}
+            if (not isinstance(result, dict) or not required <= set(result) or set(result) - required - {"channels", "selection", "workflow"}
                     or result["intent"] not in ("continue", "switch", "new", "clarify")
                     or result["scope"] not in ("general", "pc", "device", "batch")
                     or (result["channel"] is not None and type(result["channel"]) is not int)
                     or any(not isinstance(result[k], str) or len(result[k]) > 32768
                            for k in ("question", "clarification"))):
                 raise ValueError("目标识别返回格式无效，本条未执行")
+            if result.get('workflow', 'diagnostic') not in ('diagnostic', 'business'):
+                raise ValueError('业务路由类型无效，本条未执行')
+            if ('workflow' not in result and (current or {}).get('capability_business_batch')
+                    and result['scope'] == 'batch' and result['intent'] == 'continue'):
+                result['workflow'] = 'business'
             if (not isinstance(result.get("channels", []), list)
                     or any(type(c) is not int for c in result.get("channels", []))
                     or result.get("selection", "all") not in ("all", "failed", "remaining")
@@ -125,6 +151,10 @@ class AiSessionRouter:
             return result
         finally:
             client.close()
+            runtime = getattr(self.owner, "capabilities", None)
+            if runtime is not None:
+                runtime.service.metrics.record(dict(kind="intent_route", model_calls=1,
+                    total_seconds=time.monotonic() - route_started))
 
     def send(self, text, profile, *, selected="", source=None, fresh=False, guard=None, on_selected=None, diagnosis_only=None):
         text = text.strip()
@@ -172,7 +202,8 @@ class AiSessionRouter:
         if scope == "batch" and result["intent"] != "clarify":
             if diagnosis_only:
                 raise ValueError("连续诊断请指定本机电脑或单个设备通道；多样机任务可切回常规对话")
-            return self.owner.batch.route(result, text, current, targets, profile, source, fresh, on_selected, selected)
+            return self.owner.batch.route(result, text, current, targets, profile, source, fresh, on_selected, selected,
+                business=bool(getattr(self.owner, 'capabilities', None) is not None and result.get('workflow') == 'business'))
         continuing = (not fresh and result["intent"] == "continue" and current is not None
                       and (bool(selected) or current["run_id"] == run_id)
                       and session_scope(current) == scope and target_channel(current) == channel
@@ -207,7 +238,8 @@ class AiSessionRouter:
                 break
         if not identifier:
             identifier = self.owner.create_session(target, profile, source=source, scope=scope,
-                default_permission="auto_review" if source["kind"] == "dingtalk" else None)
+                default_permission="ask" if source.get("gateway_instance_id") else (
+                    "auto_review" if source["kind"] == "dingtalk" else None))
             self.owner.emit(f"路由新建会话{identifier[:8]}，目标={target_label(self.owner.store.chat(identifier))}")
         else:
             self.owner.emit(f"路由续接会话{identifier[:8]}，目标={target_label(self.owner.store.chat(identifier))}")

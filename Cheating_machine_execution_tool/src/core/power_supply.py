@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable
 from typing import Protocol
 
 import serial
+from src.core.host_resource_lock import HostResourceLock
 
 
 POWER_SUPPLY_BAUDRATE = 19200
@@ -64,6 +65,7 @@ class ProgrammablePowerSupply:
         self._sleep = sleep_fn
         self._on_output = on_output
         self._serial: SerialPort | None = None
+        self._host_resource_lock = None
 
     def __enter__(self) -> "ProgrammablePowerSupply":
         self.open()
@@ -76,6 +78,7 @@ class ProgrammablePowerSupply:
         if self._serial is not None:
             return
         try:
+            self._host_resource_lock = HostResourceLock(["power:" + self.port]).acquire()
             self._serial = self._serial_factory(
                 port=self.port,
                 baudrate=self.baudrate,
@@ -86,6 +89,9 @@ class ProgrammablePowerSupply:
                 write_timeout=2,
             )
         except Exception as exc:
+            if self._host_resource_lock:
+                self._host_resource_lock.close()
+                self._host_resource_lock = None
             raise PowerSupplyError(f"打开程控电源串口 {self.port} 失败：{exc}") from exc
         self._emit(f"已打开程控电源串口：{self.port}，{self.baudrate} 8N1。")
 
@@ -94,6 +100,9 @@ class ProgrammablePowerSupply:
             return
         try:
             self._serial.close()
+            if self._host_resource_lock:
+                self._host_resource_lock.close()
+                self._host_resource_lock = None
             self._emit(f"已关闭程控电源串口：{self.port}。")
         finally:
             self._serial = None

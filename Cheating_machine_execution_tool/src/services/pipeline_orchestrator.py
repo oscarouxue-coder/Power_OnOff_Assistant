@@ -438,6 +438,9 @@ class PipelineOrchestrator:
         """操作员主动停止:管道下个子任务不再执行;当前子任务是否能中断取决于其实现。"""
         self.ctx.stop_event.set()
 
+    from src.services.physical_resource_guards import guard_pipeline
+
+    @guard_pipeline
     def run(self, selected: set[str]) -> List[SubTaskResult]:
         """先预启动已勾选的串口日志，其余子任务按 1→7 相对顺序执行。
 

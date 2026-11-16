@@ -17,5 +17,13 @@ def target_label(session):
 
 def source_identity(source):
     source = source or {}
-    return tuple(source.get(key, "local" if key == "kind" else "")
+    base = tuple(source.get(key, "local" if key == "kind" else "")
                  for key in ("kind", "robot", "corp", "chat_type", "group", "sender"))
+    if source.get("gateway_instance_id"):
+        return base + ("gateway", source["gateway_instance_id"], source.get("gateway_run_id", ""))
+    return base
+
+
+def business_source_identity(source):
+    identity = source_identity(source)
+    return identity[:-1] if (source or {}).get("gateway_instance_id") else identity

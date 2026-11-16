@@ -3,6 +3,8 @@ from __future__ import annotations
 import configparser
 from dataclasses import dataclass
 from pathlib import Path
+import uuid
+from line_check_assistant.config_store import ChannelConfigStore
 
 
 DEFAULT_C300_OLT_IP = "172.18.18.151"
@@ -150,6 +152,10 @@ class OnuRegistrationStore:
         )
 
     def save(self, config: OnuRegistrationConfig) -> None:
+        with ChannelConfigStore(self.config_path).transaction():
+            self._save_values(config)
+
+    def _save_values(self, config: OnuRegistrationConfig) -> None:
         parser = configparser.RawConfigParser()
         parser.optionxform = str
         c300_profile = {
@@ -211,5 +217,13 @@ class OnuRegistrationStore:
         }
 
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.config_path.open("w", encoding="utf-8") as file:
-            parser.write(file)
+        temporary = self.config_path.with_name(self.config_path.name + '.' + uuid.uuid4().hex + '.tmp')
+        try:
+            with temporary.open("w", encoding="utf-8") as file:
+                parser.write(file)
+            temporary.replace(self.config_path)
+        finally:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass

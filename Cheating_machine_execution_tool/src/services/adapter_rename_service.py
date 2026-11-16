@@ -43,6 +43,8 @@ def rename_unavailable_reason(*, busy: bool = False) -> str:
 
 
 def adapter_rename_is_busy(app) -> bool:
+    if bool(getattr(app, '_capability_reservations', ())):
+        return True
     flags = (
         "running", "power_on_running", "power_test_running", "parameter_write_running",
         "sample_upgrade_running", "dut_config_running", "onu_telnet_test_running",
@@ -66,7 +68,7 @@ class AdapterRenameService:
         self.renamer = renamer or rename_adapter
         self.availability = availability or rename_unavailable_reason
 
-    def rename(self, old_name: str, new_name: str, emit=lambda _line: None) -> AdapterRenameResult:
+    def rename(self, old_name: str, new_name: str, emit=lambda _line: None, *, expected_interface_guid="") -> AdapterRenameResult:
         old_name = adapter_alias_from_display(old_name)
         try:
             new_name = validate_adapter_name(new_name)
@@ -79,6 +81,8 @@ class AdapterRenameService:
             if len(targets) != 1:
                 raise ValueError("原网卡不存在或不唯一，请刷新网卡后重新选择。")
             target = targets[0]
+            if expected_interface_guid and target.interface_guid != expected_interface_guid:
+                raise ValueError('原网卡身份在审阅后发生变化，未下发重命名命令。')
             if any(a.alias.casefold() == new_name.casefold() for a in before):
                 raise ValueError(f"网卡名称已存在：{new_name}，请使用其它名称。")
             emit(f"[网卡重命名] 已确认目标身份：{target.interface_guid}")

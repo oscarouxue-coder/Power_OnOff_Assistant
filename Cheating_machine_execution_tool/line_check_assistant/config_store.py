@@ -4,6 +4,14 @@ import configparser
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List
+from contextlib import contextmanager
+import threading
+import uuid
+from weakref import WeakValueDictionary
+from src.core.host_resource_lock import HostResourceLock
+
+_CONFIG_LOCKS = WeakValueDictionary()
+_CONFIG_LOCK_GUARD = threading.RLock()
 
 
 DEFAULT_SUBNET_MASK = "255.255.255.0"
@@ -71,6 +79,18 @@ class ChannelConfigStore:
         return parser.get(POWER_SUPPLY_SECTION, "serial_port", fallback=DEFAULT_POWER_SERIAL_PORT).strip()
 
     def save(self, channels: List[ChannelConfig], power_serial_port: str = DEFAULT_POWER_SERIAL_PORT) -> None:
+        with self.transaction():
+            self._save_values(channels, power_serial_port)
+
+    @contextmanager
+    def transaction(self):
+        identity = str(self.config_path.resolve()).casefold()
+        with _CONFIG_LOCK_GUARD:
+            lock = _CONFIG_LOCKS.setdefault(identity, threading.RLock())
+        with lock, HostResourceLock(['configuration:' + identity]):
+            yield
+
+    def _save_values(self, channels: List[ChannelConfig], power_serial_port: str) -> None:
         parser = configparser.ConfigParser()
         parser.optionxform = str
         parser[POWER_SUPPLY_SECTION] = {
@@ -92,8 +112,16 @@ class ChannelConfigStore:
             }
 
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.config_path.open("w", encoding="utf-8") as file:
-            parser.write(file)
+        temporary = self.config_path.with_name(self.config_path.name + '.' + uuid.uuid4().hex + '.tmp')
+        try:
+            with temporary.open('w', encoding='utf-8') as file:
+                parser.write(file)
+            temporary.replace(self.config_path)
+        finally:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def _channel_sort_key(value: object) -> int:

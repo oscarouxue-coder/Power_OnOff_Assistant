@@ -58,6 +58,9 @@ class PretestControls:
         ):
             self.log("[预备测试] 操作员取消，跳过执行。", "warning")
             return
+        if self.is_busy():
+            self.log('[预备测试] 确认期间资源已转忙，本次未启动。', 'warning')
+            return
         self.running = True
         self.cancel = threading.Event()
         self.start_button.configure(state="disabled")

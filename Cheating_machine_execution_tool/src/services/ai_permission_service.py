@@ -4,6 +4,7 @@ import threading
 import uuid
 
 from src.models.ai_permissions import AUTO, FULL, PERMISSION_LABELS, normalize_permission
+from src.models.ai_session_scope import source_identity
 
 
 class AiPermissionService:
@@ -18,12 +19,14 @@ class AiPermissionService:
         return json.dumps(dict({key: session[key] for key in ("id", "run_id", "target", "profile")},
                                batch_targets=session.get("batch_targets", []),
                                batch_parent_grant=session.get("batch_parent_grant", ""),
+                               source_identity=source_identity(session.get("source")),
                                scope=session.get("scope", "device")),
                           sort_keys=True, ensure_ascii=False)
 
     @staticmethod
     def _automatic(session):
-        return (session.get("source") or {}).get("kind") in (None, "local", "feishu")
+        source = session.get("source") or {}
+        return not source.get("gateway_instance_id") and source.get("kind") in (None, "local", "feishu")
 
     @staticmethod
     def _preference_key(session):

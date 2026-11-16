@@ -84,7 +84,7 @@ class AiBatchService:
                         selection=selector, question=text, clarification="")
         return None
 
-    def route(self, result, text, current, targets, profile, source, fresh, on_selected, selected=""):
+    def route(self, result, text, current, targets, profile, source, fresh, on_selected, selected="", *, business=False):
         if current and session_scope(current) == "batch" and text.strip() == "已确认清理完成":
             identifier = current["id"]
             if identifier in self.owner.running or self.store.pending_recovery():
@@ -133,11 +133,13 @@ class AiBatchService:
                 on_selected(identifier)
             self.owner.router.select(identifier, source)
             notice = "描述的样机数量与当前目标不一致。当前有效目标为" + "、".join("通道" + str(c) for c in channels) + "，请明确本次检查哪些通道。"
-            self.store.update_chat(identifier, routing_pending=dict(request=task, targets=[asdict(t) for t in targets], count_clarification=True))
+            self.store.update_chat(identifier, routing_pending=dict(request=task, targets=[asdict(t) for t in targets],
+                count_clarification=True, workflow='business' if business else 'diagnostic'))
             self.owner.message(identifier, "user", text)
             self.owner.message(identifier, "assistant", notice, "question")
             return dict(identifier=identifier, notice=notice, submitted=False)
         reusable = (current and session_scope(current) == "batch" and not fresh and result["intent"] != "new"
+                    and bool(current.get('capability_business_batch')) == business
                     and current["run_id"] == self.owner.context.run_id
                     and current.get("batch_targets") == snapshots
                     and source_identity(current.get("source")) == source_identity(source)
@@ -145,6 +147,8 @@ class AiBatchService:
         identifier = current["id"] if reusable else self.owner.create_session(None, profile, scope="batch",
             source=source, batch_targets=snapshots,
             default_permission="auto_review" if source["kind"] == "dingtalk" else None)
+        if not reusable and business:
+            self.store.update_chat(identifier, capability_business_batch=True)
         selector = result.get("selection", "all")
         if selector not in ("all", "failed", "remaining"):
             raise ValueError("批量目标引用无效")
@@ -154,11 +158,14 @@ class AiBatchService:
             on_selected(identifier)
         self.owner.router.select(identifier, source)
         if result["question"].strip():
-            self.submit(identifier, task, selector)
+            if business:
+                self.owner.send(identifier, task, _batch_dispatch=True)
+            else:
+                self.submit(identifier, task, selector)
             if current and current.get("routing_pending"):
                 self.store.update_chat(current["id"], routing_pending=None)
-            return dict(identifier=identifier, notice="已接收，按通道逐台执行并汇总", submitted=True)
-        self.owner.message(identifier, "system", "已选择批量目标，发送问题后逐台执行。")
+            return dict(identifier=identifier, notice='已接收，按正式业务服务处理本次目标；状态以业务job_id为准' if business else "已接收，按通道逐台执行并汇总", submitted=True)
+        self.owner.message(identifier, "system", '已选择业务目标集合，发送请求后调用正式业务服务。' if business else "已选择批量目标，发送问题后逐台执行。")
         return dict(identifier=identifier, notice="已选择批量目标", submitted=False)
 
     def submit(self, identifier, text, selector="all"):

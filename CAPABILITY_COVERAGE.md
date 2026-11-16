@@ -1,0 +1,105 @@
+# Capability Coverage Matrix
+
+本表由 scripts/verify_capability_coverage.py 生成；登记、自动化验证和现场验收分别判断。
+
+业务清单 86 项；已有接口 63 项；部分接入 15 项；待接入 5 项；人工控制面 3 项。
+现有诊断/交互接口不代表该组所有管理动作已开放；部分接入见限制列，不将分组数字称为最终覆盖率。
+
+| 功能ID | GUI业务 | 真实入口 | 业务实现 | AI接口 | 状态/限制 | 资源/风险 | 自动化测试入口 |
+|---|---|---|---|---|---|---|---|
+| channels.refresh | 刷新串口/网卡 | _refresh_resources | serial_inventory/network_adapter | resources.refresh | connected：已有受控接口，真实Windows/模型/DUT验收另列 | host/read | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| channels.list | 查询通道配置/状态 | _collect_ai_targets | ChannelConfigStore | channels.list | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/read | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| channels.select | 通道勾选/全选/清除 | _set_all_channels_enabled | ChannelConfigStore | channels.select | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/modify | test_capability_channels.py；Windows/真实模型及设备待验收 |
+| channels.configure | 通道VLAN/COM/IP/电源绑定 | _persist_config | ChannelConfigStore | channels.configure | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/modify | test_capability_channels.py；Windows/真实模型及设备待验收 |
+| network.rename | 网卡重命名 | _on_adapter_renamed | AdapterRenameService | network.rename | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/configuration/dangerous | test_capability_channels.py；Windows/真实模型及设备待验收 |
+| network.line_check | 环境线路检查 | _start_all_checks | run_line_check | network.line_check | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/channel/modify | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| power.on | 自动上电 | _launch_power_on | turn_on_selected_channels | power.on | connected：已有受控接口，真实Windows/模型/DUT验收另列 | power/channel/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| power.off | 自动下电 | _launch_power_on | turn_off_selected_channels | power.off | connected：已有受控接口，真实Windows/模型/DUT验收另列 | power/channel/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| pipeline.start | 所选三项全流程 | _start_all_checks | PipelineOrchestrator | pipeline.start | connected：已有受控接口，真实Windows/模型/DUT验收另列 | device/wifi/power/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| aging.start | 启动老化/开关机测试 | _start_all_checks | run_legacy_power_test | aging.start | connected：已有受控接口，真实Windows/模型/DUT验收另列 | device/wifi/power/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| aging.stop | 停止测试 | _stop_power_test | PipelineOrchestrator.request_stop | cancel_job | partial：仅受控接口发起的任务可按job_id查询/取消；旧GUI独立批次未接管 | job/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| aging.resume | 失败轮次续跑 | _show_power_test_channel_detail | PowerTestResumeSession.submit | aging.resume | connected：已有受控接口，真实Windows/模型/DUT验收另列 | device/wifi/power/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| aging.status | 通道进度和重试失败历史 | _show_power_test_channel_detail | PowerTestResumeSession | get_job_status | partial：仅受控接口发起的任务可按job_id查询/取消；旧GUI独立批次未接管 | job/read | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| logs.power | 本次开关机结果日志 | _open_selected_power_test_log | latest_power_test_result_log | logs.power | connected：已有受控接口，真实Windows/模型/DUT验收另列 | file/read | test_capability_application.py；Windows/真实模型及设备待验收 |
+| logs.wifi | 本次WiFi日志/连接历史 | _open_selected_power_test_wifi_log | current_wifi_log | logs.wifi | connected：已有受控接口，真实Windows/模型/DUT验收另列 | file/read | test_capability_application.py；Windows/真实模型及设备待验收 |
+| config.telnet | Telnet配置/登录后命令 | _build_test_item_telnet_tab | TestItemConfigStore | configuration.telnet.patch | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
+| config.commands | 测试项/预期分段/重试配置 | _build_test_item_order_tab | TestItemConfigStore | configuration.order.patch | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
+| config.defaults | 恢复默认测试项 | _build_test_item_order_tab | TestItemConfigStore | configuration.defaults.prepare | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
+| pretest.start | 执行预备测试 | _capture_pretest_request | run_pretest | pretest.start | connected：已有受控接口，真实Windows/模型/DUT验收另列 | device/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| pretest.stop | 停止预备测试 | _capture_pretest_request | PretestControls | cancel_job | partial：仅受控接口发起的任务可按job_id查询/取消；旧GUI独立批次未接管 | job/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| config.runtime | 开关机运行参数 | _build_test_item_ui_defaults_tab | LegacyUiDefaultsStore | configuration.runtime.patch | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
+| config.wifi | WiFi测试配置 | _build_test_item_wifi_tab | TestItemConfigStore | configuration.connect_wifi.patch | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
+| config.project | 项目信息和版本基准 | _build_test_item_project_info_tab | TestItemConfigStore | configuration.project_info.patch | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
+| device.version | 查询当前样机版本 | _start_project_info_query | query_device_project_info | device.version | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/modify | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| config.reload_save | 配置保存/重新加载 | _open_test_item_config | TestItemConfigStore | configuration.read | partial：支持按域读取/合并保存及默认命令草稿；GUI编辑器草稿和整套重载尚未接管 | configuration/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
+| notifications.config | 消息推送配置 | _open_test_item_config | MessagePushConfigService | notifications.read / notifications.patch | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
+| notifications.test | 发送测试消息 | _open_test_item_config | send_test_message | notifications.test | connected：已有受控接口，真实Windows/模型/DUT验收另列 | external/dangerous | test_capability_application.py；Windows/真实模型及设备待验收 |
+| firmware.full_command | 全包Tftp指令升级 | _start_full_package_upgrade | run_parallel_tftp_command_upgrades | firmware.upgrade | connected：已有受控接口，真实Windows/模型/DUT验收另列 | device/serial/adapter/power/tftp/dangerous | test_capabilities.py, test_capability_upgrade_equivalence.py；Windows/真实模型及设备待验收 |
+| firmware.full_put | 全包Tftp Put升级 | _start_full_package_upgrade | run_parallel_tftp_put_upgrades | firmware.upgrade | connected：已有受控接口，真实Windows/模型/DUT验收另列 | device/serial/adapter/power/tftp/dangerous | test_capabilities.py, test_capability_upgrade_equivalence.py；Windows/真实模型及设备待验收 |
+| firmware.full_web | 全包Web网关升级 | _start_full_package_upgrade | run_parallel_web_gateway_upgrades | firmware.upgrade | connected：已有受控接口，真实Windows/模型/DUT验收另列 | device/serial/adapter/power/browser/dangerous | test_capabilities.py, test_capability_upgrade_equivalence.py；Windows/真实模型及设备待验收 |
+| firmware.page | 页面UBUS升级 | _start_page_upgrade | run_page_upgrade_batch | firmware.upgrade | connected：已有受控接口，真实Windows/模型/DUT验收另列 | device/adapter/dangerous | test_capabilities.py, test_capability_upgrade_equivalence.py；Windows/真实模型及设备待验收 |
+| firmware.stop | 安全停止升级 | _stop_sample_upgrade | UpgradeStopControl | cancel_job | partial：仅受控接口发起的任务可按job_id查询/取消；旧GUI独立批次未接管 | job/dangerous | test_capabilities.py, test_capability_upgrade_equivalence.py；Windows/真实模型及设备待验收 |
+| firmware.settings | 升级选项保存 | _save_sample_upgrade_settings | SampleUpgradeSettingsStore | settings.read / firmware.settings.patch | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/modify | test_capability_settings.py；Windows/真实模型及设备待验收 |
+| parameters.generate | 生成参数表 | _open_parameter_generator | generate_parameter_records | parameters.generate | partial：生成规则共用，当前AI仅保存受控工作区；任意输出目录授权尚待接入 | file/modify | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| parameters.preflight | 导入/预检参数表 | _refresh_parameter_preflight | preflight_parameter_targets | parameters.preflight | connected：已有受控接口，真实Windows/模型/DUT验收另列 | file/read | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| parameters.write | 批量写样机参数 | _start_sample_parameter_write | run_parallel_sample_parameter_writes | parameters.write | connected：已有受控接口，真实Windows/模型/DUT验收另列 | device/serial/adapter/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| parameters.stop | 停止写参 | _cancel_sample_parameter_write | cancel_event | cancel_job | partial：仅受控接口发起的任务可按job_id查询/取消；旧GUI独立批次未接管 | job/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| onu.connection | OLT登录测试 | _on_onu_telnet_test_clicked | OnuRegistrationService.test_connection | onu.connection | connected：已有受控接口，真实Windows/模型/DUT验收另列 | olt/dangerous | test_capability_onu.py；Windows/真实模型及设备待验收 |
+| onu.unregistered | 查询未注册ONU | _on_onu_query_unregistered_clicked | query_unregistered | onu.unregistered | connected：已有受控接口，真实Windows/模型/DUT验收另列 | olt/pon/dangerous | test_capability_onu.py；Windows/真实模型及设备待验收 |
+| onu.templates | 查询业务模板 | _on_onu_template_query_clicked | query_templates | onu.templates | connected：已有受控接口，真实Windows/模型/DUT验收另列 | olt/dangerous | test_capability_onu.py；Windows/真实模型及设备待验收 |
+| onu.settings | 连接/PON/ID/业务配置 | _save_onu_registration_config | OnuRegistrationStore | settings.read / onu.settings.patch | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/modify | test_capability_settings.py；Windows/真实模型及设备待验收 |
+| onu.preview | 生成只读命令预览 | _on_onu_preview_clicked | build_preview | onu.preview | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/read | test_capability_onu.py；Windows/真实模型及设备待验收 |
+| onu.register | 单台/批量ONU注册 | _on_onu_register_selected_clicked | OnuRegistrationService.register | onu.register | connected：已有受控接口，真实Windows/模型/DUT验收另列 | olt/pon/onu/dangerous | test_capability_onu.py；Windows/真实模型及设备待验收 |
+| onu.cleanup_query | 查询C300离线清理候选 | _on_c300_cleanup_candidates_clicked | query_c300_cleanup_candidates | onu.cleanup_query | connected：已有受控接口，真实Windows/模型/DUT验收另列 | olt/pon/dangerous | test_capability_onu.py；Windows/真实模型及设备待验收 |
+| onu.cleanup_retry | 明确单台清理后重试 | _on_onu_register_selected_clicked | OnuRegistrationService.register | onu.register | connected：已有受控接口，真实Windows/模型/DUT验收另列 | olt/pon/onu/dangerous | test_capability_onu.py；Windows/真实模型及设备待验收 |
+| onu.registered | 查询已注册ONU | _on_onu_manage_query_clicked | query_registered_candidates | onu.registered | connected：已有受控接口，真实Windows/模型/DUT验收另列 | olt/pon/dangerous | test_capability_onu.py；Windows/真实模型及设备待验收 |
+| onu.delete | 删除选中ONU | _on_onu_manage_delete_clicked | OnuBatchDeleteService.delete | onu.delete | connected：已有受控接口，真实Windows/模型/DUT验收另列 | olt/pon/onu/dangerous | test_capability_onu.py；Windows/真实模型及设备待验收 |
+| onu.save | 保存OLT配置write | _onu_save_olt_configuration_worker | save_configuration | onu.save | connected：已有受控接口，真实Windows/模型/DUT验收另列 | olt/dangerous | test_capability_onu.py；Windows/真实模型及设备待验收 |
+| onu.stop | 停止ONU操作 | _on_onu_stop_clicked | cancel_event | cancel_job | partial：仅受控接口发起的任务可按job_id查询/取消；旧GUI独立批次未接管 | job/dangerous | test_capability_onu.py；Windows/真实模型及设备待验收 |
+| dut.telnet_query | 查询Telnet状态 | _query_dut_telnet_status | run_dut_status_query_batch | dut.telnet.query | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/modify | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| dut.telnet_enable | 开启Telnet | _start_dut_telnet_enable | run_dut_telnet_enable_batch | dut.telnet.enable | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| dut.wan_query | 查询WAN | _query_dut_wan_connections | run_dut_wan_query_batch | dut.wan.query | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/modify | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| dut.wan_add | 新增WAN | _start_dut_wan_config | run_dut_advanced_config_batch | dut.wan.configure | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| dut.wan_modify | 修改WAN | _start_dut_wan_config | run_dut_advanced_config_batch | dut.wan.configure | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| dut.wan_delete | 删除WAN | _start_dut_wan_config | run_dut_advanced_config_batch | dut.wan.configure | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| dut.wifi2_query | 查询2.4G WiFi | _query_dut_wifi_2g_status | run_dut_status_query_batch | dut.wifi_2g.query | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/modify | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| dut.wifi2_config | 配置2.4G WiFi | _start_dut_wifi_2g_config | run_dut_advanced_config_batch | dut.wifi_2g.configure | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| dut.wifi5_query | 查询5G WiFi | _query_dut_wifi_5g_status | run_dut_status_query_batch | dut.wifi_5g.query | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/modify | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| dut.wifi5_config | 配置5G WiFi | _start_dut_wifi_5g_config | run_dut_advanced_config_batch | dut.wifi_5g.configure | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| dut.voice_query | 查询语音 | _query_dut_voice_status | run_dut_status_query_batch | dut.voice.query | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/modify | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| dut.voice_config | 配置语音 | _start_dut_voice_config | run_dut_advanced_config_batch | dut.voice.configure | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| dut.tr069_query | 查询TR069 | _query_dut_tr069_status | run_dut_status_query_batch | dut.tr069.query | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/modify | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| dut.tr069_config | 配置TR069 | _start_dut_tr069_config | run_dut_advanced_config_batch | dut.tr069.configure | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| dut.stop | 停止DUT配置/查询 | _stop_dut_telnet_enable | stop_event | cancel_job | partial：仅受控接口发起的任务可按job_id查询/取消；旧GUI独立批次未接管 | job/dangerous | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| serial.open | 打开指定/全部串口日志 | _open_serial_log_module | SerialSessionManager.acquire_monitor | serial.monitor.open | connected：已有受控接口，真实Windows/模型/DUT验收另列 | serial/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
+| serial.close | 停止监控/关闭标签 | _open_serial_log_module | SerialSessionManager.release | serial.monitor.close | partial：关闭自己取得的被动监控，不关闭其它GUI标签/所有权 | serial/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
+| serial.send | 串口文本/回车发送 | _open_serial_log_module | SerialTerminal.send | 待接入 | pending：任意文本发送涉及Shell/Boot控制；必须复用A2及已审阅执行模板，不能增加裸串口写入后门 | serial/device/dangerous | 待接入/人工控制，无执行验收 |
+| serial.read | 被动串口日志 | _open_serial_log_module | read_serial_log | read_serial_log | connected：已有受控接口，真实Windows/模型/DUT验收另列 | serial/read | test_capability_application.py；Windows/真实模型及设备待验收 |
+| serial.status | 实时串口状态 | _open_serial_log_module | read_serial_status | serial.status | connected：已有受控接口，真实Windows/模型/DUT验收另列 | serial/read | test_capability_application.py；Windows/真实模型及设备待验收 |
+| serial.directory | 串口日志目录 | _on_serial_log_directory_changed | SerialTerminal | 待接入 | pending：当前工作区监控输出可用；主串口窗口保存目录及正在打开日志的归属适配待完成 | configuration/modify | 待接入/人工控制，无执行验收 |
+| ai.profiles | 模型配置增改复制删除选择 | _open_ai_assistant | DiagnosticStore | ai.profiles.list | partial：仅查询模型元数据；模型/密钥配置写入与选择仍须本地控制面，尚未开放自动化适配 | configuration/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
+| ai.models_test | 模型列表/连接测试 | _open_ai_assistant | DiagnosticClient | ai.models.query / ai.models.test | connected：已有受控接口，真实Windows/模型/DUT验收另列 | external/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
+| ai.conversation | 对话/连续诊断/停止/进展 | _open_ai_assistant | AiConversationService | existing_interaction | partial：已有受控接口，真实Windows/模型/DUT验收另列 | conversation/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
+| ai.evidence | 文本导入/证据检索 | _open_ai_assistant | AiEvidenceContext | ai.evidence.import / read_test_evidence | partial：已有受控接口，真实Windows/模型/DUT验收另列 | file/read | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
+| ai.sessions | 会话查询/重命名/删除清空 | _open_ai_assistant | DiagnosticStore | ai.sessions.list/read/rename/delete | connected：已有受控接口，真实Windows/模型/DUT验收另列 | data/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
+| ai.reports | 报告查询/重命名/删除清空 | _open_ai_assistant | DiagnosticStore | ai.reports.list/read/rename/delete | connected：已有受控接口，真实Windows/模型/DUT验收另列 | data/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
+| ai.continue_report | 报告接手排查 | _open_ai_assistant | create_session_from_report | ai.reports.continue | connected：已有受控接口，真实Windows/模型/DUT验收另列 | conversation/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
+| ai.cases | 案例创建/修订/启停/删除 | _open_ai_assistant | SharedCaseStore | ai.cases.query / ai.cases.set_active / ai.cases.delete | partial：可查询/按版本启停/删除；新增和内容修订中的根因/复测确认保留真实人工控制面 | data/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
+| ai.case_confirmation | 人工确认根因及复测 | _open_ai_assistant | confirm_case | local_confirmation | manual_control：必须由真实操作员确认，AI可准备材料但不能自我批准 | human_control/manual | 待接入/人工控制，无执行验收 |
+| ai.monitor | 监控设置/启停/状态 | _open_ai_assistant | AiMonitorService | 待接入 | pending：原监控入口保留；Agent配置/启停须复用本地监控授权，禁止自行签发或扩大监控范围 | monitor/modify | 待接入/人工控制，无执行验收 |
+| ai.permissions | 权限切换/批准/拒绝 | _open_ai_assistant | AiPermissionService | local_confirmation | manual_control：必须由真实操作员确认，AI可准备材料但不能自我批准 | human_control/manual | 待接入/人工控制，无执行验收 |
+| remote.dingtalk | 钉钉配置/启停/绑定/取消 | _configure_dingtalk_remote | DingTalkRemoteService | 待接入 | pending：远程业务调用已校验真实来源；接入配置/启停属于授权控制面，尚需本地审阅后的专用适配 | external/configuration/modify | 待接入/人工控制，无执行验收 |
+| remote.feishu | 飞书配置/启停/绑定/取消/试发 | _configure_feishu_remote | FeishuRemoteService | 待接入 | pending：远程业务调用已校验真实来源；接入配置/启停属于授权控制面，尚需本地审阅后的专用适配 | external/configuration/modify | 待接入/人工控制，无执行验收 |
+| remote.binding_confirm | 群身份绑定确认 | _build_ai_remote_management | remote.confirm_binding | local_confirmation | manual_control：必须由真实操作员确认，AI可准备材料但不能自我批准 | human_control/manual | 待接入/人工控制，无执行验收 |
+| updates.check | 检查更新 | _build_ui | AppUpdateService.check_for_update | updates.check | connected：已有受控接口，真实Windows/模型/DUT验收另列 | external/read | test_capability_application.py；Windows/真实模型及设备待验收 |
+| updates.download | 下载更新/取消 | _build_ui | AppUpdateService.download_update | updates.download | partial：原更新服务校验及取消共用；AI仅下载到受控工作区，任意目标目录授权待接入 | external/file/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
+
+## GUI动作审查
+
+当前审查快照包含 311 个按钮/菜单/绑定/变量回调。新增或改变入口会使门禁失败。
+界面辅助动作（窗口显隐/滚动/复制/显密/清屏等）不计业务覆盖；动态控件须结合运行测试复核。
+
+## 当前阶段
+
+固件升级与基础设施是首批；待接入条目保持，不能将首批通过表述为Full Capability Agent已经完成。
+暂停/恢复不是已存在的通用测试接口；SSH目前属于旧挂测路径。原始字节归档及A7有界缓冲不在本轮。

@@ -3,7 +3,7 @@
 封装 `ACCEPTANCE_BASELINE.md §0 / §1.3 / §1.4` 的全部检查,作为提交前必跑的最低门禁
 (参见 `AGENTS.md` 规则 13 与 `.claude/skills/line-check-dev/SKILL.md §5 / §11`)。
 
-执行 6 类检查:
+执行 7 类检查:
 1. **py_compile**: 全量 `src/` + `line_check_assistant/` 下的关键模块能编译
 2. **compile_inventory**: `src/` / `line_check_assistant/` 的每个 Python 源文件都必须纳入编译清单
 3. **unittest**: 全量测试通过,且能解析 `Ran N tests` 行(防止静默 0 项 / 误报 OK)
@@ -11,6 +11,7 @@
 5. **must_exist**: §1.3 的 8 条协议不变量必须在指定目录下命中
 6. **must_not_exist**: §1.3 / §1.4 的禁止模式(`0.0.0.0` 等)不能在指定文件的**代码行**中出现
    (跳过注释 / 文档字符串,避免反向语义误报)
+7. **capability_coverage**: 新增/改变GUI业务动作必须审查，业务覆盖清单不能遗漏或虚报。
 
 退出码: 0 全部通过 / 1 任一失败。
 
@@ -50,7 +51,47 @@ class CheckResult(NamedTuple):
 
 # 1. py_compile 文件清单(以 `ACCEPTANCE_BASELINE.md §0` + 当前 `src/` / `line_check_assistant/`
 #    下全部 .py 为准;新增 .py 后必须手工补到本列表)。
+PY_COMPILE_SCRIPT_FILES: tuple[str, ...] = ('scripts/run_remote_gateway.py', 'run_line_check_assistant.py')
 PY_COMPILE_FILES: tuple[str, ...] = (
+    "src/core/host_resource_lock.py",
+    "src/core/remote_gateway_transport.py",
+    "src/models/remote_gateway.py",
+    "src/services/remote_instance_identity.py",
+    "src/services/host_resource_fence.py",
+    "src/services/physical_resource_guards.py",
+    "src/services/remote_gateway_store.py",
+    "src/services/remote_instance_service.py",
+    "src/services/remote_gateway_runtime.py",
+    "src/services/remote_gateway_router.py",
+    "src/services/remote_gateway_platforms.py",
+    "src/services/controlled_host_service.py",
+    "src/services/capability_configuration_service.py",
+    "src/services/capability_observation_service.py",
+    "src/services/capability_update_service.py",
+    "src/services/capability_ai_data_service.py",
+    "src/services/capability_notification_service.py",
+    "src/services/capability_channel_service.py",
+    "src/services/capability_settings_service.py",
+    "src/services/ai_business_batch_route.py",
+    "src/ui/capability_management.py",
+    "src/services/capability_extension_service.py",
+    "src/services/capability_onu_services.py",
+    "src/services/capability_scope_service.py",
+    "src/services/capability_parameter_services.py",
+    "src/services/sample_parameter_application_service.py",
+    "src/services/capability_device_services.py",
+    "src/services/capability_catalog.py",
+    "src/models/capabilities.py",
+    "src/services/capability_registry.py",
+    "src/services/resource_lease_service.py",
+    "src/services/capability_metrics.py",
+    "src/services/capability_jobs.py",
+    "src/services/capability_service.py",
+    "src/services/controlled_file_service.py",
+    "src/services/firmware_upgrade_service.py",
+    "src/services/firmware_upgrade_validation_service.py",
+    "src/services/ai_capability_adapter.py",
+    "src/ui/capability_ui_bridge.py",
     "src/core/transport_observation.py",
     "src/services/transport_history_monitor.py",
     "src/ui/channel_list.py",
@@ -507,7 +548,7 @@ def _code_lines(content: str) -> list[tuple[int, str]]:
 
 def run_py_compile(project_root: Path) -> CheckResult:
     """对 `PY_COMPILE_FILES` 全部运行 `python -m py_compile`。"""
-    files = [str(project_root / f) for f in PY_COMPILE_FILES]
+    files = [str(project_root / f) for f in (*PY_COMPILE_FILES, *PY_COMPILE_SCRIPT_FILES)]
     missing = [f for f in files if not Path(f).exists()]
     if missing:
         return CheckResult(
@@ -677,6 +718,10 @@ def collect_results(project_root: Path) -> list[CheckResult]:
     results: list[CheckResult] = []
     results.append(run_py_compile(project_root))
     results.append(check_py_compile_inventory(project_root))
+    from verify_capability_coverage import check as check_capability_coverage
+    coverage_errors = check_capability_coverage(project_root)
+    results.append(CheckResult("capability_coverage", not coverage_errors,
+                               "; ".join(coverage_errors) if coverage_errors else "GUI actions and business inventory reviewed"))
     unittest_result, unittest_output = run_unittest(project_root)
     results.append(unittest_result)
     if unittest_result.passed:

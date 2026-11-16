@@ -208,11 +208,12 @@ class AiMonitorService:
     def waiting_count(self):
         return sum(bool(self.store.actions(identifier, ("waiting_approval",))) for identifier in tuple(self.running))
 
-    @staticmethod
-    def tools():
+    def tools(self):
         from src.services.ai_conversation_service import conversation_tools
-        return [tool for tool in conversation_tools(True, True)
-                if tool["name"] not in ("ask_user", "read_test_evidence")]
+        excluded = {"ask_user", "read_test_evidence"}
+        if getattr(self.diagnostic, "capability_runtime", None) is not None:
+            excluded.update(("run_local_command", "write_local_file", "run_dut_command"))
+        return [tool for tool in conversation_tools(True, True) if tool["name"] not in excluded]
 
     def runtime(self, identifier):
         permission = self.status(identifier)

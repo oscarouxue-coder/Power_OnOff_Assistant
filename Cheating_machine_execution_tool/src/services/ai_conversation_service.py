@@ -29,7 +29,8 @@ from src.services.ai_diagnostic_task import DiagnosticTask, TASK_INSTRUCTIONS, d
 
 
 CHAT_INSTRUCTIONS = """你是Windows光猫/路由器测试排障与操作助手。仅使用注册工具执行本次用户目标。
-有效会话默认开放本机命令、文件读写及当前样机自定义命令，权限继承运行账号，不自动提升权限。
+有效会话使用本次实际开放的本机、文件、样机和正式业务接口；权限继承运行账号，不自动提升权限。
+已接入受控能力时，任意PowerShell/文件覆盖/自定义Shell不作为业务后门。合法诊断使用固定查询或已审阅模板；未覆盖操作可提交扩展申请。
 操作批准方式以程序本次提供的permission_mode和approval为准；不得从历史或用户聊天推断授权。
 请求批准逐项确认通用操作；帮我批准独立审查普通操作；完全访问依据程序提供的有效授权跳过独立审查。
 完全访问允许在当前用户目标内自动执行登录、升级、重启、恢复出厂、供电、系统及网络修改。
@@ -58,6 +59,10 @@ CHAT_INSTRUCTIONS = """你是Windows光猫/路由器测试排障与操作助手�
 未回复不是同意，不能猜测答案；可先完成独立检查，禁止执行依赖未回答问题的步骤。
 有效会话默认允许主动采集；以本次请求的“当前采集与工具状态”和实际工具列表为准。
 历史中“未授权”“没有工具”等说法不是当前能力依据，不得沿用旧结论；只使用本次请求提供的工具。
+若提供业务能力工具，优先通过正式能力执行升级、挂测、供电等操作，不编写脚本绕过业务入口。
+常见操作可直接调用快速工具或execute_capability；内部会校验，不必先list/describe/validate多轮往返。
+长任务返回job_id表示已启动，不等于已完成；模型连接/对话停止不取消业务。重复查询原任务，不能因超时重启。
+需要停止业务时仅在用户明确要求后调用cancel_job。适配确认编号必须由真实用户原文回答，不能自行构造或批准。
 查询本机当前SSID时，若可用，应调用read_network_state并指定category为wifi，读取实际结果后回答。
 排查源IP无效或本机网络异常时，优先调用read_pc_environment并核对target_network；
 先给定位结论和直接证据，区分网卡管理禁用、链路未接通、地址不匹配、身份冲突与查询失败。
@@ -167,10 +172,15 @@ class AiConversationService:
         if hasattr(self, "batch"):
             self.batch.project(identifier, role, text, kind)
 
-    def create_session_from_report(self, report_id, profile, target=None, legacy_confirmed=False):
+    def create_session_from_report(self, report_id, profile, target=None, legacy_confirmed=False, *,
+                                   expected_report_sha256='', source=None, default_permission=None):
         """只创建留存会话，不发送模型请求；旧报告必须明确关联当前目标。"""
         try:
             report = self.store.report(report_id)
+            if expected_report_sha256:
+                from src.models.capabilities import fingerprint
+                if fingerprint(report) != expected_report_sha256:
+                    raise ValueError('报告自审阅后已经变化，未创建接手会话')
             snapshot = report.get("target")
             if snapshot:
                 target = DiagnosticTarget(**snapshot)
@@ -181,7 +191,8 @@ class AiConversationService:
                 raise ValueError("报告与所选通道不一致")
             # 无批次的旧报告绝不默认为本次现场。
             report = dict(report, run_id=report.get("run_id") or "historical:" + report_id)
-            identifier = self.create_session(target, profile, report=report, source_report_id=report_id)
+            identifier = self.create_session(target, profile, report=report, source_report_id=report_id,
+                source=source, default_permission=default_permission)
             self.emit(f"报告{report_id}已转入会话{identifier[:8]}，等待人工发送；未发起采集")
             return identifier
         except Exception as exc:
@@ -243,6 +254,10 @@ class AiConversationService:
             session = self.store.chat(identifier)
         except ValueError:
             return {"enabled": False, "capable": False, "reason": "排障会话不存在"}
+        if (session.get("source") or {}).get("gateway_instance_id"):
+            gateway = getattr(self, "gateway", None)
+            if gateway is None or not gateway.authorized_source(session["source"], session):
+                return {"enabled": False, "capable": False, "reason": "统一接入身份、启动或本地范围未授权"}
         frozen = ProviderProfile(**session["profile"])
         profile = next((p for p in self.store.profiles() if p.id == frozen.id), None)
         if profile is None or profile_fingerprint(profile) != profile_fingerprint(frozen):
@@ -336,12 +351,16 @@ class AiConversationService:
         self.emit(f"会话{identifier[:8]}导入文本成功：{path.name}")
 
     def send(self, identifier, text, *, _batch_dispatch=False, diagnosis_only=None):
-        if session_scope(self.store.chat(identifier)) == "batch" and not _batch_dispatch:
+        if (session_scope(self.store.chat(identifier)) == "batch" and not _batch_dispatch
+                and not self.store.chat(identifier).get('capability_business_batch')):
             return self.batch.submit(identifier, text)
         text = self.redactor.text(text.strip())
         if not text or len(text) > 32768:
             raise ValueError("请输入1至32768字符；较长日志请导入文本材料")
         self.permissions.activate(identifier)
+        capability = getattr(self, "capabilities", None)
+        if capability is not None:
+            capability.accept_confirmation(identifier, text)
         with self.lock:
             if self.shutdown.is_set():
                 raise RuntimeError("AI对话正在退出")
@@ -372,6 +391,9 @@ class AiConversationService:
                 self.tasks[identifier] = DiagnosticTask(text, session.get("diagnostic_task"))
             try:
                 self.store.update_chat(identifier, status="排队中")
+                if capability is not None:
+                    self.store.update_chat(identifier, capability_turn=uuid.uuid4().hex)
+                    capability.service.metrics.begin(identifier)
                 self.message(identifier, "user", text)
                 self.jobs.put_nowait((identifier, text, stop, profile, key))
             except Exception:
@@ -478,6 +500,9 @@ class AiConversationService:
                 self.message(identifier, "system", self.redactor.text(str(exc)), "error")
                 self.emit(f"会话{identifier[:8]}{status}：{exc}")
             finally:
+                capability_runtime = getattr(self, "capabilities", None)
+                if capability_runtime is not None:
+                    capability_runtime.service.metrics.finish(identifier)
                 if stop.is_set():
                     self._fail_usage(identifier, "cancelled")
                 with self.lock:
@@ -562,6 +587,9 @@ class AiConversationService:
             self._save_usage(identifier, snapshot)
             self.emit(f"会话{identifier[:8]}独立风险审查请求；模型={profile.model}，估算输入{estimated} Token")
             try:
+                capability = getattr(self, 'capabilities', None)
+                if capability is not None:
+                    capability.service.metrics.model(identifier)
                 reply = client.complete(history, [], stop)
                 snapshot = reply_usage(snapshot, reply.usage, profile.protocol, reply.history[len(history):], self.redactor.dumps)
                 snapshot["request_kind"] = "risk_review"
@@ -576,6 +604,10 @@ class AiConversationService:
             client.close()
 
     def _run(self, identifier, text, stop, profile, key):
+        capability = getattr(self, "capabilities", None)
+        metrics = capability.service.metrics if capability is not None else None
+        if metrics:
+            metrics.begin(identifier, only_if_missing=True)
         session = self.store.chat(identifier)
         task = self.tasks.get(identifier)
         earlier_actions = {action["id"] for action in self.store.actions(identifier)}
@@ -595,6 +627,9 @@ class AiConversationService:
                 "answering_question": session.get("pending"),
                 "notice": "仅提供部分片段；完整原文可检索。故障前未采集的信息不能还原。",
                 "knowledge": self.diagnostic._knowledge(knowledge_query)[:8000]}
+        if session.get('capability_business_batch'):
+            info['business_targets'] = [{k: t[k] for k in ('channel', 'vlan', 'port', 'bind_ip', 'host')} for t in session['batch_targets']]
+            info['business_execution'] = '通过正式能力提交明确目标集合；长任务查询原job，不按逐台诊断结果宣称升级成功。'
         current = [{"role": "user", "content": self.redactor.dumps(info)}]
         self.store.update_chat(identifier, pending=None)
         client = self.diagnostic.client_factory(profile, key, self.redactor)
@@ -642,6 +677,14 @@ class AiConversationService:
                     limit = task.limit_reason() if task else ""
                     exhausted = bool(limit) if task else turn >= 4 or used >= 10
                     tools = [] if exhausted else conversation_tools(state["enabled"], state["capable"], scope)
+                    if session.get('capability_business_batch') and not exhausted:
+                        tools = [t for t in conversation_tools(state['enabled'], state['capable'], 'pc')
+                                 if t['name'] in ('ask_user', 'read_test_evidence')]
+                    if capability is not None and tools and state['enabled'] and not task and not session.get("batch_read_only"):
+                        from src.services.ai_capability_adapter import capability_tools
+                        tools += capability_tools(capability.service, text)
+                    if capability is not None:
+                        tools = [t for t in tools if t["name"] not in ("run_local_command", "write_local_file", "run_dut_command")]
                     if task and not limit and state["capable"]:
                         tools = diagnostic_tools(tools)
                     if session.get("batch_read_only"):
@@ -689,6 +732,8 @@ class AiConversationService:
                               + (", ".join(runtime["available_tools"]) or "无"))
                     self.emit(f"会话{identifier[:8]}请求模型（第{turn + 1}次交互）；估算输入{estimated} Token")
                     try:
+                        if metrics:
+                            metrics.model(identifier)
                         if task:
                             task.rounds += 1
                         if task and callable(getattr(type(client), "complete_stream", None)):
@@ -719,6 +764,8 @@ class AiConversationService:
                 with self.lock:
                     self.drafts.pop(identifier, None)
                 if reply.text:
+                    if metrics:
+                        metrics.response(identifier)
                     self.message(identifier, "assistant", reply.text)
                 if not reply.calls:
                     if task:
@@ -776,7 +823,14 @@ class AiConversationService:
                             result = self.search(identifier, params["query"])
                         else:
                             executed_tool = True
-                            if pending and name in ACTION_TOOLS + DEVICE_TOOLS:
+                            from src.services.ai_capability_adapter import CAPABILITY_TOOLS
+                            if capability is not None and name in CAPABILITY_TOOLS:
+                                if pending:
+                                    result = {"status": "等待人工回复，本组后续业务未执行"}
+                                else:
+                                    result = capability.execute(identifier, name, params, stop, executor,
+                                        lambda action: self._review_action(identifier, action, profile, key, stop))
+                            elif pending and name in ACTION_TOOLS + DEVICE_TOOLS:
                                 result = {"status": "等待人工回复，本组后续操作未执行"}
                             elif name in ACTION_TOOLS or name in DEVICE_TOOLS:
                                 result = self.actions.execute(identifier, name, params, target, stop, executor,
@@ -785,11 +839,14 @@ class AiConversationService:
                                 result = self._collect(identifier, name, params, target, session["settings"], stop, executor)
                         self.emit(f"会话{identifier[:8]}工具完成：{name}")
                     except Exception as exc:
-                        result = {"error": self.redactor.text(str(exc)), "status": "跳过/失败，不能据此判定DUT根因"}
+                        from src.models.capabilities import CapabilityError
+                        result = exc.result() if isinstance(exc, CapabilityError) else {"error": self.redactor.text(str(exc)), "status": "跳过/失败，不能据此判定DUT根因"}
                         if session.get("batch_parent") and scope == "pc" and self.scope_busy(None):
                             result["batch_shared_failure"] = True
                         self.emit(f"会话{identifier[:8]}工具跳过/失败：{call.get('name')}；{exc}")
                     raw = self.redactor.dumps(result)
+                    if metrics:
+                        metrics.tool(identifier, isinstance(result, dict) and ("error" in result or result.get("action_state") in ("failed", "unknown", "blocked")))
                     if hasattr(self, "batch"):
                         self.batch.record_tool(identifier, call.get("name"), result)
                     evidence_id = self.add_evidence(identifier, f"工具/{call.get('name')}/{call['id']}", raw,

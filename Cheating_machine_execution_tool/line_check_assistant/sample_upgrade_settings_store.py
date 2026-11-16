@@ -3,6 +3,8 @@ from __future__ import annotations
 import configparser
 from dataclasses import dataclass
 from pathlib import Path
+import uuid
+from line_check_assistant.config_store import ChannelConfigStore
 from src.models.boot_entry import BOOT_ENTRY_LOGIN, normalize_boot_entry
 
 
@@ -116,6 +118,10 @@ class SampleUpgradeSettingsStore:
         )
 
     def save(self, settings: SampleUpgradeSettings) -> None:
+        with ChannelConfigStore(self.config_path).transaction():
+            self._save_values(settings)
+
+    def _save_values(self, settings: SampleUpgradeSettings) -> None:
         parser = configparser.RawConfigParser()
         parser.optionxform = str
         parser[SAMPLE_UPGRADE_SECTION] = {
@@ -143,5 +149,13 @@ class SampleUpgradeSettingsStore:
         }
 
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.config_path.open("w", encoding="utf-8") as file:
-            parser.write(file)
+        temporary = self.config_path.with_name(self.config_path.name + '.' + uuid.uuid4().hex + '.tmp')
+        try:
+            with temporary.open("w", encoding="utf-8") as file:
+                parser.write(file)
+            temporary.replace(self.config_path)
+        finally:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass

@@ -115,10 +115,13 @@ class TelnetSessionTests(unittest.TestCase):
 
     def test_wait_for_any_matches_marker_in_received_bytes(self):
         port = free_port()
+        send_prompt = threading.Event()
 
         class _PromptingHandler(socketserver.BaseRequestHandler):
             def handle(self):  # pragma: no cover
                 try:
+                    if not send_prompt.wait(3.0):
+                        return
                     self.request.sendall(b"Welcome\r\n# ")
                 except OSError:
                     pass
@@ -130,7 +133,9 @@ class TelnetSessionTests(unittest.TestCase):
                 session = TelnetSession("127.0.0.1", "127.0.0.1", device_port=port)
                 try:
                     # 等待达 # 提示符
-                    result = session.wait_for_any(("#", ">", "login:"), 3.0, session.cursor())
+                    cursor = session.cursor()
+                    send_prompt.set()  # Establish the cursor before the server is allowed to publish.
+                    result = session.wait_for_any(("#", ">", "login:"), 3.0, cursor)
                     self.assertEqual(result, "#")
                 finally:
                     session.close()

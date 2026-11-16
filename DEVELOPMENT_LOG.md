@@ -1,5 +1,90 @@
 # 开发记录
 
+## 2026-11-16 - 汇总全部变更准备提交推送
+
+- 类型：文档
+- 背景：负责人明确要求将当前全部文件合并为一次本地Git提交，并推送GitHub，由实施者汇总备注；范围包含Full Capability Agent、多实例统一接入、串口日志滚动、测试和项目文档。
+- 完成内容：核对main/origin和全部已跟踪/未忽略新增文件，fetch后本地已有4个未推送提交；本次拟用备注“完善全功能AI业务接入、多实例网关与串口日志体验”。全部未忽略变更纳入同一次本地提交，保留运行日志/缓存/构建产物的既有忽略规则；原pre-commit钩子执行标准完整基线，不绕过门禁。暂存检查发现4份新增测试末尾有多余空行，仅清理EOF格式，不修改断言，重新暂存检查并由本轮钩子复核。
+- 修改文件：本条记录与PROJECT_STATUS.md；本次业务文件完整清单由该次Git提交保存，各阶段实现、测试及待验收边界沿用前述记录和validation台账。
+- 验证方法：git status/diff、git fetch、GitHub公开仓库元数据、配置差异字段检查（不输出凭据值），git diff --cached --check；实际提交通过.githooks/pre-commit调用scripts/run_git_pre_commit.ps1执行完整verify_baseline.py，之后复核提交及工作区。
+- 验证结果：提交准备时工作区最近完整2589项通过；本次实际门禁以提交钩子输出为准，不将旧结果替代本轮。确认origin为公开仓库，已有待推送提交含新增Webhook令牌/签名密钥和设备密码；本地提交已获授权，公开推送须先取得负责人对这些真实凭据的明确处理决定，不在本记录写入其值。
+- 后续待办：完成本地提交并核对；凭据处置确认后再正常推送，不强推、不重写原历史。未构建或运行EXE，未操作真实设备。
+
+## 2026-11-16 - 补齐配置事务与多通道业务
+
+- 类型：功能
+- 背景：负责人要求继续按覆盖矩阵实施全功能Agent，保留效率、独立任务和本地/远程身份边界；本轮承接阶段3，继续减少真实业务缺口，未将固件接口完成当作总体交付。
+- 完成内容：①共享通道勾选/绑定事务和原GUID改名服务，版本与物理身份复核、原serializer/IP派生/工厂字段保留；失败回退、未知隔离，不扩大当前会话授权。②永久升级与ONU双型号配置共用原store，界面/文件共同revision、关闭编辑器及自动保存排空保护、密码合并不回显；临时文件原子发布。数据同步暂时解除编辑器Tcl写回调、精确恢复原绑定，不触发旧窗口；保存新OLT配置不授予设备执行/write权限。③默认命令未保存草稿、通知目的地审阅/固定消息异步试发、报告版本接手、案例按版本启停/删除及资源只读枚举。④明确多通道业务进入同一原业务会话，避免逐设备诊断误路由；原诊断批次保持。⑤模块回退增加channels/notifications；矩阵63接入/15部分/5待接入/3人工，未完成项逐行保留。
+- 修改文件：新增`src/services/capability_channel_service.py`、`capability_notification_service.py`、`capability_settings_service.py`、`ai_business_batch_route.py`及`tests/test_capability_channels.py`、`test_capability_settings.py`；增量修改原channel/upgrade/onu stores、app数据装配/存储忙碌提示、adapter_rename_service、能力service/catalog/host/configuration/ai_data、GUI桥/控制器、conversation/batch/router及对应回归；更新编译清单、覆盖快照/矩阵、操作员README、状态/验收/实施计划与validation台账。详细路径按模块见本阶段IMPLEMENTATION；保留并行网关和串口工作。
+- 验证方法：锁定CPython3.9.10 x64执行`validation/full_capability_agent_20261115/run_focused.py`；原adapter_rename模块单独运行；实际GUI收集函数/Tcl变量回调/线程数据桥、临时文件发布失败及GUID变化使用Fake验证。按标准`run_baseline.ps1`执行完整基线及源码前后摘要；覆盖审查后`verify_capability_coverage.py --update`；离线指标/差异/配置保护检查。
+- 验证结果：早期相关439项、业务路由相关246项通过；通道新9项和原改名44项通过，通道阶段完整2578测试/196指定/229编译/227源码清单及覆盖/协议不变量通过，367份源码快照一致。合跑离屏居中断言因包装器移动父子坐标失败，原模块44项正常通过，未放宽断言。永久选项及GUI回调保护最新289项通过；首次新增Tcl测试的Mock缺函数名造成回调错误，修正测试替身并增加回调异常收集后通过，未将假阳性作为最终证据。后续完整基线及最终离线指标追加于本阶段IMPLEMENTATION。未连接真实模型/平台/DUT、未外发、未断电/刷写/串口发送、未构建/运行EXE或提交。
+- 后续待办：全部5pending和15partial继续实施，包含串口发送/目录、监控/两平台控制面、旧GUI任务统一查询取消、任意输出目录授权及等价受控命令迁移；真实Windows/模型/平台/DUT和8/16路长期挂测资源影响由负责人后续验收，现有EXE未更新。
+
+- 最终验证补记：标准完整基线2589项、196项指定回归、230文件编译/228主源码登记、能力覆盖及全部协议不变量通过，`ALL CHECKS PASSED`、exit 0；369份Python文件前后快照一致。一次完整检查进程未汇总异常退出，日志保留，原因未确证；补充新增Tcl fixture在owner线程显式清理和弱引用释放断言，42/18项组合及最终全量均通过，未降低断言或修改权限。离线50/50 Fake任务成功；对话2次模型/1次工具/0失败/0发现，首次正文0.016s，整轮0.063s；短时模拟挂测在1717轮元数据/日志压力下继续推进，不能替代长期或真实性能验收。7份文档UTF-8读取、本轮2个本地链接、矩阵计数、新业务文件空白及差异检查通过，本机配置无差异。完整证据见`validation/full_capability_agent_20261115/IMPLEMENTATION.md`与`offline_metrics.json`。
+
+## 2026-11-16 - 实现多实例统一接入首批基础
+
+- 类型：功能
+- 背景：负责人明确要求从已修订计划进入代码实施，首批完成永久/启动身份、配对心跳、网关通信/路由、可信去重确认及任务关联、跨进程保护和Fake升级端到端；只使用Mock/Fake，不连接真实DUT。2026-11-15开始实施，11-16继续收尾，保留工作区同期Full Capability Agent和串口界面改动。
+- 完成内容：①新增独立identity/model/store/transport/router/runtime/platform模块及命令行入口，身份存程序目录外、同目录槽位独立AI/Job库，原直接模式默认保持，源码显式`--gateway-slot`才启用。②一次性配对/DPAPI逐实例凭据/撤销，随机挑战+方向+序号认证，心跳与重连；平台只显式启动原SDK，不新增业务引擎。③网关与实例持久化消息去重，目标只绑定一次，收到消息不等于业务成功；请求—会话入队前持久关联，已有Agent入队但确认异常保守unknown，禁止再次提交。④复用既有权限/Capability/Job，新远程ASK，真实来源、实例启动、目标和能力白名单独立验证；原request进入原operation幂等，转发及模型停止不取消合法Job。⑤系统级物理锁归一serial/power COM，原串口/电源/网卡及共享升级/管道入口增量保护，统一模式unknown保留主机资源隔离，原Job本地核实才解除。⑥Fake升级实际经过回环WebSocket和原Agent工具链，只执行一次Fake引擎，断网/重启后原Job继续及结果恢复；保留所有真实验收边界。
+- 修改文件：完整按模块清单见`validation/multi_instance_remote_ai_20261115/IMPLEMENTATION.md`。新增11个src模块、`scripts/run_remote_gateway.py`及三份remote专项测试；增量修改现有来源/权限/路由/动作/会话/能力桥、Job/资源租约、串口/电源、网络/升级/管道、AI控制器/主窗口装配/启动器、编译清单和GUI能力快照；同步操作员README、PROJECT_STATUS、ACCEPTANCE_BASELINE及两份实施台账。未覆盖同期Full Capability Agent业务实现或个人配置。
+- 验证方法：独立CPython3.9.10 x64，逐模块unittest及回环通信；相关组合覆盖原串口/电源/网卡/管道/Capability与停止/界面/基线结构。最终在主源码目录运行`python -X utf8 scripts/verify_baseline.py`，临时设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`并将TEMP/TMP规范为当前用户LocalApplicationData/Temp，退出后恢复；编译登记分主源码/入口脚本，保留原结构断言。执行能力覆盖审查/更新及检查、入口`--help`、文档链接/格式、源码摘要和本轮差异检查。
+- 验证结果：新增33项专项全部通过（身份8、网关18、Agent端到端7）；早期组合169项通过，后续直接相关155项通过。边界补充前完整2554项通过；最终完整2555项、196项指定回归、226文件编译/224主源码登记、能力覆盖及全部协议不变量通过，`ALL CHECKS PASSED`，最终日志`validation/multi_instance_remote_ai_20261115/baseline_confirmed_20261116.txt`。当前364份源码/测试/脚本摘要比较显示本接入代码未变；同期`capability_ai_data_service.py`及其测试变化已另外跑10项通过，详见摘要与报告，不将全工作区表述为完全未变。首次编码读取失败、清单分类/最小上下文兼容、短/长TEMP及并行源码静态读取失败证据保留，修正后未降低既有断言。没有构建/运行新EXE、提交/推送、连接真实平台/模型/DUT或执行实际供电/刷写。
+- 后续待办：GUI配对与范围管理、群内审批、原任务跨实例取消/跨run查询接手、多通道任务完整投影与高压/长时回传、凭据重配/热轮换及孤立未知资源的本地核实体验；真实Windows、平台、VPN、跨Windows用户资源权限和DUT由负责人验收。槽位只隔离AI/任务数据，同目录项目INI仍共享，独立项目使用独立目录。本批是可运行可测试的源码基础，不将其标为完整方案已现场验收。
+
+## 2026-11-15 - 接入多模块业务与受控扩展
+
+- 类型：功能
+- 背景：负责人确认继续完整业务覆盖，要求效率、任务独立、来源隔离、指标及逐阶段验证；固件首批不作为总体完成。本轮保留同时进行的网关及串口滚动改动，不将其它工作区功能计作本阶段交付。
+- 完成内容：①接入原供电/管道/老化及失败续跑、写参、DUT、ONU；写参原worker业务等价抽取，保留命令、等待、默认及原判据。②配置revision合并和编辑器保护、被动监控与当前尝试WiFi日志、原会话/报告/模型测试及更新适配。③本地审阅JSON模板、任务详情/安全取消/未知核实入口和按模块回退；AI无自我批准/提权/扩大范围接口。④DB/资源锁不跨Tk等待，GUI确认后与Agent准入双向复核，同轮等价参数幂等，固件/参数表及目标绑定复查；已提交后停止仍待核实的升级保留unknown。⑤覆盖清单登记每项缺口与专项入口，语义快照包含辅助函数变化，现为53接入/15部分/15待接入/3人工，总目标继续保留。
+- 修改文件：完整按模块列表见`validation/full_capability_agent_20261115/IMPLEMENTATION.md`；核心新增为`capability_device_services.py`、`capability_parameter_services.py`、`sample_parameter_application_service.py`、`capability_onu_services.py`、`capability_scope_service.py`、`capability_configuration_service.py`、`capability_observation_service.py`、`capability_update_service.py`、`capability_ai_data_service.py`、`capability_extension_service.py`、`controlled_host_service.py`和`src/ui/capability_management.py`。更新目录/任务/可信桥、app兼容worker及准入、对话/权限/监控、编译/覆盖门禁、8份专项测试、Telnet竞态测试、操作员README、状态/验收/实施计划及validation复现材料；保留原业务引擎。
+- 验证方法：独立CPython3.9.10执行`validation/full_capability_agent_20261115/run_focused.py`及相关模块；完整基线通过`run_baseline.ps1`调用原标准入口，前后源码摘要检查；`measure_offline.py`执行离线效率/资源对照，`verify_capability_coverage.py --update`经审查生成快照/矩阵；差异/文档/本机配置检查。
+- 验证结果：385项相关回归通过。首轮完整2550项有1失败/1错误，源于并行网关包装器的最小上下文兼容和脚本混入主源码编译清单；在实现中修复、保留断言，日志留存。最终2554项完整基线、196项指定回归、226项编译及224主源码清单、覆盖与协议不变量通过，2026-11-16复核363个Python文件快照一致。前一轮2552项已通过但源码被并行编辑，保留日志后复跑。离线性能见`offline_metrics.json`，不得当作真实模型或刷写时长。没有真实DUT/供电/串口/平台操作、打包、运行EXE、提交或修改本机配置。
+- 后续待办：矩阵全部15项pending及15项partial继续保留，尤其旧GUI任务接管、通道/永久配置和受控命令等效迁移；Windows、真实模型/平台、长时间挂测资源影响及真实DUT由负责人后续验收，不能以当前Mock/Fake替代。
+
+## 2026-11-15 - 增加串口日志竖向滚动条
+
+- 类型：功能
+- 背景：负责人要求为串口日志记录模块的显示区域增加滚动条，确认仅增加竖向滚动，并在向上翻阅时保留阅读位置、回到底部后恢复跟随最新日志。
+- 完成内容：①各VLAN/COM标签显示区增加右侧竖向滚动条，与Text双向联动，保留长行自动换行和局部模块背景。②渲染前读取该标签是否在底部，仅底部调用跟随；利用Text原有视口保持机制保留阅读位置及换行位置，5000行裁剪后的存续内容不跳动，已裁掉的阅读内容回到剩余起点。③各标签独立，清屏/重建恢复初始跟随，串口采集、写盘、发送、刷新节流和关闭逻辑保持；窗口首次创建时在主执行日志记录滚动及跟随方式，不逐次记录滚动。④审查新增Scrollbar为界面辅助动作，无新增设备业务或Capability；使用当前覆盖脚本更新动作快照及矩阵，业务覆盖状态沿用现有目录，不将快照更新视为业务接入。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/serial_terminal.py`
+  - `Cheating_machine_execution_tool/tests/test_serial_terminal.py`
+  - `Cheating_machine_execution_tool/scripts/capability_gui_actions.json`（生成）
+  - `CAPABILITY_COVERAGE.md`（生成）
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`（§2.3新增边界及§3待确认项）
+  - `DEVELOPMENT_LOG.md`（本条）
+- 验证方法：主源码目录、CPython3.9.10 x64执行`python -X utf8 -m unittest discover -s tests -p test_serial_terminal.py -v`；执行`python -X utf8 scripts/verify_capability_coverage.py --update`；设置`PYTHONPATH=tests`后执行`python -X utf8 -m unittest test_capability_coverage test_tk_lifecycle_process -v`；执行`python -X utf8 -m py_compile src/ui/serial_terminal.py tests/test_serial_terminal.py`，并核对本轮差异格式与文档一致性。
+- 验证结果：40项串口窗口专项全部通过，其中新增6项覆盖滚动条moveto/分页联动、鼠标滚轮、Vista/Clam主题与缩放、底部跟随/翻阅保持/恢复、长行换行位置、多标签缓冲、5000行裁剪、清屏及标签重建；3项能力覆盖回归和1项8路模拟串口关闭重开/GC/完整落盘子进程回归通过；能力覆盖输出`CAPABILITY_COVERAGE_OK`，两文件局部编译通过。模拟串口及离屏Tk不替代完整主程序人工或真实设备验收；未运行完整基线，保留最近完整记录，不作为本轮结果。未提交、打包、操作真实串口或修改本机配置，现有EXE未更新。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.3/§3复验日常窗口滚动与跟随交互；现有真实串口及其它功能验收结论保持。
+
+## 2026-11-15 - 合并多实例远程AI接入要求
+
+- 类型：文档
+- 背景：负责人总体同意常开电脑统一网关与独立LineCheckAssistant实例架构，在原实施请求后补充永久/启动身份、Full Capability Agent复用、权限隔离、消息/任务可靠性、网关恢复、使用体验及Mock/Fake验收七项要求，并要求先合并计划、评估进行中的Agent依赖，避免重复实现业务工具/任务持久化/权限。本轮交付限定为该修订与依赖交接，不将原最终功能目标表述为已完成。
+- 完成内容：①新增完整修订计划，固定instance_id与进程run_id/诊断批次的区别、程序目录外身份和持久槽位、复制/同目录多开、原任务/审批绑定及历史只读查询。②明确网关只做身份/选择/投递，实例复用AiConversationService、AiCapabilityAdapter、CapabilityService、CapabilityJobs和AiPermissionService；将可信request→用户轮次→operation/job关联、双端范围检查及现有资源层跨进程/未知结果保护列为联调前置。③规定持久化收件再确认、稳定去重、超时待核实、网关重启查原状态不重放、任务独立于聊天、心跳/离线/重连和单实例凭据撤销。④补多人、误选、越权、重复消息、网关/实例重启、任务中断线和恢复查结果等验收矩阵，保留现有直接模式。⑤源码审查确认首批基础与升级已有历史验证；供电/老化/DUT新增适配尚与pending覆盖台账有阶段差异，写参/ONU未接通，不据文件存在宣称全功能可用；同步Agent依赖交接与当前状态入口。
+- 修改文件：
+  - `.claude/plans/multi-instance-remote-ai.md`（新增）
+  - `.claude/plans/full-capability-agent.md`（仅追加多实例依赖交接）
+  - `PROJECT_STATUS.md`（仅新增计划/依赖审查状态）
+  - `DEVELOPMENT_LOG.md`（本条）
+- 验证方法：读取当前Registry/Service、Job、资源租约、权限、会话路由、控制器、业务适配源码和相关现有测试断言，对照CAPABILITY_COVERAGE及首批开发记录；用只读Python文档检查核对UTF-8、相对Markdown链接、必需设计主题、围栏和行尾格式，执行本轮四文件`git diff --check`并检查新增计划格式。
+- 验证结果：文档一致性检查通过，3份方案/状态文档中的4个相对链接存在，10项必需设计主题齐全，新增计划围栏/UTF-8/行尾格式通过；本轮四文件差异格式检查通过。纯文档修改，未运行代码测试或完整基线；保留首批2456项等已有验证记录，不作为本轮或后续业务扩展的实测结果。未修改业务源码、个人配置或已有未提交工作，未提交、打包或连接真实平台/模型/DUT，现有EXE未更新。
+- 后续待办：按修订计划先衔接可信身份/轮次/资源契约，再实现网关和实例桥，以升级Fake端到端验证后逐能力开放；网关、接入界面及多实例功能尚未实现，真实Windows/平台/VPN/DUT验收保持待负责人确认。本轮未修改ACCEPTANCE_BASELINE及操作员说明，因为尚无新增可用行为或验收结论。
+
+## 2026-11-15 - 接入能力目录与独立升级任务
+
+- 类型：功能 / 重构 / 测试
+- 背景：负责人确认Full Capability Agent审计方案及效率、来源隔离、独立长任务和分阶段验收补充要求；先打通原升级业务，全部未接入功能持续保留，不将本批称为全功能改造完成。
+- 完成内容：建立显式Registry、参数模型、schema缓存、可信来源/权限桥、独立SQLite业务任务、幂等及原安全停止控制；常见单通道业务请求快捷路由，升级直接工具无需先list/describe/validate。GUI和AI通过同一个数据分发入口复用四条原升级引擎，不模拟按钮、不调用窗口生命周期回调。升级前核对实时资源、文件SHA256、目标和明确适配确认，启动时重新检查并固定实际传输内容。模型/对话停止不取消合法业务，明确业务取消/退出才请求安全收尾；进程中断不重放。新增文件查询/受控文本产物与实际调用指标，保留原通用工具待等效迁移，不宣称系统沙箱。
+- 覆盖台账：86项业务，8项已有接口、2项部分接入、73项待接入、3项人工控制面；矩阵由业务目录生成，全部GUI按钮/菜单/绑定及回调内容快照进入检查，新增/变化须重新审查。已有诊断/交互分组不计为全组完全开放。
+- 修改文件：新增`src/models/capabilities.py`；`src/services/capability_registry.py`、`capability_jobs.py`、`capability_service.py`、`capability_metrics.py`、`capability_catalog.py`、`resource_lease_service.py`、`firmware_upgrade_service.py`、`firmware_upgrade_validation_service.py`、`controlled_file_service.py`、`ai_capability_adapter.py`；`src/ui/capability_ui_bridge.py`；`scripts/verify_capability_coverage.py`、GUI动作快照；`tests/test_capabilities.py`、`test_capability_coverage.py`。修改主窗口升级分发、AI控制器/会话/目标快捷路由和基线登记；同步根覆盖矩阵、实施台账、项目规则/工作流、操作员说明及验收边界。
+- 验证方法：标准独立CPython3.9.10 x64；改前完整基线2430项通过；新增19项基础模拟后升级/停止/页面/Web/A1/A2/路由/权限组合205项通过（2项原浏览器集成跳过）；实际会话工具循环补至23项通过；GUI动作覆盖新增3项。结构接入后完整标准入口`powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/run_git_pre_commit.ps1`。
+- 验证结果：首轮完整2456项有4个错误，归因旧控制器测试替身缺新属性和页面包装多传max_workers；保留原默认/兼容入口后36项直接相关复验通过。最终完整基线2456项、196项指定回归、201个源码编译/清单、能力覆盖及协议不变量全部通过，`ALL CHECKS PASSED`（2026-11-15 18:57）。未修改旧测试断言、个人配置、接收/缓冲机制或老化PASS/FAIL，未构建/提交/发布或连接真实模型/设备。
+- 后续待办：按矩阵继续供电/挂测/写参/DUT/ONU等模块，完成通用工具等效迁移及版本化扩展；Windows、真实模型/平台/DUT验收待负责人确认；本批不代表Full Capability Agent全部完成。
+
 ## 2026-11-15 - 汇总全部改动并完成本地提交检查
 
 - 类型：测试 / 状态更新

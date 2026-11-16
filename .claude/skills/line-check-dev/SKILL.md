@@ -124,7 +124,7 @@ python scripts\verify_baseline.py
 
 - 预期：`ALL CHECKS PASSED`，exit 0
 - 任何一条 `FAIL` 都必须先修复再提交（`AGENTS.md` 规则 13）
-- 验证包含 6 类检查：① 编译清单全量 py_compile ② 新增 `src/` / `line_check_assistant/` 源码必须纳入编译清单 ③ 全量 unittest（解析 `Ran N tests`）④ 已验收关键行为的指定测试 ID 必须实际执行 ⑤ §1.3 必须命中不变量 grep ⑥ §1.3 / §1.4 必须不出现模式 grep
+- 验证包含 7 类检查：① 编译清单全量 py_compile ② 新增 `src/` / `line_check_assistant/` 源码必须纳入编译清单 ③ 全量 unittest（解析 `Ran N tests`）④ 已验收关键行为的指定测试 ID 必须实际执行 ⑤ §1.3 必须命中不变量 grep ⑥ §1.3 / §1.4 必须不出现模式 grep ⑦ GUI动作与能力覆盖清单一致。GUI业务变更须审查并更新CAPABILITY_COVERAGE.md和动作快照，不能以通用Shell或只登记未实现的条目虚报接入。
 - 检查配置定义在 `scripts/verify_baseline.py` 的 `PY_COMPILE_FILES` / `REQUIRED_BASELINE_TEST_IDS` / `MUST_EXIST` / `MUST_NOT_EXIST`；`AGENTS.md` 中验收不变量章节是 grep 清单的可读副本
 
 新增单测后，在实际运行的专项范围内核对 `Ran N tests ... OK` 及新增用例；完整基线触发时再核对全量结果，不为统计全量测试数额外启动完整基线。完成报告列明本轮实际执行的检查及结果；未执行完整基线时明确注明，并保留最近一次完整验证记录，不将旧结果表述为本轮结果。

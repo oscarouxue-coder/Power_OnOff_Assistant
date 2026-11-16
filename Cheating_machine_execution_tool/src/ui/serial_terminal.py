@@ -142,6 +142,7 @@ class SerialTerminalWindow:
         if saved_geometry is None or self._geometry_is_at_top_left(saved_geometry):
             center_toplevel_on_parent(self.window, self.master)
         self._poll()
+        self._log_close("日志显示已启用竖向滚动；向上翻阅暂停跟随，回到底部恢复跟随")
         if self._on_log_dir_changed is not None:
             self._on_log_dir_changed(self.log_dir)
 
@@ -167,8 +168,13 @@ class SerialTerminalWindow:
         scope = TkScope()
         status = scope.variable(StringVar, frame, value=f"{resolved_port} 未打开")
         Label(frame, textvariable=status, anchor="w").pack(fill="x", padx=8, pady=5)
-        output = Text(frame, wrap="word", state="disabled")
-        output.pack(fill="both", expand=True, padx=8, pady=5)
+        display = Frame(frame)
+        display.pack(fill="both", expand=True, padx=8, pady=5)
+        output = Text(display, wrap="word", state="disabled")
+        scrollbar = ttk.Scrollbar(display, orient="vertical", command=output.yview)
+        scrollbar.pack(side="right", fill="y")
+        output.configure(yscrollcommand=scrollbar.set)
+        output.pack(side="left", fill="both", expand=True)
         bottom = Frame(frame)
         bottom.pack(fill="x", padx=8, pady=(0, 8))
         command = ttk.Entry(bottom)
@@ -456,10 +462,13 @@ class SerialTerminalWindow:
                 text = f"[界面显示已合并 {dropped_chars} 个字符，原始日志已完整写入文件]\n{text}"
             self._pending_chunks.pop(vlan, None)
             self._pending_char_counts.pop(vlan, None)
+            follow_tail = output.yview()[1] >= 1.0
             output.configure(state="normal")
             output.insert(END, text)
             self._trim_display(output)
-            output.see(END)
+            # Text 自身保留插入/裁剪前的阅读位置；只有原本在底部才跟随。
+            if follow_tail:
+                output.see(END)
             output.configure(state="disabled")
 
         if scope is self._scope and not scope.closed and self.window is not None and self.window.winfo_exists():

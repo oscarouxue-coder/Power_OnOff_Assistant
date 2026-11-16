@@ -24,6 +24,9 @@ READ_COMMANDS = {
     "network": "ip -s link; ip -4 addr; ip route; cat /proc/net/arp",
     "wifi": "iw dev; iwinfo 2>/dev/null",
     "logs": "logread 2>/dev/null | tail -n 120; dmesg | tail -n 80",
+    "storage": "df -h; head -n 24 /proc/meminfo",
+    "processes": "ps w | head -n 100",
+    "flash_layout": "cat /proc/mtd; ls -l /sbin/sysupgrade /sbin/mtd /usr/sbin/ubiformat /usr/bin/tftp 2>/dev/null",
 }
 
 

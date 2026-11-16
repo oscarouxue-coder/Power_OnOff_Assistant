@@ -1,0 +1,166 @@
+"""Product business inventory, including all not-yet-connected modules. Never counts private helpers."""
+
+# id | user operation | GUI callback | existing implementation | resources | risk | registered capability
+# Variants are separate rows when the user can independently request them.
+_ROWS = """
+channels.refresh|刷新串口/网卡|_refresh_resources|serial_inventory/network_adapter|host|read|
+channels.list|查询通道配置/状态|_collect_ai_targets|ChannelConfigStore|configuration|read|channels.list
+channels.select|通道勾选/全选/清除|_set_all_channels_enabled|ChannelConfigStore|configuration|modify|
+channels.configure|通道VLAN/COM/IP/电源绑定|_persist_config|ChannelConfigStore|configuration|modify|
+network.rename|网卡重命名|_on_adapter_renamed|AdapterRenameService|adapter/configuration|dangerous|
+network.line_check|环境线路检查|_start_all_checks|run_line_check|adapter/channel|modify|
+power.on|自动上电|_launch_power_on|turn_on_selected_channels|power/channel|dangerous|
+power.off|自动下电|_launch_power_on|turn_off_selected_channels|power/channel|dangerous|
+pipeline.start|所选三项全流程|_start_all_checks|PipelineOrchestrator|device/wifi/power|dangerous|
+aging.start|启动老化/开关机测试|_start_all_checks|run_legacy_power_test|device/wifi/power|dangerous|
+aging.stop|停止测试|_stop_power_test|PipelineOrchestrator.request_stop|job|dangerous|
+aging.resume|失败轮次续跑|_show_power_test_channel_detail|PowerTestResumeSession.submit|device/wifi/power|dangerous|
+aging.status|通道进度和重试失败历史|_show_power_test_channel_detail|PowerTestResumeSession|job|read|
+logs.power|本次开关机结果日志|_open_selected_power_test_log|latest_power_test_result_log|file|read|
+logs.wifi|本次WiFi日志/连接历史|_open_selected_power_test_wifi_log|current_wifi_log|file|read|
+config.telnet|Telnet配置/登录后命令|_build_test_item_telnet_tab|TestItemConfigStore|configuration|modify|
+config.commands|测试项/预期分段/重试配置|_build_test_item_order_tab|TestItemConfigStore|configuration|modify|
+config.defaults|恢复默认测试项|_build_test_item_order_tab|TestItemConfigStore|configuration|modify|
+pretest.start|执行预备测试|_capture_pretest_request|run_pretest|device|dangerous|
+pretest.stop|停止预备测试|_capture_pretest_request|PretestControls|job|dangerous|
+config.runtime|开关机运行参数|_build_test_item_ui_defaults_tab|LegacyUiDefaultsStore|configuration|modify|
+config.wifi|WiFi测试配置|_build_test_item_wifi_tab|TestItemConfigStore|configuration|modify|
+config.project|项目信息和版本基准|_build_test_item_project_info_tab|TestItemConfigStore|configuration|modify|
+device.version|查询当前样机版本|_start_project_info_query|query_device_project_info|adapter/device|modify|
+config.reload_save|配置保存/重新加载|_open_test_item_config|TestItemConfigStore|configuration|modify|
+notifications.config|消息推送配置|_open_test_item_config|MessagePushConfigService|configuration|modify|
+notifications.test|发送测试消息|_open_test_item_config|send_test_message|external|dangerous|
+firmware.full_command|全包Tftp指令升级|_start_full_package_upgrade|run_parallel_tftp_command_upgrades|device/serial/adapter/power/tftp|dangerous|firmware.upgrade
+firmware.full_put|全包Tftp Put升级|_start_full_package_upgrade|run_parallel_tftp_put_upgrades|device/serial/adapter/power/tftp|dangerous|firmware.upgrade
+firmware.full_web|全包Web网关升级|_start_full_package_upgrade|run_parallel_web_gateway_upgrades|device/serial/adapter/power/browser|dangerous|firmware.upgrade
+firmware.page|页面UBUS升级|_start_page_upgrade|run_page_upgrade_batch|device/adapter|dangerous|firmware.upgrade
+firmware.stop|安全停止升级|_stop_sample_upgrade|UpgradeStopControl|job|dangerous|cancel_job
+firmware.settings|升级选项保存|_save_sample_upgrade_settings|SampleUpgradeSettingsStore|configuration|modify|
+parameters.generate|生成参数表|_open_parameter_generator|generate_parameter_records|file|modify|
+parameters.preflight|导入/预检参数表|_refresh_parameter_preflight|preflight_parameter_targets|file|read|
+parameters.write|批量写样机参数|_start_sample_parameter_write|run_parallel_sample_parameter_writes|device/serial/adapter|dangerous|
+parameters.stop|停止写参|_cancel_sample_parameter_write|cancel_event|job|dangerous|
+onu.connection|OLT登录测试|_on_onu_telnet_test_clicked|OnuRegistrationService.test_connection|olt|dangerous|
+onu.unregistered|查询未注册ONU|_on_onu_query_unregistered_clicked|query_unregistered|olt/pon|dangerous|
+onu.templates|查询业务模板|_on_onu_template_query_clicked|query_templates|olt|dangerous|
+onu.settings|连接/PON/ID/业务配置|_save_onu_registration_config|OnuRegistrationStore|configuration|modify|
+onu.preview|生成只读命令预览|_on_onu_preview_clicked|build_preview|configuration|read|
+onu.register|单台/批量ONU注册|_on_onu_register_selected_clicked|OnuRegistrationService.register|olt/pon/onu|dangerous|
+onu.cleanup_query|查询C300离线清理候选|_on_c300_cleanup_candidates_clicked|query_c300_cleanup_candidates|olt/pon|dangerous|
+onu.cleanup_retry|明确单台清理后重试|_on_onu_register_selected_clicked|OnuRegistrationService.register|olt/pon/onu|dangerous|
+onu.registered|查询已注册ONU|_on_onu_manage_query_clicked|query_registered_candidates|olt/pon|dangerous|
+onu.delete|删除选中ONU|_on_onu_manage_delete_clicked|OnuBatchDeleteService.delete|olt/pon/onu|dangerous|
+onu.save|保存OLT配置write|_onu_save_olt_configuration_worker|save_configuration|olt|dangerous|
+onu.stop|停止ONU操作|_on_onu_stop_clicked|cancel_event|job|dangerous|
+dut.telnet_query|查询Telnet状态|_query_dut_telnet_status|run_dut_status_query_batch|adapter/device|modify|
+dut.telnet_enable|开启Telnet|_start_dut_telnet_enable|run_dut_telnet_enable_batch|adapter/device|dangerous|
+dut.wan_query|查询WAN|_query_dut_wan_connections|run_dut_wan_query_batch|adapter/device|modify|
+dut.wan_add|新增WAN|_start_dut_wan_config|run_dut_advanced_config_batch|adapter/device|dangerous|
+dut.wan_modify|修改WAN|_start_dut_wan_config|run_dut_advanced_config_batch|adapter/device|dangerous|
+dut.wan_delete|删除WAN|_start_dut_wan_config|run_dut_advanced_config_batch|adapter/device|dangerous|
+dut.wifi2_query|查询2.4G WiFi|_query_dut_wifi_2g_status|run_dut_status_query_batch|adapter/device|modify|
+dut.wifi2_config|配置2.4G WiFi|_start_dut_wifi_2g_config|run_dut_advanced_config_batch|adapter/device|dangerous|
+dut.wifi5_query|查询5G WiFi|_query_dut_wifi_5g_status|run_dut_status_query_batch|adapter/device|modify|
+dut.wifi5_config|配置5G WiFi|_start_dut_wifi_5g_config|run_dut_advanced_config_batch|adapter/device|dangerous|
+dut.voice_query|查询语音|_query_dut_voice_status|run_dut_status_query_batch|adapter/device|modify|
+dut.voice_config|配置语音|_start_dut_voice_config|run_dut_advanced_config_batch|adapter/device|dangerous|
+dut.tr069_query|查询TR069|_query_dut_tr069_status|run_dut_status_query_batch|adapter/device|modify|
+dut.tr069_config|配置TR069|_start_dut_tr069_config|run_dut_advanced_config_batch|adapter/device|dangerous|
+dut.stop|停止DUT配置/查询|_stop_dut_telnet_enable|stop_event|job|dangerous|
+serial.open|打开指定/全部串口日志|_open_serial_log_module|SerialSessionManager.acquire_monitor|serial|modify|
+serial.close|停止监控/关闭标签|_open_serial_log_module|SerialSessionManager.release|serial|modify|
+serial.send|串口文本/回车发送|_open_serial_log_module|SerialTerminal.send|serial/device|dangerous|
+serial.read|被动串口日志|_open_serial_log_module|read_serial_log|serial|read|read_serial_log
+serial.status|实时串口状态|_open_serial_log_module|read_serial_status|serial|read|read_serial_status
+serial.directory|串口日志目录|_on_serial_log_directory_changed|SerialTerminal|configuration|modify|
+ai.profiles|模型配置增改复制删除选择|_open_ai_assistant|DiagnosticStore|configuration|modify|
+ai.models_test|模型列表/连接测试|_open_ai_assistant|DiagnosticClient|external|modify|
+ai.conversation|对话/连续诊断/停止/进展|_open_ai_assistant|AiConversationService|conversation|modify|existing_interaction
+ai.evidence|文本导入/证据检索|_open_ai_assistant|AiEvidenceContext|file|read|read_test_evidence
+ai.sessions|会话查询/重命名/删除清空|_open_ai_assistant|DiagnosticStore|data|modify|
+ai.reports|报告查询/重命名/删除清空|_open_ai_assistant|DiagnosticStore|data|modify|
+ai.continue_report|报告接手排查|_open_ai_assistant|create_session_from_report|conversation|modify|
+ai.cases|案例创建/修订/启停/删除|_open_ai_assistant|SharedCaseStore|data|modify|
+ai.case_confirmation|人工确认根因及复测|_open_ai_assistant|confirm_case|human_control|manual|local_confirmation
+ai.monitor|监控设置/启停/状态|_open_ai_assistant|AiMonitorService|monitor|modify|
+ai.permissions|权限切换/批准/拒绝|_open_ai_assistant|AiPermissionService|human_control|manual|local_confirmation
+remote.dingtalk|钉钉配置/启停/绑定/取消|_configure_dingtalk_remote|DingTalkRemoteService|external/configuration|modify|
+remote.feishu|飞书配置/启停/绑定/取消/试发|_configure_feishu_remote|FeishuRemoteService|external/configuration|modify|
+remote.binding_confirm|群身份绑定确认|_build_ai_remote_management|remote.confirm_binding|human_control|manual|local_confirmation
+updates.check|检查更新|_build_ui|AppUpdateService.check_for_update|external|read|
+updates.download|下载更新/取消|_build_ui|AppUpdateService.download_update|external/file|modify|
+"""
+
+
+def business_catalog():
+    connected = {"power.on": "power.on", "power.off": "power.off", "network.line_check": "network.line_check",
+        "pipeline.start": "pipeline.start", "aging.start": "aging.start", "aging.resume": "aging.resume",
+        "aging.stop": "cancel_job", "aging.status": "get_job_status", "pretest.start": "pretest.start",
+        "pretest.stop": "cancel_job", "device.version": "device.version", "dut.telnet_query": "dut.telnet.query",
+        "dut.telnet_enable": "dut.telnet.enable", "dut.wan_query": "dut.wan.query", "dut.wan_add": "dut.wan.configure",
+        "dut.wan_modify": "dut.wan.configure", "dut.wan_delete": "dut.wan.configure", "dut.wifi2_query": "dut.wifi_2g.query",
+        "dut.wifi2_config": "dut.wifi_2g.configure", "dut.wifi5_query": "dut.wifi_5g.query", "dut.wifi5_config": "dut.wifi_5g.configure",
+        "dut.voice_query": "dut.voice.query", "dut.voice_config": "dut.voice.configure", "dut.tr069_query": "dut.tr069.query",
+        "dut.tr069_config": "dut.tr069.configure", "dut.stop": "cancel_job",
+        "parameters.preflight": "parameters.preflight", "parameters.generate": "parameters.generate",
+        "parameters.write": "parameters.write", "parameters.stop": "cancel_job",
+        "onu.connection": "onu.connection", "onu.unregistered": "onu.unregistered", "onu.templates": "onu.templates",
+        "onu.preview": "onu.preview", "onu.register": "onu.register", "onu.cleanup_query": "onu.cleanup_query",
+        "onu.cleanup_retry": "onu.register", "onu.registered": "onu.registered", "onu.delete": "onu.delete", "onu.save": "onu.save",
+        "onu.stop": "cancel_job", "serial.open": "serial.monitor.open", "serial.close": "serial.monitor.close",
+        "serial.status": "serial.status", "logs.power": "logs.power", "logs.wifi": "logs.wifi",
+        "config.telnet": "configuration.telnet.patch", "config.commands": "configuration.order.patch",
+        "config.runtime": "configuration.runtime.patch", "config.wifi": "configuration.connect_wifi.patch",
+        "config.project": "configuration.project_info.patch", "config.reload_save": "configuration.read",
+        "updates.check": "updates.check", "updates.download": "updates.download",
+        "ai.profiles": "ai.profiles.list", "ai.models_test": "ai.models.query / ai.models.test",
+        "ai.sessions": "ai.sessions.list/read/rename/delete", "ai.reports": "ai.reports.list/read/rename/delete",
+        "ai.cases": "ai.cases.query / ai.cases.set_active / ai.cases.delete", "ai.evidence": "ai.evidence.import / read_test_evidence",
+        'ai.continue_report': 'ai.reports.continue', 'notifications.config': 'notifications.read / notifications.patch',
+        'notifications.test': 'notifications.test', 'config.defaults': 'configuration.defaults.prepare', 'channels.refresh': 'resources.refresh',
+        'channels.select': 'channels.select', 'channels.configure': 'channels.configure', 'network.rename': 'network.rename',
+        'firmware.settings': 'settings.read / firmware.settings.patch', 'onu.settings': 'settings.read / onu.settings.patch'}
+    result = []
+    pending_reasons = {
+        'channels.refresh': '枚举只读原语已开放；主界面候选项刷新/保留选择的数据回写适配未完成',
+        'channels.select': '主界面选择会实时保存并影响会话范围，需原子配置/身份刷新适配，不能从模型自行扩大目标授权',
+        'channels.configure': '需同步行草稿、派生IP、选中通道持久化及授权失效，尚未提取可回退事务边界',
+        'network.rename': '现有身份回读服务可复用；尚缺配置引用/GUI草稿的原子同步及不确定结果恢复适配',
+        'config.defaults': 'GUI当前只恢复到未保存草稿；不能把读模板直接保存磁盘冒充等价恢复',
+        'notifications.config': '需保留编辑器草稿并共用平台识别/密钥保存和运行通知源，尚未完成适配',
+        'notifications.test': '需绑定负责人确认的外发目的地；本轮未开放发送接口，也未实际外发',
+        'firmware.settings': '运行时升级参数已开放；永久选项需与两个窗口的自动保存草稿同步，尚未适配',
+        'onu.settings': '执行使用当前GUI配置；永久PON/连接配置需同步双型号草稿、预览失效及新增OLT范围审阅',
+        'serial.send': '任意文本发送涉及Shell/Boot控制；必须复用A2及已审阅执行模板，不能增加裸串口写入后门',
+        'serial.directory': '当前工作区监控输出可用；主串口窗口保存目录及正在打开日志的归属适配待完成',
+        'ai.continue_report': '原报告接手服务保留；尚需可信来源/目标及历史材料身份的受控适配',
+        'ai.monitor': '原监控入口保留；Agent配置/启停须复用本地监控授权，禁止自行签发或扩大监控范围',
+        'remote.dingtalk': '远程业务调用已校验真实来源；接入配置/启停属于授权控制面，尚需本地审阅后的专用适配',
+        'remote.feishu': '远程业务调用已校验真实来源；接入配置/启停属于授权控制面，尚需本地审阅后的专用适配',
+    }
+    for row in _ROWS.strip().splitlines():
+        identifier, name, gui, service, resources, risk, capability = row.split("|")
+        capability = connected.get(identifier, capability)
+        manual = capability == "local_confirmation"
+        old_jobs = ("firmware.stop", "aging.stop", "aging.status", "pretest.stop", "dut.stop", "parameters.stop", "onu.stop")
+        partial = identifier in old_jobs + ("ai.evidence", "ai.conversation", "ai.profiles", "ai.cases", "parameters.generate", "serial.close", "config.reload_save", "updates.download")
+        result.append(dict(feature_id=identifier, name=name, gui_file="line_check_assistant/app.py", gui_entry=gui,
+            service=service, resources=resources.split("/"), risk=risk, capability_id=capability,
+            status="manual_control" if manual else "partial" if partial else "connected" if capability else "pending",
+            reason="必须由真实操作员确认，AI可准备材料但不能自我批准" if manual else
+                   "仅受控接口发起的任务可按job_id查询/取消；旧GUI独立批次未接管" if identifier in old_jobs else
+                   "关闭自己取得的被动监控，不关闭其它GUI标签/所有权" if identifier == "serial.close" else
+                   "支持按域读取/合并保存及默认命令草稿；GUI编辑器草稿和整套重载尚未接管" if identifier == "config.reload_save" else
+                   "原更新服务校验及取消共用；AI仅下载到受控工作区，任意目标目录授权待接入" if identifier == "updates.download" else
+                   "生成规则共用，当前AI仅保存受控工作区；任意输出目录授权尚待接入" if identifier == "parameters.generate" else
+                   "仅查询模型元数据；模型/密钥配置写入与选择仍须本地控制面，尚未开放自动化适配" if identifier == "ai.profiles" else
+                   "可查询/按版本启停/删除；新增和内容修订中的根因/复测确认保留真实人工控制面" if identifier == "ai.cases" else
+                   "已有受控接口，真实Windows/模型/DUT验收另列" if capability else pending_reasons[identifier]))
+        group = identifier.split('.')[0]
+        tests = ('test_capability_settings.py',) if identifier in ('firmware.settings', 'onu.settings') else (
+            ('test_capabilities.py', 'test_capability_upgrade_equivalence.py') if group == 'firmware' else (
+            ('test_capability_channels.py',) if identifier in ('channels.select', 'channels.configure', 'network.rename') else
+            ('test_capability_onu.py',) if group == 'onu' else ('test_capability_ai_data.py',) if group == 'ai' else
+            ('test_capability_application.py',) if group in ('config', 'logs', 'serial', 'updates', 'notifications') else ('test_capability_devices.py',)))
+        result[-1]['tests'] = list(tests) if capability and not manual else []
+    return result

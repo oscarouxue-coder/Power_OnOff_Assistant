@@ -11,6 +11,7 @@ import serial
 
 from src.models import SerialEvent, SerialSettings
 from src.core.transport_observation import register_session, retire_session
+from src.core.host_resource_lock import HostResourceLock
 
 
 Subscriber = Callable[[SerialEvent], None]
@@ -52,6 +53,7 @@ class PySerialSession:
         self._serial_factory = serial_factory
         self._known_secrets = tuple(secret.encode("utf-8") for secret in known_secrets if secret)
         self._serial = None
+        self._host_resource_lock = None
         self._condition = threading.Condition()
         self._write_lock = threading.Lock()
         self._log_lock = threading.Lock()
@@ -73,6 +75,7 @@ class PySerialSession:
         if self._serial is not None:
             return
         try:
+            self._host_resource_lock = HostResourceLock(["serial:" + self.settings.port]).acquire()
             self._serial = self._serial_factory(
                 port=self.settings.port,
                 baudrate=self.settings.baudrate,
@@ -86,6 +89,9 @@ class PySerialSession:
                 dsrdtr=self.settings.dsrdtr,
             )
         except Exception as exc:
+            if self._host_resource_lock:
+                self._host_resource_lock.close()
+                self._host_resource_lock = None
             raise RuntimeError(f"打开串口 {self.settings.port} 失败：{exc}") from exc
         if self.log_path is not None:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -183,6 +189,7 @@ class PySerialSession:
                 return  # a CLOSED subscriber may call close() idempotently
             self._close_done.wait()
             return
+        serial_closed = self._serial is None
         try:
             self._closed = True
             self._stop.set()
@@ -195,6 +202,7 @@ class PySerialSession:
                     pass
                 try:
                     self._serial.close()
+                    serial_closed = True
                 except Exception:
                     pass
             with self._condition:
@@ -210,6 +218,9 @@ class PySerialSession:
             if self._log_handle is not None:
                 self._log_handle.close()
                 self._log_handle = None
+            if serial_closed and self._host_resource_lock:
+                self._host_resource_lock.close()
+                self._host_resource_lock = None
         finally:
             self._close_done.set()
             retire_session(self)

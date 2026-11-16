@@ -3,6 +3,8 @@ from __future__ import annotations
 from src.models.upgrade_stop import UpgradeStopped, UpgradeStoppedResult
 from src.services.upgrade_stop_service import UpgradeRun, result_state, summarize_results
 from src.models.boot_entry import BOOT_ENTRY_LOGIN, BOOT_ENTRY_OPTIONS, normalize_boot_entry
+from src.services.firmware_upgrade_service import dispatch_upgrade
+from src.services.sample_parameter_application_service import run_sample_parameter_batch
 from src.services.web_gateway_upgrade_service import (
     TRANSFER_WEB_GATEWAY, run_parallel_web_gateway_upgrades, validate_web_target,
 )
@@ -561,6 +563,8 @@ class LineCheckAssistant(Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_app_close)
         self.after(500, self._start_dingtalk_remote)
         self.after(600, self._start_feishu_remote)
+        if os.environ.get("LINECHECK_GATEWAY_SLOT"):
+            self.after(700, self._start_gateway_remote)
         from src.services.transport_history_monitor import TransportHistoryMonitor
         self.transport_history_monitor = TransportHistoryMonitor(LOG_DIR / "resource_monitor", self.log_queue.put)
         self.transport_history_monitor.start()
@@ -726,6 +730,11 @@ class LineCheckAssistant(Tk):
 
     def _pipeline_admit_action(self) -> bool:
         """Recheck after modal dialogs, immediately before starting real work."""
+        if self.__dict__.get('_capability_reservations'):
+            logger = getattr(self, '_log', None)
+            if callable(logger):
+                logger('[业务互斥] 独立业务任务仍持有资源，本次GUI操作未下发。')
+            return False
         if self.__dict__.get('_app_closing', False):
             return False
         ui = self.__dict__.get('_pipeline_ui')
@@ -1613,221 +1622,12 @@ class LineCheckAssistant(Tk):
         return True
 
     def _sample_parameter_write_worker(self, requests: list[SampleParameterWriteRequest], parallel_count: int, cancel_event: threading.Event) -> None:
-        # 端到端 telnet 写参:UBUS 启用 telnet → TelnetSession(未登录)→ run_parameter_write_pipeline 内部 _login。
-        # 工厂模式 100 秒等待后可切换 PC 网卡到工厂模式对应网段后重建 TelnetSession
-        # （session_swap），其它情况由串口路径走 transport 回退入口。
-        import time
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
-        from src.config import DEFAULT_LOG_DIR
-        from src.core.bind_socket import wait_for_bindable_ip as _wait_for_bindable_ip
-        from src.core.telnet_transport import TelnetSession
-        from src.core.ubus_enable_telnet import enable_telnet_via_ubus
-        from src.core.ubus_http_client import UbusHttpClient
-        from src.models import SampleParameterItemResult
-        from src.services.sample_parameter_service import run_single_sample_parameter_write
-        from line_check_assistant.network_ops import prepare_network_for_sample
-
-        self.log_queue.put(f"开始批量写样机参数：{len(requests)} 台，并行上限 {parallel_count}。")
-
-        def emit_to_main(line: str) -> None:
-            self.log_queue.put(line)
-
-        # UBUS 启用 telnet 失败(典型:HTTP timed out / TCP refused)允许重试 3 次。
-        # 与 sample_parameter_service.PARAMETER_WRITE_RETRIES=3 / 串行升级
-        # TFTP_COMMAND_MAX_RETRIES=3 的同款约定。
-        UBUS_ENABLE_TELNET_MAX_RETRIES = 3
-        UBUS_ENABLE_TELNET_RETRY_DELAY_SECONDS = 2.0
-
-        telnet_indices = [index for index, req in enumerate(requests) if req.bind_ip and req.device_host]
-        serial_indices = [index for index, req in enumerate(requests) if index not in telnet_indices]
-
-        def make_telnet_factory(request):
-            def factory(r):
-                if not r.bind_ip or not r.device_host:
-                    raise RuntimeError(f"{r.vlan} 切 telnet 路径但 bind_ip / device_host 为空")
-
-                # 写参前置:启用对应通道网卡 + 按 channel.network_card_ip 设置静态 IP + 等可绑。
-                # 100 秒工厂模式网段切换由 make_factory_session_swap 处理,本步骤只覆盖用户模式初始网段。
-                adapter_alias = self._adapter_alias_for_vlan(r.vlan)
-                subnet_mask = self._subnet_mask_for_vlan(r.vlan)
-                if adapter_alias and r.bind_ip:
-                    emit_to_main(
-                        f"{r.vlan} 写参前置:准备网络 {adapter_alias}({r.bind_ip} / {subnet_mask or '255.255.255.0'})。"
-                    )
-                    network_result = prepare_network_for_sample(
-                        adapter_alias,
-                        r.bind_ip,
-                        subnet_mask,
-                        on_output=emit_to_main,
-                        sleep_fn=time.sleep,
-                        reuse_if_ready=True,
-                    )
-                    if not network_result.ok:
-                        emit_to_main(f"{r.vlan} 写参前置:网络准备失败:{network_result.message}")
-                        raise RuntimeError(f"{r.vlan} 网络准备失败:{network_result.message}")
-                    if not _wait_for_bindable_ip(r.bind_ip, timeout_seconds=15.0):
-                        emit_to_main(
-                            f"{r.vlan} 写参前置:{r.bind_ip} 仍未成为可绑地址,放弃本台。"
-                        )
-                        raise RuntimeError(f"{r.vlan} 网络准备后 {r.bind_ip} 仍不可绑")
-
-                log_path = DEFAULT_LOG_DIR / f"sample_parameter_{r.vlan}_{r.bind_ip}.log"
-                # 端到端 telnet 写参:UBUS 启用 telnet → TelnetSession(未登录)→ run_parameter_write_pipeline 内部 _login。
-                # 必须先由 UBUS 打开样机的 telnet 监听（默认防火墙禁用），再同步建立 TCP 连接，否则 192.168.1.1:23 会 timed out。
-                # 启用失败(典型:UBUS HTTP 请求失败 ... timed out)允许重试 3 次,
-                # 每次重试前 sleep 2 秒,给样机防火墙 reload / telnetd 启动留缓冲。
-                emit_to_main(f"{r.vlan} 写参前置：UBUS 启用 telnet 中 ({r.device_host})。")
-                enable_result = None
-                for _attempt in range(1, UBUS_ENABLE_TELNET_MAX_RETRIES + 2):
-                    if _attempt > 1:
-                        emit_to_main(
-                            f"{r.vlan} UBUS 启用 telnet 第 {_attempt - 1}/{UBUS_ENABLE_TELNET_MAX_RETRIES} 次重试,"
-                            f"等待 {UBUS_ENABLE_TELNET_RETRY_DELAY_SECONDS} 秒..."
-                        )
-                        time.sleep(UBUS_ENABLE_TELNET_RETRY_DELAY_SECONDS)
-                    ubus_client = UbusHttpClient(r.bind_ip, r.device_host, ubus_port=r.ubus_port)
-                    try:
-                        try:
-                            enable_result = enable_telnet_via_ubus(
-                                ubus_client,
-                                r.initial_username,
-                                r.initial_password,
-                                on_log=lambda ev: emit_to_main(f"{r.vlan} UBUS: {ev.message}"),
-                                sleep_fn=lambda _seconds: None,
-                                sleep_after_seconds=0.0,
-                            )
-                        finally:
-                            ubus_client.close()
-                        break  # 成功,跳出重试循环
-                    except Exception as exc:
-                        emit_to_main(f"{r.vlan} 写参前置：UBUS 启用 telnet 失败：{exc}")
-                        if _attempt > UBUS_ENABLE_TELNET_MAX_RETRIES:
-                            raise  # 已用完全部 3 次重试
-                emit_to_main(f"{r.vlan} UBUS 启用 telnet {enable_result.action}: {enable_result.message}")
-                return TelnetSession(
-                    r.bind_ip,
-                    r.device_host,
-                    log_path=log_path,
-                    known_secrets=(r.initial_password,),
-                )
-            return factory
-
-        def make_factory_session_swap(request):
-            """工厂模式 100 秒等待后的会话切换回调。
-
-            流程:
-              1. 关闭旧 TelnetSession(样机管理 IP 已切到工厂模式网段,旧 socket 已无意义);
-              2. 调用 ``prepare_network_for_sample`` 把 PC VLAN 网卡切到
-                 ``request.factory_bind_ip / factory_device_host`` 同一网段;
-              3. 调用 ``wait_for_bindable_ip`` 等 Windows 把新 IP 注册为可绑定地址;
-              4. 创建新 TelnetSession 指向工厂模式管理 IP 后返回。
-            失败时 (缺字段 / 切网段失败 / 新建会话失败) 返回 None,pipeline 视作放弃本台。
-            """
-            if not request.factory_bind_ip or not request.factory_device_host:
-                emit_to_main(f"{request.vlan} 工厂模式网段切换：缺少 factory_bind_ip / factory_device_host,放弃本台。")
-                return None
-
-            def swap(old_session):
-                # 关闭旧会话;失败也继续(本来就可能已断)。
-                try:
-                    old_session.close()
-                except Exception as exc:
-                    emit_to_main(f"{request.vlan} 工厂模式网段切换：关闭旧 TelnetSession 异常(忽略):{exc}")
-
-                adapter_alias = self._adapter_alias_for_vlan(request.vlan)
-                subnet_mask = self._subnet_mask_for_vlan(request.vlan)
-                if not adapter_alias:
-                    emit_to_main(f"{request.vlan} 工厂模式网段切换：未找到 VLAN {request.vlan} 的 adapter_alias,放弃本台。")
-                    return None
-                emit_to_main(
-                    f"{request.vlan} 工厂模式网段切换：准备把 {adapter_alias} 设为 {request.factory_bind_ip}（{subnet_mask or '255.255.255.0'}）,"
-                    f"样机目标 {request.factory_device_host}。"
-                )
-                result = prepare_network_for_sample(
-                    adapter_alias,
-                    request.factory_bind_ip,
-                    subnet_mask,
-                    on_output=emit_to_main,
-                    sleep_fn=time.sleep,
-                    reuse_if_ready=True,
-                )
-                if not result.ok:
-                    emit_to_main(f"{request.vlan} 工厂模式网段切换失败：{result.message}")
-                    return None
-                if not _wait_for_bindable_ip(request.factory_bind_ip, timeout_seconds=15.0):
-                    emit_to_main(
-                        f"{request.vlan} 工厂模式网段切换：{request.factory_bind_ip} 仍未成为可绑地址,放弃本台。"
-                    )
-                    return None
-                new_log_path = DEFAULT_LOG_DIR / f"sample_parameter_{request.vlan}_{request.factory_bind_ip}.log"
-                try:
-                    new_session = TelnetSession(
-                        request.factory_bind_ip,
-                        request.factory_device_host,
-                        log_path=new_log_path,
-                        known_secrets=(request.initial_password,),
-                    )
-                except Exception as exc:
-                    emit_to_main(f"{request.vlan} 工厂模式重建 TelnetSession 失败：{exc}")
-                    return None
-                emit_to_main(
-                    f"{request.vlan} 工厂模式重建 TelnetSession 成功（{request.factory_bind_ip} → {request.factory_device_host}）。"
-                )
-                return new_session
-            return swap
-
-        results: list[SampleParameterItemResult | None] = [None] * len(requests)
-
-        if serial_indices:
-            serial_requests = [requests[i] for i in serial_indices]
-            serial_results = run_parallel_sample_parameter_writes(
-                serial_requests,
-                self.serial_session_manager,
-                parallel_count=parallel_count,
-                on_output=emit_to_main,
-                on_session_ready=lambda vlan, session, log_path: self.after(
-                    0, lambda vlan=vlan, session=session, log_path=log_path: self._attach_serial_upgrade(vlan, session, log_path)
-                ),
-                cancel_event=cancel_event,
-            )
-            for offset, serial_index in enumerate(serial_indices):
-                results[serial_index] = serial_results[offset]
-
-        if telnet_indices:
-            telnet_requests = [requests[i] for i in telnet_indices]
-            with ThreadPoolExecutor(max_workers=min(parallel_count, len(telnet_requests)), thread_name_prefix="sample-parameter-telnet") as executor:
-                # 错峰启动(2026-07-18 P2 缓解): 第 1 个 worker 立即 submit,后续每个 worker
-                # 在 submit 前 sleep PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS,避免 8 台同 t=0
-                # 触发网络准备 + UBUS 4 段 HTTP + telnet login 把网卡/防火墙挤爆。
-                telnet_futures: dict = {}
-                for offset, req in enumerate(telnet_requests):
-                    if offset > 0:
-                        time.sleep(PARAMETER_PARALLEL_STARTUP_STAGGER_SECONDS)
-                    future = executor.submit(
-                        run_single_sample_parameter_write,
-                        req,
-                        self.serial_session_manager,
-                        emit_to_main,
-                        None,
-                        cancel_event,
-                        time.sleep,
-                        make_telnet_factory(req),
-                        make_factory_session_swap(req),
-                    )
-                    telnet_futures[future] = telnet_indices[offset]
-                for future in as_completed(telnet_futures):
-                    telnet_results_index = telnet_futures[future]
-                    try:
-                        results[telnet_results_index] = future.result()
-                    except Exception as exc:
-                        req = requests[telnet_results_index]
-                        results[telnet_results_index] = SampleParameterItemResult(
-                            req, False, f"{req.vlan} telnet 写参启动失败：{exc}",
-                            cancelled=cancel_event.is_set(),
-                        )
-
-        final = [r if isinstance(r, SampleParameterItemResult) else SampleParameterItemResult(requests[idx], False, "未运行") for idx, r in enumerate(results)]
+        network = {request.vlan.lower(): (self._adapter_alias_for_vlan(request.vlan), self._subnet_mask_for_vlan(request.vlan)) for request in requests}
+        final = run_sample_parameter_batch(requests, parallel_count, cancel_event,
+            self.serial_session_manager, network, self.log_queue.put,
+            on_session_ready=lambda vlan, session, log_path: self.after(
+                0, lambda vlan=vlan, session=session, log_path=log_path: self._attach_serial_upgrade(vlan, session, log_path)),
+            serial_runner=run_parallel_sample_parameter_writes)
         self.after(0, lambda: self._complete_sample_parameter_write(final))
 
 
@@ -2176,7 +1976,14 @@ class LineCheckAssistant(Tk):
     def _save_onu_registration_config(self) -> None:
         self.onu_save_after_id = None
         config = self._current_onu_registration_config()
-        self.onu_registration_store.save(config)
+        try:
+            self.onu_registration_store.save(config)
+        except Exception as exc:
+            from src.core.host_resource_lock import HostResourceBusy
+            if not isinstance(exc, HostResourceBusy):
+                raise
+            self._log('[ONU配置] 另一实例正在保存同一配置，本次未写入，保留当前输入，请稍后保存。')
+            return
         self.onu_registration_config = config
 
     def _bind_sample_upgrade_autosave(self) -> None:
@@ -2239,7 +2046,13 @@ class LineCheckAssistant(Tk):
 
     def _save_sample_upgrade_settings(self) -> None:
         self.sample_upgrade_save_after_id = None
-        self.sample_upgrade_settings_store.save(self._current_sample_upgrade_settings())
+        try:
+            self.sample_upgrade_settings_store.save(self._current_sample_upgrade_settings())
+        except Exception as exc:
+            from src.core.host_resource_lock import HostResourceBusy
+            if not isinstance(exc, HostResourceBusy):
+                raise
+            self._log('[升级选项] 另一实例正在保存同一配置，本次未写入，保留当前输入，请稍后保存。')
 
     def _open_onu_registration_module(self) -> None:
         if self.onu_registration_window is not None and self.onu_registration_window.winfo_exists():
@@ -2898,6 +2711,8 @@ class LineCheckAssistant(Tk):
             return
         if self.onu_family_var.get() != OLT_FAMILY_C300:
             return
+        if not LineCheckAssistant._pipeline_admit_action(self):
+            return
         self.onu_cleanup_query_running = True
         self.onu_cancel_event = threading.Event()
         self._clear_c300_cleanup_candidates()
@@ -2973,6 +2788,8 @@ class LineCheckAssistant(Tk):
             parent=self.onu_registration_window,
         )
         if not confirmed:
+            return
+        if not LineCheckAssistant._pipeline_admit_action(self):
             return
         self.onu_manage_query_running = True
         self.onu_cancel_event = threading.Event()
@@ -3054,6 +2871,8 @@ class LineCheckAssistant(Tk):
             return
         if LineCheckAssistant._onu_operation_is_running(self) or self.onu_registered_query_context != context:
             self._set_onu_query_status("确认期间目标或任务状态已变化，请重新查询", COLOR_WARNING)
+            return
+        if not LineCheckAssistant._pipeline_admit_action(self):
             return
         self.onu_manage_delete_running = True
         self.onu_cancel_event = threading.Event()
@@ -3262,6 +3081,8 @@ class LineCheckAssistant(Tk):
         if not confirmed:
             return
 
+        if not LineCheckAssistant._pipeline_admit_action(self):
+            return
         self.onu_telnet_test_running = True
         self.onu_cancel_event = threading.Event()
         self._set_onu_telnet_status(f"正在登录 {family}：{connection.host}:23", COLOR_WARNING)
@@ -3306,6 +3127,8 @@ class LineCheckAssistant(Tk):
             parent=self.onu_registration_window,
         )
         if not confirmed:
+            return
+        if not LineCheckAssistant._pipeline_admit_action(self):
             return
         self.onu_template_query_running = True
         self.onu_cancel_event = threading.Event()
@@ -3368,6 +3191,8 @@ class LineCheckAssistant(Tk):
         if not confirmed:
             return
 
+        if not LineCheckAssistant._pipeline_admit_action(self):
+            return
         self.onu_query_running = True
         self.onu_cancel_event = threading.Event()
         self._set_onu_query_status(f"正在查询 {family} 未注册 ONU...", COLOR_WARNING)
@@ -3562,6 +3387,8 @@ class LineCheckAssistant(Tk):
             _finish_pipeline_subtask_if_waiting(self, "onu_registration", True, result.message)
             return
 
+        if not LineCheckAssistant._pipeline_admit_action(self):
+            return
         self.onu_save_olt_running = True
         self._set_onu_query_status("正在执行 write 保存 OLT 最新配置...", COLOR_WARNING)
         self._set_onu_registration_action_buttons_state("disabled")
@@ -4230,8 +4057,9 @@ class LineCheckAssistant(Tk):
 
         self.log_queue.put(f"开始 UBUS 页面升级，共 {total} 台样机。")
         try:
-            results = run_page_upgrade_batch(
+            results = dispatch_upgrade(
                 requests,
+                None, parallel_count=None, engines={"页面升级": run_page_upgrade_batch},
                 on_output=lambda line: self.log_queue.put(line),
                 on_item_complete=on_item_complete,
                 **({"stop_control": run.control} if run else {}),
@@ -4500,10 +4328,10 @@ class LineCheckAssistant(Tk):
             refresh_status()
 
         try:
-            results = run_parallel_tftp_command_upgrades(
+            results = dispatch_upgrade(
                 requests,
                 self.serial_session_manager,
-                max_workers=max_workers,
+                parallel_count=max_workers, engines={TFTP_COMMAND_TRANSFER: run_parallel_tftp_command_upgrades},
                 on_output=lambda vlan, line: self.log_queue.put(f"[{vlan}] {line}"),
                 on_session_ready=lambda vlan, session, log_path: LineCheckAssistant._post_upgrade_ui(
                     self, run, lambda vlan=vlan, session=session, log_path=log_path: self._attach_serial_upgrade(vlan, session, log_path)
@@ -4574,10 +4402,10 @@ class LineCheckAssistant(Tk):
             refresh_status()
 
         try:
-            results = (runner or run_parallel_tftp_put_upgrades)(
+            results = dispatch_upgrade(
                 requests,
                 self.serial_session_manager,
-                max_workers=max_workers,
+                parallel_count=max_workers, engines={requests[0].transfer_method: runner or run_parallel_tftp_put_upgrades},
                 on_output=lambda vlan, line: self.log_queue.put(f"[{vlan}] {line}"),
                 on_session_ready=lambda vlan, session, log_path: LineCheckAssistant._post_upgrade_ui(
                     self, run, lambda vlan=vlan, session=session, log_path=log_path: self._attach_serial_upgrade(vlan, session, log_path)
@@ -4737,6 +4565,9 @@ class LineCheckAssistant(Tk):
                                else "[项目名称] 已保存名称为空，显示未设置。")
 
     def _open_test_item_config(self) -> None:
+        if any(owner.startswith('configuration:') for owner in getattr(self, '_capability_reservations', ())):
+            self._log('[测试项配置] 业务接口正在原子保存配置，请稍后打开编辑器。')
+            return
         """打开配置窗口：编辑、单次预备测试及只读项目信息查询。"""
         self._refresh_saved_project_name()
         if self.test_item_config_window is not None and self.test_item_config_window.winfo_exists():
@@ -5195,7 +5026,7 @@ class LineCheckAssistant(Tk):
                     capture(pretest=True), telnet_supplier()
                 ),
                 log=lambda text, tag: self._log(text, tag=tag),
-                is_busy=lambda: any(bool(getattr(self, name, False)) for name in (
+                is_busy=lambda: bool(getattr(self, '_capability_reservations', ())) or any(bool(getattr(self, name, False)) for name in (
                     "running", "power_on_running", "power_test_running",
                     "parameter_write_running", "sample_upgrade_running", "dut_config_running",
                 )),
@@ -5440,6 +5271,8 @@ class LineCheckAssistant(Tk):
         return {"capture": capture, "load": load}
 
     def _capture_pretest_request(self, order: OrderConfig, telnet: TelnetSettings):
+        if not LineCheckAssistant._pipeline_admit_action(self):
+            raise ValueError('独立业务任务占用资源，预备测试未启动')
         self._capture_current_channel()
         return prepare_pretest_request(self._selected_channels(), order, telnet)
 
@@ -5887,6 +5720,8 @@ class LineCheckAssistant(Tk):
             f"PC {bind_ip} → 样机 {device_host}。"
         )
 
+        if not LineCheckAssistant._pipeline_admit_action(self):
+            return
         self._project_info_query_count = getattr(self, "_project_info_query_count", 0) + 1
 
         def query_finished() -> None:
@@ -5950,6 +5785,12 @@ class LineCheckAssistant(Tk):
                       or getattr(session, "run_id", None))
             if run_id:
                 assistant.observe({"type": "diagnostic_start", "run_id": run_id})
+
+    def _start_gateway_remote(self):
+        try:
+            self._open_ai_assistant(show=False)
+        except Exception:
+            self._log("[统一接入] 启动失败，请检查配对、本地允许范围和实例槽位；未切换到直接接入")
 
     def _start_dingtalk_remote(self):
         if self.__dict__.get("_app_closing", False):
@@ -6026,6 +5867,8 @@ class LineCheckAssistant(Tk):
         ) for channel in self._selected_channels())
 
     def _ai_target_busy(self, target) -> bool:
+        if self.__dict__.get('_capability_reservations'):
+            return True
         if any(bool(self.__dict__.get(name, False)) for name in (
             "running", "power_on_running", "parameter_write_running", "dut_config_running",
             "onu_register_running", "onu_save_olt_running", "sample_upgrade_running",
@@ -6069,6 +5912,9 @@ class LineCheckAssistant(Tk):
             (request is None or getattr(request, "connect_wifi_enable", False)))
 
     def _prepare_ai_for_device_action(self) -> bool:
+        if self.__dict__.get('_capability_reservations'):
+            self._log('[业务任务] 已有独立业务正在执行或收尾，请先查看任务状态。')
+            return False
         if self.__dict__.get('_app_closing', False):
             self._log('[主界面] 程序正在退出，未启动新的设备任务。')
             return False
@@ -6308,6 +6154,8 @@ class LineCheckAssistant(Tk):
             self._log("[DUT配置] 操作员取消批量开启 Telnet，本次未下发命令。")
             return
 
+        if not LineCheckAssistant._pipeline_admit_action(self):
+            return
         self.dut_config_running = True
         self.dut_config_active_feature = "telnet"
         self.dut_config_cancel_event = threading.Event()
@@ -6466,6 +6314,8 @@ class LineCheckAssistant(Tk):
         parallel_count = clamp_dut_parallel_count(
             window.parallel_count() or DEFAULT_DUT_PARALLEL_COUNT
         )
+        if not LineCheckAssistant._pipeline_admit_action(self):
+            return
         self.dut_config_running = True
         self.dut_config_active_feature = "wan_query"
         self.dut_config_cancel_event = threading.Event()
@@ -6666,6 +6516,8 @@ class LineCheckAssistant(Tk):
             window.parallel_count() or DEFAULT_DUT_PARALLEL_COUNT
         )
         query_feature = f"{feature}_query"
+        if not LineCheckAssistant._pipeline_admit_action(self):
+            return
         self.dut_config_running = True
         self.dut_config_active_feature = query_feature
         self.dut_config_cancel_event = threading.Event()
@@ -6945,6 +6797,8 @@ class LineCheckAssistant(Tk):
             self._log(f"[DUT配置][{feature_label}配置] 操作员取消，本次未下发命令。")
             return
 
+        if not LineCheckAssistant._pipeline_admit_action(self):
+            return
         self.dut_config_running = True
         self.dut_config_active_feature = feature
         self.dut_config_cancel_event = threading.Event()
@@ -8245,7 +8099,14 @@ class LineCheckAssistant(Tk):
 
     def _persist_config(self) -> None:
         self._capture_current_channel()
-        self.store.save(self._selected_channels(), self._selected_power_serial_port())
+        try:
+            self.store.save(self._selected_channels(), self._selected_power_serial_port())
+        except Exception as exc:
+            from src.core.host_resource_lock import HostResourceBusy
+            if not isinstance(exc, HostResourceBusy):
+                raise
+            self._log('[通道配置] 其它实例正在保存相同配置，本次未覆盖；当前输入保留，请稍后重新保存。')
+            return
         self._refresh_upgrade_targets()
         self._log(f"已实时更新配置文件：{NETWORK_CONFIG_PATH}")
 
