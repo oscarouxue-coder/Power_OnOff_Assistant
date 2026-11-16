@@ -1,0 +1,29 @@
+{
+  "compiled": [
+    "src/models/dependency_repair.py",
+    "src/core/feishu_dependency_install.py",
+    "src/core/source_restart.py",
+    "src/core/feishu_stream.py",
+    "src/services/feishu_dependency_repair.py",
+    "src/services/ai_diagnostic_service.py",
+    "src/services/ai_conversation_service.py",
+    "src/services/ai_session_router.py",
+    "src/services/capability_service.py",
+    "src/services/capability_catalog.py",
+    "src/ui/feishu_dependency_dialog.py",
+    "src/ui/feishu_dependency_controller.py",
+    "src/ui/feishu_setup_window.py",
+    "src/ui/ai_assistant_controller.py",
+    "src/ui/capability_ui_bridge.py",
+    "line_check_assistant/app.py",
+    "scripts/restart_source_after_exit.py",
+    "scripts/verify_baseline.py",
+    "scripts/source_environment_guard.py",
+    "run_line_check_assistant.py",
+    "tests/test_feishu_dependency_repair.py"
+  ],
+  "inventory": "235 source files covered",
+  "capability_coverage": "CAPABILITY_COVERAGE_OK",
+  "full_baseline_run": false,
+  "diff_check": "passed; independent operator configuration changes excluded"
+}

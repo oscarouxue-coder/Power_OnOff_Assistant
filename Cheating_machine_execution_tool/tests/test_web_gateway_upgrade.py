@@ -165,8 +165,7 @@ class WebGatewayTests(unittest.TestCase):
                         folder = stack.enter_context(tempfile.TemporaryDirectory())
                         stack.enter_context(patch(prefix + "DEFAULT_LOG_DIR", Path(folder)))
                         controller = stack.enter_context(patch(prefix + "SerialUpgradeController")).return_value
-                        controller.wait_for_tftp_put_boot_username.return_value = CommandResult(True, "username")
-                        controller.login_tftp_put_boot_after_username.return_value = CommandResult(True, "boot")
+                        controller.wait_for_boot_login.return_value = CommandResult(True, "boot")
                         controller.login_final_system.return_value = CommandResult(True, "shell")
                         controller.monitor_post_tftp.return_value = reset
                         sdmc = stack.enter_context(patch(prefix + "enter_sdmc_boot", return_value=CommandResult(True, "boot")))
@@ -191,7 +190,11 @@ class WebGatewayTests(unittest.TestCase):
                         if not reset:
                             self.assertNotIn("on_delay_seconds", power.call_args.kwargs)
                         self.assertEqual(sdmc.call_count, int(boot == BOOT_ENTRY_SDMC))
-                        self.assertEqual(controller.login_tftp_put_boot_after_username.call_count, int(boot == BOOT_ENTRY_LOGIN))
+                        self.assertEqual(controller.wait_for_boot_login.call_count, int(boot == BOOT_ENTRY_LOGIN))
+                        if boot == BOOT_ENTRY_LOGIN:
+                            self.assertTrue(controller.wait_for_boot_login.call_args.args[0].is_set())
+                        controller.wait_for_tftp_put_boot_username.assert_not_called()
+                        controller.login_tftp_put_boot_after_username.assert_not_called()
                         self.assertEqual(controller.login_final_system.call_count, int(restore))
                         tftp.assert_not_called()
                         tftp_network.assert_not_called()

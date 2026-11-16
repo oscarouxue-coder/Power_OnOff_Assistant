@@ -86,6 +86,7 @@ ai.monitor|监控设置/启停/状态|_open_ai_assistant|AiMonitorService|monito
 ai.permissions|权限切换/批准/拒绝|_open_ai_assistant|AiPermissionService|human_control|manual|local_confirmation
 remote.dingtalk|钉钉配置/启停/绑定/取消|_configure_dingtalk_remote|DingTalkRemoteService|external/configuration|modify|
 remote.feishu|飞书配置/启停/绑定/取消/试发|_configure_feishu_remote|FeishuRemoteService|external/configuration|modify|
+remote.feishu_sdk_repair|安装飞书SDK并重启源码|_install_feishu_sdk|FeishuDependencyRepair|python-environment/process|manual|local_confirmation
 remote.binding_confirm|群身份绑定确认|_build_ai_remote_management|remote.confirm_binding|human_control|manual|local_confirmation
 updates.check|检查更新|_build_ui|AppUpdateService.check_for_update|external|read|
 updates.download|下载更新/取消|_build_ui|AppUpdateService.download_update|external/file|modify|
@@ -147,7 +148,8 @@ def business_catalog():
         result.append(dict(feature_id=identifier, name=name, gui_file="line_check_assistant/app.py", gui_entry=gui,
             service=service, resources=resources.split("/"), risk=risk, capability_id=capability,
             status="manual_control" if manual else "partial" if partial else "connected" if capability else "pending",
-            reason="必须由真实操作员确认，AI可准备材料但不能自我批准" if manual else
+            reason="仅本机缺包弹窗由操作员选择安装；修改运行环境并重启，AI不可触发或代确认" if identifier == 'remote.feishu_sdk_repair' else
+                   "必须由真实操作员确认，AI可准备材料但不能自我批准" if manual else
                    "仅受控接口发起的任务可按job_id查询/取消；旧GUI独立批次未接管" if identifier in old_jobs else
                    "关闭自己取得的被动监控，不关闭其它GUI标签/所有权" if identifier == "serial.close" else
                    "支持按域读取/合并保存及默认命令草稿；GUI编辑器草稿和整套重载尚未接管" if identifier == "config.reload_save" else

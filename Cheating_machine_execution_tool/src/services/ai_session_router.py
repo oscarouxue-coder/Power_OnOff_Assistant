@@ -7,6 +7,7 @@ import threading
 import time
 
 from src.models.ai_session_scope import session_scope, source_identity, target_channel, target_label
+from src.models.dependency_repair import maintenance_operation
 from src.services.ai_store import profile_fingerprint
 
 
@@ -156,6 +157,7 @@ class AiSessionRouter:
                 runtime.service.metrics.record(dict(kind="intent_route", model_calls=1,
                     total_seconds=time.monotonic() - route_started))
 
+    @maintenance_operation
     def send(self, text, profile, *, selected="", source=None, fresh=False, guard=None, on_selected=None, diagnosis_only=None):
         text = text.strip()
         if not 1 <= len(text) <= 32768:

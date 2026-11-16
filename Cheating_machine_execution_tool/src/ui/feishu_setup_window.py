@@ -1,14 +1,18 @@
 """飞书接入设置；界面仅收集输入、显示动态状态并调用service。"""
 import tkinter as tk
+import sys
 from tkinter import messagebox, ttk
 
 from src.ui.module_theme import apply_module_theme
+from src.models.dependency_repair import MissingFeishuSdkError
+from src.ui.feishu_dependency_dialog import MissingFeishuSdkDialog
 
 
 class FeishuSetupWindow:
-    def __init__(self, parent, config_store, runtime_provider, notifications, emit, *, embedded=False):
+    def __init__(self, parent, config_store, runtime_provider, notifications, emit, *, embedded=False, on_install_sdk=None):
         self.config_store, self.runtime_provider = config_store, runtime_provider
         self.notifications, self.emit = notifications, emit
+        self.on_install_sdk = on_install_sdk
         self.saved = config_store.load()
         self.window = tk.Frame(parent) if embedded else tk.Toplevel(parent)
         self.dialog_parent = self.window.winfo_toplevel()
@@ -70,6 +74,16 @@ class FeishuSetupWindow:
 
     def error(self, exc):
         self.status.set(str(exc))
+        if isinstance(exc, MissingFeishuSdkError):
+            if getattr(sys, 'frozen', False):
+                messagebox.showerror('飞书接入未完成', '当前EXE缺少飞书SDK，请下载并完整解压新版便携ZIP。', parent=self.dialog_parent)
+                return
+            if self.on_install_sdk is not None:
+                if MissingFeishuSdkDialog(self.dialog_parent).show():
+                    self.on_install_sdk()
+                else:
+                    self.emit('[飞书依赖] 操作员关闭提示，跳过安装及重启')
+                return
         messagebox.showerror("飞书接入未完成", str(exc), parent=self.dialog_parent)
 
     def save(self):

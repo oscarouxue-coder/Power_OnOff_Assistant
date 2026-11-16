@@ -160,8 +160,7 @@ class UpgradeStopTests(unittest.TestCase):
         with ExitStack() as stack:
             stack.enter_context(patch(prefix + "DEFAULT_LOG_DIR", Path(self.folder.name)))
             controller = stack.enter_context(patch(prefix + "SerialUpgradeController")).return_value
-            controller.wait_for_tftp_put_boot_username.return_value = CommandResult(True, "ready")
-            controller.login_tftp_put_boot_after_username.return_value = CommandResult(True, "ready")
+            controller.wait_for_boot_login.return_value = CommandResult(True, "ready")
             power = stack.enter_context(patch(prefix + "_power_cycle_current_channel", return_value=CommandResult(True, "power")))
             stack.enter_context(patch(prefix + "prepare_tftp_network", return_value=CommandResult(True, "network")))
             upload = stack.enter_context(patch(prefix + "upload_firmware", side_effect=lambda *args, **kwargs: self.control.request_stop()))

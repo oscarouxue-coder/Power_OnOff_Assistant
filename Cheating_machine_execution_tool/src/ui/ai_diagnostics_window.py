@@ -321,7 +321,7 @@ class AiDiagnosticsWindow:
             self._error(exc)
             return
         def fetch(stop):
-            client = DiagnosticModelClient(profile, key, self.service.redactor)
+            client = DiagnosticModelClient(profile, key, self.service.redactor, emit=self.service.emit)
             try:
                 return profile, refresh_model_context(self.service.store, client, stop)
             finally:
@@ -342,7 +342,7 @@ class AiDiagnosticsWindow:
             self._error(exc)
             return
         def test(stop):
-            client = DiagnosticModelClient(profile, key, self.service.redactor)
+            client = DiagnosticModelClient(profile, key, self.service.redactor, emit=self.service.emit)
             try:
                 capability, detail = client.test_connection(stop)
                 return profile, capability, detail

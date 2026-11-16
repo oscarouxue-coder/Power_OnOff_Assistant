@@ -2,7 +2,7 @@
 
 本表由 scripts/verify_capability_coverage.py 生成；登记、自动化验证和现场验收分别判断。
 
-业务清单 86 项；已有接口 63 项；部分接入 15 项；待接入 5 项；人工控制面 3 项。
+业务清单 87 项；已有接口 63 项；部分接入 15 项；待接入 5 项；人工控制面 4 项。
 现有诊断/交互接口不代表该组所有管理动作已开放；部分接入见限制列，不将分组数字称为最终覆盖率。
 
 | 功能ID | GUI业务 | 真实入口 | 业务实现 | AI接口 | 状态/限制 | 资源/风险 | 自动化测试入口 |
@@ -90,13 +90,14 @@
 | ai.permissions | 权限切换/批准/拒绝 | _open_ai_assistant | AiPermissionService | local_confirmation | manual_control：必须由真实操作员确认，AI可准备材料但不能自我批准 | human_control/manual | 待接入/人工控制，无执行验收 |
 | remote.dingtalk | 钉钉配置/启停/绑定/取消 | _configure_dingtalk_remote | DingTalkRemoteService | 待接入 | pending：远程业务调用已校验真实来源；接入配置/启停属于授权控制面，尚需本地审阅后的专用适配 | external/configuration/modify | 待接入/人工控制，无执行验收 |
 | remote.feishu | 飞书配置/启停/绑定/取消/试发 | _configure_feishu_remote | FeishuRemoteService | 待接入 | pending：远程业务调用已校验真实来源；接入配置/启停属于授权控制面，尚需本地审阅后的专用适配 | external/configuration/modify | 待接入/人工控制，无执行验收 |
+| remote.feishu_sdk_repair | 安装飞书SDK并重启源码 | _install_feishu_sdk | FeishuDependencyRepair | local_confirmation | manual_control：仅本机缺包弹窗由操作员选择安装；修改运行环境并重启，AI不可触发或代确认 | python-environment/process/manual | 待接入/人工控制，无执行验收 |
 | remote.binding_confirm | 群身份绑定确认 | _build_ai_remote_management | remote.confirm_binding | local_confirmation | manual_control：必须由真实操作员确认，AI可准备材料但不能自我批准 | human_control/manual | 待接入/人工控制，无执行验收 |
 | updates.check | 检查更新 | _build_ui | AppUpdateService.check_for_update | updates.check | connected：已有受控接口，真实Windows/模型/DUT验收另列 | external/read | test_capability_application.py；Windows/真实模型及设备待验收 |
 | updates.download | 下载更新/取消 | _build_ui | AppUpdateService.download_update | updates.download | partial：原更新服务校验及取消共用；AI仅下载到受控工作区，任意目标目录授权待接入 | external/file/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
 
 ## GUI动作审查
 
-当前审查快照包含 311 个按钮/菜单/绑定/变量回调。新增或改变入口会使门禁失败。
+当前审查快照包含 316 个按钮/菜单/绑定/变量回调。新增或改变入口会使门禁失败。
 界面辅助动作（窗口显隐/滚动/复制/显密/清屏等）不计业务覆盖；动态控件须结合运行测试复核。
 
 ## 当前阶段

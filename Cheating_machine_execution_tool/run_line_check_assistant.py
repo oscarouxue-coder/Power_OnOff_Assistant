@@ -13,6 +13,16 @@ if __name__ == "__main__":
             parser.error("统一接入槽位须为1至64")
         os.environ["LINECHECK_GATEWAY_SLOT"] = str(args.gateway_slot)
 
+    import sys
+    if not getattr(sys, 'frozen', False):
+        from scripts.source_environment_guard import ensure_source_environment_available
+        try:
+            ensure_source_environment_available()
+        except RuntimeError as exc:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, str(exc), '暂不能启动程序', 0x10)
+            raise SystemExit(1)
+
     from line_check_assistant.app import main
 
     main()

@@ -1,0 +1,12 @@
+Validation environment: C:\Users\Administrator\AppData\Local\LineCheckAssistant\feishu-repair-validation-py39
+[飞书依赖] 下发：C:\Users\Administrator\AppData\Local\LineCheckAssistant\feishu-repair-validation-py39\Scripts\python.exe -I -X utf8 -m pip uninstall -y lark-oapi
+SDK_MISSING_BEFORE_REPAIR
+[飞书依赖] 正在下载SDK及必要依赖，所有版本受项目锁定清单约束
+[飞书依赖] 下发：C:\Users\Administrator\AppData\Local\LineCheckAssistant\feishu-repair-validation-py39\Scripts\python.exe -I -X utf8 -m pip download --disable-pip-version-check --only-binary=:all: --timeout 15 --retries 1 --dest C:\Users\ADMINI~1\AppData\Local\Temp\linecheck-feishu-zvmpy9ff\wheels --constraint C:\Users\ADMINI~1\AppData\Local\Temp\linecheck-feishu-zvmpy9ff\constraints.txt lark-oapi==1.7.5
+[飞书依赖] 下载检查通过，开始离线安装
+[飞书依赖] 下发：C:\Users\Administrator\AppData\Local\LineCheckAssistant\feishu-repair-validation-py39\Scripts\python.exe -I -X utf8 -m pip install --disable-pip-version-check --no-index --no-deps --force-reinstall C:\Users\ADMINI~1\AppData\Local\Temp\linecheck-feishu-zvmpy9ff\wheels\lark_oapi-1.7.5-py3-none-any.whl
+[飞书依赖] 正在验证SDK真实导入、锁定版本及依赖一致性
+[飞书依赖] 下发：C:\Users\Administrator\AppData\Local\LineCheckAssistant\feishu-repair-validation-py39\Scripts\python.exe -I -X utf8 -c "import asyncio,importlib.metadata; asyncio.set_event_loop(asyncio.new_event_loop()); import lark_oapi.ws.client; from lark_oapi.core.const import VERSION; assert VERSION == '1.7.5'; import websockets.sync.client; assert all(importlib.metadata.version(n) == v for n,v in {'anyio': '4.12.1', 'certifi': '2023.5.7', 'charset-normalizer': '3.1.0', 'exceptiongroup': '1.3.1', 'h11': '0.16.0', 'httpcore': '1.0.9', 'httpx': '0.28.1', 'idna': '3.4', 'lark-oapi': '1.7.5', 'pycryptodome': '3.23.0', 'requests': '2.31.0', 'requests-toolbelt': '1.0.0', 'typing-extensions': '4.16.0', 'urllib3': '2.0.2', 'websockets': '15.0.1'}.items())"
+[飞书依赖] 下发：C:\Users\Administrator\AppData\Local\LineCheckAssistant\feishu-repair-validation-py39\Scripts\python.exe -I -X utf8 -m pip check
+[飞书依赖] 安装及验证成功
+REAL_FEISHU_REPAIR_OK; no application was restarted

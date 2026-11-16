@@ -358,6 +358,8 @@ class LineCheckAssistant(Tk):
     def __init__(self) -> None:
         icon_messages = set_taskbar_application_id()
         super().__init__()
+        from src.models.dependency_repair import MaintenanceGate
+        self._source_maintenance_gate = MaintenanceGate()
         icon_messages.extend(apply_application_icon(self))
         self.title(MAIN_WINDOW_TITLE)
         self.geometry("1200x780")
@@ -584,6 +586,10 @@ class LineCheckAssistant(Tk):
             return
 
     def _on_app_close(self) -> None:
+        repair = self.__dict__.get('_feishu_dependency_controller')
+        if repair is not None and repair.prevents_close:
+            messagebox.showinfo('正在安装飞书SDK', '请等待安装结束，当前不会退出程序。', parent=self)
+            return
         rename_dialog = getattr(self, "adapter_rename_dialog", None)
         if rename_dialog is not None and not rename_dialog.can_close():
             return
@@ -730,6 +736,10 @@ class LineCheckAssistant(Tk):
 
     def _pipeline_admit_action(self) -> bool:
         """Recheck after modal dialogs, immediately before starting real work."""
+        gate = self.__dict__.get('_source_maintenance_gate')
+        if gate is not None and gate.active:
+            self._log('[飞书依赖] 正在安装或等待重启，本次GUI任务未启动')
+            return False
         if self.__dict__.get('_capability_reservations'):
             logger = getattr(self, '_log', None)
             if callable(logger):
@@ -5821,7 +5831,16 @@ class LineCheckAssistant(Tk):
                 on_saved=self._sync_ai_message_push, embedded=True),
             lambda host: FeishuSetupWindow(host, FeishuConfigStore(APP_DIR),
                 lambda: getattr(self.__dict__.get("ai_assistant"), "feishu_remote", None),
-                self._feishu_notification_service(), self._log, embedded=True), self._log)
+                self._feishu_notification_service(), self._log, embedded=True,
+                on_install_sdk=lambda: LineCheckAssistant._install_feishu_sdk(self)), self._log)
+
+    def _install_feishu_sdk(self):
+        from src.ui.feishu_dependency_controller import FeishuDependencyController
+        controller = self.__dict__.get('_feishu_dependency_controller')
+        if controller is None:
+            controller = self._feishu_dependency_controller = FeishuDependencyController(
+                self, APP_DIR, self._source_maintenance_gate)
+        controller.start()
 
     def _sync_ai_message_push(self, config):
         control = self.__dict__.get("_message_push_control")
@@ -5867,6 +5886,9 @@ class LineCheckAssistant(Tk):
         ) for channel in self._selected_channels())
 
     def _ai_target_busy(self, target) -> bool:
+        gate = self.__dict__.get('_source_maintenance_gate')
+        if gate is not None and gate.active:
+            return True
         if self.__dict__.get('_capability_reservations'):
             return True
         if any(bool(self.__dict__.get(name, False)) for name in (
@@ -8382,6 +8404,13 @@ class LineCheckAssistant(Tk):
 def main() -> None:
     app = LineCheckAssistant()
     app.mainloop()
+    repair = vars(app).get('_feishu_dependency_controller')
+    if repair is not None and repair.restart_requested:
+        from src.core.source_restart import launch_restart_helper
+        try:
+            launch_restart_helper(APP_DIR, repair.arguments, cwd=repair.cwd)
+        except Exception:
+            messagebox.showerror('重启未完成', 'SDK已安装，自动重启助手启动失败，请从原源码入口手动启动程序。')
 
 
 if __name__ == "__main__":

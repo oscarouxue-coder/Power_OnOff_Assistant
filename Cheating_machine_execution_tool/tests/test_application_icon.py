@@ -9,6 +9,7 @@ import tempfile
 import textwrap
 import tkinter as tk
 import unittest
+import zlib
 from unittest.mock import Mock, call, patch
 
 from src.ui import application_icon as icons
@@ -97,7 +98,40 @@ class ApplicationIconTests(unittest.TestCase):
                 str(ROOT / "scripts/create_application_icon.ps1"), "-OutputIco", str(output)],
                 cwd=directory, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertEqual(output.read_bytes(), icons.application_icon_path().read_bytes())
+            expected = icons.application_icon_path().read_bytes()
+            actual = output.read_bytes()
+            self.assertEqual(actual[:6], expected[:6])
+            count = struct.unpack_from("<H", expected, 4)[0]
+            for index in range(count):
+                entries = [struct.unpack_from("<BBBBHHII", data, 6 + 16 * index)
+                           for data in (actual, expected)]
+                self.assertEqual(entries[0][:6], entries[1][:6])
+                frames = [data[entry[7]:entry[7] + entry[6]]
+                          for data, entry in zip((actual, expected), entries)]
+                if entries[0][0] != 0:
+                    self.assertEqual(frames[0], frames[1])
+                    continue
+                # Windows PNG encoders may produce different zlib streams for
+                # identical scanlines. Keep metadata, CRCs and image data strict.
+                decoded = []
+                for frame in frames:
+                    self.assertEqual(frame[:8], b"\x89PNG\r\n\x1a\n")
+                    offset, metadata, compressed = 8, [], []
+                    while offset < len(frame):
+                        length = struct.unpack_from(">I", frame, offset)[0]
+                        chunk = frame[offset + 4:offset + 8 + length]
+                        crc = struct.unpack_from(">I", frame, offset + 8 + length)[0]
+                        self.assertEqual(zlib.crc32(chunk) & 0xffffffff, crc)
+                        if chunk[:4] == b"IDAT":
+                            compressed.append(chunk[4:])
+                        else:
+                            metadata.append(chunk)
+                        offset += length + 12
+                    self.assertEqual(offset, len(frame))
+                    decoded.append((metadata, zlib.decompress(b"".join(compressed))))
+                self.assertEqual(decoded[0], decoded[1])
+            for data, entry in zip((actual, expected), entries):
+                self.assertEqual(entry[7] + entry[6], len(data))
 
     def test_both_window_icons_are_set_without_binding_events_or_scheduling_callbacks(self):
         window = Mock()

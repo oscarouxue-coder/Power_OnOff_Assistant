@@ -51,8 +51,14 @@ class CheckResult(NamedTuple):
 
 # 1. py_compile 文件清单(以 `ACCEPTANCE_BASELINE.md §0` + 当前 `src/` / `line_check_assistant/`
 #    下全部 .py 为准;新增 .py 后必须手工补到本列表)。
-PY_COMPILE_SCRIPT_FILES: tuple[str, ...] = ('scripts/run_remote_gateway.py', 'run_line_check_assistant.py')
+PY_COMPILE_SCRIPT_FILES: tuple[str, ...] = ('scripts/run_remote_gateway.py', 'scripts/restart_source_after_exit.py', 'scripts/source_environment_guard.py', 'run_line_check_assistant.py')
 PY_COMPILE_FILES: tuple[str, ...] = (
+    "src/models/dependency_repair.py",
+    "src/core/feishu_dependency_install.py",
+    "src/core/source_restart.py",
+    "src/services/feishu_dependency_repair.py",
+    "src/ui/feishu_dependency_dialog.py",
+    "src/ui/feishu_dependency_controller.py",
     "src/core/host_resource_lock.py",
     "src/core/remote_gateway_transport.py",
     "src/models/remote_gateway.py",
@@ -130,6 +136,7 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/ui/ai_chat_status.py",
     "src/ui/ai_session_manager.py",
     "src/core/ai_client.py",
+    "src/core/ai_gateway_network.py",
     "src/core/ai_credentials.py",
     "src/core/ai_debug_transport.py",
     "src/services/ai_store.py",

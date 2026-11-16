@@ -189,6 +189,7 @@ class SerialUpgradeController:
         self.session = StopAwareSerialSession(session, stop_control, self._cancel) if stop_control else session
         self.sleep = (lambda seconds: stop_control.sleep(seconds, sleep_fn)) if stop_control else sleep_fn
         self._monotonic_fn = monotonic_fn
+        self._tftp_put_boot_prompt_cursor: int | None = None
 
     def cancel(self) -> None:
         self._cancel.set()
@@ -419,25 +420,59 @@ class SerialUpgradeController:
                 return True
         return False
 
+    def _begin_tftp_put_boot_observation(self) -> None:
+        # 在上电前保留观察起点，不影响 Tftp指令 或 SDMC 分支的游标时序。
+        self._tftp_put_boot_prompt_cursor = self.session.cursor()
+
+    def _latest_tftp_put_boot_prompt(self) -> str | None:
+        """按到达顺序取本轮最后一个完整登录提示，不能优先命中旧 UserName。"""
+        if self._tftp_put_boot_prompt_cursor is None:
+            return None
+        text = self.session.peek_since(self._tftp_put_boot_prompt_cursor)
+        prompts = list(re.finditer(r"username:|user name:|password:|passvord:", text, re.I))
+        return prompts[-1].group().lower() if prompts else None
+
     def wait_for_tftp_put_boot_username(self, timeout_seconds: float = BOOT_LOGIN_TIMEOUT_SECONDS) -> CommandResult:
-        """仅供 Tftp Put 使用：循环回车，等待同事流程使用的 UserName 提示符。"""
-        cursor = self.session.cursor()
-        deadline = time.monotonic() + timeout_seconds
-        while time.monotonic() < deadline and not self._cancel.is_set():
+        """保留旧兼容入口；实际升级流程统一使用 wait_for_boot_login。"""
+        if self._tftp_put_boot_prompt_cursor is None:
+            self._begin_tftp_put_boot_observation()
+        cursor = self._tftp_put_boot_prompt_cursor
+        deadline = self._monotonic_fn() + timeout_seconds
+        prompt = None
+        while self._monotonic_fn() < deadline and not self._cancel.is_set():
+            # 发送前再次检查，避免在两轮交界或上电等待期间已收到提示仍补发回车。
+            prompt = self._latest_tftp_put_boot_prompt()
+            if prompt:
+                break
             self.session.write(b"\r")
-            username_prompt = self.session.wait_for_any(BOOT_USERNAME_PROMPTS, 1.0, cursor)
-            if username_prompt in BOOT_USERNAME_PROMPTS:
-                return CommandResult(True, "检测到 UserName 提示符。")
+            self.sleep(min(0.5, max(0.0, deadline - self._monotonic_fn())))
+            if self._cancel.is_set():
+                break
+            # 接收线程在半秒内持续收集；此处只检查，不再追加等待或回车。
+            found = self.session.wait_for_any(BOOT_USERNAME_PROMPTS + BOOT_PASSWORD_PROMPTS, 0, cursor)
+            prompt = self._latest_tftp_put_boot_prompt() or found
+            if prompt:
+                break
+        if self._cancel.is_set():
+            return CommandResult(False, "等待 UserName 提示符已取消，已停止循环回车。")
+        if prompt in BOOT_PASSWORD_PROMPTS:
+            return CommandResult(False, "boot 登录提示符错位：发送账号前已出现 Password 提示符，已停止循环回车和凭据发送。")
+        if prompt in BOOT_USERNAME_PROMPTS:
+            return CommandResult(True, "检测到 UserName 提示符，已停止循环回车。")
         return CommandResult(False, "等待 UserName 提示符超时，未进入 boot 登录阶段。")
 
     def login_tftp_put_boot_after_username(self) -> CommandResult:
-        """仅供 Tftp Put 使用：复用同事 serial_upgrade.py 的 UserName 后 boot 登录时序。"""
+        """保留旧兼容入口；实际升级流程统一使用 wait_for_boot_login。"""
         for attempt in range(1, 4):
             try:
+                if self._cancel.is_set():
+                    return CommandResult(False, "boot 登录已取消，已停止凭据发送。")
                 # 同事脚本在 UserName: 后直接发送账号加回车，随后等待 Password:。
                 # 游标必须在写用户名之前取得：部分样机在用户名回显的同一批数据中
                 # 已输出 Password:；若等到写入后再取游标，会把该提示当成旧数据跳过。
                 password_cursor = self.session.cursor()
+                if self._latest_tftp_put_boot_prompt() in BOOT_PASSWORD_PROMPTS:
+                    return CommandResult(False, "boot 登录提示符错位：发送账号前已出现 Password 提示符，已停止凭据发送。")
                 self.session.write(f"{BOOT_USERNAME}\r".encode("utf-8"))
                 self.sleep(0.3)
                 password_prompt = self.session.wait_for_any(BOOT_PASSWORD_PROMPTS, 10, password_cursor)
@@ -454,6 +489,8 @@ class SerialUpgradeController:
                 # 因此也必须在写密码前记录游标，不能等 1 秒后再开始等待。
                 result_cursor = self.session.cursor()
                 self.session.write(f"{BOOT_PASSWORD}\r".encode("utf-8"), sensitive=True)
+                # 若设备返回 UserName 而重试，只检查本次密码提交后的新登录阶段。
+                self._tftp_put_boot_prompt_cursor = result_cursor
                 self.sleep(1.0)
                 result = self.session.wait_for_any(TFTP_PUT_BOOT_RESULT_PROMPTS, 12, result_cursor)
                 if result in ("=>", "ecnt>", "u-boot>", "#", ">"):
@@ -876,9 +913,8 @@ def run_single_full_package_upgrade(
                 stop_control=stop_control,
             )
 
-        # Tftp Put(本机推到 192.168.1.1):先对当前通道下电 + 上电；
-        # 串口看到 UserName 后，按同事 serial_upgrade.py 的 boot 登录时序进入 shell，
-        # 上传仍使用主程序的 TFTPy Client。
+        # Tftp Put / web打开网关：先对当前通道下电 + 上电，
+        # 传统 Boot 登录复用 Tftp指令 的同一入口与时序。
         power_enabled = bool((request.power_serial_port or "").strip())
         if power_enabled:
             emit(
@@ -916,11 +952,13 @@ def run_single_full_package_upgrade(
             if not boot_login.ok:
                 return boot_login
         else:
-            username_prompt = controller.wait_for_tftp_put_boot_username()
-            if not username_prompt.ok:
-                return username_prompt
-            emit("检测到 UserName 提示符，开始使用 boot 用户名和密码登录。")
-            boot_login = controller.login_tftp_put_boot_after_username()
+            # 此分支电源调用已返回；用已就绪事件同步复用现有登录入口，
+            # 不新建线程，也不改变 Tftp指令 分支的事件/线程与游标时序。
+            power_started = threading.Event()
+            power_started.set()
+            emit("开始循环回车并按提示符登录 Boot。")
+            boot_login = controller.wait_for_boot_login(power_started)
+            emit(boot_login.message)
             if stop_control:
                 stop_control.checkpoint()
             if not boot_login.ok:

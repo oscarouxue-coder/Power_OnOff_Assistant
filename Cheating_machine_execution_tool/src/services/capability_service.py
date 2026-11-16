@@ -5,6 +5,7 @@ import threading
 import os
 
 from src.models.capabilities import CapabilitySpec, CapabilityError, object_schema, fingerprint
+from src.models.dependency_repair import maintenance_operation
 from src.services.capability_registry import CapabilityRegistry
 from src.services.capability_metrics import CapabilityMetrics
 from src.services.capability_jobs import CapabilityJobs
@@ -113,6 +114,7 @@ class CapabilityService:
                         channel_ids=value["arguments"]["channel_ids"])
         return dict(ok=True, capability_id=identifier, risk=spec.risk)
 
+    @maintenance_operation
     def execute(self, identifier, arguments, authority):
         spec = self.registry.validate(identifier, arguments)
         authority.check(arguments.get("channel_ids", ()), spec.risk)

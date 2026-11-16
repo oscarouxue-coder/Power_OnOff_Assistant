@@ -10,6 +10,7 @@ from src.core.ai_network_probe import read_network_state, probe_connectivity
 from src.core.ai_client import ContextLengthError
 from src.models.ai_conversation import ASK_USER_TOOL, ConversationMessage, DiagnosticEvidence, timestamp
 from src.models.ai_diagnostics import DiagnosticTarget, ProviderProfile
+from src.models.dependency_repair import maintenance_operation
 from src.services.ai_debug_service import tool_schemas
 from src.models.ai_actions import ACTION_TOOLS, ActionAssessment, action_tool_schemas
 from src.services.ai_action_service import AiActionService, REVIEW_INSTRUCTIONS, DEVICE_TOOLS
@@ -350,6 +351,7 @@ class AiConversationService:
         self.message(identifier, "system", f"已导入文本材料：{path.name}（{encoding}）；作为证据，内容不会直接执行。")
         self.emit(f"会话{identifier[:8]}导入文本成功：{path.name}")
 
+    @maintenance_operation
     def send(self, identifier, text, *, _batch_dispatch=False, diagnosis_only=None):
         if (session_scope(self.store.chat(identifier)) == "batch" and not _batch_dispatch
                 and not self.store.chat(identifier).get('capability_business_batch')):

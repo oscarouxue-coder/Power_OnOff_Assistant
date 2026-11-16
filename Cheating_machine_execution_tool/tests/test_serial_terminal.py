@@ -52,6 +52,9 @@ class SerialTerminalCloseTests(unittest.TestCase):
         self.addCleanup(self.root.destroy)
         self.manager = SerialSessionManager()
         self.logger = Mock()
+        confirmation = patch("src.ui.serial_terminal.messagebox.askokcancel", return_value=True)
+        self.confirm_close = confirmation.start()
+        self.addCleanup(confirmation.stop)
         base = Path(self.temp.name)
         self.terminal = SerialTerminalWindow(
             self.root, self.manager, base, base / "state.json", logger=self.logger,
@@ -255,6 +258,146 @@ class SerialTerminalCloseTests(unittest.TestCase):
         self.assertRegex(saved, r"\d{4}-\d\d-\d\d_\d\d:\d\d:\d\d RX unfinished\n")
         self.assertIn("STATE 串口已关闭", saved)
         self.assertIn("vlan101 / COM8", self.logger.call_args.args[0])
+        self.confirm_close.assert_called_once()
+        self.logger.assert_any_call("[串口日志] 确认关闭 vlan101 / COM8")
+
+    def test_close_icon_confirms_all_tab_states_before_any_release(self):
+        for state in ("unopened", "recording", "stopped"):
+            with self.subTest(state=state):
+                if state == "recording":
+                    self.terminal.open_all()
+                elif state == "stopped":
+                    self.terminal.stop_all()
+                    self.wait_closes()
+                item = self.terminal.tabs["vlan101"]
+                session, subscriber = item["session"], item["subscriber"]
+                selected = self.terminal.notebook.select()
+                self.confirm_close.reset_mock()
+
+                def cancel(*args, **kwargs):
+                    self.assertIs(self.terminal.tabs["vlan101"], item)
+                    self.assertIs(item["session"], session)
+                    if session is not None:
+                        self.assertIn(subscriber, session._subscribers)
+                        self.assertFalse(self.drivers["COM8"].closed)
+                    return False
+
+                self.confirm_close.side_effect = cancel
+                with patch.object(self.manager, "release", wraps=self.manager.release) as release:
+                    self.click_close("vlan101")
+                    release.assert_not_called()
+                self.confirm_close.assert_called_once_with(
+                    "确认关闭串口标签",
+                    "vlan101 / COM8\n\n关闭后将停止此标签的日志监控，已保存日志保留。是否继续？",
+                    parent=self.terminal.window, default="cancel",
+                )
+                self.assertIs(self.terminal.tabs["vlan101"], item)
+                self.assertIs(item["subscriber"], subscriber)
+                self.assertEqual(self.terminal.notebook.select(), selected)
+                self.assertNotIn("close_confirming", item)
+                self.assertIn("取消关闭 vlan101 / COM8", self.logger.call_args.args[0])
+                if state == "recording":
+                    session._emit("RX", b"after cancel\n", "after cancel\n")
+                    self.root.update()
+                    self.terminal._poll()
+                    self.assertIn("after cancel", item["output"].get("1.0", "end"))
+                    session._log_handle.flush()
+                    self.assertIn("after cancel", session.log_path.read_text(encoding="utf-8"))
+
+    def test_confirmed_close_does_not_repeat_during_ai_cleanup(self):
+        self.terminal.open_all()
+        control = self.manager.acquire_control("ai-debug", SerialSettings("COM8"))
+
+        def cancel_debug(port):
+            self.manager.release("ai-debug", port)
+            return True
+
+        self.terminal.ai_debug_cancel = Mock(side_effect=cancel_debug)
+        self.click_close("vlan101")
+        self.confirm_close.assert_called_once()
+        self.terminal.ai_debug_cancel.assert_called_once_with("COM8")
+        deadline = time.monotonic() + 2
+        while "vlan101" in self.terminal.tabs:
+            self.assertLess(time.monotonic(), deadline, "deferred close timed out")
+            self.root.update()
+            time.sleep(.001)
+        self.confirm_close.assert_called_once()
+        self.assertFalse(control._reader.is_alive())
+        self.assertIn("vlan102", self.terminal.tabs)
+        self.terminal.ai_debug_cancel = None
+
+    def test_cancel_close_does_not_cancel_ai_debug(self):
+        self.terminal.open_all()
+        self.terminal.ai_debug_cancel = Mock()
+        self.confirm_close.return_value = False
+        self.click_close("vlan101")
+        self.terminal.ai_debug_cancel.assert_not_called()
+        self.assertFalse(self.drivers["COM8"].closed)
+        self.terminal.ai_debug_cancel = None
+
+    def test_confirmation_cannot_close_replaced_or_rebound_tab(self):
+        for change in ("replace", "rebind"):
+            with self.subTest(change=change):
+                item = self.terminal.tabs["vlan101"]
+
+                def change_target(*args, **kwargs):
+                    if change == "replace":
+                        self.terminal.close_tab("vlan101")
+                    self.terminal._ensure_tab("vlan101", "COM10")
+                    return True
+
+                self.confirm_close.side_effect = change_target
+                if change == "rebind":
+                    self.terminal._ensure_tab("vlan101", "COM8")
+                self.click_close("vlan101")
+                self.assertIn("vlan101", self.terminal.tabs)
+                self.assertEqual(self.terminal.tabs["vlan101"]["port"], "COM10")
+                self.assertNotIn("close_confirming", item)
+                self.assertIn("标签状态已变化", self.logger.call_args.args[0])
+
+    def test_confirmation_does_not_repeat_for_pending_or_reentrant_close(self):
+        frame = str(self.terminal.tabs["vlan101"]["frame"])
+
+        def reenter(*args, **kwargs):
+            self.terminal._on_tab_close(frame)
+            return False
+
+        self.confirm_close.side_effect = reenter
+        self.click_close("vlan101")
+        self.confirm_close.assert_called_once()
+        self.confirm_close.reset_mock()
+        self.terminal.tabs["vlan101"]["close_ticket"] = SimpleNamespace(done=Mock(is_set=lambda: False))
+        try:
+            self.terminal._on_tab_close(frame)
+            self.confirm_close.assert_not_called()
+        finally:
+            self.terminal.tabs["vlan101"].pop("close_ticket")
+
+    def test_window_closed_during_confirmation_is_safe(self):
+        def close_window(*args, **kwargs):
+            self.terminal.close()
+            return True
+
+        self.confirm_close.side_effect = close_window
+        self.terminal._on_tab_close(str(self.terminal.tabs["vlan101"]["frame"]))
+        self.assertIsNone(self.terminal.window)
+        self.assertEqual(self.terminal.tabs, {})
+        self.assertIn("标签状态已变化", self.logger.call_args.args[0])
+
+    def test_window_and_upgrade_cleanup_close_without_tab_confirmation(self):
+        for automatic in (False, True):
+            with self.subTest(automatic=automatic):
+                self.terminal.show([("vlan101", "COM8"), ("vlan102", "COM9")])
+                self.terminal.open_all()
+                self.confirm_close.return_value = False
+                if automatic:
+                    self.terminal._auto_opened_for_upgrade = True
+                    self.terminal.finish_upgrade_logs()
+                else:
+                    self.terminal.close()
+                self.wait_closes()
+                self.confirm_close.assert_not_called()
+                self.assertIsNone(self.terminal.window)
 
     def test_close_inactive_unopened_tab_preserves_selection(self):
         book = self.terminal.notebook
@@ -386,6 +529,7 @@ class SerialTerminalCloseTests(unittest.TestCase):
         self.root.update()
         self.assertEqual(book.select(), target)
         self.assertEqual(len(self.terminal.tabs), 2)
+        self.confirm_close.assert_not_called()
 
     def test_drag_off_close_and_release_without_press_do_not_close(self):
         book = self.terminal.notebook
@@ -394,6 +538,7 @@ class SerialTerminalCloseTests(unittest.TestCase):
         book.event_generate("<ButtonRelease-1>", x=0, y=0)
         book.event_generate("<ButtonRelease-1>", x=x, y=y)
         self.assertEqual(len(self.terminal.tabs), 2)
+        self.confirm_close.assert_not_called()
 
     def test_press_one_close_release_on_another_does_not_close(self):
         book = self.terminal.notebook
@@ -402,6 +547,7 @@ class SerialTerminalCloseTests(unittest.TestCase):
         book.event_generate("<ButtonPress-1>", x=x, y=y)
         book.event_generate("<ButtonRelease-1>", x=other_x, y=other_y)
         self.assertEqual(len(self.terminal.tabs), 2)
+        self.confirm_close.assert_not_called()
 
     def test_close_icon_survives_window_reopen_and_clam_theme(self):
         self.terminal.close()
@@ -575,20 +721,36 @@ class SerialTerminalPersistenceTests(unittest.TestCase):
         self.assertEqual(result, "break")
 
     def test_command_entry_return_binding_triggers_send(self):
-        """模拟给命令输入框 bind 的 <Return> 回调：被触发时应等价于点击发送按钮。"""
-        # 直接复制 _ensure_tab 里 command.bind("<Return>", ...) 的实现逻辑，避免依赖 Tk Notebook
-        terminal = SerialTerminalWindow(Mock(), Mock(), Path(r"D:\Serial_Log"))
+        """实际标签无发送按钮；Enter 和纯回车按钮仍走各自原入口。"""
+        install_offscreen_windows(self)
+        root = tk.Tk()
+        root.withdraw()
+        self.addCleanup(root.destroy)
+        errors = []
+        root.report_callback_exception = lambda *args: errors.append(args)
+        terminal = SerialTerminalWindow(root, Mock(), Path(r"D:\Serial_Log"))
+        terminal.notebook = tk.ttk.Notebook(root)
         terminal.send = Mock()
 
-        def handler(event, _vlan="vlan137"):
-            terminal._on_command_return(_vlan)
-            return "break"
-
-        # 在没有真实 Tk Entry 的情况下，模拟一次 Enter 触发
-        result = handler(event=object())
-
-        terminal.send.assert_called_once_with("vlan137")
-        self.assertEqual(result, "break")
+        for vlan in ("vlan137", "vlan138"):
+            with self.subTest(vlan=vlan):
+                terminal._ensure_tab(vlan)
+                entry = terminal.tabs[vlan]["command"]
+                buttons = [child for child in entry.master.winfo_children()
+                           if isinstance(child, tk.ttk.Button)]
+                self.assertEqual([button.cget("text") for button in buttons], ["回车", "清屏"])
+                entry.insert(0, "ls")
+                binding = entry.bind("<Return>")
+                self.assertTrue(binding)
+                # 执行真实绑定脚本，无需抢占系统焦点或连接串口。
+                terminal.send.reset_mock()
+                # 绑定中的 break 正常阻止事件传播；catch 返回 Tcl 的 break 码 3。
+                self.assertEqual(entry.tk.call("catch", binding.replace("%#", "0").replace("%b", "0")), 3)
+                terminal.send.assert_called_once_with(vlan)
+                terminal.send.reset_mock()
+                buttons[0].invoke()
+                terminal.send.assert_called_once_with(vlan, force_enter=True)
+        self.assertEqual(errors, [])
 
     def test_save_state_shows_error_when_state_file_is_not_writable(self):
         master = Mock()

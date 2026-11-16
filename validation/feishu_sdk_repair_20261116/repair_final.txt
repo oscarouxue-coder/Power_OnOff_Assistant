@@ -1,0 +1,49 @@
+Interpreter: C:\Users\Administrator\AppData\Local\LineCheckAssistant\feishu-repair-validation-py39\Scripts\python.exe
+Modules: test_feishu_dependency_repair
+test_close_veto_keeps_app_and_cancels_restart_request (test_feishu_dependency_repair.ControllerTests) ... ok
+test_failed_install_keeps_app_and_shows_retry_without_restart (test_feishu_dependency_repair.ControllerTests) ... ok
+test_root_close_is_blocked_while_installer_owns_environment (test_feishu_dependency_repair.ControllerTests) ... ok
+test_success_requests_close_once_but_does_not_spawn_from_ui (test_feishu_dependency_repair.ControllerTests) ... ok
+test_real_two_button_dialog_choices_and_close_on_both_themes (test_feishu_dependency_repair.DialogTests) ... ok
+test_frozen_exe_never_offers_pip (test_feishu_dependency_repair.ErrorAndChoiceTests) ... ok
+test_install_is_explicit_single_local_callback (test_feishu_dependency_repair.ErrorAndChoiceTests) ... ok
+test_missing_sdk_raises_typed_error_before_thread_or_network (test_feishu_dependency_repair.ErrorAndChoiceTests) ... ok
+test_non_dependency_error_keeps_original_messagebox (test_feishu_dependency_repair.ErrorAndChoiceTests) ... ok
+test_ok_and_close_do_not_install (test_feishu_dependency_repair.ErrorAndChoiceTests) ... ok
+test_activity_refuses_before_environment_check_install_or_restart (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_all_existing_task_sources_refuse_without_cancellation (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_catalog_marks_repair_as_human_control_not_ai_business (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_failure_reports_once_and_allows_retry_after_ui_releases (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_frozen_source_guard_does_not_inspect_or_install_environment (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_host_activity_is_read_without_stop_callbacks (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_inflight_operation_blocks_repair_and_new_work_is_blocked_during_repair (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_new_source_instance_is_rejected_while_same_environment_is_repairing (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_pipeline_and_capability_admission_reject_maintenance (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_real_business_adapters_reject_before_any_work (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_source_entry_keeps_gateway_arguments_and_calls_main_when_not_repairing (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_source_entry_refuses_before_app_import_or_main_when_repair_owns_environment (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_source_preflight_failure_releases_maintenance (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_success_keeps_maintenance_until_close_and_prevents_duplicate_click (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_existing_lock_contains_target_and_no_unlocked_requirement (test_feishu_dependency_repair.InstallationTests) ... ok
+test_failed_download_never_installs_or_claims_success (test_feishu_dependency_repair.InstallationTests) ... ok
+test_import_or_pip_check_failure_never_returns_success (test_feishu_dependency_repair.InstallationTests) ... ok
+test_other_instance_refuses_before_network (test_feishu_dependency_repair.InstallationTests) ... ok
+test_rejects_global_and_frozen_python_before_changes (test_feishu_dependency_repair.InstallationTests) ... ok
+test_same_environment_other_process_is_rejected_without_exposing_arguments (test_feishu_dependency_repair.InstallationTests) ... ok
+test_sdist_is_never_installed (test_feishu_dependency_repair.InstallationTests) ... ok
+test_success_downloads_then_installs_locked_wheels_offline_then_checks (test_feishu_dependency_repair.InstallationTests) ... ok
+test_timeout_reports_stage_without_raw_output (test_feishu_dependency_repair.InstallationTests) ... ok
+test_verified_different_venv_is_allowed_even_with_shared_base_python (test_feishu_dependency_repair.InstallationTests) ... ok
+test_wheels_must_be_locked_exactly_and_contain_sdk (test_feishu_dependency_repair.InstallationTests) ... ok
+test_already_exited_or_reused_pid_does_not_wait_on_unrelated_process (test_feishu_dependency_repair.RestartTests) ... ok
+test_app_handoff_runs_only_after_mainloop_returns (test_feishu_dependency_repair.RestartTests) ... ok
+test_helper_preserves_interpreter_cwd_and_business_args_without_debugger (test_feishu_dependency_repair.RestartTests) ... ok
+test_real_helper_waits_for_parent_exit_and_launches_fake_entry_once (test_feishu_dependency_repair.RestartTests) ... ok
+test_timeout_never_starts_second_copy (test_feishu_dependency_repair.RestartTests) ... ok
+test_waits_for_old_process_before_launching_once (test_feishu_dependency_repair.RestartTests) ... ok
+
+----------------------------------------------------------------------
+Ran 41 tests in 0.724s
+
+OK
+OPERATOR_CONFIGURATION_WRITE_GUARD_ACTIVE

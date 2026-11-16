@@ -19,9 +19,11 @@ from src.services.ai_evidence_analysis import match_score, query_terms
 
 def canonical_url(value):
     parts = urlsplit(value.strip().rstrip("/"))
-    if (parts.scheme != "https" or not parts.hostname or parts.username or parts.password
+    # 负责人授权的唯一明文网关；比较完整authority，不扩展为整个内网。
+    company_http = parts.scheme == "http" and parts.netloc == "10.10.120.244:4000"
+    if ((parts.scheme != "https" and not company_http) or not parts.hostname or parts.username or parts.password
             or parts.query or parts.fragment):
-        raise ValueError("API 地址必须为不含账号、查询参数或片段的 HTTPS 地址")
+        raise ValueError("API 地址须为 HTTPS，或授权公司网关 http://10.10.120.244:4000；不得含账号、查询参数或片段")
     return urlunsplit((parts.scheme, parts.netloc.lower(), parts.path.rstrip("/"), "", ""))
 
 

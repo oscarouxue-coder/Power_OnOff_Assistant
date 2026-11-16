@@ -1,0 +1,749 @@
+Interpreter: C:\Users\Administrator\AppData\Local\LineCheckAssistant\feishu-repair-validation-py39\Scripts\python.exe
+Modules: test_feishu_dependency_repair, test_feishu_remote, test_feishu_stream, test_dingtalk_remote, test_ai_remote_management, test_ai_conversation, test_ai_core, test_ai_monitor_permissions, test_ai_session_router, test_capabilities, test_capability_coverage, test_capability_application, test_app, test_pipeline_window, test_test_item_pretest
+test_close_veto_keeps_app_and_cancels_restart_request (test_feishu_dependency_repair.ControllerTests) ... ok
+test_failed_install_keeps_app_and_shows_retry_without_restart (test_feishu_dependency_repair.ControllerTests) ... ok
+test_root_close_is_blocked_while_installer_owns_environment (test_feishu_dependency_repair.ControllerTests) ... ok
+test_success_requests_close_once_but_does_not_spawn_from_ui (test_feishu_dependency_repair.ControllerTests) ... ok
+test_real_two_button_dialog_choices_and_close_on_both_themes (test_feishu_dependency_repair.DialogTests) ... ok
+test_frozen_exe_never_offers_pip (test_feishu_dependency_repair.ErrorAndChoiceTests) ... ok
+test_install_is_explicit_single_local_callback (test_feishu_dependency_repair.ErrorAndChoiceTests) ... ok
+test_missing_sdk_raises_typed_error_before_thread_or_network (test_feishu_dependency_repair.ErrorAndChoiceTests) ... ok
+test_non_dependency_error_keeps_original_messagebox (test_feishu_dependency_repair.ErrorAndChoiceTests) ... ok
+test_ok_and_close_do_not_install (test_feishu_dependency_repair.ErrorAndChoiceTests) ... ok
+test_activity_refuses_before_environment_check_install_or_restart (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_all_existing_task_sources_refuse_without_cancellation (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_catalog_marks_repair_as_human_control_not_ai_business (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_failure_reports_once_and_allows_retry_after_ui_releases (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_host_activity_is_read_without_stop_callbacks (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_inflight_operation_blocks_repair_and_new_work_is_blocked_during_repair (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_pipeline_and_capability_admission_reject_maintenance (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_real_business_adapters_reject_before_any_work (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_source_preflight_failure_releases_maintenance (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_success_keeps_maintenance_until_close_and_prevents_duplicate_click (test_feishu_dependency_repair.GateAndRepairTests) ... ok
+test_existing_lock_contains_target_and_no_unlocked_requirement (test_feishu_dependency_repair.InstallationTests) ... ok
+test_failed_download_never_installs_or_claims_success (test_feishu_dependency_repair.InstallationTests) ... ok
+test_import_or_pip_check_failure_never_returns_success (test_feishu_dependency_repair.InstallationTests) ... ok
+test_other_instance_refuses_before_network (test_feishu_dependency_repair.InstallationTests) ... ok
+test_rejects_global_and_frozen_python_before_changes (test_feishu_dependency_repair.InstallationTests) ... ok
+test_same_environment_other_process_is_rejected_without_exposing_arguments (test_feishu_dependency_repair.InstallationTests) ... ok
+test_sdist_is_never_installed (test_feishu_dependency_repair.InstallationTests) ... ok
+test_success_downloads_then_installs_locked_wheels_offline_then_checks (test_feishu_dependency_repair.InstallationTests) ... ok
+test_timeout_reports_stage_without_raw_output (test_feishu_dependency_repair.InstallationTests) ... ok
+test_verified_different_venv_is_allowed_even_with_shared_base_python (test_feishu_dependency_repair.InstallationTests) ... ok
+test_wheels_must_be_locked_exactly_and_contain_sdk (test_feishu_dependency_repair.InstallationTests) ... ok
+test_already_exited_or_reused_pid_does_not_wait_on_unrelated_process (test_feishu_dependency_repair.RestartTests) ... ok
+test_app_handoff_runs_only_after_mainloop_returns (test_feishu_dependency_repair.RestartTests) ... ok
+test_helper_preserves_interpreter_cwd_and_business_args_without_debugger (test_feishu_dependency_repair.RestartTests) ... ok
+test_timeout_never_starts_second_copy (test_feishu_dependency_repair.RestartTests) ... ok
+test_waits_for_old_process_before_launching_once (test_feishu_dependency_repair.RestartTests) ... ok
+test_expired_token_refreshes_and_bot_identity_is_trusted_api_result (test_feishu_remote.ApiTests) ... ok
+test_http_and_platform_errors_do_not_disclose_credentials (test_feishu_remote.ApiTests) ... ok
+test_oversized_post_rejected_before_any_network_request (test_feishu_remote.ApiTests) ... ok
+test_post_serialization_blocks_mentions_without_mutating_input (test_feishu_remote.ApiTests) ... ok
+test_rejected_token_refreshes_on_next_request_without_replaying_send (test_feishu_remote.ApiTests) ... ok
+test_token_cached_and_requests_have_bounded_timeout_no_redirects (test_feishu_remote.ApiTests) ... ok
+test_actual_action_chain_requires_approval_and_executes_exactly_once (test_feishu_remote.ConversationTests) ... ok
+test_approval_bound_to_sender_chat_and_platform_and_once_only (test_feishu_remote.ConversationTests) ... ok
+test_binding_requires_local_confirmation_and_expiry (test_feishu_remote.ConversationTests) ... ok
+test_default_full_group_and_direct_skip_review_with_separate_grants (test_feishu_remote.ConversationTests) ... ok
+test_deleted_history_does_not_block_reenable (test_feishu_remote.ConversationTests) ... ok
+test_dingtalk_and_feishu_share_workbench_but_not_sessions_or_approval_tokens (test_feishu_remote.ConversationTests) ... ok
+test_disabling_group_preserves_direct_conversations_and_dingtalk (test_feishu_remote.ConversationTests) ... ok
+test_dm_all_application_users_need_no_individual_pairing (test_feishu_remote.ConversationTests) ... ok
+test_dm_group_member_channel_and_app_routing_are_independent (test_feishu_remote.ConversationTests) ... ok
+test_expired_unchanged_approval_rejects_original_action (test_feishu_remote.ConversationTests) ... ok
+test_fingerprint_change_and_expired_token_cannot_approve_revised_action (test_feishu_remote.ConversationTests) ... ok
+test_followup_reuses_session_and_batch_change_starts_new_session (test_feishu_remote.ConversationTests) ... ok
+test_full_queue_rejects_all_parts_and_old_generation_is_not_sent (test_feishu_remote.ConversationTests) ... ok
+test_local_and_remote_cannot_approve_same_action_twice (test_feishu_remote.ConversationTests) ... ok
+test_multiple_targets_require_explicit_channel (test_feishu_remote.ConversationTests) ... ok
+test_new_remote_session_full_even_desktop_ask_and_sources_visible (test_feishu_remote.ConversationTests) ... ok
+test_new_session_retains_background_publishing_route (test_feishu_remote.ConversationTests) ... ok
+test_notification_disable_takes_effect_in_memory_if_save_fails (test_feishu_remote.ConversationTests) ... ok
+test_other_group_tenant_and_duplicates_are_not_admitted (test_feishu_remote.ConversationTests) ... ok
+test_p2p_only_config_pins_first_trusted_enterprise (test_feishu_remote.ConversationTests) ... ok
+test_pc_target_status_and_reply_keep_source_scope (test_feishu_remote.ConversationTests) ... ok
+test_plain_recovery_skipped_and_cursor_advanced_without_changing_history (test_feishu_remote.ConversationTests) ... ok
+test_recovery_warnings_errors_and_assistant_quotes_are_still_published (test_feishu_remote.ConversationTests) ... ok
+test_reply_destination_and_external_credential_filter (test_feishu_remote.ConversationTests) ... ok
+test_send_failure_never_replays_model_or_tools (test_feishu_remote.ConversationTests) ... ok
+test_stale_queued_command_cannot_execute_after_disable_reenable (test_feishu_remote.ConversationTests) ... ok
+test_status_and_approval_are_formatted_and_preserve_exact_parameters (test_feishu_remote.ConversationTests) ... ok
+test_stop_keeps_project_testing_and_busy_question_not_queued (test_feishu_remote.ConversationTests) ... ok
+test_stream_model_reply_duplicate_receipt_executes_once (test_feishu_remote.ConversationTests) ... ok
+test_feishu_only_hidden_controller_shares_project_store_and_waits_for_both_platforms (test_feishu_remote.IntegrationTests) ... ok
+test_notification_event_reaches_main_service_without_ai_or_model (test_feishu_remote.IntegrationTests) ... ok
+test_setup_native_switches_theme_secret_and_single_chat_confirmation (test_feishu_remote.IntegrationTests) ... ok
+test_group_mention_removed_and_dm_needs_no_mention (test_feishu_remote.MessageTests) ... ok
+test_only_exact_control_commands_are_accepted (test_feishu_remote.MessageTests) ... ok
+test_other_bot_unmentioned_bot_sender_and_wrong_application_rejected (test_feishu_remote.MessageTests) ... ok
+test_disable_reenable_discards_queued_old_notification (test_feishu_remote.NotificationTests) ... ok
+test_disabled_dingtalk_or_failed_dingtalk_does_not_block_feishu_event (test_feishu_remote.NotificationTests) ... ok
+test_duplicate_event_sends_once (test_feishu_remote.NotificationTests) ... ok
+test_in_process_disable_blocks_automatic_queue_even_if_disk_still_enabled (test_feishu_remote.NotificationTests) ... ok
+test_independent_notification_switch_and_explicit_test_bypass (test_feishu_remote.NotificationTests) ... ok
+test_missing_saved_project_prevents_network (test_feishu_remote.NotificationTests) ... ok
+test_only_saved_project_channel_and_result_sent_no_remote_credentials (test_feishu_remote.NotificationTests) ... ok
+test_proxy_channel_context_is_thread_local (test_feishu_remote.NotificationTests) ... ok
+test_proxy_preserves_original_return_and_never_copies_old_body (test_feishu_remote.NotificationTests) ... ok
+test_code_payload_survives_multiple_posts_and_fence_like_content (test_feishu_remote.ReplyFormatTests) ... ok
+test_oversized_metadata_fails_without_truncating_it (test_feishu_remote.ReplyFormatTests) ... ok
+test_ping_reply_has_separate_title_and_native_markdown (test_feishu_remote.ReplyFormatTests) ... ok
+test_serialized_size_accounts_for_unicode_escapes_and_oversized_lines (test_feishu_remote.ReplyFormatTests) ... ok
+test_status_uses_native_markdown_by_default (test_feishu_remote.ReplyFormatTests) ... ok
+test_unclosed_fence_is_literal_and_matching_close_is_whole_line (test_feishu_remote.ReplyFormatTests) ... ok
+test_atomic_save_failure_preserves_previous_file (test_feishu_remote.StoreTests) ... ok
+test_bad_cipher_fails_closed_without_plaintext_fallback (test_feishu_remote.StoreTests) ... ok
+test_configure_blank_secret_preserves_value_and_app_change_resets_binding (test_feishu_remote.StoreTests) ... ok
+test_credentials_cannot_change_while_enabled_or_notification_enabled (test_feishu_remote.StoreTests) ... ok
+test_defaults_off_and_secret_encrypted_round_trip (test_feishu_remote.StoreTests) ... ok
+test_group_and_notification_require_binding_but_p2p_does_not (test_feishu_remote.StoreTests) ... ok
+test_invalid_config_does_not_write (test_feishu_remote.StoreTests) ... ok
+test_mailbox_dedup_and_restart_do_not_replay_pending_operations (test_feishu_remote.StoreTests) ... ok
+test_actual_sdk_fragment_merge_callback_and_200_ack (test_feishu_stream.StreamTests) ... ok
+test_disconnect_reconnects_without_reusing_old_socket (test_feishu_stream.StreamTests) ... ok
+test_persistence_failure_returns_500_for_redelivery (test_feishu_stream.StreamTests) ... ok
+test_sdk_reenable_uses_new_loop_and_closes_all_old_tasks (test_feishu_stream.StreamTests) ... ok
+test_stop_during_api_request_does_not_start_websocket_afterward (test_feishu_stream.StreamTests) ... ok
+test_unsupported_event_value_error_is_acknowledged_without_dispatch (test_feishu_stream.StreamTests) ... ok
+test_untrusted_endpoint_is_rejected_before_socket_connect (test_feishu_stream.StreamTests) ... ok
+test_ack_only_after_admission_and_retry_on_storage_failure (test_dingtalk_remote.ProtocolTests) ... ok
+test_parse_identity_and_control_grammar (test_dingtalk_remote.ProtocolTests) ... ok
+test_rejects_private_non_at_non_text_or_missing_identity (test_dingtalk_remote.ProtocolTests) ... ok
+test_same_instance_or_application_cannot_connect_twice (test_dingtalk_remote.ProtocolTests) ... ok
+test_session_url_validation_and_error_does_not_expose_secret (test_dingtalk_remote.ProtocolTests) ... ok
+test_stream_connect_stop_and_no_credential_logging (test_dingtalk_remote.ProtocolTests) ... ok
+test_system_ping_echoes_opaque_and_disconnect_is_recognized (test_dingtalk_remote.ProtocolTests) ... ok
+test_unicode_split_respects_byte_boundary (test_dingtalk_remote.ProtocolTests) ... ok
+test_binding_requires_local_confirmation_and_expires (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_busy_message_is_not_queued_and_stop_keeps_test_running (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_changed_robot_cannot_reuse_old_full_session_or_reply_context (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_disabling_cancels_pending_and_revokes_tokens (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_disabling_stops_even_when_configuration_cannot_be_saved (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_expired_approval_rejects_unchanged_action (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_expiry_rejects_action_and_parameter_change_invalidates_token (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_independent_subscription_does_not_consume_workbench_notifications (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_local_and_remote_approval_cannot_both_succeed (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_members_and_channels_are_isolated (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_new_session_keeps_background_route_and_does_not_stop_old_round (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_only_requester_can_approve_and_audit_keeps_identity (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_other_group_corp_robot_disabled_and_duplicate_are_not_admitted (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_password_boolean_flags_do_not_corrupt_ips_or_approval_codes (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_pc_target_status_and_reply_use_original_scope_label (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_project_header_and_credentials_are_filtered_only_at_group_outlet (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_remote_approval_dispatches_real_action_chain_exactly_once (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_remote_default_is_auto_even_when_desktop_remembers_other_modes (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_reply_failure_never_repeats_model_or_tools (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_same_sender_followup_and_new_session_preserve_history (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_stream_to_model_to_reply_duplicate_message_executes_once (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_target_model_or_batch_change_creates_new_valid_session (test_dingtalk_remote.RemoteConversationTests) ... ok
+test_hidden_controller_is_project_scoped_guarded_before_database_and_closes (test_dingtalk_remote.SetupWindowTests) ... ok
+test_setup_native_checkbutton_and_module_theme_vista_clam (test_dingtalk_remote.SetupWindowTests) ... ok
+test_config_secrets_are_encrypted_and_round_trip (test_dingtalk_remote.StoreTests) ... ok
+test_configure_rejects_unsafe_webhook_before_writing (test_dingtalk_remote.StoreTests) ... ok
+test_configure_updates_notification_webhook_preserving_flags_and_other_sections (test_dingtalk_remote.StoreTests) ... ok
+test_enabling_requires_binding_and_credentials (test_dingtalk_remote.StoreTests) ... ok
+test_full_inbox_does_not_ack_as_admitted (test_dingtalk_remote.StoreTests) ... ok
+test_initialize_copies_models_only_and_is_idempotent (test_dingtalk_remote.StoreTests) ... ok
+test_invalid_or_other_user_cipher_does_not_fallback_to_plaintext (test_dingtalk_remote.StoreTests) ... ok
+test_mailbox_deduplicates_and_never_replays_after_restart (test_dingtalk_remote.StoreTests) ... ok
+test_notification_write_failure_rolls_back_both_configurations (test_dingtalk_remote.StoreTests) ... ok
+test_project_identity_uses_directory_and_is_stable (test_dingtalk_remote.StoreTests) ... ok
+test_destroy_host_removes_timers_and_new_host_can_load_forms (test_ai_remote_management.RemoteManagementTests) ... FAIL
+test_embedded_enable_cancellation_keeps_switches_off_and_uses_ai_parent (test_ai_remote_management.RemoteManagementTests) ... ERROR
+test_embedded_feishu_context_menu_works_from_input (test_ai_remote_management.RemoteManagementTests) ... ERROR
+test_embedded_save_keeps_notification_sync_and_dialog_parent (test_ai_remote_management.RemoteManagementTests) ... ERROR
+test_failed_binding_cleanup_still_pauses_both_platforms_without_disclosure (test_ai_remote_management.RemoteManagementTests) ... FAIL
+test_hiding_active_platform_without_pending_binding_keeps_services (test_ai_remote_management.RemoteManagementTests) ... ok
+test_lazy_embedded_reuse_keeps_input_and_one_timer_per_platform (test_ai_remote_management.RemoteManagementTests) ... ERROR
+test_native_controls_and_minimum_layout_under_vista_clam (test_ai_remote_management.RemoteManagementTests) ... ok
+test_platform_load_failure_is_isolated_and_retryable (test_ai_remote_management.RemoteManagementTests) ... FAIL
+test_tab_switch_pauses_without_cancel_hide_cancels_only_pending_binding (test_ai_remote_management.RemoteManagementTests) ... FAIL
+test_active_question_waits_and_reply_is_correlated (test_ai_conversation.ConversationTests) ... ok
+test_api_failure_retains_user_message_and_allows_followup (test_ai_conversation.ConversationTests) ... ok
+test_batch_change_cancels_queued_collection_before_api_request (test_ai_conversation.ConversationTests) ... ok
+test_blank_reply_keeps_question_pending (test_ai_conversation.ConversationTests) ... ok
+test_busy_device_query_is_skipped_without_telnet_connection (test_ai_conversation.ConversationTests) ... ok
+test_changed_profile_requires_new_session (test_ai_conversation.ConversationTests) ... ok
+test_chat_network_query_uses_same_summary_and_preserves_evidence (test_ai_conversation.ConversationTests) ... ok
+test_context_trim_keeps_whole_protocol_groups_and_first_question (test_ai_conversation.ConversationTests) ... ok
+test_controller_close_waits_for_both_workers_then_closes_store (test_ai_conversation.ConversationTests) ... ok
+test_conversation_brevity_does_not_change_formal_report_instructions (test_ai_conversation.ConversationTests) ... ok
+test_default_collection_allows_deep_and_stop_keeps_next_round_enabled (test_ai_conversation.ConversationTests) ... ok
+test_delete_during_executor_close_is_rejected_until_cleanup_finishes (test_ai_conversation.ConversationTests) ... ok
+test_delete_queued_stopped_round_waits_for_worker_completion (test_ai_conversation.ConversationTests) ... ok
+test_diagnostic_and_detailed_followups_keep_boundaries_in_request (test_ai_conversation.ConversationTests) ... ok
+test_duplicate_tool_ids_reject_whole_batch_and_do_not_poison_followup (test_ai_conversation.ConversationTests) ... ok
+test_existing_history_does_not_disable_wifi_tools_in_either_protocol (test_ai_conversation.ConversationTests) ... ok
+test_exit_cancels_queued_collection_and_disables_default (test_ai_conversation.ConversationTests) ... ok
+test_fault_is_in_initial_context_even_after_many_normal_events (test_ai_conversation.ConversationTests) ... ok
+test_followup_contains_previous_question_answer_and_correction (test_ai_conversation.ConversationTests) ... ok
+test_import_text_can_be_searched_near_start_and_is_not_executed (test_ai_conversation.ConversationTests) ... ok
+test_live_target_change_after_model_request_skips_collection (test_ai_conversation.ConversationTests) ... ok
+test_model_key_filtered_in_first_message_but_device_values_retained (test_ai_conversation.ConversationTests) ... ok
+test_model_round_limit_sends_no_tools_on_fifth_round (test_ai_conversation.ConversationTests) ... ok
+test_new_batch_revokes_and_old_session_keeps_only_old_evidence (test_ai_conversation.ConversationTests) ... ok
+test_oversized_or_binary_import_does_not_add_evidence (test_ai_conversation.ConversationTests) ... ok
+test_question_and_independent_log_query_finish_before_waiting (test_ai_conversation.ConversationTests) ... ok
+test_readonly_rejects_unregistered_device_calls (test_ai_conversation.ConversationTests) ... ok
+test_real_tk_chat_waiting_render_send_and_theme (test_ai_conversation.ConversationTests) ... ok
+test_responses_protocol_question_continues_with_matching_tool_result (test_ai_conversation.ConversationTests) ... ok
+test_restart_preserves_history_and_revalidates_default_collection (test_ai_conversation.ConversationTests) ... ok
+test_restart_rejects_changed_target_and_unverified_model (test_ai_conversation.ConversationTests) ... ok
+test_simple_question_policy_reaches_both_protocols (test_ai_conversation.ConversationTests) ... ok
+test_sqlite_reopen_preserves_chat_and_old_reports (test_ai_conversation.ConversationTests) ... ok
+test_stop_queued_job_does_not_call_api (test_ai_conversation.ConversationTests) ... ok
+test_stopping_active_collection_still_closes_executor (test_ai_conversation.ConversationTests) ... ok
+test_success_event_does_not_cancel_manual_conversation (test_ai_conversation.ConversationTests) ... ok
+test_target_changed_before_tool_execution_revokes_and_skips (test_ai_conversation.ConversationTests) ... ok
+test_tool_limit_stops_execution_after_ten (test_ai_conversation.ConversationTests) ... ok
+test_unverified_model_cannot_authorize_active_operations (test_ai_conversation.ConversationTests) ... ok
+test_bounded_cache_does_not_grow_forever (test_ai_conversation.EvidenceTests) ... ok
+test_late_open_receives_preexisting_channel_events_and_exact_file (test_ai_conversation.EvidenceTests) ... ok
+test_new_run_and_stale_attempt_are_isolated (test_ai_conversation.EvidenceTests) ... ok
+test_result_file_registration_preserves_bytes_and_forwarding (test_ai_conversation.EvidenceTests) ... ok
+test_busy_shared_card_skips_without_sending (test_ai_conversation.NetworkTests) ... ok
+test_cancelled_network_query_does_not_spawn (test_ai_conversation.NetworkTests) ... ok
+test_cancelling_native_query_terminates_only_owned_process (test_ai_conversation.NetworkTests) ... ok
+test_command_injection_is_rejected (test_ai_conversation.NetworkTests) ... ok
+test_readonly_command_uses_fixed_args_and_decodes_chinese (test_ai_conversation.NetworkTests) ... ok
+test_source_address_disappears_before_probe_skips (test_ai_conversation.NetworkTests) ... ok
+test_unknown_wireless_identity_does_not_choose_first_adapter (test_ai_conversation.NetworkTests) ... ok
+test_wired_probe_selects_exact_source_and_interface (test_ai_conversation.NetworkTests) ... ok
+test_wireless_probe_uses_only_configured_card_and_target (test_ai_conversation.NetworkTests) ... ok
+test_wireless_without_valid_ipv4_skips_without_waiting_or_sending (test_ai_conversation.NetworkTests) ... ok
+test_cancelled_request_does_not_contact_service (test_ai_core.ClientTests) ... ok
+test_connection_check_requires_tool_call_and_result_round_trip (test_ai_core.ClientTests) ... ok
+test_deepseek_and_minimax_tool_history_preserved (test_ai_core.ClientTests) ... ok
+test_http_errors_do_not_expose_raw_service_response_or_key (test_ai_core.ClientTests) ... ok
+test_model_list_unsupported_reports_error_without_overwriting_model (test_ai_core.ClientTests) ... ok
+test_plain_text_fake_tool_is_never_executed (test_ai_core.ClientTests) ... ok
+test_real_material_and_auth_only_key_across_both_protocol_tool_round_trips (test_ai_core.ClientTests) ... ok
+test_responses_preserves_reasoning_and_function_call_ids (test_ai_core.ClientTests) ... ok
+test_tool_incompatibility_downgrades_question_only (test_ai_core.ClientTests) ... ok
+test_diagnostic_fields_and_nested_credentials_keep_real_values (test_ai_core.RedactionTests) ... ok
+test_ip_and_subnet_mask_are_never_replaced_by_aliases (test_ai_core.RedactionTests) ... ok
+test_only_registered_model_keys_are_removed_from_values_and_keys (test_ai_core.RedactionTests) ... ok
+test_real_dpapi_round_trip_and_binding (test_ai_core.RedactionTests) ... ok
+test_canonical_url_rejects_credentials_queries_and_plain_http (test_ai_core.StoreTests) ... ok
+test_endpoint_change_invalidates_key_and_verified_capability (test_ai_core.StoreTests) ... ok
+test_incomplete_case_is_not_confirmed (test_ai_core.StoreTests) ... ok
+test_key_and_model_changes_invalidate_capability_and_stale_test (test_ai_core.StoreTests) ... ok
+test_missing_model_allowed_for_refresh_and_no_key_in_settings (test_ai_core.StoreTests) ... ok
+test_only_confirmed_active_cases_are_retrieved_and_can_be_revised_deleted (test_ai_core.StoreTests) ... ok
+test_profiles_and_credentials_are_isolated_and_recovered (test_ai_core.StoreTests) ... ok
+test_recovery_record_persists_until_restored (test_ai_core.StoreTests) ... ok
+test_ask_temporary_change_waits_on_existing_connection (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_ask_waits_for_button_and_approval_dispatches_once (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_auto_ordinary_reviews_and_never_creates_chat (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_busy_apply_and_invalid_full_leave_settings_unchanged (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_busy_blocks_generic_modification_even_with_full_access (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_first_login_in_auto_needs_approval_full_does_not (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_full_dangerous_skips_review_with_monitor_grant (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_full_unknown_retry_across_jobs_still_needs_approval (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_independent_review_uses_verified_model_and_no_tools (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_legacy_deep_disabled_no_longer_limits_monitor_tools (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_multi_channel_scopes_are_separate_and_stale_fingerprint_rejected (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_network_probe_uses_target_batch_settings (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_readonly_file_direct_and_write_version_guard_survives (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_resource_change_during_review_prevents_dispatch (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_restart_cancels_approved_and_marks_executing_unknown (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_review_failure_waits_and_rejection_never_dispatches (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_stop_wakes_approval_and_revokes_full_preference_retained (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_target_model_and_batch_changes_revoke (test_ai_monitor_permissions.MonitorActionTests) ... ok
+test_background_pending_cancel_does_not_dispatch_or_touch_chat (test_ai_monitor_permissions.MonitorProtocolTests) ... ok
+test_default_full_keeps_monitor_off_and_reenable_creates_fresh_grant (test_ai_monitor_permissions.MonitorProtocolTests) ... ok
+test_full_monitor_tool_execution_both_protocols_and_report (test_ai_monitor_permissions.MonitorProtocolTests) ... ok
+test_pre_batch_full_binds_first_run_and_new_batch_revokes (test_ai_monitor_permissions.MonitorProtocolTests) ... ok
+test_saved_full_while_disabled_and_lower_mode_survive_restart (test_ai_monitor_permissions.MonitorProtocolTests) ... ok
+test_deleted_model_revokes_idle_full_monitor (test_ai_monitor_permissions.MonitorUiTests) ... ok
+test_dropdown_replaces_checkbox_and_permission_is_independent (test_ai_monitor_permissions.MonitorUiTests) ... ok
+test_full_cancel_keeps_active_mode_and_confirmation_contains_scope (test_ai_monitor_permissions.MonitorUiTests) ... ok
+test_pending_click_opens_nonmodal_detail_and_rejection_is_specific (test_ai_monitor_permissions.MonitorUiTests) ... ok
+test_pending_disables_dropdown_without_new_fixed_button (test_ai_monitor_permissions.MonitorUiTests) ... ok
+test_ambiguous_target_asks_without_collecting (test_ai_session_router.RouterTests) ... ok
+test_bare_target_answer_resumes_original_problem_once (test_ai_session_router.RouterTests) ... ok
+test_changed_configuration_during_resolution_does_not_create_or_send (test_ai_session_router.RouterTests) ... ok
+test_clarification_carries_only_user_description_to_device (test_ai_session_router.RouterTests) ... ok
+test_disabled_entry_cancels_before_session_creation (test_ai_session_router.RouterTests) ... ok
+test_explicit_new_creates_separate_session (test_ai_session_router.RouterTests) ... ok
+test_first_send_refresh_does_not_invalidate_route_or_keep_sent_draft (test_ai_session_router.RouterTests) ... ok
+test_general_question_with_no_targets_uses_no_tools_or_dut_executor (test_ai_session_router.RouterTests) ... ok
+test_implicit_remote_followup_after_target_change_gets_current_snapshot (test_ai_session_router.RouterTests) ... ok
+test_invalid_model_route_never_sends_old_target (test_ai_session_router.RouterTests) ... ok
+test_mention_of_other_channel_keeps_current (test_ai_session_router.RouterTests) ... ok
+test_model_cannot_execute_tools_during_route (test_ai_session_router.RouterTests) ... ok
+test_natural_language_com_port_resolves_and_preserves_user_text (test_ai_session_router.RouterTests) ... ok
+test_pc_busy_prevents_local_generic_operation (test_ai_session_router.RouterTests) ... ok
+test_pc_device_call_rejected_in_execution_service (test_ai_session_router.RouterTests) ... ok
+test_pc_session_is_independent_and_tools_exclude_device (test_ai_session_router.RouterTests) ... ok
+test_pc_snapshot_has_no_fake_device_identity (test_ai_session_router.RouterTests) ... ok
+test_queued_switch_does_not_stop_previous_session (test_ai_session_router.RouterTests) ... ok
+test_route_json_protocol_supports_responses (test_ai_session_router.RouterTests) ... ok
+test_router_shutdown_cancels_and_idle_tracks_recognition (test_ai_session_router.RouterTests) ... ok
+test_scope_participates_in_authorization_binding (test_ai_session_router.RouterTests) ... ok
+test_scope_tools_work_for_both_protocols (test_ai_session_router.RouterTests) ... ok
+test_selected_historical_session_stays_material_only (test_ai_session_router.RouterTests) ... ok
+test_source_identity_never_reuses_other_members_or_platforms (test_ai_session_router.RouterTests) ... ok
+test_switch_reuses_latest_matching_target_and_preserves_history (test_ai_session_router.RouterTests) ... ok
+test_unknown_channel_never_falls_back_to_first (test_ai_session_router.RouterTests) ... ok
+test_agent_admission_checks_existing_gui_query_and_pretest_flags (test_capabilities.CapabilityBridgeTests) ... ok
+test_cancelled_admission_result_is_discarded (test_capabilities.CapabilityBridgeTests) ... ok
+test_legacy_gui_checks_new_reservation_before_admitting_after_confirmation (test_capabilities.CapabilityBridgeTests) ... ok
+test_worker_snapshot_and_admission_use_main_thread_without_lock_inversion (test_capabilities.CapabilityBridgeTests) ... ok
+test_actual_user_confirmation_not_model_boolean_is_required (test_capabilities.CapabilityConversationTests) ... ok
+test_explicit_multi_channel_upgrade_reaches_one_shared_job_without_diagnostic_planner (test_capabilities.CapabilityConversationTests) ... ok
+test_full_grant_is_revoked_when_real_source_identity_changes (test_capabilities.CapabilityConversationTests) ... ok
+test_multi_channel_business_rejects_any_unselected_target_without_running_first_device (test_capabilities.CapabilityConversationTests) ... ok
+test_new_remote_resource_scope_needs_local_review_once (test_capabilities.CapabilityConversationTests) ... ok
+test_pasted_history_and_read_only_batch_do_not_fast_route_to_device_business (test_capabilities.CapabilityConversationTests) ... ok
+test_quick_route_preserves_exact_single_channel_request_without_model (test_capabilities.CapabilityConversationTests) ... ok
+test_read_job_is_fresh_in_new_turn_and_idempotent_inside_its_turn (test_capabilities.CapabilityConversationTests) ... ok
+test_real_tool_loop_starts_job_without_discovery_or_review (test_capabilities.CapabilityConversationTests) ... ok
+test_remote_incomplete_identity_cannot_invoke_full_business (test_capabilities.CapabilityConversationTests) ... ok
+test_semantically_equal_upgrade_arguments_reuse_completed_job_in_same_turn (test_capabilities.CapabilityConversationTests) ... ok
+test_cached_schema_is_defensive_and_revision_invalidates (test_capabilities.CapabilityTests) ... ok
+test_confirmation_cannot_be_granted_to_another_principal (test_capabilities.CapabilityTests) ... ok
+test_confirmation_is_bound_to_principal_file_and_target (test_capabilities.CapabilityTests) ... ok
+test_control_or_closing_blocks_without_engine_call (test_capabilities.CapabilityTests) ... ok
+test_disconnect_or_conversation_stop_does_not_cancel_business (test_capabilities.CapabilityTests) ... ok
+test_four_engine_dispatches_preserve_requests_and_safe_control (test_capabilities.CapabilityTests) ... ok
+test_hot_upgrade_schema_does_not_require_discovery_calls (test_capabilities.CapabilityTests) ... ok
+test_live_passive_monitor_does_not_block_upgrade (test_capabilities.CapabilityTests) ... ok
+test_metrics_count_actual_calls_and_persist_without_prompt_contents (test_capabilities.CapabilityTests) ... ok
+test_metrics_write_failure_does_not_change_business_success (test_capabilities.CapabilityTests) ... ok
+test_missing_firmware_and_known_wrong_type_do_not_start (test_capabilities.CapabilityTests) ... ok
+test_missing_power_requires_manual_restart_instead_of_guessing (test_capabilities.CapabilityTests) ... ok
+test_other_remote_identity_cannot_query_or_cancel_job (test_capabilities.CapabilityTests) ... ok
+test_recheck_detects_resource_change_before_start (test_capabilities.CapabilityTests) ... ok
+test_request_idempotency_and_repeat_queries_never_reflash (test_capabilities.CapabilityTests) ... ok
+test_restarted_inflight_job_is_unknown_and_not_replayed (test_capabilities.CapabilityTests) ... ok
+test_safe_cancel_reuses_original_control (test_capabilities.CapabilityTests) ... ok
+test_schema_rejects_injected_identity_and_boolean_channel (test_capabilities.CapabilityTests) ... ok
+test_scope_and_invalid_source_cannot_be_overridden_by_full_access (test_capabilities.CapabilityTests) ... ok
+test_stop_after_firmware_submission_retains_unknown_quarantine (test_capabilities.CapabilityTests) ... ok
+test_thread_start_failure_is_recorded_and_releases_resources (test_capabilities.CapabilityTests) ... ok
+test_unknown_capability_is_not_arbitrary_function_access (test_capabilities.CapabilityTests) ... ok
+test_workspace_write_rejects_escape_executable_and_unchecked_overwrite (test_capabilities.CapabilityTests) ... ok
+test_current_manifest_and_business_entries_are_consistent (test_capability_coverage.CapabilityCoverageTests) ... ok
+test_new_widget_and_changed_callback_are_detected (test_capability_coverage.CapabilityCoverageTests) ... ok
+test_pending_businesses_remain_visible_and_manual_actions_are_explicit (test_capability_coverage.CapabilityCoverageTests) ... ok
+test_configuration_order_remains_data_until_explicit_test_execution (test_capability_application.ApplicationCapabilityTests) ... ok
+test_configuration_rejects_stale_revision_and_open_editor (test_capability_application.ApplicationCapabilityTests) ... ok
+test_configuration_uses_same_gui_store_and_preserves_omitted_secret (test_capability_application.ApplicationCapabilityTests) ... ok
+test_default_order_draft_matches_shared_gui_loader_and_preserves_retry_until_explicit_save (test_capability_application.ApplicationCapabilityTests) ... ok
+test_invalid_legacy_notification_target_can_be_disabled_without_sending_or_granting_scope (test_capability_application.ApplicationCapabilityTests) ... ok
+test_job_submission_admission_does_not_block_gui_database_read (test_capability_application.ApplicationCapabilityTests) ... ok
+test_notification_editor_and_broadcast_change_do_not_reuse_old_authorization (test_capability_application.ApplicationCapabilityTests) ... ok
+test_notification_trial_uses_fake_original_sender_once_and_distinguishes_acceptance_from_delivery (test_capability_application.ApplicationCapabilityTests) ... ok
+test_notifications_require_local_destination_review_preserve_secrets_and_merge_original_store (test_capability_application.ApplicationCapabilityTests) ... ok
+test_passive_monitor_never_claims_device_business_and_closes_only_own (test_capability_application.ApplicationCapabilityTests) ... ok
+test_phase_rollback_disables_modules_without_removing_old_gui_engines (test_capability_application.ApplicationCapabilityTests) ... ok
+test_remote_identity_cannot_modify_global_test_configuration (test_capability_application.ApplicationCapabilityTests) ... ok
+test_resource_refresh_uses_current_enumeration_while_aging_keeps_ownership (test_capability_application.ApplicationCapabilityTests) ... ok
+test_update_download_uses_original_verified_result_without_model_supplied_url (test_capability_application.ApplicationCapabilityTests) ... ok
+test_wifi_log_uses_current_attempt_and_never_previous_directory_file (test_capability_application.ApplicationCapabilityTests) ... ok
+test_app_close_saves_onu_registration_inputs (test_app.CurrentChannelSelectionTests) ... ok
+test_app_close_still_destroys_when_save_fails (test_app.CurrentChannelSelectionTests) ... ok
+test_batch_onu_ids_match_entries_preview_confirmation_and_worker (test_app.CurrentChannelSelectionTests) ... ok
+test_c300_cleanup_selection_resolves_only_explicit_candidate (test_app.CurrentChannelSelectionTests) ... ok
+test_c300_onu_click_marks_clicked_item_selected (test_app.CurrentChannelSelectionTests) ... ok
+test_c300_query_preserves_current_pon_scope (test_app.CurrentChannelSelectionTests) ... ok
+test_c300_register_passes_only_explicit_cleanup_interface (test_app.CurrentChannelSelectionTests) ... ok
+test_c300_registered_query_confirmation_lists_bulk_commands_and_cancel_stops (test_app.CurrentChannelSelectionTests) ... ok
+test_c300_request_builds_batch_with_distinct_per_pon_ids (test_app.CurrentChannelSelectionTests) ... ok
+test_c300_request_reads_parameterized_business_inputs (test_app.CurrentChannelSelectionTests) ... ok
+test_c600_discovery_defaults_speed_command_to_auto (test_app.CurrentChannelSelectionTests) ... ok
+test_c600_discovery_fills_whitespace_template_only_with_available_model (test_app.CurrentChannelSelectionTests) ... ok
+test_c600_discovery_preserves_manual_and_dropdown_templates (test_app.CurrentChannelSelectionTests) ... ok
+test_c600_request_uses_current_parameters_and_service_mapping (test_app.CurrentChannelSelectionTests) ... ok
+test_c600_select_all_preserves_template_or_fills_first_model_when_empty (test_app.CurrentChannelSelectionTests) ... ok
+test_c600_single_selection_advances_directly_to_configuration (test_app.CurrentChannelSelectionTests) ... ok
+test_c600_success_with_write_selection_starts_save_worker (test_app.CurrentChannelSelectionTests) ... ok
+test_c600_success_without_write_selection_does_not_save (test_app.CurrentChannelSelectionTests) ... ok
+test_c600_switching_selected_onus_preserves_template_and_invalidates_preview (test_app.CurrentChannelSelectionTests) ... ok
+test_c600_template_query_updates_choices_without_overwriting_input (test_app.CurrentChannelSelectionTests) ... ok
+test_center_toplevel_uses_parent_screen_coordinates (test_app.CurrentChannelSelectionTests) ... ok
+test_channel_com_column_is_readonly_and_uses_grouped_options (test_app.CurrentChannelSelectionTests) ... ok
+test_channel_list_blank_space_does_not_select_or_toggle (test_app.CurrentChannelSelectionTests) ... ok
+test_channel_list_real_row_keeps_click_and_double_click_behavior (test_app.CurrentChannelSelectionTests) ... ok
+test_channel_list_right_click_menu_opens_selected_power_test_log (test_app.CurrentChannelSelectionTests) ... ok
+test_channel_list_right_click_selects_the_clicked_row_before_showing_menu (test_app.CurrentChannelSelectionTests) ... ok
+test_channel_selection_list_is_wide_enough_for_vlan_and_com_text (test_app.CurrentChannelSelectionTests)
+主界面通道列表必须完整显示启用通道的 VLAN / COM 信息。 ... ok
+test_channel_serial_port_prefers_saved_selection_and_falls_back_to_vlan_mapping (test_app.CurrentChannelSelectionTests) ... ok
+test_clicking_main_window_lifts_it_without_forcing_widget_focus (test_app.CurrentChannelSelectionTests) ... ok
+test_combined_refresh_calls_serial_then_adapters_once (test_app.CurrentChannelSelectionTests) ... ok
+test_complete_c300_cleanup_query_lists_same_pon_candidates_without_autoselect (test_app.CurrentChannelSelectionTests) ... ok
+test_complete_onu_manage_delete_retains_results_and_invalidates_snapshot (test_app.CurrentChannelSelectionTests) ... ok
+test_complete_onu_manage_query_lists_candidates_without_autoselect (test_app.CurrentChannelSelectionTests) ... ok
+test_complete_onu_query_unregistered_shows_all_results (test_app.CurrentChannelSelectionTests) ... ok
+test_complete_onu_register_selected_restores_buttons_and_logs_result (test_app.CurrentChannelSelectionTests) ... ok
+test_complete_onu_register_selected_starts_save_worker_when_confirmed (test_app.CurrentChannelSelectionTests) ... ok
+test_complete_onu_save_olt_configuration_restores_buttons_and_logs (test_app.CurrentChannelSelectionTests) ... ok
+test_complete_onu_telnet_test_restores_button_and_logs_result (test_app.CurrentChannelSelectionTests) ... ok
+test_complex_config_windows_use_standard_toplevel_lifecycle (test_app.CurrentChannelSelectionTests)
+异常窗口必须和其它正常窗口一样交由Tk主事件循环首次绘制。 ... ok
+test_current_onu_manage_pon_interface_builds_family_specific_path (test_app.CurrentChannelSelectionTests) ... ok
+test_current_onu_registration_config_ignores_destroyed_services_text (test_app.CurrentChannelSelectionTests) ... ok
+test_current_onu_registration_config_reads_all_input_fields (test_app.CurrentChannelSelectionTests) ... ok
+test_current_sample_upgrade_settings_normalizes_legacy_tftp_copy_label (test_app.CurrentChannelSelectionTests) ... ok
+test_current_sample_upgrade_settings_reads_all_inputs (test_app.CurrentChannelSelectionTests) ... ok
+test_default_test_item_snapshot_contains_current_order_baseline (test_app.CurrentChannelSelectionTests)
+默认模板必须存在，并保存当前 9 条测试项命令。 ... ok
+test_drain_log_queue_limits_each_ui_tick_and_continues_when_backlogged (test_app.CurrentChannelSelectionTests) ... ok
+test_dual_band_wifi_choices_keep_radios_independent_and_power_common (test_app.CurrentChannelSelectionTests) ... ok
+test_dut_config_and_query_entrypoints_use_window_target_selection (test_app.CurrentChannelSelectionTests) ... ok
+test_dut_config_entry_reuses_open_window (test_app.CurrentChannelSelectionTests) ... ok
+test_dut_config_toolbar_entry_is_next_to_serial_log (test_app.CurrentChannelSelectionTests)
+DUT 配置入口必须位于主界面串口日志右侧。 ... ok
+test_dut_config_window_is_extensible_and_dispatches_through_service (test_app.CurrentChannelSelectionTests)
+DUT 页面使用独立 Tab，UI 只调用 service，不复制 UBUS 协议。 ... ok
+test_dut_current_status_drag_resizes_and_persists_each_tab (test_app.CurrentChannelSelectionTests) ... ok
+test_dut_current_status_heights_round_trip_and_clamp_invalid_values (test_app.CurrentChannelSelectionTests) ... ok
+test_dut_current_status_resize_stops_before_bottom_actions_are_clipped (test_app.CurrentChannelSelectionTests) ... ok
+test_dut_form_field_names_are_left_aligned_in_every_tab (test_app.CurrentChannelSelectionTests) ... ok
+test_dut_option_checkbuttons_use_native_checkmark_indicator (test_app.CurrentChannelSelectionTests)
+DUT 各 Tab 的选项框应使用原生勾号，不受 Clam 叉号样式影响。 ... ok
+test_dut_request_snapshot_uses_enabled_channel_and_plaintext_shared_password (test_app.CurrentChannelSelectionTests) ... ok
+test_dut_success_row_uses_concise_operator_message (test_app.CurrentChannelSelectionTests) ... ok
+test_dut_target_selection_click_and_bulk_actions_update_shared_state (test_app.CurrentChannelSelectionTests) ... ok
+test_dut_target_selection_is_shared_by_every_tab (test_app.CurrentChannelSelectionTests) ... ok
+test_dut_target_selection_preserves_manual_clear_and_selects_new_targets (test_app.CurrentChannelSelectionTests) ... ok
+test_dut_window_size_round_trip_preserves_status_and_fits_screen (test_app.CurrentChannelSelectionTests) ... ok
+test_empty_power_serial_port_shows_all_detected_adapters (test_app.CurrentChannelSelectionTests) ... ok
+test_enabling_table_row_makes_that_row_current (test_app.CurrentChannelSelectionTests) ... ok
+test_failed_onu_telnet_test_uses_danger_color (test_app.CurrentChannelSelectionTests) ... ok
+test_finish_dut_telnet_enable_restores_ui_and_summarizes (test_app.CurrentChannelSelectionTests) ... ok
+test_finish_wan_query_populates_only_common_connections (test_app.CurrentChannelSelectionTests) ... ok
+test_full_package_requests_use_page_credentials (test_app.CurrentChannelSelectionTests) ... ok
+test_full_package_requires_manual_reboot_confirmation_when_power_port_empty (test_app.CurrentChannelSelectionTests) ... ok
+test_full_package_tftp_command_starts_parallel_upgrade_flow (test_app.CurrentChannelSelectionTests) ... ok
+test_full_package_tftp_put_refreshes_parallel_count_visibility (test_app.CurrentChannelSelectionTests) ... ok
+test_full_package_tftp_put_starts_parallel_upgrade_flow (test_app.CurrentChannelSelectionTests) ... ok
+test_full_package_tftp_server_ip_ignores_channel_and_management_networks (test_app.CurrentChannelSelectionTests) ... ok
+test_full_package_upgrade_shows_transfer_method (test_app.CurrentChannelSelectionTests) ... ok
+test_invalidating_onu_preview_clears_commands_and_disables_registration (test_app.CurrentChannelSelectionTests) ... ok
+test_iptv_multicast_vlan_field_is_conditional_and_mapped (test_app.CurrentChannelSelectionTests) ... ok
+test_launch_power_on_allows_empty_power_serial_port_after_manual_reboot_confirmation (test_app.CurrentChannelSelectionTests) ... ok
+test_launch_power_on_passes_selected_channels_and_wait_seconds (test_app.CurrentChannelSelectionTests) ... ok
+test_launch_power_on_routes_selected_channels_to_power_off (test_app.CurrentChannelSelectionTests) ... ok
+test_launch_power_on_warns_when_no_channel_enabled (test_app.CurrentChannelSelectionTests) ... ok
+test_legacy_channel_cycle_start_log_uses_green_success_tag (test_app.CurrentChannelSelectionTests)
+旧工具每轮通道测试开始日志应在新工具执行日志中显示为绿色。 ... ok
+test_loading_parameter_table_updates_persisted_pipeline_path (test_app.CurrentChannelSelectionTests)
+写参窗口选表后，全流程子任务 4 必须立刻读到同一条路径。 ... ok
+test_main_card_shows_power_test_status_and_stop_button (test_app.CurrentChannelSelectionTests)
+主界面空白区显示状态，并承接从全流程窗口移出的停止按钮。 ... ok
+test_main_header_copy_is_removed_and_admin_status_moves_to_toolbar (test_app.CurrentChannelSelectionTests)
+内容区不重复标题，管理员状态位于合并刷新按钮左侧。 ... ok
+test_main_onu_ui_uses_service_without_importing_standalone_c600_gui (test_app.CurrentChannelSelectionTests) ... ok
+test_main_stop_button_delegates_to_pipeline_window (test_app.CurrentChannelSelectionTests) ... ok
+test_main_stop_button_recovers_stale_running_status (test_app.CurrentChannelSelectionTests) ... ok
+test_main_window_title_includes_the_current_release_version (test_app.CurrentChannelSelectionTests)
+Windows 标题栏必须显示工具名称及当前发布版本。 ... ok
+test_new_onu_query_discards_previous_target_id_inputs (test_app.CurrentChannelSelectionTests) ... ok
+test_non_modal_feature_windows_do_not_stay_transient_above_main (test_app.CurrentChannelSelectionTests) ... ok
+test_onu_config_step_requires_selection_then_advances (test_app.CurrentChannelSelectionTests) ... ok
+test_onu_input_change_clears_stale_c300_cleanup_candidates (test_app.CurrentChannelSelectionTests) ... ok
+test_onu_manage_delete_clicked_confirms_and_starts_worker (test_app.CurrentChannelSelectionTests) ... ok
+test_onu_manage_query_clicked_starts_worker (test_app.CurrentChannelSelectionTests) ... ok
+test_onu_options_and_active_ui_use_native_checkmark_indicator (test_app.CurrentChannelSelectionTests)
+ONU及今后新增的布尔选项都不得使用会显示叉号的ttk控件。 ... ok
+test_onu_password_eye_toggles_plain_text_display (test_app.CurrentChannelSelectionTests) ... ok
+test_onu_preview_builds_execution_summary_and_advances_to_confirmation (test_app.CurrentChannelSelectionTests) ... ok
+test_onu_registered_manage_tab_and_danger_button_present (test_app.CurrentChannelSelectionTests) ... ok
+test_onu_registration_entry_reuses_open_window (test_app.CurrentChannelSelectionTests) ... ok
+test_onu_telnet_test_starts_worker_with_input_ip (test_app.CurrentChannelSelectionTests) ... ok
+test_onu_window_reserves_bottom_rows_without_maximizing (test_app.CurrentChannelSelectionTests) ... ok
+test_open_power_control_saves_pipeline_settings_without_power_execution (test_app.CurrentChannelSelectionTests)
+全流程「去配置」只保存 COM/操作类型，绝不能下发电源指令。 ... ok
+test_open_selected_power_test_log_opens_latest_log_for_current_channel (test_app.CurrentChannelSelectionTests) ... ok
+test_open_selected_power_test_log_reports_when_current_channel_has_no_result (test_app.CurrentChannelSelectionTests) ... ok
+test_open_wifi_log_deleted_current_file_never_falls_back (test_app.CurrentChannelSelectionTests) ... ok
+test_open_wifi_log_rejects_channel_outside_current_run (test_app.CurrentChannelSelectionTests) ... ok
+test_open_wifi_log_reports_file_access_error (test_app.CurrentChannelSelectionTests) ... ok
+test_open_wifi_log_reports_open_error (test_app.CurrentChannelSelectionTests) ... ok
+test_open_wifi_log_requires_current_session_even_with_old_file (test_app.CurrentChannelSelectionTests) ... ok
+test_open_wifi_log_requires_valid_channel (test_app.CurrentChannelSelectionTests) ... ok
+test_open_wifi_log_uses_selected_channel_and_current_resume_file (test_app.CurrentChannelSelectionTests) ... ok
+test_open_wifi_log_without_file_shows_expected_directory (test_app.CurrentChannelSelectionTests) ... ok
+test_page_upgrade_channels_follow_main_channel_order_and_deduplicate (test_app.CurrentChannelSelectionTests) ... ok
+test_page_upgrade_hides_transfer_method (test_app.CurrentChannelSelectionTests) ... ok
+test_page_upgrade_requests_propagate_custom_subnet_mask (test_app.CurrentChannelSelectionTests) ... ok
+test_page_upgrade_requests_use_enabled_channel_ips (test_app.CurrentChannelSelectionTests) ... ok
+test_page_upgrade_skips_confirmation_when_pipeline_authorized (test_app.CurrentChannelSelectionTests) ... ok
+test_page_upgrade_start_routes_to_page_upgrade_flow (test_app.CurrentChannelSelectionTests) ... ok
+test_page_upgrade_worker_reports_completion (test_app.CurrentChannelSelectionTests) ... ok
+test_parameter_and_serial_log_targets_use_saved_channel_com_selection (test_app.CurrentChannelSelectionTests) ... ok
+test_parameter_generator_centers_and_refreshes_client_area_after_layout (test_app.CurrentChannelSelectionTests) ... ok
+test_parameter_generator_has_custom_hex_mac_prefix_field (test_app.CurrentChannelSelectionTests) ... ok
+test_parameter_generator_labels_xpon_sn_fixed_format_and_sn_length_separately (test_app.CurrentChannelSelectionTests) ... ok
+test_parameter_option_checkbuttons_use_native_checkmark_indicator (test_app.CurrentChannelSelectionTests)
+写参可选项必须使用 Windows 原生勾选框，不显示 ttk clam 的叉号。 ... ok
+test_parameter_writer_reuses_persisted_path_and_restores_saved_table (test_app.CurrentChannelSelectionTests)
+重开写参窗口必须显示并恢复上次已保存的参数表。 ... ok
+test_password_eye_toggles_plain_text_display (test_app.CurrentChannelSelectionTests) ... ok
+test_persist_config_only_writes_enabled_channels (test_app.CurrentChannelSelectionTests) ... ok
+test_pipeline_parameter_bridge_forwards_unattended_authorization (test_app.CurrentChannelSelectionTests) ... ok
+test_pipeline_serial_logs_raise_when_any_port_cannot_open (test_app.CurrentChannelSelectionTests) ... ok
+test_pipeline_serial_logs_show_then_open_all (test_app.CurrentChannelSelectionTests) ... ok
+test_pipeline_subtask_wait_returns_only_after_completion_result (test_app.CurrentChannelSelectionTests)
+异步升级/写参只有完成回调通知后，管道才能执行下一项。 ... ok
+test_pipeline_upgrade_bridge_forwards_unattended_authorization (test_app.CurrentChannelSelectionTests) ... ok
+test_power_on_wait_seconds_does_not_add_startup_wait (test_app.CurrentChannelSelectionTests) ... ok
+test_power_selector_does_not_use_negative_padding (test_app.CurrentChannelSelectionTests)
+COM 选择弹窗在当前 Tk 环境中不能传负的 pack pady。 ... ok
+test_power_serial_port_accepts_operator_com_group_number (test_app.CurrentChannelSelectionTests) ... ok
+test_power_serial_port_limits_channel_com_options_to_its_eight_port_group (test_app.CurrentChannelSelectionTests) ... ok
+test_power_serial_port_limits_vlan_options_to_its_eight_vlan_group (test_app.CurrentChannelSelectionTests) ... ok
+test_power_test_channel_click_opens_separate_history_window (test_app.CurrentChannelSelectionTests) ... ok
+test_power_test_channel_history_is_isolated_and_keeps_retry_success (test_app.CurrentChannelSelectionTests) ... ok
+test_power_test_channel_progress_keeps_left_list_plain_and_renders_card_overview (test_app.CurrentChannelSelectionTests) ... ok
+test_power_test_channel_progress_updates_independent_round_before_rendering (test_app.CurrentChannelSelectionTests) ... ok
+test_power_test_channel_reset_clears_only_current_run_history (test_app.CurrentChannelSelectionTests) ... ok
+test_power_test_channel_states_stay_in_overview_and_summarize_final_results (test_app.CurrentChannelSelectionTests) ... ok
+test_power_test_progress_resets_when_total_is_unknown (test_app.CurrentChannelSelectionTests) ... ok
+test_power_test_progress_uses_configured_total_and_clamps_value (test_app.CurrentChannelSelectionTests) ... ok
+test_power_test_status_controls_main_stop_button (test_app.CurrentChannelSelectionTests) ... ok
+test_power_test_status_styles_are_prominent_and_state_specific (test_app.CurrentChannelSelectionTests)
+运行态使用高对比徽标，其余状态也有独立颜色语义。 ... ok
+test_project_info_query_uses_current_channel_and_returns_to_ui_thread (test_app.CurrentChannelSelectionTests) ... ok
+test_project_info_tab_keeps_manual_versions_separate_from_read_only_query_results (test_app.CurrentChannelSelectionTests) ... ok
+test_query_unregistered_onu_starts_worker_with_inputs (test_app.CurrentChannelSelectionTests) ... ok
+test_register_selected_onus_starts_worker_with_checked_items (test_app.CurrentChannelSelectionTests) ... ok
+test_register_selected_onus_warns_when_nothing_checked (test_app.CurrentChannelSelectionTests) ... ok
+test_restore_default_clears_every_existing_test_item_row (test_app.CurrentChannelSelectionTests)
+清空动态命令行时不得边遍历边删除而隔行残留。 ... ok
+test_restore_factory_text_uses_check_mark_when_enabled (test_app.CurrentChannelSelectionTests) ... ok
+test_restore_factory_text_uses_empty_box_when_disabled (test_app.CurrentChannelSelectionTests) ... ok
+test_restore_factory_toggle_switches_value_and_updates_text (test_app.CurrentChannelSelectionTests) ... ok
+test_save_onu_registration_config_writes_current_inputs (test_app.CurrentChannelSelectionTests) ... ok
+test_save_sample_upgrade_settings_writes_current_inputs (test_app.CurrentChannelSelectionTests) ... ok
+test_select_all_helper_marks_every_onu_then_clear_removes_all (test_app.CurrentChannelSelectionTests) ... ok
+test_select_all_onus_still_allocates_from_entered_starting_id (test_app.CurrentChannelSelectionTests) ... ok
+test_select_channel_index_syncs_internal_and_list_selection (test_app.CurrentChannelSelectionTests) ... ok
+test_selected_dut_requests_follow_window_selection_without_changing_main_targets (test_app.CurrentChannelSelectionTests) ... ok
+test_selected_registered_onu_resolves_only_explicit_candidate (test_app.CurrentChannelSelectionTests) ... ok
+test_selected_unregistered_onus_returns_only_checked_items (test_app.CurrentChannelSelectionTests) ... ok
+test_selected_upgrade_vlans_only_contains_enabled_unique_vlans (test_app.CurrentChannelSelectionTests) ... ok
+test_selecting_existing_wan_replaces_stale_form_values (test_app.CurrentChannelSelectionTests) ... ok
+test_selecting_onus_without_editing_id_keeps_automatic_assignment (test_app.CurrentChannelSelectionTests) ... ok
+test_serial_directory_notification_refreshes_idle_pipeline_and_logs (test_app.CurrentChannelSelectionTests) ... ok
+test_serial_directory_notification_safely_skips_absent_closed_or_running_pipeline (test_app.CurrentChannelSelectionTests) ... ok
+test_serial_full_package_skips_confirmation_when_pipeline_authorized (test_app.CurrentChannelSelectionTests) ... ok
+test_serial_log_directory_handles_initialization_and_delegates_current_value (test_app.CurrentChannelSelectionTests) ... ok
+test_serial_log_entry_opens_internal_terminal_for_selected_vlans (test_app.CurrentChannelSelectionTests) ... ok
+test_set_onu_query_status_updates_text_and_color (test_app.CurrentChannelSelectionTests) ... ok
+test_set_onu_telnet_status_updates_text_and_color (test_app.CurrentChannelSelectionTests) ... ok
+test_start_dut_config_requires_a_window_selected_target (test_app.CurrentChannelSelectionTests) ... ok
+test_start_dut_telnet_enable_confirms_and_starts_background_batch (test_app.CurrentChannelSelectionTests) ... ok
+test_status_display_only_applies_settings_when_batch_has_safe_common_value (test_app.CurrentChannelSelectionTests) ... ok
+test_stop_dut_telnet_enable_sets_shared_cancel_event (test_app.CurrentChannelSelectionTests) ... ok
+test_switching_onu_restores_each_entered_id_for_both_families (test_app.CurrentChannelSelectionTests) ... ok
+test_switching_to_c300_uses_confirmed_olt_and_source_ip_defaults (test_app.CurrentChannelSelectionTests) ... ok
+test_telnet_and_wan_tabs_also_show_current_status_without_duplicate_wan_query (test_app.CurrentChannelSelectionTests) ... ok
+test_telnet_and_wifi_tabs_use_chinese_field_labels (test_app.CurrentChannelSelectionTests)
+配置键名保留在存储层，操作员界面只显示对应中文含义。 ... ok
+test_telnet_credentials_disable_for_either_flag_and_preserve_values (test_app.CurrentChannelSelectionTests) ... ok
+test_telnet_tab_discards_deprecated_flag_on_initial_load_and_reload (test_app.CurrentChannelSelectionTests) ... ok
+test_telnet_yes_no_load_and_capture_preserve_all_flag_combinations (test_app.CurrentChannelSelectionTests) ... ok
+test_telnet_yes_no_save_and_reopen_keep_numeric_ini_flags (test_app.CurrentChannelSelectionTests) ... ok
+test_telnet_yes_no_selection_marks_dirty_and_changes_only_its_flag (test_app.CurrentChannelSelectionTests) ... ok
+test_template_choice_uses_name_for_commands_but_keeps_manual_input (test_app.CurrentChannelSelectionTests) ... ok
+test_test_item_command_groups_use_wider_vertical_spacing (test_app.CurrentChannelSelectionTests)
+测试项命令组之间应有明显留白，段内布局保持不变。 ... ok
+test_test_item_config_entry_reuses_open_window (test_app.CurrentChannelSelectionTests) ... ok
+test_test_item_config_has_power_cycle_runtime_parameters_tab (test_app.CurrentChannelSelectionTests)
+第五个 Tab 必须接入 config.ini [ui_defaults] 的加载、重载和保存。 ... ok
+test_test_item_tab_provides_confirmed_restore_default_action (test_app.CurrentChannelSelectionTests)
+恢复默认必须只加载默认 [order]，并保留保存确认边界。 ... ok
+test_tftp_command_parallel_mode_uses_parallel_worker (test_app.CurrentChannelSelectionTests) ... ok
+test_tftp_copy_channels_follow_main_channel_order_and_deduplicate (test_app.CurrentChannelSelectionTests) ... ok
+test_tftp_put_parallel_mode_uses_parallel_worker (test_app.CurrentChannelSelectionTests) ... ok
+test_tftp_server_ip_falls_back_to_vlan_suffix (test_app.CurrentChannelSelectionTests) ... ok
+test_tftp_server_ip_prefers_channel_network_card_ip (test_app.CurrentChannelSelectionTests) ... ok
+test_toolbar_feature_windows_use_shared_centering (test_app.CurrentChannelSelectionTests) ... ok
+test_toplevel_client_refresh_pulses_and_restores_geometry (test_app.CurrentChannelSelectionTests) ... ok
+test_tr069_capability_fields_disable_unsupported_controls (test_app.CurrentChannelSelectionTests) ... ok
+test_unattended_pipeline_parameter_completion_is_logged_without_a_dialog (test_app.CurrentChannelSelectionTests) ... ok
+test_unattended_pipeline_tftp_completion_is_logged_without_a_dialog (test_app.CurrentChannelSelectionTests) ... ok
+test_upgrade_entry_reuses_open_window (test_app.CurrentChannelSelectionTests) ... ok
+test_upgrade_required_fields_warn_when_missing (test_app.CurrentChannelSelectionTests) ... ok
+test_upgrade_start_stops_when_required_fields_missing (test_app.CurrentChannelSelectionTests) ... ok
+test_upgrade_status_shows_vlan_stage_and_progress (test_app.CurrentChannelSelectionTests) ... ok
+test_upgrade_window_only_exposes_parallel_count_for_full_package (test_app.CurrentChannelSelectionTests) ... ok
+test_voice_and_tr069_tabs_query_current_status_and_map_common_values (test_app.CurrentChannelSelectionTests) ... ok
+test_voice_choice_options_follow_dut_reported_capabilities (test_app.CurrentChannelSelectionTests) ... ok
+test_voice_sip_mode_options_include_ont_imssip_without_removing_existing_modes (test_app.CurrentChannelSelectionTests) ... ok
+test_wan_address_modes_follow_supported_dual_stack_combinations (test_app.CurrentChannelSelectionTests) ... ok
+test_wan_clear_can_hide_selection_reminder_without_retaining_old_results (test_app.CurrentChannelSelectionTests) ... ok
+test_wan_connection_snapshot_maps_to_current_form_values (test_app.CurrentChannelSelectionTests) ... ok
+test_wan_existing_connections_use_readonly_query_dropdown (test_app.CurrentChannelSelectionTests) ... ok
+test_wan_form_rules_hide_irrelevant_fields_and_apply_protocol_mtu (test_app.CurrentChannelSelectionTests) ... ok
+test_wan_lan_port_multiselect_maps_masks_and_preserves_non_lan_bits (test_app.CurrentChannelSelectionTests) ... ok
+test_wifi_advanced_requests_increment_ssid_in_selected_target_order (test_app.CurrentChannelSelectionTests) ... ok
+test_wifi_cancelled_channel_displays_stopped_without_failure_history (test_app.CurrentChannelSelectionTests) ... ok
+test_wifi_choice_options_fall_back_only_when_dut_omits_capability (test_app.CurrentChannelSelectionTests) ... ok
+test_wifi_choice_options_follow_dut_reported_capabilities (test_app.CurrentChannelSelectionTests) ... ok
+test_wifi_tabs_cover_required_fields_query_and_form_mapping (test_app.CurrentChannelSelectionTests) ... ok
+test_wifi_target_change_removes_previous_dut_capability_options (test_app.CurrentChannelSelectionTests) ... ok
+test_build_context_does_not_load_test_item_order_config (test_pipeline_window.BuildContextRegressionTests)
+移除 `[order]` 子任务后，全流程上下文不得再读取测试项目配置。 ... ok
+test_build_context_prefers_live_upgrade_and_onu_inputs (test_pipeline_window.BuildContextRegressionTests)
+去配置后，管道必须立即读取窗口当前输入而非启动时缓存。 ... ok
+test_build_context_uses_saved_onu_config_after_services_text_is_destroyed (test_pipeline_window.BuildContextRegressionTests)
+关闭ONU窗口后刷新全流程，不得读取已经销毁的Tk Text。 ... ok
+test_compute_subtask_statuses_succeeds_with_minimal_app (test_pipeline_window.BuildContextRegressionTests)
+真实 _build_context 路径上 compute_all_subtask_statuses 必须不抛。 ... ok
+test_main_stop_request_is_remembered_during_orchestrator_startup (test_pipeline_window.BuildContextRegressionTests)
+按钮刚启用但编排器尚未赋值时，停止请求不能丢失。 ... ok
+test_main_stop_request_uses_existing_orchestrator_stop_event (test_pipeline_window.BuildContextRegressionTests) ... ok
+test_pipeline_completion_dialogs_use_main_window_as_parent (test_pipeline_window.BuildContextRegressionTests)
+隐藏配置窗口后，完成和失败提示必须挂到可见主界面。 ... ok
+test_pipeline_confirmation_does_not_call_numbered_items_pipelines (test_pipeline_window.BuildContextRegressionTests)
+面向操作员的编号项统一称为子任务，不再显示管道1/后续管道。 ... ok
+test_pipeline_confirmation_excludes_serial_prestart_and_env_check_from_interval (test_pipeline_window.BuildContextRegressionTests)
+有多个子任务时，确认框必须说明串口预启动和环境检查后不等待。 ... ok
+test_pipeline_confirmation_uses_actual_prestart_order (test_pipeline_window.BuildContextRegressionTests)
+确认框必须把已勾选的串口日志显示在实际执行顺序首位。 ... ok
+test_pipeline_confirmation_warns_legacy_start_all_powers_selected_channels_off (test_pipeline_window.BuildContextRegressionTests)
+开关机测试必须在启动前明确提示仅对勾选通道初始化断电。 ... ok
+test_pipeline_defaults_to_no_selected_subtasks (test_pipeline_window.BuildContextRegressionTests)
+窗口只显示三项，首次打开全部不勾选。 ... ok
+test_pipeline_has_no_unattended_or_upgrade_reboot_confirmation (test_pipeline_window.BuildContextRegressionTests) ... ok
+test_pipeline_lifecycle_updates_main_power_test_status (test_pipeline_window.BuildContextRegressionTests)
+开始、完成和失败路径都必须刷新主界面状态。 ... ok
+test_pipeline_provides_manual_status_refresh_button (test_pipeline_window.BuildContextRegressionTests)
+操作员必须能显式刷新去配置后的必填项状态。 ... ok
+test_pipeline_refreshes_statuses_after_returning_from_configuration (test_pipeline_window.BuildContextRegressionTests)
+关闭去配置子窗口并回到全流程窗口时，必须自动刷新缺项状态。 ... ok
+test_pipeline_selection_uses_native_checkbutton (test_pipeline_window.BuildContextRegressionTests) ... ok
+test_pipeline_start_hides_configuration_window_after_thread_starts (test_pipeline_window.BuildContextRegressionTests)
+二次确认后必须先启动后台线程，再隐藏全流程配置窗口。 ... ok
+test_pipeline_stop_button_is_moved_to_main_window (test_pipeline_window.BuildContextRegressionTests)
+全流程弹窗不再重复创建停止按钮。 ... ok
+test_pipeline_thread_dispatches_completion_through_main_ui_queue (test_pipeline_window.BuildContextRegressionTests)
+隐藏窗口后，完成回调必须走主程序 UI 队列，不能依赖 Toplevel.after。 ... ok
+test_open_network_config_delegates_to_window_attribute (test_pipeline_window.OpenNetworkConfigRegressionTests)
+源码静态断言:_open_network_config 必须通过 .window 走 Toplevel 方法。 ... ok
+test_open_network_config_does_not_raise_when_window_exists (test_pipeline_window.OpenNetworkConfigRegressionTests)
+用 MagicMock 模拟 pipeline_window(只挂 .window),验证 _open_network_config 不抛。 ... ok
+test_open_network_config_handles_none_pipeline_window (test_pipeline_window.OpenNetworkConfigRegressionTests)
+pipeline_window 字段为 None 时不应抛。 ... ok
+test_open_network_config_skips_when_window_destroyed (test_pipeline_window.OpenNetworkConfigRegressionTests)
+pipeline_window 已销毁时(``winfo_exists()`` 返回 False),不应调 withdraw。 ... ok
+test_main_log_uses_current_window_numbers (test_pipeline_window.SimplifiedPipelineTests) ... ok
+test_missing_fields_warning_and_final_confirmation_can_both_cancel (test_pipeline_window.SimplifiedPipelineTests) ... ok
+test_real_tk_three_rows_native_controls_theme_and_minimum_size (test_pipeline_window.SimplifiedPipelineTests) ... ok
+test_refresh_only_updates_visible_rows_and_handles_context_failure (test_pipeline_window.SimplifiedPipelineTests) ... ok
+test_removed_tasks_cannot_start_when_no_allowed_task_is_selected (test_pipeline_window.SimplifiedPipelineTests) ... ok
+test_start_only_submits_three_allowed_tasks_in_prestart_order (test_pipeline_window.SimplifiedPipelineTests) ... ok
+test_status_scope_skips_removed_summarizers_and_keeps_default_compatibility (test_pipeline_window.SimplifiedPipelineTests) ... ok
+test_legacy_power_failure_dialog_uses_per_channel_results (test_pipeline_window.StartAllChecksRegressionTests) ... ok
+test_start_all_checks_deiconifies_when_pipeline_window_exists (test_pipeline_window.StartAllChecksRegressionTests)
+已存在 pipeline_window 包装器时,操作员再点「检查并执行测试」应把窗口拉到前台。 ... ok
+test_start_all_checks_delegates_to_window_attribute (test_pipeline_window.StartAllChecksRegressionTests)
+源码静态断言:_start_all_checks 必须通过 .window 走 Toplevel 方法。 ... ok
+test_start_all_checks_keeps_pipeline_window_hidden_while_running (test_pipeline_window.StartAllChecksRegressionTests)
+执行期间再次点击主入口，只提示状态，不重新弹出配置窗口。 ... ok
+test_start_all_checks_noop_when_already_running (test_pipeline_window.StartAllChecksRegressionTests)
+``self.running`` 为 True 时,_start_all_checks 直接 return,不调 window。 ... ok
+test_start_all_checks_recovers_stale_running_status (test_pipeline_window.StartAllChecksRegressionTests)
+线程已结束时不得继续提示“仍在执行”，应恢复状态并重新显示配置窗口。 ... ok
+test_all_targets_validated_before_any_network_operation (test_test_item_pretest.PretestServiceTests) ... ok
+test_cancel_during_login_prevents_command (test_test_item_pretest.PretestServiceTests) ... ok
+test_cancel_during_post_login_wait_prevents_pretest_command (test_test_item_pretest.PretestServiceTests) ... ok
+test_channels_are_sequential_and_bound_to_snapshot (test_test_item_pretest.PretestServiceTests) ... ok
+test_disconnect_during_response_is_failure_and_stops_device (test_test_item_pretest.PretestServiceTests) ... ok
+test_empty_post_login_value_sends_enter_before_pretest (test_test_item_pretest.PretestServiceTests) ... ok
+test_empty_targets_commands_and_invalid_port_rejected (test_test_item_pretest.PretestServiceTests) ... ok
+test_input_snapshot_does_not_change_when_page_changes (test_test_item_pretest.PretestServiceTests) ... ok
+test_login_failure_closes_session_and_continues_next_device (test_test_item_pretest.PretestServiceTests) ... ok
+test_negation_and_multiple_segments_are_preserved (test_test_item_pretest.PretestServiceTests) ... ok
+test_no_expected_is_unchecked_not_passed (test_test_item_pretest.PretestServiceTests) ... ok
+test_once_only_failure_continues_and_retry_settings_unchanged (test_test_item_pretest.PretestServiceTests) ... ok
+test_post_login_command_precedes_pretest_and_does_not_count_as_test (test_test_item_pretest.PretestServiceTests) ... ok
+test_post_login_send_failure_stops_current_device_and_continues_next (test_test_item_pretest.PretestServiceTests) ... ok
+test_silent_response_times_out_once_then_continues (test_test_item_pretest.PretestServiceTests) ... ok
+test_stop_after_first_result_sends_no_later_command_or_device (test_test_item_pretest.PretestServiceTests) ... ok
+test_stop_during_response_retains_output_and_closes (test_test_item_pretest.PretestServiceTests) ... ok
+test_close_requests_stop_and_waits_for_log_drain (test_test_item_pretest.PretestUiTests) ... ok
+test_declined_confirmation_never_starts_worker (test_test_item_pretest.PretestUiTests) ... ok
+test_double_start_blocked_and_events_drained_before_finish (test_test_item_pretest.PretestUiTests) ... ok
+test_explicit_color_and_file_log_are_consistent (test_test_item_pretest.PretestUiTests) ... ok
+test_main_capture_uses_checked_channels_and_current_page (test_test_item_pretest.PretestUiTests) ... ok
+test_worker_failure_always_queues_completion (test_test_item_pretest.PretestUiTests) ... ok
+
+======================================================================
+ERROR: test_embedded_enable_cancellation_keeps_switches_off_and_uses_ai_parent (test_ai_remote_management.RemoteManagementTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\AOUXUE\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_ai_remote_management.py", line 193, in test_embedded_enable_cancellation_keeps_switches_off_and_uses_ai_parent
+    panel = self.management.panels["feishu"]
+KeyError: 'feishu'
+
+======================================================================
+ERROR: test_embedded_feishu_context_menu_works_from_input (test_ai_remote_management.RemoteManagementTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\AOUXUE\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_ai_remote_management.py", line 207, in test_embedded_feishu_context_menu_works_from_input
+    panel = self.management.panels["feishu"]
+KeyError: 'feishu'
+
+======================================================================
+ERROR: test_embedded_save_keeps_notification_sync_and_dialog_parent (test_ai_remote_management.RemoteManagementTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\AOUXUE\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_ai_remote_management.py", line 176, in test_embedded_save_keeps_notification_sync_and_dialog_parent
+    feishu = self.management.panels["feishu"]
+KeyError: 'feishu'
+
+======================================================================
+ERROR: test_lazy_embedded_reuse_keeps_input_and_one_timer_per_platform (test_ai_remote_management.RemoteManagementTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\AOUXUE\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_ai_remote_management.py", line 71, in test_lazy_embedded_reuse_keeps_input_and_one_timer_per_platform
+    panel = self.management.panels[platform]
+KeyError: 'feishu'
+
+======================================================================
+FAIL: test_destroy_host_removes_timers_and_new_host_can_load_forms (test_ai_remote_management.RemoteManagementTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\AOUXUE\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_ai_remote_management.py", line 149, in test_destroy_host_removes_timers_and_new_host_can_load_forms
+    self.assertEqual(constructor.call_count, 2)
+AssertionError: 0 != 2
+
+======================================================================
+FAIL: test_failed_binding_cleanup_still_pauses_both_platforms_without_disclosure (test_ai_remote_management.RemoteManagementTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\AOUXUE\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_ai_remote_management.py", line 131, in test_failed_binding_cleanup_still_pauses_both_platforms_without_disclosure
+    feishu.cancel_binding.assert_called_once()
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python39\lib\unittest\mock.py", line 886, in assert_called_once
+    raise AssertionError(msg)
+AssertionError: Expected 'cancel_binding' to have been called once. Called 0 times.
+
+======================================================================
+FAIL: test_platform_load_failure_is_isolated_and_retryable (test_ai_remote_management.RemoteManagementTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\AOUXUE\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_ai_remote_management.py", line 155, in test_platform_load_failure_is_isolated_and_retryable
+    self.assertIn("feishu", self.management.panels)
+AssertionError: 'feishu' not found in {}
+
+======================================================================
+FAIL: test_tab_switch_pauses_without_cancel_hide_cancels_only_pending_binding (test_ai_remote_management.RemoteManagementTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\AOUXUE\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_ai_remote_management.py", line 104, in test_tab_switch_pauses_without_cancel_hide_cancels_only_pending_binding
+    feishu.cancel_binding.assert_called_once_with()
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python39\lib\unittest\mock.py", line 918, in assert_called_once_with
+    raise AssertionError(msg)
+AssertionError: Expected 'cancel_binding' to be called once. Called 0 times.
+
+----------------------------------------------------------------------
+Ran 625 tests in 53.845s
+
+FAILED (failures=4, errors=4)

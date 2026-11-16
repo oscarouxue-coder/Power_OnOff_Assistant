@@ -179,7 +179,7 @@ class SerialTerminalWindow:
         bottom.pack(fill="x", padx=8, pady=(0, 8))
         command = ttk.Entry(bottom)
         command.pack(side="left", fill="x", expand=True)
-        # 命令输入框按 Enter 等价于点击「发送」按钮；
+        # 命令输入框按 Enter 发送输入内容并追加回车；
         # send() 内部会自动处理空字符串、危险命令二次确认和升级中锁定的拦截。
         def _on_command_return_inner(event, _vlan=normalized):
             # event 在标准 Tk 回调中是 Event 对象，仅作为合法签名占位；
@@ -188,7 +188,6 @@ class SerialTerminalWindow:
             self._on_command_return(_vlan)
             return "break"
         command.bind("<Return>", _on_command_return_inner)
-        ttk.Button(bottom, text="发送", command=lambda v=normalized: self.send(v)).pack(side="left", padx=(6, 0))
         ttk.Button(bottom, text="回车", command=lambda v=normalized: self.send(v, force_enter=True)).pack(side="left", padx=(6, 0))
         ttk.Button(bottom, text="清屏", command=lambda o=output: self.clear(o)).pack(side="left", padx=(6, 0))
         self.tabs[normalized] = {"scope": scope, "port": resolved_port, "frame": frame, "status": status, "output": output, "command": command, "owner": None, "session": None, "subscriber": None}
@@ -277,6 +276,30 @@ class SerialTerminalWindow:
     def _on_tab_close(self, frame: str) -> None:
         for vlan, item in tuple(self.tabs.items()):
             if str(item["frame"]) == frame:
+                if (self._closing or self.master.__dict__.get('_app_closing', False)
+                        or item.get('close_ticket') is not None or item.get('close_confirming')):
+                    return
+                port = item['port']
+                target = f"{vlan} / {port}"
+                item['close_confirming'] = True
+                try:
+                    confirmed = messagebox.askokcancel(
+                        "确认关闭串口标签",
+                        f"{target}\n\n关闭后将停止此标签的日志监控，已保存日志保留。是否继续？",
+                        parent=self.window, default=messagebox.CANCEL,
+                    )
+                finally:
+                    item.pop('close_confirming', None)
+                if not confirmed:
+                    self._log_close(f"取消关闭 {target}")
+                    return
+                # 原生弹窗运行嵌套事件循环；期间标签可能被关闭、重建或更换COM。
+                if (self.window is None or self._closing or self.master.__dict__.get('_app_closing', False)
+                        or self.tabs.get(vlan) is not item or item['port'] != port
+                        or item.get('close_ticket') is not None):
+                    self._log_close(f"跳过关闭 {target}：标签状态已变化")
+                    return
+                self._log_close(f"确认关闭 {target}")
                 self.close_tab(vlan)
                 return
 
@@ -365,7 +388,7 @@ class SerialTerminalWindow:
             self._logger(f"[串口日志] {message}")
 
     def _on_command_return(self, vlan: str) -> str:
-        """命令行输入框按 Enter 时的入口，等价于「发送」按钮。
+        """命令行输入框按 Enter 时发送输入内容并追加回车。
 
         返回 "break" 用来阻止 Tk 默认 Enter 行为（例如激活焦点按钮），
         确保自动升级锁定提示、危险命令二次确认等 send() 逻辑都被执行。

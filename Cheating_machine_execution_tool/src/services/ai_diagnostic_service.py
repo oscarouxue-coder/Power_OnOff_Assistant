@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, replace
+from functools import partial
 import json
 from pathlib import Path
 import queue
@@ -12,6 +13,7 @@ import uuid
 
 from src.core.ai_client import DiagnosticModelClient
 from src.models.ai_diagnostics import DiagnosticEvent, DiagnosticJob, MonitorStatus
+from src.models.dependency_repair import maintenance_operation
 from src.services.ai_debug_service import DiagnosticToolExecutor, tool_schemas
 from src.services.ai_event_adapter import PowerDiagnosticEvents
 from src.services.ai_store import DiagnosticStore, profile_fingerprint
@@ -51,7 +53,9 @@ class AiDiagnosticService:
         self.redactor = DiagnosticRedactor()
         self.trigger = DiagnosticTrigger()
         self.serial_acquire, self.serial_read, self.busy = serial_acquire, serial_read, busy
-        self.client_factory, self.tool_factory = client_factory, tool_factory
+        self.client_factory = (partial(DiagnosticModelClient, emit=self.emit)
+                               if client_factory is DiagnosticModelClient else client_factory)
+        self.tool_factory = tool_factory
         self.manual_path = manual_path
         if manual_path and not Path(manual_path).is_file() and getattr(sys, "frozen", False):
             self.manual_path = Path(getattr(sys, "_MEIPASS", "")) / "line_check_assistant_README.md"
@@ -200,6 +204,7 @@ class AiDiagnosticService:
             finally:
                 self.events.task_done()
 
+    @maintenance_operation
     def submit(self, question, channel, level="light", event=None, automatic=False):
         if self.shutdown.is_set():
             raise RuntimeError("AI诊断正在退出")

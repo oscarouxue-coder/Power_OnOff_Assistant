@@ -3,6 +3,7 @@ import sys
 import threading
 import time
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -11,6 +12,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from line_check_assistant.network_ops import CommandResult
 from src.core.power_supply import POWER_CYCLE_OFF_DELAY_SECONDS, POWER_CYCLE_ON_DELAY_SECONDS
 from src.models import FullPackageUpgradeRequest
+from src.models.upgrade_stop import UpgradeStopped
+from src.services.upgrade_stop_service import UpgradeStopControl
 from src.services.serial_upgrade_service import (
     BOOT_PASSWORD,
     BOOT_USERNAME,
@@ -93,6 +96,354 @@ class FakeSessionManager:
 
     def release(self, owner, port):
         self.released.append((owner, port))
+
+
+class BufferedBootSession(FakeSession):
+    """保留真实接收游标和标记匹配语义，不连接串口。"""
+
+    def __init__(self, history=""):
+        super().__init__()
+        self.history = history
+        self.on_write = lambda _data: None
+        self.after_peek = lambda: None
+
+    def cursor(self):
+        return len(self.history)
+
+    def peek_since(self, cursor):
+        text = self.history[cursor:]
+        self.after_peek()
+        return text
+
+    def write(self, data, sensitive=False):
+        super().write(data, sensitive)
+        self.on_write(data)
+
+    def wait_for_any(self, markers, timeout, cursor):
+        return next((marker for marker in markers if marker in self.history[cursor:].lower()), None)
+
+
+class TftpPutBootPromptTests(unittest.TestCase):
+    """旧兼容入口的回归；实际业务分发由 SharedBootLoginTests 验证。"""
+    def setUp(self):
+        self.now = 0.0
+        self.sleeps = []
+        self.session = BufferedBootSession()
+        self.on_sleep = lambda _seconds: None
+        self.controller = SerialUpgradeController(
+            self.session, sleep_fn=self.sleep, monotonic_fn=lambda: self.now,
+        )
+        self.controller._begin_tftp_put_boot_observation()
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+        self.on_sleep(seconds)
+
+    def test_each_probe_waits_half_second_and_username_stops_probing(self):
+        def receive(_seconds):
+            self.assertEqual(self.session.writes, [(b"\r", False)] * len(self.sleeps))
+            if len(self.sleeps) == 2:
+                self.session.history += "UserName: "
+        self.on_sleep = receive
+
+        result = self.controller.wait_for_tftp_put_boot_username(2)
+
+        self.assertTrue(result.ok)
+        self.assertIn("已停止循环回车", result.message)
+        self.assertEqual(self.sleeps, [0.5, 0.5])
+        self.assertEqual(self.session.writes, [(b"\r", False)] * 2)
+
+    def test_prompt_received_during_power_wait_needs_no_probe(self):
+        for prompt in ("UserName:", "User Name:"):
+            with self.subTest(prompt=prompt):
+                self.session.history = prompt
+                result = self.controller.wait_for_tftp_put_boot_username(1)
+                self.assertTrue(result.ok)
+        self.assertEqual(self.session.writes, [])
+        self.assertEqual(self.sleeps, [])
+
+    def test_old_history_does_not_trigger_login(self):
+        self.session.history = "UserName: Password: "
+        self.controller = SerialUpgradeController(
+            self.session, sleep_fn=self.sleep, monotonic_fn=lambda: self.now,
+        )
+        self.controller._begin_tftp_put_boot_observation()
+        self.on_sleep = lambda _seconds: setattr(self.session, "history", self.session.history + "UserName:")
+
+        self.assertTrue(self.controller.wait_for_tftp_put_boot_username(1).ok)
+        self.assertEqual(self.session.writes, [(b"\r", False)])
+
+    def test_split_case_insensitive_prompt_is_accumulated_during_half_second(self):
+        def receive(_seconds):
+            for chunk in ("Us", "Er N", "aMe", ": "):
+                self.session.history += chunk
+        self.on_sleep = receive
+
+        self.assertTrue(self.controller.wait_for_tftp_put_boot_username(1).ok)
+        self.assertEqual(self.session.writes, [(b"\r", False)])
+
+    def test_prompt_arriving_between_iterations_prevents_another_enter(self):
+        def receive_after_check():
+            if self.sleeps:
+                self.session.history += "UserName:"
+                self.session.after_peek = lambda: None
+        self.session.after_peek = receive_after_check
+
+        self.assertTrue(self.controller.wait_for_tftp_put_boot_username(2).ok)
+        self.assertEqual(self.session.writes, [(b"\r", False)])
+        self.assertEqual(self.sleeps, [0.5])
+
+    def test_password_before_username_submission_rejects_stale_username(self):
+        for prompts in ("UserName: Password: ", "Passvord: "):
+            with self.subTest(prompts=prompts):
+                self.session.history = prompts
+                result = self.controller.wait_for_tftp_put_boot_username(1)
+                self.assertFalse(result.ok)
+                self.assertIn("提示符错位", result.message)
+        self.assertEqual(self.session.writes, [])
+
+    def test_username_followed_by_password_in_one_receive_window_stops(self):
+        self.on_sleep = lambda _seconds: setattr(self.session, "history", "UserName: Password:")
+
+        result = self.controller.wait_for_tftp_put_boot_username(1)
+
+        self.assertFalse(result.ok)
+        self.assertIn("提示符错位", result.message)
+        self.assertEqual(self.session.writes, [(b"\r", False)])
+
+    def test_new_username_after_old_password_is_current_stage(self):
+        self.session.history = "UserName: Password: User Name: "
+        self.assertTrue(self.controller.wait_for_tftp_put_boot_username(1).ok)
+        self.assertEqual(self.session.writes, [])
+
+    def test_password_arriving_during_handoff_blocks_credentials(self):
+        self.session.history = "UserName: "
+        self.assertTrue(self.controller.wait_for_tftp_put_boot_username(1).ok)
+        self.session.history += "Password: "
+
+        result = self.controller.login_tftp_put_boot_after_username()
+
+        self.assertFalse(result.ok)
+        self.assertIn("提示符错位", result.message)
+        self.assertEqual(self.session.writes, [])
+
+    def test_immediate_password_and_shell_responses_keep_pre_write_cursors(self):
+        self.session.history = "UserName: "
+        def respond(data):
+            if data == (BOOT_USERNAME + "\r").encode():
+                self.session.history += "Password: "
+            elif data == (BOOT_PASSWORD + "\r").encode():
+                self.session.history += "ECNT> "
+        self.session.on_write = respond
+        self.assertTrue(self.controller.wait_for_tftp_put_boot_username(1).ok)
+
+        self.assertTrue(self.controller.login_tftp_put_boot_after_username().ok)
+        self.assertEqual(self.session.writes, [
+            ((BOOT_USERNAME + "\r").encode(), False),
+            ((BOOT_PASSWORD + "\r").encode(), True),
+        ])
+
+    def test_existing_login_retry_uses_new_username_stage(self):
+        self.session.history = "UserName: "
+        password_count = 0
+        def respond(data):
+            nonlocal password_count
+            if data == (BOOT_USERNAME + "\r").encode():
+                self.session.history += "Password: "
+            elif data == (BOOT_PASSWORD + "\r").encode():
+                password_count += 1
+                self.session.history += "UserName: " if password_count == 1 else "ECNT> "
+        self.session.on_write = respond
+        self.assertTrue(self.controller.wait_for_tftp_put_boot_username(1).ok)
+
+        self.assertTrue(self.controller.login_tftp_put_boot_after_username().ok)
+        self.assertEqual(password_count, 2)
+        self.assertNotIn((b"\r", False), self.session.writes)
+
+    def test_timeout_clips_last_wait_and_stops_probing(self):
+        result = self.controller.wait_for_tftp_put_boot_username(0.75)
+        self.assertFalse(result.ok)
+        self.assertIn("超时", result.message)
+        self.assertEqual(self.sleeps, [0.5, 0.25])
+        self.assertEqual(self.session.writes, [(b"\r", False)] * 2)
+
+    def test_cancel_during_half_second_stops_before_login(self):
+        self.on_sleep = lambda _seconds: self.controller.cancel()
+        result = self.controller.wait_for_tftp_put_boot_username(1)
+        self.assertFalse(result.ok)
+        self.assertIn("取消", result.message)
+        self.assertEqual(self.session.writes, [(b"\r", False)])
+
+    def test_business_stop_interrupts_half_second_without_more_writes(self):
+        control = UpgradeStopControl()
+        self.controller = SerialUpgradeController(
+            self.session, sleep_fn=self.sleep, monotonic_fn=lambda: self.now, stop_control=control,
+        )
+        self.on_sleep = lambda _seconds: control.request_stop()
+        with self.assertRaises(UpgradeStopped):
+            self.controller.wait_for_tftp_put_boot_username(1)
+        self.assertEqual(self.session.writes, [(b"\r", False)])
+
+    def test_cancel_during_handoff_blocks_credentials(self):
+        self.session.history = "UserName: "
+        self.assertTrue(self.controller.wait_for_tftp_put_boot_username(1).ok)
+        self.controller.cancel()
+        result = self.controller.login_tftp_put_boot_after_username()
+        self.assertFalse(result.ok)
+        self.assertIn("取消", result.message)
+        self.assertEqual(self.session.writes, [])
+
+
+class SharedBootLoginTests(unittest.TestCase):
+    transfers = (TRANSFER_TFTP_COMMAND, TRANSFER_TFTP_PUT, "web打开网关")
+
+    def run_flow(self, transfer, responses, *, stop=False, power_ok=True, peek_text=""):
+        prefix = "src.services.serial_upgrade_service."
+        events = []
+        messages = []
+        control = UpgradeStopControl()
+        power_done = threading.Event()
+
+        class RecordingSession(FakeSession):
+            def write(inner, data, sensitive=False):
+                self.assertTrue(power_done.is_set(), "登录不得早于电源动作完成")
+                events.append(("write", data, sensitive))
+                super(RecordingSession, inner).write(data, sensitive)
+
+            def wait_for_any(inner, markers, timeout, cursor):
+                events.append(("wait", tuple(markers), timeout, cursor))
+                # StopAwareSerialSession 会把稳定观察拆成多次短等待；
+                # 用户名尚未提交时，不能提前消费模拟的后续密码提示。
+                if stop and tuple(markers) == ("passvord:", "password:") and (BOOT_USERNAME.encode(), False) not in inner.writes:
+                    if inner.any_results and inner.any_results[0] is None:
+                        inner.any_results.pop(0)
+                    return None
+                return super(RecordingSession, inner).wait_for_any(markers, timeout, cursor)
+
+        session = RecordingSession(any_results=responses, peek_text=peek_text)
+        manager = FakeSessionManager(session)
+        request = FullPackageUpgradeRequest(
+            "vlan101", "VLAN101", "192.168.1.101", Path("firmware.bin"),
+            "COM106", "root", "test", transfer_method=transfer, power_channel=1,
+        )
+        shared_login = SerialUpgradeController.wait_for_boot_login
+
+        def power(**kwargs):
+            self.assertEqual(session.writes, [])
+            self.assertEqual(kwargs["off_delay_seconds"], 1.0)
+            self.assertEqual(kwargs["on_delay_seconds"], 1.0)
+            power_done.set()
+            return CommandResult(power_ok, "simulated power")
+
+        def login(controller, ready, *args, **kwargs):
+            if transfer != TRANSFER_TFTP_COMMAND:
+                self.assertTrue(ready.is_set())
+                self.assertTrue(power_done.is_set())
+            return shared_login(controller, ready, *args, **kwargs)
+
+        def sleep(seconds):
+            events.append(("sleep", seconds))
+            if stop:
+                control.request_stop()
+
+        # 保留真实业务等待/重试逻辑，只将测试时钟限制为有限次循环。
+        clock_calls = 0
+        def clock():
+            nonlocal clock_calls
+            clock_calls += 1
+            return clock_calls * 0.05 if clock_calls < 200 else 1000.0
+
+        with ExitStack() as stack:
+            stack.enter_context(patch(prefix + "time.monotonic", side_effect=clock))
+            stack.enter_context(patch(prefix + "_power_cycle_current_channel", side_effect=power))
+            common = stack.enter_context(patch.object(SerialUpgradeController, "wait_for_boot_login", autospec=True, side_effect=login))
+            legacy_wait = stack.enter_context(patch.object(SerialUpgradeController, "wait_for_tftp_put_boot_username"))
+            legacy_login = stack.enter_context(patch.object(SerialUpgradeController, "login_tftp_put_boot_after_username"))
+            stack.enter_context(patch.object(SerialUpgradeController, "_begin_tftp_put_boot_observation", side_effect=AssertionError("旧观察入口不应调用")))
+            stack.enter_context(patch(prefix + "prepare_tftp_network", return_value=CommandResult(True, "network")))
+            stack.enter_context(patch(prefix + "TftpServerHandle"))
+            stack.enter_context(patch.object(SerialUpgradeController, "send_tftp_command_and_wait", return_value=CommandResult(True, "done write")))
+            stack.enter_context(patch.object(SerialUpgradeController, "monitor_post_tftp", return_value=True))
+            upload = stack.enter_context(patch(prefix + "upload_firmware"))
+            web = stack.enter_context(patch(prefix + "start_gateway_upgrade"))
+            result = run_single_full_package_upgrade(
+                request, manager, on_output=messages.append, sleep_fn=sleep,
+                **({"stop_control": control} if stop else {}),
+            )
+            self.assertEqual(common.call_count, int(power_ok))
+            legacy_wait.assert_not_called()
+            legacy_login.assert_not_called()
+            if not result.ok:
+                upload.assert_not_called()
+                web.assert_not_called()
+            else:
+                self.assertEqual(upload.call_count, int(transfer == TRANSFER_TFTP_PUT))
+                self.assertEqual(web.call_count, int(transfer == "web打开网关"))
+        self.assertEqual(len(manager.released), 1)
+        return result, events, messages, session
+
+    def test_all_three_paths_have_identical_login_timing_and_waits(self):
+        traces = []
+        for transfer in self.transfers:
+            with self.subTest(transfer=transfer):
+                result, events, messages, session = self.run_flow(transfer, ["username:", None, "password:", "#"])
+                self.assertTrue(result.ok, result.message)
+                self.assertEqual(session.writes, [
+                    (b"\r", False), (BOOT_USERNAME.encode(), False), (b"\r", False),
+                    (BOOT_PASSWORD.encode(), True), (b"\r", True),
+                ])
+                self.assertEqual([e[1] for e in events if e[0] == "sleep"][:2], [1.0, 1.0])
+                self.assertEqual([e[2] for e in events if e[0] == "wait"], [1, 1.0, 30, 20])
+                self.assertIn("boot 登录完成", "".join(messages))
+                traces.append(events)
+        self.assertEqual(len(traces), 3)
+        self.assertEqual(traces[0], traces[1])
+        self.assertEqual(traces[0], traces[2])
+
+    def test_early_password_is_discarded_then_login_retries(self):
+        for transfer in self.transfers:
+            with self.subTest(transfer=transfer):
+                result, _, _, session = self.run_flow(transfer, ["username:", "password:", "username:", None, "password:", "#"])
+                self.assertTrue(result.ok, result.message)
+                self.assertEqual(session.writes[:3], [(b"\r", False), (b"\r", False), (BOOT_USERNAME.encode(), False)])
+
+    def test_incorrect_login_retries_with_same_sequence(self):
+        for transfer in self.transfers:
+            with self.subTest(transfer=transfer):
+                result, _, _, session = self.run_flow(transfer, ["username:", None, "password:", "incorrect", "username:", None, "password:", ">"])
+                self.assertTrue(result.ok, result.message)
+                self.assertEqual(session.writes[:5], session.writes[5:])
+
+    def test_garbled_password_prompt_uses_existing_salvage(self):
+        for transfer in self.transfers:
+            with self.subTest(transfer=transfer):
+                result, _, _, session = self.run_flow(transfer, ["username:", None, None, ">"], peek_text="\ufffd")
+                self.assertTrue(result.ok, result.message)
+                self.assertIn((BOOT_PASSWORD.encode(), True), session.writes)
+
+    def test_timeout_ends_without_transfer_and_logs_failure(self):
+        for transfer in (TRANSFER_TFTP_PUT, "web打开网关"):
+            with self.subTest(transfer=transfer):
+                result, _, messages, session = self.run_flow(transfer, [])
+                self.assertFalse(result.ok)
+                self.assertIn("超时", result.message)
+                self.assertIn(result.message, messages)
+                self.assertTrue(all(data == b"\r" for data, _ in session.writes))
+
+    def test_stop_during_login_prevents_transfer(self):
+        for transfer in (TRANSFER_TFTP_PUT, "web打开网关"):
+            with self.subTest(transfer=transfer):
+                result, _, _, session = self.run_flow(transfer, ["username:", None, "password:", "#"], stop=True)
+                self.assertFalse(result.ok)
+                self.assertEqual(session.writes, [(b"\r", False), (BOOT_USERNAME.encode(), False)])
+
+    def test_power_failure_does_not_start_login(self):
+        for transfer in (TRANSFER_TFTP_PUT, "web打开网关"):
+            with self.subTest(transfer=transfer):
+                result, _, _, session = self.run_flow(transfer, [], power_ok=False)
+                self.assertFalse(result.ok)
+                self.assertEqual(session.writes, [])
 
 
 class SerialUpgradeControllerTests(unittest.TestCase):
@@ -520,12 +871,11 @@ class SerialUpgradeControllerTests(unittest.TestCase):
     ):
         """勾选恢复出厂时，Tftp Put 保留 120 秒等待及最终系统登录。"""
         # wait_for_any 调用顺序:
-        #   1. wait_for_tftp_put_boot_username:username:
-        #   2. login_tftp_put_boot_after_username:password / #
-        #   3. login_final_system:login / password / #
+        #   1. wait_for_boot_login:username / 稳定检查无提前密码 / password / #
+        #   2. login_final_system:login / password / #
         session = FakeSession(
             any_results=[
-                "username:",
+                "username:", None,
                 "password:", "#",
                 "login", "password", "#",
             ]
@@ -568,7 +918,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
     ):
         """检测到自动 reset 时，Tftp Put 保持单次首轮上下电。"""
         session = FakeSession(
-            any_results=["username:", "password:", "#", "login", "password", "#"]
+            any_results=["username:", None, "password:", "#", "login", "password", "#"]
         )
         request = FullPackageUpgradeRequest(
             vlan="vlan102",
@@ -606,7 +956,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         _monitor_post_tftp,
     ):
         session = FakeSession(
-            any_results=["username:", "password:", "#", "login", "password", "#"]
+            any_results=["username:", None, "password:", "#", "login", "password", "#"]
         )
         messages = []
         request = FullPackageUpgradeRequest(
@@ -661,7 +1011,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
 
         session = RecordingSession(
             any_results=[
-                "username:",
+                "username:", None,
                 "password:", "#",
                 "login", "password", "#",
             ]
@@ -688,9 +1038,9 @@ class SerialUpgradeControllerTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         # power_on_selected_channels 已模拟完成开启帧后的 1 秒稳定；流程不应再额外 sleep 1 秒。
-        # 第一笔等待来自提交 boot 用户名后的既有 0.3 秒间隔。
-        self.assertEqual(sleeps[0], 0.3)
-        self.assertEqual(session.writes[:2], [(b"\r", False), (b"telecomadmin\r", False)])
+        # 与 Tftp指令 一样，第一笔 sleep 前已发送探测回车和用户名。
+        self.assertEqual(sleeps[:2], [1.0, 1.0])
+        self.assertEqual(session.writes[:3], [(b"\r", False), (BOOT_USERNAME.encode(), False), (b"\r", False)])
         prompt_index = next(
             index
             for index, event in enumerate(events)
@@ -699,7 +1049,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         status_index = next(
             index
             for index, event in enumerate(events)
-            if event == ("message", "检测到 UserName 提示符，开始使用 boot 用户名和密码登录。")
+            if event == ("message", "boot 登录完成。")
         )
         self.assertLess(prompt_index, status_index)
 
@@ -776,7 +1126,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         """回归保护:Tftp Put 首轮与传输后未自动 reset 时均复用当前通道上下电。"""
         session = FakeSession(
             any_results=[
-                "username:",
+                "username:", None,
                 "password:", "#",
                 "login", "password", "#",
             ]

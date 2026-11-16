@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 from src.core.feishu_client import FeishuApi
 from src.core.dingtalk_stream import InstanceLease
+from src.models.dependency_repair import MissingFeishuSdkError
 
 
 class FeishuInstanceLease(InstanceLease):
@@ -37,7 +38,7 @@ class FeishuStream:
         if self.stop.is_set():
             raise ValueError("飞书连接正在退出")
         if not self.custom_sdk and importlib.util.find_spec("lark_oapi") is None:
-            raise RuntimeError("缺少飞书SDK，请按requirements安装固定依赖后重启")
+            raise MissingFeishuSdkError()
         self.thread = threading.Thread(target=self._run, name="feishu-stream", daemon=True)
         self.thread.start()
 

@@ -1,5 +1,113 @@
 # 开发记录
 
+## 2026-11-16 - 汇总全部改动并执行本地提交
+
+- 类型：测试
+- 背景：负责人要求将当前全部文件合并为一次本地Git提交，并由实施者总结备注；本轮仅执行本地提交。
+- 完成内容：①汇总公司MiniMax网关及网络诊断、飞书SDK按需安装和安全重启、三条升级路径Boot登录统一、串口发送入口与标签关闭确认，连同本机配置、测试、能力清单、计划和验证材料纳入同一次提交；备注“完善公司AI网关、飞书依赖修复与串口升级交互”。②首轮完整基线发现原提交环境缺少锁定依赖websockets；检查仓库外既有feishu-repair-validation-py39环境符合CPython3.9.10 x64及requirements-build.txt全部锁定要求、pip check通过后，显式使用install_git_hooks.ps1更新本仓库linecheck.pythonExecutable；没有安装或修改当前源码运行环境。③原图标九份DIB帧完全一致，256像素PNG仅zlib压缩编码不同、解压扫描行一致；修正跨Windows环境导出测试，继续严格比较帧目录、原生帧、PNG元数据、CRC、解压数据及文件末尾，不改图标资源或生产实现。④仅清理network_card_ip.ini空serial_port值后的行尾空格，值及其它本机配置保持；同步当前提交检查入口。
+- 修改文件：
+  - `Cheating_machine_execution_tool/tests/test_application_icon.py`
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/config/network_card_ip.ini`（本轮仅清理空值行尾空格，保留原有改动）
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+  - 全部既有业务改动及新增文件由本次Git提交清单完整保存，各功能实现与原复验边界沿用下方记录。
+- 验证方法：主源码目录使用上述仓库外解释器执行`python scripts/check_build_environment.py --json`、`python -m pip check`、`python -m unittest discover -s tests -p test_application_icon.py`及`python -m unittest discover -s tests -p test_remote_gateway*.py`；`git diff --check`及暂存后`git diff --cached --check`。实际提交由原`.githooks/pre-commit`进入主源码目录执行完整`python scripts/verify_baseline.py`，失败阻断提交，不绕过门禁。
+- 验证结果：首轮完整基线执行2681项，1失败/9错误/9跳过，原因分别为PNG压缩字节比较及缺少websockets；239文件编译、235源码覆盖、能力覆盖和协议不变量当时均通过。环境检查与pip check通过；针对问题的15项图标、25项网关专项全部通过，差异格式检查通过。修复后的完整基线由本次提交钩子实际复核，成功生成提交即表示全部门禁通过，最终数量与结果以钩子输出为准；不把此前完整通过记录当成本轮结果。
+- 后续待办：各功能的Windows源码版、真实模型/飞书/设备复验仍按ACCEPTANCE_BASELINE.md待确认项执行；本轮不新增现场验收结论，不推送、打包、发布或运行EXE。
+
+## 2026-11-16 - 增加串口标签关闭确认
+
+- 类型：修改
+- 背景：负责人要求串口日志单独关闭标签前增加确认，并确认所有标签（含未打开串口/已停止）统一确认；在工作区已有串口按钮调整等改动基础上做最小增量。
+- 完成内容：①仅在标签“×”回调增加原生确定/取消弹窗，显示VLAN/COM及停止本标签监控、保留日志提示，默认取消；取消/Esc/关闭弹窗不进入关闭流程，主日志记录确认或取消。②确定后复用原close_tab，保留升级占用、AI Debug清理、异步释放、共享COM及日志保存；整个窗口关闭和升级自动收尾不逐标签确认。③防止同标签重复弹窗；原生弹窗嵌套事件循环结束后复核目标身份、COM、关闭/退出状态，防止旧确认关闭新标签。④审查serial.close仍为partial且只释放AI自身被动监控所有权，不调用GUI回调；更新GUI动作快照，重生成CAPABILITY_COVERAGE.md内容与本轮开始时一致，不虚报业务覆盖。⑤同步操作员说明及当前状态、验收边界，保留既有现场结论。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/serial_terminal.py`
+  - `Cheating_machine_execution_tool/tests/test_serial_terminal.py`
+  - `Cheating_machine_execution_tool/scripts/capability_gui_actions.json`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：使用仓库git配置的CPython3.9.10 x64解释器，在主源码目录执行`python -m py_compile src/ui/serial_terminal.py tests/test_serial_terminal.py`；执行`python scripts/verify_capability_coverage.py --update`及不带--update复核；将tests加入sys.path，以unittest合跑`test_serial_terminal`、`test_capability_coverage`和`test_capability_application`；对上述修改文件及覆盖矩阵执行`git diff --check -- <文件清单>`，检查文档一致性。
+- 验证结果：两个Python文件编译通过；首轮47项串口专项通过，最终65项组合专项全部通过，含7项新增确认回归；两次覆盖检查均为CAPABILITY_COVERAGE_OK，快照审查确认本轮仅串口窗口动作文件变化，业务覆盖数及所有权限制保持。模拟串口/离屏Tk验证三类标签取消后原订阅、连接、选择及日志显示/写盘继续；确认仅关闭目标、占用阻止、AI清理只确认一次、目标重建/换COM/窗口销毁保护、重复请求、非当前/最后标签、拖离及窗口/自动收尾均通过。文档及差异检查通过。本轮未运行完整基线，保留最近完整验证记录；未提交、打包、运行EXE或操作真实设备，现有EXE未更新。
+- 后续待办：负责人重启Windows源码版按ACCEPTANCE_BASELINE.md §2.3/§3核对原生弹窗默认焦点、取消/Esc/关闭与确认交互及原真实串口复验范围；模拟及离屏测试不替代完整程序或现场验收。
+
+## 2026-11-16 - 移除串口日志发送按钮
+
+- 类型：修改
+- 背景：负责人要求移除串口日志记录窗口底部的「发送」按钮，保留键盘Enter发送及「回车」按钮的原有区别。
+- 完成内容：①仅删除各标签底部「发送」按钮，保留输入框Enter发送、「回车」「清屏」及原发送逻辑。②修正旧按钮描述，将复制回调的键盘测试替换为两个实际Tk标签的按钮/真实绑定脚本验证，使用Mock发送、不连接真实串口。③审查串口发送Capability仍为pending，更新GUI动作快照与覆盖矩阵，串口窗口动作由10项降为9项，保留工作区既有其它业务变更。④同步操作员说明、当前入口与待Windows交互复验边界，保留原真实串口验收结论。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/serial_terminal.py`
+  - `Cheating_machine_execution_tool/tests/test_serial_terminal.py`
+  - `Cheating_machine_execution_tool/scripts/capability_gui_actions.json`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `CAPABILITY_COVERAGE.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：使用仓库git配置的CPython3.9.10 x64解释器；在主源码目录执行`python -m py_compile src/ui/serial_terminal.py tests/test_serial_terminal.py`、`python scripts/verify_capability_coverage.py --update`及不带--update复核；将tests加入sys.path，以unittest合跑`test_serial_terminal`和`test_capability_coverage`；对本轮8份文件执行`git diff --check -- <文件清单>`并检查文档一致性及差异。
+- 验证结果：最终43项全部通过（含实际离屏Tk多标签按钮、Enter绑定及纯回车入口）；两个Python文件编译通过，覆盖检查CAPABILITY_COVERAGE_OK。首轮40项中的实际绑定测试直接eval遇到正常break传播产生TclError，改用Tcl catch并明确断言break码3后复验通过，未修改产品回调。文档及差异检查通过。本轮未运行完整基线，保留最近一次完整验证记录；未提交、打包、运行EXE或向真实设备发送命令，现有EXE未更新。
+- 后续待办：负责人重启Windows源码版核对布局及键盘/按钮交互，按ACCEPTANCE_BASELINE.md §2.3/§3复验；原有真实设备验收范围保持。
+
+## 2026-11-16 - 统一三条路径的Boot账号登录
+
+- 类型：修改
+- 背景：负责人在核对三条登录逻辑差异后明确要求“Tftp Put / web打开网关登录boot的逻辑改成和Tftp指令一样的”，并确认实施计划；本轮替代同日上一条半秒探测方案，该方案保留为历史，不再作为当前业务验收口径。
+- 完成内容：①Tftp Put/Web首轮电源动作返回后，传入已就绪事件，同步复用原`wait_for_boot_login`，不新增线程、不再调用旧Put观察/两段登录入口；旧方法暂保留兼容并注明。②共同流程原样采用Tftp指令：探测回车后最多1秒找用户名、再观察1秒排除提前密码，账号/密码文本各等1秒再回车，密码30秒/Shell20秒等待及原游标、乱码补救和默认600秒外层重试。③主日志记录开始/实际登录结果，Tftp指令实现、SDMC、各传输、源IP、电源和收尾保持。④新增7项三路径对照/失败/停止回归，更新原Put业务及Web/停止测试，撤换前一轮2项不再适用的立即错位结束业务断言，保留15项旧方法兼容测试；同步当前说明和验收边界。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`
+  - `Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`
+  - `Cheating_machine_execution_tool/tests/test_web_gateway_upgrade.py`
+  - `Cheating_machine_execution_tool/tests/test_upgrade_stop.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/unify-boot-login.md`
+  - `.claude/plans/tftp-put-boot-prompt.md`（标明历史方案已替代）
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用仓库`linecheck.pythonExecutable`对应的`.venv_serial_upgrade/Scripts/python.exe`（CPython3.9.10 x64），将`tests`加入sys.path，由unittest组合加载`test_serial_upgrade_service`、`test_serial_transport`、`test_sdmc_boot_entry`、`test_web_gateway_upgrade`、`test_upgrade_stop`；`python -m py_compile src/services/serial_upgrade_service.py tests/test_serial_upgrade_service.py tests/test_web_gateway_upgrade.py tests/test_upgrade_stop.py`；`python scripts/verify_capability_coverage.py`；核对本轮前后4个原登录方法AST哈希及Tftp指令完整编排/SDMC未改，检查本轮10份文件差异、UTF-8及新增文档链接。
+- 验证结果：相关组合`Ran 135 tests ... OK (skipped=2)`，即133项通过、2项需显式启用的本机无头浏览器集成测试跳过；含7项新增三路径对照测试，覆盖实际串口写入/等待序列、提前密码丢弃、错误后重试、乱码补救、超时日志、停止和电源失败。4份Python编译及能力覆盖通过。首轮新增测试的模拟事件要求/停止短等待建模与既有Tftp指令线程不一致，已修正测试夹具为原有事件等待语义并保留真实写入前电源已完成断言，未改共同登录实现或降低对照要求。未运行完整基线，保留最近完整验证记录；未启动主程序、操作DUT、打包、运行EXE或提交。原有同期修改及配置保留，既有`network_card_ip.ini`行尾空格不在本轮修改范围。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE §2.5/§2.6.1/§3核对三条路径时序一致、快速同批回显及Tftp Put/Web后续完整升级；本轮自动化不替代真实设备验收。
+
+## 2026-11-16 - 修复Boot登录回车与凭据错位
+
+- 类型：BUG 修复
+- 背景：负责人现场日志出现`RX UserName:`、`RX Password:`后才`TX telecomadmin`，随后账号回显为星号并登录失败；确认每次循环回车后等待0.5秒再检查，识别用户名提示即停止循环回车。
+- 完成内容：①Tftp Put与共用链路的web打开网关传统Boot登录，上电前记录本轮观察游标，每次发送前复查、回车后等0.5秒再检查完整提示，命中用户名立即退出探测。②按最后完整提示判断阶段，账号发送前若已经进入Password/Passvord则失败结束当前通道，不继续发送凭据；主执行日志明确输出停止回车、错位及登录结果。③保留原凭据、登录重试、总超时和发送凭据前记录游标；重试观察范围只保留本次密码提交后的新阶段，取消时不继续提交账号；Tftp指令、SDMC及传输/收尾保持。④新增17项真实缓冲游标语义的模拟回归，同步操作员说明、状态、待验收边界及已确认计划，不改GUI入口或能力登记。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`
+  - `Cheating_machine_execution_tool/tests/test_serial_upgrade_service.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/tftp-put-boot-prompt.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用本仓库`linecheck.pythonExecutable`指向的`.venv_serial_upgrade/Scripts/python.exe`（CPython3.9.10 x64）；`python -m unittest discover -s tests -p test_serial_upgrade_service.py`，以及将`tests`加入sys.path后由unittest同时加载`test_serial_upgrade_service`、`test_serial_transport`、`test_sdmc_boot_entry`、`test_web_gateway_upgrade`、`test_upgrade_stop`；`python -m py_compile src/services/serial_upgrade_service.py tests/test_serial_upgrade_service.py`、`python scripts/verify_capability_coverage.py`；本轮七份文件的`git diff --check -- <文件列表>`及UTF-8/文档链接检查。
+- 验证结果：最终相关组合`Ran 130 tests ... OK (skipped=2)`，即128项通过、2项显式启用的本机无头浏览器集成测试未运行，包含17项新增回归；两份Python编译及能力覆盖检查通过。首轮专项发现初始化取游标影响Tftp指令既有游标时序，已限定观察起点只在Tftp Put/Web传统登录分支建立，保留原断言并复验通过。全工作区差异检查发现原有`network_card_ip.ini`第2行行尾空格，未修改该本机配置；本轮文件差异检查单独核对。本轮未运行完整基线，保留最近完整验证记录；未启动主程序、操作DUT、打包、运行EXE或提交，原有同期修改保留。
+- 后续待办：负责人重启Windows源码版，以Tftp Put和web打开网关传统账号方式复验半秒探测、停止回车、账号→密码→Boot Shell顺序及错位失败日志；现场结果待确认，见ACCEPTANCE_BASELINE §2.5/§2.6.1/§3，不将模拟回归升级为真实设备验收。
+
+## 2026-11-16 - 增加飞书SDK按需安装与安全重启
+
+- 类型：优化
+- 背景：负责人反馈换电脑后再次出现“缺少飞书SDK”，要求仅在原错误弹窗中选择“安装并重启”才安装，原“确定”不安装；活动任务存在时提示结束后重试。
+- 完成内容：①专门缺包异常及独立双按钮弹窗，确定/Esc/关闭跳过，EXE引导更新完整ZIP。②独立service在当前源码隔离环境安装锁定SDK及必要wheel，下载后核对包名/版本，后台离线安装及真实导入/闭包版本/pip check验证；失败保留程序可重试。③维护准入、活动任务和同环境实例占用保护，不停止已有任务、不准入新业务。④成功走原安全退出，隐藏助手等待旧PID真正退出后按原解释器/工作目录/业务参数重启一次，不重放飞书操作。⑤人工控制面登记及编译/覆盖清单、操作员文档、状态和验收边界同步。
+- 修改文件：新增models/core/service/UI模块、重启/源码环境检查脚本及41项专项；增量修改飞书缺包、源码入口、主程序装配、AI/路由/Capability维护准入、GUI桥和机器清单；全部相对路径及各文件用途见[本轮实施记录](validation/feishu_sdk_repair_20261116/IMPLEMENTATION.md#本轮文件清单)，保留同期公司MiniMax网关及本机配置变更。
+- 验证方法：仓库外专用CPython3.9.10 x64按原锁定清单准备；执行本轮`verify_install.py`、`run_focused.py`、`check_static.py`，具体命令与失败记录见实施记录。专项配置写入保护、离屏Tk、模拟设备/平台，真实安装仅限专用测试环境。
+- 验证结果：相关组合626项通过（当时含新增37项、真实SDK7项实际执行）；补充同环境新实例启动保护后最终41项新增专项通过，不将后加4项计入此前626项。专用环境真实缺包→15种锁定wheel下载核验→仅补SDK→真实导入/版本/pip check通过。真实Windows子进程假入口等待原PID退出及一次启动通过；21文件编译、235源码登记、覆盖及差异检查见`static.json`。初次新增断言短/长路径及远程管理旧宿主回调兼容问题已修正并复验，未降低断言。本轮未运行完整基线，保留最近完整记录；未安装当前运行环境、未构建/运行EXE、外发、操作DUT或提交。
+- 补充验证：源码入口检查新增后，`test_verify_baseline`和`test_portable_release`共30项专项通过；没有调用完整基线或构建/启动EXE。当前源码环境复核仍未安装飞书SDK，保留由操作员在新弹窗中选择安装的行为。
+- 后续待办：负责人重启源码版核对完整弹窗、进度、失败重试及实际主程序重启；按ACCEPTANCE_BASELINE §2.16/§3保留待确认状态，不将离屏/假入口结果升级为完整Windows或真实设备验收。
+
+## 2026-11-16 - 接入公司MiniMax网关并补充网络诊断
+
+- 类型：优化
+- 背景：负责人确认公司HTTP网关使用不带/v1的Chat Completions路径、沿用现有代理；原配置只允许HTTPS，请求路径直接拼接，连接错误缺少多网卡定位信息。
+- 完成内容：①精确授权10.10.120.244:4000的HTTP，其余HTTPS校验及禁止重定向保持；统一显式/v1和完整端点/模型列表路径，不自动切换或重发。②复用MiniMax手填ID、Bearer、DPAPI地址绑定及工具资格验证。③新增8秒有界Windows DNS/TCP及接口/路由取证，区分原HTTP未知出口、后续TCP真实源IP/接口和路由推断；沿用代理、过滤认证、不绑定源地址或修改系统网络。④默认客户端及GUI日志接入，审查更新11份GUI摘要，原Capability业务/状态保持；新core登记编译清单，同步用户及验收文档。
+- 修改文件：`Cheating_machine_execution_tool/src/services/ai_store.py`、`src/core/ai_client.py`、新增`src/core/ai_gateway_network.py`、`src/services/ai_diagnostic_service.py`、`src/ui/ai_diagnostics_window.py`、新增`tests/test_ai_gateway.py`、`scripts/verify_baseline.py`、`scripts/capability_gui_actions.json`（上述src/tests/scripts相对主源码目录）；`Cheating_machine_execution_tool/line_check_assistant_README.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、本日志、新增`.claude/plans/company-minimax-gateway.md`及`validation/company_minimax_20261116/IMPLEMENTATION.md`。
+- 验证方法：仓库外锁定CPython3.9.10 x64运行9模块相关unittest、7文件py_compile、覆盖审查/更新及复核、git diff --check；具体可复现命令和历史失败见本轮IMPLEMENTATION。
+- 验证结果：最终196项全部通过（含22项新增），7文件编译、能力覆盖、新源码编译登记、6份文档UTF-8/新增链接及差异检查通过。真实Windows回环确认TCP源IP/接口；当前公司网关TCP可连接，未认证最小POST返回401，探测源IP为198.18.0.1、Meta/5。默认AI库无公司网关绑定密钥，两个模型的真实问答/工具仍未验证。首轮关闭端口预期断言和GUI快照失败均已针对性修正并回归，未降低成功判定；复核增加显式Session代理仍生效时不误报NO_PROXY绕过。本轮未运行完整基线，保留最近完整记录；未修改本机配置、网络、依赖或构建产物，未提交、推送、打包、运行EXE或操作DUT。
+- 后续待办：负责人在本地模型页配置公司密钥，分别验证两个模型的文本/流式/工具结果续接及完整Windows交互，按ACCEPTANCE_BASELINE §2.16/§3记录；自动化、401和TCP结果不升级真实模型或DUT验收状态。
+
 ## 2026-11-16 - 汇总全部变更准备提交推送
 
 - 类型：文档

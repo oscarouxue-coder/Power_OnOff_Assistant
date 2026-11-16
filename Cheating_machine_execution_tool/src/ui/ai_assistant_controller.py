@@ -71,6 +71,9 @@ class AiAssistantController:
         self.service.host_busy = client.host_busy if host_busy else lambda: False
         self.conversation = AiConversationService(self.service, context,
             client.shared_busy if shared_busy else None, target_current=client.target_current)
+        maintenance = vars(master).get('_source_maintenance_gate')
+        self.service.maintenance = self.conversation.maintenance = maintenance
+        self.conversation.router.maintenance = maintenance
         self.service.conversation = self.conversation
         self.capability_bridge = None
         if (app_dir is not None and hasattr(master, "channels") and hasattr(master, "serial_session_manager")
@@ -87,6 +90,7 @@ class AiAssistantController:
                 data.snapshot, data.admissible, lambda requests: inspect_upgrade_network(requests, emit), emit,
                 released=data.released, tool_root=app_dir, onu_configuration=data.onu_snapshot, channel_commit=data.commit_channels,
                 settings_commit=data.commit_settings)
+            self.capabilities.maintenance = maintenance
             self.capability_bridge.channel_configuration = getattr(self.capabilities, 'channel_configuration', None)
             self.capability_bridge.settings_configuration = getattr(self.capabilities, 'settings', None)
             self.conversation.capabilities = AiCapabilityAdapter(self.conversation, self.capabilities)

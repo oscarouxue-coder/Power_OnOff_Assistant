@@ -188,6 +188,9 @@ class CapabilityUiBridge:
         return result
 
     def _admissible(self, request):
+        gate = vars(self.app).get('_source_maintenance_gate')
+        if gate is not None and gate.active:
+            return False
         owner = request.args[0]
         if 'device-business' not in request.args[1]:
             return not getattr(self.app, '_app_closing', False)

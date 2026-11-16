@@ -1,4 +1,4 @@
-"""直接 HTTPS 调用：统一 Chat Completions / Responses，不依赖厂商 SDK。"""
+"""统一 Chat Completions / Responses；仅授权公司网关允许 HTTP。"""
 from __future__ import annotations
 
 from dataclasses import replace
@@ -10,6 +10,7 @@ import requests
 
 from src.models.ai_diagnostics import ModelReply
 from src.core.ai_stream import ModelStream
+from src.core.ai_gateway_network import collect_gateway_network, proxy_snapshot, transport_error
 from src.services.ai_store import canonical_url, profile_fingerprint
 
 
@@ -21,18 +22,34 @@ class ContextLengthError(ModelServiceError):
     """仅表示服务明确拒绝上下文长度；不携带服务原文。"""
 
 
+def request_url(base_url, path):
+    """保留配置身份，只在发请求时去掉已填写的Chat Completions后缀。"""
+    base = canonical_url(base_url)
+    suffix = "/chat/completions"
+    if base.endswith(suffix) and path in ("chat/completions", "models"):
+        base = base[:-len(suffix)]
+    return base + "/" + path
+
+
 class DiagnosticModelClient:
-    def __init__(self, profile, key, redactor, session=None):
+    def __init__(self, profile, key, redactor, session=None, emit=None):
         self.profile = profile
         self.key = key
         self.redactor = redactor
         self.redactor.add_secrets((key,))
         self.session = session or requests.Session()
+        self.emit = emit
+
+    def _emit(self, message):
+        if self.emit is not None:
+            self.emit(self.redactor.text(message))
 
     def _request(self, method, path, payload=None, stop=None, on_text=None):
         if stop is not None and stop.is_set():
             raise InterruptedError("诊断已取消")
-        url = canonical_url(self.profile.base_url) + "/" + path
+        url = request_url(self.profile.base_url, path)
+        self._emit(f"[AI请求] TX {method} {url}；协议={self.profile.protocol}；模型={self.profile.model}")
+        proxy = proxy_snapshot(self.session, url)
         try:
             response = self.session.request(
                 method, url, headers={"Authorization": "Bearer " + self.key,
@@ -47,7 +64,11 @@ class DiagnosticModelClient:
                     # 不输出服务响应正文/请求头，避免代理回显密钥及原始输入。
                     category = {401: "密钥无效", 403: "权限不足", 404: "地址或模型不存在",
                                 429: "限流或额度不足"}.get(response.status_code, "服务请求失败")
-                    raise ModelServiceError(f"{category}（HTTP {response.status_code}）")
+                    detail = f"{category}（HTTP {response.status_code}）；请求地址={url}"
+                    if response.status_code == 404:
+                        detail += "；请核对路径及模型ID，不会自动切换/v1或重发"
+                    self._emit("[AI请求] 失败：" + detail)
+                    raise ModelServiceError(self.redactor.text(detail))
                 chunks, size = [], 0
                 decoder = ModelStream(self.profile.protocol, lambda text: on_text(self.redactor.stream_text(text))) if on_text else None
                 streaming = None
@@ -75,10 +96,19 @@ class DiagnosticModelClient:
                     raise ModelServiceError("模型返回格式不正确")
                 if isinstance(result.get("base_resp"), dict) and result["base_resp"].get("status_code", 0):
                     raise ModelServiceError("厂商返回业务错误，请检查接入配置及额度")
+                self._emit(f"[AI请求] 成功：{method} {url}（HTTP {response.status_code}）")
                 return result
             finally:
                 response.close()
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            if stop is not None and stop.is_set():
+                raise InterruptedError("诊断已取消") from None
+            detail = transport_error(exc)
+            self._emit("[AI请求] 失败：" + detail + "；开始当前网络诊断（不重发模型请求）")
+            network = collect_gateway_network(url, proxy, stop, self._emit)
+            raise ModelServiceError(self.redactor.text(detail + "；" + network)) from None
         except (requests.RequestException, ValueError, TypeError, KeyError) as exc:
+            self._emit("[AI请求] 失败：网络或响应解析异常 " + type(exc).__name__)
             raise ModelServiceError("模型网络或响应解析失败：" + type(exc).__name__) from None
 
     @staticmethod
