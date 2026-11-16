@@ -2,7 +2,7 @@
 
 本表由 scripts/verify_capability_coverage.py 生成；登记、自动化验证和现场验收分别判断。
 
-业务清单 87 项；已有接口 63 项；部分接入 15 项；待接入 5 项；人工控制面 4 项。
+业务清单 92 项；已有接口 65 项；部分接入 16 项；待接入 5 项；人工控制面 6 项。
 现有诊断/交互接口不代表该组所有管理动作已开放；部分接入见限制列，不将分组数字称为最终覆盖率。
 
 | 功能ID | GUI业务 | 真实入口 | 业务实现 | AI接口 | 状态/限制 | 资源/风险 | 自动化测试入口 |
@@ -30,7 +30,7 @@
 | config.runtime | 开关机运行参数 | _build_test_item_ui_defaults_tab | LegacyUiDefaultsStore | configuration.runtime.patch | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
 | config.wifi | WiFi测试配置 | _build_test_item_wifi_tab | TestItemConfigStore | configuration.connect_wifi.patch | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
 | config.project | 项目信息和版本基准 | _build_test_item_project_info_tab | TestItemConfigStore | configuration.project_info.patch | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
-| device.version | 查询当前样机版本 | _start_project_info_query | query_device_project_info | device.version | connected：已有受控接口，真实Windows/模型/DUT验收另列 | adapter/device/modify | test_capability_devices.py；Windows/真实模型及设备待验收 |
+| device.version | 查询当前样机版本 | _start_project_info_query | query_device_project_info | device.version | connected：明确版本请求共用受控多通道Job；逐台失败继续、先真实结果后一次AI说明；不重放，现场验收待确认 | adapter/device/modify | test_capability_devices.py, test_ai_version_query.py, test_ai_multichannel_dispatch.py；Windows/真实模型及设备待验收 |
 | config.reload_save | 配置保存/重新加载 | _open_test_item_config | TestItemConfigStore | configuration.read | partial：支持按域读取/合并保存及默认命令草稿；GUI编辑器草稿和整套重载尚未接管 | configuration/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
 | notifications.config | 消息推送配置 | _open_test_item_config | MessagePushConfigService | notifications.read / notifications.patch | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
 | notifications.test | 发送测试消息 | _open_test_item_config | send_test_message | notifications.test | connected：已有受控接口，真实Windows/模型/DUT验收另列 | external/dangerous | test_capability_application.py；Windows/真实模型及设备待验收 |
@@ -78,26 +78,31 @@
 | serial.status | 实时串口状态 | _open_serial_log_module | read_serial_status | serial.status | connected：已有受控接口，真实Windows/模型/DUT验收另列 | serial/read | test_capability_application.py；Windows/真实模型及设备待验收 |
 | serial.directory | 串口日志目录 | _on_serial_log_directory_changed | SerialTerminal | 待接入 | pending：当前工作区监控输出可用；主串口窗口保存目录及正在打开日志的归属适配待完成 | configuration/modify | 待接入/人工控制，无执行验收 |
 | ai.profiles | 模型配置增改复制删除选择 | _open_ai_assistant | DiagnosticStore | ai.profiles.list | partial：仅查询模型元数据；模型/密钥配置写入与选择仍须本地控制面，尚未开放自动化适配 | configuration/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
+| ai.source_ip | 模型出口IP枚举与设置 | _open_ai_assistant | list_source_ips / DiagnosticStore | ai.source_ip.list / ai.profiles.list | partial：共用本机IPv4枚举及已保存配置；设置/保存仍为本地模型配置控制面，AI写入尚未开放 | configuration/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
 | ai.models_test | 模型列表/连接测试 | _open_ai_assistant | DiagnosticClient | ai.models.query / ai.models.test | connected：已有受控接口，真实Windows/模型/DUT验收另列 | external/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
 | ai.conversation | 对话/连续诊断/停止/进展 | _open_ai_assistant | AiConversationService | existing_interaction | partial：已有受控接口，真实Windows/模型/DUT验收另列 | conversation/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
 | ai.evidence | 文本导入/证据检索 | _open_ai_assistant | AiEvidenceContext | ai.evidence.import / read_test_evidence | partial：已有受控接口，真实Windows/模型/DUT验收另列 | file/read | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
 | ai.sessions | 会话查询/重命名/删除清空 | _open_ai_assistant | DiagnosticStore | ai.sessions.list/read/rename/delete | connected：已有受控接口，真实Windows/模型/DUT验收另列 | data/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
+| ai.sessions_create | 创建空白新会话 | _open_ai_assistant | AiConversationService.create_blank_session | ai.sessions.create | connected：已有受控接口，真实Windows/模型/DUT验收另列 | conversation/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
 | ai.reports | 报告查询/重命名/删除清空 | _open_ai_assistant | DiagnosticStore | ai.reports.list/read/rename/delete | connected：已有受控接口，真实Windows/模型/DUT验收另列 | data/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
 | ai.continue_report | 报告接手排查 | _open_ai_assistant | create_session_from_report | ai.reports.continue | connected：已有受控接口，真实Windows/模型/DUT验收另列 | conversation/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
 | ai.cases | 案例创建/修订/启停/删除 | _open_ai_assistant | SharedCaseStore | ai.cases.query / ai.cases.set_active / ai.cases.delete | partial：可查询/按版本启停/删除；新增和内容修订中的根因/复测确认保留真实人工控制面 | data/modify | test_capability_ai_data.py；Windows/真实模型及设备待验收 |
 | ai.case_confirmation | 人工确认根因及复测 | _open_ai_assistant | confirm_case | local_confirmation | manual_control：必须由真实操作员确认，AI可准备材料但不能自我批准 | human_control/manual | 待接入/人工控制，无执行验收 |
 | ai.monitor | 监控设置/启停/状态 | _open_ai_assistant | AiMonitorService | 待接入 | pending：原监控入口保留；Agent配置/启停须复用本地监控授权，禁止自行签发或扩大监控范围 | monitor/modify | 待接入/人工控制，无执行验收 |
 | ai.permissions | 权限切换/批准/拒绝 | _open_ai_assistant | AiPermissionService | local_confirmation | manual_control：必须由真实操作员确认，AI可准备材料但不能自我批准 | human_control/manual | 待接入/人工控制，无执行验收 |
-| remote.dingtalk | 钉钉配置/启停/绑定/取消 | _configure_dingtalk_remote | DingTalkRemoteService | 待接入 | pending：远程业务调用已校验真实来源；接入配置/启停属于授权控制面，尚需本地审阅后的专用适配 | external/configuration/modify | 待接入/人工控制，无执行验收 |
-| remote.feishu | 飞书配置/启停/绑定/取消/试发 | _configure_feishu_remote | FeishuRemoteService | 待接入 | pending：远程业务调用已校验真实来源；接入配置/启停属于授权控制面，尚需本地审阅后的专用适配 | external/configuration/modify | 待接入/人工控制，无执行验收 |
+| remote.dingtalk | 钉钉配置/启停/绑定/取消 | _configure_dingtalk_remote | DingTalkRemoteService | 待接入 | pending：远程业务调用已校验真实来源；接入配置/启停及AI卡片模板仍属本地授权控制面，尚需专用适配；流式为已有会话的显示投影 | external/configuration/modify | 待接入/人工控制，无执行验收 |
+| remote.feishu | 飞书配置/启停/绑定/取消/试发 | _configure_feishu_remote | FeishuRemoteService | 待接入 | pending：远程业务调用已校验真实来源；接入配置/启停及卡片权限仍属本地授权控制面，尚需专用适配；流式为已有会话的显示投影 | external/configuration/modify | 待接入/人工控制，无执行验收 |
 | remote.feishu_sdk_repair | 安装飞书SDK并重启源码 | _install_feishu_sdk | FeishuDependencyRepair | local_confirmation | manual_control：仅本机缺包弹窗由操作员选择安装；修改运行环境并重启，AI不可触发或代确认 | python-environment/process/manual | 待接入/人工控制，无执行验收 |
 | remote.binding_confirm | 群身份绑定确认 | _build_ai_remote_management | remote.confirm_binding | local_confirmation | manual_control：必须由真实操作员确认，AI可准备材料但不能自我批准 | human_control/manual | 待接入/人工控制，无执行验收 |
+| remote.instances | 多实例接入状态 | _open_ai_assistant | RemoteInstanceManagement.status | remote.instances.status | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/read | test_remote_instance_management.py；Windows/真实模型及设备待验收 |
+| remote.instance_configuration | 实例配对/启动模式/本地范围 | _open_ai_assistant | RemoteInstanceManagement | local_confirmation | manual_control：接入配置、配对、范围、启停及撤销仅本机操作员确认；AI不能生成配对码或自授权 | human_control/manual | 待接入/人工控制，无执行验收 |
+| remote.gateway_configuration | 网关配置/启停/配对码/撤销 | _open_ai_assistant | RemoteGatewayHost | local_confirmation | manual_control：接入配置、配对、范围、启停及撤销仅本机操作员确认；AI不能生成配对码或自授权 | human_control/manual | 待接入/人工控制，无执行验收 |
 | updates.check | 检查更新 | _build_ui | AppUpdateService.check_for_update | updates.check | connected：已有受控接口，真实Windows/模型/DUT验收另列 | external/read | test_capability_application.py；Windows/真实模型及设备待验收 |
 | updates.download | 下载更新/取消 | _build_ui | AppUpdateService.download_update | updates.download | partial：原更新服务校验及取消共用；AI仅下载到受控工作区，任意目标目录授权待接入 | external/file/modify | test_capability_application.py；Windows/真实模型及设备待验收 |
 
 ## GUI动作审查
 
-当前审查快照包含 316 个按钮/菜单/绑定/变量回调。新增或改变入口会使门禁失败。
+当前审查快照包含 341 个按钮/菜单/绑定/变量回调。新增或改变入口会使门禁失败。
 界面辅助动作（窗口显隐/滚动/复制/显密/清屏等）不计业务覆盖；动态控件须结合运行测试复核。
 
 ## 当前阶段

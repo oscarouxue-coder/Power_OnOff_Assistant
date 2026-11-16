@@ -14,6 +14,21 @@ from src.core.ai_credentials import WindowsCredentialCipher
 from src.models.remote_gateway import RemotePrincipal, allows, canonical, digest, identifier, signature
 
 
+def validate_pairing_scopes(scopes):
+    """Shared local form/CLI validation; never accepts an implicit whole-group grant."""
+    if not isinstance(scopes, list) or not scopes:
+        raise ValueError("必须明确允许的平台、聊天和成员")
+    for scope in scopes:
+        if not isinstance(scope, dict) or set(scope) != {"platform", "robot", "corp", "chat_type", "chat", "members"}:
+            raise ValueError("配对范围字段无效")
+        members = scope["members"]
+        if not isinstance(members, list) or not members or any(not isinstance(m, str) or not m for m in members):
+            raise ValueError("必须指定成员；全群使用显式单独的星号")
+        if "*" in members and members != ["*"]:
+            raise ValueError("全群范围须明确指定")
+        RemotePrincipal.parse(dict({k: v for k, v in scope.items() if k != "members"}, member=members[0]))
+
+
 class RemoteGatewayStore:
     def __init__(self, directory, *, cipher=None, clock=time.time):
         self.directory = Path(directory)
@@ -42,17 +57,7 @@ class RemoteGatewayStore:
 
     def create_pairing(self, scopes):
         # Validate an explicit operator-reviewed allowlist before issuing an invitation.
-        if not isinstance(scopes, list) or not scopes:
-            raise ValueError("必须明确允许的平台、聊天和成员")
-        for scope in scopes:
-            if set(scope) != {"platform", "robot", "corp", "chat_type", "chat", "members"}:
-                raise ValueError("配对范围字段无效")
-            members = scope["members"]
-            if not isinstance(members, list) or not members or any(not isinstance(m, str) or not m for m in members):
-                raise ValueError("必须指定成员；全群使用显式单独的星号")
-            if "*" in members and members != ["*"]:
-                raise ValueError("全群范围须明确指定")
-            RemotePrincipal.parse(dict({k: v for k, v in scope.items() if k != "members"}, member=members[0]))
+        validate_pairing_scopes(scopes)
         code = secrets.token_urlsafe(24)
         with self.lock, self.db:
             self.db.execute("INSERT INTO pairing VALUES(?,?,?)", (digest(code), self.clock() + 300, canonical(scopes)))

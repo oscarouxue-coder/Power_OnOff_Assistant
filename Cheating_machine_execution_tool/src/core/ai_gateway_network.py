@@ -1,4 +1,4 @@
-"""模型网关失败后的有界取证；不修改路由/代理，不绑定源地址或重发HTTP。"""
+"""模型网关失败后的有界取证；沿用配置源地址，不修改路由/代理或重发HTTP。"""
 from __future__ import annotations
 
 import json
@@ -40,6 +40,10 @@ foreach ($target in $config) {
         foreach ($address in ($addresses | Select-Object -First 2)) {
           $client=[System.Net.Sockets.TcpClient]::new($address.AddressFamily)
           try {
+            if ($target.source_ip) {
+              $source=[System.Net.IPAddress]::Parse([string]$target.source_ip)
+              $client.Client.Bind([System.Net.IPEndPoint]::new($source,0))
+            }
             $pending=$client.BeginConnect($address,[int]$target.port,$null,$null)
             $remaining=[Math]::Max(0, [int]($until-[DateTime]::UtcNow).TotalMilliseconds)
             if (-not $pending.AsyncWaitHandle.WaitOne($remaining)) {
@@ -191,7 +195,7 @@ def _probe(targets, stop):
     return records, note
 
 
-def collect_gateway_network(url, proxy, stop=None, emit=lambda _line: None):
+def collect_gateway_network(url, proxy, stop=None, emit=lambda _line: None, *, source_ip=""):
     """取证失败不替代请求错误；取消仍传给上层，结果不得当作原HTTP出口。"""
     if stop is not None and stop.is_set():
         raise InterruptedError("网络诊断已取消")
@@ -200,12 +204,17 @@ def collect_gateway_network(url, proxy, stop=None, emit=lambda _line: None):
     status = proxy.get("status", "unknown")
     proxy_note = {"proxy": "命中代理", "direct": "直连", "unknown": "未知"}.get(status, "未知")
     if proxy.get("endpoint"):
-        targets.append(proxy["endpoint"])
+        targets.append(dict(proxy["endpoint"]))
         proxy_note += " " + proxy["endpoint"]["host"] + ":" + str(proxy["endpoint"]["port"])
+    if source_ip:
+        for endpoint in targets:
+            endpoint["source_ip"] = source_ip
     lines = [f"目标={target['host']}:{target['port']}；当前有效代理={proxy_note}；"
-             f"NO_PROXY绕过={'是' if proxy.get('no_proxy_bypass') else '否' if status != 'unknown' else '未知'}",
+             f"NO_PROXY绕过={'是' if proxy.get('no_proxy_bypass') else '否' if status != 'unknown' else '未知'}；"
+             f"配置源IP={source_ip or '不指定（自动选择）'}",
              "原失败HTTP请求实际接口/源IP=未知；以下是失败后的当前探测，TCP成功仅表示端口可连接"]
-    emit("[AI网络] PC TX：PowerShell Dns.BeginGetHostAddresses / TcpClient.BeginConnect（不绑定源IP）/ "
+    binding = "绑定配置源IP=" + source_ip if source_ip else "不绑定源IP"
+    emit("[AI网络] PC TX：PowerShell Dns.BeginGetHostAddresses / TcpClient.BeginConnect（" + binding + "）/ "
          "Get-NetIPAddress -IPAddress <探测源IP> / Find-NetRoute -RemoteIPAddress <目标IP>；" + lines[0])
     try:
         records, note = _probe(targets, stop)

@@ -53,6 +53,10 @@ class CheckResult(NamedTuple):
 #    下全部 .py 为准;新增 .py 后必须手工补到本列表)。
 PY_COMPILE_SCRIPT_FILES: tuple[str, ...] = ('scripts/run_remote_gateway.py', 'scripts/restart_source_after_exit.py', 'scripts/source_environment_guard.py', 'run_line_check_assistant.py')
 PY_COMPILE_FILES: tuple[str, ...] = (
+    "src/core/ai_reply_cards.py",
+    "src/services/ai_reply_stream_service.py",
+    "src/core/ai_source_ip.py",
+    "src/ui/ai_source_ip_dialog.py",
     "src/models/dependency_repair.py",
     "src/core/feishu_dependency_install.py",
     "src/core/source_restart.py",
@@ -68,6 +72,8 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/services/remote_gateway_store.py",
     "src/services/remote_instance_service.py",
     "src/services/remote_gateway_runtime.py",
+    "src/services/remote_gateway_host.py",
+    "src/services/remote_instance_management.py",
     "src/services/remote_gateway_router.py",
     "src/services/remote_gateway_platforms.py",
     "src/services/controlled_host_service.py",
@@ -109,8 +115,10 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/models/ai_permissions.py",
     "src/models/ai_session_scope.py",
     "src/ui/ai_remote_management_tab.py",
+    "src/ui/ai_multi_instance_tab.py",
     "src/services/ai_session_router.py",
     "src/services/ai_batch_service.py",
+    "src/services/ai_version_query_service.py",
     "src/models/ai_batch.py",
     "src/services/ai_pc_conversation.py",
     "src/services/ai_permission_service.py",

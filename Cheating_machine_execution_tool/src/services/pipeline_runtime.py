@@ -38,7 +38,8 @@ class UiRequest:
     def __init__(self, channel, run, code, args, cleanup=False):
         self.channel, self.run, self.code, self.args = channel, run, code, args
         self.cleanup = cleanup
-        self.deadline = time.monotonic() + channel.dispatch_timeout
+        self.created = time.monotonic()
+        self.deadline = self.created + channel.dispatch_timeout
         self.done = threading.Event()
         self._lock = threading.Lock()
         self.state = 'pending'
@@ -129,7 +130,8 @@ class PipelineChannel:
             if request._invalid():
                 request.cancel('界面动作已取消')
             elif request.state == 'pending' and time.monotonic() >= request.deadline:
-                request.cancel('界面动作排队超时')
+                request.cancel('界面动作排队超时（动作=' + str(code) +
+                               '，等待=%.1f秒，尚未领取）' % (time.monotonic() - request.created))
         if request.error:
             if not cleanup and not request.error_type:
                 run.cancel()

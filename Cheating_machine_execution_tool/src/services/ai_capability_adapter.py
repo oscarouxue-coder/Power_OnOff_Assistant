@@ -67,7 +67,8 @@ class AiCapabilityAdapter:
             if gateway is None or not gateway.authorized_source(source, session):
                 raise CapabilityError("relay_identity_required", "统一接入实例未验证当前来源及范围")
         return CapabilityAuthority(fingerprint(business_source_identity(source)), identifier, operation_id,
-            tuple(int(t["channel"]) for t in targets), kind, permission["mode"], permission.get("grant_id", ""), approved)
+            tuple(int(t["channel"]) for t in targets), kind, permission["mode"], permission.get("grant_id", ""), approved,
+            tuple((int(t["channel"]), t["bind_ip"], t["host"], int(t.get("telnet_port", 23))) for t in targets))
 
     def accept_confirmation(self, identifier, text):
         match = re.fullmatch(r"确认固件适配\s+([0-9a-f]{8})", text.strip())
@@ -147,8 +148,8 @@ class AiCapabilityAdapter:
             approved = True
         self.owner.actions._eligible(identifier, stop)
         current = self.authority(identifier, action["id"], approved)
-        if (current.mode, current.grant_id, current.channels, current.principal) != (
-                authority.mode, authority.grant_id, authority.channels, authority.principal):
+        if (current.mode, current.grant_id, current.channels, current.principal, current.target_endpoints) != (
+                authority.mode, authority.grant_id, authority.channels, authority.principal, authority.target_endpoints):
             raise CapabilityError("authorization_changed", "批准期间授权或目标已变化，未执行")
         if needs_scope:
             decided = self.owner.store.action(action["id"])

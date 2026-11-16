@@ -42,12 +42,32 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_workspace_is_only_manual_entry_and_auxiliary_windows_are_lazy(self):
         self.assertEqual([self.dialog.book.tab(t, "text") for t in self.dialog.book.tabs()],
-                         ["排障工作台", "模型接入", "已确认案例", "远程管理"])
+                         ["排障工作台", "模型接入", "已确认案例", "远程管理", "多实例管理"])
         self.assertIsNone(self.dialog.monitor_panel.window)
         self.assertIsNone(self.dialog.reports_panel.window)
         self.assertFalse(hasattr(self.dialog, "question"))
         self.assertFalse(hasattr(self.dialog, "_submit"))
         self.assertFalse(hasattr(self.dialog.chat_panel, "from_report"))
+
+    def test_multi_instance_tab_lazy_reused_hide_only_suspends(self):
+        panel = Mock()
+        self.dialog.multi_instance_factory = Mock(return_value=panel)
+        self.assertIsNone(self.dialog.multi_panel)
+        self.dialog.book.select(self.dialog.multi_tab)
+        self.root.update()
+        self.dialog.multi_instance_factory.assert_called_once_with(self.dialog.multi_tab)
+        panel.activate.assert_called()
+        self.dialog.book.select(self.dialog.workspace)
+        self.root.update()
+        panel.suspend.assert_called()
+        self.dialog.hide()
+        panel.dispose.assert_not_called()
+        self.dialog.open()
+        self.dialog.book.select(self.dialog.multi_tab)
+        self.root.update()
+        self.dialog.multi_instance_factory.assert_called_once()
+        self.dialog.begin_close()
+        panel.dispose.assert_called_once()
 
     def test_remote_tab_is_lazy_reused_and_hiding_only_cancels_binding(self):
         remote = Mock()

@@ -64,11 +64,14 @@ class ConversationBudget:
                     pass
         return self.prefix + [item for group in self.groups for item in group] + self.current
 
-    def fit(self, client, tools):
+    def fit(self, client, tools, *, stream=False):
         while True:
             history = self.history()
             # 含协议封装、工具定义及所有文本；字节估算比字符计数更保守。
-            estimated = len(self.dumps(client.request_payload(history, tools)).encode("utf-8"))
+            payload = client.request_payload(history, tools)
+            if stream:
+                payload["stream"] = True
+            estimated = len(self.dumps(payload).encode("utf-8"))
             limit = self.capacity.tokens
             if not limit or estimated + self.max_output + math.ceil(limit * .05) <= limit:
                 return history, estimated

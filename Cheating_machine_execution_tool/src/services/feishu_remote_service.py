@@ -11,6 +11,8 @@ import threading
 import time
 
 from src.core.feishu_client import FeishuApi
+from src.core.ai_reply_cards import FeishuReplyCard, CardStopped
+from src.services.ai_reply_stream_service import ReplyStreamService
 from src.core.feishu_stream import FeishuStream, FeishuInstanceLease
 from src.models.ai_actions import action_fingerprint
 from src.models.ai_permissions import PERMISSION_LABELS
@@ -42,6 +44,8 @@ class FeishuRemoteService:
         self.stop_event = threading.Event()
         self.outbox = queue.Queue(maxsize=128)
         self.updates = conversation.subscribe()
+        self.reply_streams = ReplyStreamService(self.mailbox, self._stream_card, self._stream_allowed,
+            self._sanitize, self._send_stream_final, self.emit, clock=self.clock)
         self.worker = threading.Thread(target=self._loop, name="feishu-ai", daemon=True)
         self.sender_thread = threading.Thread(target=self._send_loop, name="feishu-reply", daemon=True)
         if autostart:
@@ -66,6 +70,9 @@ class FeishuRemoteService:
                         binding=bool(self.binding_code and self.clock() < self.binding_deadline))
 
     def start(self):
+        guard = getattr(self, "direct_admission", None)
+        if guard is not None:
+            guard("feishu", self.config)
         if self.stop_event.is_set():
             raise ValueError("飞书接入正在退出")
         if self.transport is not None:
@@ -137,6 +144,10 @@ class FeishuRemoteService:
         self.emit("已取消群绑定")
 
     def enable(self, kind, enabled):
+        if enabled:
+            guard = getattr(self, "direct_admission", None)
+            if guard is not None:
+                guard("feishu", self.config)
         if kind not in ("group", "p2p"):
             raise ValueError("飞书会话类型无效")
         self.conversation.router.cancel_platform("feishu", kind)
@@ -361,7 +372,11 @@ class FeishuRemoteService:
                 item = messages[index]
                 text = str(item.get("text", ""))
                 # 待批准详情由下面的不可变操作记录生成，替换桌面按钮指引。
-                if item.get("role") == "assistant" and "请点击“查看待确认操作”" in text:
+                if item.get("role") == "assistant" and item.get("reply_id"):
+                    if not self.reply_streams.offer(identifier, message, item, self._stream_title(message, session),
+                                                   self.generations[message.chat_type]):
+                        break
+                elif item.get("role") == "assistant" and "请点击“查看待确认操作”" in text:
                     pass
                 elif (item.get("role") == "system" and item.get("kind") == "recovery"
                       and text.strip() == "本轮恢复状态：无临时修改"):
@@ -371,6 +386,10 @@ class FeishuRemoteService:
                         break
                 self.mailbox.route(key, identifier, index + 1)
             self._publish_approval(identifier, message)
+            draft = self.conversation.draft_message(identifier)
+            if isinstance(draft, dict) and draft.get("text"):
+                self.reply_streams.offer(identifier, message, draft, self._stream_title(message, session),
+                                        self.generations[message.chat_type])
 
     def _publish_approval(self, identifier, message):
         with self.lock:
@@ -414,8 +433,26 @@ class FeishuRemoteService:
             with self.lock:
                 self.tokens.pop(token, None)
 
-    def _sanitize(self, text):
-        return sanitize(text, self.project_path, (self.config["app_secret"],), self.conversation)
+    def _sanitize(self, text, *, streaming=False):
+        return sanitize(text, self.project_path, (self.config["app_secret"],), self.conversation, streaming=streaming)
+
+    def _stream_allowed(self, message, generation):
+        with self.lock:
+            return self._allowed(message) and generation == self.generations[message.chat_type]
+
+    def _stream_card(self, message, generation):
+        return FeishuReplyCard(self.api, lambda: self._stream_allowed(message, generation), self.emit)
+
+    def _stream_title(self, message, session):
+        return f"项目：{load_push_project_name(self.project_path)} | {target_label(session)} | {message.nickname}"
+
+    def _send_stream_final(self, message, title, text, identifier, generation):
+        for index, post in enumerate(reply_posts(message.group, title, text)):
+            if not self._stream_allowed(message, generation):
+                raise CardStopped()
+            self.emit("下发降级完整回复：POST /open-apis/im/v1/messages（凭据省略）")
+            key = hashlib.sha256((identifier + ':' + str(index)).encode()).hexdigest()[:32]
+            self.api.send_post(message.group, post, identifier=key)
 
     def reply(self, message, text, channel=None, *, markdown=True):
         if not text:
@@ -465,6 +502,7 @@ class FeishuRemoteService:
 
     def _send_loop(self):
         while not self.stop_event.is_set():
+            self.reply_streams.tick()
             try:
                 message, post, generation = self.outbox.get(timeout=.2)
             except queue.Empty:
@@ -481,7 +519,7 @@ class FeishuRemoteService:
                 self.emit("飞书回复发送失败或结果未知，请在本地核对；不会重新执行排障工具")
             finally:
                 self.outbox.task_done()
-            self.stop_event.wait(self.send_interval)
+            self.reply_streams.wait(self.stop_event, self.send_interval)
 
     def begin_close(self):
         self.conversation.router.cancel_platform("feishu")

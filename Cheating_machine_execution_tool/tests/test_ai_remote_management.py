@@ -168,7 +168,9 @@ class RemoteManagementTests(unittest.TestCase):
         ding = self.management.panels["dingtalk"]
         ding.variables["client_id"].set("new-client")
         ding.variables["client_secret"].set("new-secret")
+        ding.variables["ai_card_template_id"].set("template.schema")
         ding.save()
+        self.assertEqual(self.stores["dingtalk"].configure.call_args.args[0]["ai_card_template_id"], "template.schema")
         self.root._sync_ai_message_push.assert_called_once_with(self.stores["dingtalk"].configure.return_value)
         self.assertEqual(ding.variables["client_secret"].get(), "")
         self.assertIs(self.messages.showinfo.call_args.kwargs["parent"], self.root)
@@ -200,16 +202,58 @@ class RemoteManagementTests(unittest.TestCase):
             self.assertIs(call.kwargs["parent"], self.root)
             self.assertEqual(call.kwargs["default"], "no")
 
-    def test_embedded_feishu_context_menu_works_from_input(self):
+    def test_feishu_menu_only_opens_from_more_button(self):
         self.management.activate()
         self.management.select_platform("feishu")
-        self.root.update()
-        panel = self.management.panels["feishu"]
-        entry = next(w for w in panel.window.winfo_children() if isinstance(w, ttk.Entry))
-        with patch.object(panel.menu, "tk_popup") as popup:
-            entry.event_generate("<Button-3>", rootx=20, rooty=30)
-            self.root.update()
-            popup.assert_called_once_with(20, 30)
+        for embedded in (True, False):
+            panel = self.management.panels["feishu"] if embedded else FeishuSetupWindow(
+                self.root, self.stores["feishu"], lambda: None, self.notifications, Mock())
+            try:
+                for theme in ("vista", "clam"):
+                    with self.subTest(embedded=embedded, theme=theme):
+                        ttk.Style(self.root).theme_use(theme)
+                        self.root.update()
+                        widgets = [panel.window]
+                        for widget in widgets:
+                            widgets.extend(child for child in widget.winfo_children()
+                                           if not isinstance(child, tk.Menu))
+                        more = next(w for w in widgets if isinstance(w, ttk.Button)
+                                    and w.cget("text") == "更多操作 ▾")
+                        with patch.object(panel.menu, "tk_popup") as popup:
+                            for widget in widgets:
+                                widget.event_generate("<Button-3>", rootx=20, rooty=30)
+                                self.root.update()
+                                self.assertFalse(popup.called, str(widget))
+                            more.invoke()
+                            popup.assert_called_once_with(
+                                more.winfo_rootx(), more.winfo_rooty() + more.winfo_height())
+            finally:
+                if not embedded:
+                    panel.close()
+
+    def test_feishu_more_menu_keeps_test_and_cancel_actions(self):
+        runtime = self.runtime("feishu")
+        self.management.activate()
+        for embedded in (True, False):
+            with self.subTest(embedded=embedded):
+                panel = self.management.panels["feishu"] if embedded else FeishuSetupWindow(
+                    self.root, self.stores["feishu"], lambda: runtime, self.notifications, Mock())
+                try:
+                    self.notifications.enqueue.reset_mock()
+                    runtime.cancel_binding.reset_mock()
+                    panel.code = "PENDING"
+                    self.assertEqual(panel.menu.entrycget(0, "label"), "发送飞书测试消息")
+                    self.assertEqual(panel.menu.entrycget(1, "label"), "取消当前群绑定申请")
+                    panel.menu.invoke(0)
+                    self.notifications.enqueue.assert_called_once_with({}, test=True)
+                    runtime.cancel_binding.assert_not_called()
+                    panel.menu.invoke(1)
+                    runtime.cancel_binding.assert_called_once_with()
+                    self.assertEqual(panel.code, "")
+                    self.notifications.enqueue.assert_called_once_with({}, test=True)
+                finally:
+                    if not embedded:
+                        panel.close()
 
     def test_native_controls_and_minimum_layout_under_vista_clam(self):
         self.management.activate()

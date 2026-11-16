@@ -176,15 +176,24 @@ class AiChatPanel:
 
     def new(self, report=None, target=None):
         """兼容调用入口；设备必须显式传入目标，界面不再默认选第一通道。"""
+        if self.routing:
+            self.service.emit("新会话已跳过：正在识别上一条消息，请稍后重试")
+            return None
         try:
-            self.owner.refresh_targets()
-            if target is not None and target not in self.targets:
-                raise ValueError("目标已变化或未配置")
-            self.selected = self.service.create_session(target, self.owner.service.profile, report=report,
-                scope="device" if target else "general")
-            self.service.router.select(self.selected)
+            if target is None and report is None:
+                identifier = self.service.create_blank_session(self.owner.service.profile)
+            else:
+                self.owner.refresh_targets()
+                if target is not None and target not in self.targets:
+                    raise ValueError("目标已变化或未配置")
+                identifier = self.service.create_session(target, self.owner.service.profile, report=report,
+                    scope="device" if target else "general")
+            self.service.router.select(identifier)
+            self.route_generation += 1
+            self.selected = identifier
             self.revision = None
             self.refresh()
+            self.input.focus_set()
             return self.selected
         except Exception as exc:
             self.error(exc)
@@ -344,13 +353,26 @@ class AiChatPanel:
         if revision == self.revision:
             return
         same_session = self.revision is not None and self.revision[0] == self.selected
+        previous_revision = self.revision
         self.revision = revision
         at_end = self.output.yview()[1] > 0.98
         top_index = self.output.index("@0,0")
         selection = tuple(str(index) for index in self.output.tag_ranges("sel")) if same_session else ()
         self.output.configure(state="normal")
-        self.output.delete("1.0", "end")
-        for message in messages:
+        tail = getattr(self, "_stream_tail", None)
+        incremental = (same_session and tail and messages and messages[-1].get("reply_id") == tail[0]
+                       and len(previous_revision[1]) == len(revision[1])
+                       and previous_revision[1][:-1] == revision[1][:-1])
+        if incremental:
+            self.output.delete(tail[1], "end-1c")
+            pending = messages[-1:]
+        else:
+            self.output.delete("1.0", "end")
+            pending = messages
+        self._stream_tail = None
+        for message in pending:
+            if message.get("reply_id") and message.get("kind") == "stream":
+                self._stream_tail = (message["reply_id"], self.output.index("end-1c"))
             self._insert_message(message)
         if len(selection) == 2:
             self.output.tag_add("sel", *selection)

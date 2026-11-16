@@ -1,5 +1,228 @@
 # 开发记录
 
+## 2026-11-17 - 提交全部AI改动并执行完整门禁
+
+- 类型：状态更新
+- 背景：负责人要求将当前全部文件一次提交到本地Git。
+- 完成内容：汇总当前全部68份未忽略的源码、测试、配置、计划及文档，涵盖模型出口IP、飞书重连日志、新会话菜单、多通道版本查询、流式回复和多实例管理；清理本机网卡配置4行尾随空格及实例管理service文件末尾多余空行，不改变配置值或业务逻辑。修正源IP弹窗布局测试的时序：等实际控件映射和布局完成后测量，保留宽度断言，增加未映射超时失败保护，不修改生产UI。提交说明为“完善AI多实例管理、流式回复与多通道版本查询”；仅本地提交，不推送远程。
+- 修改文件：
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/config/network_card_ip.ini`（仅清理尾随空格，其余配置改动随本次提交保留）
+  - `Cheating_machine_execution_tool/src/services/remote_instance_management.py`（仅清理文件末尾多余空行）
+  - `Cheating_machine_execution_tool/tests/test_ai_source_ip.py`（修正布局测量时序）
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+  - 其它既有改动文件保持原内容，详见下方各轮记录和本次Git提交文件清单。
+- 验证方法：`git diff --check`、`git diff --cached --check`；现有`.githooks/pre-commit`调用`scripts/run_git_pre_commit.ps1`，使用经校验的CPython3.9.10 x64，在主源码目录实际执行`python scripts/verify_baseline.py`；提交后核对提交ID、文件清单和工作区状态。
+- 验证结果：首轮完整基线编译247文件、243主源码登记、能力覆盖及协议不变量通过；2835项测试运行252.774秒，1项失败、9项跳过，提交被阻止。失败为源IP布局测试提前读取到宽度1，单独运行同项亦失败；由固定30毫秒关闭改为实际映射后测量，保留至少400像素断言，`PYTHONPATH=tests python -m unittest test_ai_source_ip -v`全部27项、3.488秒、OK。修正后完整基线由再次提交的钩子实际执行，任一门禁失败即阻止提交；成功提交表示全部检查通过，最终实际测试数量和检查结果以本次钩子输出为准。下方各轮“未运行完整基线/未提交”保留阶段事实，本次提交检查以本条为准。
+- 后续待办：Windows源码交互、真实模型/平台/多样机验收继续按`ACCEPTANCE_BASELINE.md`原待办执行；本次不打包、不运行EXE、不连接真实模型/平台/DUT，现有EXE未更新。
+
+## 2026-11-17 - 增加AI多实例配置管理标签页
+
+- 类型：功能
+- 背景：负责人要求在AI诊断助手新增多实例管理tab，已确认同时管理本机实例和统一网关；实例设置下次启动生效，网关随主程序退出。
+- 完成内容：①第五个主标签含本机实例/统一网关两子页，懒加载、局部主题及原生Checkbutton；长范围以固定高度可滚动区域显示，避免挤出操作按钮。②本地配对、明确允许通道和注册业务能力、DPAPI加密待生效配置及外部目录启动偏好；优先显式CLI/环境槽位，配置失效不自动回退直接接入，配置页仍可修复。③独立网关宿主service供GUI/CLI复用，配置明确监听/VPN/WSS/平台和配对范围；支持启停、单次配对码、登记实例详情/复制/撤销，外部CLI不接管停止。④主程序持有网关，切换/隐藏窗口不停，退出后台收尾；直接接入通过注入的同机器人冲突检查及既有应用互斥保护，未准入操作不停止原任务。⑤当前槽位复用身份、不改运行时范围；其它进程占用拒绝编辑，后台处理中冻结槽位，过期返回不覆盖新草稿。⑥配置/配对/授权/启停/撤销为人工控制面，仅注册local/gui只读remote.instances.status；覆盖清单92项（65接入/16部分/5待接入/6人工），不向AI开放授权接口。⑦同步操作说明、当前入口、验收状态和计划；本轮不扩大原现场验收结论。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/services/remote_gateway_host.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/remote_instance_management.py`（新增）
+  - `Cheating_machine_execution_tool/src/ui/ai_multi_instance_tab.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/remote_gateway_runtime.py`
+  - `Cheating_machine_execution_tool/src/services/remote_gateway_store.py`
+  - `Cheating_machine_execution_tool/src/services/dingtalk_remote_service.py`
+  - `Cheating_machine_execution_tool/src/services/feishu_remote_service.py`
+  - `Cheating_machine_execution_tool/src/services/capability_catalog.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`（仅启动装配）
+  - `Cheating_machine_execution_tool/scripts/run_remote_gateway.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_remote_instance_management.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_ai_multi_instance_tab.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_ai_workspace.py`
+  - `Cheating_machine_execution_tool/tests/test_dingtalk_remote.py`
+  - `Cheating_machine_execution_tool/scripts/capability_gui_actions.json`
+  - `CAPABILITY_COVERAGE.md`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/ai-multi-instance-management-tab.md`（新增）
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录设置`PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`、`PYTHONPATH=tests`后执行`python -m unittest test_remote_instance_management test_ai_multi_instance_tab test_remote_gateway test_remote_gateway_agent test_remote_instance_identity test_ai_workspace test_ai_remote_management test_dingtalk_remote test_feishu_remote test_capabilities test_capability_ai_data test_verify_baseline test_capability_coverage -q`；补充长范围显示后仅复验`python -m unittest test_ai_multi_instance_tab test_capability_coverage -q`。执行本轮17份Python的`py_compile`、编译登记完整性、协议不变量、`python scripts/verify_capability_coverage.py --update`及检查、CLI `--help`、本轮路径差异格式及文档链接检查。
+- 验证结果：组合277项、56.330秒、OK；长范围显示补充后UI/覆盖15项、8.841秒、OK（与组合重叠，不累加）；新管理专项18项、新UI专项12项均包含在上述结果。17份Python编译、243主源码登记、8条必须命中和禁止模式检查通过，`CAPABILITY_COVERAGE_OK`，CLI帮助正常。本轮路径差异格式通过；全仓差异检查发现已有本机`network_card_ip.ini`四行空白尾随空格，未混入本轮修复。工作区存在既有/同期其它AI改动，保留其内容，不宣称全仓静态快照或全仓格式无差异。未运行完整基线，保留最近完整记录；未提交、打包、运行EXE或连接真实平台/模型/DUT。
+- 后续待办：Windows源码版完整交互、真实VPN/WSS及钉钉/飞书联调由负责人复验；设备验收继续按原边界。首批重配使用新空闲槽位，不新增身份轮换、群内审批、跨实例取消或系统后台常驻。现有EXE未更新。
+
+## 2026-11-17 - 接入本地与远程AI流式回复
+
+- 类型：功能
+- 背景：负责人要求实施已确认流式方案：覆盖本地、飞书和钉钉默认直接接入，默认启用，卡片条件不足自动降级完整回复；本轮不扩展多实例统一网关。
+- 完成内容：①复用既有Chat Completions/Responses SSE，将普通问答、排障和连续诊断统一接入；按模型响应分配reply_id，完整正文仅入库一次。取消/断流/最终正文缺失时保留未完成显示记录，不进入协议续接或执行工具；接口返回完整JSON兼容，不因流失败重发模型请求。低延迟逐字节HTTP读取配合bytearray缓存/增量行解析，避免首段等待1KiB及长事件反复复制；Token估算使用实际stream载荷，保留原上下文裁剪/重试边界。②本地沿用100ms轮询，仅替换当前草稿，保持历史、选区、阅读位置和Markdown；最终正文替换草稿。③新增独立卡片HTTPS适配和远程投影service：飞书群/单聊CardKit，钉钉指定群AI卡片；合并最新快照、单卡生成期间每秒最多更新一次、终态立即收尾，按JSON转义体积切段，9分钟前关闭旧卡并续段。钉钉显式更新flowStatus结束状态。④平台邮箱新增reply_streams投递关联表（不保存模型/机器人凭据），游标仅在终态处理后推进；明确拒绝降级原富文本/文字，未知结果或重启遗留active/sending保守unknown，不重新发送或执行模型/业务。最终正文已接受、仅关闭状态被拒绝时只记录异常。⑤外发沿用原凭据过滤，流式暂扣已知凭据前缀，失败终止标记不释放暂扣内容；每次实际请求复核来源、群/单聊、启用及代次。状态、批准、通知、资源保护和长任务取消规则保持。⑥钉钉现有表单新增可选模板ID，默认空值兼容旧配置，不增加常驻按钮；模板/权限仍属本地授权控制面，不虚报AI业务接入。同步编译清单、能力目录/快照、说明与验收待办；保留所有同期未提交工作。
+- 修改文件：
+  - `.claude/plans/ai-streaming-replies.md`
+  - `Cheating_machine_execution_tool/src/core/ai_reply_cards.py`
+  - `Cheating_machine_execution_tool/src/core/ai_client.py`
+  - `Cheating_machine_execution_tool/src/core/ai_stream.py`
+  - `Cheating_machine_execution_tool/src/core/feishu_client.py`
+  - `Cheating_machine_execution_tool/src/services/ai_reply_stream_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_context_budget.py`
+  - `Cheating_machine_execution_tool/src/services/dingtalk_remote_service.py`
+  - `Cheating_machine_execution_tool/src/services/dingtalk_remote_store.py`
+  - `Cheating_machine_execution_tool/src/services/feishu_remote_service.py`
+  - `Cheating_machine_execution_tool/src/services/feishu_output.py`
+  - `Cheating_machine_execution_tool/src/services/capability_catalog.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/src/ui/dingtalk_setup_window.py`
+  - `Cheating_machine_execution_tool/src/utils/ai_redaction.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_reply_stream.py`
+  - `Cheating_machine_execution_tool/tests/test_dingtalk_remote.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_remote_management.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_context_budget.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/scripts/capability_gui_actions.json`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `CAPABILITY_COVERAGE.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用仓库外`%LOCALAPPDATA%/LineCheckAssistant/build-env-py39/Scripts/python.exe`。`python -m unittest discover -s tests -p test_ai_reply_stream.py`（实际以`tests/tk_test_windows.py::OffscreenTkWindows`包裹suite并assert_offscreen）；同法组合运行AI核心/对话/连续诊断、钉钉、飞书、显示、远程管理、能力覆盖，以及工作台/批量/上下文/网关回归；出口IP专项单独进程运行。对以上20份本轮Python执行py_compile；调用`check_py_compile_inventory(Path.cwd())`，执行`python scripts/verify_capability_coverage.py --update`及不带--update检查，最后进行本轮文件的`git diff --check`和文档一致性检查。
+- 验证结果：最终新增流式专项40项全部OK、无跳过（含真实Tk离屏、临时SQLite、受控模型和平台替身，不访问真实模型/平台/DUT）；修正后的上下文36项OK，出口IP单独27项OK。早期相关组合262项及后续78项阶段通过。最后两组组合分别运行304项和114项，**不表述为全绿**：304项有3条失败记录，来自同期新增“多实例管理”后旧四页签断言在Vista/Clam各失败一次，以及当时未同步的能力清单；114项仅旧四页签工作台断言失败。首次330项组合另出现出口IP弹窗测得宽度1的断言失败，隔离27项重跑通过，原因未确定；本轮未修改该弹窗。20份Python编译通过。本轮已审查并更新自身GUI/能力覆盖，--update阶段返回CAPABILITY_COVERAGE_OK；收尾时同期多实例代码继续变化，最终全仓检查提示`src/ui/ai_multi_instance_tab.py`未入编译清单，GUI快照/可读矩阵过期，保留这些范围外改动，不用刷新快照掩盖未审查业务。此前还出现其两份service未登记和专项测试尚未创建，收尾时已由同期工作补齐。自身文件差异格式检查通过；完整基线未触发、未运行，保留最近完整记录，不将旧结果表述为本轮结果。
+- 后续待办：Windows源码版可见交互、真实模型及飞书/钉钉权限/模板与流式效果待负责人按ACCEPTANCE_BASELINE.md §2.16/§3复验。工作区同期多实例模块需由该轮完成GUI断言、源码登记及能力清单同步；本轮不扩大其实现范围。未提交、打包、运行EXE或外发真实平台消息，现有EXE未更新。
+
+## 2026-11-17 - 修复多通道提交超时并优化版本查询
+
+- 类型：BUG 修复
+- 背景：负责人提供飞书及本地截图，均在查询多台样机版本时出现“界面动作排队超时”，要求重点优化多通道并存处理，并批准稳定性与版本查询提速计划。原始日志显示本地模型00:19:05成功、00:19:26路由超时；飞书批量路由失败，而通道1实际版本查询约1秒成功。隔离重现确认批量submit持会话锁调用send，权限检查等待GUI的target_current；GUI聊天刷新也要会话锁，双方等待直到20秒超时。现场当时无线程栈，不排除其它阻塞。
+- 完成内容：①批量参数交由统一send绑定，GUI/权限预检在锁外；锁内复核目标/批次/模型/权限快照、取消标记、运行状态及容量，再登记和入队。消费者同锁核对运行令牌，持久化失败的票据不执行；失败恢复本次状态/批量参数/业务轮次及指标，不清除其它请求。②批量日志显示真实通道集合，未领取超时附动作代码与耗时；不延长超时、不提高并行度、不改变资源保护。③新增独立版本编排模块，明确版本请求确定性路由，数量不符/无效/重复目标先澄清，复杂/历史/否定表达仍用原路由。通过现有AiCapabilityAdapter、device.version、Job及三档权限执行，单台异常继续，目标/登录配置变化或明确业务取消后剩余不执行。④authority追加可选host端点绑定，来自可信会话快照且不进入模型输入参数，版本准入/执行初始复核通道、源IP、目标IP与端口，封住权限检查后配置切换窗口；原GUI无绑定调用保持兼容。⑤逐台持久化事件与最终真实表回到原会话，现有后台worker观察已准入Job，模型停止不传为业务停止；真实结果先显示，再仅用本次结果调用一次无工具AI说明，说明失败不改业务结果。⑥准入前保存原operation关联，新增只读Job查找以恢复回执丢失/重启场景，按原身份查询并去重投影，保留已完成逐台事件，未知项明确待核实，不重放设备或模型请求。⑦同步能力覆盖、操作员说明、状态、验收待办与实施计划；保留所有原未提交改动及同期流式回复/网关工作。源码清单另补同期已存在的remote_gateway_host.py、remote_instance_management.py登记，不修改两模块内容。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/services/ai_batch_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/services/ai_session_router.py`
+  - `Cheating_machine_execution_tool/src/services/ai_version_query_service.py`（新增）
+  - `Cheating_machine_execution_tool/src/services/ai_capability_adapter.py`
+  - `Cheating_machine_execution_tool/src/models/capabilities.py`
+  - `Cheating_machine_execution_tool/src/services/capability_device_services.py`
+  - `Cheating_machine_execution_tool/src/services/capability_jobs.py`
+  - `Cheating_machine_execution_tool/src/services/pipeline_runtime.py`
+  - `Cheating_machine_execution_tool/src/services/capability_catalog.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_multichannel_dispatch.py`（新增）
+  - `Cheating_machine_execution_tool/tests/test_ai_version_query.py`（新增）
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/scripts/capability_gui_actions.json`（按当前GUI复核快照，含同期改动，不新增本功能按钮）
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `CAPABILITY_COVERAGE.md`
+  - `.claude/plans/ai-multichannel-timeout-version-query.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`（§2.16、§3）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录设置PYTHONPATH=tests及PYTHONIOENCODING=utf-8，TEMP/TMP/TMPDIR统一为`Path(tempfile.gettempdir()).resolve()`长路径；执行`python -m unittest test_ai_multichannel_dispatch test_ai_version_query test_ai_batch test_ai_session_router test_ai_permissions test_ai_conversation test_ai_actions test_feishu_remote test_dingtalk_remote test_capabilities test_capability_devices test_capability_ai_data test_pipeline_window test_ai_reply_stream test_capability_coverage`；补充`python -m unittest test_capability_upgrade_equivalence test_remote_gateway test_remote_gateway_agent`。执行`python -m py_compile src/models/capabilities.py src/services/ai_capability_adapter.py src/services/ai_batch_service.py src/services/ai_conversation_service.py src/services/ai_session_router.py src/services/ai_version_query_service.py src/services/capability_device_services.py src/services/capability_jobs.py src/services/pipeline_runtime.py src/services/capability_catalog.py scripts/verify_baseline.py tests/test_ai_multichannel_dispatch.py tests/test_ai_version_query.py`、`python scripts/verify_capability_coverage.py --update`及只读复查、`check_py_compile_inventory(Path.cwd())`和本轮路径`git diff --check`。
+- 验证结果：最终461项组合及26项补充共487项通过，无跳过；其中32项新增专项，覆盖实际调度锁等待、提交竞争/回滚、1/3/8通道三档权限、同IP不同源IP、身份/权限、单台失败继续、目标变化、业务取消与模型停止、表先于AI说明、无工具说明、回执丢失/原任务只读恢复与未知状态。独立离屏Tk进程45次批量提交及心跳小于200ms断言通过；以ast加载HEAD旧submit的单项回归稳定失败（target_current等待0.3秒超时），新实现通过。13份Python编译、242份主源码清单、能力覆盖和本轮差异检查通过。验证中首次新Tk压力用例组合触发Tcl_AsyncDelete，已解除测试回调保留引用并隔离UI-owner子进程，不修改生产Tk/GC；一次402项组合的Windows临时路径表示差异及同期钉钉流式断言变化，经统一长路径/采用当前测试后432项通过；后续87项中的覆盖矩阵因同期目录描述变化失败，刷新后被最终461项覆盖通过，不将历史失败写成通过。本轮未运行完整基线，保留最近完整记录；未提交、打包、运行EXE或操作真实模型/平台/DUT。
+  收尾补查：本轮32项专项再次通过（19.067秒）。随后工作区同期多实例任务继续新增`src/ui/ai_multi_instance_tab.py`及GUI动作/机器清单，当前全仓覆盖检查报告GUI动作快照、可读矩阵尚未同步，编译清单缺该UI模块；先前242份源码登记/覆盖通过为阶段事实，不代表此刻全仓门禁通过。首次收尾还曾缺其专项测试文件，第二次复查该测试已出现。未覆盖/回退同期业务代码，也未用仅刷新快照虚报新业务接入；全仓清单状态须在同期任务结束后复查。
+- 后续待办：同期多实例任务完成其GUI/机器清单与编译登记后复查全仓覆盖；负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.16/§3复验完整Windows交互、真实模型/平台及多样机。自动化证据不升级现场验收，现有EXE未更新。
+
+## 2026-11-17 - 增加发送菜单首行新会话入口
+
+- 类型：功能
+- 背景：负责人要求在发送按钮右键菜单第1行增加“新会话”，确认从空白普通对话开始，并要求实施已确认计划。
+- 完成内容：①菜单首项新增“新会话”及分隔线，原菜单顺序/右键/Alt+↓入口保持；通过共享service以当前已保存模型创建并选中普通会话，不复制旧目标、消息、证据、报告或任务进展，不调用模型或操作设备。②保留旧会话及后台任务/串行执行、发送模式和输入草稿，输入框重新获得焦点；目标识别期间菜单禁用且回调二次拦截，模型缺失/未保存/退出或存储失败保留原选择及输入，记录开始、成功、跳过和失败。③受控ai.sessions.create共用创建service，以可信授权会话来源及对应已保存模型创建；空参数拒绝伪造身份/目标，限制本地/GUI来源，同一身份、来源会话及操作编号重复调用复用记录，不改变当前GUI选择。④新增8项直接回归，同步机器业务目录、能力覆盖/GUI快照、操作员说明、项目状态及验收待办；保留既有工作区改动及同期飞书菜单调整。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostic_task_control.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_chat_panel.py`
+  - `Cheating_machine_execution_tool/src/services/ai_conversation_service.py`
+  - `Cheating_machine_execution_tool/src/services/capability_ai_data_service.py`
+  - `Cheating_machine_execution_tool/src/services/capability_catalog.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_diagnostic_task.py`
+  - `Cheating_machine_execution_tool/tests/test_capability_ai_data.py`
+  - `Cheating_machine_execution_tool/scripts/capability_gui_actions.json`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/ai-new-session-menu.md`
+  - `CAPABILITY_COVERAGE.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`（§2.16、§3）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用仓库外`%LOCALAPPDATA%/LineCheckAssistant/build-env-py39/Scripts/python.exe`；tests加入sys.path，各模块独立进程在`OffscreenTkWindows`下运行`test_ai_diagnostic_task`、`test_ai_workspace`、`test_ai_session_router`、`test_ai_conversation`、`test_ai_chat_presentation`、`test_ai_session_deletion`、`test_ai_permissions`、`test_capability_ai_data`、`test_capability_coverage`、`test_capabilities`。对本轮7份Python运行py_compile，运行`python scripts/verify_capability_coverage.py --update`及不带--update复核，检查本轮文件的`git diff --check`、计划和文档链接/内容一致性。
+- 验证结果：上述10组分别29、21、26、53、42、18、28、14、3、38项，共372项全部OK、无跳过；前置29/14项试运行与最终回归重叠，不重复累计。新增用例覆盖菜单首项/分隔线/原入口、空白数据隔离、旧任务/晚到回复不抢选择、草稿/焦点/模式、识别禁用及回调拦截、模型缺失/未保存/退出/存储失败、首次发送独立上下文、能力重复调用/来源隔离/参数拒绝及已保存模型。7份Python编译、能力覆盖更新及复核、本轮差异格式检查通过。未运行完整基线，保留最近完整验证记录，不将旧结果表述为本轮结果。
+- 后续待办：负责人重启Windows源码版，按ACCEPTANCE_BASELINE.md §2.16/§3复验完整主程序菜单与草稿/焦点/后台任务交互。临时SQLite、Mock和离屏真实Tk不替代完整Windows、真实模型或DUT验收。本轮未提交、打包、发布、运行EXE或连接真实模型/设备，现有EXE未更新。
+
+## 2026-11-17 - 收紧飞书业务菜单触发入口
+
+- 类型：BUG 修复
+- 背景：负责人截图反馈飞书配置页任意位置右键都会弹出“发送飞书测试消息 / 取消当前群绑定申请”，确认改为仅点击现有“更多操作”按钮打开。
+- 完成内容：①删除嵌入页递归子控件及兼容独立窗口的右键业务菜单绑定，保留按钮下方弹出菜单和两项原业务回调。②将原“输入框右键弹菜单”测试改为嵌入/独立、Vista/Clam四种组合的全控件右键不弹出及按钮打开位置验证，补充两种显示方式的试发/取消绑定菜单调用回归。③同步操作员说明及ACCEPTANCE_BASELINE.md §2.16/§3待复验清单，审查并刷新能力动作清单，飞书控制面仍保持原pending状态。④保留工作区其他修改；快照刷新同时反映工作区已有新会话菜单及相关UI摘要，不将该项作为本轮新增功能或能力接入成果。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/feishu_setup_window.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_remote_management.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `Cheating_machine_execution_tool/scripts/capability_gui_actions.json`
+  - `CAPABILITY_COVERAGE.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用`C:\Python\Python39\python.exe -X utf8`，通过`unittest.defaultTestLoader.loadTestsFromName`组合运行`test_ai_remote_management`、`test_feishu_remote`和`test_message_push_config`；`python -X utf8 -m unittest discover -s tests -p test_capability_coverage.py -v`；`python -X utf8 scripts/verify_capability_coverage.py --update`；对修改的UI和测试执行`py_compile.compile(..., doraise=True)`；对本轮涉及文件执行`git diff --check`。
+- 验证结果：新事件回归在旧代码上实际失败，四种组合均复现误弹；修复后100项业务/UI专项及3项能力覆盖专项通过，两份Python编译、能力清单和差异格式检查通过。仅使用模拟平台/通知/绑定与离屏真实Tk控件，未连接真实飞书、模型或设备。本轮未运行完整基线，保留最近一次完整验证记录；未提交、打包或运行EXE，现有EXE未更新。
+- 后续待办：按ACCEPTANCE_BASELINE.md §2.16/§3由负责人重启Windows源码版，复验右键范围、按钮弹出位置、Esc/点击外部关闭及原业务入口；不升级真实平台/设备验收结论。
+
+## 2026-11-17 - 隐藏资源监测正常启停提示
+
+- 类型：修改
+- 背景：负责人提供“[资源监测] 开始：每60秒只读采样；记录=...”日志，要求主界面不再打印，后台静默执行。
+- 完成内容：①主日志显示层仅隐藏资源监测已知格式的正常开始与停止提示；启动失败、采样或记录失败、写入告警、异常恢复及未知扩展/多行消息继续显示。②资源监测原文仍逐条写入主执行日志文件，60秒采样、JSONL内容、线程/退出、接收历史和设备操作保持原样。③补充5项日志回放与持久化回归，同步操作员说明；审查确认323条GUI动作及其业务回调完全一致，仅刷新主窗口118条文件摘要，不新增业务接入项。保留工作区已有模型出口IP及飞书日志等改动。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/main_log_filter.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_main_log_filter.py`
+  - `Cheating_machine_execution_tool/scripts/capability_gui_actions.json`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录使用仓库外`%LOCALAPPDATA%/LineCheckAssistant/build-env-py39/Scripts/python.exe`，分进程运行`python -m unittest discover -s tests -p test_main_log_filter.py`、`test_transport_history_monitor.py`和`test_capability_coverage.py`；对3份修改的Python执行`python -m py_compile src/ui/main_log_filter.py line_check_assistant/app.py tests/test_main_log_filter.py`；对比修改前GUI快照（排除file_code_sha256）及动作/回调内容，执行`python scripts/verify_capability_coverage.py --update`后不带--update复核，并检查本轮差异及`git diff --check`。
+- 验证结果：日志79项、资源监测11项、能力覆盖3项分进程共93项全部OK、无跳过；覆盖负责人实际开始日志、正常停止、异常及恢复、未知扩展/多行/设备回显保护、显式tag不绕过隐藏、逐条原文落盘及后台采样退出收尾。3份Python编译通过。首次能力检查按预期提示主窗口文件摘要过期，动作及回调等价审查后更新118条摘要，覆盖检查复核通过，可读矩阵内容未变；文档一致性及本轮6份文件的差异格式检查通过。全工作区差异检查发现本轮范围外`Auto_power_on_off_tool/config/network_card_ip.ini`的4处行尾空格，保留该本机配置未修改；文档一致性首轮断言受PowerShell管道中文编码影响，改用Unicode转义复核通过。未运行完整基线，保留最近完整验证记录，不将旧结果表述为本轮结果。
+- 后续待办：负责人下次重启源码版可确认完整主界面正常启停提示不再显示；本轮为离线回放/Mock与模拟采样检查，不替代Windows完整目视或真实DUT验收。未提交、打包、运行EXE或连接真实设备，现有EXE未更新。
+
+## 2026-11-16 - 合并飞书持续重连的重复提示
+
+- 类型：修改
+- 背景：负责人提供23:24:59至23:25:14间八条相同“飞书连接失败或断开，稍后重连（凭据省略）”日志，要求不要持续重复打印。检查发现每轮先发送“正在连接”再失败；前者已在主界面隐藏，因此服务原有相邻状态去重无法阻止可见失败刷屏。
+- 完成内容：①在现有主日志过滤模块增加每窗口独立的FeishuConnectionLogState，由主窗口日志入口传入；仅合并两类已知连接失败/断开，持续重试及穿插其它日志不重置。②真正已连接时显示一次“飞书连接已恢复”，正常首次连接保持原静默；恢复后再次断开及明确停止后重启可重新提示。③保持原始消息逐条写入主日志文件，飞书动态状态、重试间隔、连接/线程/退出、凭据及业务回调不变；未知扩展、多行异常及其它模块继续按原规则显示。④新增8项回放/状态/文件持久化回归，审查GUI动作和业务覆盖均无变化；主窗口文件变更需要刷新快照118条文件摘要，未新增业务接入项，上一轮模型出口IP源码和覆盖记录保留。同步操作员说明、状态与待验收边界。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/main_log_filter.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/tests/test_main_log_filter.py`
+  - `Cheating_machine_execution_tool/scripts/capability_gui_actions.json`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/feishu-reconnect-log-dedup.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`（§2.16、§3）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用仓库外build-env-py39的CPython3.9.10运行`python -m unittest discover -s tests -p test_main_log_filter.py`及`test_capability_coverage.py`；飞书使用既有feishu-validation-py39环境（含固定lark-oapi1.7.5/websockets15.0.1/requests2.31.0），分别执行`test_feishu_stream.py`、`test_feishu_remote.py`，不安装或修改当前运行环境。对上述3份Python执行py_compile；对比GUI动作快照排除file_code_sha256后内容完全一致，再运行`python scripts/verify_capability_coverage.py --update`及不带--update复核；执行文档一致性和`git diff --check`。
+- 验证结果：日志74项、飞书连接7项、飞书接入64项、能力覆盖3项分进程执行均OK、无跳过，共148项；新增8项覆盖八次失败穿插连接中、两类断线、直接/AI对话/AI监控前缀、恢复一次/再次失败、初次成功隐藏、停止重启、其它错误/未知格式/实例隔离及原始逐条落盘。合并运行初次因build-env缺SDK跳过7项并在Tk日志测试与后台接入测试同进程时发生Tcl_AsyncDelete清理异常；改为各模块独立进程且使用已有SDK环境后全部通过，不将失败尝试计为通过。3份Python编译、能力覆盖、GUI动作等价审查和差异检查通过。未运行完整基线，保留最近完整门禁记录，不将旧结果当作本轮结果。
+- 后续待办：负责人重启源码版按ACCEPTANCE_BASELINE.md §2.16/§3核对完整主界面及现有真实飞书重连场景；离线回放和Mock不替代完整Windows或真实平台验收。本轮未提交、打包、发布、运行EXE或连接真实飞书/模型/DUT，现有EXE未更新。
+
+## 2026-11-16 - 增加模型配置独立出口IP选择
+
+- 类型：功能
+- 背景：负责人要求在模型接入页“测试连接与工具能力”右侧增加出口IP按钮，确认选择本机已有IPv4、随模型配置保存、默认允许不指定，并保留原代理规则。
+- 完成内容：①独立core通过psutil只读枚举网卡IPv4及可用状态；独立弹窗提供不指定、网卡/IP选择、刷新、确定/取消，复用模块背景。确定只编辑草稿，保存后按配置持久化，复制继承，新旧配置默认不指定；主日志记录枚举、选择/取消、保存、请求配置源IP及失败。②统一模型客户端通过独立HTTP适配器绑定直连及代理连接池，覆盖模型列表、两种协议、流式、工具续接与自动诊断；不指定不替换原适配器，保留代理/NO_PROXY、TLS校验、超时和禁止重定向规则。请求前复核指定本机地址，失效/枚举失败/绑定失败明确失败，不回退或重发。③空值保留旧指纹，非空出口参与配置指纹并清除旧能力验证，密钥DPAPI绑定保持；沿用旧会话配置失效语义，旧测试结果不覆盖新保存出口/未保存出口草稿，旧模型列表不回写新出口草稿。④失败后WindowsTCP取证绑定相同配置源IP，仍区分配置、实际探测及原失败请求未知出口；不修改系统网络。⑤注册只读ai.source_ip.list共用枚举，ai.profiles.list包含保存出口；写入/选择仍为本地配置控制面，机器清单保持partial，不虚报自动写入。同步动作快照、编译清单、说明、状态和验收待办。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/core/ai_source_ip.py`（新增枚举/校验/适配器）
+  - `Cheating_machine_execution_tool/src/core/ai_client.py`
+  - `Cheating_machine_execution_tool/src/core/ai_gateway_network.py`
+  - `Cheating_machine_execution_tool/src/models/ai_diagnostics.py`
+  - `Cheating_machine_execution_tool/src/services/ai_store.py`
+  - `Cheating_machine_execution_tool/src/services/capability_ai_data_service.py`
+  - `Cheating_machine_execution_tool/src/services/capability_catalog.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_source_ip_dialog.py`（新增弹窗）
+  - `Cheating_machine_execution_tool/src/ui/ai_diagnostics_window.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_source_ip.py`（新增专项）
+  - `Cheating_machine_execution_tool/tests/test_capability_ai_data.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`（只扩充编译清单）
+  - `Cheating_machine_execution_tool/scripts/capability_gui_actions.json`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/ai-model-source-ip.md`
+  - `CAPABILITY_COVERAGE.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`（§2.16、§3）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录使用仓库外`%LOCALAPPDATA%\LineCheckAssistant\build-env-py39\Scripts\python.exe`；tests加入sys.path，以unittest合跑test_ai_source_ip、test_ai_core、test_ai_gateway、test_capability_ai_data、test_ai_context_budget、test_ai_conversation、test_ai_integration、test_ai_workspace、test_capability_coverage；新增Windows绑定取证用例后执行`python -m unittest discover -s tests -p test_ai_source_ip.py`。对全部12份新增/修改Python文件执行py_compile，单独调用check_py_compile_inventory；执行`python scripts/verify_capability_coverage.py --update`及不带--update复核、`git diff --check`和文档一致性检查；只读调用list_source_ips统计本机数量/耗时。
+- 验证结果：首轮76项组合通过；后续布局用例最初在窗口映射前测得宽度1，调整测试为真实show/wait_window映射后测量并自动关闭，不改变生产布局。补充异步草稿保护后207项组合`OK`、无跳过；新增真实Windows探测验证有效源连接成功、未配置源绑定失败且无回退，最终出口专项`Ran 27 tests ... OK`，与组合回归重叠，不累计冒充总数。实际本机HTTP、HTTPS、HTTP代理、HTTPS CONNECT及TLS证书校验、两协议流式入口、工具三请求续接、旧JSON/指纹/密钥兼容、持久化隔离/复位、无效出口/取消和Vista/Clam最小窗口通过。12份Python编译、237份源码清单覆盖、能力覆盖和差异格式通过；本机枚举58个IPv4约0.079秒，仅输出数量。未运行完整基线，保留最近完整验证记录，不将旧门禁当作本轮结果。
+- 后续待办：负责人重启源码版按ACCEPTANCE_BASELINE.md §2.16/§3复验完整窗口及真实网卡/模型请求；自动化和本机回环不替代完整主程序、真实模型或DUT验收。本轮未提交、打包、发布或运行EXE，现有EXE未更新。
+
 ## 2026-11-16 - 提交首次显示图标修复及全部配套文件
 
 - 类型：测试

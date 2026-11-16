@@ -21,7 +21,7 @@ class RemoteConfigStore:
 
     def load(self):
         defaults = dict(isolated=False, enabled=False, client_id="", client_secret="", robot_code="",
-                        group="", corp="", group_name="", webhook="", secret="")
+                        group="", corp="", group_name="", webhook="", secret="", ai_card_template_id="")
         if not self.path.exists():
             return defaults
         try:
@@ -54,8 +54,10 @@ class RemoteConfigStore:
         from src.services.ai_project_store import initialize_project
         from src.services.message_push_config_service import MessagePushConfigService
         saved = self.load()
-        values = {k: str(values.get(k, "")).strip() for k in
-                  ("client_id", "client_secret", "robot_code", "webhook", "secret")}
+        values = {k: str(values.get(k, saved.get(k, "") if k == "ai_card_template_id" else "")).strip() for k in
+                  ("client_id", "client_secret", "robot_code", "webhook", "secret", "ai_card_template_id")}
+        if len(values["ai_card_template_id"]) > 200:
+            raise ValueError("AI卡片模板ID不能超过200字符")
         if not values["client_secret"] and values["client_id"] == saved["client_id"]:
             values["client_secret"] = saved["client_secret"]
         if any("\r" in v or "\n" in v for v in values.values()):

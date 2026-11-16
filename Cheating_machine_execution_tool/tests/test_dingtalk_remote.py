@@ -393,10 +393,13 @@ class RemoteConversationTests(unittest.TestCase):
         self.assertFalse(self.service.updates.empty())
         self.remote._publish()
         self.assertFalse(self.service.updates.empty())
-        self.assertGreater(self.remote.outbox.qsize(), 1)
+        # AI正文已移交独立流式投影，状态仍走普通回复；两者不抢工作台通知。
+        self.assertGreater(self.remote.outbox.qsize() + len(self.remote.reply_streams.pending), 1)
         old_count = self.remote.outbox.qsize()
+        old_pending = len(self.remote.reply_streams.pending)
         self.remote._publish()
         self.assertEqual(self.remote.outbox.qsize(), old_count)
+        self.assertEqual(len(self.remote.reply_streams.pending), old_pending)
 
     def test_target_model_or_batch_change_creates_new_valid_session(self):
         first = self.dispatch("检查")
@@ -646,7 +649,7 @@ class SetupWindowTests(unittest.TestCase):
                                           if isinstance(w, ttk.Button)], ["刷新会话", "管理会话"])
                         self.assertEqual([controller.dialog.book.tab(t, "text")
                                           for t in controller.dialog.book.tabs()],
-                                         ["排障工作台", "模型接入", "已确认案例", "远程管理"])
+                                         ["排障工作台", "模型接入", "已确认案例", "远程管理", "多实例管理"])
                         controller.dialog.hide()
             finally:
                 for instance in (controller, other):

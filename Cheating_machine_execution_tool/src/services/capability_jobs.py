@@ -82,6 +82,14 @@ class CapabilityJobs:
                 (identifier, after_event))]
             return result
 
+    def find(self, capability, authority):
+        """Read-only recovery by the host's original operation identity; never admit."""
+        authority.check()
+        request_key = fingerprint((authority.principal, authority.operation_id, capability))
+        with self.lock:
+            row = self.db.execute("SELECT id FROM jobs WHERE request_key=?", (request_key,)).fetchone()
+        return self.status(row[0], authority) if row else None
+
     def event(self, identifier, stage, message=""):
         with self.lock, self.db:
             self.db.execute("UPDATE jobs SET stage=?,updated=? WHERE id=?", (stage, time.time(), identifier))

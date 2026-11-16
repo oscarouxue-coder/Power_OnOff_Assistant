@@ -234,16 +234,47 @@ class DeviceCapabilities:
         return self._job("aging.resume", arguments, authority, run)
 
     def _version(self, arguments, authority):
+        def check_endpoints(channels, telnet):
+            expected = {row[0]: row[1:] for row in authority.target_endpoints}
+            if expected and any(expected.get(int(c.section.rsplit('_', 1)[1])) !=
+                                (c.network_card_ip, c.device_manage_ip, int(telnet.port or 23)) for c in channels):
+                raise CapabilityError("target_changed", "版本查询端点与原会话快照不一致，未下发")
+        def precheck():
+            if authority.target_endpoints:
+                _, channels = self.selected(arguments, authority)
+                check_endpoints(channels, TestItemConfigStore(self.config_path).load(required=True).telnet)
         def run(context, snapshot, channels):
             config = TestItemConfigStore(self.config_path).load(required=True)
+            check_endpoints(channels, config.telnet)
             values = []
+            halted = ""
             for channel in channels:
-                context.stop.checkpoint()
-                value = query_device_project_info(DeviceProjectInfoQueryRequest(channel.network_card_ip,
-                    channel.device_manage_ip, config.telnet), emit=lambda line: context.event("version", line))
-                values.append(dict(channel=channel.section, **asdict(value)))
-            return dict(ok=True, items=values)
-        return self._job("device.version", arguments, authority, run)
+                row = dict(channel=channel.section, bind_ip=channel.network_card_ip,
+                           device_host=channel.device_manage_ip)
+                if not halted and context.stop.is_set():
+                    halted = "业务已请求停止"
+                if not halted:
+                    try:
+                        current, selected = self.selected(arguments, authority)
+                        if (selected != channels or current.get('upgrade_settings') != snapshot.get('upgrade_settings')
+                                or TestItemConfigStore(self.config_path).load(required=True).telnet != config.telnet):
+                            halted = "目标或登录配置已变化"
+                    except Exception as exc:
+                        halted = "无法复核目标配置：" + str(exc)
+                if halted:
+                    row.update(status="not_executed", error=halted)
+                else:
+                    try:
+                        value = query_device_project_info(DeviceProjectInfoQueryRequest(channel.network_card_ip,
+                            channel.device_manage_ip, config.telnet), emit=lambda line: context.event("version", line))
+                        row.update(asdict(value), status="succeeded")
+                    except Exception as exc:
+                        row.update(status="failed", error=str(exc))
+                values.append(row)
+                context.event("version_item", json.dumps(row, ensure_ascii=False))
+            ok = all(row["status"] == "succeeded" for row in values)
+            return dict(ok=ok, state="stopped" if context.stop.is_set() else "succeeded" if ok else "failed", items=values)
+        return self._job("device.version", arguments, authority, run, precheck=precheck)
 
     def _pretest(self, arguments, authority):
         def run(context, snapshot, channels):

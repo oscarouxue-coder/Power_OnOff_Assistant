@@ -125,6 +125,12 @@ _DUT_DETAILS = tuple(re.compile(pattern) for pattern in (
 ))
 
 
+_RESOURCE_MONITOR_START = re.compile(
+    r'\[资源监测\] 开始：每\d+(?:\.\d+)?秒只读采样；记录=[^\r\n]+[\\/]'
+    r'transport_history_\d{8}_\d{6}_\d{6}\.jsonl')
+_RESOURCE_MONITOR_STOP = '[资源监测] 已停止采样，未清理原始日志或历史缓冲'
+
+
 def is_ai_log_message(message: str) -> bool:
     """只识别程序现有AI前缀，避免把设备回显或其它业务当作AI日志。"""
     return _AI_PREFIX.match(message) is not None
@@ -133,6 +139,11 @@ def is_ai_log_message(message: str) -> bool:
 def is_dut_log_message(message: str) -> bool:
     """DUT原文独立落盘；不识别其它模块或设备回显中的嵌套前缀。"""
     return _DUT_PREFIX.match(message) is not None
+
+
+def is_resource_monitor_log_message(message: str) -> bool:
+    """资源监测原文保留落盘，显示层仅隐藏已知正常生命周期提示。"""
+    return message.startswith('[资源监测] ')
 
 
 def ai_main_log_tag(message: str) -> str | None:
@@ -344,8 +355,41 @@ def _format_ai_message(message: str) -> str | None:
     return message
 
 
-def format_main_log_message(message: str, summary: WifiLogSummary | None = None) -> str | None:
+class FeishuConnectionLogState:
+    """仅合并主界面同一次断线提示；原始日志和实际连接状态不受影响。"""
+    def __init__(self):
+        self.failed = False
+
+    def format(self, message: str) -> str | None:
+        prefix = next((p for p in (_CHAT, _MONITOR) if message.startswith(p)), '')
+        body = message[len(prefix):]
+        platform = '[飞书接入] '
+        if not body.startswith(platform):
+            return message
+        event = body[len(platform):]
+        if event in ('飞书连接失败或断开，稍后重连（凭据省略）', '飞书连接已断开，稍后重连（凭据省略）'):
+            if self.failed:
+                return None
+            self.failed = True
+        elif event == '飞书长连接已连接':
+            recovering = self.failed
+            self.failed = False
+            if recovering:
+                return prefix + platform + '飞书连接已恢复'
+        elif event == '飞书连接已停止':
+            self.failed = False
+        return message
+
+
+def format_main_log_message(message: str, summary: WifiLogSummary | None = None, *,
+                            feishu_state: FeishuConnectionLogState | None = None) -> str | None:
     """保留既有入口；有状态的调用者传入自己的摘要器。"""
+    if message == _RESOURCE_MONITOR_STOP or _RESOURCE_MONITOR_START.fullmatch(message):
+        return None
+    if feishu_state is not None:
+        message = feishu_state.format(message)
+        if message is None:
+            return None
     if is_ai_log_message(message):
         return _format_ai_message(message)
     if is_dut_log_message(message):

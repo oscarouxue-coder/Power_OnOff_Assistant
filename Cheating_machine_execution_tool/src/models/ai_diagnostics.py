@@ -30,6 +30,8 @@ class ProviderProfile:
     credential_revision: str = ""
     # 0 表示自动识别；仅影响上下文预算，不改变模型身份或工具授权。
     context_tokens: int = 0
+    # 空字符串沿用系统/代理自动选路；仅控制模型服务请求的本机源地址。
+    source_ip: str = ""
 
 
 @dataclass(frozen=True)

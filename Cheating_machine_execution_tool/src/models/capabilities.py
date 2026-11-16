@@ -30,6 +30,8 @@ class CapabilityAuthority:
     mode: str = "ask"
     grant_id: str = ""
     approved: bool = False
+    # Optional host-owned endpoints; never accepted from model/tool arguments.
+    target_endpoints: Tuple[Tuple[int, str, str, int], ...] = ()
 
     def check(self, channels=(), risk="read"):
         if not self.principal or not self.session_id or not self.operation_id:

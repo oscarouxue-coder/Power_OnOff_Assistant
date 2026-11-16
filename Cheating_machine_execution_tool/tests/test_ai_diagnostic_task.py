@@ -234,6 +234,133 @@ class TaskUiTests(unittest.TestCase):
     close_ui = workspace_fixtures.WorkspaceTests.close_ui
     stop_services = fixtures.ConversationTests.stop_services
 
+    def test_new_session_is_first_and_creates_blank_without_stopping_old_work(self):
+        panel = self.dialog.chat_panel
+        panel.selected = self.id
+        self.service.router.select(self.id)
+        self.service.message(self.id, "user", "旧会话的问题")
+        self.service.add_evidence(self.id, "旧材料", "旧会话证据")
+        self.store.update_chat(self.id, diagnostic_task=dict(goal="旧排查"), source_report_id="old-report")
+        before = self.store.chat(self.id)
+        panel.input.insert("1.0", "未发送的草稿")
+        panel.task_control.changed(True)
+        old_stop = threading.Event()
+        self.service.running[self.id] = old_stop
+        try:
+            menu = panel.task_control.menu
+            self.assertEqual(menu.entrycget(0, "label"), "新会话")
+            self.assertEqual(menu.type(1), "separator")
+            self.assertEqual(menu.entrycget(2, "label"), "切换为常规对话（沿用操作权限）")
+            with patch.object(self.service, "stop") as stop, patch.object(self.service.router, "cancel_source") as cancel, \
+                    patch.object(panel.input, "focus_set", wraps=panel.input.focus_set) as focus:
+                menu.invoke(0)
+                stop.assert_not_called()
+                cancel.assert_not_called()
+                focus.assert_called_once()
+            identifier = panel.selected
+            self.assertNotEqual(identifier, self.id)
+            session = self.store.chat(identifier)
+            self.assertEqual(session["scope"], "general")
+            self.assertIsNone(session["target"])
+            self.assertEqual(session["profile"]["id"], self.profile.id)
+            self.assertEqual(session["source_report_id"], "")
+            self.assertNotIn("diagnostic_task", session)
+            self.assertEqual(self.store.chat_evidence(identifier), [])
+            self.assertFalse(any(m["role"] in ("user", "assistant") for m in self.store.chat_items(identifier)))
+            self.assertEqual(self.store.chat(self.id), before)
+            self.assertIs(self.service.running[self.id], old_stop)
+            self.assertFalse(old_stop.is_set())
+            self.assertEqual(self.service.router.current(), identifier)
+            self.assertEqual(panel.input.get("1.0", "end-1c"), "未发送的草稿")
+            self.assertNotIn("旧会话的问题", panel.output.get("1.0", "end"))
+            self.assertTrue(panel.task_control.enabled)
+            self.service.message(self.id, "assistant", "旧任务后台返回的结果")
+            panel.poll()
+            self.assertEqual(panel.selected, identifier)
+            self.assertNotIn("旧任务后台返回的结果", panel.output.get("1.0", "end"))
+            self.assertEqual(panel.input.get("1.0", "end-1c"), "未发送的草稿")
+            self.assertEqual(self.requests, [])
+            self.assertTrue(any("空白新会话" in line and "已创建" in line for line in self.logs))
+        finally:
+            self.service.running.pop(self.id, None)
+
+    def test_new_session_menu_disables_during_routing_and_callback_guards_it(self):
+        panel = self.dialog.chat_panel
+        panel.selected = self.id
+        panel.input.insert("1.0", "草稿")
+        panel.routing = True
+        count = len(self.store.chats())
+        generation = panel.route_generation
+        menu = panel.task_control.menu
+        with patch.object(menu, "tk_popup") as popup, patch.object(menu, "grab_release"):
+            self.assertEqual(panel.task_control.popup(Mock(num=3, x_root=10, y_root=20)), "break")
+            popup.assert_called_once_with(10, 20)
+            self.assertEqual(menu.entrycget(0, "state"), "disabled")
+            menu.invoke(0)
+            self.assertIsNone(panel.task_control.new_session())
+            self.assertEqual(len(self.store.chats()), count)
+            self.assertEqual(panel.selected, self.id)
+            self.assertEqual(panel.route_generation, generation)
+            self.assertEqual(panel.input.get("1.0", "end-1c"), "草稿")
+            panel.routing = False
+            panel.task_control.popup(Mock(num=None))
+            self.assertEqual(menu.entrycget(0, "state"), "normal")
+        self.assertTrue(panel.send_button.bind("<Button-3>"))
+        self.assertTrue(panel.send_button.bind("<Alt-Down>"))
+        self.assertEqual(self.requests, [])
+
+    def test_new_session_failure_preserves_selection_and_draft(self):
+        panel = self.dialog.chat_panel
+        panel.selected = self.id
+        self.service.router.select(self.id)
+        panel.render()
+        panel.input.insert("1.0", "保留输入")
+        count = len(self.store.chats())
+        generation = panel.route_generation
+        for profile, error in ((None, None), (self.profile, RuntimeError("模拟存储失败"))):
+            with self.subTest(profile=profile), patch.object(self.dialog, "_error") as shown:
+                self.dialog.service.profile = profile
+                if error is None:
+                    self.assertIsNone(panel.task_control.new_session())
+                else:
+                    with patch.object(self.service, "create_session", side_effect=error):
+                        self.assertIsNone(panel.task_control.new_session())
+                shown.assert_called_once()
+                self.assertEqual(panel.selected, self.id)
+                self.assertEqual(self.service.router.current(), self.id)
+                self.assertEqual(panel.route_generation, generation)
+                self.assertEqual(len(self.store.chats()), count)
+                self.assertEqual(panel.input.get("1.0", "end-1c"), "保留输入")
+        self.assertTrue(any("创建空白新会话失败" in line for line in self.logs))
+        self.assertEqual(self.requests, [])
+
+    def test_new_session_first_send_stays_in_new_general_session(self):
+        panel = self.dialog.chat_panel
+        self.service.message(self.id, "user", "旧会话专有故障")
+        panel.task_control.new_session()
+        identifier = panel.selected
+        panel.input.insert("1.0", "你是谁")
+        panel.send()
+        fixtures.wait_panel(panel, self.service)
+        self.assertEqual(panel.selected, identifier)
+        self.assertEqual([m["text"] for m in self.store.chat_items(identifier) if m["role"] == "user"], ["你是谁"])
+        self.assertNotIn("旧会话专有故障", json.dumps(self.requests, ensure_ascii=False))
+        self.assertEqual(self.store.chat(identifier)["scope"], "general")
+
+    def test_new_session_rejects_unsaved_profile_and_shutdown_without_creating(self):
+        from dataclasses import replace
+        count = len(self.store.chats())
+        with self.assertRaisesRegex(ValueError, "模型配置已变化"):
+            self.service.create_blank_session(replace(self.profile, model="unsaved"))
+        self.service.shutdown.set()
+        try:
+            with self.assertRaisesRegex(RuntimeError, "正在退出"):
+                self.service.create_blank_session(self.profile)
+        finally:
+            self.service.shutdown.clear()
+        self.assertEqual(len(self.store.chats()), count)
+        self.assertEqual(self.requests, [])
+
     def test_menu_sends_diagnostic_task_and_progress_is_on_demand(self):
         panel = self.dialog.chat_panel
         panel.selected = self.id

@@ -1,6 +1,7 @@
 from dataclasses import replace
 import time
 import unittest
+from unittest.mock import patch
 
 import test_capabilities as fixture
 from src.models.capabilities import CapabilityError
@@ -35,6 +36,47 @@ class AiDataCapabilityTests(unittest.TestCase):
         with self.assertRaises(CapabilityError):
             self.runtime.execute('ai.sessions.read', dict(id=self.id), replace(self.auth, channels=()))
 
+    def test_create_blank_session_shares_service_and_reuses_operation_without_changing_active(self):
+        self.service.router.select(self.id)
+        self.service.message(self.id, 'user', '旧问题')
+        count = len(self.store.chats())
+        with patch.object(self.service, 'create_blank_session', wraps=self.service.create_blank_session) as create:
+            first = self.runtime.execute('ai.sessions.create', {}, self.auth)
+            again = self.runtime.execute('ai.sessions.create', {}, self.auth)
+            create.assert_called_once()
+        self.assertEqual(first['session_id'], again['session_id'])
+        self.assertFalse(first['reused'])
+        self.assertTrue(again['reused'])
+        self.assertFalse(first['device_operations'])
+        self.assertEqual(len(self.store.chats()), count + 1)
+        created = self.store.chat(first['session_id'])
+        self.assertEqual(created['scope'], 'general')
+        self.assertIsNone(created['target'])
+        self.assertEqual(created.get('source'), self.store.chat(self.id).get('source'))
+        self.assertEqual(self.service.router.current(), self.id)
+        self.assertFalse(any(m['role'] in ('user', 'assistant') for m in self.store.chat_items(first['session_id'])))
+        self.assertEqual(self.requests, [])
+
+    def test_create_session_rejects_forged_identity_remote_source_and_arguments(self):
+        count = len(self.store.chats())
+        for auth, args in ((replace(self.auth, principal='another-user'), {}),
+                           (replace(self.auth, source='feishu'), {}),
+                           (self.auth, dict(source={'kind': 'local'})),
+                           (self.auth, dict(scope='device'))):
+            with self.subTest(auth=auth, args=args), self.assertRaises(CapabilityError):
+                self.runtime.execute('ai.sessions.create', args, auth)
+        self.assertEqual(len(self.store.chats()), count)
+        self.assertEqual(self.requests, [])
+
+    def test_create_session_uses_saved_model_and_operation_is_bound_to_origin(self):
+        current = self.store.save_profile(replace(self.profile, model='saved-model'))
+        first = self.runtime.execute('ai.sessions.create', {}, self.auth)
+        self.assertEqual(self.store.chat(first['session_id'])['profile']['model'], current.model)
+        other = self.service.create_session(None, current, scope='general')
+        second = self.runtime.execute('ai.sessions.create', {}, replace(self.auth, session_id=other))
+        self.assertNotEqual(first['session_id'], second['session_id'])
+        self.assertEqual(self.requests, [])
+
     def test_delete_requires_explicit_inactive_ids_and_cannot_delete_itself(self):
         with self.assertRaises(CapabilityError):
             self.runtime.execute('ai.sessions.delete', dict(ids=[self.id]), self.auth)
@@ -57,6 +99,17 @@ class AiDataCapabilityTests(unittest.TestCase):
         self.assertNotIn('model-secret', str(self.runtime.execute('ai.profiles.list', {}, self.auth)))
         with self.assertRaises(CapabilityError):
             self.runtime.execute('ai.models.test', dict(profile_id=self.profile.id, capability='可自动诊断'), self.auth)
+
+    def test_source_ip_candidates_share_enumerator_and_saved_metadata(self):
+        choices = [dict(name='办公网', ip='192.168.8.2', available=True)]
+        with patch('src.services.capability_ai_data_service.list_source_ips', return_value=choices) as query:
+            self.assertEqual(self.runtime.execute('ai.source_ip.list', {}, self.auth)['items'], choices)
+            query.assert_called_once_with(self.runtime.emit)
+        profile = self.store.save_profile(replace(self.profile, source_ip='192.168.8.2'))
+        rows = self.runtime.execute('ai.profiles.list', {}, self.auth)['items']
+        self.assertEqual(next(row['source_ip'] for row in rows if row['id'] == profile.id), '192.168.8.2')
+        with self.assertRaises(CapabilityError):
+            self.runtime.execute('ai.source_ip.list', dict(source_ip='192.168.9.2'), self.auth)
 
     def test_reports_respect_channel_and_original_busy_deletion_service(self):
         self.store.save_report('one', dict(channel=1, text='evidence'))

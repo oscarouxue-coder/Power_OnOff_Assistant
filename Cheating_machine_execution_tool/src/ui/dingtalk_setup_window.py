@@ -16,8 +16,8 @@ class DingTalkSetupWindow:
         self._paused, self._disposed = False, False
         if not embedded:
             self.window.title("钉钉 AI 接入")
-            self.window.geometry("840x430")
-            self.window.minsize(680, 420)
+            self.window.geometry("840x480")
+            self.window.minsize(680, 470)
         self.window.columnconfigure(1, weight=1)
         try:
             self.saved = config_store.load()
@@ -34,23 +34,24 @@ class DingTalkSetupWindow:
         self.variables = {}
         for row, (key, title) in enumerate((("client_id", "Client ID / AppKey"),
                 ("client_secret", "Client Secret（留空保留）"), ("robot_code", "Robot Code"),
-                ("webhook", "应用机器人群 Webhook"), ("secret", "群 Webhook 加签密钥"))):
-            self.variables[key] = tk.StringVar(self.window, values[key])
+                ("webhook", "应用机器人群 Webhook"), ("secret", "群 Webhook 加签密钥"),
+                ("ai_card_template_id", "AI 卡片模板 ID（可选）"))):
+            self.variables[key] = tk.StringVar(self.window, values.get(key, ""))
             ttk.Label(self.window, text=title).grid(row=row, column=0, sticky="w", padx=12, pady=8)
             ttk.Entry(self.window, textvariable=self.variables[key],
                       show="*" if key in ("client_secret", "secret") else "").grid(
                           row=row, column=1, sticky="ew", padx=12, pady=8)
         self.enabled = tk.BooleanVar(self.window, self.saved["enabled"])
         tk.Checkbutton(self.window, text="启用指定群 AI 排障", variable=self.enabled,
-                       command=self.toggle).grid(row=5, column=0, columnspan=2, sticky="w", padx=12)
+                       command=self.toggle).grid(row=6, column=0, columnspan=2, sticky="w", padx=12)
         toolbar = ttk.Frame(self.window)
-        toolbar.grid(row=6, column=0, columnspan=2, sticky="ew", padx=12, pady=8)
+        toolbar.grid(row=7, column=0, columnspan=2, sticky="ew", padx=12, pady=8)
         for text, action in (("保存应用配置", self.save), ("开始绑定群", self.bind),
                              ("确认绑定", self.confirm), ("取消绑定", self.cancel_binding)):
             ttk.Button(toolbar, text=text, command=action).pack(side="left", padx=(0, 8))
         self.status = tk.StringVar(self.window)
         self.status_label = ttk.Label(self.window, textvariable=self.status, wraplength=780)
-        self.status_label.grid(row=7, column=0, columnspan=2, sticky="w", padx=12, pady=8)
+        self.status_label.grid(row=8, column=0, columnspan=2, sticky="w", padx=12, pady=8)
         self.code = ""
         self.candidate = None
         self.after_id = None

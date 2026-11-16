@@ -4,6 +4,7 @@ import threading
 from src.models.capabilities import CapabilitySpec, CapabilityError, object_schema, fingerprint
 from src.models.ai_session_scope import source_identity
 from src.services.ai_store import profile_fingerprint
+from src.core.ai_source_ip import list_source_ips
 
 
 class AiDataCapabilities:
@@ -12,6 +13,9 @@ class AiDataCapabilities:
         self.handoff_lock = threading.RLock()
         add = runtime.registry.register
         identifier = dict(type='string', minLength=1, maxLength=100)
+        add(CapabilitySpec('ai.sessions.create', '创建空白会话',
+            '使用当前可信身份及其模型的已保存配置创建普通会话；不切换GUI、不发送模型请求或操作设备。',
+            object_schema(), self.create_session, risk='modify', sources=('local', 'gui')))
         for kind in ('sessions', 'reports'):
             add(CapabilitySpec('ai.' + kind + '.list', '查询' + kind, '查询当前身份及通道范围的项目记录摘要。',
                 object_schema(), lambda a, auth, k=kind: self.list(k, a, auth), sources=('local', 'gui')))
@@ -25,6 +29,8 @@ class AiDataCapabilities:
                 lambda a, auth, k=kind: self.delete(k, a, auth), risk='modify', sources=('local', 'gui')))
         add(CapabilitySpec('ai.profiles.list', '查询模型配置', '仅配置元数据，不返回密钥或更改当前模型。', object_schema(),
             lambda a, auth: dict(items=[asdict(p) for p in self.store.profiles()]), sources=('local', 'gui')))
+        add(CapabilitySpec('ai.source_ip.list', '查询模型出口候选', '只读枚举本机网卡 IPv4；出口配置写入和选择仍由本地模型配置控制面完成。',
+            object_schema(), lambda a, auth: dict(items=list_source_ips(self.runtime.emit)), sources=('local', 'gui')))
         for testing in (False, True):
             add(CapabilitySpec('ai.models.test' if testing else 'ai.models.query', '测试模型连接' if testing else '查询模型列表',
                 '使用已保存配置和原客户端；不接受模型提供的URL/密钥，测试结果由客户端产生。',
@@ -59,6 +65,20 @@ class AiDataCapabilities:
                 raise CapabilityError('record_scope_unknown', '历史报告未记录明确通道，须本地界面审阅')
             authority.check([value['channel']])
         return value
+
+    def create_session(self, arguments, authority):
+        session = self._record('sessions', authority.session_id, authority)
+        operation = dict(session_id=authority.session_id, operation_id=authority.operation_id,
+                         principal=authority.principal)
+        with self.handoff_lock:
+            for candidate in self.store.chats():
+                if candidate.get('capability_create_operation') == operation:
+                    self._record('sessions', candidate['id'], authority)
+                    return dict(ok=True, session_id=candidate['id'], reused=True, device_operations=False)
+            profile = self._profile(session['profile']['id'])
+            created = self.conversation.create_blank_session(profile, source=session.get('source'))
+            self.store.update_chat(created, capability_create_operation=operation)
+        return dict(ok=True, session_id=created, reused=False, device_operations=False)
 
     def list(self, kind, arguments, authority):
         identifiers = [s['id'] for s in self.store.chats()] if kind == 'sessions' else [r[0] for r in self.store.reports()]

@@ -267,15 +267,15 @@ class ContextConversationTests(unittest.TestCase):
         original = self.diag.client_factory
         def factory(*args):
             client = original(*args)
-            def complete(*_args):
+            def complete(*_args, **_kwargs):
                 self.service.stop(self.id)
                 raise ContextLengthError("context")
-            client.complete = Mock(side_effect=complete)
+            client.complete_stream = Mock(side_effect=complete)
             self.test_client = client
             return client
         self.diag.client_factory = factory
         self.assertEqual(self.send()["status"], "已停止")
-        self.assertEqual(self.test_client.complete.call_count, 1)
+        self.assertEqual(self.test_client.complete_stream.call_count, 1)
 
     def test_unknown_context_shows_fallback_and_single_message_limit_unchanged(self):
         self.send()

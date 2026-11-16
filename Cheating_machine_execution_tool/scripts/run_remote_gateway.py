@@ -4,12 +4,12 @@ import getpass
 import json
 import os
 from pathlib import Path
-import ssl
 import sys
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.core.remote_gateway_transport import GatewayConnection, GatewayWebSocketServer
+from src.core.remote_gateway_transport import GatewayConnection
+from src.services.remote_gateway_host import RemoteGatewayHost
 from src.services.remote_gateway_store import RemoteGatewayStore
 from src.services.remote_instance_identity import RemoteInstanceIdentity
 from src.services.remote_gateway_runtime import RemoteInstanceConfig
@@ -48,6 +48,9 @@ def main(argv=None):
         identity = RemoteInstanceIdentity(args.app_dir, slot=args.slot)
         try:
             config = RemoteInstanceConfig(identity)
+            pending = RemoteInstanceConfig(identity, pending=True)
+            if pending.path.exists() and args.command in ("allow-instance", "show-instance"):
+                config = pending
             if args.command == "pair-instance":
                 pairing = GatewayConnection(args.url, vpn=args.vpn).pair(getpass.getpass("一次性配对码: "), identity.instance_id, args.name)
                 config.save(dict(pairing, url=args.url, name=args.name, vpn=args.vpn, enabled=False,
@@ -66,35 +69,28 @@ def main(argv=None):
             else:
                 value = config.load()
                 value.pop("credential", None)
-                print(json.dumps(dict(value, **identity.snapshot()), ensure_ascii=False, indent=2))
+                print(json.dumps(dict(value, **identity.snapshot(), pending=pending.path.exists()), ensure_ascii=False, indent=2))
         finally:
             identity.close()
         return 0
-    store = RemoteGatewayStore(args.directory)
-    server = None
-    platforms = None
+    store = None
+    host = None
     try:
         if args.command == "pair-code":
+            store = RemoteGatewayStore(args.directory)
             print(store.create_pairing(json.loads(args.scope_file.read_text(encoding="utf-8-sig"))))
         elif args.command == "revoke":
+            store = RemoteGatewayStore(args.directory)
             store.revoke(args.instance_id)
             print("已撤销指定实例的接入凭据")
         else:
-            context = None
-            if args.certificate or args.private_key:
-                if not args.certificate or not args.private_key:
-                    raise ValueError("TLS证书和私钥必须同时指定")
-                context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-                context.load_cert_chain(args.certificate, args.private_key)
-            server = GatewayWebSocketServer(store, args.host, args.port, ssl_context=context, vpn=args.vpn, emit=print).start()
+            configs = {}
             if args.platforms:
                 if args.platform_config_dir is None:
                     raise ValueError("启用平台必须指定已绑定应用配置目录")
                 from src.services.dingtalk_remote_store import RemoteConfigStore
                 from src.services.feishu_remote_store import FeishuConfigStore
-                from src.services.remote_gateway_platforms import GatewayPlatforms
                 factories = dict(dingtalk=RemoteConfigStore, feishu=FeishuConfigStore)
-                configs = {}
                 for name in args.platforms.split(","):
                     if name not in factories:
                         raise ValueError("平台只能为dingtalk或feishu")
@@ -104,18 +100,18 @@ def main(argv=None):
                     configs[name] = dict(config, enabled=True)
                     if name == "feishu":
                         configs[name]["group_enabled"] = True  # Explicit CLI platform opt-in; saved direct settings stay unchanged.
-                platforms = GatewayPlatforms(store, configs, emit=print)
-                platforms.start()
+            host = RemoteGatewayHost(args.directory, emit=print)
+            host.start(dict(host=args.host, port=args.port, vpn=args.vpn, certificate=args.certificate or "",
+                            private_key=args.private_key or "", platforms=list(configs)), configs)
             while True:
                 time.sleep(.5)
     except KeyboardInterrupt:
         pass
     finally:
-        if platforms:
-            platforms.close()
-        if server:
-            server.close()
-        store.close()
+        if host:
+            host.stop()
+        if store:
+            store.close()
     return 0
 
 

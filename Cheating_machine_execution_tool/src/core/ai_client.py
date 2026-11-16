@@ -10,6 +10,7 @@ import requests
 
 from src.models.ai_diagnostics import ModelReply
 from src.core.ai_stream import ModelStream
+from src.core.ai_source_ip import SourceIpAdapter, require_source_ip
 from src.core.ai_gateway_network import collect_gateway_network, proxy_snapshot, transport_error
 from src.services.ai_store import canonical_url, profile_fingerprint
 
@@ -38,6 +39,9 @@ class DiagnosticModelClient:
         self.redactor = redactor
         self.redactor.add_secrets((key,))
         self.session = session or requests.Session()
+        if profile.source_ip:
+            for scheme in ("http://", "https://"):
+                self.session.mount(scheme, SourceIpAdapter(profile.source_ip))
         self.emit = emit
 
     def _emit(self, message):
@@ -48,7 +52,14 @@ class DiagnosticModelClient:
         if stop is not None and stop.is_set():
             raise InterruptedError("诊断已取消")
         url = request_url(self.profile.base_url, path)
-        self._emit(f"[AI请求] TX {method} {url}；协议={self.profile.protocol}；模型={self.profile.model}")
+        try:
+            require_source_ip(self.profile.source_ip)
+        except Exception as exc:
+            detail = str(exc) if isinstance(exc, ValueError) else "出口 IP 检查失败：" + type(exc).__name__
+            self._emit("[AI请求] 失败：" + detail + "；未发送请求")
+            raise ModelServiceError(detail) from None
+        self._emit(f"[AI请求] TX {method} {url}；协议={self.profile.protocol}；模型={self.profile.model}；"
+                   f"配置源IP={self.profile.source_ip or '不指定（自动选择）'}")
         proxy = proxy_snapshot(self.session, url)
         try:
             response = self.session.request(
@@ -69,29 +80,30 @@ class DiagnosticModelClient:
                         detail += "；请核对路径及模型ID，不会自动切换/v1或重发"
                     self._emit("[AI请求] 失败：" + detail)
                     raise ModelServiceError(self.redactor.text(detail))
-                chunks, size = [], 0
+                chunks, size = bytearray(), 0
                 decoder = ModelStream(self.profile.protocol, lambda text: on_text(self.redactor.stream_text(text))) if on_text else None
                 streaming = None
-                for chunk in response.iter_content(1024 if decoder else 65536):
+                # SSE须在事件到达时交付，不能等待累计满1KiB才显示首段正文。
+                for chunk in response.iter_content(1 if decoder else 65536):
                     if stop is not None and stop.is_set():
                         raise InterruptedError("诊断已取消")
                     size += len(chunk)
                     if size > 4 * 1024 * 1024:
                         raise ModelServiceError("模型响应超过4 MiB限制")
                     if streaming is None:
-                        chunks.append(chunk)
-                        start = b"".join(chunks).lstrip()
+                        chunks.extend(chunk)
+                        start = chunk.lstrip()
                         if not start:
                             continue
                         streaming = bool(decoder and not start.startswith(b"{"))
                         if streaming:
-                            decoder.feed(b"".join(chunks))
+                            decoder.feed(bytes(chunks))
                             chunks.clear()
                     elif streaming:
                         decoder.feed(chunk)
                     else:
-                        chunks.append(chunk)
-                result = decoder.result() if streaming else json.loads(b"".join(chunks))
+                        chunks.extend(chunk)
+                result = decoder.result() if streaming else json.loads(chunks)
                 if not isinstance(result, dict):
                     raise ModelServiceError("模型返回格式不正确")
                 if isinstance(result.get("base_resp"), dict) and result["base_resp"].get("status_code", 0):
@@ -105,7 +117,7 @@ class DiagnosticModelClient:
                 raise InterruptedError("诊断已取消") from None
             detail = transport_error(exc)
             self._emit("[AI请求] 失败：" + detail + "；开始当前网络诊断（不重发模型请求）")
-            network = collect_gateway_network(url, proxy, stop, self._emit)
+            network = collect_gateway_network(url, proxy, stop, self._emit, source_ip=self.profile.source_ip)
             raise ModelServiceError(self.redactor.text(detail + "；" + network)) from None
         except (requests.RequestException, ValueError, TypeError, KeyError) as exc:
             self._emit("[AI请求] 失败：网络或响应解析异常 " + type(exc).__name__)

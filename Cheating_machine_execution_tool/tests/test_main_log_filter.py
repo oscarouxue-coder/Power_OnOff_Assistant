@@ -13,7 +13,8 @@ from line_check_assistant.app import LineCheckAssistant
 from src.services.legacy_power_test_service import _ForwardingLegacyLogger
 from src.services.ai_diagnostic_service import AiDiagnosticService
 from src.services.power_test_wifi_log_service import WifiResultLogWriter, WifiResultLogQueue
-from src.ui.main_log_filter import ai_main_log_tag, format_main_log_message, is_ai_log_message, is_dut_log_message
+from src.ui.main_log_filter import (FeishuConnectionLogState, ai_main_log_tag, format_main_log_message,
+                                    is_ai_log_message, is_dut_log_message)
 from src.models.dut_config_models import DutTr069Settings, DutVoiceSettings, DutWifiRadioSettings, DutWifiSettings
 from src.utils.ai_redaction import DiagnosticRedactor
 from src.utils.wifi_log_summary import WifiLogSummary
@@ -160,6 +161,95 @@ class MainLogFilterTests(unittest.TestCase):
         self.assertIn('诊断第一行\n第二行', self.send('诊断第一行\n第二行'))
 
 
+class ResourceMonitorLogTests(unittest.TestCase):
+    start = (r'[资源监测] 开始：每60秒只读采样；记录=F:\Aouxue\Power_OnOff_Assistant'
+             r'\Cheating_machine_execution_tool\assistant_logs\resource_monitor'
+             r'\transport_history_20261117_000408_572924.jsonl')
+    stopped = '[资源监测] 已停止采样，未清理原始日志或历史缓冲'
+    feedback = (
+        '[资源监测] 无法启动采样线程：RuntimeError；原程序继续',
+        '[资源监测] 采样或记录失败：OSError；原测试继续',
+        '[资源监测] 告警：serial SIM_ONLY，状态=possible_write_stall；不能确认日志完整落盘',
+        '[资源监测] 监测记录已恢复；此前缺口保留，原测试继续',
+    )
+
+    def test_known_start_and_stop_are_hidden(self):
+        for message in (self.start, self.stopped,
+                        '[资源监测] 开始：每0.02秒只读采样；记录=/tmp/resource_monitor/'
+                        'transport_history_20261117_000408_572924.jsonl'):
+            with self.subTest(message=message):
+                self.assertIsNone(format_main_log_message(message))
+
+    def test_failures_alerts_and_recovery_are_preserved(self):
+        for message in self.feedback:
+            with self.subTest(message=message):
+                self.assertEqual(format_main_log_message(message), message)
+
+    def test_unknown_extensions_multiline_and_device_echo_are_preserved(self):
+        for message in (self.start + '；记录失败', self.stopped + '；新状态',
+                        self.start + '\n采样失败', self.stopped + '\n停止异常',
+                        '[旧工具Logs][ERROR] ' + self.start,
+                        '[资源监测] 新格式：状态待核实'):
+            with self.subTest(message=message):
+                self.assertEqual(format_main_log_message(message), message)
+
+
+class FeishuConnectionLogTests(unittest.TestCase):
+    failure = '[飞书接入] 飞书连接失败或断开，稍后重连（凭据省略）'
+    disconnected = '[飞书接入] 飞书连接已断开，稍后重连（凭据省略）'
+    connecting = '[飞书接入] 正在连接飞书（HTTPS注册 / WSS）'
+    connected = '[飞书接入] 飞书长连接已连接'
+    stopped = '[飞书接入] 飞书连接已停止'
+
+    def shown(self, messages, state=None):
+        state = state if state is not None else FeishuConnectionLogState()
+        return [text for message in messages
+                if (text := format_main_log_message(message, feishu_state=state)) is not None]
+
+    def test_replay_eight_user_failures_with_hidden_connecting_only_shows_first(self):
+        # 本次八条实际失败内容；时间戳由主日志入口另加，不参与匹配。
+        failure = '[AI对话] ' + self.failure
+        messages = [event for _ in range(8) for event in ('[AI对话] ' + self.connecting, failure)]
+        self.assertEqual(self.shown(messages), [failure])
+
+    def test_both_disconnect_messages_belong_to_one_outage_for_all_supported_prefixes(self):
+        for prefix in ('', '[AI对话] ', '[AI监控] '):
+            messages = [prefix + text for text in (self.disconnected, self.connecting, self.failure, self.disconnected)]
+            self.assertEqual(self.shown(messages), [prefix + self.disconnected])
+
+    def test_recovery_is_shown_once_then_a_new_failure_can_be_shown(self):
+        for prefix in ('', '[AI对话] '):
+            messages = [prefix + text for text in (self.connecting, self.failure, self.connected,
+                        self.connected, self.connecting, self.failure)]
+            self.assertEqual(self.shown(messages), [prefix + self.failure,
+                             prefix + '[飞书接入] 飞书连接已恢复', prefix + self.failure])
+
+    def test_initial_normal_connection_stays_hidden_and_stop_resets_outage(self):
+        self.assertEqual(self.shown([self.connecting, self.connected]), [])
+        self.assertEqual(self.shown([self.failure, self.stopped, self.connecting, self.failure]),
+                         [self.failure, self.stopped, self.failure])
+
+    def test_other_errors_and_unrelated_logs_do_not_reset_or_get_suppressed(self):
+        others = ['[飞书接入] 飞书回复发送失败或结果未知，请在本地核对；不会重新执行排障工具',
+                  '[钉钉接入] 连接中断或鉴权失败，等待重连（凭据省略）',
+                  '[AI对话] 会话12345678请求模型失败：网络超时', '[DUT配置] 操作失败']
+        messages = [self.failure] + others + [self.connecting, self.failure]
+        self.assertEqual(self.shown(messages), [self.failure] + others)
+
+    def test_unknown_extensions_multiline_and_echo_are_preserved_without_reset(self):
+        others = [self.failure + '；新错误', self.failure + '\n后续处理失败',
+                  self.connected + '；新格式异常', self.stopped + '\n后续错误',
+                  '[旧工具Logs][ERROR] ' + self.failure]
+        messages = [self.failure] + others + [self.failure]
+        self.assertEqual(self.shown(messages), [self.failure] + others)
+
+    def test_each_window_has_independent_state_and_stateless_calls_keep_old_contract(self):
+        first, second = FeishuConnectionLogState(), FeishuConnectionLogState()
+        self.assertEqual(self.shown([self.failure, self.failure], first), [self.failure])
+        self.assertEqual(self.shown([self.failure], second), [self.failure])
+        self.assertEqual(format_main_log_message(self.failure), self.failure)
+
+
 class MainLogPersistenceTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -172,6 +262,25 @@ class MainLogPersistenceTests(unittest.TestCase):
         LineCheckAssistant._log(self.context, wifi_message('频段=2.4G 无线Ping第4/4包：超时'))
         self.assertEqual(self.context.log_text.mock_calls, [])
         self.assertFalse(self.context.log_path.exists())
+
+    def test_hidden_resource_monitor_messages_keep_original_file_records(self):
+        messages = [ResourceMonitorLogTests.start, ResourceMonitorLogTests.stopped]
+        for message in messages:
+            LineCheckAssistant._log(self.context, message, tag='muted')
+        self.assertEqual(self.context.log_text.mock_calls, [])
+        saved = [line[20:] for line in self.context.log_path.read_text(encoding='utf-8').splitlines()]
+        self.assertEqual(saved, messages)
+
+    def test_resource_monitor_replay_shows_feedback_and_persists_all_events(self):
+        feedback = ResourceMonitorLogTests.feedback
+        messages = [ResourceMonitorLogTests.start, *feedback, ResourceMonitorLogTests.stopped]
+        for message in messages:
+            LineCheckAssistant._log(self.context, message)
+        saved = [line[20:] for line in self.context.log_path.read_text(encoding='utf-8').splitlines()]
+        self.assertEqual(saved, messages)
+        rendered = [call.args[1].rstrip('\n') for call in self.context.log_text.insert.call_args_list
+                    if len(call.args) < 3 or call.args[2] != 'time']
+        self.assertEqual(rendered, list(feedback))
 
     def test_visible_message_uses_same_summary_on_disk_and_keeps_error_color(self):
         message = wifi_message('网卡=Intel(R) Wi-Fi 7 BE200 320MHz 测试环境异常：DNS错误码9005')
@@ -186,6 +295,24 @@ class MainLogPersistenceTests(unittest.TestCase):
         LineCheckAssistant._log(self.context, message, tag='muted')
         self.context.log_text.insert.assert_any_call('end', message + '\n', 'muted')
         self.assertTrue(self.context.log_path.read_text(encoding='utf-8').endswith(message + '\n'))
+
+    def test_feishu_reconnect_summary_keeps_every_original_event_in_file(self):
+        prefix = '[AI对话] '
+        failure = prefix + FeishuConnectionLogTests.failure
+        connecting = prefix + FeishuConnectionLogTests.connecting
+        connected = prefix + FeishuConnectionLogTests.connected
+        stopped = prefix + FeishuConnectionLogTests.stopped
+        messages = [item for _ in range(8) for item in (connecting, failure)]
+        messages += [connected, connected, failure, stopped, connecting, failure]
+        for message in messages:
+            LineCheckAssistant._log(self.context, message)
+        saved = [line[20:] for line in self.context.log_path.read_text(encoding='utf-8').splitlines()]
+        self.assertEqual(saved, messages)
+        rendered = [call.args[1].rstrip('\n') for call in self.context.log_text.insert.call_args_list
+                    if len(call.args) < 3 or call.args[2] != 'time']
+        self.assertEqual(rendered, [failure, prefix + '[飞书接入] 飞书连接已恢复', failure, stopped, failure])
+        self.assertEqual(self.context.log_path.read_text(encoding='utf-8').count(failure), 10)
+        self.assertNotIn('飞书连接已恢复', self.context.log_path.read_text(encoding='utf-8'))
 
     def test_three_sinks_match_and_raw_ipc_is_unchanged(self):
         writer = WifiResultLogWriter(self.root, lambda event: None)

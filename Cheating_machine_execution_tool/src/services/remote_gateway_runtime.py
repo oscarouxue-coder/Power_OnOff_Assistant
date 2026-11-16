@@ -15,9 +15,9 @@ from src.services.host_resource_fence import HostResourceFence
 
 
 class RemoteInstanceConfig:
-    def __init__(self, identity, cipher=None):
+    def __init__(self, identity, cipher=None, *, pending=False):
         self.identity, self.cipher = identity, cipher or WindowsCredentialCipher()
-        self.path = identity.directory / "gateway.json"
+        self.path = identity.directory / ("gateway.pending.json" if pending else "gateway.json")
         self.binding = "gateway-instance|" + identity.instance_id + "|" + str(identity.directory.resolve())
 
     def load(self):
@@ -48,6 +48,13 @@ class RemoteGatewayRuntime:
         self.client = self.bridge = self.fence = None
         self.fence_directory = fence_directory
         try:
+            pending = RemoteInstanceConfig(self.identity, cipher, pending=True)
+            if pending.path.exists():
+                value = pending.load()
+                if not value.get("enabled") or not value.get("channel_ids") or not value.get("capability_ids"):
+                    raise ValueError("待生效统一接入范围无效，请重新保存")
+                RemoteInstanceConfig(self.identity, cipher).save(value)
+                pending.path.unlink()
             self.config = RemoteInstanceConfig(self.identity, cipher).load()
             if not self.config.get("enabled"):
                 raise ValueError("统一接入尚未在本地确认通道及能力范围，未启用")

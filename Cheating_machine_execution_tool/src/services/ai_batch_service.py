@@ -84,7 +84,7 @@ class AiBatchService:
                         selection=selector, question=text, clarification="")
         return None
 
-    def route(self, result, text, current, targets, profile, source, fresh, on_selected, selected="", *, business=False):
+    def route(self, result, text, current, targets, profile, source, fresh, on_selected, selected="", *, business=False, guard=None):
         if current and session_scope(current) == "batch" and text.strip() == "已确认清理完成":
             identifier = current["id"]
             if identifier in self.owner.running or self.store.pending_recovery():
@@ -102,7 +102,7 @@ class AiBatchService:
                 on_selected(current["id"])
             self.owner.router.select(current["id"], source)
             self.store.update_chat(current["id"], batch_request=None)
-            self.owner.send(current["id"], text, _batch_dispatch=True)
+            self.owner.send(current["id"], text, _batch_dispatch=True, _submit_guard=guard)
             return dict(identifier=current["id"], notice="仅分析历史材料，不执行设备操作", submitted=True)
         channels = result.get("channels", [])
         if not channels and current and session_scope(current) == "batch":
@@ -159,16 +159,16 @@ class AiBatchService:
         self.owner.router.select(identifier, source)
         if result["question"].strip():
             if business:
-                self.owner.send(identifier, task, _batch_dispatch=True)
+                self.owner.send(identifier, task, _batch_dispatch=True, _submit_guard=guard)
             else:
-                self.submit(identifier, task, selector)
+                self.submit(identifier, task, selector, guard=guard)
             if current and current.get("routing_pending"):
                 self.store.update_chat(current["id"], routing_pending=None)
             return dict(identifier=identifier, notice='已接收，按正式业务服务处理本次目标；状态以业务job_id为准' if business else "已接收，按通道逐台执行并汇总", submitted=True)
         self.owner.message(identifier, "system", '已选择业务目标集合，发送请求后调用正式业务服务。' if business else "已选择批量目标，发送问题后逐台执行。")
         return dict(identifier=identifier, notice="已选择批量目标", submitted=False)
 
-    def submit(self, identifier, text, selector="all"):
+    def submit(self, identifier, text, selector="all", *, guard=None):
         session = self.store.chat(identifier)
         if session["run_id"] != self.owner.context.run_id or not self.current(session):
             raise ValueError("批量目标或批次已变化，请重新明确当前任务")
@@ -205,16 +205,9 @@ class AiBatchService:
             request = dict(text=text, original=original, channels=channels)
             if selector == "remaining" and old.get("stages"):
                 request.update(stages=old["stages"], resume_rows=old.get("rows", []))
-        with self.owner.lock:
-            if identifier in self.owner.running:
-                raise ValueError("本轮仍在排查")
-            self.store.update_chat(identifier, batch_request=request)
-            # 走现有有界队列及用户发送授权边界。
-            try:
-                self.owner.send(identifier, text, _batch_dispatch=True)
-            except Exception:
-                self.store.update_chat(identifier, batch_request=None)
-                raise
+        # send performs GUI/permission preflight before taking the conversation lock.
+        # Batch metadata and queue admission must be committed by that same entry.
+        self.owner.send(identifier, text, _batch_dispatch=True, _batch_request=request, _submit_guard=guard)
 
     def plan(self, request, profile, key, stop):
         if request.get("stages"):

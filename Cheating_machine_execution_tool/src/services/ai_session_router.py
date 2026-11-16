@@ -76,6 +76,12 @@ class AiSessionRouter:
 
     def _resolve(self, text, current, targets, profile, stop, fresh):
         if getattr(self.owner, 'capabilities', None) is not None:
+            from src.services.ai_version_query_service import version_route, version_available
+            version = version_route(text, current, targets, fresh) if version_available(self.owner) else None
+            if version:
+                self.owner.emit("明确版本查询目标：" + str(version.get("channels") or version.get("channel")) +
+                                ("；需澄清，不执行" if version["clarification"] else "；跳过模型识别"))
+                return version
             from src.services.ai_business_batch_route import fast_business_batch
             business = fast_business_batch(text, current, targets, fresh)
             if business:
@@ -201,11 +207,13 @@ class AiSessionRouter:
                     or diagnostic.profile is None or profile_fingerprint(diagnostic.profile) != profile_fingerprint(profile)):
                 raise ValueError("识别期间目标、批次或模型已变化，请重新发送")
         scope, channel = result["scope"], result["channel"]
+        submission_guard = lambda: not stop.is_set() and not self.owner.shutdown.is_set() and (guard is None or guard())
         if scope == "batch" and result["intent"] != "clarify":
             if diagnosis_only:
                 raise ValueError("连续诊断请指定本机电脑或单个设备通道；多样机任务可切回常规对话")
             return self.owner.batch.route(result, text, current, targets, profile, source, fresh, on_selected, selected,
-                business=bool(getattr(self.owner, 'capabilities', None) is not None and result.get('workflow') == 'business'))
+                business=bool(getattr(self.owner, 'capabilities', None) is not None and result.get('workflow') == 'business'),
+                guard=submission_guard)
         continuing = (not fresh and result["intent"] == "continue" and current is not None
                       and (bool(selected) or current["run_id"] == run_id)
                       and session_scope(current) == scope and target_channel(current) == channel
@@ -268,11 +276,11 @@ class AiSessionRouter:
                 if current.get("routing_pending"):
                     task = "原排障问题（用户描述，待核实）：" + current["routing_pending"]["request"] + "\n用户补充：" + text
             if diagnosis_only is not None:
-                self.owner.send(identifier, task, diagnosis_only=diagnosis_only)
+                self.owner.send(identifier, task, diagnosis_only=diagnosis_only, _submit_guard=submission_guard)
             elif self.owner.store.chat(identifier).get("pending"):
-                self.owner.answer_question(identifier, task)
+                self.owner.send(identifier, task, _submit_guard=submission_guard)
             else:
-                self.owner.send(identifier, task)
+                self.owner.send(identifier, task, _submit_guard=submission_guard)
             if current and current.get("routing_pending") and scope != "general":
                 self.owner.store.update_chat(current["id"], routing_pending=None)
             return dict(identifier=identifier, notice="已接收，等待执行" if self.owner.store.chat(identifier)["status"] == "排队中" else "已接收，开始排查", submitted=True)

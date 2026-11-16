@@ -6,6 +6,7 @@ import time
 import uuid
 
 import requests
+from src.core.ai_reply_cards import CardRejected
 
 
 def post_payload(chat_id, post, identifier):
@@ -26,16 +27,20 @@ class FeishuApi:
             response = self.requester(method, "https://open.feishu.cn" + path,
                                       json=payload, headers={"Authorization": "Bearer " + token} if token else {},
                                       timeout=10, allow_redirects=False)
+            if response.status_code in (400, 401, 403, 404, 429):
+                raise CardRejected("飞书接口明确拒绝（HTTP " + str(response.status_code) + "）")
             response.raise_for_status()
             if response.status_code != 200:
                 raise ValueError
             result = response.json()
             if not isinstance(result, dict) or type(result.get("code")) is not int:
                 raise ValueError
+        except CardRejected:
+            raise
         except Exception:
             raise RuntimeError("飞书HTTPS请求失败或响应无效，结果待核实（凭据省略）") from None
         if result["code"] != 0:
-            raise RuntimeError("飞书接口未接受请求，错误码：" + str(result["code"]))
+            raise CardRejected("飞书接口未接受请求，错误码：" + str(result["code"]))
         return result
 
     def token(self):

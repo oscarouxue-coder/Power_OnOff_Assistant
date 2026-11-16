@@ -51,15 +51,6 @@ class FeishuSetupWindow:
         ttk.Label(self.window, textvariable=self.status, wraplength=750, justify="left").grid(
             row=6, column=0, columnspan=2, sticky="w", padx=12, pady=8)
         self.code, self.after_id = "", None
-        def bind_menu(widget):
-            widget.bind("<Button-3>", lambda event: self.menu.tk_popup(event.x_root, event.y_root), add="+")
-            for child in widget.winfo_children():
-                if not isinstance(child, tk.Menu):
-                    bind_menu(child)
-        if embedded:
-            bind_menu(self.window)
-        else:
-            self.window.bind("<Button-3>", lambda event: self.menu.tk_popup(event.x_root, event.y_root))
         if not embedded:
             self.window.protocol("WM_DELETE_WINDOW", self.close)
         self.window.bind("<Destroy>", self._on_destroy, add="+")

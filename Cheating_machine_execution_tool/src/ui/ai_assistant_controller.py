@@ -23,12 +23,19 @@ class AiAssistantController:
         self.feishu_remote = None
         self.project_lease = None
         self.gateway_runtime = None
+        self.gateway_requested = False
+        self.gateway_startup_error = False
         if app_dir is not None:
-            import os
-            gateway_slot = os.environ.get("LINECHECK_GATEWAY_SLOT", "")
-            if gateway_slot:
-                from src.services.remote_gateway_runtime import RemoteGatewayRuntime
-                self.gateway_runtime = RemoteGatewayRuntime(app_dir, int(gateway_slot))
+            from src.services.remote_instance_management import selected_gateway_slot
+            try:
+                gateway_slot = selected_gateway_slot(app_dir)
+                self.gateway_requested = gateway_slot is not None
+                if gateway_slot is not None:
+                    from src.services.remote_gateway_runtime import RemoteGatewayRuntime
+                    self.gateway_runtime = RemoteGatewayRuntime(app_dir, gateway_slot)
+            except Exception:
+                self.gateway_requested = self.gateway_startup_error = True
+                emit("[多实例管理] 统一接入启动失败；未切换到直接接入，请在多实例管理页重新保存配置")
         self.remote_refresh = 0
         store = None
         remote_config = None
@@ -50,7 +57,7 @@ class AiAssistantController:
                 emit("[飞书接入] 配置读取失败，该平台未启动（凭据省略）")
             if self.gateway_runtime is not None:
                 store = self.gateway_runtime.open_store(app_dir, emit)
-            elif ((remote_values and remote_values["isolated"]) or (feishu_values and feishu_values["isolated"])
+            elif not self.gateway_requested and ((remote_values and remote_values["isolated"]) or (feishu_values and feishu_values["isolated"])
                     or ((remote_config.path.exists() or feishu_config.path.exists())
                         and (remote_config.directory / "diagnostics.sqlite3").is_file())):
                 from src.core.dingtalk_stream import InstanceLease
@@ -77,6 +84,7 @@ class AiAssistantController:
         self.service.conversation = self.conversation
         self.capability_bridge = None
         if (app_dir is not None and hasattr(master, "channels") and hasattr(master, "serial_session_manager")
+                and not self.gateway_startup_error
                 and os.environ.get('LINECHECK_DISABLE_CAPABILITIES') != '1'):
             from src.ui.capability_ui_bridge import CapabilityUiBridge
             from src.services.capability_service import CapabilityService
@@ -102,15 +110,24 @@ class AiAssistantController:
             self.service.capability_runtime = self.capabilities
         elif app_dir is not None and os.environ.get('LINECHECK_DISABLE_CAPABILITIES') == '1':
             emit('[能力目录] 已按本机启动配置停用业务Agent接入；原GUI入口保持')
+        self.instance_management = None
+        if app_dir is not None:
+            from src.services.remote_instance_management import RemoteInstanceManagement
+            self.instance_management = RemoteInstanceManagement(app_dir, runtime=lambda: self.gateway_runtime,
+                registry=lambda: getattr(getattr(self, 'capabilities', None), 'registry', None), emit=emit, maintenance=maintenance)
+            self.instance_management.startup_error = self.gateway_startup_error
+            if getattr(self, 'capabilities', None) is not None:
+                self.instance_management.register_status(self.capabilities.registry)
         self.dialog = AiDiagnosticsWindow(master, self.service, targets, background, foreground,
-                                          conversation=self.conversation, remote_tab_factory=remote_tab_factory)
+            conversation=self.conversation, remote_tab_factory=remote_tab_factory,
+            multi_instance_factory=self._multi_instance_panel if self.instance_management is not None else None)
         terminal.diagnostic_observer = self.service.serial_receiver
         self.terminal = terminal
         self.closing = False
         self.closed = False
         if self.gateway_runtime is not None:
             self.gateway_runtime.attach(self.conversation, project_config_path)
-        if store is not None and project_config_path is not None and self.gateway_runtime is None:
+        if store is not None and project_config_path is not None and not self.gateway_requested:
             from src.services.dingtalk_remote_service import DingTalkRemoteService
             if remote_values is not None:
                 try:
@@ -134,7 +151,15 @@ class AiAssistantController:
                         self.feishu_remote.start()
                     except Exception:
                         self.service.emit("[飞书接入] 启动失败，请检查实例占用及配置（凭据省略）")
+        if self.instance_management is not None:
+            for remote in (self.remote, self.feishu_remote):
+                if remote is not None:
+                    remote.direct_admission = self.instance_management.host.ensure_direct_available
         self.after_id = master.after(50, self._poll)
+
+    def _multi_instance_panel(self, parent):
+        from src.ui.ai_multi_instance_tab import MultiInstanceTab
+        return MultiInstanceTab(parent, self.instance_management)
 
     def open(self):
         if not self.closing:
@@ -202,6 +227,8 @@ class AiAssistantController:
                 return False
         if not self.closing:
             self.closing = True
+            if getattr(self, 'instance_management', None) is not None:
+                self.instance_management.begin_close()
             if getattr(self, "gateway_runtime", None) is not None:
                 self.gateway_runtime.begin_close()
             if self.remote is not None:
@@ -219,6 +246,8 @@ class AiAssistantController:
         if getattr(self, "feishu_remote", None) is not None and not self.feishu_remote.idle:
             return False
         if getattr(self, "gateway_runtime", None) is not None and not self.gateway_runtime.idle:
+            return False
+        if getattr(self, 'instance_management', None) is not None and not self.instance_management.idle:
             return False
         self.closed = True
         if capabilities is not None:

@@ -12,6 +12,9 @@ import threading
 import time
 
 from src.core.dingtalk_robot import send_text
+from src.core.ai_reply_cards import DingTalkReplyCard, CardStopped
+from src.services.ai_reply_stream_service import ReplyStreamService
+from src.utils.ai_redaction import hold_secret_prefix
 from src.core.dingtalk_stream import DingTalkStream, InstanceLease, send_session_text, valid_session_url
 from src.models.ai_actions import action_fingerprint
 from src.models.ai_permissions import AUTO
@@ -58,6 +61,9 @@ class DingTalkRemoteService:
         self.routing_generation = 0
         self.outbox = queue.Queue(maxsize=128)
         self.updates = conversation.subscribe()
+        self.card_token_cache = {}
+        self.reply_streams = ReplyStreamService(self.mailbox, self._stream_card, self._stream_allowed,
+            self._sanitize, self._send_stream_final, self.emit, clock=self.clock)
         self.worker = threading.Thread(target=self._loop, name="dingtalk-ai", daemon=True)
         self.sender_thread = threading.Thread(target=self._send_loop, name="dingtalk-reply", daemon=True)
         if autostart:
@@ -81,6 +87,9 @@ class DingTalkRemoteService:
                         binding=bool(self.binding_code and self.clock() < self.binding_deadline))
 
     def start(self):
+        guard = getattr(self, "direct_admission", None)
+        if guard is not None:
+            guard("dingtalk", self.config)
         if self.stop_event.is_set():
             raise ValueError("接入服务正在退出")
         if self.transport is not None:
@@ -128,6 +137,10 @@ class DingTalkRemoteService:
         self.emit("指定群绑定成功，等待本地启用确认")
 
     def enable(self, enabled):
+        if enabled:
+            guard = getattr(self, "direct_admission", None)
+            if guard is not None:
+                guard("dingtalk", self.config)
         self.conversation.router.cancel_platform("dingtalk")
         with self.lock:
             self.routing_generation += 1
@@ -316,13 +329,21 @@ class DingTalkRemoteService:
                 item = messages[index]
                 text = str(item.get("text", ""))
                 # 待批准详情由下面的不可变操作记录生成，替换桌面按钮指引。
-                if item.get("role") == "assistant" and "请点击“查看待确认操作”" in text:
+                if item.get("role") == "assistant" and item.get("reply_id"):
+                    if not self.reply_streams.offer(identifier, message, item, self._stream_title(message, session),
+                                                   self.routing_generation):
+                        break
+                elif item.get("role") == "assistant" and "请点击“查看待确认操作”" in text:
                     pass
                 elif item.get("role") != "user" and item.get("kind") not in ("context", "action"):
                     if not self.reply(message, text, target_channel(session) if session.get("target") else target_label(session)):
                         break
                 self.mailbox.route(key, identifier, index + 1)
             self._publish_approval(identifier, message)
+            draft = self.conversation.draft_message(identifier)
+            if isinstance(draft, dict) and draft.get("text"):
+                self.reply_streams.offer(identifier, message, draft, self._stream_title(message, session),
+                                        self.routing_generation)
 
     def _publish_approval(self, identifier, message):
         with self.lock:
@@ -363,8 +384,8 @@ class DingTalkRemoteService:
             with self.lock:
                 self.tokens.pop(token, None)
 
-    def _sanitize(self, text):
-        text = self.conversation.redactor.text(text)
+    def _sanitize(self, text, *, streaming=False):
+        text = self.conversation.redactor.stream_text(text) if streaming else self.conversation.redactor.text(text)
         hidden = [self.config.get(k, "") for k in ("client_secret", "webhook", "secret")]
         with self.conversation.diagnostic.lock:
             hidden += [t.password for t in self.conversation.diagnostic.targets.values()]
@@ -383,9 +404,37 @@ class DingTalkRemoteService:
                     if (re.search(r"password|passwd|secret|token|psk|verification_code|^key$", key, re.I)
                             and not re.search(r"_(flag|enable|enabled|mode|length|timeout|retry)$", key, re.I)):
                         hidden.append(value.strip())
+        if streaming:
+            text = hold_secret_prefix(text, hidden)
         for secret in sorted(set(filter(None, hidden)), key=len, reverse=True):
             text = text.replace(secret, "<凭据已隐藏>")
         return re.sub(r"(?i)(access_token|session|ticket)=([^\s&]+)", r"\1=<凭据已隐藏>", text)
+
+    def _stream_allowed(self, message, generation):
+        with self.lock:
+            return (not self.stop_event.is_set() and self.config["enabled"]
+                    and generation == self.routing_generation and message.robot == self.config["robot_code"]
+                    and message.corp == self.config["corp"] and message.group == self.config["group"])
+
+    def _stream_card(self, message, generation):
+        return DingTalkReplyCard(dict(self.config), lambda: self._stream_allowed(message, generation),
+                                self.emit, self.card_token_cache)
+
+    def _stream_title(self, message, session):
+        return f"项目：{load_push_project_name(self.project_path)} | {target_label(session)} | {message.nickname}"
+
+    def _send_stream_final(self, message, title, text, identifier, generation):
+        for chunk in split_text(title + '\n' + text):
+            if not self._stream_allowed(message, generation):
+                raise CardStopped()
+            self.emit("下发降级完整回复：POST 钉钉会话/群机器人接口（凭据省略）")
+            session, expires = self.reply_context.get(self.identity(message), ("", 0))
+            if session and expires > int(time.time() * 1000) + 10000:
+                self.session_sender(session, chunk)
+            else:
+                self.sender(self.config["webhook"], self.config.get("secret", ""), chunk, at_all=False)
+            if len(text) > 1000:
+                self.stop_event.wait(self.send_interval)
 
     def reply(self, message, text, channel=None):
         if not text:
@@ -437,6 +486,7 @@ class DingTalkRemoteService:
 
     def _send_loop(self):
         while not self.stop_event.is_set():
+            self.reply_streams.tick()
             try:
                 message, text = self.outbox.get(timeout=.2)
             except queue.Empty:
@@ -455,7 +505,7 @@ class DingTalkRemoteService:
                 self.emit("群回复发送失败或结果未知，请在本地工作台核对；不会重新执行排障工具")
             finally:
                 self.outbox.task_done()
-            self.stop_event.wait(self.send_interval)
+            self.reply_streams.wait(self.stop_event, self.send_interval)
 
     def begin_close(self):
         self.conversation.router.cancel_platform("dingtalk")

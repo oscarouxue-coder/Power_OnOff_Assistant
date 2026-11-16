@@ -74,10 +74,12 @@ serial.read|被动串口日志|_open_serial_log_module|read_serial_log|serial|re
 serial.status|实时串口状态|_open_serial_log_module|read_serial_status|serial|read|read_serial_status
 serial.directory|串口日志目录|_on_serial_log_directory_changed|SerialTerminal|configuration|modify|
 ai.profiles|模型配置增改复制删除选择|_open_ai_assistant|DiagnosticStore|configuration|modify|
+ai.source_ip|模型出口IP枚举与设置|_open_ai_assistant|list_source_ips / DiagnosticStore|configuration|modify|
 ai.models_test|模型列表/连接测试|_open_ai_assistant|DiagnosticClient|external|modify|
 ai.conversation|对话/连续诊断/停止/进展|_open_ai_assistant|AiConversationService|conversation|modify|existing_interaction
 ai.evidence|文本导入/证据检索|_open_ai_assistant|AiEvidenceContext|file|read|read_test_evidence
 ai.sessions|会话查询/重命名/删除清空|_open_ai_assistant|DiagnosticStore|data|modify|
+ai.sessions_create|创建空白新会话|_open_ai_assistant|AiConversationService.create_blank_session|conversation|modify|ai.sessions.create
 ai.reports|报告查询/重命名/删除清空|_open_ai_assistant|DiagnosticStore|data|modify|
 ai.continue_report|报告接手排查|_open_ai_assistant|create_session_from_report|conversation|modify|
 ai.cases|案例创建/修订/启停/删除|_open_ai_assistant|SharedCaseStore|data|modify|
@@ -88,6 +90,9 @@ remote.dingtalk|钉钉配置/启停/绑定/取消|_configure_dingtalk_remote|Din
 remote.feishu|飞书配置/启停/绑定/取消/试发|_configure_feishu_remote|FeishuRemoteService|external/configuration|modify|
 remote.feishu_sdk_repair|安装飞书SDK并重启源码|_install_feishu_sdk|FeishuDependencyRepair|python-environment/process|manual|local_confirmation
 remote.binding_confirm|群身份绑定确认|_build_ai_remote_management|remote.confirm_binding|human_control|manual|local_confirmation
+remote.instances|多实例接入状态|_open_ai_assistant|RemoteInstanceManagement.status|configuration|read|remote.instances.status
+remote.instance_configuration|实例配对/启动模式/本地范围|_open_ai_assistant|RemoteInstanceManagement|human_control|manual|local_confirmation
+remote.gateway_configuration|网关配置/启停/配对码/撤销|_open_ai_assistant|RemoteGatewayHost|human_control|manual|local_confirmation
 updates.check|检查更新|_build_ui|AppUpdateService.check_for_update|external|read|
 updates.download|下载更新/取消|_build_ui|AppUpdateService.download_update|external/file|modify|
 """
@@ -114,7 +119,7 @@ def business_catalog():
         "config.runtime": "configuration.runtime.patch", "config.wifi": "configuration.connect_wifi.patch",
         "config.project": "configuration.project_info.patch", "config.reload_save": "configuration.read",
         "updates.check": "updates.check", "updates.download": "updates.download",
-        "ai.profiles": "ai.profiles.list", "ai.models_test": "ai.models.query / ai.models.test",
+        "ai.profiles": "ai.profiles.list", "ai.source_ip": "ai.source_ip.list / ai.profiles.list", "ai.models_test": "ai.models.query / ai.models.test",
         "ai.sessions": "ai.sessions.list/read/rename/delete", "ai.reports": "ai.reports.list/read/rename/delete",
         "ai.cases": "ai.cases.query / ai.cases.set_active / ai.cases.delete", "ai.evidence": "ai.evidence.import / read_test_evidence",
         'ai.continue_report': 'ai.reports.continue', 'notifications.config': 'notifications.read / notifications.patch',
@@ -136,19 +141,20 @@ def business_catalog():
         'serial.directory': '当前工作区监控输出可用；主串口窗口保存目录及正在打开日志的归属适配待完成',
         'ai.continue_report': '原报告接手服务保留；尚需可信来源/目标及历史材料身份的受控适配',
         'ai.monitor': '原监控入口保留；Agent配置/启停须复用本地监控授权，禁止自行签发或扩大监控范围',
-        'remote.dingtalk': '远程业务调用已校验真实来源；接入配置/启停属于授权控制面，尚需本地审阅后的专用适配',
-        'remote.feishu': '远程业务调用已校验真实来源；接入配置/启停属于授权控制面，尚需本地审阅后的专用适配',
+        'remote.dingtalk': '远程业务调用已校验真实来源；接入配置/启停及AI卡片模板仍属本地授权控制面，尚需专用适配；流式为已有会话的显示投影',
+        'remote.feishu': '远程业务调用已校验真实来源；接入配置/启停及卡片权限仍属本地授权控制面，尚需专用适配；流式为已有会话的显示投影',
     }
     for row in _ROWS.strip().splitlines():
         identifier, name, gui, service, resources, risk, capability = row.split("|")
         capability = connected.get(identifier, capability)
         manual = capability == "local_confirmation"
         old_jobs = ("firmware.stop", "aging.stop", "aging.status", "pretest.stop", "dut.stop", "parameters.stop", "onu.stop")
-        partial = identifier in old_jobs + ("ai.evidence", "ai.conversation", "ai.profiles", "ai.cases", "parameters.generate", "serial.close", "config.reload_save", "updates.download")
+        partial = identifier in old_jobs + ("ai.evidence", "ai.conversation", "ai.profiles", "ai.source_ip", "ai.cases", "parameters.generate", "serial.close", "config.reload_save", "updates.download")
         result.append(dict(feature_id=identifier, name=name, gui_file="line_check_assistant/app.py", gui_entry=gui,
             service=service, resources=resources.split("/"), risk=risk, capability_id=capability,
             status="manual_control" if manual else "partial" if partial else "connected" if capability else "pending",
             reason="仅本机缺包弹窗由操作员选择安装；修改运行环境并重启，AI不可触发或代确认" if identifier == 'remote.feishu_sdk_repair' else
+                   "接入配置、配对、范围、启停及撤销仅本机操作员确认；AI不能生成配对码或自授权" if identifier in ('remote.instance_configuration', 'remote.gateway_configuration') else
                    "必须由真实操作员确认，AI可准备材料但不能自我批准" if manual else
                    "仅受控接口发起的任务可按job_id查询/取消；旧GUI独立批次未接管" if identifier in old_jobs else
                    "关闭自己取得的被动监控，不关闭其它GUI标签/所有权" if identifier == "serial.close" else
@@ -156,7 +162,9 @@ def business_catalog():
                    "原更新服务校验及取消共用；AI仅下载到受控工作区，任意目标目录授权待接入" if identifier == "updates.download" else
                    "生成规则共用，当前AI仅保存受控工作区；任意输出目录授权尚待接入" if identifier == "parameters.generate" else
                    "仅查询模型元数据；模型/密钥配置写入与选择仍须本地控制面，尚未开放自动化适配" if identifier == "ai.profiles" else
+                   "共用本机IPv4枚举及已保存配置；设置/保存仍为本地模型配置控制面，AI写入尚未开放" if identifier == "ai.source_ip" else
                    "可查询/按版本启停/删除；新增和内容修订中的根因/复测确认保留真实人工控制面" if identifier == "ai.cases" else
+                   "明确版本请求共用受控多通道Job；逐台失败继续、先真实结果后一次AI说明；不重放，现场验收待确认" if identifier == "device.version" else
                    "已有受控接口，真实Windows/模型/DUT验收另列" if capability else pending_reasons[identifier]))
         group = identifier.split('.')[0]
         tests = ('test_capability_settings.py',) if identifier in ('firmware.settings', 'onu.settings') else (
@@ -165,4 +173,8 @@ def business_catalog():
             ('test_capability_onu.py',) if group == 'onu' else ('test_capability_ai_data.py',) if group == 'ai' else
             ('test_capability_application.py',) if group in ('config', 'logs', 'serial', 'updates', 'notifications') else ('test_capability_devices.py',)))
         result[-1]['tests'] = list(tests) if capability and not manual else []
+        if identifier == 'remote.instances':
+            result[-1]['tests'] = ['test_remote_instance_management.py']
+        if identifier == "device.version":
+            result[-1]['tests'].extend(('test_ai_version_query.py', 'test_ai_multichannel_dispatch.py'))
     return result

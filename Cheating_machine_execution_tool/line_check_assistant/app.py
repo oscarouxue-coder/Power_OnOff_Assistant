@@ -19,7 +19,8 @@ from src.services.test_item_pretest_service import prepare_pretest_request
 from src.ui.test_item_pretest_controls import PretestControls
 from src.ui.app_update_dialog import AppUpdateDialog, arrange_update_toolbar
 from src.ui.project_name_badge import ProjectNameBadge
-from src.ui.main_log_filter import ai_main_log_tag, format_main_log_message, is_ai_log_message, is_dut_log_message
+from src.ui.main_log_filter import (FeishuConnectionLogState, ai_main_log_tag, format_main_log_message,
+                                    is_ai_log_message, is_dut_log_message, is_resource_monitor_log_message)
 from src.ui.module_theme import apply_module_theme
 from src.ui.application_icon import apply_application_icon, set_taskbar_application_id
 from src.ui.onu_registered_list import RegisteredOnuList, confirm_batch_delete
@@ -565,8 +566,7 @@ class LineCheckAssistant(Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_app_close)
         self.after(500, self._start_dingtalk_remote)
         self.after(600, self._start_feishu_remote)
-        if os.environ.get("LINECHECK_GATEWAY_SLOT"):
-            self.after(700, self._start_gateway_remote)
+        self.after(700, self._start_gateway_remote)
         from src.services.transport_history_monitor import TransportHistoryMonitor
         self.transport_history_monitor = TransportHistoryMonitor(LOG_DIR / "resource_monitor", self.log_queue.put)
         self.transport_history_monitor.start()
@@ -5797,7 +5797,12 @@ class LineCheckAssistant(Tk):
                 assistant.observe({"type": "diagnostic_start", "run_id": run_id})
 
     def _start_gateway_remote(self):
+        if self.__dict__.get("_app_closing", False):
+            return
         try:
+            from src.services.remote_instance_management import selected_gateway_slot
+            if selected_gateway_slot(APP_DIR) is None:
+                return
             self._open_ai_assistant(show=False)
         except Exception:
             self._log("[统一接入] 启动失败，请检查配对、本地允许范围和实例槽位；未切换到直接接入")
@@ -8378,9 +8383,13 @@ class LineCheckAssistant(Tk):
         summary = self.__dict__.get('_wifi_log_summary')
         if summary is None:
             summary = self._wifi_log_summary = WifiLogSummary()
-        display_message = format_main_log_message(message, summary)
+        feishu_state = self.__dict__.get('_feishu_connection_log_state')
+        if feishu_state is None:
+            feishu_state = self._feishu_connection_log_state = FeishuConnectionLogState()
+        display_message = format_main_log_message(message, summary, feishu_state=feishu_state)
         ai_message = is_ai_log_message(message)
-        file_message = message if ai_message or is_dut_log_message(message) else display_message
+        file_message = message if (ai_message or is_dut_log_message(message)
+                                   or is_resource_monitor_log_message(message)) else display_message
         if display_message is not None:
             timestamp = datetime.now().strftime("%H:%M:%S")
             if tag is None:

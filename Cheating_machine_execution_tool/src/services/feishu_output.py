@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from src.core.feishu_client import post_payload
+from src.utils.ai_redaction import hold_secret_prefix
 
 
 POST_BYTE_LIMIT = 28000
@@ -99,10 +100,10 @@ def reply_posts(chat_id, title, text, *, markdown=True):
             for index, nodes in enumerate(chunks)]
 
 
-def sanitize(text, project_path, secrets=(), conversation=None):
+def sanitize(text, project_path, secrets=(), conversation=None, *, streaming=False):
     hidden = list(secrets)
     if conversation is not None:
-        text = conversation.redactor.text(text)
+        text = (conversation.redactor.stream_text(text) if streaming else conversation.redactor.text(text))
         with conversation.diagnostic.lock:
             hidden.extend(t.password for t in conversation.diagnostic.targets.values())
         for profile in conversation.store.profiles():
@@ -116,6 +117,8 @@ def sanitize(text, project_path, secrets=(), conversation=None):
                 if (re.search(r"password|passwd|secret|token|psk|verification_code|^key$|webhook", key, re.I)
                         and not re.search(r"_(flag|enable|enabled|mode|length|timeout|retry)$", key, re.I)):
                     hidden.append(value.strip())
+    if streaming:
+        text = hold_secret_prefix(text, hidden)
     for value in sorted(set(filter(None, hidden)), key=len, reverse=True):
         text = text.replace(value, "<凭据已隐藏>")
     text = re.sub(r"(?i)(access_token|tenant_access_token|session|ticket|app_secret)=([^\s&]+)",

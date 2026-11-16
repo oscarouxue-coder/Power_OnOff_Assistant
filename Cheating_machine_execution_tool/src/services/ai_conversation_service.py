@@ -27,6 +27,7 @@ from src.services.ai_pc_conversation import PcConversationExecutor
 from src.services.ai_batch_service import AiBatchService
 from src.models.ai_batch import READ_ONLY_TOOLS
 from src.services.ai_diagnostic_task import DiagnosticTask, TASK_INSTRUCTIONS, diagnostic_tools
+from src.services.ai_version_query_service import AiVersionQueryService
 
 
 CHAT_INSTRUCTIONS = """你是Windows光猫/路由器测试排障与操作助手。仅使用注册工具执行本次用户目标。
@@ -125,6 +126,7 @@ class AiConversationService:
         self.actions = AiActionService(self)
         self.batch = AiBatchService(self)
         self.router = AiSessionRouter(self)
+        self.version_queries = AiVersionQueryService(self)
         for session in self.store.chats():
             self.permissions.initialize(session["id"])
         for session in self.store.chats():
@@ -167,8 +169,11 @@ class AiConversationService:
         with self.subscriber_lock:
             self.subscribers.discard(subscriber)
 
-    def message(self, identifier, role, text, kind="text"):
-        self.store.append_chat(identifier, self.redactor.object(asdict(ConversationMessage(role, text, kind))))
+    def message(self, identifier, role, text, kind="text", *, reply_id="", stream_state=""):
+        payload = asdict(ConversationMessage(role, text, kind))
+        if reply_id:
+            payload.update(reply_id=reply_id, stream_state=stream_state)
+        self.store.append_chat(identifier, self.redactor.object(payload))
         self.notify(identifier)
         if hasattr(self, "batch"):
             self.batch.project(identifier, role, text, kind)
@@ -200,6 +205,23 @@ class AiConversationService:
             self.emit(f"报告{report_id}接手失败：{exc}")
             raise
 
+    @maintenance_operation
+    def create_blank_session(self, profile, *, source=None):
+        """本地菜单与受控能力共用；只创建普通会话，不采集或发送。"""
+        self.emit("开始创建空白新会话")
+        try:
+            if not profile or not profile.model.strip():
+                raise ValueError("请先保存并选择模型配置")
+            current = next((p for p in self.store.profiles() if p.id == profile.id), None)
+            if current is None or profile_fingerprint(current) != profile_fingerprint(profile):
+                raise ValueError("模型配置已变化，请重新选择已保存的模型配置")
+            identifier = self.create_session(None, current, source=source, scope="general")
+        except Exception as exc:
+            self.emit("创建空白新会话失败：" + self.redactor.text(str(exc)))
+            raise
+        self.emit(f"空白新会话{identifier[:8]}已创建，等待发送问题")
+        return identifier
+
     def create_session(self, target, profile, title="", report=None, source_report_id="", *,
                        source=None, default_permission=None, scope="device", batch_targets=None, batch_parent=None):
         if self.shutdown.is_set():
@@ -216,7 +238,8 @@ class AiConversationService:
         run_id = report.get("run_id", self.context.run_id) if report else self.context.run_id
         if report and report.get("channel") != target.channel:
             raise ValueError("报告与所选通道不一致")
-        label = f"通道{target.channel}" if target else ("本机电脑" if scope == "pc" else "普通问答")
+        label = ("多通道" + "、".join(str(t["channel"]) for t in batch_targets) if scope == "batch" else
+                 f"通道{target.channel}" if target else ("本机电脑" if scope == "pc" else "普通问答"))
         payload = {"id": identifier, "created": timestamp(), "title": title.strip() or label + ("排障" if scope != "general" else ""),
                    "run_id": run_id, "scope": scope, "target": asdict(target) if target else None, "profile": asdict(profile),
                    "settings": self.context.target_settings(run_id, target.channel) if target else {},
@@ -352,13 +375,24 @@ class AiConversationService:
         self.emit(f"会话{identifier[:8]}导入文本成功：{path.name}")
 
     @maintenance_operation
-    def send(self, identifier, text, *, _batch_dispatch=False, diagnosis_only=None):
+    def send(self, identifier, text, *, _batch_dispatch=False, diagnosis_only=None, _batch_request=None, _submit_guard=None):
         if (session_scope(self.store.chat(identifier)) == "batch" and not _batch_dispatch
                 and not self.store.chat(identifier).get('capability_business_batch')):
-            return self.batch.submit(identifier, text)
+            return self.batch.submit(identifier, text, guard=_submit_guard)
         text = self.redactor.text(text.strip())
         if not text or len(text) > 32768:
             raise ValueError("请输入1至32768字符；较长日志请导入文本材料")
+        # No caller may hold this lock while permission/target checks wait for Tk.
+        # Capture the data binding before preflight; commit only the same request.
+        def binding():
+            session = self.store.chat(identifier)
+            return (session["run_id"], session.get("target"), session.get("batch_targets"),
+                    session["profile"], session.get("settings"), session.get("source"),
+                    session.get("permission_mode"), self.context.run_id,
+                    tuple(self.diagnostic.targets.values()), self.diagnostic.profile)
+        expected = binding() if _batch_request is not None else None
+        if _submit_guard is not None and not _submit_guard():
+            raise InterruptedError("本条发送已取消，未入队")
         self.permissions.activate(identifier)
         capability = getattr(self, "capabilities", None)
         if capability is not None:
@@ -366,6 +400,10 @@ class AiConversationService:
         with self.lock:
             if self.shutdown.is_set():
                 raise RuntimeError("AI对话正在退出")
+            if _submit_guard is not None and not _submit_guard():
+                raise InterruptedError("本条发送已取消，未入队")
+            if expected is not None and binding() != expected:
+                raise ValueError("提交期间批量目标、批次或模型已变化，本条未入队")
             if identifier in self.running:
                 task = self.tasks.get(identifier)
                 if task is not None and not self.running[identifier].is_set() and diagnosis_only is not False:
@@ -377,6 +415,10 @@ class AiConversationService:
                     return
                 raise ValueError("本轮仍在排查，请等待或停止本轮后再发送；本条问题未排队")
             session = self.store.chat(identifier)
+            if _batch_request is not None and (session["run_id"] != self.context.run_id or any(
+                    self.diagnostic.targets.get(t["channel"]) != DiagnosticTarget(**t)
+                    for t in session.get("batch_targets", []))):
+                raise ValueError("批量目标或批次已变化，本条未入队")
             if diagnosis_only is not None:
                 diagnosis_only = bool(diagnosis_only and session_scope(session) in ("pc", "device"))
                 session = self.store.update_chat(identifier, diagnosis_only=diagnosis_only)
@@ -388,19 +430,29 @@ class AiConversationService:
             stop = threading.Event()
             if self.jobs.full():
                 raise ValueError("对话队列已满，请稍后重试")
+            previous_batch = session.get("batch_request")
+            previous_status = session["status"]
             self.running[identifier] = stop
             if session.get("diagnosis_only"):
                 self.tasks[identifier] = DiagnosticTask(text, session.get("diagnostic_task"))
             try:
-                self.store.update_chat(identifier, status="排队中")
+                changes = {"status": "排队中"}
+                if _batch_request is not None:
+                    changes["batch_request"] = _batch_request
+                self.store.update_chat(identifier, **changes)
                 if capability is not None:
                     self.store.update_chat(identifier, capability_turn=uuid.uuid4().hex)
                     capability.service.metrics.begin(identifier)
-                self.message(identifier, "user", text)
                 self.jobs.put_nowait((identifier, text, stop, profile, key))
+                self.message(identifier, "user", text)
             except Exception:
                 self.running.pop(identifier, None)
                 self.tasks.pop(identifier, None)
+                rollback = dict(status=previous_status, batch_request=previous_batch)
+                if capability is not None:
+                    rollback["capability_turn"] = session.get("capability_turn", "")
+                    capability.service.metrics.finish(identifier)
+                self.store.update_chat(identifier, **rollback)
                 raise
         self.emit(f"会话{identifier[:8]}收到问题，进入排查队列；其它会话继续")
 
@@ -478,6 +530,14 @@ class AiConversationService:
             try:
                 identifier, text, stop, profile, key = self.jobs.get(timeout=0.1)
             except queue.Empty:
+                self.version_queries.recover()
+                continue
+            # The producer publishes its message/metadata before releasing this
+            # lock. A failed submission may leave a queue ticket, never a task.
+            with self.lock:
+                admitted = self.running.get(identifier) is stop
+            if not admitted:
+                self.jobs.task_done()
                 continue
             try:
                 # 与旧单次诊断共享执行互斥，避免两个AI控制路径交叉。
@@ -497,6 +557,7 @@ class AiConversationService:
                     self.diagnostic.operation_lock.release()
             except Exception as exc:
                 status = "已停止" if isinstance(exc, InterruptedError) else "失败，可继续"
+                self._abort_draft(identifier, "cancelled" if isinstance(exc, InterruptedError) else "failed")
                 self._fail_usage(identifier, "cancelled" if isinstance(exc, InterruptedError) else "failed")
                 self.store.update_chat(identifier, status=status)
                 self.message(identifier, "system", self.redactor.text(str(exc)), "error")
@@ -519,7 +580,7 @@ class AiConversationService:
                 self.jobs.task_done()
 
     def draft_message(self, identifier):
-        """流式正文仅供本机预览，完整响应才入库/用于工具调用及远程发送。"""
+        """线程安全的显示快照；草稿不可作为工具输入或模型历史。"""
         with self.lock:
             value = getattr(self, "drafts", {}).get(identifier)
             return dict(value) if value else None
@@ -527,9 +588,25 @@ class AiConversationService:
     def _draft(self, identifier, text):
         with self.lock:
             if identifier not in self.drafts:
-                self.drafts[identifier] = asdict(ConversationMessage("assistant", "", "stream"))
+                self._begin_draft(identifier)
             self.drafts[identifier]["text"] = text
         self.notify(identifier)
+
+    def _begin_draft(self, identifier):
+        import uuid
+        with self.lock:
+            draft = asdict(ConversationMessage("assistant", "", "stream"))
+            draft.update(reply_id=uuid.uuid4().hex, stream_state="generating")
+            self.drafts[identifier] = draft
+            return draft["reply_id"]
+
+    def _abort_draft(self, identifier, state):
+        with self.lock:
+            draft = self.drafts.pop(identifier, None)
+            if draft and draft["text"]:
+                suffix = "回复未完成，已取消" if state == "cancelled" else "回复未完成，生成失败"
+                self.message(identifier, "assistant", draft["text"] + "\n\n[" + suffix + "]",
+                             "incomplete", reply_id=draft["reply_id"], stream_state=state)
 
     def _task_checkpoint(self, identifier, task, current):
         with self.lock:
@@ -616,6 +693,8 @@ class AiConversationService:
         target = DiagnosticTarget(**session["target"]) if session.get("target") else None
         scope = session_scope(session)
         profile = self._profile(session)  # 排队期间容量设置可能已变化，模型身份仍须相同。
+        if self.version_queries.try_run(identifier, text, stop, profile, key):
+            return
         self.refresh_evidence(identifier)
         groups = self.store.chat_items(identifier, group=True)
         evidence = self.store.chat_evidence(identifier)
@@ -720,7 +799,8 @@ class AiConversationService:
                                          "需要样机目标时请用户明确切换。" if scope == "pc" else
                                          "\n本会话为普通问答，不执行采集或操作。" if scope == "general" else "") +
                                         "\n当前采集与工具状态（程序实时校验）：" + self.redactor.dumps(runtime)}
-                    history, estimated = budget.fit(client, tools)
+                    streaming = callable(getattr(type(client), "complete_stream", None))
+                    history, estimated = budget.fit(client, tools, stream=streaming)
                     snapshot = request_usage(profile, capacity, estimated, budget.skipped,
                                              self.store.chat(identifier).get("context_usage"))
                     self._save_usage(identifier, snapshot)
@@ -738,10 +818,14 @@ class AiConversationService:
                             metrics.model(identifier)
                         if task:
                             task.rounds += 1
-                        if task and callable(getattr(type(client), "complete_stream", None)):
+                        reply_id = self._begin_draft(identifier)
+                        if streaming:
                             reply = client.complete_stream(history, tools, stop, on_text=lambda value: self._draft(identifier, value))
                         else:
                             reply = client.complete(history, tools, stop)
+                        draft = self.draft_message(identifier)
+                        if draft and draft["text"] and not reply.text:
+                            raise ValueError("模型流最终响应缺少已生成的正文；本轮未执行工具")
                         snapshot = reply_usage(snapshot, reply.usage, profile.protocol,
                                                reply.history[len(history):], self.redactor.dumps)
                         self._save_usage(identifier, snapshot)
@@ -763,12 +847,15 @@ class AiConversationService:
                 if task:
                     task.boundaries.append(len(current))
                 current.extend(reply.history[len(history):])
+                if stop.is_set():
+                    raise InterruptedError("本轮已取消")
                 with self.lock:
+                    if reply.text:
+                        if metrics:
+                            metrics.response(identifier)
+                        self.message(identifier, "assistant", reply.text,
+                                     reply_id=reply_id, stream_state="completed")
                     self.drafts.pop(identifier, None)
-                if reply.text:
-                    if metrics:
-                        metrics.response(identifier)
-                    self.message(identifier, "assistant", reply.text)
                 if not reply.calls:
                     if task:
                         if not reply.text.strip():
@@ -881,8 +968,7 @@ class AiConversationService:
                     with self.lock:
                         task.accepting = False
                     self._task_checkpoint(identifier, task, current)
-                with self.lock:
-                    self.drafts.pop(identifier, None)
+                self._abort_draft(identifier, "cancelled" if stop.is_set() else "failed")
                 self.store.append_chat(identifier, self.redactor.object(current), group=True)
             finally:
                 try:

@@ -12,6 +12,8 @@ class DiagnosticTaskControl:
         self.window = None
         self.enabled = panel.service.store.setting("continuous_diagnosis", False) is True
         self.menu = tk.Menu(panel.send_button, tearoff=False)
+        self.menu.add_command(label="新会话", command=self.new_session)
+        self.menu.add_separator()
         self.menu.add_command(label="切换为常规对话（沿用操作权限）", command=lambda: self.changed(False))
         self.menu.add_command(label="切换为连续诊断（仅定位与建议）", command=lambda: self.changed(True))
         self.menu.add_separator()
@@ -24,6 +26,7 @@ class DiagnosticTaskControl:
         panel.send_button.bind("<Alt-Down>", self.popup)
 
     def popup(self, event):
+        self.menu.entryconfigure(0, state="disabled" if self.panel.routing else "normal")
         button = self.panel.send_button
         x, y = button.winfo_rootx(), button.winfo_rooty() + button.winfo_height()
         if getattr(event, "num", None) == 3:
@@ -33,6 +36,9 @@ class DiagnosticTaskControl:
         finally:
             self.menu.grab_release()
         return "break"
+
+    def new_session(self):
+        return self.panel.new()
 
     def show_capabilities(self):
         from src.ui.capability_management import CapabilityManagement

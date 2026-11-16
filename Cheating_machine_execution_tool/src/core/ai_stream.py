@@ -6,7 +6,7 @@ import json
 class ModelStream:
     def __init__(self, protocol, on_text):
         self.protocol, self.on_text = protocol, on_text
-        self.buffer = b""
+        self.buffer = bytearray()
         self.data = []
         self.text = ""
         self.message = {"role": "assistant", "content": ""}
@@ -16,10 +16,13 @@ class ModelStream:
         self.finished = False
 
     def feed(self, chunk):
-        self.buffer += chunk
-        while b"\n" in self.buffer:
-            line, self.buffer = self.buffer.split(b"\n", 1)
-            self.line(line.rstrip(b"\r"))
+        # 低延迟HTTP读取可能一次仅到一个字节；避免反复复制/扫描整条长事件。
+        parts = chunk.split(b"\n")
+        self.buffer.extend(parts[0])
+        for part in parts[1:]:
+            self.line(bytes(self.buffer).rstrip(b"\r"))
+            self.buffer.clear()
+            self.buffer.extend(part)
 
     def line(self, line):
         if not line:
@@ -78,7 +81,7 @@ class ModelStream:
 
     def result(self):
         if self.buffer:
-            self.line(self.buffer.rstrip(b"\r"))
+            self.line(bytes(self.buffer).rstrip(b"\r"))
         self.line(b"")
         if not self.finished:
             raise ValueError("模型流意外中断，工具未执行")

@@ -13,6 +13,7 @@ import uuid
 from urllib.parse import urlsplit, urlunsplit
 
 from src.core.ai_credentials import WindowsCredentialCipher
+from src.core.ai_source_ip import normalize_source_ip
 from src.models.ai_diagnostics import ProviderProfile
 from src.services.ai_evidence_analysis import match_score, query_terms
 
@@ -30,6 +31,9 @@ def canonical_url(value):
 def profile_fingerprint(profile):
     payload = (profile.id, canonical_url(profile.base_url), profile.protocol, profile.model,
                profile.timeout, profile.max_output, profile.credential_revision)
+    source_ip = normalize_source_ip(profile.source_ip)
+    if source_ip:
+        payload += ("source_ip", source_ip)
     return hashlib.sha256(repr(payload).encode("utf-8")).hexdigest()
 
 
@@ -108,7 +112,7 @@ class DiagnosticStore:
             raise ValueError("超时须为5–180秒，输出上限须为256–32768")
         if type(profile.context_tokens) is not int or profile.context_tokens < 0:
             raise ValueError("上下文上限须为正整数，留空表示自动识别")
-        profile = replace(profile, base_url=base)
+        profile = replace(profile, base_url=base, source_ip=normalize_source_ip(profile.source_ip))
         binding = f"{profile.id}|{base}"
         with self.lock:
             old = self.db.execute("SELECT payload,binding,credential FROM profiles WHERE id=?", (profile.id,)).fetchone()

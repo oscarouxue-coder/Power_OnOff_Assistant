@@ -5,6 +5,16 @@ import json
 import threading
 
 
+def hold_secret_prefix(text, secrets):
+    """暂扣末尾尚未完整到达的已知凭据，供远程流式外发复用。"""
+    hold = 0
+    for secret in filter(None, secrets):
+        for size in range(1, min(len(secret), len(text) + 1)):
+            if text.endswith(secret[:size]):
+                hold = max(hold, size)
+    return text[:-hold] if hold else text
+
+
 class DiagnosticRedactor:
     def __init__(self, secrets=()):
         self._lock = threading.RLock()

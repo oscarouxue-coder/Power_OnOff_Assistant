@@ -19,7 +19,7 @@ from src.ui.ai_reports_window import AiReportsWindow
 
 class AiDiagnosticsWindow:
     def __init__(self, master, service, targets_provider, background=MODULE_BACKGROUND, foreground="#17202a", conversation=None,
-                 *, remote_tab_factory=None):
+                 *, remote_tab_factory=None, multi_instance_factory=None):
         self.master, self.service, self.targets_provider = master, service, targets_provider
         self.background_color, self.foreground_color = background, foreground
         self.window = None
@@ -37,6 +37,8 @@ class AiDiagnosticsWindow:
         self.chat_panel = None
         self.remote_tab_factory = remote_tab_factory
         self.remote_panel = None
+        self.multi_instance_factory = multi_instance_factory
+        self.multi_panel = None
 
     def open(self):
         if self.window is not None and self.window.winfo_exists():
@@ -44,10 +46,14 @@ class AiDiagnosticsWindow:
             self.window.deiconify()
             self.window.lift()
             self._remote_tab_changed()
+            self._multi_tab_changed()
             return
         if self.remote_panel is not None:
             self.remote_panel.dispose()
             self.remote_panel = None
+        if self.multi_panel is not None:
+            self.multi_panel.dispose()
+            self.multi_panel = None
         self.window = tk.Toplevel(self.master)
         self.window.configure(background=self.background_color)
         self.window.title("AI 诊断助手")
@@ -63,6 +69,8 @@ class AiDiagnosticsWindow:
             book.add(frame, text=title)
         self.remote_tab = ttk.Frame(book, padding=10)
         book.add(self.remote_tab, text="远程管理")
+        self.multi_tab = ttk.Frame(book, padding=10)
+        book.add(self.multi_tab, text="多实例管理")
         self.monitor_status = tk.StringVar(self.window)
         self.report_status = tk.StringVar(self.window)
         self.monitor_panel = AiMonitorWindow(self)
@@ -91,6 +99,7 @@ class AiDiagnosticsWindow:
         self._reload_cases()
         book.bind("<<NotebookTabChanged>>", self._case_tab_changed, add="+")
         book.bind("<<NotebookTabChanged>>", self._remote_tab_changed, add="+")
+        book.bind("<<NotebookTabChanged>>", self._multi_tab_changed, add="+")
         if self._poll_id is None:
             self._poll()
 
@@ -106,6 +115,15 @@ class AiDiagnosticsWindow:
                 self.remote_panel.activate()
         elif self.remote_panel is not None:
             self.remote_panel.suspend()
+
+    def _multi_tab_changed(self, _event=None):
+        if self.book.select() == str(self.multi_tab) and self.window.state() != "withdrawn":
+            if self.multi_panel is None and self.multi_instance_factory is not None:
+                self.multi_panel = self.multi_instance_factory(self.multi_tab)
+            if self.multi_panel is not None:
+                self.multi_panel.activate()
+        elif self.multi_panel is not None:
+            self.multi_panel.suspend()
 
     def open_remote(self, platform):
         self.open()
@@ -125,7 +143,7 @@ class AiDiagnosticsWindow:
         form = ttk.Frame(parent)
         form.pack(fill="x")
         self.vars = {key: tk.StringVar(self.window) for key in
-                     ("name", "provider", "base_url", "protocol", "model", "timeout", "max_output", "context_tokens", "key")}
+                     ("name", "provider", "base_url", "protocol", "model", "timeout", "max_output", "context_tokens", "key", "source_ip")}
         labels = (("name", "配置名称"), ("provider", "模型厂商"), ("base_url", "API 地址"),
                   ("protocol", "接口协议"), ("model", "模型 ID"), ("timeout", "请求超时（秒）"),
                   ("max_output", "最大输出 Token"), ("context_tokens", "上下文上限 Token（留空自动）"),
@@ -152,6 +170,9 @@ class AiDiagnosticsWindow:
         buttons.pack(fill="x", pady=14)
         for title, action in (("保存并选择", self._save), ("刷新模型", self._models), ("测试连接与工具能力", self._test)):
             ttk.Button(buttons, text=title, command=action).pack(side="left", padx=(0, 8))
+        self.source_ip_button = ttk.Button(buttons, text="指定出口 IP…", command=self._source_ip)
+        self.source_ip_button.pack(side="left")
+        self.vars["source_ip"].trace_add("write", self._update_source_ip_button)
         self.connection_status = tk.StringVar(self.window, value="未配置；密钥按Windows当前用户加密保存")
         ttk.Label(parent, textvariable=self.connection_status, wraplength=900).pack(anchor="w", pady=10)
         ttk.Label(parent, text="每次诊断固定使用启动时的厂商和模型；切换对下一次生效。\n模型列表不可用时可手填ID。不同区域的服务地址和密钥请按对应厂商账号配置。",
@@ -186,6 +207,24 @@ class AiDiagnosticsWindow:
     def _error(self, exc):
         self.service.emit("[AI界面] 操作失败：" + str(exc))
         messagebox.showerror("AI 诊断助手", self.service.redactor.text(str(exc)), parent=self.window)
+
+    def _update_source_ip_button(self, *_args):
+        value = self.vars["source_ip"].get()
+        self.source_ip_button.configure(text="出口 IP：" + value if value else "指定出口 IP…")
+
+    def _source_ip(self):
+        from src.ui.ai_source_ip_dialog import SourceIpDialog
+        identifier, previous = self.profile.id, self.vars["source_ip"].get()
+        result = SourceIpDialog(self.window, previous, self.service.emit).show()
+        if result is None:
+            return
+        if not self.window.winfo_exists() or self.profile.id != identifier or self.vars["source_ip"].get() != previous:
+            self.service.emit("[AI出口] 配置已变化，跳过过期选择，请重新打开设置")
+            return
+        self.vars["source_ip"].set(result)
+        detail = "出口 IP：" + (result or "不指定（自动选择）") + "；点击保存并选择后生效"
+        self.connection_status.set(detail)
+        self.service.emit("[AI出口] 已选择草稿：" + detail)
 
     def _fill_profile(self, profile):
         self.profile = profile
@@ -284,7 +323,8 @@ class AiDiagnosticsWindow:
             self.service.store.set_setting("selected_profile", self.profile.id)
             self.service.store.set_setting("last_profile:" + self.profile.provider, self.profile.id)
             self._reload_profiles(self.profile.id)
-            self.service.emit("[AI配置] 接入配置已保存：" + self.profile.name + " / " + self.profile.provider)
+            self.service.emit("[AI配置] 接入配置已保存：" + self.profile.name + " / " + self.profile.provider
+                              + "；出口 IP=" + (self.profile.source_ip or "不指定（自动选择）"))
             return self.profile
         except Exception as exc:
             self._error(exc)
@@ -472,7 +512,8 @@ class AiDiagnosticsWindow:
                 self.service.emit("[AI配置] " + value)
             elif kind == "models":
                 requested, models = value
-                if requested.id == self.profile.id and requested.base_url == self.vars["base_url"].get().strip().rstrip("/"):
+                if (requested.id == self.profile.id and requested.base_url == self.vars["base_url"].get().strip().rstrip("/")
+                        and requested.source_ip == self.vars["source_ip"].get()):
                     self.model_choice["values"] = tuple(item["id"] for item in models)
                     self.connection_status.set("模型列表及容量已刷新；不会自动切换当前模型")
             elif kind == "capability":
@@ -482,7 +523,11 @@ class AiDiagnosticsWindow:
                     verified = replace(current, capability=capability, tested_fingerprint=profile_fingerprint(current))
                     self.service.store.save_profile(verified)
                     if current.id == self.profile.id:
-                        self._reload_profiles(current.id)
+                        if current.source_ip == self.vars["source_ip"].get():
+                            self._reload_profiles(current.id)
+                        else:
+                            # 旧出口的测试可以回写对应已保存配置，不能覆盖新的出口草稿。
+                            self.profile = verified
                         self.service.configure(verified, self.targets)
                     self.connection_status.set(capability + "：" + detail)
                     self.service.emit("[AI配置] " + capability + "：" + detail)
@@ -517,6 +562,8 @@ class AiDiagnosticsWindow:
             manager.hide()
         if self.remote_panel is not None:
             self.remote_panel.suspend(cancel_binding=True)
+        if self.multi_panel is not None:
+            self.multi_panel.suspend()
         for panel in (self.monitor_panel, self.reports_panel):
             if panel.window is not None and panel.window.winfo_exists():
                 panel.window.withdraw()
@@ -528,5 +575,7 @@ class AiDiagnosticsWindow:
             manager.close()
         if self.remote_panel is not None:
             self.remote_panel.dispose()
+        if self.multi_panel is not None:
+            self.multi_panel.dispose()
         for stop in tuple(self.background_stops):
             stop.set()
