@@ -138,21 +138,27 @@ class ApplicationIconTests(unittest.TestCase):
         with patch.object(icons.sys, "platform", "win32"):
             messages = icons.apply_application_icon(window)
         path = str(icons.application_icon_path())
-        self.assertEqual(window.mock_calls, [call.iconbitmap(bitmap=path), call.iconbitmap(default=path)])
+        self.assertEqual(window.mock_calls, [call.iconbitmap(default=path), call.iconbitmap(bitmap=path),
+                                             call.iconbitmap(default=path)])
         self.assertEqual(messages, [])
 
     def test_corrupt_icon_or_tk_error_does_not_abort_other_initialization(self):
-        for effects in ([tk.TclError("bad ICO"), None], [None, tk.TclError("default failed")],
-                        [tk.TclError("bad ICO"), tk.TclError("bad ICO")]):
+        for effects in ([tk.TclError("default failed"), None], [None, tk.TclError("root failed"), None],
+                        [OSError("default unreadable"), tk.TclError("root failed")],
+                        [None, None, OSError("default refresh failed")]):
             with self.subTest(effects=effects):
                 window = Mock()
                 window.iconbitmap.side_effect = effects
                 with patch.object(icons.sys, "platform", "win32"):
                     messages = icons.apply_application_icon(window)
-                self.assertEqual(window.iconbitmap.call_count, 2)
+                path = str(icons.application_icon_path())
+                expected_calls = [call.iconbitmap(default=path), call.iconbitmap(bitmap=path)]
+                if effects[0] is None:
+                    expected_calls.append(call.iconbitmap(default=path))
+                self.assertEqual(window.mock_calls, expected_calls)
                 expected = [
                     f"[程序图标] {label}图标设置失败：{error}；继续启动。"
-                    for label, error in zip(("主窗口", "子窗口默认"), effects)
+                    for label, error in zip(("子窗口默认", "主窗口", "子窗口默认"), effects)
                     if error is not None
                 ]
                 self.assertEqual(messages, expected)
@@ -204,6 +210,13 @@ class ApplicationIconTests(unittest.TestCase):
 
     @unittest.skipUnless(sys.platform == "win32", "Windows native icon inheritance")
     def test_native_windows_icons_in_timed_isolated_process(self):
+        self._run_native_windows_icon_probe("inheritance")
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows native first-show icons")
+    def test_native_windows_icons_are_ready_at_first_activation(self):
+        self._run_native_windows_icon_probe("first_show")
+
+    def _run_native_windows_icon_probe(self, mode):
         probe = textwrap.dedent(r'''
             import ctypes
             from ctypes import wintypes as w
@@ -229,6 +242,8 @@ class ApplicationIconTests(unittest.TestCase):
             user.LoadImageW.argtypes = [w.HINSTANCE, w.LPCWSTR, w.UINT, ctypes.c_int, ctypes.c_int, w.UINT]
             user.LoadImageW.restype = w.HANDLE
             user.DestroyIcon.argtypes = [w.HICON]
+            user.CopyImage.argtypes = [w.HANDLE, w.UINT, ctypes.c_int, ctypes.c_int, w.UINT]
+            user.CopyImage.restype = w.HANDLE
             gdi = ctypes.WinDLL('gdi32')
             class BITMAP(ctypes.Structure):
                 _fields_ = [('type', w.LONG), ('width', w.LONG), ('height', w.LONG),
@@ -266,6 +281,87 @@ class ApplicationIconTests(unittest.TestCase):
                 assert identity.value == APPLICATION_ID
             finally:
                 ole.CoTaskMemFree(ctypes.cast(identity, ctypes.c_void_p))
+            if sys.argv[1] == 'first_show':
+                # Observe only this disposable process/thread. Assertions stay
+                # outside ctypes callbacks so callback errors cannot pass a test.
+                kernel = ctypes.WinDLL('kernel32')
+                kernel.GetCurrentThreadId.restype = w.DWORD
+                callback_type = ctypes.WINFUNCTYPE(w.LPARAM, ctypes.c_int, w.WPARAM, w.LPARAM)
+                user.SetWindowsHookExW.argtypes = [ctypes.c_int, callback_type, w.HINSTANCE, w.DWORD]
+                user.SetWindowsHookExW.restype = w.HANDLE
+                user.CallNextHookEx.argtypes = [w.HANDLE, ctypes.c_int, w.WPARAM, w.LPARAM]
+                user.CallNextHookEx.restype = w.LPARAM
+                user.UnhookWindowsHookEx.argtypes = [w.HANDLE]
+                user.GetClassNameW.argtypes = [w.HWND, w.LPWSTR, ctypes.c_int]
+                observations, errors = [], []
+                hook = None
+
+                @callback_type
+                def observe(code, hwnd, detail):
+                    if code == 5:  # HCBT_ACTIVATE: the wrapper is visible now.
+                        try:
+                            name = ctypes.create_unicode_buffer(256)
+                            user.GetClassNameW(hwnd, name, len(name))
+                            if name.value == 'TkTopLevel':
+                                matches = []
+                                for kind in (0, 1):
+                                    handle = user.SendMessageW(hwnd, 0x007F, kind, 0)
+                                    handle = handle or user.GetClassLongPtrW(hwnd, -34 if kind == 0 else -14)
+                                    size, actual = pixels(handle)
+                                    expected = user.LoadImageW(None, str(application_icon_path()), 1, *size, 0x10)
+                                    assert expected
+                                    try:
+                                        match = actual == pixels(expected)[1]
+                                    finally:
+                                        user.DestroyIcon(expected)
+                                    if kind == 0 and not match:
+                                        # RegisterClass supplies only the large
+                                        # default icon; Windows derives the first
+                                        # small icon until WM_SETICON supplies it.
+                                        large = user.LoadImageW(None, str(application_icon_path()), 1, 32, 32, 0x10)
+                                        assert large
+                                        scaled = None
+                                        try:
+                                            scaled = user.CopyImage(large, 1, *size, 0)
+                                            assert scaled
+                                            match = actual == pixels(scaled)[1]
+                                        finally:
+                                            if scaled:
+                                                user.DestroyIcon(scaled)
+                                            user.DestroyIcon(large)
+                                    matches.append((kind, size, match))
+                                observations.append(matches)
+                        except Exception as exc:
+                            errors.append(repr(exc))
+                    return user.CallNextHookEx(hook, code, hwnd, detail)
+
+                with OffscreenTkWindows():
+                    root = tk.Tk()
+                    hook = user.SetWindowsHookExW(5, observe, None, kernel.GetCurrentThreadId())
+                    assert hook
+                    try:
+                        bindings = root.bind(), root.bind_all(), root.tk.call('after', 'info')
+                        assert apply_application_icon(root) == []
+                        assert bindings == (root.bind(), root.bind_all(), root.tk.call('after', 'info'))
+                        root.update()
+                        assert not errors, errors
+                        assert len(observations) == 1, observations
+                        assert all(match for _, _, match in observations[0]), observations
+                        hwnd = user.GetParent(root.winfo_id())
+                        for kind in (0, 1):
+                            handle = user.SendMessageW(hwnd, 0x007F, kind, 0)
+                            size, actual = pixels(handle)
+                            expected = user.LoadImageW(None, str(application_icon_path()), 1, *size, 0x10)
+                            assert expected
+                            try:
+                                assert actual == pixels(expected)[1], kind
+                            finally:
+                                user.DestroyIcon(expected)
+                    finally:
+                        assert user.UnhookWindowsHookEx(hook)
+                        root.destroy()
+                print('NATIVE_FIRST_SHOW_OK small_and_large=ready final_pixels=verified offscreen_violations=0')
+                raise SystemExit(0)
             with OffscreenTkWindows() as guard:
                 root = tk.Tk()
                 existing = tk.Toplevel(root)
@@ -299,10 +395,10 @@ class ApplicationIconTests(unittest.TestCase):
                 root.destroy()
             print('NATIVE_ICON_OK windows=4 small_and_large=8 identity=verified offscreen_violations=0')
         ''')
-        result = subprocess.run([sys.executable, "-X", "utf8", "-c", probe], cwd=ROOT,
+        result = subprocess.run([sys.executable, "-X", "utf8", "-c", probe, mode], cwd=ROOT,
                                 capture_output=True, text=True, encoding="utf-8", timeout=25)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("NATIVE_ICON_OK", result.stdout)
+        self.assertIn("NATIVE_FIRST_SHOW_OK" if mode == "first_show" else "NATIVE_ICON_OK", result.stdout)
 
 
 if __name__ == "__main__":

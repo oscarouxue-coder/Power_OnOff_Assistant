@@ -1,5 +1,35 @@
 # 开发记录
 
+## 2026-11-16 - 提交首次显示图标修复及全部配套文件
+
+- 类型：测试
+- 背景：负责人要求将当前全部文件提交到本地Git，并由实施者总结提交备注。
+- 完成内容：①汇总当前全部7份未忽略改动文件，包含主窗口首次显示图标初始化顺序修复、子窗口默认图标刷新、首次激活与异常兜底回归、操作员说明、实施计划和状态/验收待办。②提交备注为“修复主窗口首次显示图标并完善回归验证”。③沿用仓库现有CPython3.9.10 x64解释器及版本化提交钩子，完整基线失败时阻断提交。
+- 修改文件：
+  - `DEVELOPMENT_LOG.md`（本轮追加提交记录）
+  - `PROJECT_STATUS.md`（本轮追加最新提交检查入口）
+  - 其余既有改动文件及实现细节见下方“修复主窗口首次显示图标顺序”条目和本次Git提交清单。
+- 验证方法：`git diff --check`、`git diff --cached --check`；本次`git commit`由`.githooks/pre-commit`进入主源码目录，使用仓库`linecheck.pythonExecutable`执行完整`python -X utf8 scripts/verify_baseline.py`，不绕过门禁；提交后核对提交文件清单及工作区状态。
+- 验证结果：提交前工作区差异格式检查通过。完整基线由本次提交钩子实际执行，成功生成提交即表示全部门禁通过，测试数量与最终结果以钩子输出为准；此前局部验证记录保留当时事实，不作为本轮完整验证结果。
+- 后续待办：完整Windows源码版图标目视复验仍按ACCEPTANCE_BASELINE.md §2.17/§3执行；本轮仅本地提交，不新增现场验收结论，未打包、发布或运行EXE。
+
+## 2026-11-16 - 修复主窗口首次显示图标顺序
+
+- 类型：BUG 修复
+- 背景：负责人截图显示主界面任务栏仍为Tk羽毛、串口窗口已为项目图标，确认原因并批准实施优化计划。原生取证发现主窗口初始化结束后的图标正确，但首次激活时仍使用Tk默认大小图标，旧测试未覆盖这一瞬间；独立快速窗口未稳定复现任务栏残留，不将时序证据直接升级为完整程序任务栏验收。
+- 完成内容：①独立图标模块改为默认图标先于主窗口图标设置，保留各步失败日志及继续启动。②原有继承专项发现Tk首次注册窗口类只提供大图标，默认小图标由Windows缩放生成；默认首次设置成功后，在主窗口图标操作结束时补一次默认刷新，维持原生小尺寸帧继承，未放宽原有4窗口8图标像素/掩码断言。③新增隔离Windows进程首次激活回归，测试钩子仅限该进程UI线程、异常在回调外断言、结束前解除；首次小图标允许项目大图标的Windows缩放结果，初始化结束后仍严格核对原生大小帧。④更新顺序与默认/主窗口/刷新失败回归，同步操作员说明、状态、验收待办及实施计划。未修改图标资源、入口、应用标识、窗口生命周期或设备业务；无新增生产钩子、定时任务、依赖及GUI业务绑定，能力清单只读复核通过，无需刷新动作快照。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/ui/application_icon.py`
+  - `Cheating_machine_execution_tool/tests/test_application_icon.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `.claude/plans/application-icon-first-show.md`
+  - `PROJECT_STATUS.md`
+  - `ACCEPTANCE_BASELINE.md`（§2.17、§3）
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：使用仓库`linecheck.pythonExecutable`对应的仓库外CPython3.9.10 x64解释器；主源码目录规范化TEMP/TMP等临时目录，将`tests`加入sys.path，以unittest合跑`test_application_icon`、`test_application_icon_package`和`test_portable_release`；`python -X utf8 -m py_compile src/ui/application_icon.py tests/test_application_icon.py`；`python -X utf8 scripts/verify_capability_coverage.py`；`git diff --check`及文档一致性/UTF-8/新增链接检查。
+- 验证结果：新首次激活测试在旧顺序上实际失败，大小图标均为Tk默认；仅调换顺序后首次激活通过，但原有继承测试准确拦截子窗口小帧差异，补默认刷新后复验通过。最终组合`Ran 29 tests ... OK`，无跳过，包含16项图标、3项模拟归档和10项便携专项；两份Python编译、能力覆盖和差异检查通过。测试覆盖主入口初始化、非Windows跳过、资源异常、Tk/OSError独立兜底、首次显示、已有/嵌套/重开继承及包内资源一致性。未运行完整基线，保留此前本地提交`72a2f75`完整门禁结果，不将其作为本轮结果。
+- 后续待办：负责人完全退出并重启源码程序，按ACCEPTANCE_BASELINE.md §2.17/§3核对实际启动入口下的任务栏、标题栏、Alt+Tab、最小化恢复及串口窗口关闭重开；若仍残留羽毛，再记录条件定位任务栏关联。本轮未启动完整主程序、操作真实设备、提交、打包、发布或运行EXE，现有EXE未更新。
+
 ## 2026-11-16 - 汇总全部改动并执行本地提交
 
 - 类型：测试

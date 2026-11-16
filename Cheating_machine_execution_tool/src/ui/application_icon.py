@@ -62,12 +62,25 @@ def apply_application_icon(window) -> list[str]:
     messages = []
     # The shared ICO uses native DIB frames for title-bar/taskbar sizes. This
     # avoids Tk's generic-file fallback with all-PNG ICOs, without image hooks.
-    operations = (("主窗口", lambda: window.iconbitmap(bitmap=str(icon))),
-                  ("子窗口默认", lambda: window.iconbitmap(default=str(icon))))
+    # Setting the root bitmap can create and show its native wrapper before
+    # WM_SETICON runs. Install the class default first so it never starts as Tk.
+    operations = (("子窗口默认", lambda: window.iconbitmap(default=str(icon))),
+                  ("主窗口", lambda: window.iconbitmap(bitmap=str(icon))))
     # Keep the calls independent: failure of one must not prevent the other.
+    default_applied = False
     for label, apply in operations:
         try:
             apply()
         except (TclError, OSError) as exc:
             messages.append(f"[程序图标] {label}图标设置失败：{exc}；继续启动。")
+        else:
+            if label == "子窗口默认":
+                default_applied = True
+    if default_applied:
+        # The initial class registration supplies only its large icon. Refresh
+        # the registered class so children also inherit the native small frame.
+        try:
+            window.iconbitmap(default=str(icon))
+        except (TclError, OSError) as exc:
+            messages.append(f"[程序图标] 子窗口默认图标设置失败：{exc}；继续启动。")
     return messages
