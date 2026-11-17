@@ -16,6 +16,8 @@ from src.ui.window_paint import center_toplevel_on_parent
 def repair_host_busy(app):
     """Read existing activity without invoking stop/cancel/close callbacks."""
     values = vars(app)
+    if 'views' in values and any(repair_host_busy(view) for view in tuple(values['views'].values())):
+        return True
     if (values.get('_app_closing') or adapter_rename_is_busy(app)
             or any(v for k, v in values.items() if isinstance(v, bool) and (k == 'running' or k.endswith('_running')))
             or values.get('_project_info_query_count', 0)):

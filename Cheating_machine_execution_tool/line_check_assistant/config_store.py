@@ -41,7 +41,11 @@ class ChannelConfig:
         return self.section.replace("channel_", "通道 ")
 
 
+from src.models.project_task import ScopedConfigPath
+
+
 class ChannelConfigStore:
+    config_path = ScopedConfigPath()
     def __init__(self, config_path: Path):
         self.config_path = config_path
 

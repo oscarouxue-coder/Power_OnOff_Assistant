@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from src.ui import project_dialogs as messagebox
+
 import json
 import os
 import queue
@@ -8,7 +10,7 @@ import time
 from collections import deque
 from datetime import date
 from pathlib import Path
-from tkinter import END, Frame, Label, StringVar, Text, Toplevel, filedialog, messagebox, ttk
+from tkinter import END, Frame, Label, StringVar, Text, Toplevel, filedialog, ttk
 from typing import Callable
 
 from src.config import DEFAULT_LOG_DIR
@@ -20,6 +22,7 @@ from src.ui.module_theme import apply_module_theme
 from src.ui.tk_lifecycle import TkScope
 from src.utils.bounded_mailbox import BoundedMailbox
 from src.models.serial_delivery import SerialDelivery
+from src.services.project_execution import project_operation
 
 
 _DEFAULT_GEOMETRY = "1000x650"
@@ -57,6 +60,7 @@ class SerialTerminalWindow:
         logger: Callable[[str], None] | None = None,
     ) -> None:
         self.master = master
+        self.project_view = master
         self.manager = manager
         self.log_dir = log_dir
         self._log_dir_initialized = False
@@ -675,6 +679,12 @@ class SerialTerminalWindow:
         return None
 
     def _restore_log_dir(self) -> Path:
+        context = vars(self.master).get('project_context')
+        if context is not None:
+            saved = self._saved_log_dir()
+            directory = saved if saved is not None else context.root / 'logs' / 'serial'
+            directory.mkdir(parents=True, exist_ok=True)
+            return directory
         """从 state_file 恢复日志目录;无效或缺失时回退到默认 D:\\Serial_Log"""
         saved = self._saved_log_dir()
         if saved is not None:
@@ -708,6 +718,9 @@ class SerialTerminalWindow:
         if not chosen:
             return  # 用户取消
         new_path = Path(chosen)
+        context = vars(self.master).get('project_context')
+        if context is not None and new_path.name != context.identity.project_id:
+            new_path = new_path / context.identity.project_id
         try:
             new_path.mkdir(parents=True, exist_ok=True)
         except OSError as exc:

@@ -25,7 +25,7 @@ class JobContext:
 
 
 class CapabilityJobs:
-    def __init__(self, directory, resources, emit=lambda line: None, metrics=None):
+    def __init__(self, directory, resources, emit=lambda line: None, metrics=None, project_context=None):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.instance_lease = None
@@ -50,6 +50,7 @@ class CapabilityJobs:
         self.resources, self.emit, self.metrics = resources, emit, metrics
         self.threads, self.controls = {}, {}
         self.closing = False
+        self.project_context = project_context
 
     @property
     def idle(self):
@@ -131,6 +132,17 @@ class CapabilityJobs:
         self.resources.acquire(identifier, resources)
         try:
             recheck()
+            if self.project_context is not None:
+                from src.services.project_store import ProjectStore
+                from src.models.project_task import project_task_scope
+                project = self.project_context
+                task_root = ProjectStore(project.source_root).snapshot(project)
+                original_runner = runner
+                def runner(context):
+                    context.project_id = project.identity.project_id
+                    context.configuration_root = task_root
+                    with project_task_scope(project.working_root, task_root):
+                        return original_runner(context)
             with self.lock:
                 if self.closing:
                     raise CapabilityError("closing", "程序正在退出，任务未下发")
@@ -182,7 +194,7 @@ class CapabilityJobs:
                     self.metrics.record(dict(kind="business_job", capability_id=self._row(identifier)["capability_id"],
                                              state=state, total_seconds=time.monotonic() - started))
             finally:
-                if getattr(self.resources, "fence", None):
+                if getattr(self.resources, "fence", None) or getattr(self.resources, 'coordinator', None):
                     self.resources.release(identifier, uncertain=state == "unknown")
                 else:
                     self.resources.release(identifier)
@@ -224,6 +236,8 @@ class CapabilityJobs:
         self.event(identifier, "reconciled", "本地负责人已审阅现场核实依据；仅解除未知状态，不执行设备操作")
         if getattr(self.resources, "fence", None):
             self.resources.fence.resolve(identifier)
+        if getattr(self.resources, 'coordinator', None):
+            self.resources.coordinator.resolve(identifier)
         return dict(job_id=identifier, state=state, notice="已保留原结果和核实记录；不会自动重试")
 
     def close(self):

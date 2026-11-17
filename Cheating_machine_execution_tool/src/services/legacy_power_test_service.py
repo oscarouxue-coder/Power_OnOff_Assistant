@@ -1053,6 +1053,12 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
     try:
         tool_root = Path(request.tool_root).resolve()
         os.chdir(tool_root)
+        # Project snapshots contain configuration/output, while business code stays
+        # in the application package. Never change the main process directory.
+        from line_check_assistant.paths import resolve_tool_root
+        source_root = resolve_tool_root() / "Auto_power_on_off_tool"
+        if source_root != tool_root:
+            sys.path.insert(0, str(source_root))
         sys.path.insert(0, str(tool_root))
         onu_config_class = _install_headless_legacy_stubs(request)
         if request.connect_wifi_enable:

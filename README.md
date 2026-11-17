@@ -4,6 +4,8 @@
 
 ## 从这里开始
 
+- 单实例多项目入口：启动源码后使用可收起项目侧栏或“项目”菜单，新建/打开/保存独立项目；旧目录通过“导入旧配置目录”迁入，操作见主源码操作员说明。兼容回退参数为`--legacy-single-project`。本轮源码改造的验证和待验收边界见`PROJECT_STATUS.md`及`ACCEPTANCE_BASELINE.md §2.18`。
+
 - 主源码与运行目录：`Cheating_machine_execution_tool/`
 - 源码入口：`Cheating_machine_execution_tool/run_line_check_assistant.py`
 - 运行：进入主源码目录后执行 `python run_line_check_assistant.py`

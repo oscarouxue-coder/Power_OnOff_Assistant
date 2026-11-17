@@ -6,13 +6,15 @@ from src.core.host_resource_lock import HostResourceLock, HostResourceBusy, phys
 
 
 class ResourceLeaseService:
-    def __init__(self, admissible=lambda owner, keys: True, released=lambda owner: None, fence=None):
+    def __init__(self, admissible=lambda owner, keys: True, released=lambda owner: None, fence=None,
+                 coordinator=None, project_id="", project_name=""):
         self._lock = threading.RLock()
         self._owners = {}
         self.admissible = admissible
         self.released = released
         self.fence = fence
         self._host_locks = {}
+        self.coordinator, self.project_id, self.project_name = coordinator, project_id, project_name
 
     @property
     def busy(self):
@@ -30,6 +32,8 @@ class ResourceLeaseService:
             if not conflict:
                 guard = None
                 try:
+                    if self.coordinator is not None:
+                        self.coordinator.acquire(owner, self.project_id, self.project_name, keys)
                     physical = [physical_key(k) for k in keys if k.startswith(("serial:", "adapter:", "power:", "olt:", "pon:"))]
                     if owner in self._host_locks:
                         physical = list(set(physical) | set(self._host_locks[owner].keys))
@@ -43,6 +47,8 @@ class ResourceLeaseService:
                     for key in keys:
                         self._owners[key] = owner
                 except Exception as exc:
+                    if self.coordinator is not None:
+                        self.coordinator.release(owner)
                     if guard:
                         guard.close()
                     error = exc
@@ -57,6 +63,8 @@ class ResourceLeaseService:
 
     def release(self, owner, uncertain=False):
         with self._lock:
+            if self.coordinator is not None:
+                self.coordinator.release(owner, uncertain)
             if self.fence:
                 self.fence.release(owner, uncertain)
             self._owners = {key: value for key, value in self._owners.items() if value != owner}

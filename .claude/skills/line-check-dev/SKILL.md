@@ -50,7 +50,7 @@ src/core/      单个底层能力（ping、ssh、telnet、串口、TFTP、升级
 src/services/  多步骤流程编排
 src/models/    数据结构与字段定义
 src/utils/     工具函数（少量）
-config/        配置文件（注：项目已统一到 Auto_power_on_off_tool/config/）
+config/        兼容单项目配置在Auto_power_on_off_tool/config/；多项目由ProjectContext显式提供独立草稿/已保存版本/任务快照，见操作员说明和single-instance-multi-project计划
 assets/        图标和图片
 logs/          运行日志，不提交 Git
 tests/         unittest（与 src/ 平级，从 src.X 与 line_check_assistant.X 导入）

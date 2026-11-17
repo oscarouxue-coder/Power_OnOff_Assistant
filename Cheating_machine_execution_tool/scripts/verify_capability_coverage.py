@@ -70,9 +70,15 @@ def check(root):
     ids = [r["feature_id"] for r in catalog]
     if len(set(ids)) != len(ids):
         errors.append("业务功能ID重复")
-    app = ast.parse((root / "line_check_assistant/app.py").read_text(encoding="utf-8-sig"))
-    functions = {n.name for n in ast.walk(app) if isinstance(n, ast.FunctionDef)}
-    errors.extend("业务入口不存在：" + r["gui_entry"] for r in catalog if r["gui_entry"] not in functions)
+    functions = {}
+    for row in catalog:
+        filename = row.get('gui_file', 'line_check_assistant/app.py')
+        if filename not in functions:
+            path = root / filename
+            tree = ast.parse(path.read_text(encoding='utf-8-sig')) if path.is_file() else ast.Module(body=[], type_ignores=[])
+            functions[filename] = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+        if row['gui_entry'] not in functions[filename]:
+            errors.append('业务入口不存在：' + filename + ':' + row['gui_entry'])
     errors.extend('专项测试入口不存在：' + name for r in catalog for name in r['tests'] if not (root / 'tests' / name).is_file())
     expected = render_matrix(catalog, gui_actions(root))
     matrix = root.parent / "CAPABILITY_COVERAGE.md"

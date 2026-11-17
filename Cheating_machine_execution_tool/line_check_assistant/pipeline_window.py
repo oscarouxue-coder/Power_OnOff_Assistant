@@ -16,10 +16,12 @@
 """
 from __future__ import annotations
 
+from src.ui import project_dialogs as messagebox
+
 import threading
 from copy import deepcopy
 import queue
-from tkinter import BooleanVar, Checkbutton, Frame, Label, StringVar, Toplevel, messagebox, ttk
+from tkinter import BooleanVar, Checkbutton, Frame, Label, StringVar, Toplevel, ttk
 from typing import Any, Callable, Dict, List, Set
 
 from src.services.pipeline_orchestrator import (
@@ -42,6 +44,7 @@ from src.ui.module_theme import MODULE_BACKGROUND, apply_module_theme
 from src.ui.window_paint import center_toplevel_on_parent
 from src.ui.tk_lifecycle import TkScope
 from src.services.pipeline_runtime import PipelineClient, PipelineLogSink, run_pipeline
+from src.services.project_execution import project_operation
 
 
 # 窗口入口仅保留三项，编排器原任务代码及其它能力继续兼容。
@@ -70,6 +73,7 @@ class PipelineWindow:
 
     def __init__(self, app: Any) -> None:
         self.app = app
+        self.project_view = app
         self._scope = TkScope()
         self._closed = False
         self._run = None
@@ -261,18 +265,21 @@ class PipelineWindow:
             from line_check_assistant.onu_registration_store import OnuRegistrationConfig
             onu = OnuRegistrationConfig()
         import line_check_assistant.app as _app_module
+        project = vars(app).get('project_context')
+        legacy_root = (vars(app).get('_project_run_root', project.saved_root) if project else _app_module.APP_DIR)
         return PipelineContext(
             app=app,
-            channels=channels,
+            channels=deepcopy(channels),
             sample_upgrade_settings=settings,
             onu_registration=onu,
             serial_log_dir=_get_attr(app, "_serial_log_directory", lambda: None)(),
-            legacy_tool_root=_app_module.APP_DIR / "Auto_power_on_off_tool",
+            legacy_tool_root=legacy_root / "Auto_power_on_off_tool",
             unattended_execution=unattended_execution,
         )
 
     # -- 开始 / 停止 -----------------------------------------------------
 
+    @project_operation
     def _on_start(self) -> None:
         ui = self.app.__dict__.get('_pipeline_ui')
         if ui is not None and not ui.idle():

@@ -37,7 +37,7 @@
 - `Cheating_machine_execution_tool/src/services`：放完整业务流程编排
 - `Cheating_machine_execution_tool/src/models`：放数据结构
 - `Cheating_machine_execution_tool/src/utils`：放工具函数
-- `Cheating_machine_execution_tool/Auto_power_on_off_tool/config`：当前程序使用的本机配置文件
+- `Cheating_machine_execution_tool/Auto_power_on_off_tool/config`：兼容单项目入口使用的本机配置及新项目脱敏模板来源；多项目入口通过显式ProjectContext使用独立项目目录的`draft/Auto_power_on_off_tool/config`草稿和`revisions/`已保存版本，任务使用`runs/`配置快照，不切换主进程工作目录。
 - `Cheating_machine_execution_tool/logs`：运行日志，不提交 Git
 - `Cheating_machine_execution_tool/tests`：测试代码
 - `Cheating_machine_execution_tool/scripts`：运行和打包脚本

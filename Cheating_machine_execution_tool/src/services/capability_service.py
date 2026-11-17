@@ -18,7 +18,8 @@ from src.services.firmware_upgrade_validation_service import FirmwareUpgradeVali
 class CapabilityService:
     def __init__(self, directory, manager, snapshot, admissible=lambda owner, keys: True,
                  network_check=lambda requests: [], emit=lambda line: None, upgrade_dispatch=dispatch_upgrade,
-                 released=lambda owner: None, tool_root=None, onu_configuration=None, enabled_modules=None, channel_commit=None, settings_commit=None):
+                 released=lambda owner: None, tool_root=None, onu_configuration=None, enabled_modules=None, channel_commit=None, settings_commit=None,
+                 resource_coordinator=None, project_context=None):
         available = frozenset(('devices', 'parameters', 'onu', 'configuration', 'channels', 'notifications', 'observations', 'updates', 'ai_data', 'extensions'))
         if enabled_modules is None:
             configured = os.environ.get('LINECHECK_CAPABILITY_MODULES')
@@ -29,9 +30,12 @@ class CapabilityService:
         self.registry, self.manager, self.snapshot, self.emit = CapabilityRegistry(), manager, snapshot, emit
         if self.enabled_modules != available:
             self.emit('[能力目录] 本次启动停用模块：' + ','.join(sorted(available - self.enabled_modules)))
-        self.resources = ResourceLeaseService(admissible, released)
+        self.resources = ResourceLeaseService(admissible, released, coordinator=resource_coordinator,
+            project_id=project_context.identity.project_id if project_context else "",
+            project_name=project_context.identity.name if project_context else "")
+        self.project_context = project_context
         self.metrics = CapabilityMetrics(directory, emit=emit)
-        self.jobs = CapabilityJobs(directory, self.resources, emit, self.metrics)
+        self.jobs = CapabilityJobs(directory, self.resources, emit, self.metrics, project_context=project_context)
         from src.services.capability_scope_service import CapabilityScopes
         self.scopes = CapabilityScopes(self.jobs)
         self.files = ControlledFiles(Path(directory) / "workspace")
@@ -61,7 +65,7 @@ class CapabilityService:
                 self.observations = ObservationCapabilities(self, tool_root)
             if 'updates' in self.enabled_modules:
                 from src.services.capability_update_service import UpdateCapabilities
-                self.updates = UpdateCapabilities(self, tool_root)
+                self.updates = UpdateCapabilities(self, project_context.source_root if project_context else tool_root)
             if 'parameters' in self.enabled_modules and self.devices is not None:
                 from src.services.capability_parameter_services import ParameterCapabilities
                 self.parameters = ParameterCapabilities(self)

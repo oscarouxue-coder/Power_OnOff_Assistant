@@ -136,7 +136,7 @@ class DingTalkRemoteService:
             self.binding_code, self.candidate = "", None
         self.emit("指定群绑定成功，等待本地启用确认")
 
-    def enable(self, enabled):
+    def enable(self, enabled, *, persist=True):
         if enabled:
             guard = getattr(self, "direct_admission", None)
             if guard is not None:
@@ -146,7 +146,8 @@ class DingTalkRemoteService:
             self.routing_generation += 1
             config = dict(self.config, enabled=bool(enabled))
             if enabled:
-                self.config_store.save(config)
+                if persist:
+                    self.config_store.save(config)
             self.config = config  # 停用先在内存生效，即使磁盘不可写也立即停止接收/执行。
             self.tokens.clear()
             self.reply_context.clear()
@@ -156,7 +157,8 @@ class DingTalkRemoteService:
                 self.start()
             except Exception:
                 self.config["enabled"] = False
-                self.config_store.save(self.config)
+                if persist:
+                    self.config_store.save(self.config)
                 raise
             self.emit("已启用，指定群全员可调用当前项目排障；新会话默认帮我批准")
         else:
@@ -175,7 +177,8 @@ class DingTalkRemoteService:
                     pass
             self.emit("已停用，取消本项目钉钉排障并等待清理；原挂测继续")
             try:
-                self.config_store.save(config)
+                if persist:
+                    self.config_store.save(config)
             except Exception:
                 raise ValueError("本进程已停用，但停用设置保存失败；请修复文件权限，重启前重新保存") from None
 

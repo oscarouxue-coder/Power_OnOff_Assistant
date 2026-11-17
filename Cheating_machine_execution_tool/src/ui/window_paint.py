@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from tkinter import TclError
+from tkinter import Misc, TclError
 
 
 FIRST_PAINT_REFRESH_DELAYS_MS = (20, 120, 360)
@@ -63,6 +63,20 @@ def schedule_toplevel_client_refresh(
     generation = current_generation + 1
     setattr(window, "_client_refresh_generation", generation)
     notified = [False]
+    pending = None
+    if isinstance(window, Misc):
+        pending = vars(window).setdefault('_client_refresh_after_ids', set())
+        if not vars(window).get('_client_refresh_destroy_bound'):
+            def cancel_refreshes(event):
+                if event.widget is window:
+                    for identifier in tuple(pending):
+                        try:
+                            window.after_cancel(identifier)
+                        except TclError:
+                            pass
+                    pending.clear()
+            window.bind('<Destroy>', cancel_refreshes, add='+')
+            window._client_refresh_destroy_bound = True
 
     def refresh() -> None:
         try:
@@ -93,7 +107,17 @@ def schedule_toplevel_client_refresh(
 
     for delay_ms in delays_ms:
         try:
-            window.after(max(0, int(delay_ms)), refresh)
+            if pending is None:
+                window.after(max(0, int(delay_ms)), refresh)
+            else:
+                holder = []
+                def invoke(holder=holder):
+                    if holder:
+                        pending.discard(holder[0])
+                    refresh()
+                identifier = window.after(max(0, int(delay_ms)), invoke)
+                holder.append(identifier)
+                pending.add(identifier)
         except (AttributeError, TclError, ValueError):
             return
 

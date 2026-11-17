@@ -28,7 +28,11 @@ NONNEGATIVE_INTEGER_OPTIONS = (
 )
 
 
+from src.models.project_task import ScopedConfigPath
+
+
 class LegacyUiDefaultsStore:
+    config_path = ScopedConfigPath()
     """加载和保存 ``[ui_defaults]``，不改写配置文件其它内容。"""
 
     def __init__(self, config_path: Path) -> None:

@@ -1,11 +1,14 @@
 """测试项页预备测试按钮及后台任务生命周期。"""
 from __future__ import annotations
 
+from src.ui import project_dialogs as messagebox
+
 import queue
 import threading
 from tkinter import messagebox, ttk
 
 from src.services.test_item_pretest_service import run_pretest
+from src.services.project_execution import project_operation
 from src.services.telnet_post_login_service import describe_telnet_post_login
 
 
@@ -31,6 +34,7 @@ class PretestControls:
         )
         self.stop_button.pack(side="left", padx=(8, 0))
 
+    @project_operation
     def start(self):
         if self.running:
             return

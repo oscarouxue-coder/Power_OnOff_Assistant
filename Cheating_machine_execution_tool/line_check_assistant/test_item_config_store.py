@@ -216,7 +216,11 @@ def _build_order_key(command: str, retry_times: int) -> str:
     return command
 
 
+from src.models.project_task import ScopedConfigPath
+
+
 class TestItemConfigStore:
+    config_path = ScopedConfigPath()
     """测试项 ini 的读写服务,接口风格与 ``SampleUpgradeSettingsStore`` 一致。"""
 
     def __init__(self, config_path: Path) -> None:

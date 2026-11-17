@@ -178,6 +178,15 @@ class CapabilityUiBridge:
             raise
         try:
             self.app._refresh_upgrade_targets()
+            renamed = request.args[0].get('physical_rename')
+            workspace = vars(self.app).get('workspace')
+            if renamed and workspace is not None:
+                from src.models.network_adapter import AdapterIdentity, AdapterRenameResult
+                confirmed = AdapterRenameResult(True, '已由原业务按GUID回读确认',
+                    tuple(AdapterIdentity(**value) for value in renamed['adapters']))
+                warnings = workspace.synchronize_adapter_names(self.app, renamed['old'], renamed['new'], confirmed)
+                if warnings:
+                    raise RuntimeError('；'.join(warnings))
             assistant = getattr(self.app, 'ai_assistant', None)
             if assistant is not None:
                 assistant.service.configure(assistant.service.profile, self.app._collect_ai_targets())

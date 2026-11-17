@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from src.ui import project_dialogs as messagebox
+
 from src.models.upgrade_stop import UpgradeStopped, UpgradeStoppedResult
 from src.services.upgrade_stop_service import UpgradeRun, result_state, summarize_results
 from src.models.boot_entry import BOOT_ENTRY_LOGIN, BOOT_ENTRY_OPTIONS, normalize_boot_entry
@@ -32,7 +34,7 @@ from src.services.adapter_rename_service import (
     adapter_has_numeric_suffix, adapter_rename_is_busy, synchronize_channel_adapter_names,
 )
 from pathlib import Path
-from tkinter import BooleanVar, Button, Canvas, Checkbutton, DoubleVar, END, Frame, IntVar, Label, Menu, StringVar, TclError, Text, Tk, Toplevel, filedialog, messagebox, ttk
+from tkinter import BooleanVar, Button, Canvas, Checkbutton, DoubleVar, END, Frame, IntVar, Label, Menu, StringVar, TclError, Text, Tk, Toplevel, filedialog, ttk
 
 from .config_store import ChannelConfig, ChannelConfigStore, DEFAULT_POWER_SERIAL_PORT, DEFAULT_SUBNET_MASK
 from .legacy_ui_defaults_store import LegacyUiDefaultsStore, TELNET_ENABLE_OPTION
@@ -56,6 +58,10 @@ from .onu_registration_store import (
 )
 from .page_upgrade import PageUpgradeRequest, run_page_upgrade_batch
 from .paths import resolve_config_dir, resolve_tool_root
+from src.models.project import project_path as _project_path
+from src.models.project import project_log_root as _project_log_root
+from src.ui.project_view_frame import ProjectViewFrame
+from src.services.project_execution import project_operation
 from .sample_upgrade_settings_store import (
     DEFAULT_PARAMETER_PARALLEL_COUNT,
     DEFAULT_PARALLEL_COUNT,
@@ -172,6 +178,17 @@ TEST_ITEM_CONFIG_PATH = CONFIG_DIR / "test_project_config.ini"
 TEST_ITEM_DEFAULT_CONFIG_PATH = CONFIG_DIR / "test_project_config.default.ini"
 LEGACY_UI_DEFAULTS_CONFIG_PATH = CONFIG_DIR / "config.ini"
 LOG_DIR = APP_DIR / "assistant_logs"
+def _remote_config(view, kind):
+    workspace = vars(view).get("workspace")
+    if workspace is not None:
+        return workspace.service.platform_config(kind)
+    if kind == "dingtalk":
+        from src.services.dingtalk_remote_store import RemoteConfigStore
+        return RemoteConfigStore(APP_DIR)
+    from src.services.feishu_remote_store import FeishuConfigStore
+    return FeishuConfigStore(APP_DIR)
+
+
 POWER_SUPPLY_COUNT = 6
 TOTAL_CHANNEL_COUNT = 16
 VLAN_PER_POWER_SUPPLY = 8
@@ -355,25 +372,32 @@ def _finish_pipeline_subtask_if_waiting(app, code: str, ok: bool, detail: str) -
         finish(code, ok, detail)
 
 
-class LineCheckAssistant(Tk):
-    def __init__(self) -> None:
+class LineCheckAssistant(ProjectViewFrame):
+    def __init__(self, master=None, *, project_context=None, workspace=None) -> None:
         icon_messages = set_taskbar_application_id()
-        super().__init__()
+        window = Tk() if master is None else master.winfo_toplevel()
+        self.attach_window(window, master is None)
+        self.project_context = project_context
+        self.workspace = workspace
         from src.models.dependency_repair import MaintenanceGate
-        self._source_maintenance_gate = MaintenanceGate()
-        icon_messages.extend(apply_application_icon(self))
+        self._source_maintenance_gate = workspace.service.maintenance if workspace else MaintenanceGate()
+        icon_messages.extend(apply_application_icon(window))
         self.title(MAIN_WINDOW_TITLE)
+        super().__init__(master or window, background=COLOR_BG)
+        if master is None:
+            self.pack(fill="both", expand=True)
         self.geometry("1200x780")
         self.minsize(1040, 700)
         self.configure(background=COLOR_BG)
         self._configure_theme()
 
-        self.store = ChannelConfigStore(NETWORK_CONFIG_PATH)
-        self.onu_registration_store = OnuRegistrationStore(ONU_REGISTRATION_CONFIG_PATH)
+        self.store = ChannelConfigStore(_project_path(self, NETWORK_CONFIG_PATH))
+        self.onu_registration_store = OnuRegistrationStore(_project_path(self, ONU_REGISTRATION_CONFIG_PATH))
         self.onu_registration_config = self.onu_registration_store.load()
-        self.sample_upgrade_settings_store = SampleUpgradeSettingsStore(SAMPLE_UPGRADE_SETTINGS_PATH)
+        self.sample_upgrade_settings_store = SampleUpgradeSettingsStore(_project_path(self, SAMPLE_UPGRADE_SETTINGS_PATH))
         self.sample_upgrade_settings = self.sample_upgrade_settings_store.load()
-        self._module_window_size_state_path = MODULE_WINDOW_SIZE_STATE_PATH
+        self._module_window_size_state_path = (project_context.root / "ui" / "module_windows.json"
+                                               if project_context else MODULE_WINDOW_SIZE_STATE_PATH)
         self.channels = self.store.load()
         self.power_serial_port = normalize_com_port(self.store.load_power_serial_port())
         self.show_all_resources_var = BooleanVar(value=False)
@@ -414,11 +438,15 @@ class LineCheckAssistant(Tk):
         self.parameter_loaded_table_path = ""
         self.parameter_preflight = None
         self.parameter_cancel_event = None
-        self.serial_session_manager = SerialSessionManager()
+        self.serial_session_manager = SerialSessionManager(
+            resource_coordinator=workspace.service.resources if workspace else None,
+            project_id=project_context.identity.project_id if project_context else "",
+            project_name=project_context.identity.name if project_context else "")
         self.serial_terminal = SerialTerminalWindow(
             self,
             self.serial_session_manager,
             self._serial_log_directory(),
+            state_file=project_context.root / "ui" / "serial.json" if project_context else None,
             on_log_dir_changed=self._on_serial_log_directory_changed,
             logger=self._log,
         )
@@ -547,8 +575,8 @@ class LineCheckAssistant(Tk):
         self.power_operation_var = StringVar(value=self.sample_upgrade_settings.power_operation or "up")
         self.parameter_table_path_var = StringVar(value=self.sample_upgrade_settings.parameter_table_path or "")
         self._bind_sample_upgrade_autosave()
-        LOG_DIR.mkdir(exist_ok=True)
-        self.log_path = LOG_DIR / f"line_check_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        _project_path(self, LOG_DIR).mkdir(parents=True, exist_ok=True)
+        self.log_path = _project_path(self, LOG_DIR) / f"line_check_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
         self._build_ui()
         for message in icon_messages:
@@ -568,7 +596,7 @@ class LineCheckAssistant(Tk):
         self.after(600, self._start_feishu_remote)
         self.after(700, self._start_gateway_remote)
         from src.services.transport_history_monitor import TransportHistoryMonitor
-        self.transport_history_monitor = TransportHistoryMonitor(LOG_DIR / "resource_monitor", self.log_queue.put)
+        self.transport_history_monitor = TransportHistoryMonitor(_project_path(self, LOG_DIR) / "resource_monitor", self.log_queue.put)
         self.transport_history_monitor.start()
 
     def _maximize_window(self) -> None:
@@ -1228,6 +1256,10 @@ class LineCheckAssistant(Tk):
 
     def _restore_module_window_size(self, window, module_key: str) -> tuple[int, int]:
         """恢复功能模块窗口宽高；首次打开保持既有默认值。"""
+        context = vars(self).get('project_context')
+        if context is not None and isinstance(window, Toplevel):
+            base = vars(window).setdefault('_project_title_base', window.title())
+            window.title(base + ' · ' + context.identity.name)
         default_width, default_height, min_width, min_height = MODULE_WINDOW_SIZE_SPECS[module_key]
         width, height = load_module_window_size(
             self._module_window_size_state_path,
@@ -1494,6 +1526,7 @@ class LineCheckAssistant(Tk):
         self.parameter_preview_text.insert(END, "\n".join(lines))
         self.parameter_preview_text.configure(state="disabled")
 
+    @project_operation
     def _start_sample_parameter_write(self, skip_confirmation: bool = False) -> bool:
         if not LineCheckAssistant._prepare_ai_for_device_action(self):
             return False
@@ -2772,6 +2805,7 @@ class LineCheckAssistant(Tk):
                 state="normal" if has_selection else "disabled"
             )
 
+    @project_operation
     def _on_onu_manage_query_clicked(self) -> None:
         if LineCheckAssistant._onu_operation_is_running(self):
             return
@@ -2847,6 +2881,7 @@ class LineCheckAssistant(Tk):
         self._set_onu_query_status(result.message, COLOR_SUCCESS if self.onu_registered_candidates else COLOR_WARNING)
         self._log(f"[ONU注册][{family}] 查询已注册 ONU：{host} - {result.message}")
 
+    @project_operation
     def _on_onu_manage_delete_clicked(self) -> None:
         if LineCheckAssistant._onu_operation_is_running(self):
             return
@@ -3073,6 +3108,7 @@ class LineCheckAssistant(Tk):
         self._set_onu_query_status("正在停止 ONU 操作，等待当前安全点...", COLOR_WARNING)
         self._log(f"[ONU注册][{self.onu_family_var.get()}] 操作员请求停止")
 
+    @project_operation
     def _on_onu_telnet_test_clicked(self) -> None:
         if self.onu_telnet_test_running:
             return
@@ -3119,6 +3155,7 @@ class LineCheckAssistant(Tk):
         self._set_onu_telnet_status(result.message, COLOR_SUCCESS if result.ok else COLOR_DANGER)
         self._log(f"[ONU注册][{family}] OLT 登录测试：{host} - {result.message}")
 
+    @project_operation
     def _on_onu_template_query_clicked(self, kind: str) -> None:
         if self.onu_template_query_running:
             return
@@ -3175,6 +3212,7 @@ class LineCheckAssistant(Tk):
             self._set_onu_query_status(result.message, COLOR_DANGER)
         self._log(f"[ONU注册][{family}] 查询{kind_name}：{host} - {result.message}")
 
+    @project_operation
     def _on_onu_query_unregistered_clicked(self) -> None:
         if self.onu_query_running:
             return
@@ -3240,6 +3278,7 @@ class LineCheckAssistant(Tk):
             self._render_unregistered_onu_selection([])
         self._log(f"[ONU注册][{family}] 查询未注册 ONU：{host} - {result.message}")
 
+    @project_operation
     def _on_onu_register_selected_clicked(self) -> bool:
         if LineCheckAssistant._onu_operation_is_running(self):
             return False
@@ -3979,6 +4018,7 @@ class LineCheckAssistant(Tk):
         self._set_upgrade_status("", f"已打开 {len(vlans)} 个内置串口监控，未下发升级命令", 0)
         messagebox.showinfo("串口日志已启动", "已打开内置串口监控，当前未下发升级命令。", parent=self.upgrade_window)
 
+    @project_operation
     def _start_page_upgrade(self, skip_confirmation: bool = False) -> bool:
         if getattr(self, "sample_upgrade_running", False):
             self._log("样机升级仍在运行或正在停止，请等待当前批次释放资源。")
@@ -4137,6 +4177,7 @@ class LineCheckAssistant(Tk):
             return False
         return True
 
+    @project_operation
     def _start_full_package_upgrade(self, skip_confirmation: bool = False) -> bool:
         if getattr(self, "sample_upgrade_running", False):
             self._log("样机升级仍在运行或正在停止，请等待当前批次释放资源。")
@@ -4562,7 +4603,9 @@ class LineCheckAssistant(Tk):
     def _refresh_saved_project_name(self) -> None:
         """只展示磁盘配置；失败不影响主窗口或测试项配置的既有流程。"""
         try:
-            name = TestItemConfigStore(TEST_ITEM_CONFIG_PATH).load(required=True).project_info.project_name
+            context = vars(self).get('project_context')
+            path = context.saved_root / 'Auto_power_on_off_tool/config/test_project_config.ini' if context else TEST_ITEM_CONFIG_PATH
+            name = TestItemConfigStore(path).load(required=True).project_info.project_name
         except FileNotFoundError:
             self.project_name_badge.set_name("")
             self.log_queue.put("[项目名称] 配置文件不存在，显示未设置。")
@@ -4606,19 +4649,19 @@ class LineCheckAssistant(Tk):
             foreground=COLOR_TEXT,
         ).pack(anchor="w")
 
-        store = TestItemConfigStore(TEST_ITEM_CONFIG_PATH)
-        if not TEST_ITEM_CONFIG_PATH.exists():
+        store = TestItemConfigStore(_project_path(self, TEST_ITEM_CONFIG_PATH))
+        if not _project_path(self, TEST_ITEM_CONFIG_PATH).exists():
             messagebox.showwarning(
                 "未找到测试项 ini",
                 (
-                    f"未找到 {TEST_ITEM_CONFIG_PATH}。\n\n"
+                    f"未找到 {_project_path(self, TEST_ITEM_CONFIG_PATH)}。\n\n"
                     "将以空白表单打开，保存后自动创建。"
                     "默认值与老工具原 ini 保持一致。"
                 ),
                 parent=dialog,
             )
-        legacy_defaults_store = LegacyUiDefaultsStore(LEGACY_UI_DEFAULTS_CONFIG_PATH)
-        message_push_service = MessagePushConfigService(LEGACY_UI_DEFAULTS_CONFIG_PATH)
+        legacy_defaults_store = LegacyUiDefaultsStore(_project_path(self, LEGACY_UI_DEFAULTS_CONFIG_PATH))
+        message_push_service = MessagePushConfigService(_project_path(self, LEGACY_UI_DEFAULTS_CONFIG_PATH))
         try:
             message_push_values = message_push_service.load()
             config = store.load()
@@ -4639,15 +4682,19 @@ class LineCheckAssistant(Tk):
 
         def mark_dirty(*_args) -> None:
             dirty[0] = True
+            recovery = vars(self).get('_project_editor_recovery')
+            if recovery is not None and recovery.dialog is dialog:
+                recovery.changed()
 
         telnet_vars = self._build_test_item_telnet_tab(notebook, config.telnet, mark_dirty)
         order_control = self._build_test_item_order_tab(
             notebook,
             config.order,
             mark_dirty,
-            TEST_ITEM_DEFAULT_CONFIG_PATH,
+            _project_path(self, TEST_ITEM_DEFAULT_CONFIG_PATH),
             telnet_supplier=telnet_vars["capture"],
         )
+        self._project_editor_order = order_control
         wifi_vars = self._build_test_item_wifi_tab(notebook, config.connect_wifi, mark_dirty)
         project_info_vars = self._build_test_item_project_info_tab(
             notebook,
@@ -4663,7 +4710,7 @@ class LineCheckAssistant(Tk):
         message_push_control = MessagePushTab(
             notebook, message_push_values, mark_dirty,
             background=COLOR_BG, foreground=COLOR_TEXT, log=self._log,
-            project_config_path=TEST_ITEM_CONFIG_PATH,
+            project_config_path=_project_path(self, TEST_ITEM_CONFIG_PATH),
         )
         self._message_push_control = message_push_control
         def forget_message_push(event):
@@ -4705,7 +4752,7 @@ class LineCheckAssistant(Tk):
             self._log("[测试项配置] 已从磁盘重新加载（未保存改动已丢弃）")
             self._log("[消息推送] 已重新加载 config.ini [dingtalk_config]")
 
-        def save() -> None:
+        def save(*, confirm=True, quiet=False, commit=True) -> bool:
             try:
                 captured_message_push = message_push_service.validate(message_push_control.capture())
                 captured = TestProjectConfig(
@@ -4724,11 +4771,11 @@ class LineCheckAssistant(Tk):
             except ValueError as exc:
                 self._log("[测试项配置 / 消息推送] 保存跳过：输入校验失败。")
                 messagebox.showerror("数据不合法", str(exc), parent=dialog)
-                return
-            if not messagebox.askyesno(
+                return False
+            if confirm and not messagebox.askyesno(
                 "保存测试项 ini",
                 (
-                    f"将更新 {TEST_ITEM_CONFIG_PATH} 和 {LEGACY_UI_DEFAULTS_CONFIG_PATH}。\n\n"
+                    f"将更新 {_project_path(self, TEST_ITEM_CONFIG_PATH)} 和 {_project_path(self, LEGACY_UI_DEFAULTS_CONFIG_PATH)}。\n\n"
                     f"- Telnet 字段：{len(captured.telnet.__dict__)} 项\n"
                     f"- 测试项命令：{len(captured.order.items)} 条\n"
                     f"- 指令重试间隔：{captured.order.command_fail_retry_interval_time} 秒"
@@ -4753,7 +4800,7 @@ class LineCheckAssistant(Tk):
                 parent=dialog,
             ):
                 self._log("[消息推送] 操作员取消保存，跳过写入。")
-                return
+                return False
             try:
                 self._log("[消息推送] 开始保存 config.ini [dingtalk_config]")
                 store.save(captured)
@@ -4762,22 +4809,34 @@ class LineCheckAssistant(Tk):
             except OSError as exc:
                 messagebox.showerror("保存失败", f"写入 ini 失败：{exc}", parent=dialog)
                 self._log(f"[测试项配置 / 消息推送] 保存失败：{exc}")
-                return
+                return False
             finally:
                 self._refresh_saved_project_name()
             reset_dirty()
             self._log("[消息推送] 已保存 config.ini [dingtalk_config]，未发送消息。")
+            recovery = vars(self).get('_project_editor_recovery')
+            if recovery is not None:
+                recovery.clear()
+            workspace = vars(self).get('workspace')
+            if workspace is not None and commit and not workspace.save_project(self):
+                return False
             self._log(
                 f"[测试项配置] 已保存 {len(captured.order.items)} 条测试项命令，"
                 f"已将指令重试间隔 {captured.order.command_fail_retry_interval_time} 秒"
                 "保存到 config.ini [other_config]，"
                 f"并更新 {len(captured_legacy_defaults)} 项旧工具参数"
             )
-            messagebox.showinfo(
-                "保存成功",
-                f"已保存到 {TEST_ITEM_CONFIG_PATH} 和 {LEGACY_UI_DEFAULTS_CONFIG_PATH}。",
-                parent=dialog,
-            )
+            if not quiet:
+                messagebox.showinfo(
+                    "保存成功",
+                    f"已保存到 {_project_path(self, TEST_ITEM_CONFIG_PATH)} 和 {_project_path(self, LEGACY_UI_DEFAULTS_CONFIG_PATH)}。",
+                    parent=dialog,
+                )
+
+            return True
+
+        self._project_editor_save = save
+        self._project_editor_dirty = lambda: dirty[0]
 
         def close_dialog() -> None:
             if not message_push_control.can_close():
@@ -4793,6 +4852,9 @@ class LineCheckAssistant(Tk):
                 ):
                     return
             self._remember_module_window_size(dialog, "test_item_config")
+            recovery = vars(self).get('_project_editor_recovery')
+            if recovery is not None:
+                recovery.clear()
             dialog.destroy()
             self.test_item_config_window = None
             self.test_item_pretest_controls = None
@@ -4809,6 +4871,10 @@ class LineCheckAssistant(Tk):
             window_height=window_height,
         )
         schedule_toplevel_client_refresh(dialog)
+
+        if vars(self).get('project_context') is not None:
+            from src.ui.project_editor_recovery import EditorRecovery
+            self._project_editor_recovery = EditorRecovery(self, dialog, mark_dirty)
 
     # -- 测试项配置：各 Tab 的具体构建 ------------------------------------
 
@@ -5041,6 +5107,9 @@ class LineCheckAssistant(Tk):
                     "parameter_write_running", "sample_upgrade_running", "dut_config_running",
                 )),
             )
+
+        if self.test_item_pretest_controls is not None:
+            self.test_item_pretest_controls.project_view = self
 
         # 中间滚动列表 + 底部新增按钮
         list_outer = ttk.Frame(frame, style="App.TFrame")
@@ -5278,7 +5347,8 @@ class LineCheckAssistant(Tk):
             else:
                 add_row(OrderItem())
 
-        return {"capture": capture, "load": load}
+        return {"capture": capture, "load": load,
+                "layout": lambda: [len(row['segments']) for row in row_widgets]}
 
     def _capture_pretest_request(self, order: OrderConfig, telnet: TelnetSettings):
         if not LineCheckAssistant._pipeline_admit_action(self):
@@ -5694,6 +5764,7 @@ class LineCheckAssistant(Tk):
 
         return {"capture": capture, "load": load}
 
+    @project_operation
     def _start_project_info_query(self, telnet: TelnetSettings, on_success) -> None:
         """以当前通道及 Telnet 页参数登录、查询版本，并在主线程回填结果。"""
         self._capture_current_channel()
@@ -5763,7 +5834,8 @@ class LineCheckAssistant(Tk):
 
     def _serial_log_directory(self) -> Path:
         terminal = self.__dict__.get("serial_terminal")
-        return terminal.get_log_directory() if terminal is not None else DEFAULT_LOG_DIR
+        return terminal.get_log_directory() if terminal is not None else (
+            self.project_context.root / "logs" / "serial" if vars(self).get("project_context") else DEFAULT_LOG_DIR)
 
     def _open_ai_assistant(self, show=True) -> None:
         from src.ui.ai_assistant_controller import AiAssistantController
@@ -5780,8 +5852,10 @@ class LineCheckAssistant(Tk):
                 context=context, shared_busy=self._ai_shared_network_busy,
                 host_busy=lambda: self._ai_target_busy(None),
                 on_monitor_status=self.ai_monitor_status_row.show,
-                app_dir=APP_DIR, project_config_path=TEST_ITEM_CONFIG_PATH,
+                app_dir=_project_path(self, APP_DIR), project_config_path=_project_path(self, TEST_ITEM_CONFIG_PATH),
                 remote_tab_factory=self._build_ai_remote_management,
+                workspace=vars(self)["workspace"].service if vars(self).get("workspace") else None,
+                project_context=vars(self).get("project_context"),
             )
             self.ai_assistant = assistant
         if show:
@@ -5812,7 +5886,7 @@ class LineCheckAssistant(Tk):
             return
         from src.services.dingtalk_remote_store import RemoteConfigStore
         try:
-            config = RemoteConfigStore(APP_DIR).load()
+            config = _remote_config(self, "dingtalk").load()
             if config["isolated"]:
                 self._open_ai_assistant(show=False)
         except Exception:
@@ -5829,17 +5903,20 @@ class LineCheckAssistant(Tk):
         from src.ui.dingtalk_setup_window import DingTalkSetupWindow
         from src.ui.feishu_setup_window import FeishuSetupWindow
         return RemoteManagementTab(parent,
-            lambda host: DingTalkSetupWindow(host, RemoteConfigStore(APP_DIR),
+            lambda host: DingTalkSetupWindow(host, _remote_config(self, "dingtalk"),
                 lambda: getattr(self.__dict__.get("ai_assistant"), "remote", None),
-                MessagePushConfigService(LEGACY_UI_DEFAULTS_CONFIG_PATH).load(), self._log,
-                LEGACY_UI_DEFAULTS_CONFIG_PATH,
+                MessagePushConfigService(_project_path(self, LEGACY_UI_DEFAULTS_CONFIG_PATH)).load(), self._log,
+                _project_path(self, LEGACY_UI_DEFAULTS_CONFIG_PATH),
                 on_saved=self._sync_ai_message_push, embedded=True),
-            lambda host: FeishuSetupWindow(host, FeishuConfigStore(APP_DIR),
+            lambda host: FeishuSetupWindow(host, _remote_config(self, "feishu"),
                 lambda: getattr(self.__dict__.get("ai_assistant"), "feishu_remote", None),
                 self._feishu_notification_service(), self._log, embedded=True,
                 on_install_sdk=lambda: LineCheckAssistant._install_feishu_sdk(self)), self._log)
 
     def _install_feishu_sdk(self):
+        workspace = vars(self).get('workspace')
+        if workspace is not None:
+            return workspace.install_feishu_sdk()
         from src.ui.feishu_dependency_controller import FeishuDependencyController
         controller = self.__dict__.get('_feishu_dependency_controller')
         if controller is None:
@@ -5857,7 +5934,7 @@ class LineCheckAssistant(Tk):
         from src.services.feishu_remote_store import FeishuConfigStore
         service = self.__dict__.get("feishu_notifications")
         if service is None and not self.__dict__.get("_app_closing", False):
-            service = FeishuNotificationService(FeishuConfigStore(APP_DIR), TEST_ITEM_CONFIG_PATH, self._log)
+            service = FeishuNotificationService(_remote_config(self, "feishu"), _project_path(self, TEST_ITEM_CONFIG_PATH), self._log)
             self.feishu_notifications = service
         return service
 
@@ -5866,7 +5943,7 @@ class LineCheckAssistant(Tk):
             return
         from src.services.feishu_remote_store import FeishuConfigStore
         try:
-            config = FeishuConfigStore(APP_DIR).load()
+            config = _remote_config(self, "feishu").load()
             if config["isolated"]:
                 self._open_ai_assistant(show=False)
         except Exception:
@@ -5879,7 +5956,7 @@ class LineCheckAssistant(Tk):
     def _collect_ai_targets(self):
         from src.models.ai_diagnostics import DiagnosticTarget
         self._capture_current_channel()
-        telnet = TestItemConfigStore(TEST_ITEM_CONFIG_PATH).load(required=True).telnet
+        telnet = TestItemConfigStore(_project_path(self, TEST_ITEM_CONFIG_PATH)).load(required=True).telnet
         return tuple(DiagnosticTarget(
             int(channel.section.rsplit("_", 1)[-1]),
             adapter_alias_from_display(channel.vlan_name or channel.adapter_alias).strip(),
@@ -5891,6 +5968,13 @@ class LineCheckAssistant(Tk):
         ) for channel in self._selected_channels())
 
     def _ai_target_busy(self, target) -> bool:
+        workspace = vars(self).get('workspace')
+        if workspace is not None and target is not None:
+            keys = ['adapter:' + target.vlan] if target.vlan else []
+            if target.port:
+                keys.append('serial:' + target.port)
+            if workspace.service.resources.busy_for(self.project_context.identity.project_id, keys):
+                return True
         gate = self.__dict__.get('_source_maintenance_gate')
         if gate is not None and gate.active:
             return True
@@ -5932,6 +6016,9 @@ class LineCheckAssistant(Tk):
             assistant.observe(message)
 
     def _ai_shared_network_busy(self, target) -> bool:
+        workspace = vars(self).get('workspace')
+        if workspace is not None and workspace.service.resources.busy_for(self.project_context.identity.project_id, ['wifi:host']):
+            return True
         session = self.__dict__.get("power_test_resume_session")
         request = getattr(session, "request", None)
         return self._ai_target_busy(target) or bool(
@@ -6034,6 +6121,7 @@ class LineCheckAssistant(Tk):
             on_query_wifi_5g=self._query_dut_wifi_5g_status,
             on_stop=self._stop_dut_telnet_enable,
             on_close=self._close_dut_config_module,
+            state_path=self.project_context.root / "ui" / "dut.json" if vars(self).get("project_context") else None,
         )
         self._refresh_dut_config_targets()
         self._log(
@@ -6128,6 +6216,7 @@ class LineCheckAssistant(Tk):
             if request.channel in selected_channels
         ]
 
+    @project_operation
     def _start_dut_telnet_enable(self) -> None:
         if self.dut_config_running:
             return
@@ -6303,6 +6392,7 @@ class LineCheckAssistant(Tk):
             return
         self._start_dut_advanced_config("wan", window.wan_settings())
 
+    @project_operation
     def _query_dut_wan_connections(self) -> None:
         """启动只读 WAN 查询；业务流程由 service 执行。"""
         if self.dut_config_running:
@@ -6472,6 +6562,7 @@ class LineCheckAssistant(Tk):
             "wifi_5g", ssid_index=window.wifi_ssid_index("wifi_5g")
         )
 
+    @project_operation
     def _query_dut_current_status(
         self,
         feature: str,
@@ -6661,6 +6752,7 @@ class LineCheckAssistant(Tk):
             return
         self._start_dut_advanced_config("tr069", window.tr069_settings())
 
+    @project_operation
     def _start_dut_advanced_config(
         self,
         feature: str,
@@ -7091,14 +7183,14 @@ class LineCheckAssistant(Tk):
         self._select_channel_index(index)
         self._persist_config()
 
-    def _on_adapter_renamed(self, section, old_name, new_name, result):
+    def _on_adapter_renamed(self, section, old_name, new_name, result, _from_workspace=False):
         synchronize_channel_adapter_names(self.channels, section, old_name, new_name)
         self.adapters = [adapter.display_name for adapter in result.adapters]
         # 不调用采集所有行的 _persist_config，避免重命名时顺带修改其它配置字段。
         save_warning = None
         try:
             self.store.save(self._selected_channels(), self._selected_power_serial_port())
-            self._log(f"[网卡重命名] 通道名称与 PC 静态 IP 已保存：{NETWORK_CONFIG_PATH}")
+            self._log(f"[网卡重命名] 通道名称与 PC 静态 IP 已保存：{_project_path(self, NETWORK_CONFIG_PATH)}")
         except Exception as exc:
             save_warning = f"网卡已重命名，但配置保存失败：{exc}。内存已更新，请核对后重新保存配置。"
             self._log(f"[网卡重命名] {save_warning}")
@@ -7112,6 +7204,11 @@ class LineCheckAssistant(Tk):
         self._refresh_dut_config_targets(capture_current=False)
         self._refresh_parameter_preflight(capture_current=False)
         self._invalidate_onu_preview()
+        workspace = vars(self).get('workspace')
+        if workspace is not None and not _from_workspace:
+            warnings = workspace.synchronize_adapter_names(self, old_name, new_name, result)
+            if warnings:
+                save_warning = (save_warning + '；' if save_warning else '') + '；'.join(warnings)
         return save_warning
 
     def _on_row_serial_changed(self, section: str) -> None:
@@ -7218,6 +7315,9 @@ class LineCheckAssistant(Tk):
     def _refresh_resources(self) -> None:
         self._refresh_power_serial_ports()
         self._refresh_adapters()
+        workspace = vars(self).get('workspace')
+        if workspace is not None:
+            workspace.refresh_inventory()
 
     def _refresh_power_serial_ports(self) -> None:
         if self.show_all_resources_var.get():
@@ -7766,14 +7866,14 @@ class LineCheckAssistant(Tk):
 
         try:
             log_path = latest_power_test_result_log(
-                APP_DIR / "Auto_power_on_off_tool", channel_number
+                _project_log_root(self, APP_DIR / "Auto_power_on_off_tool"), channel_number
             )
         except (OSError, ValueError) as exc:
             messagebox.showerror("查找开关机运行日志失败", str(exc), parent=self)
             self._log(f"[开关机运行日志] 通道 {channel_number} 查找失败：{exc}")
             return
         if log_path is None:
-            result_dir = APP_DIR / "Auto_power_on_off_tool" / "test_results" / f"device_{channel_number}"
+            result_dir = _project_log_root(self, APP_DIR / "Auto_power_on_off_tool") / "test_results" / f"device_{channel_number}"
             messagebox.showinfo(
                 "未找到开关机运行日志",
                 f"通道 {channel_number} 暂无可打开的运行日志。\n\n结果目录：{result_dir}",
@@ -7815,7 +7915,7 @@ class LineCheckAssistant(Tk):
             return
         log_path = session.current_wifi_log(channel_number)
         if log_path is None:
-            result_dir = APP_DIR / "Auto_power_on_off_tool" / "test_results" / f"device_{channel_number}"
+            result_dir = _project_log_root(self, APP_DIR / "Auto_power_on_off_tool") / "test_results" / f"device_{channel_number}"
             messagebox.showinfo("本次WiFi连接日志尚未生成",
                                 f"通道 {channel_number} 当前执行尝试尚未生成WiFi连接日志，未打开历史日志。\n\n结果目录：{result_dir}",
                                 parent=self)
@@ -7914,6 +8014,7 @@ class LineCheckAssistant(Tk):
         else:
             self._log("已刷新网卡：未识别到网卡")
 
+    @project_operation
     def _launch_power_on(self) -> None:
         if self.power_on_running:
             return
@@ -7926,6 +8027,10 @@ class LineCheckAssistant(Tk):
         selected_com, power_action = self._select_power_com_port()
         if selected_com is None:
             return
+        workspace = vars(self).get('workspace')
+        if workspace is not None and selected_com:
+            if not workspace.reserve_actual(self, ['power:' + selected_com]):
+                return
         if power_action not in POWER_ACTION_OPTIONS:
             messagebox.showwarning("操作类型不正确", "程控电源操作只能选择上电或下电。", parent=self)
             return
@@ -8135,7 +8240,7 @@ class LineCheckAssistant(Tk):
             self._log('[通道配置] 其它实例正在保存相同配置，本次未覆盖；当前输入保留，请稍后重新保存。')
             return
         self._refresh_upgrade_targets()
-        self._log(f"已实时更新配置文件：{NETWORK_CONFIG_PATH}")
+        self._log(f"已实时更新配置文件：{_project_path(self, NETWORK_CONFIG_PATH)}")
 
     def _start_all_checks(self) -> None:
         """2026-07-20: 主界面「检查并执行测试」按钮升级为「全流程执行」弹窗入口。
@@ -8247,6 +8352,7 @@ class LineCheckAssistant(Tk):
     def _selected_channels(self) -> list[ChannelConfig]:
         return [channel for channel in self.channels if channel.enabled]
 
+    @project_operation
     def _run_checks(self, channels) -> None:
         if not LineCheckAssistant._prepare_ai_for_device_action(self):
             return
@@ -8410,7 +8516,26 @@ class LineCheckAssistant(Tk):
                 file.write(f"{timestamp} {file_message}\n")
 
 
-def main() -> None:
+def main(project_path=None) -> None:
+    if os.environ.get('LINECHECK_LEGACY_SINGLE_PROJECT') != '1':
+        from src.core.workspace_instance import WorkspaceInstance
+        from src.services.workspace_service import workspace_data_dir
+        from src.ui.project_workspace import ProjectWorkspace
+        instance = WorkspaceInstance(workspace_data_dir())
+        try:
+            if not instance.start(project_path):
+                return
+            workspace = ProjectWorkspace(APP_DIR, instance=instance)
+            if project_path:
+                workspace.after_idle(lambda: workspace.open_project(project_path))
+            workspace.mainloop()
+            repair = vars(workspace).get('_feishu_dependency_controller')
+            if repair is not None and repair.restart_requested:
+                from src.core.source_restart import launch_restart_helper
+                launch_restart_helper(APP_DIR, repair.arguments, cwd=repair.cwd)
+        finally:
+            instance.close()
+        return
     app = LineCheckAssistant()
     app.mainloop()
     repair = vars(app).get('_feishu_dependency_controller')

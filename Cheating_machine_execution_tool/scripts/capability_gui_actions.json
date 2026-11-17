@@ -1,28 +1,28 @@
 [
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "02de370045eac4b0085819bb9893cbc3a0dac0cfcc9bd3c1219da3a2c095fabf",
     "expression": "ttk.Scrollbar(list_outer, orient='vertical', command=canvas.yview)",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "0354a847fbf60cfedc4ad46dc48c9e8b93ebb74d2cb4c5975d3c589d8fc0fad4",
     "expression": "Checkbutton(self.onu_unregistered_list_frame, text=text, variable=variable, command=command, background=COLOR_SURFACE_SUBTLE, activebackground=COLOR_SURFACE_SUBTLE, selectcolor='#ffffff', anchor='w')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "0704041f8402be7cc6bcdc6b76a530f6f72c1aa1bda5c858053aa7b42b7de37d",
     "expression": "Button(buttons, text='确定', command=confirm)",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "0b7d2cbcaa652c9db9481892ea91832910631e57cb0eeb6e0eee42bbeebbbddb",
     "expression": "ttk.Button(actions, text='停止批次', command=self._cancel_sample_parameter_write, state='disabled', style='Secondary.TButton')",
     "callbacks": {
@@ -31,16 +31,16 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "0c5b18cf39e6cf1bf9ea82f0c4d5f1862f9b46e579f79d4dac75da3b69791e8d",
     "expression": "ttk.Button(frame, text='查询当前样机版本', command=lambda : self._start_project_info_query(telnet_supplier(), apply_query_result), style='Secondary.TButton')",
     "callbacks": {
-      "_start_project_info_query": "bf86624d7efcd77cf5a16f14cf1dcba411c8d54cd28549ddcfbac4d7ae309ed6"
+      "_start_project_info_query": "ceb81d2f1b429b3899a40226d85f3b4abc47b3699abbb2f77c851b8d0851c368"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "0e2ac745c8d8d539dcd5fdc263171b865313f26cce6fec2c710b85d253ee8d13",
     "expression": "widget.bind('<<ComboboxSelected>>', self._on_vlan_changed)",
     "callbacks": {
@@ -49,7 +49,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "11633d7c389b4a818012a490519c7703717928ace390307eaf28bcb95b28fae6",
     "expression": "ttk.Button(toolbar_commands, text='ONU注册', command=self._open_onu_registration_module, style='Tool.TButton')",
     "callbacks": {
@@ -58,46 +58,46 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "11a245b93cb7dd6c34ff26fa99b6306a7d05dc8313fbd9c677e0994433ebf13e",
     "expression": "ttk.Button(preview_actions, text='返回修改', command=lambda : self.onu_notebook.select(self.onu_config_tab), style='Secondary.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "11d0e4eae0e2c375c460cab75a07e767bf5c68c8bc5870e0e488a89f41466d72",
     "expression": "ttk.Button(actions, text='写入参数', command=self._start_sample_parameter_write, style='Primary.TButton')",
     "callbacks": {
-      "_start_sample_parameter_write": "5f91f10b663f1d08f0b78f07a42581023cc8a91ff52f89247383c47e11eda7df"
+      "_start_sample_parameter_write": "658634a1d1bfe7a34607167d92b054fc2c126ef2da4bbfef611a10df55747cb9"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "12a77e12fdf75e06171facdc70ad8898364b2aa770e8d602b77c0e3f54b9fcf2",
     "expression": "seg_var.trace_add('write', lambda *_a: mark_dirty())",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "131399aaf11b592a6fae15cc2cdf7c19db305655f6ca7719458dd9294996e4eb",
     "expression": "ttk.Button(seg_actions, text='+ 增加段', width=10, command=add_segment, style='Secondary.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "13c6056cbe293cdda76f2c2ffcef586ebadc6c711d2163d12098a2136a897fb9",
     "expression": "ttk.Button(toolbar_actions, text='刷新串口/网卡', command=self._refresh_resources, style='Secondary.TButton')",
     "callbacks": {
-      "_refresh_resources": "87e8a1c71f761be653c81f859a7aa8c38a25526d48dcafd1e2c4e2f7ea6294ac"
+      "_refresh_resources": "364c2c150ac85821ac18d261f5575cee9d905add1c5d68584a7ca3d6eb6255f5"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "184658be50aec6217937d68f2b5881bfe746385aaddf5975917eb3944dc60430",
     "expression": "ttk.Button(selection_actions, text='全选', command=lambda : self._set_all_channels_enabled(True), style='Secondary.TButton')",
     "callbacks": {
@@ -106,7 +106,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "1a574a41b708a705b0e3c7e5f691a055c638d04e703906678e43bc7a3d67e793",
     "expression": "variable.trace_add('write', lambda *_args: self._clear_registered_candidates())",
     "callbacks": {
@@ -115,7 +115,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "1a7c52360cb9741a83c23c3866b6d5b81224f902c1e498ad27d616cebfa40fcc",
     "expression": "vlan_combo.bind('<<ComboboxSelected>>', lambda _event, section=channel.section: self._on_row_vlan_changed(section))",
     "callbacks": {
@@ -124,41 +124,41 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "1c4e37f71b7aa979c6409f241519c4936c723cf8208ec4bbaacea4d60f7a7856",
     "expression": "ttk.Button(toolbar_commands, text='自动上/下电', command=self._launch_power_on, style='Primary.TButton')",
     "callbacks": {
-      "_launch_power_on": "b447ebef065613eb23f9b339dc2267a8b6a3a3f872cc5547d6e1e87ab50d7d2e"
+      "_launch_power_on": "a7b4ae2d7d2c506b18812e4615d2cfbd039fcf73a1604fed285b751671a4c178"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "1cf56f051572c9b51c177eb139990b22b049b6d357ffe9e2597e43cfb912a444",
     "expression": "ttk.Button(container, text='查询', command=lambda : self._on_onu_template_query_clicked(kind), style='Secondary.TButton', width=5)",
     "callbacks": {
-      "_on_onu_template_query_clicked": "e5618e8ae0105763d7a718a599c7724b03ec31d1eeeea24b50c732b308283510"
+      "_on_onu_template_query_clicked": "3deaac03b9e95a1551b29f694589fd290d735adb5cbdeef53b2d05af43937f7c"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "1cf56f051572c9b51c177eb139990b22b049b6d357ffe9e2597e43cfb912a444",
     "expression": "ttk.Button(container, text='查询', command=lambda : self._on_onu_template_query_clicked(kind), style='Secondary.TButton', width=5)",
     "callbacks": {
-      "_on_onu_template_query_clicked": "e5618e8ae0105763d7a718a599c7724b03ec31d1eeeea24b50c732b308283510"
+      "_on_onu_template_query_clicked": "3deaac03b9e95a1551b29f694589fd290d735adb5cbdeef53b2d05af43937f7c"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "1d065594faadaf49fd2f26543b64b63c7919c1ed41be47959c233ca88fb080ee",
     "expression": "ttk.Button(buttons, text='关闭', width=12, command=close_dialog, style='Secondary.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "1dd3756ddeccf79357c43a24e41f393314240fbf5e5750e30a13fa373ef32788",
     "expression": "device_ip_entry.bind('<FocusOut>', self._on_device_ip_changed)",
     "callbacks": {
@@ -167,35 +167,35 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "20491113144ae7d8465384a53f5ecf60a7f985d047c11c7ea44b42da76c37826",
     "expression": "var.trace_add('write', lambda *_a: mark_dirty())",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "20491113144ae7d8465384a53f5ecf60a7f985d047c11c7ea44b42da76c37826",
     "expression": "var.trace_add('write', lambda *_a: mark_dirty())",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "20491113144ae7d8465384a53f5ecf60a7f985d047c11c7ea44b42da76c37826",
     "expression": "var.trace_add('write', lambda *_a: mark_dirty())",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "20be5906a11354f56da2c0dec9fecdc7d97b81750fe4b746f1af368a51bf3604",
     "expression": "rows_frame.bind('<Configure>', lambda _e: canvas.configure(scrollregion=canvas.bbox('all')))",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "23a1a6f762b176389b53e79c76afae99c7b36f8b1a23bbefc49623623e7cb990",
     "expression": "tile.bind('<Button-1>', lambda _event, selected=number: self._show_power_test_channel_detail(selected, open_history=True))",
     "callbacks": {
@@ -204,28 +204,28 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "2d3074d08e49ac5de18e789bfed828a666601479c5f11e0b541926196961f2c5",
     "expression": "dialog.bind('<Escape>', lambda _event: cancel())",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "2d5628e7a113442c75b20458bf63e603a45fb35b103d2c4add1c3f633c0ab530",
     "expression": "negate_var.trace_add('write', lambda *_a: mark_dirty())",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "2face259c63befa88e36c97e519261e94f4a86c6b478a2ca1ed64d8ac4229317",
     "expression": "ttk.Button(buttons, text='生成并保存...', command=generate_and_save, style='Primary.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "3452c48b77004b43fc86a49463c71d2d11add2a3a1722d3db7965979f10c138f",
     "expression": "self.upgrade_restore_factory_label.bind('<Button-1>', self._toggle_upgrade_restore_factory)",
     "callbacks": {
@@ -234,16 +234,16 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "3764a30a90f4838d8369b9b279f471d62216cc5972f1fe31e1c36a5dd0b51884",
     "expression": "ttk.Button(config_header, text='测试项配置', command=self._open_test_item_config, style='Tool.TButton')",
     "callbacks": {
-      "_open_test_item_config": "7724936f77eff935c70ae04121a7138a62a15107f887d05604dd2c228cadfb94"
+      "_open_test_item_config": "8993c39086efeaa1202b3fa07177b347f29b5736e78493b0853c75a232cbd498"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "385fa61fa019012975ede9bb60459f816045128f5108a1f2493648544bc21a30",
     "expression": "ttk.Radiobutton(mode_options, text=mode, value=mode, variable=self.upgrade_mode_var, command=self._refresh_upgrade_transfer_visibility)",
     "callbacks": {
@@ -252,7 +252,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "3aeb1cb539dbc7648ee0744f313ebaf0a83da151264473a3461bc3a7d2919655",
     "expression": "self.bind('<ButtonPress-1>', self._bring_main_window_to_front, add='+')",
     "callbacks": {
@@ -261,7 +261,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "4026443303c3d2d3890b227ca06d34dd344df27c0099ed0fe1a96a4c4705d3ae",
     "expression": "device_ip_entry.bind('<Return>', self._on_device_ip_changed)",
     "callbacks": {
@@ -270,7 +270,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "4295349870068981265620269b6f218ff82624c3752d8925f099e87ea089d2fe",
     "expression": "variable.trace_add('write', lambda *_args: self._schedule_sample_upgrade_save())",
     "callbacks": {
@@ -279,41 +279,41 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "4695458ada3956bd19b01e02d5f46a11cb1bd69c7171dbe8882b52eda47a714a",
     "expression": "self.channel_context_menu.add_command(label='打开本次WiFi连接日志', command=self._open_selected_power_test_wifi_log)",
     "callbacks": {
-      "_open_selected_power_test_wifi_log": "6b06f4ec9e3de2dfb70763d87fbd14ecd1a8646c70dcb3611220a4707bc3de6d"
+      "_open_selected_power_test_wifi_log": "95a65cc0fd3e6ec92af5e298f95a9e268acd6768e97999dcc9f465478ca34273"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "470ec5df91097692a62161a20ea1d6a4435244f07566cf69175856c618c9902f",
     "expression": "ttk.Button(manage_tab, text='删除选中 ONU（危险）', command=self._on_onu_manage_delete_clicked, style='Danger.TButton', state='disabled')",
     "callbacks": {
-      "_on_onu_manage_delete_clicked": "f1339dcf1b3c549dee18fc4b28561d85c8f42696df5a01bcfc85176c1ee946be"
+      "_on_onu_manage_delete_clicked": "34cb3ee44cdef5892260fcfec982193b1d61c425b2fa63e2b26915a04e378bf2"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "47f6c40d5ed45b42be25e844484cd2f522cbfbba2972b2ff0e0ea2ba24db0d65",
     "expression": "ttk.Button(toolbar_commands, text='DUT配置', command=self._open_dut_config_module, style='Tool.TButton')",
     "callbacks": {
-      "_open_dut_config_module": "f9a81b3ad4bb0160c18b6b35e9d08a17d782449dc52788e7a33faa9df1ca503d"
+      "_open_dut_config_module": "b92d0c1f36ffd45dc573cb02e677e51ee3d407c2d027b5b9d63db5fef5f99172"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "4a2cf6237e87989c6d5f7780587412ea2bd53a807bf26a89beea29ea42d78ea8",
     "expression": "canvas.bind('<Enter>', lambda _e: canvas.bind_all('<MouseWheel>', _on_mousewheel))",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "50f02e44f1070a7865ba9e60e448d3ff6dd33f835011f898c4b4a3de8d350f68",
     "expression": "combo.bind('<<ComboboxSelected>>', lambda _event: self._invalidate_onu_preview())",
     "callbacks": {
@@ -322,7 +322,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "50f02e44f1070a7865ba9e60e448d3ff6dd33f835011f898c4b4a3de8d350f68",
     "expression": "combo.bind('<<ComboboxSelected>>', lambda _event: self._invalidate_onu_preview())",
     "callbacks": {
@@ -331,14 +331,14 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "519e619e1830113aa15d753ef5879f8b820c8fa5be9f88b5c3d902d71f7b2d46",
     "expression": "OrderItem(command=command, expected_segments=segments, retry_times=1 if pretest else int(row_dict['retry_var'].get() or 1))",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "5dec11993e34907f0acf241a48d85d9017435cfc36efafb93cc726e894a59d78",
     "expression": "ttk.Button(container, text='关闭', command=self._close_power_test_channel_history_window, style='Secondary.TButton')",
     "callbacks": {
@@ -347,37 +347,37 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "60d9d8ed6486edef4d2ee0e3e83c4df4b4f026d1f14b7a411ae71a10370cc159",
     "expression": "ttk.Button(bottom_bar, text='+ 新增测试项', width=14, command=lambda : add_row(), style='Secondary.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "60ddb07122bdab4be6bf27b0de03da12a7fa3627885220a17239804cd68a72f4",
     "expression": "dialog.bind('<Return>', lambda _event: confirm())",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "61d41167d781072a93798f0aba785929f843d3d4b2515e9fd1b0e7a234438ec4",
     "expression": "ttk.Button(bottom_bar, text='恢复默认', width=12, command=restore_default, style='Secondary.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "6246ee09747ebd9e80b507bb04fdca491c9e35b3dd9f0862dbaf625f10646740",
     "expression": "ttk.Button(preview_actions, text='开始注册', command=self._on_onu_register_selected_clicked, style='Primary.TButton', state='disabled')",
     "callbacks": {
-      "_on_onu_register_selected_clicked": "b31c82f0d37bde16dfbf4b144dcc0c27eb69cc4d62e6419eef8d3ba37eaca65f"
+      "_on_onu_register_selected_clicked": "37d27679397327a7005e9a062bec0b29a829d12e1e95bfb59a140fbce6c3ee8d"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "645a7520fc0cf7ae5998daa051e8281099a7fa86b9d2c6f4c80df033a3b138c3",
     "expression": "ttk.Button(toolbar_commands, text='串口日志', command=self._open_serial_log_module, style='Tool.TButton')",
     "callbacks": {
@@ -386,16 +386,16 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "648ad7bddd970bef3fa989f6267c0dddec82c29a18b002fe0d83d5d51db81ff9",
     "expression": "ttk.Button(query_actions, text='查询未注册 ONU（全0=整机）', command=self._on_onu_query_unregistered_clicked, style='Secondary.TButton')",
     "callbacks": {
-      "_on_onu_query_unregistered_clicked": "007cb62dc4093767924c08ffd5e42348c2461666f023562d5c9e2068312f52b6"
+      "_on_onu_query_unregistered_clicked": "a9a1cba19667e6e07ea041b21e19677d6440ddaadab69bbf044c799ada21205a"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "68121d3d4bdb3e120edede3dae921e19c1b02b6251e8529000d42956a687536e",
     "expression": "self.onu_family_combo.bind('<<ComboboxSelected>>', self._on_onu_family_changed)",
     "callbacks": {
@@ -404,7 +404,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "691f5351e517250d115452776f58a176d405bdcf4c29a1aeec93181fca64ae4f",
     "expression": "variable.trace_add('write', lambda *_args: self._on_onu_registration_input_changed())",
     "callbacks": {
@@ -413,7 +413,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "691ff06fb8ed50c76f77d83f630711c5df51252c917447d0f5716c67b111b13f",
     "expression": "self.channel_list.bind('<Button-3>', self._on_channel_list_context_menu)",
     "callbacks": {
@@ -422,14 +422,14 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "6be45c6bbe0a4b926801e0d2048d23364ab831f1c550dcdbe61b6d5e1c8beb91",
     "expression": "no_user_pwd_flag_var.trace_add('write', refresh_credentials_state)",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "73978f16a2e1de3fd767e2f650dfe95993952ee9d1af633b6e65ce0d80f05851",
     "expression": "ttk.Button(actions, text='重新预检', command=self._refresh_parameter_preflight, style='Secondary.TButton')",
     "callbacks": {
@@ -438,7 +438,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "754d5ebc77b4146bcda189f9a670a78837cd81a6b39194309e7d668de317bea6",
     "expression": "serial_combo.bind('<<ComboboxSelected>>', lambda _event, section=channel.section: self._on_row_serial_changed(section))",
     "callbacks": {
@@ -447,35 +447,35 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "76276f0c57b3f85bdf0a764b97791c0fe3f910a9cfb897e1330ed8de6d727875",
     "expression": "variable.trace_add('write', lambda *_args: mark_dirty())",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "786c499ec7b0d44a406839afe1eb2743369ede1f192eb76fe9008b865b58f350",
     "expression": "ttk.Button(top, text='删除命令', width=10, command=remove_row, style='Secondary.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "78829229dfb96174e8101230c22361d2a86ce7473e00106010db631d167046ec",
     "expression": "Button(buttons, text='取消', command=cancel)",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "790e4caf00b0ce016239020a27e5b65a269f7932f89632e8e1abc32c78e240d3",
     "expression": "variable.trace_add('write', lambda *_a: mark_dirty())",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "84fcd7a30ebe7849162f76d53360dfb9f6e61881757c06d2a7784d3e5ae86283",
     "expression": "self.channel_list.bind('<ButtonRelease-1>', self._on_channel_list_click)",
     "callbacks": {
@@ -484,14 +484,14 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "8548925f4c230775c5292e380a52928e6c4e813cf28b39238a1e3d2ca01e8c01",
     "expression": "command_var.trace_add('write', lambda *_a: mark_dirty())",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "86560d6ff2dae9f5e52b31b0451dc41f49e11016d7210642550a5344a5f56d7a",
     "expression": "ttk.Button(buttons, text='开始升级', width=12, command=self._on_upgrade_start_clicked, style='Primary.TButton')",
     "callbacks": {
@@ -500,7 +500,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "89e56359d1bc0f99d359dafb93d831db8b3cacd5480a0c038bcf34f477f22082",
     "expression": "self.upgrade_transfer_combo.bind('<<ComboboxSelected>>', lambda _event: self._refresh_upgrade_transfer_visibility())",
     "callbacks": {
@@ -509,14 +509,14 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "8a6d6d25e346e8d58d616c9eca5009dd1676f8404938768d618e1fbe68de7051",
     "expression": "ttk.Scrollbar(history_body, orient='vertical', command=history_text.yview)",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "8d87771fec588afff21ca09e029a0b4ad08b42fba28748cb9bbc06e950b38178",
     "expression": "ttk.Button(run_actions, text='停止测试', command=self._stop_power_test, style='Secondary.TButton', state='disabled')",
     "callbacks": {
@@ -525,7 +525,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "8fc3bc7304bf7e250290b10c5a1a500868b256d230214bc4fb65a6c8b9829c22",
     "expression": "self.onu_c600_services_text.bind('<<Modified>>', self._on_onu_services_text_modified)",
     "callbacks": {
@@ -534,14 +534,14 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "9040dfe18390f12855f559c8b3cbef3fee1a4c4591dcdcd3c1ea36fa265c08c9",
     "expression": "ttk.Button(button_bar, text='重新加载', command=reload, style='Secondary.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "91ea23344d0a5fa32d825f6234d76b4022ba8d0b5ed63b0e70cb6b0efd8cbf7c",
     "expression": "ttk.Button(toolbar_commands, text='写样机参数', command=self._open_sample_parameter_writer, style='Tool.TButton')",
     "callbacks": {
@@ -550,7 +550,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "92ad5e2e0b4e129811f2891a00e1868a104ece77cac6d47695fe9dcc81323622",
     "expression": "Button(onu_password_container, text='👁', width=3, command=self._toggle_onu_password_visibility)",
     "callbacks": {
@@ -559,16 +559,16 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "97fa5ea108a44abb83898822f108c5c0f185b74d0899d67d39564258f0a7cb5e",
     "expression": "ttk.Button(connection_frame, text='登录测试', command=self._on_onu_telnet_test_clicked, style='Secondary.TButton')",
     "callbacks": {
-      "_on_onu_telnet_test_clicked": "c240267be3eee8bf8bef205c60a7c7c015553cc87534dffad954cc4957f1f38c"
+      "_on_onu_telnet_test_clicked": "3311b8cd586d0e423d8db55a141807c56af811a1ff51269eea778c8565c8b9f0"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "99b902d1ccce10bbc56fa220808d4ade56dfcf5a83d416e935c6140de7eab489",
     "expression": "ttk.Button(buttons, text='停止升级', width=12, command=self._stop_sample_upgrade, style='Secondary.TButton')",
     "callbacks": {
@@ -577,7 +577,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "9d40e6984ecfa2817cff5ac78f5b2cae60bc64cfd4bb9ddc369a59c46cbcbc07",
     "expression": "self.channel_list.bind('<<ListboxSelect>>', self._on_channel_selected)",
     "callbacks": {
@@ -586,35 +586,35 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "9e72a5b7e03642514230e45a5520483d94e29dd8ac9a3fdbe882362239d50c4e",
     "expression": "field.bind('<Button-3>', lambda event: show_copy_menu(event, var))",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "a40a696812d07fd5dc75cf96a23c5bf20a9a05c38c3f916f6cc7bbd40a8f3552",
     "expression": "ttk.Button(frame, text='刷新无线网卡', command=refresh_wireless_cards, style='Tool.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "a8779e54d24c2712f117ac045303ca4ece988bc566ec3aa8b7eae3f708fdbb83",
     "expression": "retry_var.trace_add('write', lambda *_a: mark_dirty())",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "a9b15a4409fe7cd620901407a2e3f7375d0f0f3d44f91b8f19a7ded9ef7c3f3c",
     "expression": "copy_menu.add_command(label='复制全部', command=copy_query_result)",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "a9c184be7b7a02e8c8e6d9e95fa6a0d936b7e844db7d33cf8ce9051126f46f03",
     "expression": "ttk.Button(selection_actions, text='清除', command=lambda : self._set_all_channels_enabled(False), style='Secondary.TButton')",
     "callbacks": {
@@ -623,7 +623,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "aa714a4217a2a72f5415758270231f681dfaaa3f4fe4b7d25edd0bc3758bc829",
     "expression": "ttk.Button(query_actions, text='清除选择', command=self._clear_unregistered_onu_selection, style='Secondary.TButton', state='disabled')",
     "callbacks": {
@@ -632,7 +632,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "aae2a2b7ddd2ed108328fdfe6567d40a71167221bf7ce7764c518620fac51697",
     "expression": "ttk.Button(source_row, text='生成批量参数表...', command=self._open_parameter_generator, style='Tool.TButton')",
     "callbacks": {
@@ -641,14 +641,14 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "aeb810483754fad202a6b71dd7c7db093989011a1ac80f4ea3cb7b5feb03712f",
     "expression": "Button(pwd_container, text='👁', width=3, command=toggle_password_visibility)",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "afcb31c0d03d9b34c9f1241cf9a6552c71baad8bcd1b1e3618414c9f486d2bdb",
     "expression": "self.channel_list.bind('<Double-Button-1>', self._on_channel_list_double_click)",
     "callbacks": {
@@ -657,7 +657,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "b0b7a2f57c64a575a4c48d7b4bf61570cb1b05e23007342667a90bb6d34ce19b",
     "expression": "Button(overview, text='选择固件...', command=self._select_upgrade_firmware)",
     "callbacks": {
@@ -666,7 +666,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "b45a1fabda15ab4137d5efdff1bc6662fe26ab7f9f6002d795bd63bf80feb0f4",
     "expression": "ttk.Button(config_actions, text='生成预览并进入下一步', command=self._on_onu_preview_clicked, style='Primary.TButton', state='disabled')",
     "callbacks": {
@@ -675,7 +675,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "b47ba07af3dc38635c9e14448975e213ebbca9adebb19061e476fb36207f86c5",
     "expression": "Checkbutton(self.onu_c300_config_frame, text='C300 配置失败时，允许删除明确选择的一台同 PON 离线 ONU 后重试（危险）', variable=self.onu_c300_allow_offline_cleanup_var, command=self._on_c300_cleanup_toggle, selectcolor='#ffffff', background=COLOR_SURFACE, activebackground=COLOR_SURFACE, foreground=COLOR_TEXT, highlightthickness=0, borderwidth=0)",
     "callbacks": {
@@ -684,7 +684,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "b4abdb5f2c1b00f7cd730915cbe0cb7f7622791191944fb98811fce6380aaa0d",
     "expression": "ttk.Button(run_actions, text='检查并执行测试', command=self._start_all_checks, style='Primary.TButton')",
     "callbacks": {
@@ -693,42 +693,42 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "b517397be6b420570355dc3759fa7d817d9eb22023f67853528f75bbdb4ee956",
     "expression": "message_push_control.frame.bind('<Destroy>', forget_message_push, add='+')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "b612527034bf614c6dc73f0d3c83caf6c4ee1d1a98da8f8d408d3f519286f96d",
     "expression": "self.onu_query_status_label.bind('<Configure>', lambda event: self.onu_query_status_label.configure(wraplength=max(280, event.width - 18)))",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "b66b2febc323075061604086095060278d319116ee90dd6576cb9ce3e187b594",
     "expression": "ttk.Button(button_bar, text='关闭', command=close_dialog, style='Secondary.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "b8368bc2085f34b5304644d7197d33bb7885666d52e4890443bcb6aef8dfd928",
     "expression": "ttk.Button(toolbar_actions, text='检查更新', command=self.app_update_dialog.open, style='Secondary.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "b91a16c59b77614386f9e1a9b848dcdafc3bb814789d432d0e7960c8dd61d55c",
     "expression": "ttk.Button(button_bar, text='保存', command=save, style='Primary.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "b9abf7a145899e313b5d446ac1f777fddaecbdde4fde3ca3fc82cfffc872435b",
     "expression": "ttk.Button(cleanup_row, text='查询同 PON 离线候选', command=self._on_c300_cleanup_candidates_clicked, style='Secondary.TButton', state='disabled')",
     "callbacks": {
@@ -737,7 +737,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "bcb169106606776c3ec26444117e9bdd007e7275796f76b5abc5eee8f4b351e6",
     "expression": "ttk.Button(source_row, text='选择参数表...', command=self._browse_parameter_table, style='Secondary.TButton')",
     "callbacks": {
@@ -746,7 +746,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "bd22078dd002d66ea910fc108fc2b8fabcec286396490f573f315ddbb8f7eea6",
     "expression": "Checkbutton(c600_form, text='完整验证成功后执行 write（危险，仅本次有效）', variable=self.onu_c600_write_after_success_var, command=self._invalidate_onu_preview, selectcolor='#ffffff', background=COLOR_SURFACE, activebackground=COLOR_SURFACE, foreground=COLOR_TEXT, highlightthickness=0, borderwidth=0)",
     "callbacks": {
@@ -755,7 +755,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "bf8b219eeb4cac6e93a205771cff7ecb7c8f73ae538f0ab29ac52b7abe2962cd",
     "expression": "ttk.Button(toolbar_commands, text='样机升级', command=self._open_upgrade_module, style='Tool.TButton')",
     "callbacks": {
@@ -764,7 +764,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "c79f103601c16a3630141017589bcb9b6fcca7c759187c827fa8672161d3b889",
     "expression": "Checkbutton(power_form, text='显示所有网卡和串口', variable=self.show_all_resources_var, command=self._on_show_all_resources_changed, background=COLOR_SURFACE, activebackground=COLOR_SURFACE, foreground=COLOR_TEXT, highlightthickness=0, borderwidth=0)",
     "callbacks": {
@@ -773,7 +773,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "c928a43e40149dad1d4f82b8742e87985cf8f3876f5ada24773a7dc250438f58",
     "expression": "Button(password_container, text='👁', width=3, command=self._toggle_upgrade_password_visibility)",
     "callbacks": {
@@ -782,7 +782,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "cf7677f3cc9c5166d70078f7e8376edd72f40c6a8d8113d4e23e71c7eecae0c8",
     "expression": "self.channel_list.bind('<space>', self._toggle_selected_channel_enabled)",
     "callbacks": {
@@ -791,7 +791,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "d0f7cc97114f10b07838a5f11639e34a60c97c8bce8443831c7961ce4cb00a3b",
     "expression": "self.onu_c300_services_text.bind('<<Modified>>', self._on_onu_services_text_modified)",
     "callbacks": {
@@ -800,7 +800,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "d1930f94c4c165767cceae44f7f9e69eea26a4a55274db8f022ff703a23228db",
     "expression": "ttk.Button(query_actions, text='下一步：配置业务', command=self._go_to_onu_config_step, style='Primary.TButton', state='disabled')",
     "callbacks": {
@@ -809,7 +809,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "d5ddf6009d13d210f2d1110e7ceaf1e13da4579d3d8948270ecf0dff45b93fac",
     "expression": "ttk.Button(bottom_actions, text='停止', width=12, command=self._on_onu_stop_clicked, style='Secondary.TButton', state='disabled')",
     "callbacks": {
@@ -818,14 +818,14 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "daedb3f2999b7d3599e4faef8bdbe68dd522f265415e44d24bd54967a5efddf1",
     "expression": "ttk.Button(config_actions, text='返回查询', command=lambda : self.onu_notebook.select(self.onu_discovery_tab), style='Secondary.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "dc60dad0ae18b8f6dbc751e3c2b95e30c96701de9a1184ea3144bdc4687b0b79",
     "expression": "Checkbutton(self.channel_table, variable=enabled_var, command=lambda section=channel.section: self._on_row_enabled_changed(section), background=COLOR_SURFACE, activebackground=COLOR_SURFACE, highlightthickness=0, borderwidth=0)",
     "callbacks": {
@@ -834,14 +834,14 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "dca5350c95b70131ba4ffa0f7f3b91a1a1cc227d78a010081e2b0d949292b235",
     "expression": "canvas.bind('<Configure>', lambda e: canvas.itemconfigure(rows_window, width=e.width))",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "de8526dcf97d7d2c937c0aabc1daec2314844f5ce2255516d46bf05c1234d1a0",
     "expression": "self.channel_list.bind('<Button-1>', self._on_channel_list_press)",
     "callbacks": {
@@ -850,7 +850,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "e465c680b38e40199dd4f89ceee505e0487bb7bdc28d71288bf9ffb6eff12fb7",
     "expression": "self.power_serial_combo.bind('<<ComboboxSelected>>', self._on_power_serial_changed)",
     "callbacks": {
@@ -859,7 +859,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "e67440ab0cf970f9b57db9da2ba22c2cc881b8d47b0be62df61ac0d6d32165ff",
     "expression": "ttk.Button(self.power_test_channel_overview, text='通道概览（收起）', command=self._toggle_power_test_channel_overview, style='OverviewToggle.TButton')",
     "callbacks": {
@@ -868,30 +868,30 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "e8c0997531af601064f34d3744d0b32636cb360207cd95d6dde48be8cb01c780",
     "expression": "only_power_var.trace_add('write', refresh_credentials_state)",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "eb0a0a8ee9b2b7e96a8bd184dca42bc64a5defeab8d078a21e0cec5fa4516cae",
     "expression": "ttk.Button(toolbar_commands, text='AI诊断', command=self._open_ai_assistant, style='Tool.TButton')",
     "callbacks": {
-      "_open_ai_assistant": "fe7c315ed58a45a2f582d86e46ad1152bac27dc6874d0f464baeb09494fa5d8d"
+      "_open_ai_assistant": "57d5c0ab824a7540001eb72ea1b8de8a6a477cfbaa5886e32c03f2a4ec915fb3"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "ec5fab15e5bcb42b26b8bd66ef9e2eb3e964247e550f140781bba4cd900ad593",
     "expression": "interval_var.trace_add('write', lambda *_a: mark_dirty())",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "ed0433780e420d3516107897e526cfa84c063b59035d6eb453604cb3098a18c2",
     "expression": "self.onu_c300_cleanup_combo.bind('<<ComboboxSelected>>', lambda _event: self._invalidate_onu_preview())",
     "callbacks": {
@@ -900,16 +900,16 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "eefaef440740bd269d85542c8114ee639383fb0f5a8c812bf5b131ca66b3cbb6",
     "expression": "self.channel_context_menu.add_command(label='打开本次开关机运行日志', command=self._open_selected_power_test_log)",
     "callbacks": {
-      "_open_selected_power_test_log": "d2020496839566029487be44beb40a14538d3badad415875d1af6d4d40a71e3e"
+      "_open_selected_power_test_log": "398c6fda5983c4c089195edd7454af2e7aa38f405c62f087d671078073b0dc05"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "f0a497d99a9b561d1d243a2eb1b10ad2de5de2332540c5b4bf163768cf474cb3",
     "expression": "self.power_serial_combo.bind('<FocusOut>', self._on_power_serial_changed)",
     "callbacks": {
@@ -918,7 +918,7 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "f26edff0f05115d340950720ff7084353c26fe485b55cbbc25e5ec499b23b385",
     "expression": "ttk.Button(log_header, text='清空日志', command=self._clear_log, style='Secondary.TButton')",
     "callbacks": {
@@ -927,37 +927,37 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "f311fecace4045a47997754298ee1519532d31d99e5d60e4c9e013229887aeed",
     "expression": "canvas.bind('<Leave>', lambda _e: canvas.unbind_all('<MouseWheel>'))",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "f4df792520b9780a1111f6f11f7a88b6392213cf6625a744ba0c1ffb8bbbf9d5",
     "expression": "ttk.Button(manage_actions, text='查询已注册 ONU', command=self._on_onu_manage_query_clicked, style='Secondary.TButton')",
     "callbacks": {
-      "_on_onu_manage_query_clicked": "2139ec1c99e19168aa777b681aa6a75416059a2d52fa3387bd278706eef0a865"
+      "_on_onu_manage_query_clicked": "5b4d7711a8713f6e6c1177a4525a2933bcb3622d34073694973492e8c3a013f3"
     }
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "f6fd1cc0fcf6c02100ddac8168f6519daae2be49afaea2d6aa0bf1eb3461304a",
     "expression": "ttk.Button(buttons, text='取消', command=lambda : (dialog.grab_release(), dialog.destroy()), style='Secondary.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "f7c7756b517f4faa90456266e0d262ca4077b96f607d8281a111f23aa16cb50a",
     "expression": "ttk.Button(seg_frame, text='删除段', width=8, command=remove_segment, style='Secondary.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "fb39a2f3cf6dd12bcc311b72178525508d1ba5c287e29594495ef51d7a12606e",
     "expression": "widget.bind('<FocusOut>', self._on_vlan_changed)",
     "callbacks": {
@@ -966,14 +966,14 @@
   },
   {
     "file": "line_check_assistant/app.py",
-    "file_code_sha256": "8f78e91c126023e5ec61c922035fcef49d1577b7cdbb927e99c00c1308ac500c",
+    "file_code_sha256": "d91bc8d588c3cbf56a660b2580f831147b3d204113fba367ce890f77c74a90c0",
     "action": "fe79ee3c0fba1a869ba1dcd8c0575bf944428156f17651d0ac4bad114242a184",
     "expression": "ttk.Button(bottom_actions, text='关闭', width=12, command=close_dialog, style='Secondary.TButton')",
     "callbacks": {}
   },
   {
     "file": "line_check_assistant/pipeline_window.py",
-    "file_code_sha256": "e4a34824812f3f73d44926853e352e44d52a171ad9070525ae1d88d8b1865ac1",
+    "file_code_sha256": "1e28d0718ea86beac2db814f9a838d2f399b96a73bf09afb788ad8114f4aa4d2",
     "action": "16480519a59feba6f54add5667dc057e705c55fccad5b2527a3c901e93c9056f",
     "expression": "Checkbutton(row, text=WINDOW_SUBTASK_LABELS[code], variable=var, command=self._refresh_statuses, selectcolor=COLOR_SURFACE, background=COLOR_BG, activebackground=COLOR_BG, foreground=COLOR_TEXT, anchor='w')",
     "callbacks": {
@@ -982,7 +982,7 @@
   },
   {
     "file": "line_check_assistant/pipeline_window.py",
-    "file_code_sha256": "e4a34824812f3f73d44926853e352e44d52a171ad9070525ae1d88d8b1865ac1",
+    "file_code_sha256": "1e28d0718ea86beac2db814f9a838d2f399b96a73bf09afb788ad8114f4aa4d2",
     "action": "264f4db29b910e015cd75ad05f892879f9aca02b79fe9ac94967d1a5c6f42081",
     "expression": "self.window.bind('<FocusIn>', self._on_focus_in)",
     "callbacks": {
@@ -991,16 +991,16 @@
   },
   {
     "file": "line_check_assistant/pipeline_window.py",
-    "file_code_sha256": "e4a34824812f3f73d44926853e352e44d52a171ad9070525ae1d88d8b1865ac1",
+    "file_code_sha256": "1e28d0718ea86beac2db814f9a838d2f399b96a73bf09afb788ad8114f4aa4d2",
     "action": "79fc19ca2526774c99af3d34cf39c463c1e52db8b6ef0291af46c362185582ca",
     "expression": "ttk.Button(button_bar, text='开始执行', command=self._on_start, style='Primary.TButton')",
     "callbacks": {
-      "_on_start": "54da2b5bb82fd4d1978fb2bfe5225b94ddb3531e8f2025741bf268c79b38819d"
+      "_on_start": "990b4df2e402537c052bf38b9d6340a709210729e7a47f1c936aeb313b2bf8fa"
     }
   },
   {
     "file": "line_check_assistant/pipeline_window.py",
-    "file_code_sha256": "e4a34824812f3f73d44926853e352e44d52a171ad9070525ae1d88d8b1865ac1",
+    "file_code_sha256": "1e28d0718ea86beac2db814f9a838d2f399b96a73bf09afb788ad8114f4aa4d2",
     "action": "8a3fa27dc630b7b1435ed15bda9c4739883854c27a16f2cb7eb30587dbdee6ae",
     "expression": "ttk.Button(button_bar, text='刷新状态', command=self._refresh_statuses, style='Secondary.TButton')",
     "callbacks": {
@@ -1009,7 +1009,7 @@
   },
   {
     "file": "line_check_assistant/pipeline_window.py",
-    "file_code_sha256": "e4a34824812f3f73d44926853e352e44d52a171ad9070525ae1d88d8b1865ac1",
+    "file_code_sha256": "1e28d0718ea86beac2db814f9a838d2f399b96a73bf09afb788ad8114f4aa4d2",
     "action": "caf28051adb137b1cbb52355991222e03c08e4285e217503a28b700811d85818",
     "expression": "ttk.Button(button_bar, text='取消', command=self._on_close, style='Secondary.TButton')",
     "callbacks": {
@@ -1018,7 +1018,7 @@
   },
   {
     "file": "line_check_assistant/pipeline_window.py",
-    "file_code_sha256": "e4a34824812f3f73d44926853e352e44d52a171ad9070525ae1d88d8b1865ac1",
+    "file_code_sha256": "1e28d0718ea86beac2db814f9a838d2f399b96a73bf09afb788ad8114f4aa4d2",
     "action": "ee8f4a96b37488862c4f4c806cd6c33cc7190a78a55434f5ec67a5468a5e7933",
     "expression": "ttk.Button(row, text='去配置', command=lambda m=config_method: self._open_config(m), style='Secondary.TButton')",
     "callbacks": {
@@ -1027,7 +1027,7 @@
   },
   {
     "file": "src/ui/adapter_rename_dialog.py",
-    "file_code_sha256": "2a85939d0fc2b98d3c14bd502e9832bccd5dd2e90cbee1f3c22e70130f433b17",
+    "file_code_sha256": "50a6446674e607f0c212b4fda0c945c9a5aafe35073883fcb920fb1b1b89bb28",
     "action": "2cde4d3f78c16976e5414104a0d0bd0b8cc4992e248913db4d2363da03353aaf",
     "expression": "self.window.bind('<Escape>', lambda _event: self.close())",
     "callbacks": {
@@ -1036,25 +1036,25 @@
   },
   {
     "file": "src/ui/adapter_rename_dialog.py",
-    "file_code_sha256": "2a85939d0fc2b98d3c14bd502e9832bccd5dd2e90cbee1f3c22e70130f433b17",
+    "file_code_sha256": "50a6446674e607f0c212b4fda0c945c9a5aafe35073883fcb920fb1b1b89bb28",
     "action": "66065ddc40da375a61be32f217ac3e931abffcb756814649cc9efeb469633013",
     "expression": "ttk.Button(buttons, text='确认修改', command=self.submit)",
     "callbacks": {
-      "submit": "192b54582187e4e182f0e9bf49da547e2b8ea7511a5a19e99cf01e40025b2e5e"
+      "submit": "3f4e1f9b0cad6a4a0f38f0c82a7364d184ba5aa15b7574e4edf5db05239add86"
     }
   },
   {
     "file": "src/ui/adapter_rename_dialog.py",
-    "file_code_sha256": "2a85939d0fc2b98d3c14bd502e9832bccd5dd2e90cbee1f3c22e70130f433b17",
+    "file_code_sha256": "50a6446674e607f0c212b4fda0c945c9a5aafe35073883fcb920fb1b1b89bb28",
     "action": "b9f7d5d9a3e27d69d1e7b835030fe04795bdbf88fc5f7b2f18e9c31e98ebbea9",
     "expression": "self.window.bind('<Return>', lambda _event: self.submit())",
     "callbacks": {
-      "submit": "192b54582187e4e182f0e9bf49da547e2b8ea7511a5a19e99cf01e40025b2e5e"
+      "submit": "3f4e1f9b0cad6a4a0f38f0c82a7364d184ba5aa15b7574e4edf5db05239add86"
     }
   },
   {
     "file": "src/ui/adapter_rename_dialog.py",
-    "file_code_sha256": "2a85939d0fc2b98d3c14bd502e9832bccd5dd2e90cbee1f3c22e70130f433b17",
+    "file_code_sha256": "50a6446674e607f0c212b4fda0c945c9a5aafe35073883fcb920fb1b1b89bb28",
     "action": "ec36b13ca30aaa87436985c7c8cb7c66a24840fa33c2c8b9b1cb4bf8b6697012",
     "expression": "ttk.Button(buttons, text='取消', command=self.close)",
     "callbacks": {
@@ -2408,7 +2408,7 @@
   },
   {
     "file": "src/ui/feishu_dependency_controller.py",
-    "file_code_sha256": "f2a239751e65987534e86115a3b2f480851cccea357d0b5b9800aa6dcfe95eb7",
+    "file_code_sha256": "b72f81028e60bc2b3cb08d7f3722c291b69721e7f6aca1140f0de8f1905d11f3",
     "action": "28349bc8a709abdca95feac124684389e5112f259c283f2f55d68d6abef5eb5b",
     "expression": "ttk.Button(self.buttons, text='关闭', command=self.dismiss)",
     "callbacks": {
@@ -2417,7 +2417,7 @@
   },
   {
     "file": "src/ui/feishu_dependency_controller.py",
-    "file_code_sha256": "f2a239751e65987534e86115a3b2f480851cccea357d0b5b9800aa6dcfe95eb7",
+    "file_code_sha256": "b72f81028e60bc2b3cb08d7f3722c291b69721e7f6aca1140f0de8f1905d11f3",
     "action": "fcbbbe6d3a1c74eea4efe2d6c3f33ac1eed585d1eb79603ab3b978ee0da4898a",
     "expression": "ttk.Button(self.buttons, text='重试', command=self.start)",
     "callbacks": {
@@ -2540,7 +2540,7 @@
   },
   {
     "file": "src/ui/module_theme.py",
-    "file_code_sha256": "ab8ac933a147ae7cdbc7d1909a155fdc857c05a84a7bbaa7c18b5e6e085e239d",
+    "file_code_sha256": "61f4f89656792ff635cdfb6dc41db2d32586ddd847235019bed92f3152724d1b",
     "action": "6d99a70e1b00949cdb36e61ae137409fe27ea5760221e871d5624496d1adbe14",
     "expression": "window.bind('<Map>', lambda event: apply(event.widget), add='+')",
     "callbacks": {}
@@ -2686,6 +2686,15 @@
     "callbacks": {}
   },
   {
+    "file": "src/ui/project_editor_recovery.py",
+    "file_code_sha256": "4a57d164323a583607c48ba2209764bca69d22317006db29a8c59569c4b4156a",
+    "action": "f4dcc5d270325267a68c245c37e15363bf61f9bd9ee5309dc7b8732cbed056c2",
+    "expression": "self.dialog.bind('<Destroy>', self._destroyed, add='+')",
+    "callbacks": {
+      "_destroyed": "85c889e0e42cc5d63eeb57b5f33762652913bc793bb6916054d4a1dff7a7cb39"
+    }
+  },
+  {
     "file": "src/ui/project_name_badge.py",
     "file_code_sha256": "4e573a7e16dc2a752f7a91863e859d98340e4d2c0d141c3e589a74c89ba7dbd7",
     "action": "59cae0ff3606244be8b4ab8f2459997986e7e801247e1cfb71f0dd2a1c4fa64f",
@@ -2740,15 +2749,282 @@
     }
   },
   {
+    "file": "src/ui/project_view_frame.py",
+    "file_code_sha256": "0a7a6897838d7a8f59624bbe178058ebf25a66cfbd0c74a55d38e6290d21ac6c",
+    "action": "df885641ec1a0dfe5e2a903b4e78b7c2d2e1d1098d4361fd777701e37b584647",
+    "expression": "self._project_window.bind(sequence, func, add)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/project_view_frame.py",
+    "file_code_sha256": "0a7a6897838d7a8f59624bbe178058ebf25a66cfbd0c74a55d38e6290d21ac6c",
+    "action": "eeec1c1f7e6b9eba3a77dcdcdf4ccd689acbeeeb5144e4f9b1652048f0a7e856",
+    "expression": "super().bind(sequence, func, add)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "0cb36ab146eb641a46d9f43b03b6b8e46727c275d6683d06a0b63d8df2524b2c",
+    "expression": "self.bind('<Control-n>', lambda event: self.new_project())",
+    "callbacks": {
+      "new_project": "2b0d16ed125fba0d622007b3132fc4e9ca2212bc9703bb53fed6e38654497bf5"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "1aa5bb9c978ceb5db6585d5ab472fd1de6aceadc1914400d078cc7c89b8737d4",
+    "expression": "self.bind('<ButtonPress-1>', lambda event: self.lift(), add='+')",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "211d5eb6662c4d8ff6afe78ea9b2d4e94d70fb0bb9bc4d773decd7c5d53b3b18",
+    "expression": "self.project_menu.add_command(label='从最近列表移除', command=self.forget_project)",
+    "callbacks": {
+      "forget_project": "e2a517eb0623e0a72630598582766fac51b8e91d9916b7d68316dd644c3d67ba"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "265dd80ff3048fd24967ca75135e379598f4830f831cdcd3fb88477073ed3e6b",
+    "expression": "self.tree.bind('<<TreeviewSelect>>', self._tree_selected)",
+    "callbacks": {
+      "_tree_selected": "6c5f6763afdb6a640140b9373620f4fe812663555442d5f726849e05059c9a91"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "2af89945a5fda62ca54d3ccc66d490f138986d91c70b3b5cf5f4a215dd86dd3c",
+    "expression": "self.project_menu.add_command(label='远程可访问项目…', command=self.remote_project_range)",
+    "callbacks": {
+      "remote_project_range": "6da9af1b071caf18fca42796f0225ccc2107ab58ee5e0b8ef473f5ba21d04f32"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "2bf10958483554a6565c62e34a76a3e006e262bd8bf8cd80c85b61133a8508d2",
+    "expression": "ttk.Button(dialog, text='保存', command=save)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "31b9afeb922c80f7fe0c585b02736ce899a807bcb5d2437ec96dfc9913e17973",
+    "expression": "self.project_menu.add_command(label='新建项目…', command=self.new_project, accelerator='Ctrl+N')",
+    "callbacks": {
+      "new_project": "2b0d16ed125fba0d622007b3132fc4e9ca2212bc9703bb53fed6e38654497bf5"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "3a1188e0296d346ba0af2bcbfd8668ee18175d6cd3843d61b8fddecb1474dc09",
+    "expression": "self.recent_menu.add_command(label=item['name'], command=lambda path=item['path']: self.open_project(path))",
+    "callbacks": {
+      "open_project": "502a1e4a120f300106d2e012a1984c4bf984704d396a1a992b1caa99d78a7e26"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "5c93758f7542ba79da33e0f8df7582d011d4a4fdfd1dcecd1a73fa9f405efbc8",
+    "expression": "self.switch_menu.add_command(label=project['name'], command=lambda key=project['project_id']: self.select_project(key))",
+    "callbacks": {
+      "select_project": "a6990d64fc9e564dfac9a8a8b222904c5b316f18dd09afd9f5e4acd2ecd263d7"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "68f79f0b6c19428277be482fcfc2b2bf68cd7ff68c35a7361518491b74c8ccc9",
+    "expression": "ttk.Button(toolbar, text='☰ 项目', command=self.toggle_sidebar)",
+    "callbacks": {
+      "toggle_sidebar": "d837f0c1b813070a313b0f07095fb3db1b1c834c914b9e441fa04571b4da403e"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "6d56913c04143ea84d047e221354ad49166d4477a7e413c625ce8e30d4874213",
+    "expression": "self.project_menu.add_command(label='打开项目…', command=self.open_project, accelerator='Ctrl+O')",
+    "callbacks": {
+      "open_project": "502a1e4a120f300106d2e012a1984c4bf984704d396a1a992b1caa99d78a7e26"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "74a87d6bf2ff271017b89a0f81d3fc6d2d2e76a4874f1ad22376eb1e3cc8f74b",
+    "expression": "self.project_menu.add_command(label='关闭项目', command=self.close_project)",
+    "callbacks": {
+      "close_project": "0244b0ca97a7ee6a7b7588bb3eb29a53849e378b7462c69a3cb0eb51d4ba96d7"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "7f33b2646d407729c863c0338b088e5b8be8d0491d1b8cf8f64087da8cc60aef",
+    "expression": "self.project_menu.add_command(label='选择导入的接入配置…', command=self.imported_connection)",
+    "callbacks": {
+      "imported_connection": "36239a3fc7d4747a7f7d143c522627cf634cf698e558a7c93c657f50c19a35a4"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "82930d0bd728b1d596b6ffcb8107e25d2e28d1dc238a55e3f5d609db1ed63bc1",
+    "expression": "self.project_menu.add_command(label='打开项目目录', command=self.open_directory)",
+    "callbacks": {
+      "open_directory": "1ff839fceffdec79a27fd8716ceccb008c97355249ca29a5b65a7f3201823505"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "8501ed2435a4cb83acdc51f0292b53d9b7963852011f09f194e7e6f074594fb1",
+    "expression": "self.tree.bind('<Button-3>', self._context_menu)",
+    "callbacks": {
+      "_context_menu": "9a50e4c0ba901cd87f734b727f349f74cf609078c9f592792a8a0b4a5e835f57"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "8903ef5aab1471ea1138891ba52e22796f2020a86bdfb42b1cd22b692c8977cc",
+    "expression": "ttk.Button(buttons, text='打开…', command=self.open_project)",
+    "callbacks": {
+      "open_project": "502a1e4a120f300106d2e012a1984c4bf984704d396a1a992b1caa99d78a7e26"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "9208f5565c98444a306670cd4c949c897554267ba21d760cc3fe80b1c93193b1",
+    "expression": "ttk.Button(toolbar, text='AI / 远程接入', command=self.open_ai)",
+    "callbacks": {
+      "open_ai": "0347edfa90ba854b2888ef1ed4910e9a38472078b0621e135598d441bbd90671"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "9a0fc94e8cfee17932903e4f9e27ccc065305c11b90a122edb85559bdf96ddfe",
+    "expression": "self.bind('<Control-s>', lambda event: self.save_project())",
+    "callbacks": {
+      "save_project": "340c3416c5731b5107be4e416fe4b55423fe1711b83b52a30a989cf7da6e503e"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "9ad9a3229fcd1e420bfa17c9374db5236b87330a7a6c6130ad192db4ebc58f88",
+    "expression": "self.project_menu.add_command(label='多实例 / 统一网关…', command=self.open_instance_management)",
+    "callbacks": {
+      "open_instance_management": "8ca79b819403d26d76a2d9dffb5218d90e1f305d21dbcba282b10b65a954675f"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "9ccff28a386dec1f5e8292f9f176997193e114f3f20554f3b28cbe3d67a05390",
+    "expression": "ttk.Button(dialog, text='记录并解除保护', command=save)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "a911c9d83d56dad963446fec9233e0f8947055cc044e97ad3ad69a02405380d7",
+    "expression": "self.project_menu.add_command(label='另存为 / 复制项目…', command=self.duplicate_project)",
+    "callbacks": {
+      "duplicate_project": "1093adb45ce9289a3c01b9d07e7ee5d963ac5971a5547c589ab45b7743f56824"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "b09409f36317d9159fc48695e19400563af99a17275181cd65109bff039ac81f",
+    "expression": "self.project_menu.add_command(label='重命名项目…', command=self.rename_project)",
+    "callbacks": {
+      "rename_project": "3abe0f2593b0848d04647f577b8a7bb321269cce05d3fe18bd67afa6b76ec174"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "b0ebfde6da94b111a4e96b271c811d2fca1ce2246a4d0ea1e0f60e8a473efa1e",
+    "expression": "ttk.Button(buttons, text='新建', command=self.new_project)",
+    "callbacks": {
+      "new_project": "2b0d16ed125fba0d622007b3132fc4e9ca2212bc9703bb53fed6e38654497bf5"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "cdd4fb0e75f7d0644b629385be530e12839151036bcdd8c4c8af659349b37c2c",
+    "expression": "self.project_menu.add_command(label='保存项目', command=self.save_project, accelerator='Ctrl+S')",
+    "callbacks": {
+      "save_project": "340c3416c5731b5107be4e416fe4b55423fe1711b83b52a30a989cf7da6e503e"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "ce384ad93e28cf4986c01a1004f1cee9003f28c36e31d16633b9c009b7321f92",
+    "expression": "self.bind('<Control-o>', lambda event: self.open_project())",
+    "callbacks": {
+      "open_project": "502a1e4a120f300106d2e012a1984c4bf984704d396a1a992b1caa99d78a7e26"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "d11faa67d69beff28566203c2fe67a9a07c544cb5366688cc0b0be250576b962",
+    "expression": "self.project_menu.add_command(label='导入旧配置目录…', command=self.import_project)",
+    "callbacks": {
+      "import_project": "a024f47d20a48a010349209559bb089bc0d0718d2c16e00b590941b882f972a2"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "d18125a78a85b75769bc31c1dee6d3d93e2d49d9e35d427bd28f296590920274",
+    "expression": "ttk.Button(dialog, text='选择', command=save)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "d8a9308fda4e611991e32272bd7ff75be32240519c32d499b9ed91facb560cd0",
+    "expression": "ttk.Button(toolbar, text='保存', command=self.save_project)",
+    "callbacks": {
+      "save_project": "340c3416c5731b5107be4e416fe4b55423fe1711b83b52a30a989cf7da6e503e"
+    }
+  },
+  {
+    "file": "src/ui/project_workspace.py",
+    "file_code_sha256": "406bed42f1b0d9ee3e9c87eab8a0134808e6da6e8628fcaaf27dc13bd18f7f02",
+    "action": "f26683e3b26267ef0538c4e4d9ee0a570301847005de8b675141a802b25c36bc",
+    "expression": "self.project_menu.add_command(label='核实未知任务…', command=self.resolve_unknown)",
+    "callbacks": {
+      "resolve_unknown": "fad0ddc1b45f31b235121d7b8c5bb070a8d6b72ebbe99b5fde430646590bd004"
+    }
+  },
+  {
     "file": "src/ui/serial_terminal.py",
-    "file_code_sha256": "3d0853ff87c3833aaecd7ddac34d934195f1fcd73629ec96f91c2640ec31b90d",
+    "file_code_sha256": "bb34c31daceb6ddf5488c9da513ff65d4bacda389ef97327026db7a0340c2ae2",
     "action": "18a5d8775037f1592775555b7d50298b97d54b9bfd2d34494fe97ab111bf3423",
     "expression": "command.bind('<Return>', _on_command_return_inner)",
     "callbacks": {}
   },
   {
     "file": "src/ui/serial_terminal.py",
-    "file_code_sha256": "3d0853ff87c3833aaecd7ddac34d934195f1fcd73629ec96f91c2640ec31b90d",
+    "file_code_sha256": "bb34c31daceb6ddf5488c9da513ff65d4bacda389ef97327026db7a0340c2ae2",
     "action": "28fd50eb03928417da4fdad0480fc0b614e3c03713eeb46854088bec75e1da47",
     "expression": "ttk.Button(bottom, text='回车', command=lambda v=normalized: self.send(v, force_enter=True))",
     "callbacks": {
@@ -2757,23 +3033,23 @@
   },
   {
     "file": "src/ui/serial_terminal.py",
-    "file_code_sha256": "3d0853ff87c3833aaecd7ddac34d934195f1fcd73629ec96f91c2640ec31b90d",
+    "file_code_sha256": "bb34c31daceb6ddf5488c9da513ff65d4bacda389ef97327026db7a0340c2ae2",
     "action": "5bbe05f7b4ff1e1da21e480e4974322d8a39e7913519797240b59bdfde5def8b",
     "expression": "ttk.Scrollbar(display, orient='vertical', command=output.yview)",
     "callbacks": {}
   },
   {
     "file": "src/ui/serial_terminal.py",
-    "file_code_sha256": "3d0853ff87c3833aaecd7ddac34d934195f1fcd73629ec96f91c2640ec31b90d",
+    "file_code_sha256": "bb34c31daceb6ddf5488c9da513ff65d4bacda389ef97327026db7a0340c2ae2",
     "action": "7b3c8e990b7b69e9e7725766af79f6d3058fd1ea3777ee31eed893428bcf4135",
     "expression": "ttk.Button(path_bar, text='浏览…', command=self._choose_log_dir)",
     "callbacks": {
-      "_choose_log_dir": "be96e8227ac9228ad24c3b7f107362aeeb387e413edc8c3ac43027545b977007"
+      "_choose_log_dir": "0f5ba5e104c46c583f5fb357f20ddbebb9e1ee0672a8aad0f1c6e1d68d9c556e"
     }
   },
   {
     "file": "src/ui/serial_terminal.py",
-    "file_code_sha256": "3d0853ff87c3833aaecd7ddac34d934195f1fcd73629ec96f91c2640ec31b90d",
+    "file_code_sha256": "bb34c31daceb6ddf5488c9da513ff65d4bacda389ef97327026db7a0340c2ae2",
     "action": "7c55f19531aca1c23e8bab0b7609f525e2a8470e0740d545459b1d6840238e3c",
     "expression": "ttk.Button(toolbar, text='停止全部', command=self.stop_all)",
     "callbacks": {
@@ -2782,7 +3058,7 @@
   },
   {
     "file": "src/ui/serial_terminal.py",
-    "file_code_sha256": "3d0853ff87c3833aaecd7ddac34d934195f1fcd73629ec96f91c2640ec31b90d",
+    "file_code_sha256": "bb34c31daceb6ddf5488c9da513ff65d4bacda389ef97327026db7a0340c2ae2",
     "action": "b560fc87e46eb4a276dbe4ff82843175755d73d210c0b9a7937b65201eb17b07",
     "expression": "ttk.Button(toolbar, text='打开全部', command=self.open_all)",
     "callbacks": {
@@ -2791,7 +3067,7 @@
   },
   {
     "file": "src/ui/serial_terminal.py",
-    "file_code_sha256": "3d0853ff87c3833aaecd7ddac34d934195f1fcd73629ec96f91c2640ec31b90d",
+    "file_code_sha256": "bb34c31daceb6ddf5488c9da513ff65d4bacda389ef97327026db7a0340c2ae2",
     "action": "b8cfd6857ca8216a803dcc670af5e18d69abb4e443eb3fcdfeb6b8911b9933fe",
     "expression": "ttk.Button(path_bar, text='打开文件夹', command=self._open_log_dir)",
     "callbacks": {
@@ -2800,7 +3076,7 @@
   },
   {
     "file": "src/ui/serial_terminal.py",
-    "file_code_sha256": "3d0853ff87c3833aaecd7ddac34d934195f1fcd73629ec96f91c2640ec31b90d",
+    "file_code_sha256": "bb34c31daceb6ddf5488c9da513ff65d4bacda389ef97327026db7a0340c2ae2",
     "action": "bbc2e996b8116f8fb898d3f04ef1d2e748dcd6162a9a525bade5c916e9780216",
     "expression": "ttk.Button(bottom, text='清屏', command=lambda o=output: self.clear(o))",
     "callbacks": {
@@ -2809,7 +3085,7 @@
   },
   {
     "file": "src/ui/serial_terminal.py",
-    "file_code_sha256": "3d0853ff87c3833aaecd7ddac34d934195f1fcd73629ec96f91c2640ec31b90d",
+    "file_code_sha256": "bb34c31daceb6ddf5488c9da513ff65d4bacda389ef97327026db7a0340c2ae2",
     "action": "ec44abd922986e7c177256a4fbb04ff6b157fd34b515f348cb925b8bf0f90f8e",
     "expression": "self.notebook.bind('<<NotebookTabChanged>>', self._on_tab_changed)",
     "callbacks": {
@@ -2818,16 +3094,16 @@
   },
   {
     "file": "src/ui/test_item_pretest_controls.py",
-    "file_code_sha256": "9ba519117e91df57a2f0875c329c844b4ab9440b92044655f4412236157974d9",
+    "file_code_sha256": "be5397f35c9391689abeeed51048688239a38834f9ee5efd2082d01f2210aa5c",
     "action": "72409109e03bde20bc78b94400cd8538f8b62ac446554520e7543d589e097be4",
     "expression": "ttk.Button(self.frame, text='执行全部命令（预备测试）', command=self.start, style='Primary.TButton')",
     "callbacks": {
-      "start": "533e649ddf7bda6cdeb197d2f853464d2d20ded965a586f3dda195b6af648363"
+      "start": "22d82a9214cbe646897cd5149fb563532c1e41333f8c7eb7ee5f346b1aa0136f"
     }
   },
   {
     "file": "src/ui/test_item_pretest_controls.py",
-    "file_code_sha256": "9ba519117e91df57a2f0875c329c844b4ab9440b92044655f4412236157974d9",
+    "file_code_sha256": "be5397f35c9391689abeeed51048688239a38834f9ee5efd2082d01f2210aa5c",
     "action": "fb6f78cbcabc038b1e05896978d2eca2d80acf659a8cb87c9e0a0aeb85039806",
     "expression": "ttk.Button(self.frame, text='停止执行', command=self.stop, state='disabled', style='Secondary.TButton')",
     "callbacks": {
@@ -2839,6 +3115,13 @@
     "file_code_sha256": "c727d1ef6ee821187d72d7d94716c7f591c0f66c9ec67f7589a8d1bea3ed5644",
     "action": "a9ee46e7653ad45821d713b4b08580321704673524bf1877866202666d211fac",
     "expression": "variable.trace_add('write', update)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/window_paint.py",
+    "file_code_sha256": "145d1b7b31b982e06d2858eb4df1240c2f9367c40cb16449a950281d37b75f91",
+    "action": "7cf97d0369b93ee03c8cdacb5de137acf1ba9d332ed2d9ccf92f103dce2e6d96",
+    "expression": "window.bind('<Destroy>', cancel_refreshes, add='+')",
     "callbacks": {}
   }
 ]

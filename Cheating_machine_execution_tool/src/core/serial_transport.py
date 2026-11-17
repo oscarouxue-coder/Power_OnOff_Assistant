@@ -308,12 +308,17 @@ class PySerialSession:
 
 
 class SerialSessionManager:
-    def __init__(self) -> None:
+    def __init__(self, *, resource_coordinator=None, project_id='', project_name='') -> None:
         self._lock = threading.RLock()
         self._sessions: dict[str, PySerialSession] = {}
         self._owners: dict[str, set[str]] = defaultdict(set)
         self._controllers: dict[str, str] = {}
         self._closing: dict[str, SerialCloseTicket] = {}
+        self._resource_coordinator = resource_coordinator
+        self._project_id, self._project_name = project_id, project_name
+
+    def _workspace_owner(self, port):
+        return 'serial-session:' + self._project_id + ':' + port
 
     def acquire_monitor(self, owner: str, settings: SerialSettings, log_path: Path | None = None) -> PySerialSession:
         return self._acquire(owner, settings, log_path, control=False)
@@ -331,8 +336,16 @@ class SerialSessionManager:
                 raise RuntimeError(f"串口 {port} 正被升级流程占用")
             session = self._sessions.get(port)
             if session is None:
-                session = PySerialSession(settings, log_path)
-                session.open()
+                coordinator = self._resource_coordinator
+                if coordinator is not None:
+                    coordinator.acquire(self._workspace_owner(port), self._project_id, self._project_name, ['serial:' + port])
+                try:
+                    session = PySerialSession(settings, log_path)
+                    session.open()
+                except BaseException:
+                    if coordinator is not None:
+                        coordinator.release(self._workspace_owner(port))
+                    raise
                 self._sessions[port] = session
             self._owners[port].add(owner)
             if control:
@@ -377,6 +390,8 @@ class SerialSessionManager:
                 # state could create a second reader on the physical port.
                 if not ticket.error:
                     self._closing.pop(key, None)
+                if self._resource_coordinator is not None:
+                    self._resource_coordinator.release(self._workspace_owner(key), uncertain=bool(ticket.error))
             ticket.done.set()
 
     def manual_writable(self, port: str) -> bool:

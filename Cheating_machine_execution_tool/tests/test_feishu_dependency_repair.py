@@ -482,15 +482,32 @@ class RestartTests(unittest.TestCase):
         repair = SimpleNamespace(restart_requested=True, arguments=['--gateway-slot', '3'], cwd=str(ROOT))
         app = SimpleNamespace(_feishu_dependency_controller=repair, mainloop=lambda: events.append('mainloop_return'))
         helper = Mock(side_effect=lambda *a, **kw: events.append('helper'))
-        with patch.object(module, 'LineCheckAssistant', return_value=app), patch.object(restart, 'launch_restart_helper', helper):
+        with patch.dict(os.environ, {'LINECHECK_LEGACY_SINGLE_PROJECT': '1'}), patch.object(module, 'LineCheckAssistant', return_value=app), patch.object(restart, 'launch_restart_helper', helper):
             module.main()
         self.assertEqual(events, ['mainloop_return', 'helper'])
         helper.assert_called_once_with(module.APP_DIR, repair.arguments, cwd=repair.cwd)
         repair.restart_requested = False
         helper.reset_mock()
-        with patch.object(module, 'LineCheckAssistant', return_value=app), patch.object(restart, 'launch_restart_helper', helper):
+        with patch.dict(os.environ, {'LINECHECK_LEGACY_SINGLE_PROJECT': '1'}), patch.object(module, 'LineCheckAssistant', return_value=app), patch.object(restart, 'launch_restart_helper', helper):
             module.main()
         helper.assert_not_called()
+
+    def test_workspace_handoff_runs_after_mainloop_and_closes_single_instance(self):
+        import line_check_assistant.app as module
+        events = []
+        repair = SimpleNamespace(restart_requested=True, arguments=['project.linecheck.json'], cwd=str(ROOT))
+        workspace = SimpleNamespace(_feishu_dependency_controller=repair, mainloop=lambda: events.append('mainloop_return'))
+        instance = Mock()
+        instance.start.return_value = True
+        helper = Mock(side_effect=lambda *a, **kw: events.append('helper'))
+        with patch.dict(os.environ, {'LINECHECK_LEGACY_SINGLE_PROJECT': '0'}), \
+                patch('src.core.workspace_instance.WorkspaceInstance', return_value=instance), \
+                patch('src.ui.project_workspace.ProjectWorkspace', return_value=workspace), \
+                patch.object(restart, 'launch_restart_helper', helper):
+            module.main()
+        self.assertEqual(events, ['mainloop_return', 'helper'])
+        helper.assert_called_once_with(module.APP_DIR, repair.arguments, cwd=repair.cwd)
+        instance.close.assert_called_once()
 
     def test_helper_preserves_interpreter_cwd_and_business_args_without_debugger(self):
         with tempfile.TemporaryDirectory(prefix='中文 path ') as folder:

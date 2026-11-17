@@ -1,5 +1,6 @@
 """网卡名称修改的确认、输入和后台任务窗口。"""
 from __future__ import annotations
+from src.services.project_execution import project_operation
 
 import queue
 import threading
@@ -36,6 +37,7 @@ def offer_adapter_rename(parent, *, section, old_name, is_busy, on_success, log)
 
 class AdapterRenameDialog:
     def __init__(self, parent, *, old_name, is_busy, on_success, log, service=None):
+        self.project_view = parent
         self.parent = parent
         self.old_name = old_name
         self.is_busy = is_busy
@@ -73,6 +75,7 @@ class AdapterRenameDialog:
         self.window.grab_set()
         self.entry.focus_set()
 
+    @project_operation
     def submit(self):
         if self.running or self.uncertain:
             return

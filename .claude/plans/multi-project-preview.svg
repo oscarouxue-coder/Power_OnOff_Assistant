@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800">
+<rect width="1280" height="800" fill="#eef2f5"/>
+<g font-family="Microsoft YaHei UI,Segoe UI,sans-serif" fill="#17202a">
+<rect x="0" y="0" width="1280" height="48" fill="#fff"/>
+<text x="22" y="31" font-size="18" font-weight="bold">LineCheckAssistant · 多项目工作区</text>
+<text x="905" y="30" font-size="14">项目 ▾　　保存　　AI / 远程接入　　更新</text>
+<rect x="16" y="64" width="230" height="720" rx="9" fill="#fff"/>
+<text x="34" y="98" font-size="17" font-weight="bold">项目</text><text x="177" y="98" font-size="14" fill="#2563eb">＋ 新建</text>
+<rect x="26" y="118" width="210" height="84" rx="7" fill="#e8efff"/>
+<text x="42" y="147" font-size="16" font-weight="bold">光猫 A · 稳定性测试</text>
+<circle cx="47" cy="177" r="4" fill="#0f766e"/><text x="60" y="182" font-size="13">运行中 · 4 个通道</text>
+<text x="42" y="239" font-size="16">路由器 B · 升级验证</text>
+<circle cx="47" cy="268" r="4" fill="#2563eb"/><text x="60" y="273" font-size="13">升级中 · 2 台</text>
+<text x="42" y="330" font-size="16">光猫 C · 环境准备 *</text>
+<text x="42" y="362" font-size="13" fill="#52606d">空闲 · 有未保存修改</text>
+<text x="34" y="753" font-size="13" fill="#2563eb">打开已有项目…　最近 ▾</text>
+<rect x="262" y="64" width="1002" height="80" rx="9" fill="#fff"/>
+<text x="282" y="96" font-size="19" font-weight="bold">光猫 A · 稳定性测试</text>
+<text x="282" y="124" font-size="13" fill="#52606d">检查并执行测试　 自动上/下电　 样机升级　 写样机参数　 ONU注册　 串口日志　 DUT配置　 测试项配置</text>
+<rect x="262" y="160" width="270" height="624" rx="9" fill="#fff"/>
+<text x="284" y="194" font-size="16" font-weight="bold">选择测试通道</text>
+<g font-size="14"><text x="284" y="240">☑ 通道 1　VLAN101　COM1</text><text x="284" y="284">☑ 通道 2　VLAN102　COM2</text><text x="284" y="328">☑ 通道 3　VLAN103　COM3</text><text x="284" y="372">☑ 通道 4　VLAN104　COM4</text></g>
+<rect x="548" y="160" width="716" height="196" rx="9" fill="#fff"/>
+<text x="570" y="194" font-size="16" font-weight="bold">当前项目运行状态</text>
+<text x="570" y="232" font-size="14" fill="#0f766e">运行中　　第 36 / 100 轮</text>
+<rect x="570" y="251" width="580" height="8" rx="4" fill="#e2e8f0"/><rect x="570" y="251" width="209" height="8" rx="4" fill="#2563eb"/>
+<text x="570" y="299" font-size="14">通道 1　通过　　通道 2　通过　　通道 3　执行中　　通道 4　等待</text>
+<text x="1142" y="333" font-size="14" fill="#b91c1c">停止本项目</text>
+<rect x="548" y="372" width="716" height="412" rx="9" fill="#fff"/>
+<text x="570" y="408" font-size="16" font-weight="bold">执行日志</text>
+<g font-size="13" fill="#52606d"><text x="570" y="451">10:02:08　[光猫 A] 已启动开关机测试，配置版本已固定</text><text x="570" y="485">10:02:09　[光猫 A] 通道 1 · 第 36 轮开始</text><text x="570" y="519">10:02:10　[光猫 A] 通道 2 · 第 36 轮开始</text><text x="570" y="553">10:03:21　[光猫 A] 通道 1 · 检测通过</text></g>
+</g></svg>

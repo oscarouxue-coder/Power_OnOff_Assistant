@@ -55,7 +55,11 @@ def send_feishu_notification(values, project_name, message, normal_flag=0, *, lo
     log('[消息推送] 正式发送成功（飞书已接受）。')
 
 
+from src.models.project_task import ScopedConfigPath
+
+
 class MessagePushConfigService:
+    config_path = ScopedConfigPath()
     def __init__(self, config_path: Path):
         self.config_path = config_path
 

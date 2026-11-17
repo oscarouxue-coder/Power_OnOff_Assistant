@@ -14,8 +14,10 @@ from src.ui.ai_monitor_status import monitor_presentation
 class AiAssistantController:
     def __init__(self, master, terminal, manager, targets, busy, forbidden_port, emit, manual_path,
                  background="#eef2f5", foreground="#17202a", context=None, shared_busy=None,
-                 on_monitor_status=None, app_dir=None, project_config_path=None, remote_tab_factory=None, host_busy=None):
+                 on_monitor_status=None, app_dir=None, project_config_path=None, remote_tab_factory=None, host_busy=None,
+                 workspace=None, project_context=None):
         self.master = master
+        self.workspace, self.project_context = workspace, project_context
         self.on_monitor_status = on_monitor_status
         self.monitor_snapshot = None
         self.targets_provider = targets
@@ -25,7 +27,9 @@ class AiAssistantController:
         self.gateway_runtime = None
         self.gateway_requested = False
         self.gateway_startup_error = False
-        if app_dir is not None:
+        if workspace is not None:
+            self.gateway_requested = workspace.gateway_slot is not None or bool(workspace.gateway_error)
+        if app_dir is not None and workspace is None:
             from src.services.remote_instance_management import selected_gateway_slot
             try:
                 gateway_slot = selected_gateway_slot(app_dir)
@@ -47,6 +51,9 @@ class AiAssistantController:
             from src.services.ai_store import DiagnosticStore
             remote_config = RemoteConfigStore(app_dir)
             feishu_config = FeishuConfigStore(app_dir)
+            if workspace is not None:
+                remote_config = workspace.platform_config('dingtalk', project_context)
+                feishu_config = workspace.platform_config('feishu', project_context)
             try:
                 remote_values = remote_config.load()
             except ValueError:
@@ -55,7 +62,9 @@ class AiAssistantController:
                 feishu_values = feishu_config.load()
             except ValueError:
                 emit("[飞书接入] 配置读取失败，该平台未启动（凭据省略）")
-            if self.gateway_runtime is not None:
+            if workspace is not None:
+                store = workspace.ai_store(project_context)
+            elif self.gateway_runtime is not None:
                 store = self.gateway_runtime.open_store(app_dir, emit)
             elif not self.gateway_requested and ((remote_values and remote_values["isolated"]) or (feishu_values and feishu_values["isolated"])
                     or ((remote_config.path.exists() or feishu_config.path.exists())
@@ -72,6 +81,12 @@ class AiAssistantController:
         self.bridge.dispatcher.handlers['target_current'] = lambda request: request.args[0] in tuple(targets())
         self.service = AiDiagnosticService(emit, client.acquire, client.read,
                                            client.busy, manual_path=manual_path, store=store)
+        if workspace is not None:
+            from functools import partial
+            from src.services.project_diagnostic_transport import ProjectDiagnosticTransport
+            self.service.tool_factory = partial(self.service.tool_factory, transport_factory=partial(
+                ProjectDiagnosticTransport, resources=workspace.resources, project_context=project_context,
+                recovery_store=store))
         self.service.serial_status = client.serial_status
         self.service.target_current = client.target_current
         self.service.shared_busy = client.shared_busy if shared_busy else client.busy
@@ -97,7 +112,8 @@ class AiAssistantController:
             self.capabilities = CapabilityService(business_directory, manager,
                 data.snapshot, data.admissible, lambda requests: inspect_upgrade_network(requests, emit), emit,
                 released=data.released, tool_root=app_dir, onu_configuration=data.onu_snapshot, channel_commit=data.commit_channels,
-                settings_commit=data.commit_settings)
+                settings_commit=data.commit_settings,
+                resource_coordinator=workspace.resources if workspace else None, project_context=project_context)
             self.capabilities.maintenance = maintenance
             self.capability_bridge.channel_configuration = getattr(self.capabilities, 'channel_configuration', None)
             self.capability_bridge.settings_configuration = getattr(self.capabilities, 'settings', None)
@@ -111,7 +127,9 @@ class AiAssistantController:
         elif app_dir is not None and os.environ.get('LINECHECK_DISABLE_CAPABILITIES') == '1':
             emit('[能力目录] 已按本机启动配置停用业务Agent接入；原GUI入口保持')
         self.instance_management = None
-        if app_dir is not None:
+        if workspace is not None:
+            self.instance_management = workspace.management()
+        if app_dir is not None and workspace is None:
             from src.services.remote_instance_management import RemoteInstanceManagement
             self.instance_management = RemoteInstanceManagement(app_dir, runtime=lambda: self.gateway_runtime,
                 registry=lambda: getattr(getattr(self, 'capabilities', None), 'registry', None), emit=emit, maintenance=maintenance)
@@ -128,10 +146,17 @@ class AiAssistantController:
         if self.gateway_runtime is not None:
             self.gateway_runtime.attach(self.conversation, project_config_path)
         if store is not None and project_config_path is not None and not self.gateway_requested:
+            remote_options, feishu_options = {}, {}
+            if workspace is not None:
+                from src.services.workspace_platforms import PooledLease
+                remote_options = dict(transport_factory=workspace.platforms['dingtalk'].factory(project_context.identity.project_id),
+                                      lease_factory=PooledLease)
+                feishu_options = dict(transport_factory=workspace.platforms['feishu'].factory(project_context.identity.project_id),
+                                      lease_factory=PooledLease)
             from src.services.dingtalk_remote_service import DingTalkRemoteService
             if remote_values is not None:
                 try:
-                    self.remote = DingTalkRemoteService(self.conversation, remote_config, project_config_path, project_guarded=True)
+                    self.remote = DingTalkRemoteService(self.conversation, remote_config, project_config_path, project_guarded=True, **remote_options)
                 except Exception:
                     self.service.emit("[钉钉接入] 服务初始化失败，该平台未启动（凭据省略）")
             if self.remote is not None and self.remote.config["enabled"]:
@@ -143,7 +168,7 @@ class AiAssistantController:
                 from src.services.feishu_remote_service import FeishuRemoteService
                 try:
                     self.feishu_remote = FeishuRemoteService(self.conversation, feishu_config, project_config_path,
-                                                             project_guarded=True)
+                        project_guarded=True, **feishu_options)
                 except Exception:
                     self.service.emit("[飞书接入] 服务初始化失败，该平台未启动（凭据省略）")
                 if self.feishu_remote is not None and self.feishu_remote.config["enabled"]:
@@ -155,6 +180,8 @@ class AiAssistantController:
             for remote in (self.remote, self.feishu_remote):
                 if remote is not None:
                     remote.direct_admission = self.instance_management.host.ensure_direct_available
+        if workspace is not None:
+            workspace.register_controller(self, project_context)
         self.after_id = master.after(50, self._poll)
 
     def _multi_instance_panel(self, parent):
@@ -220,6 +247,8 @@ class AiAssistantController:
     def prepare_app_close(self):
         if self.closed:
             return True
+        if vars(self).get("workspace") is not None and not self.workspace.prepare_project_close(self.project_context):
+            return False
         capabilities = getattr(self, "capabilities", None)
         if capabilities is not None:
             capabilities.jobs.begin_close()
@@ -227,7 +256,7 @@ class AiAssistantController:
                 return False
         if not self.closing:
             self.closing = True
-            if getattr(self, 'instance_management', None) is not None:
+            if getattr(self, 'instance_management', None) is not None and vars(self).get("workspace") is None:
                 self.instance_management.begin_close()
             if getattr(self, "gateway_runtime", None) is not None:
                 self.gateway_runtime.begin_close()
@@ -247,7 +276,7 @@ class AiAssistantController:
             return False
         if getattr(self, "gateway_runtime", None) is not None and not self.gateway_runtime.idle:
             return False
-        if getattr(self, 'instance_management', None) is not None and not self.instance_management.idle:
+        if getattr(self, 'instance_management', None) is not None and vars(self).get("workspace") is None and not self.instance_management.idle:
             return False
         self.closed = True
         if capabilities is not None:
@@ -272,6 +301,8 @@ class AiAssistantController:
             self.feishu_remote.close()
         if getattr(self, "gateway_runtime", None) is not None:
             self.gateway_runtime.close()
+        if vars(self).get("workspace") is not None:
+            self.workspace.detach_controller(self.project_context)
         self.service.store.close()
         if self.project_lease is not None:
             self.project_lease.close()

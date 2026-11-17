@@ -8,6 +8,9 @@ from src.services.ai_store import DiagnosticStore, default_ai_data_dir
 
 
 def project_directory(app_dir):
+    root = Path(app_dir).resolve()
+    if root.name == "draft" and (root.parent / "project.linecheck.json").is_file():
+        return root.parent / "history" / "ai"
     identity = os.path.normcase(str(Path(app_dir).resolve()))
     key = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:32]
     return default_ai_data_dir().parent / "projects" / key

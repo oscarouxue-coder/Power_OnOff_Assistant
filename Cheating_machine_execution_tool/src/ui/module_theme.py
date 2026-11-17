@@ -12,6 +12,15 @@ def apply_module_theme(window, background=MODULE_BACKGROUND):
     """构造完成后调用；后续映射的动态控件也使用同一背景。"""
     if not isinstance(window, tk.Misc):
         return  # 兼容只测试窗口编排的最小替身。
+    if isinstance(window, tk.Toplevel):
+        parent = window.master
+        while parent is not None:
+            context = vars(parent).get('project_context')
+            if context is not None:
+                base = vars(window).setdefault('_project_title_base', window.title())
+                window.title(base + ' · ' + context.identity.name)
+                break
+            parent = vars(parent).get('master')
     style = ttk.Style(window)
 
     def apply(widget):

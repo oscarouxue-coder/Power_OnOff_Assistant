@@ -1,5 +1,92 @@
 # 开发记录
 
+## 2026-11-17 - 提交单实例多项目管理改造
+
+- 类型：状态更新
+- 背景：负责人要求将本轮单实例多项目改造提交一次本地Git，并已确认提交计划及中文备注。
+- 完成内容：核对当前main分支的63份改动文件，涵盖多项目工作区、运行隔离、统一模型/平台、资源保护、回归测试、能力清单、计划与文档；暂存范围与下方功能条目的完整文件清单一致。提交标题为“实现单实例多项目管理与项目运行隔离”，正文说明项目操作、独立运行边界、统一接入及兼容与文档。仅本地提交，不推送、不打包。
+- 修改文件：
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+  - 本轮其它61份源码、测试、计划及文档保持原内容；完整63文件清单见下方“实现单实例多项目工作区与独立运行边界”条目和实际提交文件清单。
+- 验证方法：核对暂存区与已授权63文件清单、受保护目录及旧配置未改动，运行`git diff --check`和`git diff --cached --check`；`git commit`通过既有`.githooks/pre-commit`调用`scripts/run_git_pre_commit.ps1`，以经校验的CPython3.9.10 x64在主源码目录实际执行`python scripts/verify_baseline.py`。完成后核对提交哈希、标题/正文、文件数、工作区及与origin/main关系。
+- 验证结果：提交准备阶段清单和差异检查通过。上一轮冻结完整基线为2884项测试、196项指定回归、262文件编译/258源码登记、能力覆盖与协议不变量通过；本次提交继续由既有钩子重新执行完整门禁，任一失败阻断，最终本轮结果以实际钩子输出和Git提交结果为准，不用上一轮结果替代。
+- 后续待办：Windows可见交互、真实模型/平台及DUT仍按ACCEPTANCE_BASELINE.md §2.18/§3复验。窗口工具本轮规划检查两次均报`native pipe is unavailable (os error 2)`，未取得新的可见交互证据；未新增源码验收入口或修改设备功能。本次不更新EXE，不扩大验收标签。
+
+## 2026-11-17 - 实现单实例多项目工作区与独立运行边界
+
+- 类型：功能
+- 背景：负责人已确认单窗口管理全部项目、独立项目目录、全业务隔离、统一模型/平台、显式保存和恢复草稿及首轮4项目并行方案；界面预览后要求项目侧栏可收起，并要求继续实施。计划及回退边界见`.claude/plans/single-instance-multi-project.md`。
+- 完成内容：①新增稳定UUID项目格式、项目写锁、原子版本提交、恢复草稿、最近项目、改名/复制/旧配置导入，原目录保留；参数表迁入项目，固件保留外部引用。②单个Tk根窗口装配独立项目Frame，侧栏可收起，切换不销毁视图或停止任务，关闭保留原安全停止与取消语义；回调/窗口生命周期归属项目。③草稿/保存版本/任务快照分离，旧引擎子进程在独立任务目录运行，不更改主进程工作目录；运行期间保存不替换已准入配置。④串口、电源、网卡别名/GUID、OLT、WiFi主机及传输端点在项目间协调，并复用原跨进程锁与持久未知保护；已结束资源单独释放，保留其它运行资源。原AI底层诊断也受相同保护，断连或临时恢复未完成需核实，不自动重放。⑤模型账户统一加密保存，项目选择/会话/权限/Job隔离；钉钉/飞书共用连接、明确选择项目，本机设置允许范围，旧审批与回复仍属原项目；网关保留原签名协议/实例身份。⑥Windows认证管道转交重复启动请求，保留旧单项目入口；共享SDK维护等待全部项目空闲。⑦补齐能力清单和编译登记，新增项目/资源/平台/网关/进程通信与离屏真实Tk测试；同步使用、验收及项目导航文档。继续便携ZIP，本轮无安装程序、依赖或工具链调整。
+- 修改文件：
+  - `.claude/plans/multi-project-preview.svg`
+  - `.claude/plans/single-instance-multi-project.md`
+  - `.claude/skills/line-check-dev/SKILL.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `AGENTS.md`
+  - `CAPABILITY_COVERAGE.md`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/config_store.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/legacy_ui_defaults_store.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/onu_registration_store.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/sample_upgrade_settings_store.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/test_item_config_store.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `Cheating_machine_execution_tool/run_line_check_assistant.py`
+  - `Cheating_machine_execution_tool/scripts/capability_gui_actions.json`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/scripts/verify_capability_coverage.py`
+  - `Cheating_machine_execution_tool/src/core/serial_transport.py`
+  - `Cheating_machine_execution_tool/src/core/workspace_instance.py`
+  - `Cheating_machine_execution_tool/src/models/project.py`
+  - `Cheating_machine_execution_tool/src/models/project_task.py`
+  - `Cheating_machine_execution_tool/src/services/ai_project_store.py`
+  - `Cheating_machine_execution_tool/src/services/capability_catalog.py`
+  - `Cheating_machine_execution_tool/src/services/capability_channel_service.py`
+  - `Cheating_machine_execution_tool/src/services/capability_device_services.py`
+  - `Cheating_machine_execution_tool/src/services/capability_jobs.py`
+  - `Cheating_machine_execution_tool/src/services/capability_service.py`
+  - `Cheating_machine_execution_tool/src/services/dingtalk_remote_service.py`
+  - `Cheating_machine_execution_tool/src/services/feishu_remote_service.py`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/src/services/message_push_config_service.py`
+  - `Cheating_machine_execution_tool/src/services/project_ai_store.py`
+  - `Cheating_machine_execution_tool/src/services/project_diagnostic_transport.py`
+  - `Cheating_machine_execution_tool/src/services/project_execution.py`
+  - `Cheating_machine_execution_tool/src/services/project_store.py`
+  - `Cheating_machine_execution_tool/src/services/remote_instance_service.py`
+  - `Cheating_machine_execution_tool/src/services/resource_lease_service.py`
+  - `Cheating_machine_execution_tool/src/services/workspace_gateway.py`
+  - `Cheating_machine_execution_tool/src/services/workspace_platforms.py`
+  - `Cheating_machine_execution_tool/src/services/workspace_resources.py`
+  - `Cheating_machine_execution_tool/src/services/workspace_service.py`
+  - `Cheating_machine_execution_tool/src/ui/adapter_rename_dialog.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/capability_ui_bridge.py`
+  - `Cheating_machine_execution_tool/src/ui/feishu_dependency_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/module_theme.py`
+  - `Cheating_machine_execution_tool/src/ui/project_dialogs.py`
+  - `Cheating_machine_execution_tool/src/ui/project_editor_recovery.py`
+  - `Cheating_machine_execution_tool/src/ui/project_view_frame.py`
+  - `Cheating_machine_execution_tool/src/ui/project_workspace.py`
+  - `Cheating_machine_execution_tool/src/ui/serial_terminal.py`
+  - `Cheating_machine_execution_tool/src/ui/test_item_pretest_controls.py`
+  - `Cheating_machine_execution_tool/src/ui/window_paint.py`
+  - `Cheating_machine_execution_tool/tests/test_feishu_dependency_repair.py`
+  - `Cheating_machine_execution_tool/tests/test_project_management.py`
+  - `Cheating_machine_execution_tool/tests/test_project_workspace.py`
+  - `Cheating_machine_execution_tool/tests/test_workspace_gateway.py`
+  - `Cheating_machine_execution_tool/tests/test_workspace_instance.py`
+  - `Cheating_machine_execution_tool/tests/test_workspace_platforms.py`
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+  - `README.md`
+- 验证方法：使用仓库外既有CPython3.9.10 x64构建虚拟环境，将TEMP/TMP/TMPDIR规范为长路径；在主源码目录运行`PYTHONPATH=tests python -m unittest test_project_management test_project_workspace test_workspace_platforms test_workspace_gateway test_workspace_instance test_capability_devices test_ai_actions test_ai_debug test_ai_resource_guard test_ai_shell_guard -q`、`python scripts/verify_capability_coverage.py --update`、`python scripts/verify_baseline.py`及`git diff --check`。冻结前后对源码、测试、脚本和本机配置逐文件SHA256核对，避免把阶段基线当作最终源码验证。
+- 验证结果：最新相关组合154项、28.698秒全部通过；新增5个专项模块包含48个项目/资源/平台/网关/管道用例，并补充原SDK重启测试。最终冻结完整基线实际输出`ALL CHECKS PASSED`、exit 0：2884项测试、196项指定关键回归、262文件编译、258源码登记、能力覆盖及全部协议不变量通过；454份源码/测试/脚本/本机配置前后SHA256完全一致。日志在`%TEMP%/linecheck_multi_project_frozen_baseline_20261117.log`，冻结清单在同目录`linecheck_multi_project_frozen_snapshot_20261117.json`。收尾能力覆盖复核、63文件开发记录清单核对、受保护目录/旧配置未改动检查和`git diff --check`通过。前一阶段完整基线2880项及196项指定回归通过，但其后增加底层诊断/临时恢复保护与逐资源释放，故以本次冻结结果为准。
+- 开发中定位：首轮完整运行被旧SDK重启测试进入新工作区主循环阻塞，已将原测试显式保持兼容入口，并增加新入口纯Mock重启测试；未执行设备操作。全局Python与短TEMP路径导致既有虚拟环境/工作目录断言不符，改用项目既有环境与规范路径，未安装依赖。专项测试修正了messagebox常量兼容、飞书共享transport的api参数、SimpleNamespace改名元数据与窗口after清理；后续相关组合通过。曾误填不存在的测试模块名，已按实际文件名重跑，最终154项结果使用正确模块。
+- 后续待办：ACCEPTANCE_BASELINE.md §2.18/§3的Windows完整可见交互、4项目真实并发、平台/模型及DUT复验；自动化使用临时目录、Fake/Mock和离屏真实Tk，不替代现场验收。单进程不提供进程崩溃隔离。本轮不提交、不打包、不运行EXE、不连接真实平台/模型/DUT，现有EXE未更新；不改写原设备命令、刷写/停止时序或PASS/FAIL判据。
+
 ## 2026-11-17 - 提交全部AI改动并执行完整门禁
 
 - 类型：状态更新

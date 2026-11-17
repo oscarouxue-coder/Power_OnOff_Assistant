@@ -108,6 +108,9 @@ class ChannelCapabilities:
             if not result.ok:
                 return dict(ok=False, state='unknown' if result.uncertain else 'failed', message=result.message)
             prepared['after']['adapter_options'] = [a.display_name for a in result.adapters]
+            prepared['physical_rename'] = dict(old=prepared['old'], new=prepared['new'],
+                adapters=[dict(alias=adapter.alias, interface_guid=adapter.interface_guid,
+                               status=getattr(adapter, 'status', '')) for adapter in result.adapters])
             try:
                 commit = self.commit_callback(prepared)
                 if isinstance(commit, dict) and commit.get('state') == 'saved_refresh_failed':

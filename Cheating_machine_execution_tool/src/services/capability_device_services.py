@@ -168,6 +168,14 @@ class DeviceCapabilities:
                 resources.append("serial:" + port.upper())
         if snapshot.get('power_serial_port') and identifier.startswith(('power.', 'aging.', 'pipeline.')):
             resources.append('power:' + snapshot['power_serial_port'].upper())
+        if identifier.startswith(('aging.', 'pipeline.')):
+            if identifier == 'aging.resume' and self.latest_aging:
+                session = self.latest_aging[2].power_test_resume_session
+                wifi_enabled = bool(getattr(getattr(session, 'request', None), 'connect_wifi_enable', False))
+            else:
+                wifi_enabled = bool(TestItemConfigStore(self.config_path).load().connect_wifi.enable)
+            if wifi_enabled:
+                resources.append('wifi:host')
         return self.service.jobs.start(identifier, dict(arguments, **(recorded_extra or {}), target_binding=binding), authority, resources,
             lambda context: run(context, snapshot, channels), recheck=recheck,
             risk=self.service.registry.get(identifier).risk)
@@ -196,7 +204,7 @@ class DeviceCapabilities:
             projection = PipelineProjection(context, channels, self.service.manager,
                 snapshot.get("serial_log_dir") or self.service.jobs.directory / "serial")
             config = PipelineContext(projection, channels, SampleUpgradeSettings(**snapshot["upgrade_settings"]),
-                OnuRegistrationConfig(), legacy_tool_root=self.root / "Auto_power_on_off_tool", stop_event=context.stop.event)
+                OnuRegistrationConfig(), legacy_tool_root=getattr(context, 'configuration_root', self.root) / "Auto_power_on_off_tool", stop_event=context.stop.event)
             try:
                 context.event("pipeline", "复用原编排器，保留版本预检/WiFi/停止/测试判据", dispatched=True)
                 results = self.pipeline_factory(config, lambda line: context.event("pipeline", line)).run(set(tasks))

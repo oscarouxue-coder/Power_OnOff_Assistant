@@ -160,6 +160,9 @@ class GatewayAgentBridge:
                     self.inbox.associate(request["request_id"], value, cursor)
                     self.owner.store.update_chat(value, gateway_request_id=request["request_id"])
             text = request["text"]
+            transform = getattr(self, 'project_text', None)
+            if transform is not None:
+                text = transform(text)
             # Chat stop is explicitly distinct from business cancellation.
             if text == "停止":
                 identifier = self.owner.router.current(source)

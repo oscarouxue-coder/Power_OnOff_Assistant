@@ -53,6 +53,22 @@ class CheckResult(NamedTuple):
 #    下全部 .py 为准;新增 .py 后必须手工补到本列表)。
 PY_COMPILE_SCRIPT_FILES: tuple[str, ...] = ('scripts/run_remote_gateway.py', 'scripts/restart_source_after_exit.py', 'scripts/source_environment_guard.py', 'run_line_check_assistant.py')
 PY_COMPILE_FILES: tuple[str, ...] = (
+    "src/core/workspace_instance.py",
+    "src/models/project.py",
+    "src/models/project_task.py",
+    "src/services/project_ai_store.py",
+    "src/services/project_diagnostic_transport.py",
+    "src/services/project_execution.py",
+    "src/services/project_store.py",
+    "src/services/workspace_gateway.py",
+    "src/services/workspace_platforms.py",
+    "src/services/workspace_resources.py",
+    "src/services/workspace_service.py",
+    "src/ui/project_dialogs.py",
+    "src/ui/project_editor_recovery.py",
+    "src/ui/project_view_frame.py",
+    "src/ui/project_workspace.py",
+
     "src/core/ai_reply_cards.py",
     "src/services/ai_reply_stream_service.py",
     "src/core/ai_source_ip.py",

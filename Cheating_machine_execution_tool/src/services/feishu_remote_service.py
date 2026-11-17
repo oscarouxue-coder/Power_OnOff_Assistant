@@ -143,7 +143,7 @@ class FeishuRemoteService:
                 self.transport.begin_close()
         self.emit("已取消群绑定")
 
-    def enable(self, kind, enabled):
+    def enable(self, kind, enabled, *, persist=True):
         if enabled:
             guard = getattr(self, "direct_admission", None)
             if guard is not None:
@@ -166,7 +166,8 @@ class FeishuRemoteService:
                             self.mailbox.route(key, identifier, len(self.store.chat_items(identifier)))
                     except ValueError:
                         pass
-                self.config_store.save(config)
+                if persist:
+                    self.config_store.save(config)
             self.config = config  # 停用先在内存生效，磁盘失败也不能继续调用。
             self.generations[kind] += 1
             self.tokens = {k: v for k, v in self.tokens.items() if v["identity"][2] != kind}
@@ -177,7 +178,8 @@ class FeishuRemoteService:
                 with self.lock:
                     self.config[kind + "_enabled"] = False
                     self.config["enabled"] = self.config["group_enabled"] or self.config["p2p_enabled"]
-                    self.config_store.save(self.config)
+                    if persist:
+                        self.config_store.save(self.config)
                 raise
             self.emit(("群聊" if kind == "group" else "单聊") + "AI排障已启用，新会话默认完全访问；保留手动权限选择")
         else:
@@ -191,7 +193,8 @@ class FeishuRemoteService:
                 self.transport.begin_close()
             self.emit(("群聊" if kind == "group" else "单聊") + "AI排障已停用，等待对应会话清理；原挂测继续")
             try:
-                self.config_store.save(self.config)
+                if persist:
+                    self.config_store.save(self.config)
             except Exception:
                 raise ValueError("本进程已停用，但飞书停用设置保存失败；请修复权限并在重启前重新保存") from None
 

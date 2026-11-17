@@ -74,7 +74,12 @@ class SampleUpgradeSettings:
     boot_entry_method: str = BOOT_ENTRY_LOGIN
 
 
+from src.models.project_task import ScopedConfigPath
+from src.models.project import project_asset_path
+
+
 class SampleUpgradeSettingsStore:
+    config_path = ScopedConfigPath()
     def __init__(self, config_path: Path) -> None:
         self.config_path = config_path
 
@@ -93,7 +98,7 @@ class SampleUpgradeSettingsStore:
             restore_factory=parser.getboolean(SAMPLE_UPGRADE_SECTION, "restore_factory", fallback=False),
             username=parser.get(SAMPLE_UPGRADE_SECTION, "username", fallback=""),
             password=parser.get(SAMPLE_UPGRADE_SECTION, "password", fallback=""),
-            firmware_path=parser.get(SAMPLE_UPGRADE_SECTION, "firmware_path", fallback=""),
+            firmware_path=project_asset_path(self.config_path, parser.get(SAMPLE_UPGRADE_SECTION, "firmware_path", fallback="")),
             parameter_initial_username=parser.get(SAMPLE_UPGRADE_SECTION, "parameter_initial_username", fallback=""),
             parameter_initial_password=parser.get(SAMPLE_UPGRADE_SECTION, "parameter_initial_password", fallback=""),
             parameter_parallel_count=clamp_parameter_parallel_count(
@@ -110,11 +115,11 @@ class SampleUpgradeSettingsStore:
                 "power_operation",
                 fallback="up",
             ),
-            parameter_table_path=parser.get(
+            parameter_table_path=project_asset_path(self.config_path, parser.get(
                 SAMPLE_UPGRADE_SECTION,
                 "parameter_table_path",
                 fallback="",
-            ),
+            )),
         )
 
     def save(self, settings: SampleUpgradeSettings) -> None:
@@ -132,7 +137,7 @@ class SampleUpgradeSettingsStore:
             "restore_factory": "1" if settings.restore_factory else "0",
             "username": settings.username or "",
             "password": settings.password or "",
-            "firmware_path": settings.firmware_path or "",
+            "firmware_path": project_asset_path(self.config_path, settings.firmware_path or "", saving=True),
             "parameter_initial_username": settings.parameter_initial_username or "",
             "parameter_initial_password": settings.parameter_initial_password or "",
             "parameter_parallel_count": str(
@@ -145,7 +150,7 @@ class SampleUpgradeSettingsStore:
             "power_operation": (settings.power_operation or "up").strip().lower()
             if (settings.power_operation or "up").strip().lower() in {"up", "down"}
             else "up",
-            "parameter_table_path": settings.parameter_table_path or "",
+            "parameter_table_path": project_asset_path(self.config_path, settings.parameter_table_path or "", saving=True),
         }
 
         self.config_path.parent.mkdir(parents=True, exist_ok=True)

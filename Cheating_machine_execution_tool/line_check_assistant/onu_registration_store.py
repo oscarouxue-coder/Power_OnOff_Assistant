@@ -57,7 +57,11 @@ class OnuRegistrationConfig:
     c300_allow_offline_cleanup: bool = False
 
 
+from src.models.project_task import ScopedConfigPath
+
+
 class OnuRegistrationStore:
+    config_path = ScopedConfigPath()
     def __init__(self, config_path: Path):
         self.config_path = config_path
 

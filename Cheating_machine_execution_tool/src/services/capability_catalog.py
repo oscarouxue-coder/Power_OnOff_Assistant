@@ -177,4 +177,25 @@ def business_catalog():
             result[-1]['tests'] = ['test_remote_instance_management.py']
         if identifier == "device.version":
             result[-1]['tests'].extend(('test_ai_version_query.py', 'test_ai_multichannel_dispatch.py'))
+    project_actions = (
+        ('projects.list', '查询已打开项目', '_update_menu', 'workspace.projects.list'),
+        ('projects.create', '新建项目', 'new_project', ''),
+        ('projects.open', '打开或切换项目', 'open_project', ''),
+        ('projects.save', '保存项目及页面草稿', 'save_project', ''),
+        ('projects.duplicate', '另存为独立项目', 'duplicate_project', ''),
+        ('projects.rename', '重命名项目', 'rename_project', ''),
+        ('projects.import', '导入旧配置及历史', 'import_project', ''),
+        ('projects.close', '安全关闭项目', 'close_project', ''),
+        ('projects.forget', '从最近列表移除', 'forget_project', ''),
+        ('projects.remote_scope', '本机确认远程项目范围', 'remote_project_range', ''),
+        ('projects.resolve_unknown', '本机核实GUI未知任务', 'resolve_unknown', ''),
+        ('projects.imported_connection', '选择导入的接入配置', 'imported_connection', ''),
+    )
+    for identifier, name, entry, capability in project_actions:
+        result.append(dict(feature_id=identifier, name=name, gui_file='src/ui/project_workspace.py', gui_entry=entry,
+            service='WorkspaceService / ProjectStore', resources=['project', 'configuration'], risk='read' if capability else 'manual',
+            capability_id=capability or 'local_confirmation', status='connected' if capability else 'manual_control',
+            reason='仅local/gui查询项目身份和状态；不切换目标、不扩大权限' if capability else
+                   '涉及本地目录所有权、配置版本、运行生命周期或远程授权，限本机操作员；AI不可模拟GUI或自行确认',
+            tests=['test_project_management.py', 'test_project_workspace.py', 'test_workspace_platforms.py']))
     return result
