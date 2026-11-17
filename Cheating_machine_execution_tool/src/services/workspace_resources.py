@@ -148,6 +148,13 @@ class WorkspaceResources:
             else:
                 self.fence.resolve(owner)
 
+    def unknown_for(self, project_id):
+        with self.lock:
+            return tuple(owner for owner, group, state in self.fence.db.execute(
+                "SELECT owner,group_id,state FROM workspace_owners WHERE state != 'done'")
+                if group.endswith(':' + project_id) and
+                (state == 'unknown' or not group.startswith(self.run_id + ':')))
+
     def unknown_gui(self):
         with self.lock:
             return [(owner, label or owner) for owner, group, state, label in self.fence.db.execute(

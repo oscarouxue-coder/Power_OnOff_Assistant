@@ -311,7 +311,7 @@ class CasePackageTests(unittest.TestCase):
             bundle = root / "portable.zip"
             def write_bundle(content):
                 with zipfile.ZipFile(bundle, "w") as archive:
-                    archive.writestr("LineCheckAssistant_portable/" + SNAPSHOT_NAME, content)
+                    archive.writestr("DUTPilot_portable/" + SNAPSHOT_NAME, content)
             write_bundle(data)
             reader = Mock()
             reader.extract.return_value = data

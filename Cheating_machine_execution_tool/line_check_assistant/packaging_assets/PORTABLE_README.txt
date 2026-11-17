@@ -1,7 +1,7 @@
-LineCheckAssistant 免安装便携版
+DUTPilot 免安装便携版
 ================================
 
-1. 请先完整解压 ZIP，再运行 LineCheckAssistant.exe；不要只复制 EXE。
+1. 请先完整解压 ZIP，再运行 DUTPilot.exe；不要只复制 EXE。
 2. 首次运行建议右键选择“以管理员身份运行”。
 3. 发布包内配置已脱敏，不包含打包电脑的账号、密码、钉钉/远程控制信息、
    固件/参数表路径、网卡、串口或无线网卡绑定。
@@ -12,8 +12,8 @@ LineCheckAssistant 免安装便携版
    - ONU 注册：C300/C600 的 OLT 地址、源 IP、账号、密码、槽位和 PON。
 5. 程序运行日志和后续保存的配置都位于本便携目录，请保持目录可写。
 6. 可在 PowerShell 中执行以下命令核对 EXE 完整性：
-   Get-FileHash .\LineCheckAssistant.exe -Algorithm SHA256
-   结果应与 LineCheckAssistant.exe.sha256.txt 中的值一致。
+   Get-FileHash .\DUTPilot.exe -Algorithm SHA256
+   结果应与 DUTPilot.exe.sha256.txt 中的值一致。
 7. 主界面“检查更新”仅在手动点击后访问 GitHub，发现新版可选择下载完整便携 ZIP。
    下载支持取消，校验通过后可打开所在文件夹，不会自动替换或启动新版。
 8. 手动换版前先结束测试、退出旧程序，备份旧目录及 Auto_power_on_off_tool/config；
@@ -26,6 +26,11 @@ LineCheckAssistant 免安装便携版
    所有项目和模型共用，升级仅补充新案例，本地修订、停用及删除结果优先。
    项目会话/报告和AI配置另存于该用户的LineCheckAssistant数据目录，不在便携目录内；
    备份案例前请退出所有项目并备份整个case_library目录。案例导入失败见主执行日志。
+
+改名说明（2026-11-17）：旧版客户端首次升级到DUTPilot附件需手动下载完整ZIP；
+新版更新客户端兼容新旧附件名，ZIP和SHA256必须同组，缺件或校验失败会报错。
+旧LineCheckAssistant本机数据目录及源码入口继续保留，不自动迁移或清空数据。
+独立项目请备份完整项目目录并在新版通过“打开项目”打开。
 
 重要提示：设备升级、ONU 注册/删除、重启等操作会修改真实设备，执行前请确认
 目标设备、源 IP、端口及维护窗口。

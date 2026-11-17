@@ -56,6 +56,11 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/core/workspace_instance.py",
     "src/models/project.py",
     "src/models/project_task.py",
+    "src/models/project_status.py",
+    "src/services/project_status_service.py",
+    "src/services/project_runtime.py",
+    "src/services/project_import_service.py",
+    "src/ui/project_status_tooltip.py",
     "src/services/project_ai_store.py",
     "src/services/project_diagnostic_transport.py",
     "src/services/project_execution.py",
@@ -319,6 +324,11 @@ PY_COMPILE_FILES: tuple[str, ...] = (
 # 关键已验收行为的回归用例。全量 unittest 必须实际执行这些 ID，避免测试文件或
 # 用例在重构时被静默删除 / 改名而使已验收边界失去保护。
 REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
+    "test_project_completion.StatusAndBackupTests.test_import_has_verified_original_bytes_before_conversion",
+    "test_project_completion.StatusAndBackupTests.test_worker_uses_frozen_config_and_ui_callback_returns_to_draft",
+    "test_multi_project_business_validation.MultiProjectBusinessTests.test_four_projects_execute_every_business_kind_with_isolated_commands_and_results",
+    "test_multi_project_business_validation.MultiProjectBusinessTests.test_stopping_one_real_job_does_not_cancel_or_release_the_other_three",
+    "test_project_completion.CompletionGuiTests.test_gui_unknown_preserves_resource_guard_until_explicit_local_review",
     "test_ui_lifecycle_runtime.MailboxTests.test_consumer_and_producer_never_wait_for_busy_mutex",
     "test_ui_lifecycle_runtime.PipelineRuntimeTests.test_expired_request_never_executes_later",
     "test_ui_lifecycle_runtime.PipelineRuntimeTests.test_actual_upgrade_entry_rejects_cancel_after_confirmation",

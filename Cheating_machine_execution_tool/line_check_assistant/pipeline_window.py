@@ -45,6 +45,7 @@ from src.ui.window_paint import center_toplevel_on_parent
 from src.ui.tk_lifecycle import TkScope
 from src.services.pipeline_runtime import PipelineClient, PipelineLogSink, run_pipeline
 from src.services.project_execution import project_operation
+from src.services.project_runtime import start_project_thread, report_project_result
 
 
 # 窗口入口仅保留三项，编排器原任务代码及其它能力继续兼容。
@@ -393,7 +394,7 @@ class PipelineWindow:
             name="pipeline-orchestrator",
         )
         ui.register(self, run, self._running_thread)
-        self._running_thread.start()
+        start_project_thread(self._running_thread)
         self.window.withdraw()
         self._emit_to_main_log(
             "[全流程] 已开始后台执行，全流程配置窗口已自动隐藏；请在主界面查看状态或停止。"

@@ -1,8 +1,16 @@
-# Power OnOff Assistant
+# DUTPilot
 
-这是面向光猫 / 路由器测试工程师的 Windows 桌面工具仓库。当前主程序为 `LineCheckAssistant`，用于环境线路检查、程控电源、串口日志、样机升级、批量写参、ONU 注册和测试项执行。
+这是面向光猫 / 路由器测试工程师的 Windows 桌面工具仓库。当前主程序为 `DUTPilot`，用于环境线路检查、程控电源、串口日志、样机升级、批量写参、ONU 注册和测试项执行。
+
+## 产品名称与旧版升级
+
+2026-11-17起，产品名称统一为 **DUTPilot**，窗口标题显示名称和版本号。后续标准构建交付`DUTPilot.exe`及`DUTPilot_portable.zip`，发布附件仍仅为完整ZIP和对应`.sha256.txt`。本次仅改源码和构建规则，V1.2.10版本号及现有线上发布保持。
+
+旧版更新客户端无法识别新附件名，首次升级须从现有GitHub Releases页面手动下载完整ZIP；新版客户端兼容新旧附件名。换版前退出程序并备份旧目录、配置及独立项目，完整解压新包，按[操作员说明](Cheating_machine_execution_tool/line_check_assistant_README.md)恢复或导入配置、打开原项目。内部源码入口、`LineCheckAssistant`本机数据目录和构建环境路径继续保留，不批量改名或迁移。
 
 ## 从这里开始
+
+- 多项目主程序验收：在主源码目录执行`python run_line_check_assistant.py`，通过项目菜单新建或打开验收项目。操作及现场记录见[验收清单](Cheating_machine_execution_tool/validation/multi_project_completion_20261117/ACCEPTANCE_CHECKLIST.md)。自动化结果不代替可见Windows或真实设备验收。
 
 - 单实例多项目入口：启动源码后使用可收起项目侧栏或“项目”菜单，新建/打开/保存独立项目；旧目录通过“导入旧配置目录”迁入，操作见主源码操作员说明。兼容回退参数为`--legacy-single-project`。本轮源码改造的验证和待验收边界见`PROJECT_STATUS.md`及`ACCEPTANCE_BASELINE.md §2.18`。
 
@@ -66,7 +74,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1 -CheckOnly
 ```
 
-构建输出包括`LineCheckAssistant.exe`、完整便携ZIP、SHA256、版本/构建说明、第三方声明和`PACKAGING_REPORT.json`。构建后校验实际EXE/PYZ关键模块、原生依赖、Tcl/Tk四份布局、排除项、ZIP CRC和哈希。不要在打包电脑启动新EXE；交付到目标电脑按该版本变更范围复验。**统一入口是PowerShell脚本，不直接调用全局`pyinstaller`或单独执行spec来代替完整流程。**
+构建输出包括`DUTPilot.exe`、完整便携ZIP、SHA256、版本/构建说明、第三方声明和`PACKAGING_REPORT.json`。构建后校验实际EXE/PYZ关键模块、原生依赖、Tcl/Tk四份布局、排除项、ZIP CRC和哈希。不要在打包电脑启动新EXE；交付到目标电脑按该版本变更范围复验。**统一入口是PowerShell脚本，不直接调用全局`pyinstaller`或单独执行spec来代替完整流程。**
 
 ## GitHub 发布附件
 
@@ -74,8 +82,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant
 
 从2026-11-05确认后的下一次构建/发布开始，GitHub Release只上传同一次构建输出的两个文件：
 
-- `LineCheckAssistant_portable.zip`
-- `LineCheckAssistant_portable.zip.sha256.txt`
+- `DUTPilot_portable.zip`
+- `DUTPilot_portable.zip.sha256.txt`
 
 构建脚本完成后会单独列出这两个待上传路径。本地仍保留完整EXE、便携目录、校验文件和构建报告；版本说明、第三方声明及EXE校验文件随ZIP提供，不再作为独立附件上传。公开发布说明统一指引下载完整ZIP及ZIP校验文件，不再提供单独EXE下载说明。
 
@@ -106,7 +114,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant
 
 - 按负责人要求，`Cheating_machine_execution_tool/Auto_power_on_off_tool/config/` 下所有配置与源码文件均纳入 Git 跟踪，包括本机配置；后续新增配置可正常加入跟踪，自动生成的 Python 缓存仍按通用规则忽略。
 - `build/`、`dist/`、日志和测试结果是生成物，不提交 Git。
-- 打包后不得在当前 PC 运行 `dist/LineCheckAssistant.exe`；只确认打包成功并报告输出路径。
+- 打包后不得在当前 PC 运行 `dist/DUTPilot.exe`；只确认打包成功并报告输出路径。
 - 上述配置按负责人要求原样纳入跟踪；其中的 webhook、密码或其他凭据不要额外复制到文档、日志或提交说明；配置模板化与凭据轮换应作为单独任务处理。
 
 中兴C300： 

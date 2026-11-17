@@ -6,7 +6,7 @@ import sys
 
 from src.models.capabilities import CapabilitySpec, CapabilityError, object_schema
 from src.models.app_update import AppUpdateCheckResult, ReleaseAsset, UpdateCheckStatus
-from src.services.app_update_service import AppUpdateService, AppUpdateCancelled
+from src.services.app_update_service import AppUpdateService, AppUpdateCancelled, PORTABLE_ZIP_NAME
 
 
 class UpdateCapabilities:
@@ -46,7 +46,7 @@ class UpdateCapabilities:
             package_asset=ReleaseAsset(**raw['package_asset']) if raw.get('package_asset') else None))
         if not update.update_available:
             raise CapabilityError('no_update', '该检查结果没有可下载的更新包')
-        destination = (self.service.files.workspace / 'updates' / update.latest_version / 'LineCheckAssistant_portable.zip').resolve()
+        destination = (self.service.files.workspace / 'updates' / update.latest_version / PORTABLE_ZIP_NAME).resolve()
         if self.service.files.workspace not in destination.parents:
             raise CapabilityError('workspace_required', '更新输出路径越过受控工作区，未下载')
         def runner(context):

@@ -133,7 +133,7 @@ class MessagePushSendTests(unittest.TestCase):
         self.assertTrue(query['sign'][0])
         self.assertTrue(json.loads(request.data)['at']['isAtAll'])
         self.assertEqual(json.loads(request.data)['text']['content'],
-                         '项目：中文项目\nLineCheckAssistant 消息推送测试：收到此消息表示钉钉机器人推送正常。')
+                         '项目：中文项目\nDUTPilot 消息推送测试：收到此消息表示钉钉机器人推送正常。')
         self.assertEqual(opener.open.call_args.kwargs['timeout'], 10)
         opener.open.assert_called_once()
 

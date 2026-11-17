@@ -94,10 +94,10 @@ def inspect_archive(exe: Path, excluded: list[str]) -> dict:
 
 
 def inspect_portable(exe: Path, portable_zip: Path) -> dict:
-    root = "LineCheckAssistant_portable/"
+    root = "DUTPilot_portable/"
     required = {
         root + name for name in (
-            "LineCheckAssistant.exe", "LineCheckAssistant.exe.sha256.txt",
+            "DUTPilot.exe", "DUTPilot.exe.sha256.txt",
             "VERSION_INFO.txt", "BUILD_INFO.txt", "PORTABLE_README.txt", "THIRD_PARTY_NOTICES.md",
             "CONFIRMED_CASES.json",
         )
@@ -113,9 +113,9 @@ def inspect_portable(exe: Path, portable_zip: Path) -> dict:
         if not required.issubset(bundle.namelist()):
             raise ValueError("Incomplete portable ZIP: " + ", ".join(sorted(required - set(bundle.namelist()))))
         expected = hashlib.sha256(exe.read_bytes()).hexdigest()
-        if hashlib.sha256(bundle.read(root + "LineCheckAssistant.exe")).hexdigest() != expected:
+        if hashlib.sha256(bundle.read(root + "DUTPilot.exe")).hexdigest() != expected:
             raise ValueError("Portable EXE differs from the standalone EXE")
-        if bundle.read(root + "LineCheckAssistant.exe.sha256.txt").decode("ascii").split()[0].lower() != expected:
+        if bundle.read(root + "DUTPilot.exe.sha256.txt").decode("ascii").split()[0].lower() != expected:
             raise ValueError("Portable EXE checksum mismatch")
     actual = hashlib.sha256(portable_zip.read_bytes()).hexdigest()
     if Path(str(portable_zip) + ".sha256.txt").read_text(encoding="ascii").split()[0].lower() != actual:
@@ -134,7 +134,7 @@ def inspect_case_snapshot(exe: Path, portable_zip: Path, snapshot: Path) -> dict
     if archive.extract(SNAPSHOT_NAME) != expected:
         raise ValueError("Embedded case snapshot differs from the build snapshot")
     with zipfile.ZipFile(portable_zip) as bundle:
-        if bundle.read("LineCheckAssistant_portable/" + SNAPSHOT_NAME) != expected:
+        if bundle.read("DUTPilot_portable/" + SNAPSHOT_NAME) != expected:
             raise ValueError("Portable case snapshot differs from the build snapshot")
     return {"case_count": len(payload["cases"]),
             "case_revision_count": sum(len(row["revisions"]) for row in payload["cases"]),

@@ -1,5 +1,154 @@
 # 开发记录
 
+## 2026-11-18 - 提交DUTPilot改名与当前全部改动
+
+- 类型：状态更新
+- 背景：负责人要求提交一次本地Git，并明确选择“提交当前全部改动（包含本机网络配置）”。
+- 完成内容：将当前DUTPilot改名、新旧更新附件兼容、多项目收尾与测试隔离、布局预览及相关源码/测试/计划/验收说明和本机network_card_ip.ini修改纳入同一次本地提交；保留原已验收边界，预览未接入主程序，不将自动化通过升级为Windows或真实设备验收。核对空暂存区、现有.githooks/pre-commit及其标准CPython3.9.10 x64解析入口，保留原钩子且不跳过门禁；修正上一条记录解释器路径中的转义控制字符。本次备注“将工具更名为DUTPilot并完善多项目收尾与布局预览”，保留项目要求的Co-Authored-By。
+- 修改文件：本条新增更新`DEVELOPMENT_LOG.md`、`PROJECT_STATUS.md`；其余为当前全部未忽略改动，文件清单由本次`git show --stat HEAD`提供，详细实现与本轮前置验证见下方各条开发记录。生成目录build/dist/logs/.venv不纳入提交。
+- 验证方法：提交前核对暂存文件、生成目录边界及源码/文档差异；`git commit`通过现有pre-commit进入主源码目录执行`python scripts/verify_baseline.py`，任一失败即阻止提交；提交后核对`git log -1`、`git show --stat HEAD`与`git status -sb`，确认提交内容及剩余改动。
+- 验证结果：暂存69份文件，生成目录未纳入；差异格式检查列出既有network_card_ip.ini四处空值尾随空格和project_validation_fixtures.py一处末尾空行，按全部改动提交范围原样保留，未修改配置含义或测试代码。完整基线由本次提交钩子实际执行，成功提交以钩子`ALL CHECKS PASSED`及最终Git结果为准，失败不提交；具体结果在本次会话输出中报告。下方各开发阶段的“未运行完整基线/未提交”为当时事实，不覆盖本轮提交门禁。
+- 后续待办：Windows源码版改名目视、多项目完整交互以及真实模型/平台/DUT仍按ACCEPTANCE_BASELINE.md §2.15/§2.18/§3复验；版本V1.2.10不变，本轮仅本地提交，不推送、不打包、不运行EXE、不发布或操作设备。
+
+
+## 2026-11-17 - 将产品及交付名称改为DUTPilot
+
+- 类型：修改
+- 背景：负责人确认界面与交付名称一起改为DUTPilot，保留旧数据路径和源码入口；确认下次直接发布新附件名，旧版首次升级手动下载，并要求实施已确认计划。
+- 完成内容：①主窗口标题、项目选择说明、消息推送测试和远程统一接入文案、请求客户端标识统一DUTPilot；Windows应用标识及现有图标保持。②标准构建入口/spec路径不变，后续输出DUTPilot.exe、DUTPilot_portable目录、ZIP和对应校验文件；更新实际归档校验及包内说明，标准工具链/全部门禁保持。spec文件名仍为LineCheckAssistant，因此PyInstaller内部work子目录及BUILD_INFO读取路径保留旧名。③更新客户端优先使用新名称，仅完全未出现两种新附件名时才使用旧ZIP/SHA256组合；缺件、混配、不安全URL或校验错误明确报错且不回退。校验文本必须匹配选中的包名，GUI与受控Capability下载默认采用DUTPilot名称，原结果模型、取消/覆盖确认及不自动运行规则保持，主日志记录实际GET及所选包名。④导航/操作员说明/生效构建发布规则/第三方说明与§2.15/§3验收边界同步，历史发布名称、日期、源码和旧数据路径不改写。⑤能力覆盖审查无新增GUI业务或权限变化，既有updates.check/download继续共享更新service，更新相关说明及GUI摘要快照。
+- 修改文件：
+  - `.claude/plans/dutpilot-rename.md`
+  - `.claude/skills/line-check-dev/SKILL.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `AGENTS.md`
+  - `Cheating_machine_execution_tool/THIRD_PARTY_NOTICES.md`
+  - `Cheating_machine_execution_tool/build_line_check_assistant.ps1`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/PORTABLE_README.txt`
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_assets/VERSION_INFO.txt`
+  - `Cheating_machine_execution_tool/line_check_assistant/packaging_specs/LineCheckAssistant.spec`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `Cheating_machine_execution_tool/run_line_check_assistant.py`
+  - `Cheating_machine_execution_tool/scripts/capability_gui_actions.json`
+  - `Cheating_machine_execution_tool/scripts/create_portable_config.py`
+  - `Cheating_machine_execution_tool/scripts/verify_slim_package.py`
+  - `Cheating_machine_execution_tool/src/core/dingtalk_stream.py`
+  - `Cheating_machine_execution_tool/src/core/github_release_client.py`
+  - `Cheating_machine_execution_tool/src/services/app_update_service.py`
+  - `Cheating_machine_execution_tool/src/services/capability_update_service.py`
+  - `Cheating_machine_execution_tool/src/services/feishu_notifications.py`
+  - `Cheating_machine_execution_tool/src/services/message_push_config_service.py`
+  - `Cheating_machine_execution_tool/src/services/remote_gateway_platforms.py`
+  - `Cheating_machine_execution_tool/src/ui/app_update_dialog.py`
+  - `Cheating_machine_execution_tool/src/ui/project_workspace.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_case_store.py`
+  - `Cheating_machine_execution_tool/tests/test_app.py`
+  - `Cheating_machine_execution_tool/tests/test_app_update.py`
+  - `Cheating_machine_execution_tool/tests/test_app_update_ui.py`
+  - `Cheating_machine_execution_tool/tests/test_application_icon_package.py`
+  - `Cheating_machine_execution_tool/tests/test_capability_application.py`
+  - `Cheating_machine_execution_tool/tests/test_message_push_config.py`
+  - `Cheating_machine_execution_tool/tests/test_portable_release.py`
+  - `Cheating_machine_execution_tool/tests/test_project_workspace.py`
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+  - `README.md`
+- 验证方法：在主源码目录使用现有`%LOCALAPPDATA%\LineCheckAssistant\build-env-py39\Scripts\python.exe`（CPython3.9.10 x64），设置PYTHONUTF8=1及PYTHONPATH为源码目录和tests。①`python -X utf8 -m unittest test_app_update test_app_update_ui test_app test_project_workspace test_portable_release test_application_icon test_application_icon_package test_ai_case_store test_capability_application test_message_push_config test_remote_gateway test_remote_gateway_agent test_capability_coverage -q`；②`python -X utf8 -m unittest test_feishu_remote test_dingtalk_remote -q`；③对22份本轮修改Python执行py_compile，使用PowerShell Parser解析标准构建脚本，执行`python scripts/verify_capability_coverage.py --update`及不带参数复核；④核对本轮改动前快照与主窗口/多项目/更新/构建差异，检查文档链接和本轮文件的`git diff --check`。
+- 验证结果：最终第一组423项、第二组106项，共529项全部通过，无跳过；覆盖新旧名称检查与模拟下载、两组并存优先级、新缺件不回退、混配、HTTPS、校验错、取消/覆盖确认、受控路径以及模拟归档目录/EXE/ZIP哈希及案例快照。22份Python编译、PowerShell语法、能力覆盖均通过。首轮更新专项46项通过；随后374项组合有1项失败，隔离案例库19项通过。定位到`test_project_workspace`在临时Mock上下文中首次导入AiDiagnosticService，使该模块保留临时open_shared_cases绑定；仅将测试依赖导入移到patch前，最终423项组合复跑全绿，未更改生产案例库路径。收尾手动修改生成矩阵说明曾导致可读矩阵一致性失败，已通过原脚本重新生成、保留原能力登记和限制，脚本连续两次复核及3项覆盖回归通过。全工作区差异检查发现先前已修改network_card_ip.ini四处尾随空格，本轮未修改该配置并保留；本轮文件差异检查通过。
+- 后续待办：负责人在Windows源码版确认主窗口/项目选择/更新保存名称；下次正式构建与发布验证DUTPilot实际EXE/PYZ/ZIP/哈希、目标电脑及新旧更新链路。旧版首次手动下载说明已补。完整基线本轮未运行，最近一次完整记录保持；本轮未打包、运行EXE、提交/推送、修改线上Release或操作真实设备/平台。当前已有多项目源码、预览和本机配置改动保持。
+
+
+## 2026-11-17 - 补回布局预览中的运行卡片
+
+- 类型：BUG 修复
+- 背景：负责人指出首版预览遗漏原“3 环境检查与开关机测试”卡片。核对主程序确认卡片一直存在，遗漏仅发生于独立视觉预览，不能将顶部导航视为替代。
+- 完成内容：在配置卡片下方补回运行卡片，包含检查并执行测试、停止测试、运行状态、轮次、进度条及通道概览；所有交互仍只更新预览自身模拟反馈。右侧预览内容增加滚动支持，最小窗口或字体放大时可查看完整运行卡片和日志；重新生成标准图及150%字体模拟下滚动到运行卡片的截图。计划明确保留此卡片，生产源码、能力清单及真实设备逻辑未改。
+- 修改文件：`.claude/plans/workspace-layout-preview.py`、`.claude/plans/workspace-layout-alignment.md`、两张同名预览PNG、`PROJECT_STATUS.md`及本文件。
+- 验证方法：运行预览`--check`、`python -X utf8 -m py_compile .claude/plans/workspace-layout-preview.py`、两次原生窗口`--capture`（150%图使用`--show-run-card`）以及本轮文件`git diff --check`；实际查看两张截图。
+- 验证结果：四组Tk几何检查通过，补充确认卡片顺序、运行标题/状态/进度/两个按钮在滚动视口内完整可达、日志可达、切换项目的模拟状态及停止按钮禁用态；局部编译及差异检查通过。本轮未运行完整基线，不改变既有Windows/DPI/设备验收结论；原完整验证记录保留。
+- 后续待办：负责人确认修订预览后再接入主程序；未运行EXE、操作真实设备或提交打包发布。
+
+## 2026-11-17 - 制作多项目布局真实Tk预览
+
+- 类型：优化
+- 背景：负责人指出现有多项目工作区与已认可效果图差异较大，确认按统一顶栏、两行项目卡片和项目标题加紧凑导航进行显示调整；已确认计划要求先展示真实Tk预览并取得视觉认可，再接入主程序。
+- 完成内容：制作不导入主程序的独立Tk视觉预览，显示灰色底板、白色面板、项目选中态、动态模拟反馈、可收起侧栏和可换行导航；下方配置区域仅作为模拟布局上下文。通过自身窗口原生渲染取得1280×800及1100×720/150%字体模拟PNG，并实际查看截图。未修改主程序、项目配置或业务绑定；能力覆盖清单和原有验收结论保持。
+- 修改文件：
+  - `.claude/plans/workspace-layout-alignment.md`
+  - `.claude/plans/workspace-layout-preview.py`
+  - `.claude/plans/workspace-layout-preview.png`
+  - `.claude/plans/workspace-layout-preview-150.png`
+  - `PROJECT_STATUS.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：仓库根执行`python -X utf8 .claude/plans/workspace-layout-preview.py --check`、`python -X utf8 -m py_compile .claude/plans/workspace-layout-preview.py`、两次`--capture`及`git diff --check`；使用现有CPython3.9.10，无新增依赖。
+- 验证结果：四组实际Tk几何检查通过（1280×800/1100×720，100%/150%进程内字体缩放），导航100%一行、150%两行，包含标题/按钮边界、侧栏收起与切换、选中态和长项目标题换行；局部编译及差异格式检查通过。首轮离屏PrintWindow返回空白，改为短暂映射本预览窗口并等待绘制后成功捕获，增加空白图检测。Computer Use三次连接均报`native pipe is unavailable (os error 2)`，未进行该工具的交互验收。字体模拟不作为真实Windows DPI结论。本轮仅预览，未运行完整基线，最近完整记录保持。
+- 后续待办：等待负责人对已展示截图的视觉确认；认可后按计划接入主程序、补齐相关回归与能力清单和操作说明。未运行EXE、连接设备/模型/平台、提交、打包或发布。
+
+## 2026-11-17 - 移除独立验收入口，改为主程序验收
+
+- 类型：修改 / 测试整理 / 文档
+- 背景：负责人明确不需要独立交互验收脚本，直接在主程序验收，并确认实施移除计划。
+- 完成内容：删除独立交互/冒烟脚本及其专用测试；将共享Fake辅助代码移至tests，移除仅供独立窗口使用的关闭适配函数，保留四项目真实业务编排、快照、停止、冲突和未知保护的自动化回归。编译清单移除两个原scripts路径，指定回归ID改为保留的真实主程序GUI未知任务保护测试，201个指定ID均可加载。操作员说明、导航、项目状态和验收清单统一使用正常入口`python run_line_check_assistant.py`；人工清单不再要求模拟菜单、字体参数或专用JSON报告。主程序业务功能、版本和设备执行规则未修改。
+- 本轮修改文件（保留此前全部未提交的多项目源码改动）：
+  - 删除`Cheating_machine_execution_tool/scripts/validate_multi_project_workspace.py`、`Cheating_machine_execution_tool/tests/test_project_validation_entry.py`。
+  - 将`Cheating_machine_execution_tool/scripts/project_validation_fixtures.py`移至`Cheating_machine_execution_tool/tests/project_validation_fixtures.py`；调整`tests/test_multi_project_business_validation.py`、`tests/test_project_completion.py`的导入（两者均位于主源码目录）。
+  - 调整`Cheating_machine_execution_tool/scripts/verify_baseline.py`。
+  - 同步`README.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、本文件、`.claude/plans/multi-project-completion.md`、`Cheating_machine_execution_tool/line_check_assistant_README.md`及`Cheating_machine_execution_tool/validation/multi_project_completion_20261117/ACCEPTANCE_CHECKLIST.md`。
+- 实际验证：在项目CPython3.9.10 x64环境运行`python -m unittest test_project_completion test_multi_project_business_validation test_project_workspace test_project_management test_pipeline_window -q`，98项通过；`python -m unittest test_verify_baseline -q`，20项通过；使用既有基线函数执行267文件编译、263生产源码登记检查，三个测试/辅助文件另行编译通过，201个指定回归ID加载无错误且无重复；`python scripts/verify_capability_coverage.py`通过。相关路径、文档链接与差异格式检查通过，暂存区为空。
+- 验收状态：本次仅移除辅助入口并整理测试/文档，未运行完整基线；下方2916项完整结果属于移除前的上一轮记录，保留其历史事实。Windows可见交互和真实模型/平台/DUT仍待负责人在主程序反馈。本轮不连接设备、不打包、不运行EXE、不提交Git，版本保持V1.2.10。
+
+## 2026-11-17 - 补齐多项目状态备份与隔离验收
+
+- 类型：功能
+- 背景：负责人要求按原计划未完成项制定收尾计划并实施，已确认本轮只完成源码与验证，版本号不变；可见Windows使用隔离入口人工复验，真实模型/平台及DUT由负责人按清单执行，不打包、不发布、不自动提交Git。计划见`.claude/plans/multi-project-completion.md`。
+- 完成内容：①新增独立项目状态模型/service，GUI和本地`workspace.projects.list`共用运行、停止、失败、未知、最近结果及计数/时间；侧栏动态异常标记与悬停详情，不根据日志文字或线程结束冒充成功。未校验与执行未知分开，核实保留原未知结果及依据，不捏造成功或重试。②GUI线程及晚到回调显式关联原任务；工作线程读取不可变运行快照，UI回调返回编辑草稿；新增持久开始/停止请求/终结元数据，进程中断保留未知。补齐C300离线查询准入；ONU注册→确认→保存保持同一身份，确认期间持有归属，注册成功不掩盖后续write失败。续跑/预备测试及ONU停止状态纳入观察，不改原设备命令、确认、停止和PASS/FAIL。③转换前备份原始配置字节、SQLite一致性快照和加密接入配置，生成大小/SHA256清单；失败或来源变化中止，保留失败标记和原目录，拒绝将未完成导入作为完整项目打开；固件等非配置大文件仍只保留引用。复制不复制备份、历史或授权。④四个真实Job管理器分轮执行network/aging/power/serial/upgrade/parameters/onu/dut/ai实际业务编排，物理传输/子进程协议/模型HTTP均Fake，验证保存快照、项目归属、停止一个保留其余三个、冲突及未知保护。补充实际GUI线路检查线程与晚到回调测试。⑤新增仓库外临时数据的`--interactive`/`--smoke`源码入口、100%/150% Tk字体模拟及负责人W01–W12/F01–F08验收表；拒绝真实连接、外部程序和测试目录外Python写入，报告不自动标记现场通过。⑥更新能力矩阵、机器快照、269文件编译清单及201个指定回归ID，原协议grep不变；更新操作员说明、项目状态及验收边界。
+- 修改文件：
+  - `.claude/plans/multi-project-completion.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `CAPABILITY_COVERAGE.md`
+  - `Cheating_machine_execution_tool/line_check_assistant/app.py`
+  - `Cheating_machine_execution_tool/line_check_assistant/pipeline_window.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `Cheating_machine_execution_tool/scripts/capability_gui_actions.json`
+  - `Cheating_machine_execution_tool/scripts/project_validation_fixtures.py`
+  - `Cheating_machine_execution_tool/scripts/validate_multi_project_workspace.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/src/models/project_status.py`
+  - `Cheating_machine_execution_tool/src/models/project_task.py`
+  - `Cheating_machine_execution_tool/src/services/capability_catalog.py`
+  - `Cheating_machine_execution_tool/src/services/capability_jobs.py`
+  - `Cheating_machine_execution_tool/src/services/capability_service.py`
+  - `Cheating_machine_execution_tool/src/services/pipeline_runtime.py`
+  - `Cheating_machine_execution_tool/src/services/project_execution.py`
+  - `Cheating_machine_execution_tool/src/services/project_import_service.py`
+  - `Cheating_machine_execution_tool/src/services/project_runtime.py`
+  - `Cheating_machine_execution_tool/src/services/project_status_service.py`
+  - `Cheating_machine_execution_tool/src/services/project_store.py`
+  - `Cheating_machine_execution_tool/src/services/workspace_resources.py`
+  - `Cheating_machine_execution_tool/src/services/workspace_service.py`
+  - `Cheating_machine_execution_tool/src/ui/adapter_rename_dialog.py`
+  - `Cheating_machine_execution_tool/src/ui/ai_assistant_controller.py`
+  - `Cheating_machine_execution_tool/src/ui/project_status_tooltip.py`
+  - `Cheating_machine_execution_tool/src/ui/project_view_frame.py`
+  - `Cheating_machine_execution_tool/src/ui/project_workspace.py`
+  - `Cheating_machine_execution_tool/src/ui/test_item_pretest_controls.py`
+  - `Cheating_machine_execution_tool/tests/test_ai_multichannel_dispatch.py`
+  - `Cheating_machine_execution_tool/tests/test_multi_project_business_validation.py`
+  - `Cheating_machine_execution_tool/tests/test_pipeline_window.py`
+  - `Cheating_machine_execution_tool/tests/test_project_completion.py`
+  - `Cheating_machine_execution_tool/tests/test_project_validation_entry.py`
+  - `Cheating_machine_execution_tool/tests/test_project_workspace.py`
+  - `Cheating_machine_execution_tool/validation/multi_project_completion_20261117/ACCEPTANCE_CHECKLIST.md`
+  - `DEVELOPMENT_LOG.md`
+  - `PROJECT_STATUS.md`
+  - `README.md`
+- 验证方法：在仓库外既有CPython3.9.10 x64环境，TEMP/TMP/TMPDIR规范为长路径，主源码目录执行`PYTHONPATH=tests python -m unittest test_app test_project_completion test_multi_project_business_validation test_project_validation_entry test_project_workspace test_capabilities test_capability_devices test_sample_parameter_app test_page_upgrade test_pipeline_window test_test_item_pretest test_onu_registration_service test_adapter_rename -q`；`python scripts/validate_multi_project_workspace.py --smoke --font-scale 1.5`；`python scripts/verify_capability_coverage.py --update`；冻结源码后`python scripts/verify_baseline.py`、源码/测试/脚本/本机配置逐文件SHA256前后比较及`git diff --check`。
+- 验证结果：阶段大组合502项、24.630秒全部通过，最后迁移相关42项、22.003秒通过；四项目九类业务的Fake矩阵、未知核实及隔离入口子进程检查通过。默认及1.5倍字体的离屏真实Tk冒烟通过，均保留`acceptance_report.json`且`visible_acceptance=pending_operator_confirmation`；最终1.5倍字体及真实关闭流程冒烟7.438秒通过，报告为`%TEMP%/LineCheck-validation-g1dukizl/acceptance_report.json`，`single_project_close=passed`、`write_boundary=enforced`、回调错误为空。最终冻结完整基线实际输出`ALL CHECKS PASSED`、exit 0：2916项测试、201项指定关键回归、269文件编译、263源码登记、能力覆盖与全部协议不变量通过；464份源码/测试/脚本/本机配置的前后SHA256完全一致。日志为`%TEMP%/linecheck_multi_project_completion_source_final_baseline_20261117.log`，快照为同目录`linecheck_multi_project_completion_source_final_frozen_20261117.json`。最终能力覆盖复核、39文件文档清单、差异及受保护目录/版本未改动检查通过；暂存区为空，未提交。
+- 开发中定位：第一轮相关组合触发已销毁Tk对象在后续后台线程GC时析构，出现`main thread is not in main loop`及`Tcl_AsyncDelete`；修正测试夹具在UI线程释放root/service和Mock回调引用并收尾GC，未修改Tcl析构、未关闭全局GC，后续496项及502项组合干净通过。原全流程测试写死旧线程启动函数名，改为验证携带原运行身份的启动入口仍早于隐藏窗口，保留原时序断言。隔离入口补齐Windows审计事件bytes路径和只读平台识别兼容；模拟串口的嵌套租约按项目数核验，不错误地把8个合法owner当成4个项目冲突。新增测试中的一次变量作用域错误已修正；最终结论以本轮冻结基线为准。
+- 完整基线首轮定位：269文件编译、263源码登记、能力覆盖及协议grep通过；2914项测试运行261.444秒，1项失败、9项跳过。旧`test_full_access_batch_does_not_block_ui_reader_while_waiting_for_dispatch`记录0.219秒超过0.15秒，独立9项重跑通过；原计时覆盖整个提交过程，包含持久化等其它阶段，无法单凭该值证明GUI派发等待期间持锁。仅调整此测试为GUI实际派发时的非阻塞会话锁探测，保留原0.15秒阈值和原Tk心跳压力检查，并增加故意持锁的负向对照；相关40项、18.361秒通过。首次冻结后生产源码未变，仅此测试文件变化；保留首轮日志及快照，重新冻结后复跑完整基线。
+- 最终迁移收尾：第二、三轮完整基线各2915项及201项指定回归通过；补齐隔离入口运行中关闭适配后，1.5倍字体冒烟确认关闭第一项目而其它三项目继续。最后对“同一工作区关闭项目→移动完整目录→重开→核实未知”的状态缓存重新加载路径补回归，避免写回旧目录；相关42项、22.003秒通过。最终以此后`linecheck_multi_project_completion_source_final_baseline_20261117.log`和对应`source_final_frozen`清单为准；阶段验证不替代当前源码门禁。
+- 后续待办：负责人按主源码`validation/multi_project_completion_20261117/ACCEPTANCE_CHECKLIST.md`填写可见交互、真实模型/平台及DUT结果；自动化、离屏Tk、Fake协议及字体模拟不代表Windows DPI或现场验收。保留真实设备既有复验范围；原计划不标记为全部验收完成。版本仍为V1.2.10，本轮不提交、不打包、不运行EXE、不发布或连接真实平台/模型/DUT，现有EXE未更新。
+
 ## 2026-11-17 - 提交单实例多项目管理改造
 
 - 类型：状态更新

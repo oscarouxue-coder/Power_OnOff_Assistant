@@ -120,6 +120,7 @@ class ApplicationCapabilityTests(unittest.TestCase):
         actual = self.runtime.jobs.status(result['job_id'], self.auth)
         self.assertEqual('succeeded', actual['state'])
         self.assertFalse(actual['result']['executed'])
+        self.assertEqual(Path(actual['result']['path']).name, 'DUTPilot_portable.zip')
         self.assertTrue(Path(actual['result']['path']).is_relative_to(self.runtime.files.workspace))
         with self.assertRaises(CapabilityError):
             self.runtime.execute('updates.download', dict(check_job_id=checked['job_id'], url='https://arbitrary.invalid'), self.auth)

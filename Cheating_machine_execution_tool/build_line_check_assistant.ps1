@@ -30,11 +30,11 @@ $portableReadme = Join-Path $projectRoot "line_check_assistant\packaging_assets\
 $versionInfo = Join-Path $projectRoot "line_check_assistant\packaging_assets\VERSION_INFO.txt"
 $applicationIcon = Join-Path $projectRoot "assets\icons\line_check_assistant_network_topology_v1.ico"
 $runtimeConfigDir = Join-Path $projectRoot "Auto_power_on_off_tool\config"
-$exePath = Join-Path $distDir "LineCheckAssistant.exe"
-$portableDir = Join-Path $distDir "LineCheckAssistant_portable"
+$exePath = Join-Path $distDir "DUTPilot.exe"
+$portableDir = Join-Path $distDir "DUTPilot_portable"
 $portableConfigDir = Join-Path $portableDir "Auto_power_on_off_tool\config"
-$portableZip = Join-Path $distDir "LineCheckAssistant_portable.zip"
-$portableZipChecksum = Join-Path $distDir "LineCheckAssistant_portable.zip.sha256.txt"
+$portableZip = Join-Path $distDir "DUTPilot_portable.zip"
+$portableZipChecksum = Join-Path $distDir "DUTPilot_portable.zip.sha256.txt"
 $packageVerifier = Join-Path $projectRoot "scripts\verify_slim_package.py"
 $buildInfo = Join-Path $buildDir "LineCheckAssistant\BUILD_INFO.txt"
 $caseSnapshot = Join-Path $buildDir "CONFIRMED_CASES.json"
@@ -122,7 +122,7 @@ try {
     }
 
     New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
-    Copy-Item -LiteralPath $exePath -Destination (Join-Path $portableDir "LineCheckAssistant.exe") -Force
+    Copy-Item -LiteralPath $exePath -Destination (Join-Path $portableDir "DUTPilot.exe") -Force
     Copy-Item -LiteralPath $portableReadme -Destination (Join-Path $portableDir "PORTABLE_README.txt") -Force
     if (-not (Test-Path -LiteralPath $versionInfo -PathType Leaf)) {
         throw "Portable version information is missing: $versionInfo"
@@ -139,13 +139,13 @@ try {
         throw "Portable configuration generation failed with exit code $LASTEXITCODE"
     }
 
-    $portableExe = Join-Path $portableDir "LineCheckAssistant.exe"
+    $portableExe = Join-Path $portableDir "DUTPilot.exe"
     $exeHash = (Get-FileHash -LiteralPath $portableExe -Algorithm SHA256).Hash
     Set-Content `
-        -LiteralPath (Join-Path $portableDir "LineCheckAssistant.exe.sha256.txt") `
-        -Value "$exeHash *LineCheckAssistant.exe" `
+        -LiteralPath (Join-Path $portableDir "DUTPilot.exe.sha256.txt") `
+        -Value "$exeHash *DUTPilot.exe" `
         -Encoding Ascii
-    Copy-Item -LiteralPath (Join-Path $portableDir "LineCheckAssistant.exe.sha256.txt") -Destination $distDir -Force
+    Copy-Item -LiteralPath (Join-Path $portableDir "DUTPilot.exe.sha256.txt") -Destination $distDir -Force
     Copy-Item -LiteralPath $versionInfo -Destination $distDir -Force
     Copy-Item -LiteralPath $buildInfo -Destination $distDir -Force
 
@@ -156,7 +156,7 @@ try {
     $zipHash = (Get-FileHash -LiteralPath $portableZip -Algorithm SHA256).Hash
     Set-Content `
         -LiteralPath $portableZipChecksum `
-        -Value "$zipHash *LineCheckAssistant_portable.zip" `
+        -Value "$zipHash *DUTPilot_portable.zip" `
         -Encoding Ascii
 
     & $PythonExecutable -I -X utf8 $packageVerifier --exe $exePath --zip $portableZip --case-snapshot $caseSnapshot @auditArgs

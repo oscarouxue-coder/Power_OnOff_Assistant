@@ -94,7 +94,7 @@ class FeishuNotificationService:
         header = "项目：" + project
         if type(job["channel"]) is int and 1 <= job["channel"] <= 16:
             header += " | 通道" + str(job["channel"])
-        body = header + "\n" + ("LineCheckAssistant 飞书测试消息。" if job["test"] else
+        body = header + "\n" + ("DUTPilot 飞书测试消息。" if job["test"] else
                                  ("挂测开关机完成。" if job["normal"] else "挂测开关机出现异常，请查看本地主执行日志。"))
         body = sanitize(body, self.project_path, (config["app_secret"],))
         self.emit("[飞书通知] 下发" + ("测试消息" if job["test"] else "测试结果") +

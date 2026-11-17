@@ -581,7 +581,7 @@ class CurrentChannelSelectionTests(unittest.TestCase):
         match = re.search(r"^版本：\s*(\S+)", version_info_path.read_text(encoding="utf-8"), re.MULTILINE)
         self.assertIsNotNone(match)
         self.assertEqual(RELEASE_VERSION, match.group(1))
-        self.assertEqual(MAIN_WINDOW_TITLE, f"openWRT老化测试环境搭建助手 {RELEASE_VERSION}")
+        self.assertEqual(MAIN_WINDOW_TITLE, f"DUTPilot {RELEASE_VERSION}")
         self.assertIn("self.title(MAIN_WINDOW_TITLE)", source)
 
     def test_main_card_shows_power_test_status_and_stop_button(self):

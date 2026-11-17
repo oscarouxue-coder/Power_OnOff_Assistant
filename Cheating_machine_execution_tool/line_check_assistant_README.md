@@ -1,4 +1,26 @@
-# openWRT老化测试环境搭建助手
+# DUTPilot
+
+## 名称与旧版升级（2026-11-17）
+
+当前工具名称为 **DUTPilot**，主窗口继续显示版本号。源码启动仍使用`python run_line_check_assistant.py`，构建入口仍为`build_line_check_assistant.ps1`；本次版本保持V1.2.10，现有EXE及线上Release未更新。后续完整ZIP为`DUTPilot_portable.zip`，解压后运行`DUTPilot.exe`，ZIP校验文件为`DUTPilot_portable.zip.sha256.txt`。
+
+旧版客户端只识别原附件名，因此首次换到改名版本需手动从现有GitHub Releases下载完整ZIP；新版“检查更新”和AI更新能力同时支持新旧名称，优先使用新名称。ZIP和校验文件必须成对，新名称缺件或校验失败会报错，不混用旧附件。
+
+换版前结束测试并退出程序，备份旧便携目录、`Auto_power_on_off_tool/config`、独立项目目录以及下文说明的本机AI数据；完整解压新包，保留新包默认配置副本，再按旧项目导入流程导入旧配置，独立项目通过“打开项目”继续使用。核对网卡、COM、账号和文件路径后再执行测试。不要直接重命名或覆盖旧目录，确认新版正常前保留旧版及备份。
+
+本机`%LOCALAPPDATA%\LineCheckAssistant`等旧数据路径保留，名称改变不会自动搬迁或清空数据。兼容单项目入口仍按程序目录区分AI数据身份，移动程序目录的原有影响见AI数据章节。
+
+## 多项目源码收尾与主程序验收（2026-11-17）
+
+侧栏和本地AI项目查询共用运行状态：停止中、运行中、结果未知、失败、已停止及空闲。并行运行期间存在异常时显示`!`，悬停查看活动任务、未知数量和最近结果；切换项目不清除结果。最近结果由后续完成的业务更新，历史未知经原受控核实入口解除；核实不改写成未经现场证明的成功，也不重试。预备测试未配置期望值时仍显示“未校验”，不冒充通过或执行未知。
+
+旧项目导入先在新项目的`backups/imports/时间_编号/`备份原始配置、可识别AI数据库及加密接入配置，生成大小/SHA256清单，再转换；普通配置保留原字节，数据库保存一致性快照。备份失败或来源配置变化会中止，原目录不改写，失败目录保留供核查。固件保留引用，复制项目不复制备份、历史和授权。历史/接入转换失败的目录标记为未完成，不作为完整项目打开。
+
+关闭项目后可移动完整项目目录，重开保持原身份，并从新目录重新载入运行记录；后续核实记录写入新目录。
+
+负责人直接在主源码目录执行`python run_line_check_assistant.py`，通过主程序的项目菜单新建或打开验收项目，检查侧栏、保存、切换及并行任务。验收使用主程序现有业务入口和执行日志；详细步骤及现场记录模板见[多项目验收清单](validation/multi_project_completion_20261117/ACCEPTANCE_CHECKLIST.md)。Mock/Fake仅用于自动化回归，人工验收无需运行独立脚本。
+
+本轮只完成源码与验证，版本仍为V1.2.10，EXE未更新；Windows可见交互及真实模型/平台/DUT结论由负责人按清单反馈，自动化不替代现场验收。
 
 ## 单实例多项目工作区（2026-11-17，源码版，待现场复验）
 
@@ -611,16 +633,16 @@ Telnet 页保留“免用户名密码登录”“仅执行上下电”两个“�
 
 构建会将 `assets\\icons\\line_check_assistant_network_topology_v1.ico` 写入 EXE 的 Windows 图标资源。一次构建会生成三种输出：
 
-- `dist\LineCheckAssistant.exe`：单文件 EXE，仅适合开发侧留档或手工配套配置。
-- `dist\LineCheckAssistant_portable\`：可直接复制的完整免安装目录。
-- `dist\LineCheckAssistant_portable.zip`：推荐复制到另一台电脑的压缩包；必须完整解压后再运行，不能只取出 EXE。
+- `dist\DUTPilot.exe`：单文件 EXE，仅适合开发侧留档或手工配套配置。
+- `dist\DUTPilot_portable\`：可直接复制的完整免安装目录。
+- `dist\DUTPilot_portable.zip`：推荐复制到另一台电脑的压缩包；必须完整解压后再运行，不能只取出 EXE。
 
-另生成 `dist\LineCheckAssistant_portable.zip.sha256.txt`，格式为 `SHA256值 *LineCheckAssistant_portable.zip`，用于程序内下载校验。本地EXE、便携目录、EXE校验文件、版本/构建说明、第三方声明及构建报告继续保留，完整基线、EXE/PYZ、脱敏配置、Tcl/Tk、ZIP CRC和哈希门禁保持。
+另生成 `dist\DUTPilot_portable.zip.sha256.txt`，格式为 `SHA256值 *DUTPilot_portable.zip`，用于程序内下载校验。本地EXE、便携目录、EXE校验文件、版本/构建说明、第三方声明及构建报告继续保留，完整基线、EXE/PYZ、脱敏配置、Tcl/Tk、ZIP CRC和哈希门禁保持。
 
 GitHub 更新发布约定（从2026-11-05确认后的下一次构建/发布开始执行）：先更新 `line_check_assistant/packaging_assets/VERSION_INFO.txt` 的版本与说明，再构建并检查交付物；Release 标签统一为 `v主版本.次版本.修订号`，数字必须与包内版本一致。创建草稿 Release，填写更新说明，**只上传**以下两个**同一次构建**的附件，核对大小/SHA256后发布并标记为 Latest：
 
-- `LineCheckAssistant_portable.zip`
-- `LineCheckAssistant_portable.zip.sha256.txt`
+- `DUTPilot_portable.zip`
+- `DUTPilot_portable.zip.sha256.txt`
 
 发布为Latest后，匿名完整下载并核对两个附件的大小/SHA256、验证源码更新客户端，再删除旧Release及附件；保留Git标签和源码历史。公开发布说明只指引下载完整ZIP及ZIP校验文件，不再单独提供EXE下载。版本说明、第三方声明及EXE校验文件继续包含在ZIP内。V1.2.6及其六份附件、历史发布记录保持原样。
 
@@ -632,6 +654,6 @@ Tkinter资源同时兼容既有PyInstaller 5和当前PyInstaller 6：EXE内部�
 
 生成的 `.spec` 文件统一保存到 `line_check_assistant\packaging_specs`。
 
-每次重新打包出最新版 EXE 后，不在当前 PC 直接运行 `dist\LineCheckAssistant.exe`或便携目录中的 EXE；只检查构建结果、ZIP清单、配置脱敏和SHA256，并向用户报告输出路径。
+每次重新打包出最新版 EXE 后，不在当前 PC 直接运行 `dist\DUTPilot.exe`或便携目录中的 EXE；只检查构建结果、ZIP清单、配置脱敏和SHA256，并向用户报告输出路径。
 
 打包后程序会从 EXE 所在目录、上级目录中查找 `Auto_power_on_off_tool/config` 文件夹；程控电源协议已内置，不再依赖 `Auto_Power_On_Off_Tool.exe`。

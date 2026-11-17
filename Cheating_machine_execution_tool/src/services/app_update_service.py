@@ -25,8 +25,10 @@ from src.models.app_update import (
 )
 
 
-PORTABLE_ZIP_NAME = "LineCheckAssistant_portable.zip"
-PORTABLE_ZIP_SHA256_NAME = "LineCheckAssistant_portable.zip.sha256.txt"
+PORTABLE_ZIP_NAME = "DUTPilot_portable.zip"
+PORTABLE_ZIP_SHA256_NAME = PORTABLE_ZIP_NAME + ".sha256.txt"
+LEGACY_PORTABLE_ZIP_NAME = "LineCheckAssistant_portable.zip"
+LEGACY_PORTABLE_ZIP_SHA256_NAME = LEGACY_PORTABLE_ZIP_NAME + ".sha256.txt"
 _VERSION_PATTERN = re.compile(r"^[vV]?([0-9]+)\.([0-9]+)\.([0-9]+)$")
 _SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 
@@ -72,7 +74,7 @@ class AppUpdateService:
         return None
 
     @staticmethod
-    def _parse_sha256(text: str) -> str:
+    def _parse_sha256(text: str, package_name: str = PORTABLE_ZIP_NAME) -> str:
         for raw_line in text.splitlines():
             line = raw_line.strip()
             if not line:
@@ -81,10 +83,10 @@ class AppUpdateService:
             if len(parts) != 2 or not _SHA256_PATTERN.fullmatch(parts[0]):
                 continue
             filename = parts[1].lstrip("* ").strip()
-            if filename == PORTABLE_ZIP_NAME:
+            if filename == package_name:
                 return parts[0].lower()
         raise AppUpdateError(
-            f"{PORTABLE_ZIP_SHA256_NAME} 中缺少 {PORTABLE_ZIP_NAME} 的有效 SHA256。"
+            f"{package_name}.sha256.txt 中缺少 {package_name} 的有效 SHA256。"
         )
 
     @staticmethod
@@ -125,11 +127,17 @@ class AppUpdateService:
 
         package_asset = self._asset_from_payload(payload, PORTABLE_ZIP_NAME)
         checksum_asset = self._asset_from_payload(payload, PORTABLE_ZIP_SHA256_NAME)
+        package_name, checksum_name = PORTABLE_ZIP_NAME, PORTABLE_ZIP_SHA256_NAME
+        # Only a release without either new-name asset may use the legacy pair.
+        if package_asset is None and checksum_asset is None:
+            package_name, checksum_name = LEGACY_PORTABLE_ZIP_NAME, LEGACY_PORTABLE_ZIP_SHA256_NAME
+            package_asset = self._asset_from_payload(payload, package_name)
+            checksum_asset = self._asset_from_payload(payload, checksum_name)
         missing = [
             name
             for name, asset in (
-                (PORTABLE_ZIP_NAME, package_asset),
-                (PORTABLE_ZIP_SHA256_NAME, checksum_asset),
+                (package_name, package_asset),
+                (checksum_name, checksum_asset),
             )
             if asset is None
         ]
@@ -137,7 +145,7 @@ class AppUpdateService:
             raise AppUpdateError("最新版本发布不完整，缺少附件：" + "、".join(missing))
         self._raise_if_cancelled(cancel_event)
         try:
-            log(f"[检查更新] GET {checksum_asset.download_url}")
+            log(f"[检查更新] GET {checksum_asset.download_url}；更新包：{package_name}")
             checksum_text = self.client.read_text_asset(checksum_asset.download_url, cancel_event)
         except DownloadCancelled as exc:
             raise AppUpdateCancelled("检查已取消。") from exc
@@ -145,7 +153,7 @@ class AppUpdateService:
             self._raise_if_cancelled(cancel_event)
             raise AppUpdateError(str(exc)) from exc
         self._raise_if_cancelled(cancel_event)
-        expected_sha256 = self._parse_sha256(checksum_text)
+        expected_sha256 = self._parse_sha256(checksum_text, package_name)
         return AppUpdateCheckResult(
             status=UpdateCheckStatus.UPDATE_AVAILABLE,
             package_asset=package_asset,

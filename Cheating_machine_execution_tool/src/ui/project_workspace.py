@@ -9,7 +9,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from src.models.project import PROJECT_FILE
-from src.services.project_execution import project_busy, project_resources
+from src.services.project_execution import project_busy, project_resources, project_stopping
 from src.services.workspace_service import WorkspaceService
 from src.ui.application_icon import apply_application_icon, set_taskbar_application_id
 from src.ui.module_theme import MODULE_BACKGROUND, apply_module_theme
@@ -28,6 +28,7 @@ class ProjectWorkspace(tk.Tk):
         self.events = queue.Queue()
         self.service = service or WorkspaceService(source_root, emit=self.events.put)
         self.service.emit = self.service.projects.emit = self.events.put
+        self.service.status.emit = self.events.put
         self._source_maintenance_gate = self.service.maintenance
         self.instance = instance
         self.inventory_events = queue.Queue()
@@ -107,6 +108,8 @@ class ProjectWorkspace(tk.Tk):
         self.tree.pack(fill='both', expand=True)
         self.tree.bind('<<TreeviewSelect>>', self._tree_selected)
         self.tree.bind('<Button-3>', self._context_menu)
+        from src.ui.project_status_tooltip import ProjectStatusTooltip
+        self.status_tooltip = ProjectStatusTooltip(self.tree, self._status_detail)
         buttons = tk.Frame(self.sidebar, background=MODULE_BACKGROUND)
         buttons.pack(fill='x', pady=(8, 0))
         ttk.Button(buttons, text='新建', command=self.new_project).pack(side='left')
@@ -116,6 +119,10 @@ class ProjectWorkspace(tk.Tk):
         self.status = tk.StringVar(self, value='')
         ttk.Label(self, textvariable=self.status).pack(fill='x', padx=14, pady=(0, 6))
         apply_module_theme(self)
+
+    def _status_detail(self, identifier):
+        context = self.views[identifier].project_context
+        return context.identity.name + '\n' + self.service.status.snapshot(context).detail
 
     def toggle_sidebar(self):
         self.sidebar_visible = not self.sidebar_visible
@@ -176,6 +183,7 @@ class ProjectWorkspace(tk.Tk):
             view = factory(self.content, project_context=context, workspace=self)
             view._project_closed_callback = self._project_closed
             self.views[identifier] = view
+            self.service.status.attach(context)
             self.tree.insert('', 'end', iid=identifier, text=context.identity.name, values=('空闲',))
         except BaseException:
             self.views.pop(identifier, None)
@@ -199,7 +207,7 @@ class ProjectWorkspace(tk.Tk):
         if self.closing:
             return
         path = path or filedialog.askopenfilename(title='打开项目', parent=self,
-            filetypes=[('LineCheckAssistant 项目', PROJECT_FILE)])
+            filetypes=[('DUTPilot 项目', PROJECT_FILE)])
         if path:
             self._perform(lambda: self._add_project(self.service.projects.open(path)))
 
@@ -214,21 +222,7 @@ class ProjectWorkspace(tk.Tk):
             return
         destination = filedialog.askdirectory(title='选择新的空项目文件夹', parent=self)
         if destination:
-            def run():
-                context = self.service.projects.create(destination, name, import_directory=source)
-                try:
-                    legacy_root = Path(source)
-                    if legacy_root.name == 'config':
-                        legacy_root = legacy_root.parent
-                    if legacy_root.name.lower() == 'auto_power_on_off_tool':
-                        legacy_root = legacy_root.parent
-                    self.service.projects.import_history(context, legacy_root)
-                    self.service.import_connections(legacy_root)
-                    self._add_project(context)
-                except BaseException:
-                    self.service.projects.close(context)
-                    raise
-            self._perform(run)
+            self._perform(lambda: self._add_project(self.service.import_project(source, destination, name)))
 
     def imported_connection(self):
         candidates = self.service.connection_candidates()
@@ -462,11 +456,12 @@ class ProjectWorkspace(tk.Tk):
             if operation == 'submit' and rename is not None:
                 self.service.resources.acquire(owner, context.identity.project_id, context.identity.name, ['adapter:' + rename.old_name])
             snapshot = self.service.projects.snapshot(context)
+            self.service.status.begin(context, owner, snapshot, operation)
             self.tickets[owner] = dict(view=view, snapshot=snapshot, operation=operation, started=time.monotonic(), tracking=False, uncertain=False)
             view._project_run_root = snapshot
             if operation == '_on_start':
                 view._project_legacy_root = snapshot / 'Auto_power_on_off_tool'
-            view._log('[项目管理] 任务准入：' + operation + '；项目=' + context.identity.name + '；配置版本=' + context.identity.revision)
+            view._log('[项目管理] 任务准入：' + operation + '；项目=' + context.identity.name + '；运行=' + snapshot.name + '；配置版本=' + context.identity.revision)
             return owner
         except Exception as exc:
             if owner is not None:
@@ -588,9 +583,11 @@ class ProjectWorkspace(tk.Tk):
                     self.deiconify()
                     self.lift()
             for owner, entry in tuple(self.tickets.items()):
-                if entry['tracking'] and time.monotonic() - entry['started'] > .2 and not project_busy(entry['view']):
+                if (entry['tracking'] and time.monotonic() - entry['started'] > .2
+                        and not project_busy(entry['view']) and not self.service.status.is_held(owner)):
+                    self.service.status.finish_unreported(owner)
                     rename = vars(entry['view']).get('adapter_rename_dialog')
-                    uncertain = entry['uncertain'] or bool(rename is not None and rename.uncertain)
+                    uncertain = entry['uncertain'] or self.service.status.is_unknown(owner) or bool(rename is not None and rename.uncertain)
                     self.service.resources.release(owner, uncertain=uncertain)
                     del self.tickets[owner]
             if time.monotonic() >= self.next_status:
@@ -598,9 +595,11 @@ class ProjectWorkspace(tk.Tk):
                 if not self.closing:
                     self.service.synchronize_platforms()
                 for identifier, view in tuple(self.views.items()):
+                    self.service.refresh_status(view.project_context, busy=project_busy(view),
+                                                closing=bool(vars(view).get('_app_closing')) or project_stopping(view))
                     dirty = self.is_dirty(view)
                     name = view.project_context.identity.name + (' *' if dirty else '')
-                    self.tree.item(identifier, text=name, values=('停止中' if vars(view).get('_app_closing') else '运行中' if project_busy(view) else '空闲',))
+                    self.tree.item(identifier, text=name, values=(self.service.status.snapshot(view.project_context).label,))
             if self.closing and not self.views and self.service.idle:
                 self.service.close()
                 if self.instance:

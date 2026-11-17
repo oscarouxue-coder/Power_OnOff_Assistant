@@ -19,7 +19,7 @@ class CapabilityService:
     def __init__(self, directory, manager, snapshot, admissible=lambda owner, keys: True,
                  network_check=lambda requests: [], emit=lambda line: None, upgrade_dispatch=dispatch_upgrade,
                  released=lambda owner: None, tool_root=None, onu_configuration=None, enabled_modules=None, channel_commit=None, settings_commit=None,
-                 resource_coordinator=None, project_context=None):
+                 resource_coordinator=None, project_context=None, status_service=None):
         available = frozenset(('devices', 'parameters', 'onu', 'configuration', 'channels', 'notifications', 'observations', 'updates', 'ai_data', 'extensions'))
         if enabled_modules is None:
             configured = os.environ.get('LINECHECK_CAPABILITY_MODULES')
@@ -35,7 +35,8 @@ class CapabilityService:
             project_name=project_context.identity.name if project_context else "")
         self.project_context = project_context
         self.metrics = CapabilityMetrics(directory, emit=emit)
-        self.jobs = CapabilityJobs(directory, self.resources, emit, self.metrics, project_context=project_context)
+        self.jobs = CapabilityJobs(directory, self.resources, emit, self.metrics, project_context=project_context,
+                                   status_service=status_service)
         from src.services.capability_scope_service import CapabilityScopes
         self.scopes = CapabilityScopes(self.jobs)
         self.files = ControlledFiles(Path(directory) / "workspace")

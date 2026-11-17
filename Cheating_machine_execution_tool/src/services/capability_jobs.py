@@ -25,7 +25,7 @@ class JobContext:
 
 
 class CapabilityJobs:
-    def __init__(self, directory, resources, emit=lambda line: None, metrics=None, project_context=None):
+    def __init__(self, directory, resources, emit=lambda line: None, metrics=None, project_context=None, status_service=None):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.instance_lease = None
@@ -51,6 +51,10 @@ class CapabilityJobs:
         self.threads, self.controls = {}, {}
         self.closing = False
         self.project_context = project_context
+        self.project_status = status_service
+        if project_context is not None and self.project_status is None:
+            from src.services.project_status_service import ProjectStatusService
+            self.project_status = ProjectStatusService(emit)
 
     @property
     def idle(self):
@@ -137,6 +141,7 @@ class CapabilityJobs:
                 from src.models.project_task import project_task_scope
                 project = self.project_context
                 task_root = ProjectStore(project.source_root).snapshot(project)
+                self.project_status.begin(project, identifier, task_root, capability)
                 original_runner = runner
                 def runner(context):
                     context.project_id = project.identity.project_id
@@ -158,6 +163,8 @@ class CapabilityJobs:
                 self.threads[identifier] = thread
                 thread.start()
         except BaseException:
+            if self.project_status is not None:
+                self.project_status.complete(identifier, state='failed')
             self.resources.release(identifier)
             with self.lock:
                 self.controls.pop(identifier, None)
@@ -173,6 +180,8 @@ class CapabilityJobs:
         started = time.monotonic()
         state, result = "unknown", None
         try:
+            if self.project_status is not None:
+                self.project_status.update(identifier, 'running')
             with self.lock, self.db:
                 self.db.execute("UPDATE jobs SET state='running' WHERE id=?", (identifier,))
             context.event("preparing", "业务任务开始；独立于模型请求运行")
@@ -186,6 +195,8 @@ class CapabilityJobs:
             result = dict(ok=False, error=str(exc), dispatched=context.dispatched)
         finally:
             try:
+                if self.project_status is not None:
+                    self.project_status.complete(identifier, state=state)
                 with self.lock, self.db:
                     self.db.execute("UPDATE jobs SET state=?,updated=?,result=? WHERE id=?",
                         (state, time.time(), json.dumps(result, ensure_ascii=False), identifier))
@@ -201,6 +212,12 @@ class CapabilityJobs:
                 with self.lock:
                     self.controls.pop(identifier, None)
 
+    def runtime_states(self):
+        """Host-local summary, without request arguments, credentials or principals."""
+        with self.lock:
+            return tuple(dict(job_id=row[0], state=row[1], updated_at=row[2])
+                         for row in self.db.execute('SELECT id,state,updated FROM jobs'))
+
     def cancel(self, identifier, authority):
         status = self.status(identifier, authority)
         authority.check(risk="dangerous")
@@ -208,6 +225,8 @@ class CapabilityJobs:
             control = self.controls.get(identifier)
             if control and status["state"] not in TERMINAL:
                 control.request_stop()
+                if self.project_status is not None:
+                    self.project_status.update(identifier, 'stopping')
                 with self.db:
                     self.db.execute("UPDATE jobs SET state='stop_requested' WHERE id=?", (identifier,))
                 return dict(job_id=identifier, state="stop_requested", notice="等待原业务安全停止边界，不代表已撤销")
@@ -238,6 +257,8 @@ class CapabilityJobs:
             self.resources.fence.resolve(identifier)
         if getattr(self.resources, 'coordinator', None):
             self.resources.coordinator.resolve(identifier)
+        if self.project_status is not None:
+            self.project_status.reconcile(identifier, state)
         return dict(job_id=identifier, state=state, notice="已保留原结果和核实记录；不会自动重试")
 
     def close(self):

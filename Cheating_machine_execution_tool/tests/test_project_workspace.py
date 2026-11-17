@@ -5,6 +5,7 @@ import threading
 import time
 import tkinter as tk
 import unittest
+import gc
 from unittest.mock import patch
 
 from tk_test_windows import OffscreenTkWindows
@@ -18,6 +19,8 @@ SOURCE = Path(__file__).resolve().parents[1]
 
 class ProjectWorkspaceTests(unittest.TestCase):
     def setUp(self):
+        # Run after window and patch cleanup, when mocks no longer own Tk callbacks.
+        self.addCleanup(lambda: ProjectWorkspaceTests._release_ui_graph(self))
         self.temporary = tempfile.TemporaryDirectory(prefix='工作区 test ')
         self.addCleanup(self.temporary.cleanup)
         self.windows = OffscreenTkWindows()
@@ -34,9 +37,18 @@ class ProjectWorkspaceTests(unittest.TestCase):
         value.return_value.idle = True
         self.service = WorkspaceService(SOURCE, Path(self.temporary.name) / 'user')
         self.root = ProjectWorkspace(SOURCE, service=self.service)
+        from line_check_assistant.app import MAIN_WINDOW_TITLE
+        self.assertEqual(self.root.title(), MAIN_WINDOW_TITLE)
+        self.assertTrue(self.root.title().startswith('DUTPilot '))
         self.errors = []
         self.root.report_callback_exception = lambda kind, error, trace: self.errors.append(error)
         self.addCleanup(self.close)
+
+    def _release_ui_graph(self):
+        self.root = None
+        self.service = None
+        self.patches = []
+        gc.collect()
 
     def close(self):
         for view in tuple(self.root.views.values()):
@@ -198,6 +210,9 @@ class ProjectWorkspaceTests(unittest.TestCase):
 
     def test_two_real_ai_controllers_share_models_but_not_conversations_or_business_storage(self):
         from src.services.ai_case_store import SharedCaseStore
+        # Resolve the real dependency before patching its export; otherwise a
+        # first import can retain this test's temporary mock in later tests.
+        from src.services.ai_diagnostic_service import AiDiagnosticService
         a, b = self.add('AI A'), self.add('AI B')
         root = Path(self.temporary.name)
         with patch('src.services.ai_project_store.default_ai_data_dir', return_value=root / 'legacy'), \

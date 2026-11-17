@@ -32,7 +32,23 @@ class MultichannelDispatchTests(unittest.TestCase):
         client = AiSerialClient(None)
         client.channel.dispatch_timeout = .3
         dispatcher = PipelineDispatcher(client.channel)
-        dispatcher.handlers["target_current"] = lambda request: True
+        reads = []
+        def target_current(request):
+            # The submitter is waiting for this dispatch. Probe that exact lock
+            # boundary; timing the whole submission also includes SQLite fsync.
+            available = self.service.lock.acquire(blocking=False)
+            try:
+                if available:
+                    start = time.monotonic()
+                    self.service.draft_message(self.id)
+                    reads.append((True, time.monotonic() - start))
+                else:
+                    reads.append((False, 0))
+            finally:
+                if available:
+                    self.service.lock.release()
+            return True
+        dispatcher.handlers["target_current"] = target_current
         self.service.target_current = client.target_current
         self.addCleanup(dispatcher.dispose)
         self.addCleanup(client.close)
@@ -45,12 +61,9 @@ class MultichannelDispatchTests(unittest.TestCase):
         with patch.object(self.service.batch, "run"):
             worker = threading.Thread(target=submit)
             worker.start()
-            longest = 0
             deadline = time.monotonic() + 3
             while worker.is_alive() and time.monotonic() < deadline:
-                start = time.monotonic()
                 self.service.draft_message(self.id)
-                longest = max(longest, time.monotonic() - start)
                 dispatcher.poll(32)
                 time.sleep(.002)
             if worker.is_alive():
@@ -59,7 +72,37 @@ class MultichannelDispatchTests(unittest.TestCase):
             self.service.jobs.join()
         self.assertFalse(worker.is_alive())
         self.assertEqual(errors, [])
-        self.assertLess(longest, .15)
+        self.assertTrue(reads, '必须实际执行GUI派发期间的读锁探测')
+        self.assertTrue(all(available for available, duration in reads), '提交线程等待GUI时不得持有会话锁')
+        self.assertLess(max(duration for available, duration in reads), .15)
+
+    def test_dispatch_lock_probe_detects_a_submitter_holding_the_conversation_lock(self):
+        client = AiSerialClient(None)
+        dispatcher = PipelineDispatcher(client.channel)
+        probes = []
+        def handler(request):
+            available = self.service.lock.acquire(blocking=False)
+            probes.append(available)
+            if available:
+                self.service.lock.release()
+            return True
+        dispatcher.handlers['target_current'] = handler
+        def submit():
+            with self.service.lock:
+                client.target_current(self.targets[0])
+        worker = threading.Thread(target=submit)
+        try:
+            worker.start()
+            deadline = time.monotonic() + 3
+            while worker.is_alive() and time.monotonic() < deadline:
+                dispatcher.poll(32)
+                time.sleep(.002)
+            worker.join(2)
+        finally:
+            client.close()
+            dispatcher.dispose()
+        self.assertFalse(worker.is_alive())
+        self.assertEqual([False], probes, '负向对照必须识别持锁等待，不能把响应超时当作通过')
 
     def test_two_simultaneous_submissions_have_one_batch_and_one_user_message(self):
         barrier = threading.Barrier(2)

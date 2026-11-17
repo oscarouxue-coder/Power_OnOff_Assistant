@@ -62,6 +62,7 @@ from src.models.project import project_path as _project_path
 from src.models.project import project_log_root as _project_log_root
 from src.ui.project_view_frame import ProjectViewFrame
 from src.services.project_execution import project_operation
+from src.services.project_runtime import start_project_thread, report_project_result, project_result_handoff
 from .sample_upgrade_settings_store import (
     DEFAULT_PARAMETER_PARALLEL_COUNT,
     DEFAULT_PARALLEL_COUNT,
@@ -334,7 +335,7 @@ COLOR_WARNING_BG = "#f8f0dd"
 COLOR_DANGER = "#b42318"
 COLOR_DANGER_DARK = "#8f1c13"
 COLOR_DANGER_BG = "#fbe9e7"
-APPLICATION_NAME = "openWRT老化测试环境搭建助手"
+APPLICATION_NAME = "DUTPilot"
 VERSION_INFO_FILENAME = "VERSION_INFO.txt"
 
 
@@ -760,7 +761,7 @@ class LineCheckAssistant(ProjectViewFrame):
 
     def _start_tracked_worker(self, thread) -> None:
         LineCheckAssistant._remember_worker(self, thread)
-        thread.start()
+        start_project_thread(thread)
 
     def _pipeline_admit_action(self) -> bool:
         """Recheck after modal dialogs, immediately before starting real work."""
@@ -1661,7 +1662,7 @@ class LineCheckAssistant(ProjectViewFrame):
             daemon=True,
         )
         LineCheckAssistant._remember_worker(self, thread)
-        thread.start()
+        start_project_thread(thread)
         return True
 
     def _sample_parameter_write_worker(self, requests: list[SampleParameterWriteRequest], parallel_count: int, cancel_event: threading.Event) -> None:
@@ -1671,6 +1672,7 @@ class LineCheckAssistant(ProjectViewFrame):
             on_session_ready=lambda vlan, session, log_path: self.after(
                 0, lambda vlan=vlan, session=session, log_path=log_path: self._attach_serial_upgrade(vlan, session, log_path)),
             serial_runner=run_parallel_sample_parameter_writes)
+        report_project_result(final)
         self.after(0, lambda: self._complete_sample_parameter_write(final))
 
 
@@ -2742,6 +2744,7 @@ class LineCheckAssistant(ProjectViewFrame):
             None,
         )
 
+    @project_operation
     def _on_c300_cleanup_candidates_clicked(self) -> None:
         if self.onu_cleanup_query_running:
             return
@@ -2769,7 +2772,7 @@ class LineCheckAssistant(ProjectViewFrame):
             daemon=True,
         )
         LineCheckAssistant._remember_worker(self, thread)
-        thread.start()
+        start_project_thread(thread)
 
     def _onu_cleanup_candidates_worker(self, connection: OltConnection, request) -> None:
         result = OnuRegistrationService(logger=self._log).query_c300_cleanup_candidates(
@@ -2777,6 +2780,7 @@ class LineCheckAssistant(ProjectViewFrame):
             request,
             self.onu_cancel_event,
         )
+        report_project_result(result)
         self.after(0, lambda: self._complete_onu_cleanup_candidates(result))
 
     def _complete_onu_cleanup_candidates(self, result) -> None:
@@ -2849,12 +2853,13 @@ class LineCheckAssistant(ProjectViewFrame):
             daemon=True,
         )
         LineCheckAssistant._remember_worker(self, thread)
-        thread.start()
+        start_project_thread(thread)
 
     def _onu_manage_query_worker(self, family, connection, pon_interface) -> None:
         result = OnuRegistrationService(logger=self._log).query_registered_candidates(
             family, connection, pon_interface, self.onu_cancel_event
         )
+        report_project_result(result)
         self.after(0, lambda: self._complete_onu_manage_query(family, connection.host, result))
 
     def _complete_onu_manage_query(self, family, host, result) -> None:
@@ -2931,12 +2936,13 @@ class LineCheckAssistant(ProjectViewFrame):
             daemon=True,
         )
         LineCheckAssistant._remember_worker(self, thread)
-        thread.start()
+        start_project_thread(thread)
 
     def _onu_manage_delete_worker(self, family, connection, pon_interface, candidates) -> None:
         result = OnuBatchDeleteService(logger=self._log).delete(
             family, connection, pon_interface, candidates, self.onu_cancel_event
         )
+        report_project_result(result)
         self.after(0, lambda: self._complete_onu_manage_delete(family, connection.host, result))
 
     def _complete_onu_manage_delete(self, family, host, result) -> None:
@@ -3138,12 +3144,13 @@ class LineCheckAssistant(ProjectViewFrame):
             self.onu_stop_button.configure(state="normal")
         thread = threading.Thread(target=self._onu_telnet_test_worker, args=(family, connection), daemon=True)
         LineCheckAssistant._remember_worker(self, thread)
-        thread.start()
+        start_project_thread(thread)
 
     def _onu_telnet_test_worker(self, family: str, connection: OltConnection) -> None:
         result = OnuRegistrationService(logger=self._log).test_connection(
             family, connection, self.onu_cancel_event
         )
+        report_project_result(result)
         self.after(0, lambda: self._complete_onu_telnet_test(family, connection.host, result))
 
     def _complete_onu_telnet_test(self, family: str, host: str, result) -> None:
@@ -3189,12 +3196,13 @@ class LineCheckAssistant(ProjectViewFrame):
             daemon=True,
         )
         LineCheckAssistant._remember_worker(self, thread)
-        thread.start()
+        start_project_thread(thread)
 
     def _onu_template_query_worker(self, family: str, connection: OltConnection, kind: str) -> None:
         result = OnuRegistrationService(logger=self._log).query_templates(
             family, connection, kind, self.onu_cancel_event
         )
+        report_project_result(result)
         self.after(0, lambda: self._complete_onu_template_query(family, connection.host, kind, result))
 
     def _complete_onu_template_query(self, family: str, host: str, kind: str, result) -> None:
@@ -3255,12 +3263,13 @@ class LineCheckAssistant(ProjectViewFrame):
             daemon=True,
         )
         LineCheckAssistant._remember_worker(self, thread)
-        thread.start()
+        start_project_thread(thread)
 
     def _onu_query_unregistered_worker(self, family: str, connection: OltConnection, scope: OnuDiscoveryScope) -> None:
         result = OnuRegistrationService(logger=self._log).query_unregistered(
             family, connection, scope, self.onu_cancel_event
         )
+        report_project_result(result)
         self.after(0, lambda: self._complete_onu_query_unregistered(family, connection.host, result))
 
     def _complete_onu_query_unregistered(self, family: str, host: str, result) -> None:
@@ -3371,7 +3380,7 @@ class LineCheckAssistant(ProjectViewFrame):
             daemon=True,
         )
         LineCheckAssistant._remember_worker(self, thread)
-        thread.start()
+        start_project_thread(thread)
         return True
 
     def _onu_register_selected_worker(
@@ -3397,6 +3406,7 @@ class LineCheckAssistant(ProjectViewFrame):
             ),
         )
 
+    @project_result_handoff
     def _complete_onu_register_selected(
         self,
         family: str,
@@ -3413,10 +3423,12 @@ class LineCheckAssistant(ProjectViewFrame):
         self._set_onu_query_status(result.message, COLOR_SUCCESS if result.ok else COLOR_DANGER)
         self._log(f"[ONU注册][{family}] 注册结果：{connection.host} - {result.message}")
         if not result.ok:
+            report_project_result(result)
             _finish_pipeline_subtask_if_waiting(self, "onu_registration", False, result.message)
             return
         if family == OLT_FAMILY_C600:
             if not write_after_success:
+                report_project_result(result)
                 messagebox.showinfo(
                     "C600 注册与验证完成",
                     "C600 ONU 注册、业务配置及只读验证已经执行。\n本次未选择 write，当前运行配置尚未写入启动配置。",
@@ -3432,11 +3444,13 @@ class LineCheckAssistant(ProjectViewFrame):
                 parent=self.onu_registration_window,
             )
         if not confirmed:
+            report_project_result(result)
             self._log(f"[ONU注册][{family}] 保存 OLT 配置：{connection.host} - 用户选择暂不保存")
             _finish_pipeline_subtask_if_waiting(self, "onu_registration", True, result.message)
             return
 
         if not LineCheckAssistant._pipeline_admit_action(self):
+            report_project_result(result)
             return
         self.onu_save_olt_running = True
         self._set_onu_query_status("正在执行 write 保存 OLT 最新配置...", COLOR_WARNING)
@@ -3446,12 +3460,13 @@ class LineCheckAssistant(ProjectViewFrame):
             self.onu_stop_button.configure(state="normal")
         thread = threading.Thread(target=self._onu_save_olt_configuration_worker, args=(family, connection), daemon=True)
         LineCheckAssistant._remember_worker(self, thread)
-        thread.start()
+        start_project_thread(thread)
 
     def _onu_save_olt_configuration_worker(self, family: str, connection: OltConnection) -> None:
         result = OnuRegistrationService(logger=self._log).save_configuration(
             family, connection, self.onu_cancel_event
         )
+        report_project_result(result)
         self.after(0, lambda: self._complete_onu_save_olt_configuration(family, connection.host, result))
 
     def _complete_onu_save_olt_configuration(self, family: str, host: str, result) -> None:
@@ -3928,7 +3943,7 @@ class LineCheckAssistant(ProjectViewFrame):
         run.thread = threading.Thread(target=worker, args=args, kwargs={"run": run}, daemon=True)
         try:
             LineCheckAssistant._remember_worker(self, run.thread)
-            run.thread.start()
+            start_project_thread(run.thread)
         except Exception as exc:
             LineCheckAssistant._finish_upgrade_run(self, run, [], str(exc))
             raise
@@ -3972,6 +3987,7 @@ class LineCheckAssistant(ProjectViewFrame):
             # Queue completion only after the worker's finally blocks and COM cleanup.
             self.after(50, lambda: LineCheckAssistant._finish_upgrade_run(self, run, results, error))
             return True
+        report_project_result(results, state='stopped' if run.control.is_set() else 'unknown' if error else None)
         run.finished = True
         self.sample_upgrade_running = False
         terminal = getattr(self, "serial_terminal", None)
@@ -5820,10 +5836,12 @@ class LineCheckAssistant(ProjectViewFrame):
                         "查询样机版本失败", error, parent=self.test_item_config_window
                     ),
                 )
+                report_project_result(state='failed')
                 self.log_queue.put(f"[项目信息] 查询失败：{exc}")
                 return
             finally:
                 self.after(0, query_finished)
+            report_project_result(state='succeeded')
             self.after(0, lambda: on_success(result))
 
         try:
@@ -6320,6 +6338,7 @@ class LineCheckAssistant(ProjectViewFrame):
             ]
             for result in results:
                 self.dut_config_ui_queue.put(("item", "telnet", result))
+        report_project_result(results)
         self.dut_config_ui_queue.put(("finished", "telnet", results))
 
     def _finish_dut_telnet_enable(
@@ -6481,6 +6500,7 @@ class LineCheckAssistant(ProjectViewFrame):
             ]
             for result in results:
                 self.dut_config_ui_queue.put(("item", "wan_query", result))
+        report_project_result(results)
         self.dut_config_ui_queue.put(("finished", "wan_query", results))
 
     def _finish_dut_wan_query(self, results: list[DutWanQueryResult]) -> None:
@@ -6704,6 +6724,7 @@ class LineCheckAssistant(ProjectViewFrame):
             ]
             for result in results:
                 self.dut_config_ui_queue.put(("item", query_feature, result))
+        report_project_result(results)
         self.dut_config_ui_queue.put(("finished", query_feature, results))
 
     def _finish_dut_current_status_query(
@@ -6984,6 +7005,7 @@ class LineCheckAssistant(ProjectViewFrame):
             ]
             for result in results:
                 self.dut_config_ui_queue.put(("item", feature, result))
+        report_project_result(results)
         self.dut_config_ui_queue.put(("finished", feature, results))
 
     def _finish_dut_advanced_config(
@@ -8068,7 +8090,7 @@ class LineCheckAssistant(ProjectViewFrame):
         self.power_on_running = True
         thread = threading.Thread(target=self._power_on_worker, args=(selected_com, power_channels, power_action, wait_seconds), daemon=True)
         LineCheckAssistant._remember_worker(self, thread)
-        thread.start()
+        start_project_thread(thread)
 
     def _open_power_control(self) -> None:
         """供全流程窗口「自动上/下电 → 去配置」使用，只保存配置不执行电源操作。"""
@@ -8185,8 +8207,10 @@ class LineCheckAssistant(ProjectViewFrame):
                     power_channels,
                     on_output=lambda line: self.log_queue.put(line),
                 )
+            report_project_result(result)
             self.log_queue.put(result.message)
         except Exception as exc:
+            report_project_result(state='unknown')
             self.log_queue.put(f"自动上/下电后台流程异常：{exc}")
         finally:
             self.log_queue.put("__POWER_DONE__")
@@ -8368,7 +8392,7 @@ class LineCheckAssistant(ProjectViewFrame):
         self.progress.configure(value=0, maximum=len(channels))
         thread = threading.Thread(target=self._check_worker, args=(channels,), daemon=True)
         LineCheckAssistant._remember_worker(self, thread)
-        thread.start()
+        start_project_thread(thread)
 
     def _validate_channels(self, channels) -> str:
         available = {adapter_alias_from_display(adapter) for adapter in self.adapters}
@@ -8392,6 +8416,7 @@ class LineCheckAssistant(ProjectViewFrame):
         diagnostic_run_id = uuid.uuid4().hex
         LineCheckAssistant._observe_ai_power_event(self, {"type": "diagnostic_start", "run_id": diagnostic_run_id})
         passed = 0
+        project_results = []
         for index, channel in enumerate(channels, start=1):
             self.log_queue.put(f"开始检查 {channel.section}")
             self.log_queue.put(f"  VLAN：{channel.vlan_name or '未配置'}")
@@ -8403,6 +8428,7 @@ class LineCheckAssistant(ProjectViewFrame):
                 channel.subnet_mask,
                 channel.device_manage_ip,
             )
+            project_results.append(result)
             if result.ok:
                 passed += 1
                 self.log_queue.put(f"[通过] {channel.section} {result.message}")
@@ -8418,6 +8444,7 @@ class LineCheckAssistant(ProjectViewFrame):
             self.log_queue.put(f"__PROGRESS__:{index}")
         self.log_queue.put(f"线路检查完成：通过 {passed}/{len(channels)}")
         LineCheckAssistant._observe_ai_power_event(self, {"type": "diagnostic_end", "run_id": diagnostic_run_id})
+        report_project_result(project_results)
         self.log_queue.put("__DONE__")
 
     def _drain_log_queue(self) -> None:

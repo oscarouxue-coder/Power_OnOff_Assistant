@@ -1,10 +1,17 @@
 """Thread-local configuration view of an admitted immutable project revision."""
 from contextlib import contextmanager
-from contextvars import ContextVar
+from contextvars import ContextVar, copy_context
 from pathlib import Path
 
 
 _task_roots = ContextVar('linecheck_project_task_roots', default=None)
+
+
+def capture_ui_context():
+    """Keep run correlation while returning UI config stores to the editable draft."""
+    context = copy_context()
+    context.run(_task_roots.set, None)
+    return context
 
 
 def task_path(path):

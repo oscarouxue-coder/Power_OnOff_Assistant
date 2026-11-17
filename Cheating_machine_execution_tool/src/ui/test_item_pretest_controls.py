@@ -5,10 +5,11 @@ from src.ui import project_dialogs as messagebox
 
 import queue
 import threading
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
 from src.services.test_item_pretest_service import run_pretest
 from src.services.project_execution import project_operation
+from src.services.project_runtime import start_project_thread, report_project_result
 from src.services.telnet_post_login_service import describe_telnet_post_login
 
 
@@ -71,7 +72,7 @@ class PretestControls:
         self.stop_button.configure(state="normal")
         self.log(f"[预备测试] 已确认执行目标：\n{targets}", "")
         try:
-            threading.Thread(target=self._worker, args=(request,), daemon=True).start()
+            start_project_thread(threading.Thread(target=self._worker, args=(request,), daemon=True))
         except Exception as exc:
             self.log(f"[预备测试] 启动失败：{exc}", "error")
             self._finish()
@@ -80,8 +81,10 @@ class PretestControls:
 
     def _worker(self, request):
         try:
-            run_pretest(request, self.cancel, lambda text, tag: self.events.put((text, tag)))
+            result = run_pretest(request, self.cancel, lambda text, tag: self.events.put((text, tag)))
+            report_project_result(result)
         except Exception as exc:
+            report_project_result(state='unknown')
             self.events.put((f"[预备测试] 执行失败：{exc}", "error"))
         finally:
             self.events.put(None)

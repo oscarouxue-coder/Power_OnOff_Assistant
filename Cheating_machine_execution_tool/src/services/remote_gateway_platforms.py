@@ -108,7 +108,7 @@ class GatewayPlatforms:
                 from src.services.feishu_output import reply_posts
                 config = self.configs["feishu"]
                 api = FeishuApi(config["app_id"], config["app_secret"])
-                for index, post in enumerate(reply_posts(principal.chat, "LineCheckAssistant统一接入", row[2])):
+                for index, post in enumerate(reply_posts(principal.chat, "DUTPilot统一接入", row[2])):
                     api.send_post(principal.chat, post, identifier=digest((row[0], index))[:32])
             state = "sent"
         except Exception:

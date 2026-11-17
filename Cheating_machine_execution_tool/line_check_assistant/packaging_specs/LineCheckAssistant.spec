@@ -18,7 +18,7 @@ validate_snapshot(json.loads(case_snapshot.read_text(encoding='utf-8')))
 build_info = Path(workpath) / "BUILD_INFO.txt"
 build_info.parent.mkdir(parents=True, exist_ok=True)
 build_info.write_text(
-    "LineCheckAssistant standard slim packaging\n"
+    "DUTPilot standard slim packaging\n"
     f"Build date: {date.today().isoformat()}\n"
     "Toolchain: CPython 3.9.10 x64 / PyInstaller 5.10.1; requirements-build.txt\n"
     "Change summary: see the bundled VERSION_INFO.txt for this release.\n"
@@ -64,7 +64,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='LineCheckAssistant',
+    name='DUTPilot',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

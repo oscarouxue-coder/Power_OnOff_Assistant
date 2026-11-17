@@ -133,7 +133,7 @@ class BuildContextRegressionTests(unittest.TestCase):
 
         source = inspect.getsource(pw_mod.PipelineWindow._on_start)
         self.assertIn("self.window.withdraw()", source)
-        self.assertLess(source.index("self._running_thread.start()"), source.index("self.window.withdraw()"))
+        self.assertLess(source.index("start_project_thread(self._running_thread)"), source.index("self.window.withdraw()"))
         self.assertIn("全流程配置窗口已自动隐藏", source)
 
     def test_pipeline_completion_dialogs_use_main_window_as_parent(self) -> None:

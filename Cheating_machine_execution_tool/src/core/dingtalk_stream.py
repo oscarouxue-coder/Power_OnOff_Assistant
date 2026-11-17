@@ -147,7 +147,7 @@ class DingTalkStream:
                     connection = self.opener("https://api.dingtalk.com/v1.0/gateway/connections/open", {
                         "clientId": self.client_id, "clientSecret": self.client_secret,
                         "subscriptions": [{"type": "CALLBACK", "topic": BOT_TOPIC}],
-                        "ua": "LineCheckAssistant/Python3.9"})
+                        "ua": "DUTPilot/Python3.9"})
                     endpoint, ticket = connection.get("endpoint", ""), connection.get("ticket", "")
                     parts = urlsplit(endpoint)
                     if (parts.scheme != "wss" or not parts.hostname or not parts.hostname.endswith(".dingtalk.com")

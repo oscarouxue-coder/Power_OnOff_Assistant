@@ -22,13 +22,14 @@ from src.core.github_release_client import (
 from src.models.app_update import AppUpdateCheckResult, ReleaseAsset, UpdateCheckStatus, UpdateProgressStage
 from src.services.app_update_service import (
     AppUpdateCancelled, AppUpdateError, AppUpdateService, PORTABLE_ZIP_NAME, PORTABLE_ZIP_SHA256_NAME,
+    LEGACY_PORTABLE_ZIP_NAME,
 )
 
 
-def zip_content():
+def zip_content(package_name=PORTABLE_ZIP_NAME):
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w") as archive:
-        archive.writestr("LineCheckAssistant_portable/VERSION_INFO.txt", "版本：V1.1.10")
+        archive.writestr(package_name[:-4] + "/VERSION_INFO.txt", "版本：V1.1.10")
     return stream.getvalue()
 
 
@@ -36,14 +37,14 @@ ZIP_CONTENT = zip_content()
 ZIP_HASH = hashlib.sha256(ZIP_CONTENT).hexdigest()
 
 
-def release_payload(version="v1.1.10"):
+def release_payload(version="v1.1.10", package_name=PORTABLE_ZIP_NAME):
     return {
         "tag_name": version, "draft": False, "prerelease": False,
         "published_at": "2026-10-16T01:00:00Z", "body": "修复与新增功能",
         "html_url": "https://github.com/example/app/releases/tag/" + version,
         "assets": [
-            {"name": PORTABLE_ZIP_NAME, "size": len(ZIP_CONTENT), "browser_download_url": "https://github.com/example/portable.zip"},
-            {"name": PORTABLE_ZIP_SHA256_NAME, "size": 100, "browser_download_url": "https://github.com/example/checksum.txt"},
+            {"name": package_name, "size": len(ZIP_CONTENT), "browser_download_url": "https://github.com/example/" + package_name},
+            {"name": package_name + ".sha256.txt", "size": 100, "browser_download_url": "https://github.com/example/" + package_name + ".sha256.txt"},
         ],
     }
 
@@ -226,6 +227,78 @@ class AppUpdateCheckTests(unittest.TestCase):
         self.assertEqual(result.expected_sha256, ZIP_HASH)
         self.assertEqual(result.release_notes, "修复与新增功能")
 
+    def test_legacy_release_is_checked_and_downloaded_with_its_own_checksum(self):
+        content = zip_content(LEGACY_PORTABLE_ZIP_NAME)
+        digest = hashlib.sha256(content).hexdigest()
+        payload = release_payload(package_name=LEGACY_PORTABLE_ZIP_NAME)
+        payload["assets"][0]["size"] = len(content)
+        self.client.latest_release.return_value = payload
+        self.client.read_text_asset.return_value = f"{digest} *{LEGACY_PORTABLE_ZIP_NAME}"
+        result = self.service.check_for_update("V1.1.9")
+        self.assertEqual(result.package_asset.name, LEGACY_PORTABLE_ZIP_NAME)
+        self.client.read_text_asset.assert_called_once_with(payload["assets"][1]["browser_download_url"], None)
+        self.client.download_asset.side_effect = lambda url, path, *args: path.write_bytes(content)
+        with tempfile.TemporaryDirectory() as folder:
+            destination = Path(folder) / PORTABLE_ZIP_NAME
+            self.service.download_update(result, destination, threading.Event())
+            self.assertEqual(destination.read_bytes(), content)
+
+    def both_names_payload(self):
+        payload = release_payload()
+        payload["assets"] += release_payload(package_name=LEGACY_PORTABLE_ZIP_NAME)["assets"]
+        return payload
+
+    def test_new_pair_wins_even_when_legacy_assets_are_first(self):
+        payload = self.both_names_payload()
+        payload["assets"].reverse()
+        self.client.latest_release.return_value = payload
+        result = self.service.check_for_update("V1.1.9")
+        self.assertEqual(result.package_asset.name, "DUTPilot_portable.zip")
+        self.client.read_text_asset.assert_called_once_with(
+            "https://github.com/example/DUTPilot_portable.zip.sha256.txt", None)
+
+    def test_incomplete_new_pair_never_falls_back_to_complete_legacy_pair(self):
+        for index, missing in ((0, PORTABLE_ZIP_NAME), (1, PORTABLE_ZIP_SHA256_NAME)):
+            payload = self.both_names_payload()
+            payload["assets"].pop(index)
+            self.client.latest_release.return_value = payload
+            with self.subTest(missing=missing), self.assertRaisesRegex(AppUpdateError, missing):
+                self.service.check_for_update("V1.1.9")
+        self.client.read_text_asset.assert_not_called()
+
+    def test_mixed_names_and_incomplete_legacy_pair_are_rejected(self):
+        for new_index in (0, 1):
+            payload = release_payload()
+            payload["assets"] = [payload["assets"][new_index],
+                release_payload(package_name=LEGACY_PORTABLE_ZIP_NAME)["assets"][1-new_index]]
+            self.client.latest_release.return_value = payload
+            with self.subTest(mixed=new_index), self.assertRaisesRegex(AppUpdateError, "缺少附件"):
+                self.service.check_for_update("V1.1.9")
+        for index in (0, 1):
+            payload = release_payload(package_name=LEGACY_PORTABLE_ZIP_NAME)
+            payload["assets"].pop(index)
+            self.client.latest_release.return_value = payload
+            with self.subTest(legacy_missing=index), self.assertRaisesRegex(AppUpdateError, "缺少附件"):
+                self.service.check_for_update("V1.1.9")
+        self.client.read_text_asset.assert_not_called()
+
+    def test_mismatched_new_checksum_does_not_fall_back(self):
+        self.client.latest_release.return_value = self.both_names_payload()
+        self.client.read_text_asset.return_value = f"{ZIP_HASH} *{LEGACY_PORTABLE_ZIP_NAME}"
+        with self.assertRaisesRegex(AppUpdateError, "有效 SHA256"):
+            self.service.check_for_update("V1.1.9")
+        self.client.read_text_asset.assert_called_once()
+        self.client.download_asset.assert_not_called()
+
+    def test_invalid_new_asset_url_does_not_fall_back(self):
+        for index in (0, 1):
+            payload = self.both_names_payload()
+            payload["assets"][index]["browser_download_url"] = "http://example.invalid/file"
+            self.client.latest_release.return_value = payload
+            with self.subTest(index=index), self.assertRaisesRegex(AppUpdateError, "HTTPS"):
+                self.service.check_for_update("V1.1.9")
+        self.client.read_text_asset.assert_not_called()
+
     def test_same_or_older_remote_never_prompts_downgrade_or_reads_checksum(self):
         for remote in ("v1.1.4", "v1.0.99"):
             self.client.latest_release.return_value = release_payload(remote)
@@ -306,7 +379,7 @@ class AppUpdateCheckTests(unittest.TestCase):
         log = Mock()
         self.service.check_for_update("V1.1.4", log=log)
         self.assertIn("/releases/latest", log.call_args_list[0].args[0])
-        self.assertIn("https://github.com/example/checksum.txt", log.call_args_list[1].args[0])
+        self.assertIn("https://github.com/example/" + PORTABLE_ZIP_SHA256_NAME, log.call_args_list[1].args[0])
 
 
 class AppUpdateDownloadTests(unittest.TestCase):

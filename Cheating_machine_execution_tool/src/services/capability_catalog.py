@@ -184,7 +184,7 @@ def business_catalog():
         ('projects.save', '保存项目及页面草稿', 'save_project', ''),
         ('projects.duplicate', '另存为独立项目', 'duplicate_project', ''),
         ('projects.rename', '重命名项目', 'rename_project', ''),
-        ('projects.import', '导入旧配置及历史', 'import_project', ''),
+        ('projects.import', '备份并导入旧配置及历史', 'import_project', ''),
         ('projects.close', '安全关闭项目', 'close_project', ''),
         ('projects.forget', '从最近列表移除', 'forget_project', ''),
         ('projects.remote_scope', '本机确认远程项目范围', 'remote_project_range', ''),
@@ -197,5 +197,6 @@ def business_catalog():
             capability_id=capability or 'local_confirmation', status='connected' if capability else 'manual_control',
             reason='仅local/gui查询项目身份和状态；不切换目标、不扩大权限' if capability else
                    '涉及本地目录所有权、配置版本、运行生命周期或远程授权，限本机操作员；AI不可模拟GUI或自行确认',
-            tests=['test_project_management.py', 'test_project_workspace.py', 'test_workspace_platforms.py']))
+            tests=['test_project_management.py', 'test_project_workspace.py', 'test_workspace_platforms.py',
+                   'test_project_completion.py', 'test_multi_project_business_validation.py']))
     return result

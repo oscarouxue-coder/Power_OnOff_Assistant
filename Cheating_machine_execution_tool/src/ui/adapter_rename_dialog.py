@@ -1,10 +1,12 @@
 """网卡名称修改的确认、输入和后台任务窗口。"""
 from __future__ import annotations
 from src.services.project_execution import project_operation
+from src.services.project_runtime import start_project_thread, report_project_result
 
 import queue
 import threading
-from tkinter import StringVar, Toplevel, messagebox, ttk
+from tkinter import StringVar, Toplevel, ttk
+from src.ui import project_dialogs as messagebox
 
 from src.models.network_adapter import AdapterRenameResult
 from src.services.adapter_rename_service import (
@@ -96,7 +98,7 @@ class AdapterRenameDialog:
         self.cancel_button.configure(state="disabled")
         self.status_var.set("正在修改并核实网卡名称，请等待……")
         try:
-            threading.Thread(target=self._worker, args=(new_name,), daemon=True).start()
+            start_project_thread(threading.Thread(target=self._worker, args=(new_name,), daemon=True))
         except Exception as exc:
             self._finish(AdapterRenameResult(False, f"启动修改任务失败：{exc}"))
             return
@@ -110,6 +112,7 @@ class AdapterRenameDialog:
             )
         except Exception as exc:
             result = AdapterRenameResult(False, f"重命名任务异常：{exc}。请核实系统网卡名称后刷新。", uncertain=True)
+        report_project_result(result)
         self.events.put(("result", result))
 
     def _poll(self):

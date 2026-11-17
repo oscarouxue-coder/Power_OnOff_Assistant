@@ -40,7 +40,7 @@ def send_test_message(values: Mapping[str, object], project_config_path: Path, *
     log(f'[消息推送] 已识别{name}；下发测试消息：POST {SAFE_ENDPOINTS[platform]}（凭据省略）。')
     sender = send_feishu_text if platform == 'feishu' else send_text
     sender(values['webhook'], values['secret'],
-           f'项目：{project_name}\nLineCheckAssistant 消息推送测试：收到此消息表示{name}机器人推送正常。',
+           f'项目：{project_name}\nDUTPilot 消息推送测试：收到此消息表示{name}机器人推送正常。',
            at_all=values['at_all'] == '1')
     return name
 

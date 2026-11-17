@@ -1,8 +1,12 @@
-LineCheckAssistant 便携版版本说明
+DUTPilot 便携版版本说明
 ==================================
 
 版本：V1.2.10
 发布日期：2026-11-13
+
+产品名称：源码与后续构建已改名为DUTPilot，当前版本号保持V1.2.10。
+旧版客户端首次升级需手动下载完整DUTPilot ZIP；新版兼容新旧附件名称。
+旧配置和本机数据路径保留，换版前请备份；本说明不修改已发布历史产物。
 
 本版本更新：
 1. 优化串口大流量时的显示与线程收尾，降低界面卡顿风险；完整原始日志继续
@@ -100,12 +104,12 @@ AI 使用说明：
 - 测试项执行、失败通道续跑、串口日志、DUT 配置及消息推送。
 
 下载与使用：
-- 下载 LineCheckAssistant_portable.zip 并完整解压，再运行其中的 LineCheckAssistant.exe；
+- 下载 DUTPilot_portable.zip 并完整解压，再运行其中的 DUTPilot.exe；
   首次运行建议以管理员身份运行。
 - 新包配置已脱敏，使用前填写现场网络、COM、设备账号及测试方案。
 - 换版前结束测试并退出旧程序，备份旧目录及 Auto_power_on_off_tool/config；
   将新包解压到另一个目录后迁移配置，不要用默认配置覆盖旧目录。
-- 下载同次发布的 LineCheckAssistant_portable.zip.sha256.txt 核对 ZIP 下载完整性。
+- 下载同次发布的 DUTPilot_portable.zip.sha256.txt 核对 ZIP 下载完整性。
   版本说明、第三方声明及 EXE 校验文件均包含在 ZIP 内。
 
 - 150% 字体缩放时建议窗口保持 1200 像素以上宽度或最大化。

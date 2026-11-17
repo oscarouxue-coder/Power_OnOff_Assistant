@@ -48,8 +48,9 @@ class ProjectStore:
         self.lock = threading.RLock()
         self.opened = {}
         self.leases = {}
+        self.import_backups = {}
 
-    def create(self, directory, name, *, import_directory=None):
+    def create(self, directory, name, *, import_directory=None, _configuration_copy=False):
         root = Path(directory).resolve()
         name = str(name).strip()
         if not name or len(name) > 160 or any(c in name for c in "\r\n\0"):
@@ -67,7 +68,13 @@ class ProjectStore:
                                or (p / "network_card_ip.ini").is_file()), None)
                 if config is None:
                     raise ValueError("未找到旧项目配置目录")
-                self._copy_config(config, context.config_dir)
+                if not _configuration_copy:
+                    from src.services.project_import_service import backup_import
+                    backup = backup_import(config, root, self.emit)
+                    self.import_backups[context.identity.project_id] = backup
+                    self._copy_config(backup / 'config', context.config_dir)
+                else:
+                    self._copy_config(config, context.config_dir)
                 self._import_assets(context, config)
             else:
                 from scripts.create_portable_config import create_portable_config
@@ -140,7 +147,7 @@ class ProjectStore:
 
     @staticmethod
     def _validate_paths(context):
-        paths = [context.root / name for name in ('draft', 'revisions', 'history', 'runs', 'ui', 'inputs', 'logs')]
+        paths = [context.root / name for name in ('draft', 'revisions', 'history', 'runs', 'ui', 'inputs', 'logs', 'backups')]
         paths.extend((context.config_dir, context.saved_root / 'Auto_power_on_off_tool/config'))
         for expected in paths:
             if expected.resolve() != expected:
@@ -150,6 +157,9 @@ class ProjectStore:
         root = Path(directory).resolve()
         if root.is_file():
             root = root.parent
+        import_state = root / 'import_state.json'
+        if import_state.exists() and json.loads(import_state.read_text(encoding='utf-8')).get('state') != 'complete':
+            raise ValueError('该目录导入未完成；原始备份保留，请先核对导入失败记录')
         value = json.loads((root / PROJECT_FILE).read_text(encoding="utf-8"))
         if type(value.get('format_version')) is not int or value.get("format_version") != FORMAT_VERSION:
             raise ValueError("项目格式版本不受支持，请使用匹配版本的程序")
@@ -232,7 +242,7 @@ class ProjectStore:
 
     def duplicate(self, context, directory, name=None):
         return self.create(directory, name or context.identity.name + " 副本",
-                           import_directory=context.saved_root)
+                           import_directory=context.saved_root, _configuration_copy=True)
 
     def snapshot(self, context):
         """New task data directory; immutable saved config, isolated legacy output paths."""
@@ -248,6 +258,9 @@ class ProjectStore:
     def import_history(self, context, legacy_root):
         from src.services.ai_project_store import project_directory
         source = project_directory(legacy_root) / "diagnostics.sqlite3"
+        backup = self.import_backups.get(context.identity.project_id)
+        if backup is not None:
+            source = backup / 'history' / 'diagnostics.sqlite3'
         target = context.history / "ai" / "diagnostics.sqlite3"
         if source.is_file() and not target.exists():
             target.parent.mkdir(parents=True, exist_ok=True)

@@ -19,6 +19,8 @@ class WorkspaceService:
         self.directory = Path(directory) if directory else workspace_data_dir()
         self.directory.mkdir(parents=True, exist_ok=True)
         self.emit = emit
+        from src.services.project_status_service import ProjectStatusService
+        self.status = ProjectStatusService(emit)
         from src.models.dependency_repair import MaintenanceGate
         self.maintenance = MaintenanceGate()
         self.projects = ProjectStore(self.source_root, emit)
@@ -86,7 +88,15 @@ class WorkspaceService:
     def list_projects(self):
         with self.projects.lock:
             return [dict(project_id=context.identity.project_id, name=context.identity.name,
-                         revision=context.identity.revision) for context in self.projects.opened.values()]
+                         revision=context.identity.revision, **self.status.snapshot(context).public())
+                    for context in self.projects.opened.values()]
+
+    def refresh_status(self, context, *, busy=False, closing=False):
+        controller = self.controllers.get(context.identity.project_id)
+        capabilities = getattr(controller, 'capabilities', None)
+        jobs = capabilities.jobs.runtime_states() if capabilities is not None else ()
+        self.status.set_activity(context.identity.project_id, busy, closing, jobs,
+                                 self.resources.unknown_for(context.identity.project_id))
 
     def forget(self, directory):
         directory = Path(directory).resolve()
@@ -124,13 +134,35 @@ class WorkspaceService:
         from src.services.workspace_platforms import ProjectPlatformConfig
         return ProjectPlatformConfig(shared, context.history / 'ai')
 
-    def import_connections(self, legacy_root):
+    def import_project(self, source, destination, name):
+        from src.services.project_import_service import legacy_root
+        context = self.projects.create(destination, name, import_directory=source)
+        try:
+            atomic_json(context.root / 'import_state.json', dict(state='preparing'))
+            root = legacy_root(source)
+            self.projects.import_history(context, root)
+            self.import_connections(root, backup=self.projects.import_backups[context.identity.project_id])
+            atomic_json(context.root / 'import_state.json', dict(state='complete'))
+            return context
+        except BaseException:
+            try:
+                atomic_json(context.root / 'import_state.json', dict(state='failed'))
+            except OSError:
+                pass
+            self.projects.close(context)
+            self.emit('[项目导入] 导入未完成；原始备份保留，项目未接入工作区')
+            raise
+
+    def import_connections(self, legacy_root, *, backup=None):
         import hashlib
         from src.services.dingtalk_remote_store import RemoteConfigStore
         from src.services.feishu_remote_store import FeishuConfigStore
         key = hashlib.sha256(str(Path(legacy_root).resolve()).encode()).hexdigest()[:20]
         for kind, factory, field in (('dingtalk', RemoteConfigStore, 'client_id'), ('feishu', FeishuConfigStore, 'app_id')):
-            value = factory(legacy_root).load()
+            incoming = factory(legacy_root)
+            if backup is not None:
+                incoming.path = backup / 'history' / (kind + '.json')
+            value = incoming.load()
             if not value.get(field):
                 continue
             # Imported credentials are retained, while enabling and project access
@@ -308,6 +340,7 @@ class WorkspaceService:
         atomic_json(self.directory / 'reconciliations' / (hashlib.sha256(owner.encode()).hexdigest() + '.json'),
                     dict(owner=owner, evidence=evidence, reviewed_by='local_operator', replayed=False))
         self.resources.resolve(owner)
+        self.status.reconcile(owner)
         self.emit('[项目管理] 本机负责人已记录现场依据并解除原未知任务保护；不会自动重试设备操作')
 
     @property

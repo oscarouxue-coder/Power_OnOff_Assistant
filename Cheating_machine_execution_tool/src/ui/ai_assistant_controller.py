@@ -113,7 +113,8 @@ class AiAssistantController:
                 data.snapshot, data.admissible, lambda requests: inspect_upgrade_network(requests, emit), emit,
                 released=data.released, tool_root=app_dir, onu_configuration=data.onu_snapshot, channel_commit=data.commit_channels,
                 settings_commit=data.commit_settings,
-                resource_coordinator=workspace.resources if workspace else None, project_context=project_context)
+                resource_coordinator=workspace.resources if workspace else None, project_context=project_context,
+                status_service=workspace.status if workspace else None)
             self.capabilities.maintenance = maintenance
             self.capability_bridge.channel_configuration = getattr(self.capabilities, 'channel_configuration', None)
             self.capability_bridge.settings_configuration = getattr(self.capabilities, 'settings', None)

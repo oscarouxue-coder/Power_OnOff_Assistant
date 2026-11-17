@@ -162,7 +162,7 @@ class AppUpdateDialog:
             return
         path = filedialog.asksaveasfilename(
             parent=self.window, title="保存新版本便携包",
-            initialfile=f"LineCheckAssistant_portable_{self.update.latest_version}.zip",
+            initialfile=f"DUTPilot_portable_{self.update.latest_version}.zip",
             defaultextension=".zip", filetypes=[("ZIP 压缩包", "*.zip")],
             confirmoverwrite=False,
         )

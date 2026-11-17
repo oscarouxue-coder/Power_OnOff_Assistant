@@ -173,7 +173,7 @@ def create_portable_config(source_dir: Path, destination_dir: Path) -> tuple[Pat
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="生成 LineCheckAssistant 便携版脱敏配置")
+    parser = argparse.ArgumentParser(description="生成 DUTPilot 便携版脱敏配置")
     parser.add_argument("--source", required=True, type=Path, help="当前配置模板目录")
     parser.add_argument("--destination", required=True, type=Path, help="便携版配置输出目录")
     args = parser.parse_args()

@@ -270,8 +270,12 @@ def run_pipeline(context, selected, channel, run, emit):
         orchestrator = PipelineOrchestrator(context, emit)
         run.diagnostic_run_id = orchestrator.diagnostic_run_id
         results = orchestrator.run(selected)
+        from src.services.project_runtime import report_project_result
+        report_project_result(results, state='stopped' if run.stop.is_set() else None)
         run.outcome = (results, '')
     except Exception as exc:
+        from src.services.project_runtime import report_project_result
+        report_project_result(state='unknown')
         run.outcome = ([], type(exc).__name__ + ': ' + str(exc))
     finally:
         run.finished.set()

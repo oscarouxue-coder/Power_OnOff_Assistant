@@ -5,7 +5,7 @@ if __name__ == "__main__":
 
     import argparse
     import os
-    parser = argparse.ArgumentParser(description="LineCheckAssistant")
+    parser = argparse.ArgumentParser(description="DUTPilot")
     parser.add_argument('project', nargs='?', help='要打开的project.linecheck.json或项目文件夹')
     parser.add_argument('--legacy-single-project', action='store_true', help='兼容回退：使用原程序目录配置的单项目入口')
     parser.add_argument("--gateway-slot", type=int, help="显式启用已配对并在本地允许的统一接入槽位1至64")

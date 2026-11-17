@@ -114,7 +114,7 @@ class AppUpdateUiTests(unittest.TestCase):
         with patch.object(self.dialog, "_start_task") as start:
             self.dialog.download()
         start.assert_not_called()
-        self.assertIn("v1.1.10", save_dialog.call_args.kwargs["initialfile"])
+        self.assertEqual(save_dialog.call_args.kwargs["initialfile"], "DUTPilot_portable_v1.1.10.zip")
 
     def test_existing_destination_requires_confirmation_before_download(self):
         self.dialog.update = update_result()
@@ -232,7 +232,7 @@ class AppUpdateTkTests(unittest.TestCase):
         self.logs = queue.Queue()
         self.client = Mock()
         self.client.latest_release.return_value = release_payload()
-        self.client.read_text_asset.return_value = f"{ZIP_HASH} *LineCheckAssistant_portable.zip"
+        self.client.read_text_asset.return_value = f"{ZIP_HASH} *DUTPilot_portable.zip"
         self.dialog = AppUpdateDialog(self.root, "V1.1.4", log=self.logs.put, service_factory=lambda: AppUpdateService(self.client))
         self.button = ttk.Button(self.root, text="检查更新", command=self.dialog.open)
         self.dialog.bind_button(self.button)
