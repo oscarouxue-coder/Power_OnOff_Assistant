@@ -1,0 +1,15 @@
+GUI_TEST_COVERAGE_OK
+F
+======================================================================
+FAIL: test_old_local_device_session_accepts_retained_evidence_only (test_qt_workspace_adapter.QtWorkspaceAdapterTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\ADMINI~1\AppData\Local\Temp\dutpilot-archive-chat-kbi5wihd\test_qt_workspace_adapter.py", line 844, in test_old_local_device_session_accepts_retained_evidence_only
+    self.assertTrue(view.history_analysis and view.writable)
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 1 test in 1.980s
+
+FAILED (failures=1)
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

@@ -20,6 +20,8 @@ class _ChannelInteractionContract:
         )
 
     def setUp(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         self.root = tk.Tk()
         self.addCleanup(self.close_root)
         self.root.geometry('560x650+20+20')
@@ -186,6 +188,8 @@ class FlatChannelListContractTests(_ChannelInteractionContract, unittest.TestCas
 
 class ChannelListAppearanceTests(unittest.TestCase):
     def setUp(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         self.root = tk.Tk()
         self.root.geometry('1000x650+20+20')
         self.addCleanup(self.root.destroy)
@@ -220,6 +224,14 @@ class ChannelListAppearanceTests(unittest.TestCase):
 
     @unittest.skipUnless(sys.platform == 'win32', 'Actual Windows render pixels require Win32')
     def test_selected_blurred_refocused_pixels_are_flat_in_both_themes(self):
+        import os
+        if not os.environ.get('DUTPILOT_NATIVE_RENDER_DESKTOP'):
+            from tk_test_windows import run_gui_child
+            result = run_gui_child([sys.executable, '-m', 'unittest', self.id(), '-v'],
+                native_render=True, capture_output=True, text=True, encoding='utf-8', timeout=25)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(result.offscreen_report['isolation'], 'private_desktop')
+            return
         user32, gdi32 = ctypes.windll.user32, ctypes.windll.gdi32
         user32.GetDC.argtypes = [ctypes.c_void_p]
         user32.GetDC.restype = ctypes.c_void_p

@@ -1,0 +1,28 @@
+GUI_TEST_COVERAGE_OK
+test_bounded_inactive_buffer_and_old_subscription_isolation (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_close_failure_remains_visible_and_blocks_reopen_and_shutdown (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_closing_one_monitor_keeps_other_owner_and_rejects_stale_delivery (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_dangerous_confirmation_cancel_expiry_and_binding_change (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_detach_releases_sessions_when_window_preferences_are_unwritable (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_diagnostic_snapshot_preserves_ownership_input_and_original_history (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_directory_persistence_failure_does_not_change_current_path (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_directory_restore_preserves_geometry_and_existing_session_file (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_existing_different_serial_settings_are_not_silently_reconfigured (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_failed_release_restores_subscription_with_new_identity (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_manual_text_empty_enter_and_control_lock_never_replay (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_only_gui_sources_registered_no_agent_raw_write_expansion (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_open_all_preserves_original_log_name_timestamps_and_tail_on_close (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_partial_detach_can_retry_without_releasing_another_monitor (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_partial_open_failure_keeps_other_monitor_and_reports_real_error (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_passive_read_reports_incompatible_settings_without_changing_session (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_reader_error_visible_without_log_event_delivery (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_show_selected_targets_does_not_open_devices_and_uses_legacy_fallback (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_shutdown_waits_for_real_reader_callback_and_flushes_tail (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_stale_window_token_cannot_stop_or_send (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_write_failure_releases_only_manual_control_and_never_retries (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+
+----------------------------------------------------------------------
+Ran 21 tests in 0.480s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

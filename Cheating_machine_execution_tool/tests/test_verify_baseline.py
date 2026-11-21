@@ -4,7 +4,7 @@
 以及核心检查函数 `check_must_exist` / `check_must_not_exist` 在临时目录下的命中/缺失行为。
 防止「不变量清单被改错」或「检查函数被改坏」导致门禁误判。
 
-不依赖 subprocess,所有用例在 tempfile 临时目录构造最小化源码,毫秒级跑完。
+在 tempfile 临时目录构造最小化源码，并验证实际子进程的编译输入。
 """
 import os
 import sys
@@ -31,6 +31,7 @@ from verify_baseline import (  # noqa: E402  (sys.path mutation above)
     check_must_exist,
     check_must_not_exist,
     missing_required_baseline_tests,
+    run_py_compile,
 )
 
 
@@ -85,6 +86,28 @@ class VerifyBaselineStructureTests(unittest.TestCase):
 
 class CompileInventoryTests(unittest.TestCase):
     """新增主程序源码必须加入编译清单。"""
+
+    def test_compile_uses_full_inventory_beyond_windows_command_line_limit(self):
+        with tempfile.TemporaryDirectory(prefix="中文 编译-") as temporary:
+            root = Path(temporary)
+            name = "src/" + "working_module_" * 5 + ".py"
+            path = root / name
+            path.parent.mkdir()
+            path.write_text("value = 1\n", encoding="utf-8")
+            broken = root / "src" / "最后的错误.py"
+            broken.write_text("value =\n", encoding="utf-8")
+            files = (name,) * 450
+            self.assertGreater(sum(len(str(root / item)) for item in files), 32767)
+            with patch("verify_baseline.PY_COMPILE_FILES", files), \
+                 patch("verify_baseline.PY_COMPILE_SCRIPT_FILES", ()):
+                result = run_py_compile(root)
+                self.assertTrue(result.passed, result.detail)
+                self.assertIn("450 files", result.detail)
+            with patch("verify_baseline.PY_COMPILE_FILES", files + ("src/最后的错误.py",)), \
+                 patch("verify_baseline.PY_COMPILE_SCRIPT_FILES", ()):
+                result = run_py_compile(root)
+                self.assertFalse(result.passed)
+                self.assertIn("SyntaxError", result.detail)
 
     def test_reports_source_file_missing_from_compile_list(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -268,6 +291,54 @@ class CheckMustNotExistTests(unittest.TestCase):
             results = check_must_not_exist(root)
             zero = next(r for r in results if "0.0.0.0" in r.name)
             self.assertTrue(zero.passed)
+
+
+class GuiTestGateIntegrationTests(unittest.TestCase):
+    def test_unittest_uses_guarded_runner_and_preserves_count(self):
+        import verify_baseline as baseline
+        from types import SimpleNamespace
+        with patch.object(baseline.subprocess, 'run', return_value=SimpleNamespace(
+                returncode=0, stdout='Ran 3 tests in 0.1s\nOK\n', stderr='')) as run:
+            result, output = baseline.run_unittest(Path.cwd())
+        self.assertTrue(result.passed)
+        self.assertIn('Ran 3 tests', result.detail)
+        self.assertEqual(run.call_args[0][0][1:], ['scripts/run_tests.py', 'discover', '-s', 'tests', '-v'])
+
+    def test_unittest_count_and_chinese_output_survive_a_legacy_parent_codepage(self):
+        import verify_baseline as baseline
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'scripts').mkdir()
+            (root / 'scripts/run_tests.py').write_text(
+                'import sys\nprint("通道核对")\nprint("Ran 3 tests", file=sys.stderr)\n', encoding='utf-8')
+            with patch.dict(os.environ, PYTHONIOENCODING='cp936', PYTHONUTF8='0'):
+                result, output = baseline.run_unittest(root)
+            self.assertTrue(result.passed, result.detail)
+            self.assertIn('通道核对', output)
+
+    def test_runtime_failure_is_not_overridden_by_unittest_ok(self):
+        import verify_baseline as baseline
+        from types import SimpleNamespace
+        with patch.object(baseline.subprocess, 'run', return_value=SimpleNamespace(
+                returncode=1, stdout='Ran 3 tests\nOK\nGUI runtime failure', stderr='')):
+            result, output = baseline.run_unittest(Path.cwd())
+        self.assertFalse(result.passed)
+
+    def test_coverage_failure_prevents_test_start(self):
+        import verify_baseline as baseline
+        passed = baseline.CheckResult('fixture', True, 'ok')
+        with patch.object(baseline, 'run_py_compile', return_value=passed), \
+                patch.object(baseline, 'check_py_compile_inventory', return_value=passed), \
+                patch('verify_capability_coverage.check', return_value=[]), \
+                patch('verify_gui_test_coverage.check', return_value=['unowned GUI entry']), \
+                patch.object(baseline, 'run_unittest') as run, \
+                patch.object(baseline, 'check_must_exist', return_value=[]), \
+                patch.object(baseline, 'check_must_not_exist', return_value=[]):
+            results = baseline.collect_results(Path.cwd())
+        run.assert_not_called()
+        self.assertFalse(next(r for r in results if r.name == 'gui_test_coverage').passed)
+        self.assertIn('not run', next(r for r in results if r.name == 'unittest').detail)
+        self.assertTrue(next(r for r in results if r.name == 'capability_coverage').passed)
 
 
 if __name__ == "__main__":

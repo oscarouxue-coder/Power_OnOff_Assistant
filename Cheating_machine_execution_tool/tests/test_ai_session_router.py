@@ -237,6 +237,8 @@ class RouterTests(unittest.TestCase):
             self.assertEqual(conversation_tools(True, True, "general"), [])
 
     def test_first_send_refresh_does_not_invalidate_route_or_keep_sent_draft(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         root = tk.Tk()
         root.withdraw()
         dialog = AiDiagnosticsWindow(root, self.diag, lambda: (TARGET,), conversation=self.service)

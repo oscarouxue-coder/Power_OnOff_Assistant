@@ -1,0 +1,63 @@
+﻿ M .claude/skills/line-check-dev/SKILL.md
+ M ACCEPTANCE_BASELINE.md
+ M AGENTS.md
+ M CAPABILITY_COVERAGE.md
+ M Cheating_machine_execution_tool/line_check_assistant/app.py
+ M Cheating_machine_execution_tool/line_check_assistant_README.md
+ M Cheating_machine_execution_tool/scripts/capability_gui_actions.json
+ M Cheating_machine_execution_tool/scripts/verify_baseline.py
+ M Cheating_machine_execution_tool/src/ui/module_theme.py
+ M Cheating_machine_execution_tool/src/ui/project_workspace.py
+ M Cheating_machine_execution_tool/tests/serial_lifecycle_stress.py
+ M Cheating_machine_execution_tool/tests/test_adapter_rename.py
+ M Cheating_machine_execution_tool/tests/test_ai_actions.py
+ M Cheating_machine_execution_tool/tests/test_ai_chat_markdown.py
+ M Cheating_machine_execution_tool/tests/test_ai_chat_presentation.py
+ M Cheating_machine_execution_tool/tests/test_ai_context_budget.py
+ M Cheating_machine_execution_tool/tests/test_ai_context_usage.py
+ M Cheating_machine_execution_tool/tests/test_ai_conversation.py
+ M Cheating_machine_execution_tool/tests/test_ai_integration.py
+ M Cheating_machine_execution_tool/tests/test_ai_monitor_status.py
+ M Cheating_machine_execution_tool/tests/test_ai_multichannel_dispatch.py
+ M Cheating_machine_execution_tool/tests/test_ai_report_target_dialog.py
+ M Cheating_machine_execution_tool/tests/test_ai_session_deletion.py
+ M Cheating_machine_execution_tool/tests/test_ai_session_router.py
+ M Cheating_machine_execution_tool/tests/test_ai_workspace.py
+ M Cheating_machine_execution_tool/tests/test_app_update_ui.py
+ M Cheating_machine_execution_tool/tests/test_application_icon.py
+ M Cheating_machine_execution_tool/tests/test_capability_extensions.py
+ M Cheating_machine_execution_tool/tests/test_channel_list.py
+ M Cheating_machine_execution_tool/tests/test_main_log_filter.py
+ M Cheating_machine_execution_tool/tests/test_message_push_config.py
+ M Cheating_machine_execution_tool/tests/test_onu_command_editor.py
+ M Cheating_machine_execution_tool/tests/test_project_name_badge.py
+ M Cheating_machine_execution_tool/tests/test_project_workspace.py
+ M Cheating_machine_execution_tool/tests/test_remote_instance_identity.py
+ M Cheating_machine_execution_tool/tests/test_resource_options.py
+ M Cheating_machine_execution_tool/tests/test_tk_lifecycle_process.py
+ M Cheating_machine_execution_tool/tests/test_tk_test_windows.py
+ M Cheating_machine_execution_tool/tests/test_verify_baseline.py
+ M Cheating_machine_execution_tool/tests/test_wifi_test_controls.py
+ M Cheating_machine_execution_tool/tests/tk_test_windows.py
+ M DEVELOPMENT_LOG.md
+ M PROJECT_STATUS.md
+ M README.md
+?? .claude/plans/gui-test-offscreen-gate.md
+?? .claude/plans/ui-visual-restoration.md
+?? .claude/plans/unified-workbench.md
+?? .vscode/tasks.json
+?? Cheating_machine_execution_tool/scripts/run_gui_child.py
+?? Cheating_machine_execution_tool/scripts/run_tests.py
+?? Cheating_machine_execution_tool/scripts/verify_gui_test_coverage.py
+?? Cheating_machine_execution_tool/src/services/workbench_status_service.py
+?? Cheating_machine_execution_tool/src/ui/workbench_dashboard.py
+?? Cheating_machine_execution_tool/src/ui/workbench_panels.py
+?? Cheating_machine_execution_tool/tests/fixtures/gui_guard_probe.py
+?? Cheating_machine_execution_tool/tests/test_gui_test_coverage.py
+?? Cheating_machine_execution_tool/tests/test_workbench_panels.py
+?? Cheating_machine_execution_tool/tests/test_workbench_status.py
+?? Cheating_machine_execution_tool/tests/workbench_visual_probe.py
+?? Cheating_machine_execution_tool/validation/gui_offscreen_20261118/
+?? Cheating_machine_execution_tool/validation/pyside6_migration_20261118/
+?? Cheating_machine_execution_tool/validation/ui_visual_20261118/
+?? Cheating_machine_execution_tool/validation/unified_workbench_20261118/

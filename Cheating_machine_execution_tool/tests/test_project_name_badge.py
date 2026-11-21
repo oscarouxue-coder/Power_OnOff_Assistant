@@ -51,6 +51,8 @@ class SavedProjectNameTests(unittest.TestCase):
 
 class ProjectNameBadgeTests(unittest.TestCase):
     def setUp(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         self.root = tk.Tk()
         self.root.withdraw()
         self.addCleanup(self.root.destroy)

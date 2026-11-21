@@ -147,6 +147,9 @@ class GatewayAgentBridge:
             source = RemotePrincipal.parse(request["principal"]).source(self.identity.instance_id, self.identity.run_id)
             if not self.authorized_source(source):
                 raise ValueError("来源范围已失效")
+            prepare = getattr(self.owner, 'prepare_gateway_turn', None)
+            if prepare is not None:
+                prepare()
             def register(value):
                 nonlocal identifier, cursor
                 with self.owner.lock:

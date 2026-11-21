@@ -1,0 +1,7 @@
+{
+  "python": "3.9.10",
+  "bits": "64bit",
+  "pyside6_essentials": "6.8.3",
+  "shiboken6": "6.8.3",
+  "independent_environment": true
+}

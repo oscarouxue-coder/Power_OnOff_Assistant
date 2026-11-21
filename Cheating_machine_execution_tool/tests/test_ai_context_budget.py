@@ -284,6 +284,8 @@ class ContextConversationTests(unittest.TestCase):
             self.service.send(self.id, "x" * 32769)
 
     def test_tk_context_field_source_save_and_reload_in_both_themes(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         gc.collect()
         root = tk.Tk()
         root.withdraw()

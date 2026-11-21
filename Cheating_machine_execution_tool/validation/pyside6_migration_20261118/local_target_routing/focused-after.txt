@@ -1,0 +1,52 @@
+GUI_TEST_COVERAGE_OK
+test_ambiguous_target_asks_without_collecting (test_ai_session_router.RouterTests) ... ok
+test_bare_target_answer_resumes_original_problem_once (test_ai_session_router.RouterTests) ... ok
+test_changed_configuration_during_resolution_does_not_create_or_send (test_ai_session_router.RouterTests) ... ok
+test_clarification_carries_only_user_description_to_device (test_ai_session_router.RouterTests) ... ok
+test_disabled_entry_cancels_before_session_creation (test_ai_session_router.RouterTests) ... ok
+test_explicit_new_creates_separate_session (test_ai_session_router.RouterTests) ... ok
+test_first_send_refresh_does_not_invalidate_route_or_keep_sent_draft (test_ai_session_router.RouterTests) ... ok
+test_general_question_with_no_targets_uses_no_tools_or_dut_executor (test_ai_session_router.RouterTests) ... ok
+test_implicit_remote_followup_after_target_change_gets_current_snapshot (test_ai_session_router.RouterTests) ... ok
+test_invalid_model_route_never_sends_old_target (test_ai_session_router.RouterTests) ... ok
+test_mention_of_other_channel_keeps_current (test_ai_session_router.RouterTests) ... ok
+test_model_cannot_execute_tools_during_route (test_ai_session_router.RouterTests) ... ok
+test_natural_language_com_port_resolves_and_preserves_user_text (test_ai_session_router.RouterTests) ... ok
+test_pc_busy_prevents_local_generic_operation (test_ai_session_router.RouterTests) ... ok
+test_pc_device_call_rejected_in_execution_service (test_ai_session_router.RouterTests) ... ok
+test_pc_session_is_independent_and_tools_exclude_device (test_ai_session_router.RouterTests) ... ok
+test_pc_snapshot_has_no_fake_device_identity (test_ai_session_router.RouterTests) ... ok
+test_queued_switch_does_not_stop_previous_session (test_ai_session_router.RouterTests) ... ok
+test_route_json_protocol_supports_responses (test_ai_session_router.RouterTests) ... ok
+test_router_shutdown_cancels_and_idle_tracks_recognition (test_ai_session_router.RouterTests) ... ok
+test_scope_participates_in_authorization_binding (test_ai_session_router.RouterTests) ... ok
+test_scope_tools_work_for_both_protocols (test_ai_session_router.RouterTests) ... ok
+test_selected_historical_session_stays_material_only (test_ai_session_router.RouterTests) ... ok
+test_source_identity_never_reuses_other_members_or_platforms (test_ai_session_router.RouterTests) ... ok
+test_switch_reuses_latest_matching_target_and_preserves_history (test_ai_session_router.RouterTests) ... ok
+test_unknown_channel_never_falls_back_to_first (test_ai_session_router.RouterTests) ... ok
+test_explicit_local_channel_routes_from_send_and_preserves_report_and_project_scope (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... FAIL
+test_old_local_device_session_accepts_retained_evidence_only (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_report_chat_analyzes_retained_evidence_without_live_collection (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_configured_gateway_restart_routes_project_controls_over_loopback (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+
+======================================================================
+FAIL: test_explicit_local_channel_routes_from_send_and_preserves_report_and_project_scope (test_qt_workspace_adapter.QtWorkspaceAdapterTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_qt_workspace_adapter.py", line 920, in test_explicit_local_channel_routes_from_send_and_preserves_report_and_project_scope
+    self.assertEqual(replies, [(), (), ()])
+AssertionError: Lists differ: [(), (), ('ask_user', 'read_test_evidence')] != [(), (), ()]
+
+First differing element 2:
+('ask_user', 'read_test_evidence')
+()
+
+- [(), (), ('ask_user', 'read_test_evidence')]
++ [(), (), ()]
+
+----------------------------------------------------------------------
+Ran 30 tests in 17.293s
+
+FAILED (failures=1)
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 2, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

@@ -1,0 +1,50 @@
+[
+  {
+    "version": "6.8.3",
+    "requires_python": "<3.14,>=3.9",
+    "requires_dist": [
+      "shiboken6==6.8.3",
+      "PySide6-Essentials==6.8.3",
+      "PySide6-Addons==6.8.3"
+    ],
+    "windows_wheels": [
+      {
+        "filename": "PySide6-6.8.3-cp39-abi3-win_amd64.whl",
+        "sha256": "722dc0061d8ef6dbb8c0b99864f21e83a5b49ece1ecb2d0b890840d969e1e461"
+      }
+    ],
+    "source": "https://pypi.org/pypi/PySide6/6.8.3/json"
+  },
+  {
+    "version": "6.9.3",
+    "requires_python": "<3.14,>=3.9",
+    "requires_dist": [
+      "shiboken6==6.9.3",
+      "PySide6_Essentials==6.9.3",
+      "PySide6_Addons==6.9.3"
+    ],
+    "windows_wheels": [
+      {
+        "filename": "pyside6-6.9.3-cp39-abi3-win_amd64.whl",
+        "sha256": "71b41b9ebd1c044c3777f2b32278d3919f07bda4f15c504bc165b643bc3cec01"
+      }
+    ],
+    "source": "https://pypi.org/pypi/PySide6/6.9.3/json"
+  },
+  {
+    "version": "6.10.0",
+    "requires_python": "<3.14,>=3.9",
+    "requires_dist": [
+      "shiboken6==6.10.0",
+      "PySide6_Essentials==6.10.0",
+      "PySide6_Addons==6.10.0"
+    ],
+    "windows_wheels": [
+      {
+        "filename": "pyside6-6.10.0-cp39-abi3-win_amd64.whl",
+        "sha256": "70a8bcc73ea8d6baab70bba311eac77b9a1d31f658d0b418e15eb6ea36c97e6f"
+      }
+    ],
+    "source": "https://pypi.org/pypi/PySide6/6.10.0/json"
+  }
+]

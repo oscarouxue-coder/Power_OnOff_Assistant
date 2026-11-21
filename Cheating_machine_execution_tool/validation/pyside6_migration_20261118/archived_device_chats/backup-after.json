@@ -1,0 +1,13 @@
+{
+  "archive_sha256": "58fcd3828dfb94bc5da180b07a511a5b465e9d54604cc4ffaa3564f94a905f72",
+  "counts": {
+    "databases": 4,
+    "sessions": 28,
+    "local_device_sessions": 4,
+    "without_report": 4,
+    "qt_archived_at_manual_start": 1,
+    "without_report_named_run": 1,
+    "retained_evidence_rows": 3,
+    "qt_history_only_at_manual_start": 3
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "owner_exit": 47,
+  "worker_pid": 57500,
+  "entry": "original",
+  "owner_exit_seconds_from_worker": 3.141,
+  "frames_after_confirmed_exit": [
+    {
+      "event": "frame",
+      "seconds": 13.25,
+      "hex": "5501a10003a3"
+    },
+    {
+      "event": "frame",
+      "seconds": 16.781,
+      "hex": "5501a00003a2"
+    }
+  ],
+  "trace": {
+    "pid": 57500,
+    "events": [
+      {
+        "event": "serial_open",
+        "seconds": 0.078,
+        "port": "COM7682",
+        "baudrate": 19200
+      },
+      {
+        "event": "frame",
+        "seconds": 0.094,
+        "hex": "5501a10003a3"
+      },
+      {
+        "event": "channel_start",
+        "seconds": 0.609,
+        "channel": 3
+      },
+      {
+        "event": "frame",
+        "seconds": 3.125,
+        "hex": "5501a00003a2"
+      },
+      {
+        "event": "configured_wait",
+        "seconds": 3.125,
+        "channel": 3,
+        "duration": 10
+      },
+      {
+        "event": "frame",
+        "seconds": 13.25,
+        "hex": "5501a10003a3"
+      },
+      {
+        "event": "configured_wait",
+        "seconds": 14.75,
+        "channel": 3,
+        "duration": 2
+      },
+      {
+        "event": "frame",
+        "seconds": 16.781,
+        "hex": "5501a00003a2"
+      },
+      {
+        "event": "configured_wait",
+        "seconds": 16.781,
+        "channel": 3,
+        "duration": 10
+      },
+      {
+        "event": "serial_close",
+        "seconds": 27.031
+      },
+      {
+        "event": "mail_transport_calls",
+        "seconds": 27.031,
+        "count": 1
+      }
+    ],
+    "blocked": []
+  },
+  "physical_serial_opens": 0
+}

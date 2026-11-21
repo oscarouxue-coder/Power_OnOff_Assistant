@@ -3,11 +3,13 @@
 No device commands or test verdict logic live here. The pipeline projection owns
 only data and events; it is intentionally not a Tk application or GUI callback.
 """
+from contextlib import nullcontext
 from dataclasses import asdict, fields, is_dataclass, MISSING
 from pathlib import Path
 import json
 import threading
 import time
+
 
 from line_check_assistant.config_store import ChannelConfig
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
@@ -27,6 +29,17 @@ from src.services.dut_config_service import run_dut_telnet_enable_batch
 from src.services.dut_wan_query_service import run_dut_wan_query_batch
 from src.services.dut_status_query_service import run_dut_status_query_batch
 from src.services.dut_advanced_config_service import run_dut_advanced_config_batch, validate_dut_advanced_request
+
+
+# The original orchestrator wraps both a negative test verdict and a graceful
+# stop receipt in PipelineError. Keep unrelated failures and forcibly terminated
+# workers distinguishable even when the operator requested a stop.
+_POWER_STOP_ERRORS = frozenset('子任务 legacy_power_test 失败:' + detail for detail in (
+    '开关机版本预检已停止，未启动开关机测试',
+    '开关机测试已停止，未启动开关机测试',
+    '用户已停止初始化断电，未启动开关机测试',
+    '用户已停止执行开关机测试',
+))
 
 
 CHANNEL_PROPERTIES = {"channel_ids": dict(type="array", minItems=1, maxItems=16, uniqueItems=True,
@@ -54,13 +67,16 @@ def settings_schema(model):
 
 class PipelineProjection:
     """Data-only implementation of the existing orchestrator's application protocol."""
-    def __init__(self, context, channels, manager, log_directory):
+    def __init__(self, context, channels, manager, log_directory, *, serial_prestart=None):
         self.context, self.channels, self.manager = context, channels, manager
         self.log_directory = Path(log_directory)
         self.power_test_resume_session = None
         self.monitors = []
+        self.serial_prestart = serial_prestart
 
     def _open_pipeline_serial_logs(self):
+        if self.serial_prestart is not None:
+            return self.serial_prestart(self.context, self.channels, self.log_directory)
         self.log_directory.mkdir(parents=True, exist_ok=True)
         for channel in self.channels:
             port = channel.serial_port
@@ -99,6 +115,9 @@ class DeviceCapabilities:
         self.config_path = resolve_config_dir(self.root) / "test_project_config.ini"
         self.pipeline_factory = PipelineOrchestrator
         self.latest_aging = None
+        self.gui_pipeline_serial_prestart = None
+        self.gui_diagnostic_observer = None
+        self.gui_pipeline_power_scope = None
         self._register()
 
     def _add(self, identifier, name, handler, properties=None, risk="dangerous"):
@@ -143,7 +162,8 @@ class DeviceCapabilities:
             result.append(ChannelConfig(**item))
         return snapshot, result
 
-    def _job(self, identifier, arguments, authority, run, *, recorded_extra=None, precheck=lambda: None):
+    def _job(self, identifier, arguments, authority, run, *, recorded_extra=None, precheck=lambda: None,
+             power_test=False):
         snapshot, channels = self.selected(arguments, authority)
         def identity(current_snapshot, current_channels):
             return fingerprint(dict(channels=[asdict(c) for c in current_channels],
@@ -172,12 +192,22 @@ class DeviceCapabilities:
             if identifier == 'aging.resume' and self.latest_aging:
                 session = self.latest_aging[2].power_test_resume_session
                 wifi_enabled = bool(getattr(getattr(session, 'request', None), 'connect_wifi_enable', False))
+            elif power_test:
+                from src.services.project_execution import power_test_needs_wifi
+                wifi_enabled = power_test_needs_wifi(self.config_path.parent, channels)
             else:
                 wifi_enabled = bool(TestItemConfigStore(self.config_path).load().connect_wifi.enable)
             if wifi_enabled:
                 resources.append('wifi:host')
+        def run_admitted(context):
+            if power_test and 'wifi:host' not in resources:
+                from src.services.project_execution import power_test_needs_wifi
+                root = getattr(context, 'configuration_root', self.root)
+                if power_test_needs_wifi(resolve_config_dir(root), channels):
+                    raise CapabilityError('configuration_changed', '挂测方案的无线资源已变化，请重新确认')
+            return run(context, snapshot, channels)
         return self.service.jobs.start(identifier, dict(arguments, **(recorded_extra or {}), target_binding=binding), authority, resources,
-            lambda context: run(context, snapshot, channels), recheck=recheck,
+            run_admitted, recheck=recheck,
             risk=self.service.registry.get(identifier).risk)
 
     def _power(self, arguments, authority, enabled):
@@ -202,24 +232,32 @@ class DeviceCapabilities:
         identifier = "aging.start" if tasks == ("legacy_power_test",) else "network.line_check" if tasks == ("env_check",) else "pipeline.start"
         def run(context, snapshot, channels):
             projection = PipelineProjection(context, channels, self.service.manager,
-                snapshot.get("serial_log_dir") or self.service.jobs.directory / "serial")
+                snapshot.get("serial_log_dir") or self.service.jobs.directory / "serial",
+                serial_prestart=self.gui_pipeline_serial_prestart if authority.source == "gui" else None)
+            if authority.source == "gui" and self.gui_diagnostic_observer is not None:
+                projection._observe_ai_power_event = self.gui_diagnostic_observer
             config = PipelineContext(projection, channels, SampleUpgradeSettings(**snapshot["upgrade_settings"]),
                 OnuRegistrationConfig(), legacy_tool_root=getattr(context, 'configuration_root', self.root) / "Auto_power_on_off_tool", stop_event=context.stop.event)
             try:
                 context.event("pipeline", "复用原编排器，保留版本预检/WiFi/停止/测试判据", dispatched=True)
-                results = self.pipeline_factory(config, lambda line: context.event("pipeline", line)).run(set(tasks))
+                hold = self.gui_pipeline_power_scope if authority.source == "gui" and "legacy_power_test" in tasks else None
+                with hold(projection) if hold is not None else nullcontext():
+                    results = self.pipeline_factory(config, lambda line: context.event("pipeline", line)).run(set(tasks))
+                    stopped = context.stop.is_set()
                 if projection.power_test_resume_session is not None:
                     self.latest_aging = (context.job_id, authority.principal, projection)
-                return dict(ok=all(r.ok for r in results) and not context.stop.is_set(),
-                            state="stopped" if context.stop.is_set() else "succeeded" if all(r.ok for r in results) else "failed",
+                return dict(ok=all(r.ok for r in results) and not stopped,
+                            state="stopped" if stopped else "succeeded" if all(r.ok for r in results) else "failed",
                             items=[asdict(r) for r in results])
             except PipelineError as exc:
                 if projection.power_test_resume_session is not None:
                     self.latest_aging = (context.job_id, authority.principal, projection)
-                return dict(ok=False, state="failed", error=str(exc))
+                error = str(exc)
+                stopped = context.stop.is_set() and error in _POWER_STOP_ERRORS
+                return dict(ok=False, state="stopped" if stopped else "failed", error=error)
             finally:
                 projection.close()
-        return self._job(identifier, arguments, authority, run)
+        return self._job(identifier, arguments, authority, run, power_test='legacy_power_test' in tasks)
 
     def _resume(self, arguments, authority):
         parent = arguments.get("parent_job_id")

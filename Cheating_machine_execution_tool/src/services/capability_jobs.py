@@ -7,6 +7,7 @@ import time
 import uuid
 import os
 
+from src.services.power_worker_lifetime import POWER_JOB_IDS, guard_power_worker_review
 from src.models.capabilities import CapabilityError, fingerprint
 from src.services.upgrade_stop_service import UpgradeStopControl
 
@@ -48,6 +49,7 @@ class CapabilityJobs:
             self.db.execute("UPDATE jobs SET state='unknown',stage='process_interrupted',updated=? "
                             "WHERE state NOT IN ('succeeded','failed','stopped','skipped','unknown')", (time.time(),))
         self.resources, self.emit, self.metrics = resources, emit, metrics
+        self.event_output = None
         self.threads, self.controls = {}, {}
         self.closing = False
         self.project_context = project_context
@@ -98,10 +100,14 @@ class CapabilityJobs:
     def event(self, identifier, stage, message=""):
         with self.lock, self.db:
             self.db.execute("UPDATE jobs SET stage=?,updated=? WHERE id=?", (stage, time.time(), identifier))
+            created = time.time()
             self.db.execute("INSERT INTO job_events(job_id,created,stage,message) VALUES(?,?,?,?)",
-                            (identifier, time.time(), stage, str(message)))
+                            (identifier, created, stage, str(message)))
         if message:
-            self.emit(f"[业务任务 {identifier[:8]}][{stage}] {message}")
+            if self.event_output is None:
+                self.emit(f"[业务任务 {identifier[:8]}][{stage}] {message}")
+            else:
+                self.event_output(identifier, created, stage, str(message))
 
     def start(self, capability, arguments, authority, resources, runner, *, risk="dangerous", recheck=lambda: None, observational=False):
         # Serialize submissions without keeping the database mutex across Tk admission/snapshots.
@@ -247,6 +253,8 @@ class CapabilityJobs:
             current = self._row(identifier)
             if current["state"] != "unknown":
                 return dict(job_id=identifier, state=current["state"], notice="不是未知任务，未更改结果")
+            if current['capability_id'] in POWER_JOB_IDS:
+                guard_power_worker_review(self.project_context)
             result = current["result"] or {}
             result["reconciliation"] = dict(outcome=outcome, evidence=evidence, reviewed_scope=True, created=time.time())
             state = "succeeded" if outcome == "succeeded" else "failed"

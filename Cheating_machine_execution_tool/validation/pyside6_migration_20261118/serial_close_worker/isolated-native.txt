@@ -1,0 +1,10 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_c00218356e624f4384b6d590256e5679'}
+ test_qt_serial_close_worker_refusal_keeps_live_output_until_retry (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 1.781s
+
+OK
+
+{'passed': True, 'managed_windows': 4, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_c00218356e624f4384b6d590256e5679', 'qt': {'passed': True, 'managed_windows': 4, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_c00218356e624f4384b6d590256e5679', 'framework': 'qt', 'platform': 'windows'}}

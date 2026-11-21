@@ -447,6 +447,8 @@ class ConversationTests(unittest.TestCase):
         self.assertEqual(self.store.chat(self.id)["status"], "可继续")
 
     def test_real_tk_chat_waiting_render_send_and_theme(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         gc.collect()
         root = tk.Tk()
         root.withdraw()
@@ -628,6 +630,8 @@ class ConversationTests(unittest.TestCase):
         self.assertIn("正在执行设备操作", json.dumps(self.store.chat_evidence(self.id), ensure_ascii=False))
 
     def test_controller_close_waits_for_both_workers_then_closes_store(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         from src.ui.ai_assistant_controller import AiAssistantController
         self.service.begin_close()
         self.service.worker.join(4)

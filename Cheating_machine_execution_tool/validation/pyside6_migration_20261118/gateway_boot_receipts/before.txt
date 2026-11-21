@@ -1,0 +1,26 @@
+GUI_TEST_COVERAGE_OK
+python.exe : E
+所在位置 行:4 字符: 1
++ & "$env:LOCALAPPDATA/LineCheckAssistant/qt-build-py39/Scripts/python. ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (E:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+======================================================================
+ERROR: test_configured_gateway_restart_routes_project_controls_over_loopback (test_qt_workspace_adapter.QtWorkspaceAdap
+terTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_qt_workspace_adapter.py", line 154, 
+in test_configured_gateway_restart_routes_project_controls_over_loopback
+    ledger.select(PRINCIPAL, restarted.identity.instance_id)
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\src\services\remote_gateway_store.py", line 130
+, in select
+    raise ValueError("实例不在线、名称重复或超出授权范围，请查看在线实例")
+ValueError: 实例不在线、名称重复或超出授权范围，请查看在线实例
+
+----------------------------------------------------------------------
+Ran 1 test in 4.566s
+
+FAILED (errors=1)
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

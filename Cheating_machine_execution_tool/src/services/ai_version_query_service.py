@@ -125,7 +125,8 @@ class AiVersionQueryService:
         session = owner.store.chat(identifier)
         if not version_available(owner) or session.get("diagnosis_only") or session.get("batch_parent"):
             return False
-        selection = version_selection(text, session, tuple(owner.diagnostic.targets.values()))
+        from src.services.ai_session_router import scoped_targets
+        selection = version_selection(text, session, scoped_targets(owner, session.get('source')))
         if selection is None or selection[1]:
             return False
         channels = selection[0]

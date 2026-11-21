@@ -240,6 +240,8 @@ class OnuCommandEditorTests(unittest.TestCase):
 
 class OnuCommandEditorTkTests(unittest.TestCase):
     def test_real_tk_preview_is_always_readonly_and_has_no_edit_actions(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         try:
             root = tk.Tk()
         except tk.TclError as exc:

@@ -92,6 +92,156 @@ class SerialTransportTests(unittest.TestCase):
             self.assertIn('STATE 串口已关闭', saved)
             manager.shutdown_all()
 
+    def test_close_thread_failure_keeps_control_and_bulk_shutdown_can_retry(self):
+        from qt_serial_fakes import SerialHarness
+
+        ports = ('COM7955', 'COM7956', 'COM7957')
+        start = threading.Thread.start
+        coordinator = mock.Mock()
+        manager = SerialSessionManager(resource_coordinator=coordinator, project_id='fixture')
+        harness = SerialHarness()
+        with mock.patch('src.core.serial_transport.PySerialSession', side_effect=harness.factory):
+            for port in ports:
+                manager.acquire_control('original', SerialSettings(port))
+
+        def refuse_second(worker):
+            if worker.name == 'serial-close-' + ports[1]:
+                raise RuntimeError('synthetic close thread unavailable')
+            start(worker)
+
+        try:
+            with mock.patch.object(threading.Thread, 'start', refuse_second):
+                with self.assertRaisesRegex(RuntimeError, 'thread unavailable'):
+                    manager.shutdown_all(wait=False)
+            for port in ports[1:]:
+                state = manager.diagnostic_state(port)
+                self.assertTrue(state['opened_in_program'])
+                self.assertFalse(state['closing_in_program'])
+                self.assertEqual(state['control_owner'], 'original')
+                self.assertIs(manager.existing_session(SerialSettings(port)), harness.sessions[port])
+                self.assertFalse(manager.manual_writable(port))
+                self.assertFalse(harness.drivers[port].closed)
+            # Exercise the same driver even if Thread.start delivers a late exception.
+            def started_then_raised(worker):
+                start(worker)
+                raise RuntimeError('thread already started')
+            with mock.patch.object(threading.Thread, 'start', started_then_raised):
+                ticket = manager.release('original', ports[1], wait=False)
+            self.assertTrue(ticket.done.wait(2))
+            self.assertEqual(ticket.error, '')
+            self.assertTrue(all(t.done.is_set() and not t.error for t in manager.shutdown_all(wait=True)))
+            self.assertTrue(all(harness.drivers[port].closed and not harness.drivers[port].writes for port in ports))
+            self.assertCountEqual(coordinator.release.call_args_list,
+                [mock.call(manager._workspace_owner(port), uncertain=False) for port in ports])
+        finally:
+            # Also works against a failed implementation with an unstarted close ticket.
+            for session in harness.sessions.values():
+                session.close()
+
+    def test_workspace_release_failure_completes_ticket_and_preserves_port_fence(self):
+        from qt_serial_fakes import SerialHarness
+
+        coordinator = mock.Mock()
+        coordinator.release.side_effect = OSError('synthetic resource database unavailable')
+        manager = SerialSessionManager(resource_coordinator=coordinator, project_id='fixture')
+        harness = SerialHarness()
+        settings = SerialSettings('COM7958')
+        with mock.patch('src.core.serial_transport.PySerialSession', side_effect=harness.factory):
+            manager.acquire_monitor('monitor', settings)
+            ticket = manager.release('monitor', settings.port, wait=False)
+            self.assertTrue(ticket.done.wait(2))
+            self.assertIn('synthetic resource database unavailable', ticket.error)
+            self.assertTrue(harness.drivers[settings.port].closed)
+            self.assertFalse(harness.drivers[settings.port].writes)
+            self.assertEqual(manager.shutdown_all(wait=True), (ticket,))
+            with self.assertRaisesRegex(RuntimeError, '正在关闭'):
+                manager.acquire_monitor('retry', settings)
+
+    def test_open_failure_releases_driver_log_and_port_before_retry(self):
+        from qt_serial_fakes import SerialHarness
+        from src.core.host_resource_lock import HostResourceLock
+
+        for fault in ('log', 'reader', 'started_reader'):
+            harness = SerialHarness()
+            with self.subTest(fault=fault), TemporaryDirectory() as directory, \
+                    mock.patch('src.core.serial_transport.PySerialSession', side_effect=harness.factory):
+                manager = SerialSessionManager()
+                self.addCleanup(manager.shutdown_all)
+                settings = SerialSettings('COM7941')
+                log = Path(directory) / 'serial.log'
+                if fault == 'log':
+                    log.mkdir()
+                    with self.assertRaises(OSError):
+                        manager.acquire_monitor('gui', settings, log)
+                    log.rmdir()
+                else:
+                    start = threading.Thread.start
+
+                    def fail_start(thread):
+                        if fault == 'started_reader':
+                            start(thread)
+                        raise RuntimeError('fixture-start')
+
+                    with mock.patch.object(threading.Thread, 'start', fail_start):
+                        with self.assertRaisesRegex(RuntimeError, 'fixture-start'):
+                            manager.acquire_monitor('gui', settings, log)
+
+                first = harness.sessions[settings.port]
+                self.assertTrue(harness.drivers[settings.port].closed)
+                self.assertIsNone(first._log_handle)
+                self.assertFalse(first._reader is not None and first._reader.is_alive())
+                self.assertFalse(manager.diagnostic_state(settings.port)['closing_in_program'])
+                with HostResourceLock(['serial:' + settings.port], reentrant=False):
+                    pass
+                harness.drivers.pop(settings.port)
+                retry = manager.acquire_monitor('gui', settings, log)
+                self.assertIsNot(first, retry)
+                manager.release('gui', settings.port)
+                self.assertTrue(harness.drivers[settings.port].closed)
+
+    def test_driver_close_error_fences_normal_release_and_failed_start_rollback(self):
+        from qt_serial_fakes import QueueSerial
+        from src.core.host_resource_lock import HostResourceBusy, HostResourceLock
+
+        for rollback in (False, True):
+            with self.subTest(rollback=rollback), TemporaryDirectory() as directory:
+                coordinator = mock.Mock()
+                manager = SerialSessionManager(resource_coordinator=coordinator, project_id='fixture')
+                port = 'COM7942'
+                driver = QueueSerial()
+                log = Path(directory) / 'closed.log'
+                session = PySerialSession(SerialSettings(port), log, serial_factory=lambda **kwargs: driver)
+                events = []
+                session.subscribe(events.append)
+                try:
+                    with mock.patch('src.core.serial_transport.PySerialSession', return_value=session), \
+                            mock.patch.object(driver, 'close', side_effect=OSError('fixture-close')):
+                        if rollback:
+                            with mock.patch.object(threading.Thread, 'start', side_effect=RuntimeError('fixture-start')):
+                                with self.assertRaisesRegex(RuntimeError, 'fixture-close'):
+                                    manager.acquire_monitor('gui', session.settings, log)
+                        else:
+                            manager.acquire_monitor('gui', session.settings, log)
+                            ticket = manager.release('gui', port, wait=False)
+                            self.assertTrue(ticket.done.wait(3))
+                            self.assertIn('fixture-close', ticket.error)
+                        with self.assertRaisesRegex(RuntimeError, 'fixture-close'):
+                            session.close()
+                        with self.assertRaisesRegex(RuntimeError, '正在关闭'):
+                            manager.acquire_control('upgrade', session.settings)
+                        self.assertTrue(manager.diagnostic_state(port)['closing_in_program'])
+                        with self.assertRaises(HostResourceBusy):
+                            HostResourceLock(['serial:' + port], reentrant=False).acquire()
+                        coordinator.release.assert_called_once_with(manager._workspace_owner(port), uncertain=True)
+                        self.assertFalse(any(event.text == '串口已关闭' for event in events))
+                        self.assertTrue(any(event.direction == 'ERROR' and 'fixture-close' in event.text for event in events))
+                        self.assertIsNone(session._log_handle)
+                        self.assertFalse(driver.writes)
+                finally:
+                    driver.close()
+                    if session._host_resource_lock:
+                        session._host_resource_lock.close()
+
     def test_log_file_prefixes_every_serial_line_and_joins_split_rx_chunks(self):
         session = PySerialSession(SerialSettings("COM1"), serial_factory=lambda **_k: FakeSerial(**_k))
         session._log_handle = StringIO()

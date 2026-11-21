@@ -1,0 +1,15 @@
+GUI_TEST_COVERAGE_OK
+F
+======================================================================
+FAIL: test_passive_reader_limits_bytes_at_read_time_during_driver_burst (test_qt_serial_terminal.QtSerialTerminalTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_qt_serial_terminal.py", line 122, in test_passive_reader_limits_bytes_at_read_time_during_driver_burst
+    self.assertEqual(len(result.encode('utf-8')), 65536)
+AssertionError: 131072 != 65536
+
+----------------------------------------------------------------------
+Ran 1 test in 0.038s
+
+FAILED (failures=1)
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

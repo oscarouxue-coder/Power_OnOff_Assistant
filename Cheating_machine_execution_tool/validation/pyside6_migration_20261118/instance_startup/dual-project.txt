@@ -1,0 +1,9 @@
+GUI_TEST_COVERAGE_OK
+test_disjoint_project_power_jobs_keep_separate_snapshots_stops_and_leases (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_power_failure_after_stop_request_preserves_original_failure (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 2.082s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

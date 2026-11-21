@@ -1,0 +1,17 @@
+GUI_TEST_COVERAGE_OK
+test_configured_gateway_restart_routes_project_controls_over_loopback (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_client_first_poll_sees_attached_project_and_start_failure_drains_worker (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_close_waits_for_receipt_after_agent_worker_finishes (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_failed_incoming_receipt_releases_only_its_own_project (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_local_project_revocation_does_not_expand_to_another_project (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_other_principal_is_rejected_before_project_listing (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_repeated_receipt_after_switch_does_not_move_or_reexecute_original (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_requires_explicit_project_before_forwarding (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_selection_and_explicit_prefix_keep_original_signed_request (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_unready_receipt_is_not_replayed_after_project_controller_attaches (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 5.034s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

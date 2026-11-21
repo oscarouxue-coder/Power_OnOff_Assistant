@@ -452,6 +452,8 @@ class AdapterRenameDialogTests(unittest.TestCase):
 class AdapterRenameTkTests(unittest.TestCase):
     """只构造独立窗口，后台 service 全部替身，不实例化主程序。"""
     def setUp(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         self.root = Tk()
         self.root.geometry("700x450+160+120")
         self.root.update()

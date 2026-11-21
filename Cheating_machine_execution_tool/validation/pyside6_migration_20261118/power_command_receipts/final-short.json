@@ -1,0 +1,265 @@
+{
+  "parent": 13456,
+  "cases": [
+    {
+      "entry": "direct",
+      "original_reported_state": "succeeded",
+      "complete_serial_sequences": true,
+      "expected_per_channel": [
+        "off",
+        "on",
+        "off",
+        "on"
+      ],
+      "observed_per_channel": {
+        "3": [
+          "off",
+          "on",
+          "off",
+          "on"
+        ],
+        "9": [
+          "off",
+          "on",
+          "off",
+          "on"
+        ]
+      },
+      "pid": 61556,
+      "events": [
+        {
+          "event": "serial_open",
+          "seconds": 0.078,
+          "port": "COM239",
+          "baudrate": 19200
+        },
+        {
+          "event": "frame",
+          "seconds": 0.078,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "frame",
+          "seconds": 0.593,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "channel_start",
+          "seconds": 1.093,
+          "channel": 3
+        },
+        {
+          "event": "channel_start",
+          "seconds": 2.109,
+          "channel": 9
+        },
+        {
+          "event": "frame",
+          "seconds": 4.125,
+          "hex": "5501a00003a2"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 4.125,
+          "channel": 3,
+          "duration": 1
+        },
+        {
+          "event": "frame",
+          "seconds": 8.14,
+          "hex": "5501a00009a8"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 8.14,
+          "channel": 9,
+          "duration": 1
+        },
+        {
+          "event": "frame",
+          "seconds": 12.156,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "frame",
+          "seconds": 13.671,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 13.671,
+          "channel": 3,
+          "duration": 2
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 15.171,
+          "channel": 9,
+          "duration": 2
+        },
+        {
+          "event": "frame",
+          "seconds": 15.687,
+          "hex": "5501a00003a2"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 15.687,
+          "channel": 3,
+          "duration": 1
+        },
+        {
+          "event": "frame",
+          "seconds": 19.718,
+          "hex": "5501a00009a8"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 19.718,
+          "channel": 9,
+          "duration": 1
+        },
+        {
+          "event": "serial_close",
+          "seconds": 22.718
+        },
+        {
+          "event": "mail_transport_calls",
+          "seconds": 22.718,
+          "count": 2
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "entry": "qt",
+      "original_reported_state": "succeeded",
+      "complete_serial_sequences": true,
+      "expected_per_channel": [
+        "off",
+        "on",
+        "off",
+        "on"
+      ],
+      "observed_per_channel": {
+        "3": [
+          "off",
+          "on",
+          "off",
+          "on"
+        ],
+        "9": [
+          "off",
+          "on",
+          "off",
+          "on"
+        ]
+      },
+      "pid": 46032,
+      "events": [
+        {
+          "event": "serial_open",
+          "seconds": 0.079,
+          "port": "COM239",
+          "baudrate": 19200
+        },
+        {
+          "event": "frame",
+          "seconds": 0.079,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "frame",
+          "seconds": 0.594,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "channel_start",
+          "seconds": 1.094,
+          "channel": 3
+        },
+        {
+          "event": "channel_start",
+          "seconds": 2.11,
+          "channel": 9
+        },
+        {
+          "event": "frame",
+          "seconds": 4.141,
+          "hex": "5501a00003a2"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 4.141,
+          "channel": 3,
+          "duration": 1
+        },
+        {
+          "event": "frame",
+          "seconds": 8.157,
+          "hex": "5501a00009a8"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 8.157,
+          "channel": 9,
+          "duration": 1
+        },
+        {
+          "event": "frame",
+          "seconds": 12.172,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 13.672,
+          "channel": 3,
+          "duration": 2
+        },
+        {
+          "event": "frame",
+          "seconds": 13.688,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 15.204,
+          "channel": 9,
+          "duration": 2
+        },
+        {
+          "event": "frame",
+          "seconds": 15.719,
+          "hex": "5501a00003a2"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 15.719,
+          "channel": 3,
+          "duration": 1
+        },
+        {
+          "event": "frame",
+          "seconds": 19.735,
+          "hex": "5501a00009a8"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 19.735,
+          "channel": 9,
+          "duration": 1
+        },
+        {
+          "event": "serial_close",
+          "seconds": 22.735
+        },
+        {
+          "event": "mail_transport_calls",
+          "seconds": 22.735,
+          "count": 2
+        }
+      ],
+      "blocked": []
+    }
+  ]
+}

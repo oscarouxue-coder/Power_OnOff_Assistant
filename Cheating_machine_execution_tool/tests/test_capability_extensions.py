@@ -78,6 +78,8 @@ class ExtensionTests(unittest.TestCase):
                 self.runtime.extensions.review(dict(self.manifest, input_schema=schema))
 
     def test_local_management_hides_reopens_and_disposes_polling(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         root = tk.Tk()
         root.withdraw()
         panel = SimpleNamespace(service=SimpleNamespace(capabilities=SimpleNamespace(service=self.runtime)), owner=SimpleNamespace(window=root))

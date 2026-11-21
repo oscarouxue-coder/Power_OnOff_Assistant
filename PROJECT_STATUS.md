@@ -1,5 +1,179 @@
 # 项目交接状态
 
+Qt 源码工作台新增按项目路由群消息的启动方式。可信测试机直接交换项目目录与成员选择，目标项目沿用原 AI 会话、业务审批和执行服务。原常开网关继续作为回退入口，双机、真实平台和 DUT 待现场验证。[配置与群内操作](Cheating_machine_execution_tool/line_check_assistant_README.md#qt-源码工作台按项目接收群-)
+
+Windows Qt 候选 qt-20261121-194426-f1cfb93a 包含明确单通道切换、目标澄清及已有串口的被动读取。完整基线通过 3,265 项，264 项指定回归全部命中。Windows 原生界面在 100%、125%、150% 缩放下各通过 100 项，共 300 次。 [便携 ZIP](Cheating_machine_execution_tool/dist/qt-20261121-194426-f1cfb93a/DUTPilot_portable.zip) · [本次验证](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/local_serial_chat/REPORT.md)
+
+Windows Qt 候选 qt-20261121-174731-da5a40fa 已修复网关同槽位重启后的回执恢复。完整基线通过 3,261 项，260 项指定用例全部命中。Windows 原生界面在 100%、125%、150% 缩放下各通过 96 项，共 288 次。 [便携 ZIP](Cheating_machine_execution_tool/dist/qt-20261121-174731-da5a40fa/DUTPilot_portable.zip) · [本次验证](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/gateway_boot_receipts/REPORT.md)
+
+旧设备会话阶段的 Windows Qt 候选已包含留存分析、串口被动取证与关闭失败保护。完整基线运行 3,260 项，259 项指定测试全部命中，八类门禁通过。Windows 原生界面在 100%、125%、150% 缩放下各通过 96 项，共 288 次。 [交付 ZIP](Cheating_machine_execution_tool/dist/qt-20261121-171909-88b5a602/DUTPilot_portable.zip) · [复验与待验范围](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/archived_device_chats/REPORT.md)
+
+串口阶段的 Windows 候选已包含被动读取、启动失败清理和关闭失败保护。完整基线运行 3,259 项，258 项指定回归全部命中，八类门禁通过。Windows 原生界面在 100%、125%、150% 缩放下各通过 95 项。 [便携 ZIP](Cheating_machine_execution_tool/dist/qt-20261121-165305-f2c9cfc7/DUTPilot_portable.zip) · [测试报告和现场待验范围](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/serial_lifecycle/REPORT.md)
+
+串口被动诊断的 64 KiB 读取边界已完成源码修正。未启用文件日志时，原驱动仍长期保留收到的全部原始历史。源码复现与测试已归档。[测试报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/serial_passive_read/REPORT.md)
+
+网关阶段的 Windows Qt 候选已按保存的实例槽位接入项目目录与选择。业务消息返回拒绝回执，本地挂测沿用原任务。完整基线运行 3,255 项，254 项指定回归全部命中，八类门禁通过。Windows 原生界面在 100%、125%、150% 缩放下各通过 95 项。 真实平台、目标机、DUT 及长期运行仍待现场。[便携包](Cheating_machine_execution_tool/dist/qt-20261121-161023-3fc3681b/DUTPilot_portable.zip) · [测试及验收范围](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/qt_gateway_client/REPORT.md)
+
+统一网关首条项目列表和客户端部分启动失败已通过线程与回执专项复验。Qt 启动配置继续按阶段接入。[本批源码验证](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/gateway_startup_order/REPORT.md)
+
+原开关机子进程存活保护已进入 [Windows Qt 候选包](Cheating_machine_execution_tool/dist/qt-20261121-150514-03643dce/DUTPilot_portable.zip)。完整基线 3,251 项通过，251 项指定回归均已执行。Windows 原生用例在 100%、125%、150% 三档各通过 95 项，共 285 次。 真实电源与目标电脑验收待现场。[报告及逐帧证据](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/power_owner_exit/REPORT.md)
+
+2026-11-21，[Windows Qt 候选包](Cheating_machine_execution_tool/dist/qt-20261121-143820-20f3c0f3/DUTPilot_portable.zip)已纳入项目主日志与资源监测归档。3,248 项完整基线通过，249 项指定用例全部执行。三档 Windows 原生共 285 次通过。成品入口和 331 个项目模块与源码一致，92 个受保护业务文件保留原哈希，另外 5 个与负责人确认的修正快照一致。整体迁移及现场验收仍待完成。[交付与遗留项](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/project_main_logs/REPORT.md)
+
+2026-11-21，原挂测子进程可在 Qt 主进程异常退出后继续操作模拟电源。重开的工作区保留未知保护，现场不能仅凭 GUI 消失判断挂测已经停止。[原子进程逐帧实测](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/power_owner_exit/REPORT.md)
+
+2026-11-21，[Windows Qt 候选包](Cheating_machine_execution_tool/dist/qt-20261121-141002-8f2876a1/DUTPilot_portable.zip)已纳入独立项目同时开关机及按选中方案保护无线资源的修改。3,247 项完整基线通过，249 项指定用例全部执行。三档 Windows 原生共 285 次通过。成品入口和 331 个项目模块与源码一致，92 个受保护业务文件保留原哈希，另外 5 个与负责人确认的修正快照一致。整体迁移及现场验收仍待完成。[交付与遗留项](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/parallel_power/REPORT.md)
+
+2026-11-21，Qt 工作台已接入独立资源上的多项目自动开关机。模拟原业务子进程验证了两个项目同时运行、跨项目停止请求被拒绝、停止 A 后 B 完成。共享无线接口按选中方案申请租约。现场及其他设备任务并行继续待验。[软件复验](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/parallel_power/REPORT.md)
+
+2026-11-21，[Windows Qt 候选包](Cheating_machine_execution_tool/dist/qt-20261121-131321-f895c473/DUTPilot_portable.zip)已纳入原开关机串口写入回执修正。3,245 项完整基线通过，247 项指定用例全部执行。三档 Windows 原生共 282 次通过。成品入口和 330 个项目模块与源码一致，92 个受保护业务文件保留原哈希，另外 5 个与负责人确认的修正快照一致。整体迁移及现场验收仍待完成。[交付与遗留项](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/power_command_receipts/REPORT.md)
+
+2026-11-21，[Windows Qt 候选包](Cheating_machine_execution_tool/dist/qt-20261121-123123-b69436ef/DUTPilot_portable.zip)已纳入项目回执和平台关闭顺序修正。3,243 项完整基线通过，245 项指定用例全部执行。三档 Windows 原生共 282 次通过。成品入口和 330 个项目模块与源码一致，97 个原业务文件与迁移前的哈希一致。整体迁移及现场验收仍待完成。[交付与遗留项](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/gateway_project_lifecycle/REPORT.md)
+
+**自动开关机原执行器已按负责人确认单独修正，待整机与现场验收。** 短等待两通道两轮已写全 8 帧，模拟串口异常已回传失败。旧版误报及其逐帧记录保留。本批仅使用模拟电源。[修改及验证](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/power_command_receipts/REPORT.md)
+
+2026-11-21，Qt 退出会等待平台连接停止，项目关闭会等待原网关回执持久化。模拟回归覆盖两个项目独立收尾和真实窗口关闭。Qt 自动启动实例客户端和项目会话转发仍待接入。[生命周期阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/gateway_project_lifecycle/REPORT.md)
+
+2026-11-21，[Windows Qt 候选包](Cheating_machine_execution_tool/dist/qt-20261121-120503-1bc9ddf8/DUTPilot_portable.zip)已纳入实例启动设置和开关机停止回执修正。3,240 项完整基线通过，242 项指定用例全部执行。三档 Windows 原生共 282 次通过。成品入口和 330 个项目模块与源码一致，97 个原业务文件与迁移前的哈希一致。整体迁移及现场验收仍待完成。[交付与遗留项](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/instance_startup/REPORT.md)
+
+2026-11-21，Qt 已接入多实例下次启动配置，统一接入客户端及项目转发仍待迁移。原开关机任务的明确停止回执现能正确归入已停止。两个项目的模拟执行器验证了配置快照、停止信号及资源释放隔离。[本轮修改与验收记录](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/instance_startup/REPORT.md)
+
+2026-11-21，[最新 Windows Qt 候选包](Cheating_machine_execution_tool/dist/qt-20261121-110646-bc54506d/DUTPilot_portable.zip)已纳入串口终端的被动诊断快照。3,235 项完整基线、三档 276 次原生回归、328 个成品项目模块比对通过。目标机、硬件及长期挂测仍待验收。[串口诊断阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/serial_diagnostics/REPORT.md)
+
+2026-11-21，包含本机电脑连续诊断的[最新 Windows Qt 候选包](Cheating_machine_execution_tool/dist/qt-20261121-103221-39df2f12/DUTPilot_portable.zip)已通过标准验包。3,233 项完整基线和最终三档 273 次原生回归通过，已核对 16 通道原请求、诊断批次和停止。[本机诊断、构建及现场待验项](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/pc_diagnosis/REPORT.md)
+
+2026-11-21，包含网关签发与实例配对的[Windows Qt 候选包](Cheating_machine_execution_tool/dist/qt-20261121-094840-01ea3a1e/DUTPilot_portable.zip)已完成标准构建。3,232 项基线通过，325 个项目模块的成品代码与源码匹配。16 通道模拟回执通过，目标机启动、真实设备和长期运行待验。[构建、专项验证及剩余业务](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/instance_pairing/REPORT.md)
+
+2026-11-21 Qt 候选新增网关配置与本机启停、登记实例撤销、会话权限与具体操作审批。开关机继续使用原编排器，持续开机全业务老化待接入独立执行源。当前候选的阶段覆盖、模拟测试、构建及现场条件见[迁移总结与测试报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/current_candidate_review/REPORT.md)。
+
+此前候选已通过 3,231 项完整源码回归、267 次三档 Windows Qt 原生验证及标准目录验包。[前次 Windows 验证包](Cheating_machine_execution_tool/dist/qt-20261121-033007-cb5006d8/DUTPilot_portable.zip)留作对照。当前默认入口仍为 Tk。
+
+2026-11-21，VS Code 通过 Ctrl+F5 可启动独立 Qt 源码工作台。本机远程项目范围的写入已接入原授权服务；持久任务历史支持查询整个任务、按匹配事件翻页。模拟验证结果及真实平台待办见[阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/HISTORY_SCOPE_QT_REPORT.md)。
+
+2026-11-21 V1.3.0 Qt 仍处于迁移收尾阶段。负责人确认实验室验收待现场，开关机按每台 500 次验收，全业务老化满 7 天逐项验收。本轮已核对指导书、项目实现和历史 Qt 包。后续从[交接差异与执行记录](docs/GUI_UPGRADE_EXECUTION_PLAN.md)继续。
+
+2026-11-20 负责人确认两阶段开发。当前继续原 V1.3.0 PySide6 迁移，正式验收及 Git 基线保存后再审计 V1.3.x 的公共准备流程、设计规范和架构升级。界面与原业务分离，持续复用现有服务和组件。[阶段管理原则](.claude/plans/pyside6-migration.md)
+
+2026-11-21 Qt 已接入 Tk 工作台的项目快捷键和打开项目目录操作。目录和保存均定位到当前所选项目。[项目菜单验证](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PROJECT_COMMANDS_QT_REPORT.md)
+
+2026-11-21 Qt「任务历史」可以查看旧工作台直接启动的批次。95 项相关回归已通过，包含旧项目重开时的历史隔离和跨批次迟到事件隔离。[旧项目历史](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/LEGACY_RUN_HISTORY_QT_REPORT.md)
+
+2026-11-21 Qt 六个功能弹窗恢复原 Tk 项目保存的宽高，并在关闭时按项目保存。156 项专项和 252 项三档 Qt 原生用例通过。实际系统 DPI 动态切换与实体多屏待现场验收。[窗口尺寸兼容](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/MODULE_WINDOW_SIZES_QT_REPORT.md)
+
+2026-11-21 Qt 通道详情可查看本次开关机批次的重试、失败原因和续跑历史。132 项专项及 249 项三档 Qt 原生用例通过。真实 DUT 重试与长挂仍待现场复验。[通道重试历史](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/CHANNEL_RETRY_HISTORY_QT_REPORT.md)
+
+2026-11-21 Qt AI 会话已恢复原 Markdown 展示、独立最新状态、流式末尾更新及原输入快捷键。3,211 项完整基线和 246 项三档 Qt 原生用例通过。真实模型、输入法、设备和平台待验收。[Qt 会话排版报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/AI_CHAT_PRESENTATION_QT_REPORT.md)
+
+2026-11-20 Qt 实时 AI 日志已复用旧版任务摘要、异常分类及原文归档。181 项专项回归和 243 项三档原生用例通过。真实模型、设备和平台验收继续待办。[AI 实时日志报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/AI_LIVE_LOG_QT_REPORT.md)
+
+2026-11-20 Qt 任务历史可在工作台重启后打开所选开关机批次的结果与 WiFi 文件。98 项专项回归和 240 项三档原生复验通过。实际目标机关联程序和现场输出待验收。[历史批次结果文件](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/HISTORY_RESULT_FILES_QT_REPORT.md)
+
+2026-11-20 Qt 通道矩阵和列表可打开选定通道的开关机运行日志及本次尝试的 WiFi 日志。150 项专项回归和三档共 237 项 Windows 原生用例通过。目标机文件关联和现场输出待验收。[通道日志报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/CHANNEL_LOGS_QT_REPORT.md)
+
+2026-11-20 Qt 实时日志按批次追加并裁剪过期行，原始日志可继续归档读取。四线程 6,000 条短时写盘核对、94 项专项回归和 234 项三档原生复验通过。真实长挂、整机指标和目标机待验收。[实时日志验证](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/LOG_BATCH_QT_REPORT.md)
+
+2026-11-20 Qt DUT 与写参的登录输入按项目即时联动，继续通过写参入口显式保存。103 项专项回归和三档共 231 项 Windows 原生用例通过。真实设备和目标机待验收。[共用登录输入报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PARAMETER_LOGIN_QT_REPORT.md)
+
+2026-11-20 Qt DUT 配置六个页签按项目独立恢复和保存状态区高度。96 项相关回归与 228 项三档原生复验通过。实际系统 DPI 和现场设备待办。[DUT 状态区报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/DUT_STATUS_HEIGHT_QT_REPORT.md)
+
+2026-11-20 Qt 串口终端和 DUT 配置已兼容按项目保存的原窗口偏好。串口关闭时日志目录偏好保存失败仍会释放会话。125 项相关回归和 225 项三档原生复验通过，实际系统 DPI、实体多屏和目标机待验收。[Qt 窗口状态报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/WINDOW_PLACEMENT_QT_REPORT.md)
+
+2026-11-20 Qt AI 诊断加入项目会话管理。多选、改名与批量删除复用原会话库和整批忙碌保护。159 项相关回归和 222 项三档原生用例通过，目标机历史项目待验收。[Qt 排障会话管理](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/AI_SESSION_MANAGER_QT_REPORT.md)
+
+2026-11-20 Qt 通道配置接入原网卡改名与跨项目草稿同步。修复工作台冷启动时更新模块和工作区线程的 Requests 导入竞争。224 项相关回归、15 项冷启动专项与 219 项三档原生复验通过，真实网卡及目标机待验收。[Qt 网卡改名](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/ADAPTER_RENAME_QT_REPORT.md)
+
+2026-11-20 Qt 顶栏「设备管理」可查看网卡 GUID、串口、工作区活动租约和项目通道。113 项相关回归和 216 项三档原生复验通过。目标机验收待办。[Qt 设备管理](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/DEVICE_INVENTORY_QT_REPORT.md)
+
+2026-11-20 Qt 全局设置已接入检查更新、ZIP 保存及校验、取消和退出收尾。134 项相关回归和 213 项三档原生检查通过，真实发布与目标机更新待验收。[Qt 检查更新](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/APP_UPDATE_QT_REPORT.md)
+
+2026-11-20 Qt 本机报告会话已可分析留存材料，支持模型分析、会话内证据检索、文本导入和停止本轮。180 项相关回归和 210 项三档 Windows 原生检查通过。实时采集、设备工具、审批及平台控制面继续迁移，真实模型与现场验收待办。[Qt 留存报告分析](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/AI_REPORT_ANALYSIS_QT_REPORT.md)
+
+2026-11-20 Qt 已接入新旧报告转入项目排查会话，复用原目标快照、同通道关联确认及会话证据。179 项相关回归和 207 项三档 Windows 原生检查通过。[Qt 报告接手迁移记录](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/AI_HANDOFF_QT_REPORT.md)
+
+2026-11-20 Qt 已接入共用案例库和从报告新建草稿，沿用人工确认、共享版本、修订记录、检索启停及删除标记。178 项相关回归和 204 项三档 Windows 原生检查通过。[Qt 共用案例迁移记录](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/AI_CASES_QT_REPORT.md)
+
+2026-11-20 Qt 已接入项目诊断报告和批量管理，复用原报告库、证据、标题和删除保护。158 项相关回归和 201 项三档 Windows 原生检查通过。[Qt 诊断报告迁移记录](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/AI_REPORTS_QT_REPORT.md)
+
+2026-11-20 Qt 已接入项目普通问答和会话历史，复用原模型选择、会话库、证据和流式回复。154 项相关回归和 198 项三档 Windows 原生用例通过。[Qt 普通问答报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/AI_CHAT_QT_REPORT.md)
+
+2026-11-20 Qt 任务历史已接入持久化业务任务现场核实。明确本机确认绑定项目、原任务及版本，复用原结果记录和资源保护。118 项相关回归及三档共 192 项 Windows 原生用例通过。[业务任务核实报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/JOB_REVIEW_QT_REPORT.md)
+
+2026-11-20 Qt 项目菜单已接入本机核实原 GUI 未知保护，沿用原回执和资源规则，保留原结果。131 项相关和覆盖回归、三档 189 项 Windows 原生用例通过。持久化 Job 的独立审阅及现场验收仍待完成。[核实未知任务报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/UNKNOWN_TASK_QT_REPORT.md)
+
+2026-11-20 Qt 总览已接入系统状态，展示现有界面回调、工作区响应、日志写入与积压、任务日志和资源租约。121 项相关及门禁用例通过，Windows 私有桌面三档共 186 项通过，隔离违规为零。持续开机业务探测、现场与长挂验收待完成。[系统状态报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/SYSTEM_HEALTH_QT_REPORT.md)
+
+2026-11-20 Qt 已接入原工作区日志和项目串口文件的归档浏览，后台有界分页，支持本页搜索及导出。42 项相关回归及三档 183 项原生检查通过。写盘健康与长期验收仍待办。[归档日志报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/ARCHIVED_LOGS_QT_REPORT.md)
+
+2026-11-20 已生成首份 Qt V1.3.0 Windows 迁移验证目录包及 ZIP。锁定 Qt 环境完整基线通过，执行 3,185 项与 239 项指定用例。实际 EXE 版本、Qt Windows 插件、关键 DLL、ZIP 一致性与哈希核验通过。目标电脑、真实设备及长期验收仍待办。[Windows Qt 目录包报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/QT_DIRECTORY_BUILD_REPORT.md)
+
+2026-11-20 Qt 已接入导入的钉钉和飞书配置选择，保存复用原加密存储，选中平台保持停用。72 项相关回归、三档 180 项原生用例通过。平台启用和远程控制面仍待迁移及现场验收。[导入接入配置报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/IMPORTED_CONNECTIONS_QT_REPORT.md)
+
+2026-11-20 Qt 六标签窗口已接入按项目和版本加密的页面草稿恢复。原保存校验继续独立。旧 Tk 草稿由原窗口恢复。68 项业务相关回归、28 项验证脚本回归和 177 项三档原生用例通过。[配置草稿恢复报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/EDITOR_RECOVERY_QT_REPORT.md)
+
+2026-11-20 Qt 项目菜单已接入最近项目的按路径打开及从最近列表移除，复用原工作区记录。36 项相关回归和三档共 174 项原生验证通过。配置页面草稿恢复和导入平台配置选择仍待迁移。[最近项目报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/RECENT_PROJECTS_QT_REPORT.md)
+
+2026-11-20 Qt 单次「自动上/下电」已接入本机选口、方向、通道确认及空端口人工重启。原电源服务与 Job 资源保护复用，配置快照优先显示本次端口。三档共 171 项 Windows 原生检查通过，真实电源与样机流程待验收。[单次电源控制报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/SINGLE_POWER_QT_REPORT.md)
+
+2026-11-20 Qt 项目菜单已接入任务历史。按项目和完整任务 ID 只读分页，并可筛选与导出当前历史页。关闭重开项目后仍能查看原记录。90 项相关回归、三档 168 项原生复验通过。工作区旧文本、串口原文统一浏览和系统健康待接入。[任务历史报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/LOG_HISTORY_QT_REPORT.md)
+
+2026-11-20 Qt 日志区已接入项目、当前任务和通道筛选及当前缓冲导出。任务标识由原 Job 事件提供，导出使用本机选定的新 TXT。88 项相关回归和三档 165 项原生复验通过。持久历史分页和系统健康待接入。[日志阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/LOG_SCOPE_QT_REPORT.md)
+
+2026-11-20 Qt 主工具栏已接入「刷新串口/网卡」，与通道窗口共用只读扫描。枚举期间保留任务停止及活动租约，跨项目更新候选时保留编辑草稿。三档 162 项原生复验通过。[工具栏刷新阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/HOST_INVENTORY_QT_REPORT.md)
+
+2026-11-19 Qt 通道配置已接入串口与网卡分组、全量模式和只读刷新。候选变化保留当前输入。300 项相关回归、三档 159 项原生复验及本机只读枚举通过。最近一次完整基线全部通过，运行 3,165 项，包含 239 项指定用例。物理网卡改名待迁移。[候选阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/RESOURCE_OPTIONS_QT_REPORT.md)
+
+2026-11-19 Qt 失败轮次续跑已补齐批次结束后的多通道排队。确认后的请求按顺序复核并取得单通道资源，停止或关闭会取消等待项。191 项相关回归及三档 Windows 原生 Qt 共 156 项通过。现场设备验收待做。[排队阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/RESUME_QUEUE_QT_REPORT.md)
+
+2026-11-19 Qt 已接入失败轮次续跑。原批次运行时复用原会话和控制队列，批次结束后单独获取已确认通道资源。首次阶段的 185 项相关回归及 153 项三档原生用例通过。[续跑阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/RESUME_QT_REPORT.md)
+
+2026-11-19 Qt「消息推送」已接入本机确认后的单次试发，使用当前草稿和已保存项目名，自动识别钉钉或飞书。104 项相关回归及三档 150 项原生用例通过，真实目标群待验收。[消息试发阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PUSH_TRIAL_QT_REPORT.md)
+
+2026-11-19 Qt「项目信息」已接入单通道样机版本查询及只读结果。沿用原 Telnet 登录和查询服务，读取当前窗口草稿，保留 `>` 的登录后命令确认及样机版本基准。119 项相关回归及 Windows 原生 Qt 三档各 49 项通过，真实样机待验收。[版本查询阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/VERSION_QUERY_QT_REPORT.md)
+
+2026-11-19 Qt 测试项页已接入单次预备测试。确认绑定当前项目、已选通道和 Telnet/命令草稿，沿用原执行、检查、日志及停止流程。该阶段 100%、125%、150% 原生 Qt 共 144 项通过，另有 116 项相关回归通过。设备和长期验收待做。[预备测试阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PRETEST_QT_REPORT.md)
+
+2026-11-19 Qt 全流程已接入原三项选择和配置就绪状态，经本机二次确认调用 `pipeline.start`。串口日志使用同一项目终端与日志目录，先逐台尝试再由原编排器运行后续。环境失败中止，停止等待原业务实际收尾。后续三档原生复验通过，现场验收待做。[全流程阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PIPELINE_QT_REPORT.md)
+
+2026-11-19 Qt 样机升级已接入未配置程控电源时的手动重启确认。三种全包模式使用实际通道、空电源口、原预检和原升级任务，确认绑定项目配置与固件。通用能力对无程控电源仍保持原拒绝。三档原生模拟和补图已通过，实机验收待完成。[手动重启阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/FIRMWARE_MANUAL_REPORT.md)
+
+2026-11-19 Qt ONU 已接入 C300/C600 项目配置、连接、模板和查询、注册、当前 PON 批量删除及注册后独立保存 OLT 启动配置。C300 单台注册的可选离线清理重试接入原只读候选查询、SN 复核和重试服务。三档各 5 项原生模拟和补图已通过，实机验收待做。[ONU 阶段证据索引](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/NEXT_ONU_AUDIT.md)
+
+2026-11-19 Qt 写样机参数已接入原参数表导入、生成、目标预检、确认、独立批量执行和停止。串口回退自动展示原会话的只读日志，停止收尾后自动关闭。旧全流程联动和真机复验待做。[写参阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PARAMETER_WRITER_REPORT.md) [串口观察报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PARAMETER_OBSERVATION_REPORT.md)
+
+2026-11-19 Qt 升级日志增量：有程控电源的全包升级自动展示原串口会话的只读输出，逐台状态来自原引擎回调。187 项相关回归通过，2 项默认跳过的本机浏览器用例另行启用并通过。三档 Windows 原生共 114 项通过。任务收尾只关闭自动观察窗。手动重启、旧全流程联动和设备现场验收待做。[阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/FIRMWARE_OBSERVATION_REPORT.md)
+
+2026-11-19 Qt 样机升级增量：页面升级、有程控电源的 Tftp 指令/Tftp Put/Web 网关全包升级和项目升级设置接入。预检与本机确认绑定原固件哈希/真实目标，执行和安全停止走原 `firmware.upgrade` 与 Job。169项相关通过，两项默认跳过的无头浏览器案例另行启用并通过，源码/协议保全通过。三档窗口证据见[样机升级报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/FIRMWARE_REPORT.md)。手动重启、全流程联动及现场待迁移或验收。Tk 默认入口保持。
+
+2026-11-19 Qt 最新检查点：DUT配置六页均接入原查询、配置和任务控制，64项相关、105项三档原生及3,093项完整基线（239指定用例）通过。之后补齐旧目录导入、修正项目凭据读取和TR069缺失字段显示，最新源码75项相关、108项三档原生及源码保全通过，截图见[后续报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/QT_FOLLOWUP_REPORT.md)。现场设备与系统DPI/多屏未验收。下一项为[样机升级](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/NEXT_FIRMWARE_AUDIT.md)，写参、ONU、AI/平台、长挂和Qt打包待实施或复验。默认入口仍为Tk。
+
+最新Qt WiFi检查点（2026-11-19，自动化通过、待现场验收）：两频段所有表单字段、原查询能力、一致回填、双频、SSID递增、原60秒等待/回读/停止接入完成。恢复输入桌面后完整基线3087项和236项指定用例通过，303编译/293登记、505项GUI动作、协议及保全通过；原生33×3=99项和稳定布局复采2×3=6项通过。源码、文件列表、历史失败及实际截图见[WiFi阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/WIFI_REPORT.md)。下方为各轮历史检查点。
+
+WAN当前验证边界：完整基线3071项/232指定回归、原生93项曾在同版源码通过。随后仅修正WAN确认摘要实际UBUS端口及断言，42项相关回归和源码检查通过，但最新原生在GUI创建前因OpenInputDesktop/WinError 5失败；未回退用户桌面。此增量保持“源码已实现、最新原生待恢复桌面复验、真实设备未验收”，不是全部通过。具体版本哈希和错误见本轮WAN报告；整份迁移目标继续。
+
+最新Qt WAN增量（2026-11-18，已实现未现场验收）：原批量查询、共同名称/完整详情、新增/修改/删除、全部WAN字段和原显隐/回填/地址组合规则已接入；共用DUT独立目标/凭据/并发、一次确认/配置/NIC/查询绑定、原Job和资源保护。WAN密码仅给GUI私有回填，实际参数不改，持久任务/日志隐藏；停止等原worker，切页/关窗口不停任务。11项纯展示定义原文共享到models，旧Tk保留导入API，剩余34项定义AST一致，原服务/core不变。42项相关服务与最后三档31×3=93原生通过，宽二列/窄一列、行内完整性和滚动到底访问已验证；完整基线与最终源码结果见[WAN阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/WAN_REPORT.md)。整份计划仍活动，下一步WiFi/语音/TR069；其余模块、真实硬件/长期/部署未完成。未提交、打包、运行EXE、改真实网卡/DUT或外发消息。下方各条为对应历史检查点。
+
+Qt DUT本轮验证汇总：28项相关服务回归（17新DUT）、完整基线3057项/229指定回归通过；随后仅调整新窗口滚动布局及对应原生断言，业务适配哈希不变，最后原生29×3=87项与298编译/288登记、493动作覆盖、协议及九份原DUT边界保全通过。560×460逻辑尺寸三档实际成立、结果可滚动访问。完整基线早于最后这两份UI/测试代码变化，未再次跑全量；版本范围与最终核对见本轮报告。
+
+最新Qt DUT Telnet增量（2026-11-18，已实现未现场验收）：接入真实项目目标、独立选择、原凭据初值/会话草稿、默认取消确认、原批量开启/当前状态查询、1–8并行、逐台结果及原Job安全停止。原准入/项目快照/NIC身份/资源保护保持；关闭窗口和切项目不取消任务，重开仍关联原Job；查询成功不冒充测试健康。仅gui控制面，Qt日志/Job结果不含密码。原DUT service/core/Tk文件不改，最终验证和失败修复见[DUT Telnet阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/DUT_TELNET_REPORT.md)。WAN/WiFi/语音/TR069等后续增量、整个GUI迁移、真实硬件/长期/部署仍未完成；正常挂测仍Tk。未执行真实设备、网卡修改、外部消息、EXE或发布。下方为对应历史检查点。
+
+最新Qt基本串口终端（2026-11-18，已实现未现场验收）：项目详情串口入口、已选VLAN/显式COM标签、打开/停止全部、文本/空回车、危险命令确认、目录恢复/选择、清屏及逐标签确认关闭已接入。原SerialSessionManager/PySerialSession、所有权/控制锁/实际串口参数/文件格式/关闭尾行保持；共享无文件日志时如实提示。仅gui来源，不扩大AI裸串口权限；后台操作与原100ms主线程轮询复用，窗口切换不停止监控，关闭等待实际reader/日志收尾。显示有界、非当前标签缓存、阅读锚点修复、窄窗口与三档截图通过。17项服务、最终原生27×3=81项通过，每档36受管顶层/违规0；296编译/286登记、488动作覆盖/协议及原串口边界字节保全通过。本轮最终完整基线3040项、226项指定回归及全部门禁通过（ALL CHECKS PASSED）；首轮父子编码不一致导致收集失败，统一UTF-8后完整复跑，失败记录保留。未连接真实串口/DUT、发送外部消息、提交、打包或运行EXE。原升级自动开窗/AI联动、窗口几何恢复仍待对应Qt模块；整体迁移、真实系统DPI/多屏/长期及部署未完成，正常挂测仍Tk。文件、前后截图、失败修正及验收边界见[串口阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/SERIAL_REPORT.md)。下方各轮结果为对应历史检查点。
+
+最新Qt通道增量（2026-11-18，已实现未人工验收）：已接入16槽位选择/VLAN/COM/共享管理IP/电源绑定、全选/清除、只读资源刷新和预览确认保存，复用原ChannelCapabilities/ChannelConfigStore及原项目版本；只存已选行，未选绑定保留当前项目会话，不扩大AI/远程权限。通道与六标签编辑、任务互斥；版本冲突不覆盖、提交失败恢复/未知保护。矩阵/只读列表共用实际快照，修复隐藏列表撑高矩阵布局，窄表单自动换行、纵向访问。16项新服务用例及最终109项组合通过；原生24×3=72项最终顺序复验通过，每档30受管顶层/违规0；并发中间轮曾被原COM102资源保护拒绝，失败证据保留。294编译/284登记、478动作覆盖/协议及原业务字节保全通过。本轮未跑完整基线，前轮2981项不是本轮结果。正常测试仍Tk，整套迁移未完成；资源分组过滤/网卡改名/失败续跑、预备测试/版本查询/试发、其它业务页/历史日志/AI平台/可靠性/打包及真实设备/DPI/长挂仍待后续，持续开机老化保持待接入。文件、前后截图、实际验证和差异见[通道阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/CHANNELS_REPORT.md)。未提交、打包、运行EXE或操作真实设备。
+
+最新Qt配置编辑增量（2026-11-18，已实现未人工验收）：六标签QDialog已接入原测试/运行/推送配置存储和项目版本保存，含命令/期望分段增删、默认命令草稿、WiFi网卡只读刷新、密码显隐、重载/保存/关闭；隐藏运行字段、禁用选项值、Telnet反向镜像及重试间隔唯一来源保留。GUI专用configuration.editor.*只接受gui来源，不向AI/远程返回私有值；同项目编辑租约/任务互斥，保存复核版本，暂存序列化及提交失败恢复，恢复失败保留未知保护。原生20项×三档=60项通过，每档23受管顶层/违规0；14项新增服务回归通过，相关156项首轮155通过、1项动作快照待更新，审查更新后覆盖模块3项复验通过；291编译/281源码登记、469动作覆盖、协议及原业务保全通过。本轮未跑完整基线，最近2981项仍为前轮结果。原预备测试/设备版本查询/消息试发、通道配置及其它业务页/历史日志/AI平台/打包仍待后续，不表示整个Phase 5或迁移完成。未操作真实设备、发送消息、提交或打包。文件、实际六标签截图、失败复现与剩余边界见[配置阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/CONFIGURATION_REPORT.md)。
+
+最新Qt开关机接入（2026-11-18，Phase 3代码已实现、未设备验收）：Qt开始/环境检查/停止复用原CapabilityService/Jobs、PipelineOrchestrator及legacy_power_test_service；确认绑定项目、保存版本/全部配置字节、明确通道且两分钟内有效，NIC GUID与原主机资源保护继续准入。页面切换只切视图；任务数据来自原事件，当前测试配置显示runs快照；关闭等待原业务线程/串口实际结束，不接管旧Tk批次，不自动恢复未知历史。11项新服务回归和相关组合共146项通过，原生Qt16项×三档=48项通过、每档14受管顶层/违规0；288编译/278源码登记、覆盖/协议及旧业务字节保全通过。本轮未运行完整基线，最近2981项记录仍为前轮结果。配置编辑、其它业务页面/AI/平台、完整历史/日志导出、Qt打包和系统DPI/真实设备/24–72小时仍待后续；正常挂测仍使用Tk。文件、前后截图、差异和验证见[Phase 3报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PHASE3_REPORT.md)。未提交/打包/运行EXE。
+
+最新Qt迁移检查点（2026-11-18，Phase 1与Phase 2基础管理已实现、待人工验收）：已修复下述初始基线阻断，保留Tk默认入口/原业务，增加独立`run_dutpilot_qt.py --demo`和`--workspace`。Qt工作台含统一主题、虚拟卡片/列表/筛选/排序、详情/16通道快照、只读配置和有界可拖动日志；真实项目新建/打开/保存/重命名/复制/关闭在后台串行复用原WorkspaceService/ProjectStore，保留UUID/revision/草稿/历史格式及本机人工控制。历史未完成只显示待核实，不自动恢复任务，关闭等待文件worker实际退出。当前Qt设备执行、完整配置编辑、其它业务/平台控制面仍未迁移或禁用，持续开机老化保持待接入，不代表整体迁移完成。最终完整基线2981项/211指定回归/287编译/277源码登记及全部覆盖/协议项通过；Qt原生12项×三档=36项通过，每档10受管顶层、违规0；61相关回归、910源码/17 SQLite恢复演练及原162 core/services+31旧业务+10本机配置+app.py字节保全通过。原生捕获不代替人工、真实系统DPI/设备/平台/24–72小时；旧包匹配与Qt打包仍待对应阶段。文件、启动方法和截图见[阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PHASE1_2_REPORT.md)。Qt只装仓库外独立开发环境；未提交/推送/打包/运行EXE，V1.2.10及原构建链保持。下方失败和旧结果保留历史事实。
+
+最新PySide6迁移审计（2026-11-18，Phase 0审计交付、基线未放行）：负责人改为分阶段迁移Qt Widgets，已建立`feature/pyside6-migration`并保留原工作区/Tk入口，仓库外备份910份源码相关文件和1060份配置/历史文件，依赖及旧EXE留存。实际代码确认大部分service可复用，但Tk参数快照/准入/关闭及旧GUI批次接管仍需适配；持续开机老化仍待接入。新跑完整基线exit 1：273份编译/266源码登记/离屏预检及协议项通过，能力快照陈旧，全量unittest出现Tcl_AsyncDelete原生中止；定向14项中13通过、日志sash布局1项失败。不能沿用下方历史全绿记录宣布当前工作区通过。原生Tk临时两项目/16通道私有桌面捕获通过，不代表真实业务/DPI/现场验收；现有09月EXE与当前源码未建立版本匹配。报告/文件/截图/直接修复清单见[Phase 0审计](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PHASE0_AUDIT.md)，代码级阶段表见[迁移计划](.claude/plans/pyside6-migration.md)。本轮未改生产业务、未安装Qt、未实现Qt原型、未提交/推送/打包/运行EXE，V1.2.10保持。
+
+最新GUI测试窗口隔离（2026-11-18，测试设施已实现）：统一入口为`python scripts/run_tests.py ...`和VS Code带“离屏预检”的任务；完整基线新增第八类gui_test_coverage，新增真实Tk测试漏接入会预检失败或被原始构造前的运行时守卫拦截，捕获异常/缺少子进程证据/泄漏作用域仍失败。普通窗口屏幕外映射；原生像素专项在系统核验的非输入私有桌面执行，保留原GetPixel断言、不切换用户桌面。相关组合975项及收尾78项通过，覆盖66个构造位置、38文件编译通过；未运行本轮完整基线，不覆盖下方2940项工作台历史边界。人工目视、VS Code实际任务、实体多屏待确认；只改测试设施与文档，不改产品验收状态、未提交/打包/运行EXE。文件、命令及结果见[本轮报告](Cheating_machine_execution_tool/validation/gui_offscreen_20261118/REPORT.md)及DEVELOPMENT_LOG最新条目。
+
+收尾并发边界（2026-11-18）：下述工作台完整基线完成后，`Cheating_machine_execution_tool/tests/tk_test_windows.py`出现非本轮修改的并发改动，已原样保留；2940项结果不覆盖其后变化，不能作为当前含该改动的整工作区验证结论。详情见本轮Phase 1报告。
+
+最新统一工作台（2026-11-18，Phase 1源码已实现，待Windows验收）：按负责人参考图调整深青色顶栏/侧栏、统计卡片、项目卡片/列表、运行项目分组/搜索、右侧配置摘要与原表单、底部可拖动/折叠日志；复用现有项目、运行、资源及安全退出链路，不改变设备命令、周期、判定、停止或配置快照。通道不同步只展示实际轮次范围，未知不计正常；新工作台日志显示有界，文件记录保留。负责人明确“持续开机全业务老化尚未实现，先保留待接入”，现有aging.start仍是开关机挂测，未创建Probe引擎。审计/代码级方案见[实施计划](.claude/plans/unified-workbench.md)，本轮文件、检查、截图及待验收清单见[Phase 1报告](Cheating_machine_execution_tool/validation/unified_workbench_20261118/PHASE1_REPORT.md)。本轮完整基线2940项测试、201项指定回归、270份编译、266份源码登记、能力覆盖及协议不变量全部通过（ALL CHECKS PASSED）；Windows真实交互、真实DPI、24/72小时及真实设备尚未验收，Phase 2/3未开展。分支ui/unified-workbench-phase1，未提交、推送、打包或运行EXE，V1.2.10不变。
+
 最新本地提交（2026-11-18）：负责人明确要求提交当前全部改动，包含本机网络配置；以“将工具更名为DUTPilot并完善多项目收尾与布局预览”纳入源码、测试、计划、预览及相关文档。本次提交由既有pre-commit使用校验后的CPython3.9.10 x64执行完整基线，失败阻止提交，最终结果见本次钩子输出及DEVELOPMENT_LOG.md。下方各阶段未提交/未运行完整基线记录保留历史事实；Windows及真实模型/平台/DUT验收边界保持，布局预览尚未接入主程序。只提交本地，不推送、不构建或发布，版本V1.2.10及现有EXE保持。
 
 最新产品改名（2026-11-17，源码已实现，待Windows与正式改名包复验）：当前工具名称统一为DUTPilot，后续标准产物为DUTPilot.exe、DUTPilot_portable.zip及对应校验文件；旧配置/AI/案例库路径、源码与构建入口、Windows应用标识和图标保留。新版更新客户端优先新名称并兼容旧附件组合，缺件/混配/校验失败明确报错；旧版首次换版需手动下载。529项相关回归分两组通过，22份Python编译、PowerShell语法及能力覆盖通过；首轮测试导入Mock污染已修正并组合复跑通过。详细文件、命令及既有工作区差异边界见DEVELOPMENT_LOG.md；[实施计划](.claude/plans/dutpilot-rename.md)，验收待办见ACCEPTANCE_BASELINE.md §2.15/§3。本轮未运行完整基线，最近完整记录保留；版本V1.2.10不变，未构建、运行EXE、提交、发布或连接真实平台/DUT，原有多项目及本机配置改动保留。

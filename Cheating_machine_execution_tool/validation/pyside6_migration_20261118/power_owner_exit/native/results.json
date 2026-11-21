@@ -1,0 +1,68 @@
+[
+  {
+    "scale": "1",
+    "passed": true,
+    "tests": 95,
+    "missing": [],
+    "evidence": {
+      "passed": true,
+      "managed_windows": 1851,
+      "violations": [],
+      "isolation": "private_desktop",
+      "desktop": "DUTPilot_render_908ccaf272284dc6b6cb22b1263959cd",
+      "qt": {
+        "passed": true,
+        "managed_windows": 1851,
+        "violations": [],
+        "isolation": "private_desktop",
+        "desktop": "DUTPilot_render_908ccaf272284dc6b6cb22b1263959cd",
+        "framework": "qt",
+        "platform": "windows"
+      }
+    }
+  },
+  {
+    "scale": "1.25",
+    "passed": true,
+    "tests": 95,
+    "missing": [],
+    "evidence": {
+      "passed": true,
+      "managed_windows": 1851,
+      "violations": [],
+      "isolation": "private_desktop",
+      "desktop": "DUTPilot_render_04eccbba2e594a2983538d7701b8d899",
+      "qt": {
+        "passed": true,
+        "managed_windows": 1851,
+        "violations": [],
+        "isolation": "private_desktop",
+        "desktop": "DUTPilot_render_04eccbba2e594a2983538d7701b8d899",
+        "framework": "qt",
+        "platform": "windows"
+      }
+    }
+  },
+  {
+    "scale": "1.5",
+    "passed": true,
+    "tests": 95,
+    "missing": [],
+    "evidence": {
+      "passed": true,
+      "managed_windows": 1851,
+      "violations": [],
+      "isolation": "private_desktop",
+      "desktop": "DUTPilot_render_684c59b8dd1a46f5a338103d07c77987",
+      "qt": {
+        "passed": true,
+        "managed_windows": 1851,
+        "violations": [],
+        "isolation": "private_desktop",
+        "desktop": "DUTPilot_render_684c59b8dd1a46f5a338103d07c77987",
+        "framework": "qt",
+        "platform": "windows"
+      }
+    }
+  }
+]

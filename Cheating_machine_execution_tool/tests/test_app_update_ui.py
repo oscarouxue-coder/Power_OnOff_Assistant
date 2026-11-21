@@ -227,6 +227,8 @@ class AppUpdateTkTests(unittest.TestCase):
     """只构造更新窗口，无主程序初始化、配置写入或设备访问。"""
 
     def setUp(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         self.root = Tk()
         self.root.withdraw()
         self.logs = queue.Queue()

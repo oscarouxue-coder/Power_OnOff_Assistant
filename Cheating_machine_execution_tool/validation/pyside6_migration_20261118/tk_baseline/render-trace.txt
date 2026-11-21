@@ -1,0 +1,9 @@
+construct workspace
+construct project 0
+construct project 1
+mainloop
+update detail
+capture detail
+update config
+update overview
+update dialog

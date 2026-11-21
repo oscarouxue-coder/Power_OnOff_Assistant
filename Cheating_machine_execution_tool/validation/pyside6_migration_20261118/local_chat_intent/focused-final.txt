@@ -1,0 +1,7 @@
+GUI_TEST_COVERAGE_OK
+................................................................................
+----------------------------------------------------------------------
+Ran 80 tests in 46.600s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 2, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

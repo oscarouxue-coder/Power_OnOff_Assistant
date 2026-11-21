@@ -1,0 +1,41 @@
+{
+  "checkout": "C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-source\\local-channel-0d686fd9\\Cheating_machine_execution_tool",
+  "base_candidate": "qt-20261121-181751-f6f47fda",
+  "changed_project_modules": [
+    "src/models/qt_ai_chat.py",
+    "src/services/ai_conversation_service.py",
+    "src/services/ai_serial_client.py",
+    "src/services/ai_session_router.py",
+    "src/services/qt_ai_chat.py",
+    "src/services/qt_ai_report_handoff.py",
+    "src/services/qt_execution_adapter.py",
+    "src/services/qt_workspace_adapter.py",
+    "src/ui/qt/ai_chat_dialog.py",
+    "src/ui/qt/workspace_controller.py"
+  ],
+  "unchanged_previous_modules": 322,
+  "independent_source_files": [
+    "src/core/project_peer_transport.py",
+    "src/services/project_peer_router.py",
+    "src/services/project_peer_runtime.py"
+  ],
+  "separate_feature_test_ids": [
+    "test_project_peer_routing.ProjectPeerTests.test_platform_received_on_b_only_a_executes_once_and_returns_version",
+    "test_project_peer_routing.ProjectPeerTests.test_closed_offline_reopened_never_replays",
+    "test_project_peer_routing.ProjectPeerTests.test_lost_receipt_and_concurrent_duplicate",
+    "test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_peer_mode_delivers_version_through_project_chat_and_local_approval"
+  ],
+  "verified_source_inventory": {
+    "files": 697,
+    "sha256": "77579b16d205ec3b9a6abf5b254b671c4fe62741af691426cb6f6e62699c314d"
+  },
+  "first_isolated_inventory": {
+    "files": 697,
+    "sha256": "b6680dd236530bc04aaf8f3b90d3466f5f06df8fde0d2b021f7410809c59bb6e"
+  },
+  "test_fixture_provenance": {
+    "file": "tests/test_qt_workspace_adapter.py",
+    "restored_from": "pre-peer temporary snapshot",
+    "sha256": "c6655add3e3700ebd7ff7398dc84b86668aa78e54e9a412263e068eb83c2c749"
+  }
+}

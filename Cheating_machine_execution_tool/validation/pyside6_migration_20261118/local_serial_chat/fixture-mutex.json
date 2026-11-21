@@ -1,0 +1,7 @@
+{
+  "default_host_lock_held": true,
+  "same_simulated_bench_blocked_other_process": true,
+  "distinct_simulated_bench_independent": true,
+  "released_mutex_reacquired": true,
+  "physical_device_operations": 0
+}

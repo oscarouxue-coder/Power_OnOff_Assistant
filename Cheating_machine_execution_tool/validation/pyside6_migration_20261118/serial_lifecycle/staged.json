@@ -1,0 +1,35 @@
+{
+  "log_open": {
+    "error": "PermissionError",
+    "driver_closed": true,
+    "log_open": false,
+    "manager_closing": false,
+    "system_reserved": false,
+    "releases": [
+      false
+    ],
+    "writes": 0
+  },
+  "reader_start": {
+    "error": "RuntimeError: fixture-start",
+    "driver_closed": true,
+    "log_open": false,
+    "manager_closing": false,
+    "system_reserved": false,
+    "releases": [
+      false
+    ],
+    "writes": 0
+  },
+  "driver_close": {
+    "error": "RuntimeError: SerialCloseError: \u4e32\u53e3 COM7903 \u9a71\u52a8\u5173\u95ed\u5931\u8d25\uff1afixture-close",
+    "driver_closed": false,
+    "log_open": false,
+    "manager_closing": true,
+    "system_reserved": true,
+    "releases": [
+      true
+    ],
+    "writes": 0
+  }
+}

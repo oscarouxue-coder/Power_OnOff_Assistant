@@ -1,0 +1,217 @@
+{
+  "parent": 34024,
+  "cases": [
+    {
+      "entry": "direct",
+      "original_reported_state": "succeeded",
+      "complete_serial_sequences": false,
+      "expected_per_channel": [
+        "off",
+        "on",
+        "off",
+        "on"
+      ],
+      "observed_per_channel": {
+        "3": [
+          "off",
+          "on"
+        ],
+        "9": [
+          "off",
+          "on"
+        ]
+      },
+      "pid": 23700,
+      "events": [
+        {
+          "event": "serial_open",
+          "seconds": 0.062,
+          "port": "COM239",
+          "baudrate": 19200
+        },
+        {
+          "event": "frame",
+          "seconds": 0.078,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "frame",
+          "seconds": 0.578,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "channel_start",
+          "seconds": 1.094,
+          "channel": 3
+        },
+        {
+          "event": "channel_start",
+          "seconds": 2.094,
+          "channel": 9
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 2.609,
+          "channel": 3,
+          "duration": 1
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 3.609,
+          "channel": 9,
+          "duration": 1
+        },
+        {
+          "event": "frame",
+          "seconds": 4.109,
+          "hex": "5501a00003a2"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 5.125,
+          "channel": 3,
+          "duration": 2
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 6.125,
+          "channel": 9,
+          "duration": 2
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 7.156,
+          "channel": 3,
+          "duration": 1
+        },
+        {
+          "event": "frame",
+          "seconds": 8.125,
+          "hex": "5501a00009a8"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 8.156,
+          "channel": 9,
+          "duration": 1
+        },
+        {
+          "event": "serial_close",
+          "seconds": 9.172
+        },
+        {
+          "event": "mail_transport_calls",
+          "seconds": 9.172,
+          "count": 2
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "entry": "qt",
+      "original_reported_state": "succeeded",
+      "complete_serial_sequences": false,
+      "expected_per_channel": [
+        "off",
+        "on",
+        "off",
+        "on"
+      ],
+      "observed_per_channel": {
+        "3": [
+          "off",
+          "on"
+        ],
+        "9": [
+          "off",
+          "on"
+        ]
+      },
+      "pid": 58740,
+      "events": [
+        {
+          "event": "serial_open",
+          "seconds": 0.063,
+          "port": "COM239",
+          "baudrate": 19200
+        },
+        {
+          "event": "frame",
+          "seconds": 0.063,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "frame",
+          "seconds": 0.578,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "channel_start",
+          "seconds": 1.078,
+          "channel": 3
+        },
+        {
+          "event": "channel_start",
+          "seconds": 2.094,
+          "channel": 9
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 2.594,
+          "channel": 3,
+          "duration": 1
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 3.594,
+          "channel": 9,
+          "duration": 1
+        },
+        {
+          "event": "frame",
+          "seconds": 4.11,
+          "hex": "5501a00003a2"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 5.125,
+          "channel": 3,
+          "duration": 2
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 6.125,
+          "channel": 9,
+          "duration": 2
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 7.157,
+          "channel": 3,
+          "duration": 1
+        },
+        {
+          "event": "frame",
+          "seconds": 8.125,
+          "hex": "5501a00009a8"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 8.141,
+          "channel": 9,
+          "duration": 1
+        },
+        {
+          "event": "serial_close",
+          "seconds": 9.172
+        },
+        {
+          "event": "mail_transport_calls",
+          "seconds": 9.172,
+          "count": 2
+        }
+      ],
+      "blocked": []
+    }
+  ]
+}

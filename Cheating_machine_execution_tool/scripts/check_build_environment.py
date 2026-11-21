@@ -35,7 +35,22 @@ def locked_versions(root: Path) -> dict[str, str]:
     return versions
 
 
-def check_environment(root: Path = PROJECT_ROOT) -> dict:
+def locked_qt_versions(root: Path) -> dict[str, str]:
+    versions = {}
+    for line in (root / "requirements-qt.txt").read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        match = re.fullmatch(r"([A-Za-z0-9_.-]+)==([^\s]+) --hash=sha256:[0-9a-f]{64}", line)
+        if not match:
+            raise ValueError("Qt build dependencies must be pinned with a SHA256 hash: " + line)
+        versions[normalized(match[1])] = match[2]
+    if set(versions) != {"pyside6-essentials", "shiboken6"}:
+        raise ValueError("The Qt lock must contain PySide6-Essentials and shiboken6")
+    return versions
+
+
+def check_environment(root: Path = PROJECT_ROOT, *, gui: str = "Tk") -> dict:
     if sys.platform != "win32" or sys.version_info[:3] != PYTHON_VERSION or struct.calcsize("P") != 8:
         raise ValueError("Standard packaging requires CPython 3.9.10 x64 on Windows")
     cfg = Path(sys.prefix) / "pyvenv.cfg"
@@ -46,6 +61,8 @@ def check_environment(root: Path = PROJECT_ROOT) -> dict:
     if settings.get("include-system-site-packages") != "false":
         raise ValueError("System site-packages must be disabled")
     expected = locked_versions(root)
+    if gui == "Qt":
+        expected.update(locked_qt_versions(root))
     installed = {normalized(d.metadata["Name"]): d.version for d in importlib.metadata.distributions()}
     mismatches = [f"{name}: expected {version}, found {installed.get(name, 'missing')}" for name, version in expected.items() if installed.get(name) != version]
     if mismatches:
@@ -56,18 +73,21 @@ def check_environment(root: Path = PROJECT_ROOT) -> dict:
     unwanted = [name for name in EXCLUDED_MODULES if importlib.util.find_spec(name) is not None]
     if unwanted:
         raise ValueError("Optional heavy dependencies must be absent: " + ", ".join(unwanted))
-    return {"python": ".".join(map(str, PYTHON_VERSION)), "architecture": "x64", "dependencies": installed, "excluded_modules": list(EXCLUDED_MODULES)}
+    return {"gui": gui, "python": ".".join(map(str, PYTHON_VERSION)), "architecture": "x64",
+            "dependencies": installed, "excluded_modules": list(EXCLUDED_MODULES)}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--gui", choices=("Tk", "Qt"), default="Tk")
     args = parser.parse_args()
     try:
-        report = check_environment()
+        report = check_environment(gui=args.gui)
     except ValueError as exc:
         parser.exit(1, f"BUILD_ENVIRONMENT_FAILED: {exc}\n")
-    print(json.dumps(report, indent=2) if args.json else "BUILD_ENVIRONMENT_OK CPython 3.9.10 x64; locked dependencies; numpy/lxml/PyQt5 absent")
+    print(json.dumps(report, indent=2) if args.json else
+          f"BUILD_ENVIRONMENT_OK {args.gui} CPython 3.9.10 x64; locked dependencies; numpy/lxml/PyQt5 absent")
 
 
 if __name__ == "__main__":

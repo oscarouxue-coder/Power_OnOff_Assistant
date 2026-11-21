@@ -1,0 +1,28 @@
+GUI child offscreen failure: {'passed': False, 'managed_windows': 3, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_690b6fdf244e4a7ead484ba3cd5a776f', 'qt': {'passed': False, 'managed_windows': 3, 'violations': ['Unadapted native Qt dialog; mock the answer in GUI tests'], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_690b6fdf244e4a7ead484ba3cd5a776f', 'framework': 'qt', 'platform': 'windows'}}
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_690b6fdf244e4a7ead484ba3cd5a776f'}
+
+test_close_waits_for_actual_worker_cleanup (qt_workbench_probe.QtProjectWorkspaceTests) ... Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\Temp\dutpilot-route-review-94a025b5147b4a9ea8db7bf5ffbc8460\src\ui\qt\workspace_controller.py", line 1277, in poll
+    QMessageBox.warning(self.window, '项目操作未完成', result.error)
+  File "C:\Users\Administrator\AppData\Local\Temp\dutpilot-route-review-94a025b5147b4a9ea8db7bf5ffbc8460\scripts\qt_test_guard.py", line 78, in native_dialog
+    self.reject('Unadapted native Qt dialog; mock the answer in GUI tests')
+  File "C:\Users\Administrator\AppData\Local\Temp\dutpilot-route-review-94a025b5147b4a9ea8db7bf5ffbc8460\scripts\qt_test_guard.py", line 26, in reject
+    raise AssertionError(message)
+AssertionError: Unadapted native Qt dialog; mock the answer in GUI tests
+FAIL
+
+======================================================================
+FAIL: test_close_waits_for_actual_worker_cleanup (qt_workbench_probe.QtProjectWorkspaceTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\Temp\dutpilot-route-review-94a025b5147b4a9ea8db7bf5ffbc8460\tests\qt_workbench_probe.py", line 2027, in test_close_waits_for_actual_worker_cleanup
+    self.wait_for(stopping.is_set)
+  File "C:\Users\Administrator\AppData\Local\Temp\dutpilot-route-review-94a025b5147b4a9ea8db7bf5ffbc8460\tests\qt_workbench_probe.py", line 506, in wait_for
+    self.fail('Qt project result did not arrive: ' + self.window.statusBar().currentMessage() +
+AssertionError: Qt project result did not arrive: RuntimeError：关闭未完成，请核对草稿与活动任务 / 正在等待测试、串口、项目和更新操作收尾…
+
+----------------------------------------------------------------------
+Ran 1 test in 7.568s
+
+FAILED (failures=1)

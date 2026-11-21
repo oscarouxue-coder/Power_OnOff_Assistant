@@ -1,5 +1,10 @@
 """Real-window coverage for the test-only desktop isolation fixture."""
 import ctypes
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
 from ctypes import wintypes
 import sys
 import tkinter as tk
@@ -88,6 +93,22 @@ class OffscreenWindowTests(unittest.TestCase):
             next_root.destroy()
 
     def test_callback_violation_fails_cleanup_even_after_window_was_destroyed(self):
+        # Intentional failures run in their own guard. A surrounding strict
+        # suite must not erase or excuse a recorded violation to make this pass.
+        if os.environ.get('DUTPILOT_EXPECTED_GUI_VIOLATION') != '1':
+            with tempfile.TemporaryDirectory() as temporary:
+                report = Path(temporary) / 'report.json'
+                wrapper = Path(__file__).resolve().parents[1] / 'scripts' / 'run_gui_child.py'
+                result = subprocess.run([sys.executable, str(wrapper), '--report', str(report), '--',
+                    '-m', 'unittest', self.id(), '-v'],
+                    env=dict(os.environ, DUTPILOT_EXPECTED_GUI_VIOLATION='1'),
+                    capture_output=True, text=True, encoding='utf-8', timeout=20)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                evidence = json.loads(report.read_text(encoding='utf-8'))
+                self.assertFalse(evidence['passed'])
+                self.assertTrue(any('entered the desktop' in v for v in evidence['violations']))
+                self.assertIn('OK', result.stderr)
+            return
         originals = (tk.Tk.__init__, tk.Toplevel.__init__, tk.Wm.geometry)
         with self.assertRaisesRegex(AssertionError, "entered the desktop"):
             with OffscreenTkWindows() as windows:
@@ -102,6 +123,35 @@ class OffscreenWindowTests(unittest.TestCase):
                 self.assertTrue(windows.violations)
                 root.destroy()
         self.assertEqual(originals, (tk.Tk.__init__, tk.Toplevel.__init__, tk.Wm.geometry))
+
+    def test_nested_scopes_cleanup_only_own_windows_and_preserve_centering(self):
+        with OffscreenTkWindows() as outer:
+            root = tk.Tk()
+            root.geometry('800x600')
+            root.update()
+            with OffscreenTkWindows() as inner:
+                dialog = tk.Toplevel(root)
+                x, y = root.winfo_rootx() + 100, root.winfo_rooty() + 100
+                dialog.geometry(f'600x400+{x}+{y}')
+                root.update()
+                self.assertAlmostEqual(dialog.winfo_x() + 300, root.winfo_rootx() + 400, delta=2)
+                self.assertEqual(inner.created_windows, 1)
+                self.assertEqual(outer.created_windows, 1)
+            self.assertFalse(OffscreenTkWindows._exists(dialog))
+            self.assertTrue(OffscreenTkWindows._exists(root))
+            root.geometry('900x650')
+            root.update()
+            outer.assert_offscreen()
+
+    def test_repeated_installation_reuses_scope_and_cleanup(self):
+        case = unittest.TestCase()
+        first = install_offscreen_windows(case)
+        try:
+            self.assertIs(first, install_offscreen_windows(case))
+            root = tk.Tk()
+        finally:
+            case.doCleanups()
+        self.assertFalse(OffscreenTkWindows._exists(root))
 
     def test_failed_setup_runs_registered_cleanup(self):
         originals = (tk.Tk.__init__, tk.Toplevel.__init__, tk.Wm.geometry)

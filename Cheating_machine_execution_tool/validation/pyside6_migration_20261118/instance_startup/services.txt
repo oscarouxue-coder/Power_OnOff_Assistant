@@ -1,0 +1,29 @@
+GUI_TEST_COVERAGE_OK
+test_begin_close_waits_for_operation_then_stops_owned_gateway (test_remote_instance_management.ManagementTests) ... ok
+test_default_unchanged_and_explicit_environment_wins (test_remote_instance_management.ManagementTests) ... ok
+test_direct_platform_conflict_blocks_before_gateway_start (test_remote_instance_management.ManagementTests) ... ok
+test_duplicate_start_and_stop_do_not_cancel_any_business (test_remote_instance_management.ManagementTests) ... ok
+test_empty_scope_never_creates_pairing_code (test_remote_instance_management.ManagementTests) ... ok
+test_external_cli_gateway_not_taken_over_or_recovered (test_remote_instance_management.ManagementTests) ... ok
+test_gateway_draft_does_not_start_and_running_settings_unchanged (test_remote_instance_management.ManagementTests) ... ok
+test_gateway_invalid_endpoints_certificates_port_and_scope (test_remote_instance_management.ManagementTests) ... ok
+test_loopback_gui_pair_persist_local_approval_and_revocation (test_remote_instance_management.ManagementTests) ... ok
+test_other_occupied_slot_refused_and_runtime_slot_can_be_read (test_remote_instance_management.ManagementTests) ... ok
+test_pair_existing_slot_refuses_without_network (test_remote_instance_management.ManagementTests) ... ok
+test_pair_failure_is_sanitized_and_no_retry (test_remote_instance_management.ManagementTests) ... ok
+test_partial_start_failure_releases_server_and_resources (test_remote_instance_management.ManagementTests) ... ok
+test_pending_promoted_on_next_runtime_and_run_id_changes (test_remote_instance_management.ManagementTests) ... ok
+test_reject_unpaired_unknown_local_only_capability_and_empty_channels (test_remote_instance_management.ManagementTests) ... ok
+test_running_gateway_blocks_direct_enable_before_cancel_platform (test_remote_instance_management.ManagementTests) ... ok
+test_stage_active_slot_without_reacquiring_or_changing_runtime_scope (test_remote_instance_management.ManagementTests) ... ok
+test_startup_write_failure_restores_previous_pending_scope (test_remote_instance_management.ManagementTests) ... ok
+test_status_capability_local_only_has_no_control_plane_or_secret (test_remote_instance_management.ManagementTests) ... ok
+test_pairing_reuses_original_single_use_store_without_granting_runtime_access (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_instance_direct_startup_recovers_corrupt_settings_and_an_occupied_slot (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_project_close_waits_for_review_of_its_registered_capabilities (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+
+----------------------------------------------------------------------
+Ran 22 tests in 5.506s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

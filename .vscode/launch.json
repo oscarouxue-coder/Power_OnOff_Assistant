@@ -2,7 +2,22 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "LineCheckAssistant",
+      "name": "DUTPilot V1.3.0 · PySide6 工作台",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${userHome}/AppData/Local/LineCheckAssistant/qt-dev-py39/Scripts/python.exe",
+      "program": "${workspaceFolder}/Cheating_machine_execution_tool/run_dutpilot_qt.py",
+      "args": ["--workspace"],
+      "cwd": "${workspaceFolder}/Cheating_machine_execution_tool",
+      "console": "integratedTerminal",
+      "env": {
+        "LOCALAPPDATA": "${userHome}/AppData/Local",
+        "PYTHONUTF8": "1"
+      },
+      "justMyCode": true
+    },
+    {
+      "name": "DUTPilot · Tk 旧版工作台",
       "type": "debugpy",
       "request": "launch",
       "python": "${workspaceFolder}/.venv_serial_upgrade/Scripts/python.exe",

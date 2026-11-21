@@ -211,6 +211,8 @@ class UsageConversationTests(unittest.TestCase):
         self.assertEqual(self.service.context_status(self.id)["snapshot"]["state"], "failed")
 
     def test_real_dialog_minimum_layout_and_session_switch(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         gc.collect()
         root = tk.Tk()
         root.withdraw()
@@ -261,6 +263,8 @@ class UsageConversationTests(unittest.TestCase):
 
 class UsageWidgetTests(unittest.TestCase):
     def test_compact_status_wraps_and_preserves_unknown_estimate_and_failure_states(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         gc.collect()
         root = tk.Tk()
         try:

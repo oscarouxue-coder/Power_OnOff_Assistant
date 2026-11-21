@@ -1,0 +1,34 @@
+GUI_TEST_COVERAGE_OK
+....................E........................................................................................
+======================================================================
+ERROR: test_failed_release_restores_subscription_with_new_identity (test_qt_serial_terminal.QtSerialTerminalTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\src\services\qt_serial_terminal.py", line 232, in _stop
+    item['ticket'] = self.manager.release(item['owner'], item['port'], wait=False)
+  File "C:\Python\Python39\lib\unittest\mock.py", line 1092, in __call__
+    return self._mock_call(*args, **kwargs)
+  File "C:\Python\Python39\lib\unittest\mock.py", line 1096, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+  File "C:\Python\Python39\lib\unittest\mock.py", line 1151, in _execute_mock_call
+    raise effect
+OSError: fixture owner not released
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_qt_serial_terminal.py", line 358, in test_failed_release_restores_subscription_with_new_identity
+    self.call('close_tab', dict(target='vlan116'))
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_qt_serial_terminal.py", line 52, in call
+    return spec.handler(args, self.authority)
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\src\services\qt_serial_terminal.py", line 267, in close_tab
+    self._stop(vlan, item, remove=True)
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\src\services\qt_serial_terminal.py", line 243, in _stop
+    raise CapabilityError('serial_release_refused', message) from error
+src.models.capabilities.CapabilityError: vlan116 / COM216 停止请求未受理，原监控继续。请重试。
+
+----------------------------------------------------------------------
+Ran 109 tests in 15.528s
+
+FAILED (errors=1)
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 65, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

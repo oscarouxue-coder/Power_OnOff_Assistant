@@ -1,0 +1,9 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_fa23db93d88b4b5ca8c392e8dbc7e994'}
+
+test_qt_serial_passive_snapshot_after_display_clear (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 3.008s
+
+OK

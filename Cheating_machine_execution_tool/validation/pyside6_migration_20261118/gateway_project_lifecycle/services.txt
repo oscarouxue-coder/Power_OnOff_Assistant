@@ -1,0 +1,70 @@
+GUI_TEST_COVERAGE_OK
+test_close_waits_for_receipt_after_agent_worker_finishes (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_failed_incoming_receipt_releases_only_its_own_project (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_local_project_revocation_does_not_expand_to_another_project (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_other_principal_is_rejected_before_project_listing (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_repeated_receipt_after_switch_does_not_move_or_reexecute_original (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_requires_explicit_project_before_forwarding (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_selection_and_explicit_prefix_keep_original_signed_request (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_disallowed_channel_and_capability_and_permission_claim_are_rejected (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_exception_after_agent_enqueue_is_unknown_and_never_resubmitted (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_fake_upgrade_once_survives_gateway_disconnect_and_reports_original_job (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_local_rejection_is_confirmed_without_disconnect_or_execution (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_new_remote_session_does_not_inherit_local_full_grant (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_scope_change_invalidates_full_grant_and_generic_shell_is_blocked (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_unknown_upgrade_is_not_retried_with_a_new_message_id (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_adapter_rename_rechecks_guid_and_protects_after_partial_project_write (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_ai_case_edits_reuse_shared_store_and_preserve_version_protection (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_ai_log_projection_preserves_archive_and_does_not_displace_live_alerts (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_ai_reports_reuse_project_store_and_reject_a_busy_deletion_batch (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_ai_session_manager_rejects_cross_project_and_busy_batches_and_deletes_related_records (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_bad_configuration_admission_releases_the_project_lease (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_close_project_releases_sql_reader_before_reopen_and_keeps_other_project_reads (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_close_workspace_interrupts_active_sql_scan_and_settles_each_read_once (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_concurrent_log_burst_keeps_every_record_on_disk_with_bounded_handoff (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_corrupt_recents_warn_without_rewriting_at_startup (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_device_inventory_retains_last_success_per_source (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_display_backlog_limits_preserve_the_workspace_file (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_gateway_operations_wait_for_original_service_without_blocking_workspace (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_health_tracks_actual_log_failure_and_recovery_separately_from_task_logs (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_health_uses_current_leases_and_actual_inventory_result (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_host_refresh_does_not_replace_a_newer_verified_adapter_binding (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_host_refresh_keeps_existing_resource_authority_and_ignores_late_results_on_exit (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_host_refresh_shares_one_reader_and_does_not_delay_project_commands (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_imported_connection_rejects_changed_or_enabled_dingtalk_candidate (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_imported_connection_uses_original_encrypted_store_and_keeps_platform_disabled (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_instance_direct_startup_recovers_corrupt_settings_and_an_occupied_slot (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_invalid_operations_preserve_configuration_and_emit_failure (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_legacy_import_creates_original_backup_and_leaves_source_intact (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_legacy_import_rejects_an_overlapping_destination_without_writes (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_local_chat_reuses_project_history_and_cancels_before_store_close (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_local_review_reuses_original_receipt_and_persists_unknown_result (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_model_configuration_shares_accounts_but_keeps_project_selection_and_secrets_local (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_model_probe_uses_original_request_profile_and_discards_stale_capability (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_module_sizes_share_the_tk_file_and_save_only_the_current_project (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_old_running_and_queued_history_never_starts_hardware (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_open_project_directory_rejects_closed_project_and_reports_shell_failure (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_original_project_lifecycle_preserves_values_and_identity (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_pairing_reuses_original_single_use_store_without_granting_runtime_access (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_persisted_job_review_binds_original_job_and_releases_only_its_protection (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_project_close_waits_for_review_of_its_registered_capabilities (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_project_gateway_close_waits_for_receipts_and_workbench_waits_for_client (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_qt_serial_admission_and_project_close_wait_for_safe_stop (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_recent_projects_persist_reorder_and_forget_keeps_open_project (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_refresh_is_coalesced_and_file_commands_run_off_main_thread (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_remote_scope_save_rechecks_open_contexts_and_original_grants (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_report_chat_analyzes_retained_evidence_without_live_collection (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_report_handoff_freezes_reviewed_report_and_legacy_target (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_selected_channels_are_unknown_not_claimed_running (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_slow_archive_reader_does_not_delay_workspace_work_or_exit (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_slow_gateway_does_not_delay_power_stop_during_workspace_exit (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_slow_sql_history_keeps_project_commands_available_and_read_results_in_order (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_start_time_follows_project_ledger_after_reopen (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_unconfirmed_dirty_close_keeps_worker_and_data_until_explicit_choice (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_window_placement_reads_old_state_merges_preferences_and_handles_write_failure (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+
+----------------------------------------------------------------------
+Ran 63 tests in 43.301s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

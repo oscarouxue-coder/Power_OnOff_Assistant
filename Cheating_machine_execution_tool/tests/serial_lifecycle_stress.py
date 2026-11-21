@@ -18,11 +18,12 @@ import traceback
 import weakref
 from contextlib import ExitStack
 from unittest.mock import patch
-from tk_test_windows import OffscreenTkWindows
+from tk_test_windows import OffscreenTkWindows, requires_offscreen, run_gui_child
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
+@requires_offscreen
 def child(seconds, cycles, rate, report, test_windows):
     import psutil
     import tkinter as tk
@@ -349,7 +350,7 @@ def main():
                '--seconds', str(args.seconds), '--cycles', str(args.cycles), '--rate', str(args.rate),
                '--report', str(args.report.resolve())]
     try:
-        result = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', timeout=args.seconds+90)
+        result = run_gui_child(command, capture_output=True, text=True, encoding='utf-8', timeout=args.seconds+90)
     except subprocess.TimeoutExpired:
         print('FAIL: isolated simulation timed out; its child was killed and reaped')
         return 1

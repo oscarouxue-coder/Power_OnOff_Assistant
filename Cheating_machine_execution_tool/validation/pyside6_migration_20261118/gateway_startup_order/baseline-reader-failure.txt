@@ -1,0 +1,23 @@
+Exception in thread Thread-4:
+Traceback (most recent call last):
+  File "C:\Python\Python39\lib\threading.py", line 973, in _bootstrap_inner
+    self.run()
+  File "C:\Python\Python39\lib\threading.py", line 910, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Python\Python39\lib\subprocess.py", line 1479, in _readerthread
+    buffer.append(fh.read())
+  File "C:\Python\Python39\lib\codecs.py", line 322, in decode
+    (result, consumed) = self._buffer_decode(data, self.errors, final)
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xd6 in position 91039: invalid continuation byte
+Project root: F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool
+
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\scripts\verify_baseline.py", line 970, in <module>
+    sys.exit(main())
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\scripts\verify_baseline.py", line 953, in main
+    results = collect_results(project_root)
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\scripts\verify_baseline.py", line 939, in collect_results
+    unittest_result, unittest_output = run_unittest(project_root)
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\scripts\verify_baseline.py", line 832, in run_unittest
+    output = proc.stdout + proc.stderr
+TypeError: can only concatenate str (not "NoneType") to str

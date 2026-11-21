@@ -1,7 +1,16 @@
 import time
 import queue
+from threading import Event
 from common.my_logging import creat_logger
 from common.serilal_client import Serial
+
+
+class PowerCommandCancelled(InterruptedError):
+    """The operator stopped the run before the channel could continue."""
+
+
+class PowerCommandError(IOError):
+    """The shared power port could not complete a queued command."""
 
 
 class PowerOnOff(object):
@@ -12,19 +21,51 @@ class PowerOnOff(object):
 
         self.PowerTaskQueue = queue.Queue()
         self.switch_status_list = [0] * 16
+        self.stop_event = None
+        self._dispatch_error = ''
 
     def set_interval(self, interval):
         self.interval = interval
 
-    def producer(self, task_turple):
-        ''''
-        调用方法 Poo = PowerOnOff()
-        poo.set_interval(1)
-        poo.producer((poo.power_on(), ser, num))
-        '''
-        # print(f"生产者存入数据{task_turple[0].__name__}_串口操作开关序号{task_turple[2]}") #(power_on[power_off], ser, num)
-        self.PowerTaskQueue.put(task_turple)  # 生产者线程函数,向队列存入数据
-        print('我在生产。。。。。。。。。')
+    def _stopping(self):
+        return self.stopthreadevent or (self.stop_event is not None and self.stop_event.is_set())
+
+    def _check_dispatch(self):
+        if self._stopping():
+            raise PowerCommandCancelled('用户已停止程控电源队列')
+        if self._dispatch_error:
+            raise PowerCommandError(self._dispatch_error)
+
+    def producer(self, task_tuple):
+        """Wait for this channel's write before starting its configured delay."""
+        task, serial_port, channel = task_tuple
+        written = Event()
+
+        def dispatch():
+            try:
+                self._check_dispatch()
+                if not written.is_set():
+                    if task in (self.power_on, self.power_off):
+                        task(serial_port, channel, on_written=written.set)
+                    else:
+                        task(serial_port, channel)
+            except PowerCommandCancelled:
+                pass
+            except Exception as exc:
+                self._dispatch_error = f'通道 {channel} 程控电源指令执行失败：{exc}'
+                self.logger.error(self._dispatch_error)
+            finally:
+                # Includes a redundant on/off suppressed by the original state cache.
+                written.set()
+
+        self._check_dispatch()
+        self.PowerTaskQueue.put(dispatch)
+        try:
+            while not written.wait(0.1):
+                self._check_dispatch()
+            self._check_dispatch()
+        finally:
+            written.set()
 
     def consumer(self):
         '''
@@ -35,17 +76,22 @@ class PowerOnOff(object):
         t1.join()
 
         '''
-        while True:
-            if self.stopthreadevent == 1:
-                break
+        while not self._stopping() and not self._dispatch_error:
             time.sleep(self.interval)
-            (task, ser, num) = self.PowerTaskQueue.get()
-            print('self.stopthreadevent',self.stopthreadevent)
-            task(ser, num)
-            self.PowerTaskQueue.task_done()
-            # print("消费者取出数据")
+            while not self._stopping():
+                try:
+                    dispatch = self.PowerTaskQueue.get(timeout=0.1)
+                    break
+                except queue.Empty:
+                    continue
+            else:
+                return
+            try:
+                dispatch()
+            finally:
+                self.PowerTaskQueue.task_done()
 
-    def power_on(self, ser, num):
+    def power_on(self, ser, num, *, on_written=None):
         ch_open = []
         ch_close = []
         if num == 1:
@@ -111,19 +157,20 @@ class PowerOnOff(object):
         if self.switch_status_list[num - 1] == 1:
             return
 
-        else:
-            if self.switch_status_list[num - 1] == 0:
-                self.switch_status_list[num - 1] = 1
-
         # while True:
         # 通道开
         byte_data = bytearray(ch_open)
-        write_len = ser.write(byte_data)
+        if on_written is not None:
+            self._check_dispatch()
+        ser.write(byte_data)
+        self.switch_status_list[num - 1] = 1
+        if on_written is not None:
+            on_written()
         time.sleep(3)
         # self.logger.info(f'通道{num}开')
         self.logger.info(f'channel {num} open')
 
-    def power_off(self, ser, num):
+    def power_off(self, ser, num, *, on_written=None):
         ch_open = []
         ch_close = []
         if num == 1:
@@ -186,14 +233,17 @@ class PowerOnOff(object):
         # 避免误操作
         if self.switch_status_list[num - 1] == 0:
             return
-        else:
-            self.switch_status_list[num - 1] = 0
 
         # while True:
         # 通道开
         ch_open = [0x55, 0x00, 0xac, 0x00, 0x00, 0xac]
         byte_data = bytearray(ch_close)
-        write_len = ser.write(byte_data)
+        if on_written is not None:
+            self._check_dispatch()
+        ser.write(byte_data)
+        self.switch_status_list[num - 1] = 0
+        if on_written is not None:
+            on_written()
         time.sleep(0.5)
         self.logger.info(f'通道{num}关')
         print('通道{num}关')

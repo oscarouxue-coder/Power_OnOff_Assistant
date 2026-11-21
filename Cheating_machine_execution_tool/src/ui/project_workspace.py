@@ -20,7 +20,8 @@ class ProjectWorkspace(tk.Tk):
         set_taskbar_application_id()
         super().__init__()
         apply_application_icon(self)
-        from line_check_assistant.app import MAIN_WINDOW_TITLE
+        from line_check_assistant.app import MAIN_WINDOW_TITLE, LineCheckAssistant
+        LineCheckAssistant._configure_theme(self)
         self.title(MAIN_WINDOW_TITLE)
         self.geometry('1480x900')
         self.minsize(1100, 720)
@@ -35,12 +36,14 @@ class ProjectWorkspace(tk.Tk):
         self.inventory_worker = None
         self.views = {}
         self.selected = None
+        self.page = 'overview'
         self.sidebar_visible = True
         self.closing = False
         self.tickets = {}
         self.next_status = 0
         self.view_factory = view_factory
         self._build()
+        self._restore_view_mode()
         self.protocol('WM_DELETE_WINDOW', self.close_application)
         self.bind('<Control-s>', lambda event: self.save_project())
         self.bind('<Control-o>', lambda event: self.open_project())
@@ -65,11 +68,27 @@ class ProjectWorkspace(tk.Tk):
         self.inventory_worker.start()
 
     def _build(self):
-        toolbar = tk.Frame(self, background=MODULE_BACKGROUND)
-        toolbar.pack(fill='x', padx=12, pady=(10, 0))
-        ttk.Button(toolbar, text='☰ 项目', command=self.toggle_sidebar).pack(side='left')
+        style = ttk.Style(self)
+        style.configure('Workbench.Header.TButton', background='#07565a', foreground='#ffffff',
+                        borderwidth=0, padding=(12, 8), font=('Microsoft YaHei UI', 10))
+        style.map('Workbench.Header.TButton', background=[('active', '#0f766e')])
+        style.configure('Workbench.Header.TMenubutton', background='#07565a', foreground='#ffffff',
+                        borderwidth=0, padding=(12, 8), font=('Microsoft YaHei UI', 10))
+        style.map('Workbench.Header.TMenubutton', background=[('active', '#0f766e')])
+        style.configure('Workbench.Sidebar.Treeview', background='#0a3540', fieldbackground='#0a3540',
+                        foreground='#e4eff1', rowheight=32, borderwidth=0, font=('Microsoft YaHei UI', 10))
+        style.map('Workbench.Sidebar.Treeview', background=[('selected', '#0f766e')],
+                  foreground=[('selected', '#ffffff')])
+        toolbar = tk.Frame(self, background='#064e52', padx=14, pady=6)
+        toolbar._module_theme_preserve = True
+        toolbar.pack(fill='x')
+        tk.Label(toolbar, text='◈  DUTPilot', font=('Microsoft YaHei UI', 16, 'bold'),
+                 foreground='#ffffff', background='#064e52').pack(side='left', padx=(0, 18))
+        ttk.Button(toolbar, text='☰ 项目', command=self.toggle_sidebar,
+                   style='Workbench.Header.TButton').pack(side='left')
         self.project_menu = tk.Menu(self, tearoff=False)
-        menu_button = ttk.Menubutton(toolbar, text='项目 ▾', menu=self.project_menu)
+        menu_button = ttk.Menubutton(toolbar, text='项目管理 ▾', menu=self.project_menu,
+                                     style='Workbench.Header.TMenubutton')
         menu_button.pack(side='left', padx=8)
         self.project_menu.configure(postcommand=self._update_menu)
         self.project_menu.add_command(label='新建项目…', command=self.new_project, accelerator='Ctrl+N')
@@ -91,36 +110,153 @@ class ProjectWorkspace(tk.Tk):
         self.project_menu.add_command(label='选择导入的接入配置…', command=self.imported_connection)
         self.project_menu.add_command(label='多实例 / 统一网关…', command=self.open_instance_management)
         self.project_menu.add_command(label='核实未知任务…', command=self.resolve_unknown)
-        ttk.Button(toolbar, text='保存', command=self.save_project).pack(side='left')
+        self.save_button = ttk.Button(toolbar, text='保存项目', command=self.save_project, state='disabled',
+                                      style='Workbench.Header.TButton')
+        self.save_button.pack(side='left')
+        self.settings_menu = tk.Menu(self, tearoff=False)
+        self.settings_menu.add_command(label='远程可访问项目…', command=self.remote_project_range)
+        self.settings_menu.add_command(label='选择导入的接入配置…', command=self.imported_connection)
+        self.settings_menu.add_command(label='多实例 / 统一网关…', command=self.open_instance_management)
+        self.settings_menu.add_command(label='核实未知任务…', command=self.resolve_unknown)
+        ttk.Menubutton(toolbar, text='全局设置 ▾', menu=self.settings_menu,
+                        style='Workbench.Header.TMenubutton').pack(side='right')
         self.project_title = tk.StringVar(self, value='')
-        ttk.Label(toolbar, textvariable=self.project_title).pack(side='left', padx=18)
-        ttk.Button(toolbar, text='AI / 远程接入', command=self.open_ai).pack(side='right')
+        self.global_state = tk.StringVar(self, value='')
+        tk.Label(toolbar, textvariable=self.global_state, background='#064e52', foreground='#d7f1ea',
+                 font=('Microsoft YaHei UI', 10)).pack(side='right', padx=12)
+        global_actions = ttk.Frame(self, padding=(12, 6))
+        global_actions.pack(fill='x')
+        ttk.Label(global_actions, textvariable=self.project_title, width=26,
+                  font=('Microsoft YaHei UI', 11, 'bold')).pack(side='left')
+        self.update_button = ttk.Button(global_actions, text='检查更新', command=self.open_update, state='disabled')
+        self.update_button.pack(side='right')
+        self.refresh_button = ttk.Button(global_actions, text='刷新串口/网卡', command=self.refresh_current, state='disabled')
+        self.refresh_button.pack(side='right', padx=8)
+        from line_check_assistant.network_ops import is_admin
+        admin = is_admin()
+        ttk.Label(global_actions, text='管理员权限已就绪' if admin else '缺少管理员权限，请右键以管理员身份运行',
+                  foreground='#047857' if admin else '#b42318').pack(side='right', padx=8)
+        self.detail_state = tk.StringVar(self)
+        ttk.Label(global_actions, textvariable=self.detail_state).pack(side='left', padx=8)
         self.body = tk.Frame(self, background=MODULE_BACKGROUND)
         self.body.pack(fill='both', expand=True, padx=10, pady=10)
-        self.sidebar = tk.Frame(self.body, background=MODULE_BACKGROUND, width=230)
+        self.sidebar = tk.Frame(self.body, background='#0a3540', width=230, padx=10, pady=10)
+        self.sidebar._module_theme_preserve = True
         self.sidebar.pack(side='left', fill='y', padx=(0, 10))
         self.sidebar.pack_propagate(False)
-        self.tree = ttk.Treeview(self.sidebar, columns=('state',), show='tree headings', selectmode='browse')
+        ttk.Button(self.sidebar, text='▦  总览工作台', command=self.show_dashboard,
+                   style='Workbench.Header.TButton').pack(fill='x', pady=(0, 10))
+        tk.Label(self.sidebar, text='项目管理', anchor='w', background='#0a3540', foreground='#c8dee3',
+                 font=('Microsoft YaHei UI', 10)).pack(fill='x', pady=(4, 8))
+        self.project_search = tk.StringVar(self)
+        search = ttk.Entry(self.sidebar, textvariable=self.project_search)
+        search.pack(fill='x', pady=(0, 8))
+        self.project_search.trace_add('write', self._filter_projects)
+        tree_frame = tk.Frame(self.sidebar, background='#0a3540')
+        tree_frame.pack(fill='both', expand=True)
+        self.tree = ttk.Treeview(tree_frame, columns=('state',), show='tree', selectmode='browse',
+                                 style='Workbench.Sidebar.Treeview')
         self.tree.heading('#0', text='项目')
         self.tree.heading('state', text='状态')
         self.tree.column('#0', width=145, minwidth=90)
         self.tree.column('state', width=70, minwidth=60, stretch=False)
+        self.tree.insert('', 'end', iid='__running', text='运行中的项目', open=True)
+        self.tree.insert('', 'end', iid='__other', text='其他项目', open=True)
+        tree_scroll = ttk.Scrollbar(tree_frame, orient='vertical', command=self.tree.yview)
+        self.tree.configure(yscrollcommand=tree_scroll.set)
+        tree_scroll.pack(side='right', fill='y')
         self.tree.pack(fill='both', expand=True)
         self.tree.bind('<<TreeviewSelect>>', self._tree_selected)
+        self.tree.bind('<ButtonRelease-1>', self._tree_clicked)
+        self.tree.bind('<Return>', self._tree_selected_explicit)
         self.tree.bind('<Button-3>', self._context_menu)
         from src.ui.project_status_tooltip import ProjectStatusTooltip
         self.status_tooltip = ProjectStatusTooltip(self.tree, self._status_detail)
-        buttons = tk.Frame(self.sidebar, background=MODULE_BACKGROUND)
+        buttons = tk.Frame(self.sidebar, background='#0a3540')
         buttons.pack(fill='x', pady=(8, 0))
-        ttk.Button(buttons, text='新建', command=self.new_project).pack(side='left')
-        ttk.Button(buttons, text='打开…', command=self.open_project).pack(side='right')
+        ttk.Button(buttons, text='新建', command=self.new_project, style='Workbench.Header.TButton').pack(side='left')
+        ttk.Button(buttons, text='打开…', command=self.open_project, style='Workbench.Header.TButton').pack(side='right')
         self.content = tk.Frame(self.body, background=MODULE_BACKGROUND)
         self.content.pack(fill='both', expand=True)
+        from src.ui.workbench_dashboard import WorkbenchDashboard
+        self.dashboard = WorkbenchDashboard(self.content, select_project=self.select_project,
+            new_project=self.new_project, open_project=self.open_project)
+        self.dashboard._module_theme_preserve = True
+        self.dashboard.pack(fill='both', expand=True)
         self.status = tk.StringVar(self, value='')
         ttk.Label(self, textvariable=self.status).pack(fill='x', padx=14, pady=(0, 6))
-        apply_module_theme(self)
+        apply_module_theme(self, preserve_views=True)
+        self.project_title.set('统一测试工作台')
+
+    def show_dashboard(self):
+        if self.closing:
+            return
+        for view in self.views.values():
+            view.pack_forget()
+        self.page = 'overview'
+        self.dashboard.render(self._dashboard_projects())
+        self.dashboard.pack(fill='both', expand=True)
+        self.project_title.set('统一测试工作台')
+        self.detail_state.set('')
+        self._enable_project_actions(False)
+
+    def _enable_project_actions(self, enabled):
+        for button in (self.save_button, self.refresh_button, self.update_button):
+            button.configure(state='normal' if enabled else 'disabled')
+
+    def refresh_current(self):
+        view = self.current_view()
+        if view is not None and not self.closing:
+            view._refresh_resources()
+
+    def open_update(self):
+        view = self.current_view()
+        if view is not None and not self.closing:
+            view.app_update_dialog.open()
+
+    def _filter_projects(self, *args):
+        query = self.project_search.get().strip().casefold()
+        for identifier, view in self.views.items():
+            if query in view.project_context.identity.name.casefold():
+                state = self.service.status.snapshot(view.project_context).state
+                self.tree.move(identifier, '__running' if state in ('running', 'stopping') else '__other', 'end')
+            else:
+                self.tree.detach(identifier)
+        self.tree.item('__running', text=f"运行中的项目（{len(self.tree.get_children('__running'))}）")
+        self.tree.item('__other', text=f"其他项目（{len(self.tree.get_children('__other'))}）")
+
+    def _dashboard_projects(self):
+        from src.services.workbench_status_service import workbench_projects, run_channel_snapshot
+        channels = {}
+        for key, view in self.views.items():
+            session = vars(view).get('power_test_resume_session')
+            request = getattr(session, 'request', None)
+            numbers = [channel.number for channel in request.channels] if request is not None else None
+            channels[key] = run_channel_snapshot(dict(vars(view).get('power_test_channel_progresses', {})),
+                dict(vars(view).get('power_test_channel_states', {})), numbers)
+        return workbench_projects(self.service.status, self.service.list_projects(), channels)
+
+    def _restore_view_mode(self):
+        import json
+        try:
+            path = self.service.directory / 'workbench_ui.json'
+            value = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
+            if isinstance(value, dict) and value.get('version') == 1:
+                self.dashboard.set_mode(value.get('overview_mode', 'cards'))
+        except (OSError, ValueError, TypeError):
+            self.events.put('[工作台] 视图偏好无法读取，使用卡片视图；项目配置未改变')
+        self.dashboard.on_mode_changed = self._save_view_mode
+
+    def _save_view_mode(self, mode):
+        from src.services.project_store import atomic_json
+        try:
+            atomic_json(self.service.directory / 'workbench_ui.json', dict(version=1, overview_mode=mode))
+        except OSError:
+            self.events.put('[工作台] 视图偏好保存失败；项目配置未改变')
 
     def _status_detail(self, identifier):
+        if identifier not in self.views:
+            return self.tree.item(identifier, 'text')
         context = self.views[identifier].project_context
         return context.identity.name + '\n' + self.service.status.snapshot(context).detail
 
@@ -142,23 +278,37 @@ class ProjectWorkspace(tk.Tk):
 
     def _context_menu(self, event):
         row = self.tree.identify_row(event.y)
-        if row:
+        if row in self.views:
             self.tree.selection_set(row)
             self.select_project(row)
             self._update_menu()
             self.project_menu.tk_popup(event.x_root, event.y_root)
 
     def _tree_selected(self, event=None):
+        if self.page != 'project':
+            return  # Delayed programmatic selection must not leave the overview.
+        self._tree_selected_explicit()
+
+    def _tree_selected_explicit(self, event=None):
         selected = self.tree.selection()
         if selected:
             self.select_project(selected[0])
 
+    def _tree_clicked(self, event):
+        row = self.tree.identify_row(event.y)
+        if row in self.views:
+            self.select_project(row)
+
     def current_view(self):
-        return self.views.get(self.selected)
+        return self.views.get(self.selected) if self.page == 'project' else None
 
     def select_project(self, identifier):
         if self.closing or identifier not in self.views:
             return
+        self.page = 'project'
+        self.dashboard.pack_forget()
+        if self.project_search.get().strip().casefold() not in self.views[identifier].project_context.identity.name.casefold():
+            self.project_search.set('')
         for key, view in self.views.items():
             if key != identifier:
                 view.pack_forget()
@@ -168,6 +318,8 @@ class ProjectWorkspace(tk.Tk):
         if self.tree.selection() != (identifier,):
             self.tree.selection_set(identifier)
         self.project_title.set(view.project_context.identity.name)
+        self.detail_state.set(self.service.status.snapshot(view.project_context).label)
+        self._enable_project_actions(True)
         self.status.set('已切换到 ' + view.project_context.identity.name)
 
     def _add_project(self, context):
@@ -185,6 +337,7 @@ class ProjectWorkspace(tk.Tk):
             self.views[identifier] = view
             self.service.status.attach(context)
             self.tree.insert('', 'end', iid=identifier, text=context.identity.name, values=('空闲',))
+            self._filter_projects()
         except BaseException:
             self.views.pop(identifier, None)
             for child in set(self.content.winfo_children()) - existing_children:
@@ -434,10 +587,10 @@ class ProjectWorkspace(tk.Tk):
         was_selected = self.selected == context.identity.project_id
         if was_selected:
             self.selected = None
-        if was_selected and self.views and not self.closing:
+        if was_selected and self.views and not self.closing and self.page == 'project':
             self.select_project(next(iter(self.views)))
         elif not self.views:
-            self.project_title.set('')
+            self.show_dashboard()
 
     def admit_operation(self, view, operation):
         if self.closing or vars(view).get('_app_closing'):
@@ -451,11 +604,16 @@ class ProjectWorkspace(tk.Tk):
                 return None
             context = view.project_context
             owner = 'gui:' + context.identity.project_id + ':' + uuid.uuid4().hex
-            self.service.resources.acquire(owner, context.identity.project_id, context.identity.name, project_resources(view, operation))
+            keys = project_resources(view, operation)
+            self.service.resources.acquire(owner, context.identity.project_id, context.identity.name, keys)
             rename = vars(view).get('adapter_rename_dialog')
             if operation == 'submit' and rename is not None:
                 self.service.resources.acquire(owner, context.identity.project_id, context.identity.name, ['adapter:' + rename.old_name])
             snapshot = self.service.projects.snapshot(context)
+            if operation == '_on_start' and 'wifi:host' not in keys:
+                from src.services.project_execution import power_test_needs_wifi
+                if power_test_needs_wifi(snapshot / 'Auto_power_on_off_tool/config', view.channels):
+                    self.service.resources.acquire(owner, context.identity.project_id, context.identity.name, ['wifi:host'])
             self.service.status.begin(context, owner, snapshot, operation)
             self.tickets[owner] = dict(view=view, snapshot=snapshot, operation=operation, started=time.monotonic(), tracking=False, uncertain=False)
             view._project_run_root = snapshot
@@ -570,6 +728,7 @@ class ProjectWorkspace(tk.Tk):
                 except queue.Empty:
                     break
                 self.status.set(text)
+                self.dashboard.append_event(text)
                 with (self.service.directory / 'workspace.log').open('a', encoding='utf-8') as stream:
                     stream.write(text + '\n')
             if self.instance is not None:
@@ -600,6 +759,15 @@ class ProjectWorkspace(tk.Tk):
                     dirty = self.is_dirty(view)
                     name = view.project_context.identity.name + (' *' if dirty else '')
                     self.tree.item(identifier, text=name, values=(self.service.status.snapshot(view.project_context).label,))
+                projects = self._dashboard_projects()
+                self.dashboard.render(projects)
+                self.global_state.set('活动任务：' + str(sum(row['active_task_count'] for row in projects)))
+                if self.page == 'project' and self.selected in self.views:
+                    view = self.views[self.selected]
+                    self.detail_state.set(self.service.status.snapshot(view.project_context).label)
+                    if vars(view).get('workbench_panels') is not None:
+                        view.workbench_panels.refresh_summary()
+                self._filter_projects()
             if self.closing and not self.views and self.service.idle:
                 self.service.close()
                 if self.instance:

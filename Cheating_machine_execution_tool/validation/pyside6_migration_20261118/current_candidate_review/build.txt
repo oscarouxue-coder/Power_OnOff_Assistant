@@ -1,0 +1,202 @@
+Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Requirement already satisfied: pyserial==3.5 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 1)) (3.5)
+Requirement already satisfied: tftpy==0.8.7 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 2)) (0.8.7)
+Requirement already satisfied: requests<3,>=2.31 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 3)) (2.31.0)
+Requirement already satisfied: requests-toolbelt<2,>=1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 4)) (1.0.0)
+Requirement already satisfied: paramiko<4,>=3.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 5)) (3.1.0)
+Requirement already satisfied: ping3<5,>=4.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 6)) (4.0.4)
+Requirement already satisfied: pywifi<2,>=1.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 7)) (1.1.12)
+Requirement already satisfied: configobj<6,>=5.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 8)) (5.0.9)
+Requirement already satisfied: psutil<8,>=5.9 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 9)) (5.9.5)
+Requirement already satisfied: openpyxl<4,>=3.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 10)) (3.1.2)
+Requirement already satisfied: xlrd<3,>=2.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 11)) (2.0.2)
+Requirement already satisfied: websockets==15.0.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 12)) (15.0.1)
+Requirement already satisfied: lark-oapi==1.7.5 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 13)) (1.7.5)
+Requirement already satisfied: charset-normalizer==3.1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 8)) (3.1.0)
+Requirement already satisfied: idna==3.4 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 9)) (3.4)
+Requirement already satisfied: urllib3==2.0.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 10)) (2.0.2)
+Requirement already satisfied: certifi==2023.5.7 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 11)) (2023.5.7)
+Requirement already satisfied: bcrypt==4.0.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 13)) (4.0.1)
+Requirement already satisfied: cryptography==40.0.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 14)) (40.0.2)
+Requirement already satisfied: cffi==1.15.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 15)) (1.15.1)
+Requirement already satisfied: pycparser==2.21 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 16)) (2.21)
+Requirement already satisfied: PyNaCl==1.5.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 17)) (1.5.0)
+Requirement already satisfied: comtypes==1.1.14 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 21)) (1.1.14)
+Requirement already satisfied: et-xmlfile==1.1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 25)) (1.1.0)
+Requirement already satisfied: pycryptodome==3.23.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 29)) (3.23.0)
+Requirement already satisfied: httpx==0.28.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 30)) (0.28.1)
+Requirement already satisfied: httpcore==1.0.9 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 31)) (1.0.9)
+Requirement already satisfied: h11==0.16.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 32)) (0.16.0)
+Requirement already satisfied: anyio==4.12.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 33)) (4.12.1)
+Requirement already satisfied: exceptiongroup==1.3.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 34)) (1.3.1)
+Requirement already satisfied: typing-extensions==4.16.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 35)) (4.16.0)
+Requirement already satisfied: pyinstaller==5.10.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 36)) (5.10.1)
+Requirement already satisfied: pyinstaller-hooks-contrib==2023.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 37)) (2023.2)
+Requirement already satisfied: setuptools==58.1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 38)) (58.1.0)
+Requirement already satisfied: altgraph==0.17.3 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 39)) (0.17.3)
+Requirement already satisfied: pefile==2023.2.7 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 40)) (2023.2.7)
+Requirement already satisfied: pywin32-ctypes==0.2.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 41)) (0.2.2)
+Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Requirement already satisfied: PySide6-Essentials==6.8.3 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-qt.txt (line 2)) (6.8.3)
+Requirement already satisfied: shiboken6==6.8.3 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-qt.txt (line 3)) (6.8.3)
+No broken requirements found.
+BUILD_ENVIRONMENT_OK Qt CPython 3.9.10 x64; locked dependencies; numpy/lxml/PyQt5 absent
+Packaging Python: C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-build-py39\Scripts\python.exe
+Project root: F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool
+
+  [OK  ] py_compile - 378 files compiled
+  [OK  ] compile_inventory - 368 source files covered
+  [OK  ] capability_coverage - GUI actions and business inventory reviewed
+  [OK  ] gui_test_coverage - GUI test ownership preflight passed
+  [OK  ] unittest - Ran 3230 tests
+  [OK  ] required_baseline_tests - 239 required tests executed
+  [OK  ] must_exist: bbfdm.operate - hit in src\core\dut_ubus_config.py (+1)
+  [OK  ] must_exist: tclinux_allinone - hit in src\core\tftp_transport.py (+1)
+  [OK  ] must_exist: 192.168.1.1 - hit in src\core\telnet_transport.py (+5)
+  [OK  ] must_exist: vlan_to_serial_port - hit in src\core\__init__.py (+11)
+  [OK  ] must_exist: MAX_PARALLEL_UPGRADES = 8 - hit in line_check_assistant\sample_upgrade_settings_store.py
+  [OK  ] must_exist: clamp_parallel_count - hit in src\services\firmware_upgrade_service.py (+2)
+  [OK  ] must_exist: source_address=(bind_ip, 0) - hit in src\core\telnet_transport.py (+3)
+  [OK  ] must_exist: Device.Firewall.<X_SDMC_>Security.AccessCtrl - hit in src\core\ubus_enable_telnet.py
+  [OK  ] must_not_exist: 0.0.0.0 - absent from code lines of src/core/tftp_transport.py,src/core/telnet_transport.py
+
+ALL CHECKS PASSED
+[AI案例] 开始汇集旧库及项目库中的人工确认案例
+[AI案例] 旧库导入完成：新增0，跳过0
+[AI案例] 旧库导入完成：新增0，跳过0
+[AI案例] 旧库汇集成功：新增0
+[AI案例] 快照导出成功：案例0，修订0，SHA256=d11586fed43eeb3a21cf99faee3ee0cc268774607e7a533cae761c623bcec9d2
+188 INFO: PyInstaller: 5.10.1
+188 INFO: Python: 3.9.10
+192 INFO: Platform: Windows-10-10.0.19044-SP0
+193 INFO: UPX is not available.
+942 INFO: Extending PYTHONPATH with paths
+['F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool',
+ 'F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool',
+ 'F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool\\Auto_power_on_off_tool']
+1110 INFO: Appending 'datas' from .spec
+1111 INFO: checking Analysis
+1111 INFO: Building Analysis because Analysis-00.toc is non existent
+1111 INFO: Initializing module dependency graph...
+1112 INFO: Caching module graph hooks...
+1122 INFO: Analyzing base_library.zip ...
+1731 INFO: Loading module hook 'hook-encodings.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+2353 INFO: Loading module hook 'hook-pickle.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+2739 INFO: Loading module hook 'hook-heapq.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+3012 INFO: Caching module dependency graph...
+3084 INFO: running Analysis Analysis-00.toc
+3092 INFO: Adding Microsoft.Windows.Common-Controls to dependent assemblies of final executable
+  required by C:\Python\Python39\python.exe
+3218 INFO: Analyzing F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\run_dutpilot_qt.py
+3238 INFO: Loading module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+3298 INFO: Loading module hook 'hook-xml.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+3516 INFO: Loading module hook 'hook-PySide6.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+4017 INFO: Loading module hook 'hook-platform.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+4032 INFO: Loading module hook 'hook-openpyxl.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\_pyinstaller_hooks_contrib\\hooks\\stdhooks'...
+4213 INFO: Loading module hook 'hook-xml.etree.cElementTree.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+5882 INFO: Loading module hook 'hook-charset_normalizer.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\_pyinstaller_hooks_contrib\\hooks\\stdhooks'...
+5943 INFO: Loading module hook 'hook-cryptography.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\_pyinstaller_hooks_contrib\\hooks\\stdhooks'...
+6580 INFO: Loading module hook 'hook-bcrypt.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\_pyinstaller_hooks_contrib\\hooks\\stdhooks'...
+6704 INFO: Loading module hook 'hook-certifi.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\_pyinstaller_hooks_contrib\\hooks\\stdhooks'...
+6843 INFO: Loading module hook 'hook-difflib.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+6918 INFO: Loading module hook 'hook-sysconfig.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+7258 INFO: Loading module hook 'hook-nacl.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\_pyinstaller_hooks_contrib\\hooks\\stdhooks'...
+7590 INFO: Loading module hook 'hook-sqlite3.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+7813 INFO: Loading module hook 'hook-websockets.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\_pyinstaller_hooks_contrib\\hooks\\stdhooks'...
+8500 INFO: Loading module hook 'hook-Crypto.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\_pyinstaller_hooks_contrib\\hooks\\stdhooks'...
+8842 INFO: Loading module hook 'hook-pycparser.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\_pyinstaller_hooks_contrib\\hooks\\stdhooks'...
+9143 INFO: Processing pre-find module path hook distutils from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks\\pre_find_module_path\\hook-distutils.py'.
+9158 INFO: Loading module hook 'hook-distutils.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+9230 INFO: Loading module hook 'hook-distutils.util.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+9345 INFO: Loading module hook 'hook-setuptools.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+9733 INFO: Loading module hook 'hook-pkg_resources.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+31206 INFO: Loading module hook 'hook-anyio.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\_pyinstaller_hooks_contrib\\hooks\\stdhooks'...
+38482 INFO: Analyzing hidden import 'openpyxl.compat.abc'
+38483 INFO: Analyzing hidden import 'openpyxl.compat.product'
+38484 INFO: Analyzing hidden import 'openpyxl.compat.singleton'
+38486 INFO: Analyzing hidden import 'openpyxl.descriptors.slots'
+38487 INFO: Analyzing hidden import 'openpyxl.packaging.interface'
+38489 INFO: Analyzing hidden import 'openpyxl.utils.dataframe'
+38492 INFO: Analyzing hidden import 'openpyxl.utils.inference'
+38493 INFO: Analyzing hidden import 'openpyxl.worksheet.cell_watch'
+38494 INFO: Analyzing hidden import 'openpyxl.worksheet.controls'
+38501 INFO: Analyzing hidden import 'openpyxl.worksheet.custom'
+38502 INFO: Analyzing hidden import 'openpyxl.worksheet.errors'
+38505 INFO: Analyzing hidden import 'openpyxl.worksheet.picture'
+38506 INFO: Analyzing hidden import 'openpyxl.worksheet.smart_tag'
+38509 INFO: Processing module hooks...
+38850 INFO: Processing pre-safe import module hook win32com from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\_pyinstaller_hooks_contrib\\hooks\\pre_safe_import_module\\hook-win32com.py'.
+39054 INFO: Loading module hook 'hook-PySide6.QtCore.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+39201 INFO: Loading module hook 'hook-PySide6.QtGui.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+39354 INFO: Loading module hook 'hook-PySide6.QtNetwork.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+39598 INFO: Loading module hook 'hook-PySide6.QtWidgets.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+39827 INFO: Loading module hook 'hook-setuptools.msvc.py' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks'...
+40656 INFO: Looking for ctypes DLLs
+40703 WARNING: Ignoring /System/Library/Frameworks/IOKit.framework/IOKit imported from C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-build-py39\lib\site-packages\serial\tools\list_ports_osx.py - only basenames are supported with ctypes imports!
+40703 WARNING: Ignoring /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation imported from C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-build-py39\lib\site-packages\serial\tools\list_ports_osx.py - only basenames are supported with ctypes imports!
+40753 INFO: Analyzing run-time hooks ...
+40801 INFO: Including run-time hook 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_inspect.py'
+40803 INFO: Including run-time hook 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_pkgutil.py'
+40806 INFO: Including run-time hook 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_setuptools.py'
+40807 INFO: Including run-time hook 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_pkgres.py'
+40813 INFO: Including run-time hook 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_pyside6.py'
+40814 INFO: Including run-time hook 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_multiprocessing.py'
+40952 INFO: Looking for dynamic libraries
+2415 INFO: Imported existing <module 'comtypes.gen' from 'C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\lib\\site-packages\\comtypes\\gen\\__init__.py'>
+2415 INFO: Using writeable comtypes cache directory: 'C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-build-py39\lib\site-packages\comtypes\gen'
+2458 INFO: Extra DLL search directories (AddDllDirectory): ['C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\Lib\\site-packages\\shiboken6']
+2458 INFO: Extra DLL search directories (PATH): ['C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-build-py39\\Lib\\site-packages\\PySide6', 'C:\\Users\\Administrator\\.codex\\tmp\\arg0-windows\\codex-arg0y8QfDS', 'C:\\Program Files\\VanDyke Software\\Clients\\', 'C:\\Python\\Python39\\Scripts\\', 'C:\\Python\\Python39\\', 'C:\\Windows\\system32', 'C:\\Windows', 'C:\\Windows\\System32\\Wbem', 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\', 'C:\\Windows\\System32\\OpenSSH\\', 'D:\\Program Files\\Microsoft VS Code\\bin', 'D:\\Program Files\\Git\\cmd', 'C:\\Program Files\\nodejs\\', 'C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps', 'C:\\Program Files\\JetBrains\\PyCharm Community Edition 2024.3.2\\bin', 'C:\\Users\\Administrator\\AppData\\Roaming\\npm', 'c:\\Users\\Administrator\\.vscode\\extensions\\openai.chatgpt-26.1117.31558-win32-x64\\bin\\windows-x86_64']
+2598 WARNING: lib not found: Qt6VirtualKeyboard.dll dependency of C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-build-py39\lib\site-packages\PySide6\plugins\platforminputcontexts\qtvirtualkeyboardplugin.dll
+2658 WARNING: lib not found: api-ms-win-shcore-scaling-l1-1-1.dll dependency of C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-build-py39\lib\site-packages\PySide6\plugins\platforms\qdirect2d.dll
+2674 WARNING: lib not found: api-ms-win-shcore-scaling-l1-1-1.dll dependency of C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-build-py39\lib\site-packages\PySide6\plugins\platforms\qwindows.dll
+2706 WARNING: lib not found: Qt6Pdf.dll dependency of C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-build-py39\lib\site-packages\PySide6\plugins\imageformats\qpdf.dll
+44327 INFO: Looking for eggs
+44327 INFO: Using Python library C:\Python\Python39\python39.dll
+44327 INFO: Found binding redirects: 
+[]
+44364 INFO: Warnings written to F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\build\qt-20261121-025546-6cc2f962\DUTPilotQt\warn-DUTPilotQt.txt
+45857 INFO: Graph cross-reference written to F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\build\qt-20261121-025546-6cc2f962\DUTPilotQt\xref-DUTPilotQt.html
+46216 INFO: checking PYZ
+46216 INFO: Building PYZ because PYZ-00.toc is non existent
+46217 INFO: Building PYZ (ZlibArchive) F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\build\qt-20261121-025546-6cc2f962\DUTPilotQt\PYZ-00.pyz
+51209 INFO: Building PYZ (ZlibArchive) F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\build\qt-20261121-025546-6cc2f962\DUTPilotQt\PYZ-00.pyz completed successfully.
+51547 INFO: checking PKG
+51547 INFO: Building PKG because PKG-00.toc is non existent
+51547 INFO: Building PKG (CArchive) DUTPilot.pkg
+51567 INFO: Building PKG (CArchive) DUTPilot.pkg completed successfully.
+51569 INFO: Bootloader C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-build-py39\lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\runw.exe
+51569 INFO: checking EXE
+51569 INFO: Building EXE because EXE-00.toc is non existent
+51569 INFO: Building EXE from EXE-00.toc
+51569 INFO: Copying bootloader EXE to F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\build\qt-20261121-025546-6cc2f962\DUTPilotQt\DUTPilot.exe.notanexecutable
+51576 INFO: Copying icon to EXE
+51577 INFO: Copying icons from ['F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool\\assets\\icons\\line_check_assistant_network_topology_v1.ico']
+51577 INFO: Writing RT_GROUP_ICON 0 resource with 146 bytes
+51577 INFO: Writing RT_ICON 1 resource with 1128 bytes
+51577 INFO: Writing RT_ICON 2 resource with 1720 bytes
+51577 INFO: Writing RT_ICON 3 resource with 2440 bytes
+51577 INFO: Writing RT_ICON 4 resource with 4264 bytes
+51577 INFO: Writing RT_ICON 5 resource with 6760 bytes
+51578 INFO: Writing RT_ICON 6 resource with 9640 bytes
+51578 INFO: Writing RT_ICON 7 resource with 16936 bytes
+51578 INFO: Writing RT_ICON 8 resource with 38056 bytes
+51578 INFO: Writing RT_ICON 9 resource with 67624 bytes
+51578 INFO: Writing RT_ICON 10 resource with 29223 bytes
+51580 INFO: Copying version information to EXE
+51583 INFO: Copying 0 resources to EXE
+51583 INFO: Embedding manifest in EXE
+51584 INFO: Updating manifest in F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\build\qt-20261121-025546-6cc2f962\DUTPilotQt\DUTPilot.exe.notanexecutable
+51584 INFO: Updating resource type 24 name 1 language 0
+51586 INFO: Appending PKG archive to EXE
+51597 INFO: Fixing EXE headers
+51719 INFO: Building EXE from EXE-00.toc completed successfully.
+51721 INFO: checking COLLECT
+51721 INFO: Building COLLECT because COLLECT-00.toc is non existent
+51721 INFO: Building COLLECT COLLECT-00.toc
+52597 INFO: Building COLLECT COLLECT-00.toc completed successfully.
+Created 6 sanitized configuration files: F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\dist\qt-20261121-025546-6cc2f962\DUTPilot_portable\Auto_power_on_off_tool\config
+PACKAGE_ARCHIVE_OK exe=17273831 zip=55367600 report=F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\dist\qt-20261121-025546-6cc2f962\PACKAGING_REPORT.json
+Local build artifacts (retained for verification): F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\dist\qt-20261121-025546-6cc2f962
+  Qt validation EXE: F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\dist\qt-20261121-025546-6cc2f962\DUTPilot_portable\DUTPilot.exe
+  Portable ZIP: F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\dist\qt-20261121-025546-6cc2f962\DUTPilot_portable.zip
+  Portable ZIP SHA256: F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\dist\qt-20261121-025546-6cc2f962\DUTPilot_portable.zip.sha256.txt

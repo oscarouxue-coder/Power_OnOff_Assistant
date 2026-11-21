@@ -167,6 +167,8 @@ class MonitorUiTests(unittest.TestCase):
     finish = fixtures.ServiceTests.finish
 
     def setUp(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         self.setUp_service()
         gc.collect()
         self.root = tk.Tk()

@@ -1,0 +1,31 @@
+{
+  "expected_abrupt_exit_code": 47,
+  "projects": [
+    {
+      "project": "80ac7c26-ff5b-4dcd-b4cb-4ceb327875a7",
+      "job": "423cb5731ddc43198892893de040ec7b",
+      "before": "running",
+      "after": "unknown",
+      "active_jobs": 0,
+      "stored_job_state": "running",
+      "previous_resource_owner_preserved": true,
+      "restart_blocked": true
+    },
+    {
+      "project": "d1a63679-9f7b-477b-b979-fdc25de1a73f",
+      "job": "b4b0fed127e243e98d8ecf45da8e469d",
+      "before": "running",
+      "after": "unknown",
+      "active_jobs": 0,
+      "stored_job_state": "running",
+      "previous_resource_owner_preserved": true,
+      "restart_blocked": true
+    }
+  ],
+  "new_engine_calls": 0,
+  "external_io": [],
+  "physical_serial_opens": 0,
+  "first_review_outcome": "failed",
+  "first_can_prepare_after_review": true,
+  "second_remains_protected": true
+}

@@ -1,5 +1,6 @@
 """Project-bound GUI admission; existing engines keep their own stop semantics."""
 from functools import wraps
+from configparser import Error as ConfigError
 from src.services.project_runtime import current_run, report_project_result
 
 
@@ -85,6 +86,19 @@ def project_stopping(view):
     return bool(values.get('sample_upgrade_running') and run is not None and run.control.is_set())
 
 
+def power_test_needs_wifi(config_dir, channels):
+    from src.services.legacy_power_test_service import LegacyPowerChannel, prepare_legacy_power_test_request
+
+    selected = [LegacyPowerChannel(int(c.section.rsplit('_', 1)[1]), c.network_card_ip)
+                for c in channels if c.enabled]
+    try:
+        return prepare_legacy_power_test_request(config_dir.parent, selected).connect_wifi_enable
+    except (ConfigError, OSError, ValueError):
+        # An incomplete legacy profile still goes through its original preflight.
+        # Reserve the shared radio until the selected profile can be resolved.
+        return True
+
+
 def project_resources(view, operation=''):
     if operation.startswith(('_on_onu', '_on_c300_cleanup')):
         config = view._current_onu_registration_config()
@@ -104,8 +118,6 @@ def project_resources(view, operation=''):
             keys.append('tftp:' + channel.network_card_ip + ':69')
     if view.power_serial_port and operation in ('_on_start', '_launch_power_on', '_start_page_upgrade', '_start_full_package_upgrade'):
         keys.append('power:' + view.power_serial_port)
-    from line_check_assistant.test_item_config_store import TestItemConfigStore
-    config = TestItemConfigStore(view.project_context.config_dir / 'test_project_config.ini').load()
-    if config.connect_wifi.enable and operation == '_on_start':
+    if operation == '_on_start' and power_test_needs_wifi(view.project_context.config_dir, view.channels):
         keys.append('wifi:host')
     return keys

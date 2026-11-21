@@ -1,0 +1,113 @@
+{
+  "parent": 57028,
+  "cases": [
+    {
+      "entry": "direct",
+      "original_reported_state": "failed",
+      "rejected_power_on": "5501a00003a2",
+      "protocol": "telnet",
+      "failure_mode": "exception",
+      "accepted_frames": 2,
+      "failure_reported": true,
+      "pid": 15116,
+      "events": [
+        {
+          "event": "serial_open",
+          "seconds": 0.078,
+          "port": "COM239",
+          "baudrate": 19200
+        },
+        {
+          "event": "frame",
+          "seconds": 0.078,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "frame",
+          "seconds": 0.594,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "channel_start",
+          "seconds": 1.094,
+          "channel": 3
+        },
+        {
+          "event": "channel_start",
+          "seconds": 2.11,
+          "channel": 9
+        },
+        {
+          "event": "serial_write_error",
+          "seconds": 4.125,
+          "hex": "5501a00003a2",
+          "mode": "exception"
+        },
+        {
+          "event": "serial_close",
+          "seconds": 4.625
+        },
+        {
+          "event": "mail_transport_calls",
+          "seconds": 4.625,
+          "count": 2
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "entry": "qt",
+      "original_reported_state": "failed",
+      "rejected_power_on": "5501a00003a2",
+      "protocol": "telnet",
+      "failure_mode": "exception",
+      "accepted_frames": 2,
+      "failure_reported": true,
+      "pid": 57204,
+      "events": [
+        {
+          "event": "serial_open",
+          "seconds": 0.079,
+          "port": "COM239",
+          "baudrate": 19200
+        },
+        {
+          "event": "frame",
+          "seconds": 0.079,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "frame",
+          "seconds": 0.594,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "channel_start",
+          "seconds": 1.094,
+          "channel": 3
+        },
+        {
+          "event": "channel_start",
+          "seconds": 2.11,
+          "channel": 9
+        },
+        {
+          "event": "serial_write_error",
+          "seconds": 4.125,
+          "hex": "5501a00003a2",
+          "mode": "exception"
+        },
+        {
+          "event": "serial_close",
+          "seconds": 4.625
+        },
+        {
+          "event": "mail_transport_calls",
+          "seconds": 4.625,
+          "count": 2
+        }
+      ],
+      "blocked": []
+    }
+  ]
+}

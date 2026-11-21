@@ -1,0 +1,35 @@
+{
+  "log_open": {
+    "error": "PermissionError",
+    "driver_closed": false,
+    "log_open": false,
+    "manager_closing": false,
+    "system_reserved": true,
+    "releases": [
+      false
+    ],
+    "writes": 0
+  },
+  "reader_start": {
+    "error": "RuntimeError: fixture-start",
+    "driver_closed": false,
+    "log_open": true,
+    "manager_closing": false,
+    "system_reserved": true,
+    "releases": [
+      false
+    ],
+    "writes": 0
+  },
+  "driver_close": {
+    "error": "",
+    "driver_closed": false,
+    "log_open": false,
+    "manager_closing": false,
+    "system_reserved": true,
+    "releases": [
+      false
+    ],
+    "writes": 0
+  }
+}

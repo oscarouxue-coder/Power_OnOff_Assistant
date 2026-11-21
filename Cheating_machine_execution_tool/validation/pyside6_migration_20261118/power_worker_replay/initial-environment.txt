@@ -1,0 +1,57 @@
+﻿python.exe : Process legacy-start-all-headless:
+所在位置 行:3 字符: 1
++ & "$env:LOCALAPPDATA/LineCheckAssistant/qt-build-py39/Scripts/python. ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Process legacy-start-all-headless::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Traceback (most recent call last):
+  File "C:\Python\Python39\lib\multiprocessing\process.py", line 315, in _bootstrap
+    self.run()
+  File "C:\Python\Python39\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\validation\pyside6_migration_20261118\power_worker_replay\replay.py", line 73, in record_child
+    wifi = stack.enter_context(patch('pywifi.PyWiFi'))
+  File "C:\Python\Python39\lib\contextlib.py", line 448, in enter_context
+    result = _cm_type.__enter__(cm)
+  File "C:\Python\Python39\lib\unittest\mock.py", line 1388, in __enter__
+    self.target = self.getter()
+  File "C:\Python\Python39\lib\unittest\mock.py", line 1563, in <lambda>
+    getter = lambda: _importer(target)
+  File "C:\Python\Python39\lib\unittest\mock.py", line 1235, in _importer
+    thing = __import__(import_path)
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-build-py39\lib\site-packages\pywifi\__init__.py", line 15, in <module>
+    from .wifi import PyWiFi
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-build-py39\lib\site-packages\pywifi\wifi.py", line 15, in <module>
+    from .iface import Interface
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-build-py39\lib\site-packages\pywifi\iface.py", line 10, in <module>
+    if platform.system().lower() == 'windows':
+  File "C:\Python\Python39\lib\platform.py", line 921, in system
+    return uname().system
+  File "C:\Python\Python39\lib\platform.py", line 856, in uname
+    release, version, csd, ptype = win32_ver()
+  File "C:\Python\Python39\lib\platform.py", line 368, in win32_ver
+    major, minor, build = map(int, _syscmd_ver()[2].split('.'))
+  File "C:\Python\Python39\lib\platform.py", line 282, in _syscmd_ver
+    info = subprocess.check_output(cmd,
+  File "C:\Python\Python39\lib\subprocess.py", line 424, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+  File "C:\Python\Python39\lib\subprocess.py", line 505, in run
+    with Popen(*popenargs, **kwargs) as process:
+  File "C:\Python\Python39\lib\subprocess.py", line 951, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "C:\Python\Python39\lib\subprocess.py", line 1416, in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\validation\pyside6_migration_20261118\power_worker_replay\replay.py", line 25, in guard
+    raise RuntimeError('Unexpected external I/O in the fixture: ' + event)
+RuntimeError: Unexpected external I/O in the fixture: subprocess.Popen
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\validation\pyside6_migration_20261118\power_worker_replay\replay.py", line 213, in <module>
+    main()
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\validation\pyside6_migration_20261118\power_worker_replay\replay.py", line 206, in main
+    results = [run_case(mode, Path(folder)) for mode in ('direct','qt')]
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\validation\pyside6_migration_20261118\power_worker_replay\replay.py", line 206, in <listcomp>
+    results = [run_case(mode, Path(folder)) for mode in ('direct','qt')]
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\validation\pyside6_migration_20261118\power_worker_replay\replay.py", line 149, in run_case
+    assert verdict.ok, verdict.detail
+AssertionError: 旧业务子进程异常退出，exitcode=1

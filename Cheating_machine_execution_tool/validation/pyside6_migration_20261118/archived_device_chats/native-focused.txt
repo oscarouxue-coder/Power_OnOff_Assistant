@@ -1,0 +1,10 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_02a0a50206d9418d91ef4fdde3583675'}
+ test_qt_reopens_local_device_chat_from_an_older_power_run (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 1.816s
+
+OK
+
+{'passed': True, 'managed_windows': 5, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_02a0a50206d9418d91ef4fdde3583675', 'qt': {'passed': True, 'managed_windows': 5, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_02a0a50206d9418d91ef4fdde3583675', 'framework': 'qt', 'platform': 'windows'}}

@@ -1,0 +1,27 @@
+﻿GUI_TEST_COVERAGE_OK
+python.exe : test_close_waits_for_receipt_after_agent_worker_finishes (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+所在位置 行:2 字符: 1
++ & "$env:LOCALAPPDATA/LineCheckAssistant/qt-build-py39/Scripts/python. ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (test_close_wait...ayTests) ... ok:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+test_failed_incoming_receipt_releases_only_its_own_project (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_local_project_revocation_does_not_expand_to_another_project (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_other_principal_is_rejected_before_project_listing (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_repeated_receipt_after_switch_does_not_move_or_reexecute_original (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_requires_explicit_project_before_forwarding (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_selection_and_explicit_prefix_keep_original_signed_request (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_disallowed_channel_and_capability_and_permission_claim_are_rejected (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_exception_after_agent_enqueue_is_unknown_and_never_resubmitted (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_fake_upgrade_once_survives_gateway_disconnect_and_reports_original_job (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_local_rejection_is_confirmed_without_disconnect_or_execution (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_new_remote_session_does_not_inherit_local_full_grant (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_scope_change_invalidates_full_grant_and_generic_shell_is_blocked (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_unknown_upgrade_is_not_retried_with_a_new_message_id (test_remote_gateway_agent.GatewayAgentTests) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 10.763s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

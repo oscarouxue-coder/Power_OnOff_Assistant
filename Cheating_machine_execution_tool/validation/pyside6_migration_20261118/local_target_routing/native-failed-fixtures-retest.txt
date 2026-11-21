@@ -1,0 +1,11 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_f50f68e6ebc84e82b7dd48423d28859a'}
+ test_qt_wan_different_details_invalidation_switch_and_safe_stop (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_wifi_actual_caps_dual_sync_password_and_responsive_forms (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_wifi_confirm_increment_switch_and_stop_preserve_unverified_state (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 9.821s
+
+OK
+

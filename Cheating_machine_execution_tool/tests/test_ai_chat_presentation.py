@@ -32,6 +32,8 @@ class TimeDisplayTests(unittest.TestCase):
 
 class ChatPresentationTests(unittest.TestCase):
     def setUp(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         gc.collect()
         self.root = tk.Tk()
         self.root.geometry("1040x760")

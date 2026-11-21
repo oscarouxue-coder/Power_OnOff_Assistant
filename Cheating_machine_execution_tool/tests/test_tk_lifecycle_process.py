@@ -12,7 +12,8 @@ class TkLifecycleProcessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             report = Path(temporary)/'result.json'
             script = Path(__file__).with_name('serial_lifecycle_stress.py')
-            result = subprocess.run([sys.executable, '-X', 'utf8', str(script), '--child',
+            from tk_test_windows import run_gui_child
+            result = run_gui_child([sys.executable, '-X', 'utf8', str(script), '--child',
                                      '--seconds', '3', '--cycles', '8', '--report', str(report)],
                                     capture_output=True, text=True, encoding='utf-8', timeout=25)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

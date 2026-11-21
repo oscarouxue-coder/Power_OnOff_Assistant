@@ -130,15 +130,19 @@ class CapabilityService:
         self.emit(f"[能力执行] {identifier}；来源={authority.source}；任务={authority.operation_id[:8]}")
         return spec.handler(arguments, authority)
 
-    def _upgrade(self, arguments, authority):
-        prepared = self.upgrades.validate(arguments, authority)
+    def _upgrade(self, arguments, authority, *, local_manual_restart=False):
+        # Only the host-owned firmware editor can supply this keyword; it is not in UPGRADE_SCHEMA.
+        manual = {"local_manual_restart": True} if local_manual_restart else {}
+        prepared = self.upgrades.validate(arguments, authority, **manual)
         def recheck():
-            current = self.upgrades.validate(arguments, authority)
+            current = self.upgrades.validate(arguments, authority, **manual)
             if current["binding"] != prepared["binding"]:
                 raise CapabilityError("target_changed", "预检后目标或固件发生变化，未启动升级")
         def runner(context):
             context.stop.checkpoint()
             requests = self.upgrades.pin(prepared)
+            if local_manual_restart:
+                context.event("preparing", "本机已确认所选样机手动重启，按空程控电源口进入原升级引擎")
             # Existing engines own all Boot/transfer/write/retry/timing decisions.
             context.event("engine", "调用现有升级引擎；未增加刷后系统登录", dispatched=True)
             phases, phase_lock = {}, threading.RLock()
@@ -179,4 +183,6 @@ class CapabilityService:
                 result["notice"] = "原引擎返回失败；设备实际刷写结果需核实，不自动重刷"
             return result
         recorded = dict(prepared["arguments"], firmware_sha256=prepared["firmware"]["sha256"], target_binding=prepared["binding"])
+        if local_manual_restart:
+            recorded["manual_restart_confirmed"] = True
         return self.jobs.start("firmware.upgrade", recorded, authority, prepared["resources"], runner, recheck=recheck)

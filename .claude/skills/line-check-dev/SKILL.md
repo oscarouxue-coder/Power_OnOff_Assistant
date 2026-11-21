@@ -124,12 +124,18 @@ python scripts\verify_baseline.py
 
 - 预期：`ALL CHECKS PASSED`，exit 0
 - 任何一条 `FAIL` 都必须先修复再提交（`AGENTS.md` 规则 13）
-- 验证包含 7 类检查：① 编译清单全量 py_compile ② 新增 `src/` / `line_check_assistant/` 源码必须纳入编译清单 ③ 全量 unittest（解析 `Ran N tests`）④ 已验收关键行为的指定测试 ID 必须实际执行 ⑤ §1.3 必须命中不变量 grep ⑥ §1.3 / §1.4 必须不出现模式 grep ⑦ GUI动作与能力覆盖清单一致。GUI业务变更须审查并更新CAPABILITY_COVERAGE.md和动作快照，不能以通用Shell或只登记未实现的条目虚报接入。
+- 验证包含 8 类检查：① 编译清单全量 py_compile ② 新增 `src/` / `line_check_assistant/` 源码必须纳入编译清单 ③ 全量 unittest（解析 `Ran N tests`）④ 已验收关键行为的指定测试 ID 必须实际执行 ⑤ §1.3 必须命中不变量 grep ⑥ §1.3 / §1.4 必须不出现模式 grep ⑦ GUI动作与能力覆盖清单一致 ⑧ GUI测试离屏覆盖（gui_test_coverage），覆盖失败不启动GUI测试，unittest通过严格守卫入口执行。GUI业务变更须审查并更新CAPABILITY_COVERAGE.md和动作快照，不能以通用Shell或只登记未实现的条目虚报接入。
 - 检查配置定义在 `scripts/verify_baseline.py` 的 `PY_COMPILE_FILES` / `REQUIRED_BASELINE_TEST_IDS` / `MUST_EXIST` / `MUST_NOT_EXIST`；`AGENTS.md` 中验收不变量章节是 grep 清单的可读副本
 
 新增单测后，在实际运行的专项范围内核对 `Ran N tests ... OK` 及新增用例；完整基线触发时再核对全量结果，不为统计全量测试数额外启动完整基线。完成报告列明本轮实际执行的检查及结果；未执行完整基线时明确注明，并保留最近一次完整验证记录，不将旧结果表述为本轮结果。
 
 ---
+
+### 5.1 GUI测试窗口隔离
+
+新增真实GUI测试必须在创建窗口前调用`install_offscreen_windows(self)`或使用`OffscreenTkWindows()`上下文；共享辅助函数可用`requires_offscreen`声明并检查调用方作用域。命令行统一`python scripts/run_tests.py ...`，VS Code使用带“离屏预检”的任务；直接运行旧unittest命令不保证先经过门禁。GUI子进程使用`run_gui_child(..., timeout=...)`，缺少独立证据即失败。静态检查不能确认的已识别GUI入口不能自动标为通过；运行时未受管创建、错误线程、原生对话框及泄漏作用域保留失败，即使异常被捕获。禁止整文件豁免、全隐藏、放宽断言或新增跳过。Windows原生像素专项可使用`native_render=True`的系统核验非输入私有桌面；不切换用户桌面，隔离失败不回退。普通布局测试继续屏幕外真实映射，实体多屏和目视结论另记。
+
+PySide6迁移原生测试使用独立环境与`qt_test_guard.QtTestScope`/`install_qt_test_scope`，经`run_gui_child(..., framework='qt', native_render=True, timeout=...)`启动同一测试入口。运行`python scripts/verify_qt_migration.py --output <目录>`覆盖100/125/150%显式Qt缩放和全部指定原生用例，缺环境/插件/证据或任何用例失败均失败；不将Tk作用域当作Qt保护，也不在原Tk构建环境安装Qt。此专项与原完整基线分别记录；真实Windows系统DPI切换仍待人工验证。
 
 ## 6. 真实样机验收记录
 

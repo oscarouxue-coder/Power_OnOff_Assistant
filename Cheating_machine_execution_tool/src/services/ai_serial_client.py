@@ -5,6 +5,14 @@ from src.services.pipeline_runtime import PipelineChannel, PipelineUiError
 from src.utils.bounded_mailbox import BoundedMailbox
 
 
+def read_existing_serial(manager, port):
+    session = manager.existing_session(SerialSettings(port)) if manager is not None and port else None
+    if session is None:
+        return '目标串口未打开，无实时串口输出；未为被动读取自动打开COM'
+    # Resolve a tail-relative slice under the reader lock, including bytes that just arrived.
+    return session.peek_since(-65536)
+
+
 class SerialLease:
     def __init__(self, client, target, session, owner, cancelled, token):
         self.client, self.target, self.session = client, target, session
@@ -73,10 +81,7 @@ class AiSerialClient:
         return False
 
     def read(self, target):
-        session = self.manager.existing_session(SerialSettings(target.port)) if target.port else None
-        if session is None:
-            return '目标串口未打开，无实时串口输出；未为被动读取自动打开COM'
-        return session.peek_since(max(0, session.cursor() - 65536))
+        return read_existing_serial(self.manager, target.port)
 
     def serial_status(self, target):
         return self.call('status', target)

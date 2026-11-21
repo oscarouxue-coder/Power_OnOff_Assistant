@@ -1048,11 +1048,14 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
         message_queue = _AttemptQueue(message_queue, run_id)
     serial_client = None
     legacy_worker = None
+    power_consumer = None
     restore_result_log_open = None
     wifi_logs = None
     try:
         tool_root = Path(request.tool_root).resolve()
         os.chdir(tool_root)
+        from src.services.power_worker_lifetime import publish_power_worker
+        publish_power_worker(tool_root)
         # Project snapshots contain configuration/output, while business code stays
         # in the application package. Never change the main process directory.
         from line_check_assistant.paths import resolve_tool_root
@@ -1200,6 +1203,7 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
                 1 if channel_number in selected else 0,
             )
         legacy_worker.power_control.stopthreadevent = 0
+        legacy_worker.power_control.stop_event = stop_event
         power_consumer = threading.Thread(
             target=legacy_worker.power_control.consumer,
             name="legacy-power-command-consumer",
@@ -1372,6 +1376,8 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
                 legacy_worker.power_control.stopthreadevent = 1
             except Exception:
                 pass
+        if power_consumer is not None and power_consumer.ident is not None:
+            power_consumer.join()
         if serial_client is not None:
             try:
                 serial_client.serial_close()

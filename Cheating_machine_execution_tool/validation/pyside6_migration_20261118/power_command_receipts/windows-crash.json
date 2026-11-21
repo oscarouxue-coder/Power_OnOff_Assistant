@@ -1,0 +1,7 @@
+﻿{
+    "TimeCreated":  "\/Date(1795237802233)\/",
+    "Id":  1000,
+    "RecordId":  47261,
+    "ProviderName":  "Application Error",
+    "Message":  "错误应用程序名称: python.exe，版本: 3.9.10150.1013，时间戳: 0x61e588f1\r\n错误模块名称: ntdll.dll，版本: 10.0.19041.1288，时间戳: 0xa280d1d6\r\n异常代码: 0xc0000005\r\n错误偏移量: 0x000000000002faad\r\n错误进程 ID: 0x5b18\r\n错误应用程序启动时间: 0x01dd79755ec6ebb9\r\n错误应用程序路径: C:\\Python\\Python39\\python.exe\r\n错误模块路径: C:\\Windows\\SYSTEM32\\ntdll.dll\r\n报告 ID: 3796d033-dfff-4d08-aa99-b253ea5dac4d\r\n错误程序包全名: \r\n错误程序包相对应用程序 ID: "
+}

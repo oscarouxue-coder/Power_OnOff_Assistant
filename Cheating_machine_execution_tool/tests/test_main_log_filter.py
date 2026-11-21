@@ -586,6 +586,8 @@ class DutMainLogPersistenceTests(unittest.TestCase):
             self.assertIn(message + '\n', saved)
 
     def test_real_tk_both_themes_keep_commands_colors_and_raw_file(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         import tkinter as tk
         from tkinter import ttk
         root = tk.Tk()
@@ -1215,6 +1217,8 @@ class AiMainLogPersistenceTests(unittest.TestCase):
                                    if (text := format_main_log_message(message)) is not None])
 
     def test_real_tk_both_themes_render_summary_and_preserve_full_file(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         import tkinter as tk
         from tkinter import ttk
         root = tk.Tk()

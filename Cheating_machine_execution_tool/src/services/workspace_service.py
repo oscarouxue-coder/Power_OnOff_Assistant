@@ -189,7 +189,7 @@ class WorkspaceService:
                                        directory=path.parent, kind=kind))
         return result
 
-    def use_connection(self, candidate):
+    def use_connection(self, candidate, *, validate_selection=None):
         kind = candidate['kind']
         if self.platforms[kind].transport is not None and not self.platforms[kind].idle:
             raise ValueError('请先停用平台接入并等待连接退出，再更换导入配置')
@@ -197,12 +197,14 @@ class WorkspaceService:
         from src.services.feishu_remote_store import FeishuConfigStore
         factory = RemoteConfigStore if kind == 'dingtalk' else FeishuConfigStore
         value = factory(self.source_root, directory=candidate['directory']).load()
+        if validate_selection is not None:
+            validate_selection(value)
         self.platform_config(kind).save(value)
         self.emit('[项目管理] 已选择导入的接入配置；请重启程序后在本机确认启用')
 
     def synchronize_platforms(self):
         """Project the locally saved global control plane to each original service."""
-        if self.gateway_slot is not None or self.gateway_error or self.maintenance.active:
+        if self.gateway_slot is not None or self.gateway_runtime is not None or self.gateway_error or self.maintenance.active:
             return
         for kind, attribute in (('dingtalk', 'remote'), ('feishu', 'feishu_remote')):
             try:
@@ -279,21 +281,52 @@ class WorkspaceService:
             capabilities.registry.register(CapabilitySpec('workspace.projects.list', '查询工作区项目',
                 '仅本地查询已打开项目的身份与状态，不改变当前项目或授权。', object_schema(),
                 lambda args, authority: dict(projects=self.list_projects()), sources=('local', 'gui')))
-        if self.gateway_slot is not None and not self.gateway_error:
-            try:
-                if self.gateway_runtime is None:
-                    from src.services.remote_gateway_runtime import RemoteGatewayRuntime
-                    from src.services.workspace_gateway import WorkspaceGatewayBridge
-                    from src.core.remote_gateway_transport import GatewayInstanceClient
-                    runtime = RemoteGatewayRuntime(self.source_root, self.gateway_slot)
-                    runtime.bridge = WorkspaceGatewayBridge(self, runtime.identity, runtime.config)
-                    runtime.client = GatewayInstanceClient(runtime.config['url'], runtime.config['credential'], runtime.bridge,
-                        vpn=runtime.config.get('vpn', False), emit=self.emit).start()
-                    self.gateway_runtime = runtime
+        self.open_project_gateway(context, controller)
+
+    def open_project_gateway(self, context, controller=None):
+        if self.gateway_slot is None or self.gateway_error:
+            return
+        if os.environ.get('LINECHECK_DISABLE_CAPABILITIES') == '1':
+            self.gateway_error = '本机已停用业务接入，统一接入未启动'
+            self.emit('[项目管理] ' + self.gateway_error)
+            return
+        try:
+            if self.gateway_runtime is None:
+                self._start_project_gateway(controller, context)
+                self.emit('[统一接入] 已启动实例客户端，槽位 ' + str(self.gateway_slot))
+            elif controller is None:
+                self.gateway_runtime.bridge.open_project_controls(context)
+            else:
                 self.gateway_runtime.bridge.attach(controller, context)
-            except Exception:
-                self.gateway_error = '统一接入启动失败，请在多实例管理中核对；未回退直接接入'
-                self.emit('[项目管理] ' + self.gateway_error)
+        except Exception:
+            self.gateway_error = '统一接入启动失败，请在多实例管理中核对；未回退直接接入'
+            self.emit('[项目管理] ' + self.gateway_error)
+
+    def _start_project_gateway(self, controller, context):
+        from src.core.remote_gateway_transport import GatewayInstanceClient
+        from src.services.remote_gateway_runtime import RemoteGatewayRuntime
+        from src.services.workspace_gateway import WorkspaceGatewayBridge
+        runtime = RemoteGatewayRuntime(self.source_root, self.gateway_slot)
+        self.gateway_runtime = runtime
+        try:
+            if controller is None and not all(runtime.config.get(key) for key in ('scopes', 'channel_ids', 'capability_ids')):
+                raise ValueError('该槽位尚未确认成员、通道及能力范围')
+            runtime.bridge = WorkspaceGatewayBridge(self, runtime.identity, runtime.config)
+            if controller is None:
+                runtime.bridge.open_project_controls(context)
+            else:
+                runtime.bridge.attach(controller, context)
+            runtime.client = GatewayInstanceClient(runtime.config['url'], runtime.config['credential'],
+                runtime.bridge, vpn=runtime.config.get('vpn', False), emit=self.emit)
+            runtime.client.start()
+        except Exception:
+            runtime.begin_close()
+            # A partially started worker may already be finishing an inbox receipt.
+            # Keep its database and slot owned until the normal workspace close.
+            if runtime.idle:
+                runtime.close()
+                self.gateway_runtime = None
+            raise
 
     def set_remote_projects(self, identifiers):
         identifiers = set(identifiers)
@@ -336,6 +369,15 @@ class WorkspaceService:
     def resolve_gui_unknown(self, owner, evidence):
         if owner not in {key for key, _ in self.resources.unknown_gui()} or not evidence.strip():
             raise ValueError('请选择原未知任务并填写现场核实依据')
+        from src.services.power_worker_lifetime import guard_power_worker_review
+        project_id = owner.split(':', 2)[1]
+        with self.status.lock:
+            record = self.status.records.get(owner, {})
+        context = self.projects.opened.get(project_id)
+        if project_id not in ('qt-configuration', 'qt-channel') and record.get('operation') in (None, '_on_start'):
+            if context is None:
+                raise ValueError('请先打开原项目核对执行进程，再核实任务')
+            guard_power_worker_review(context)
         import hashlib
         atomic_json(self.directory / 'reconciliations' / (hashlib.sha256(owner.encode()).hexdigest() + '.json'),
                     dict(owner=owner, evidence=evidence, reviewed_by='local_operator', replayed=False))

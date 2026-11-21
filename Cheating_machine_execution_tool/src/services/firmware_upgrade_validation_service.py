@@ -85,10 +85,16 @@ class FirmwareUpgradeValidation:
                 self.confirmed.pop(next(iter(self.confirmed)))
         self.emit("[升级预检] 操作员已明确确认固件适配；绑定目标与SHA256")
 
-    def validate(self, arguments, authority, *, require_confirmation=True):
+    def validate(self, arguments, authority, *, require_confirmation=True, local_manual_restart=False):
         args = normalized_upgrade_arguments(arguments)
         authority.check(args["channel_ids"])
         snapshot = self.snapshot()
+        manual_required = args["upgrade_type"] == "全包升级" and not snapshot.get("power_serial_port")
+        if local_manual_restart:
+            if authority.source != "gui":
+                raise CapabilityError("source_forbidden", "人工重启续接只供本机升级窗口")
+            if not manual_required:
+                raise CapabilityError("target_changed", "程控电源或升级模式已变化，请重新预检")
         requests = build_upgrade_requests(args, snapshot)
         info = file_information(args["firmware_path"])
         binding = self.binding(args, snapshot, info)
@@ -101,7 +107,7 @@ class FirmwareUpgradeValidation:
         problems = self.network_check(requests)
         if problems:
             raise CapabilityError("network_conflict", "升级网络预检未通过", problems=problems)
-        if args["upgrade_type"] == "全包升级" and not snapshot.get("power_serial_port"):
+        if manual_required and not local_manual_restart:
             raise CapabilityError("manual_restart_required", "未配置程控电源，需要人工重启配合；不会擅自选择电源串口")
         with self.lock:
             confirmed = (authority.principal, binding) in self.confirmed

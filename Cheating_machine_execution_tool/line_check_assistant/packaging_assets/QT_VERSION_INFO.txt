@@ -1,0 +1,7 @@
+DUTPilot V1.3.0 · PySide6 迁移验证版
+
+完整解压 DUTPilot_portable.zip 后，从 DUTPilot_portable 目录启动 DUTPilot.exe。
+请保留同目录 DLL、PySide6 插件、配置模板和许可证资料。源项目配置与任务数据仍使用原工作区路径。
+运行前请先退出当前打开的 DUTPilot 工作台，避免新窗口请求转交给原实例。
+
+当前版本用于目标 Windows 的迁移验证。待迁移的业务入口使用旧版，已接入的测试请按各模块验收范围使用。

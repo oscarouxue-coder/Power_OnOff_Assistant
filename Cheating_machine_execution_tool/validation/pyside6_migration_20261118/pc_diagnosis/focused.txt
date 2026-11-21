@@ -1,0 +1,10 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_2338d3050ac74273ab1ea562c8ce7487'}
+
+test_pc_continuous_diagnosis_uses_local_scope_and_keeps_query_evidence (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_ai_chat_sends_and_reopens_original_persisted_history (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 5.299s
+
+OK

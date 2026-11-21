@@ -1,0 +1,5 @@
+construct workspace
+construct project 0
+mainloop
+update detail
+capture original parameter writer

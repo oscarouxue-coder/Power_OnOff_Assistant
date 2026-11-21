@@ -1,0 +1,20 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_b5ca1c6f9b8a49a3b0dd00c4f4491b1e'}
+ test_manual_upgrade_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_manual_upgrade_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_manual_upgrade_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_manual_upgrade_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_manual_upgrade_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_manual_upgrade_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_manual_upgrade_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_manual_upgrade_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_manual_upgrade_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_manual_upgrade_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_manual_upgrade_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_manual_upgrade_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 21.699s
+
+OK
+

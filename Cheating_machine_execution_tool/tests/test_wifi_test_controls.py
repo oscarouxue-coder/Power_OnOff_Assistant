@@ -63,6 +63,8 @@ class WifiConfigTests(unittest.TestCase):
 
 class WifiControlsTests(unittest.TestCase):
     def setUp(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         self.root = tk.Tk()
         self.root.withdraw()
         self.root.geometry('1060x680')

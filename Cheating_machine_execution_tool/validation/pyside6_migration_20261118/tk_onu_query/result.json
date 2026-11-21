@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "managed_windows": 2,
+  "violations": [],
+  "isolation": "private_desktop",
+  "desktop": "DUTPilot_render_b448953836714e9baf2f8e36b2d810be"
+}

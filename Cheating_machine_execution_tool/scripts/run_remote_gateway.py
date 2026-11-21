@@ -31,7 +31,7 @@ def main(argv=None):
     pair.add_argument("--scope-file", type=Path, required=True, help="本地审阅后的聊天/成员允许范围JSON")
     revoke = commands.add_parser("revoke")
     revoke.add_argument("instance_id")
-    for name in ("pair-instance", "allow-instance", "show-instance"):
+    for name in ("pair-instance", "allow-instance", "show-instance", "peer-id"):
         command = commands.add_parser(name)
         command.add_argument("--app-dir", type=Path, default=Path(__file__).resolve().parents[1])
         command.add_argument("--slot", type=int, default=1)
@@ -44,9 +44,12 @@ def main(argv=None):
             command.add_argument("--capabilities", required=True)
             command.add_argument("--confirm-local-scope", action="store_true", required=True)
     args = parser.parse_args(argv)
-    if args.command in ("pair-instance", "allow-instance", "show-instance"):
+    if args.command in ("pair-instance", "allow-instance", "show-instance", "peer-id"):
         identity = RemoteInstanceIdentity(args.app_dir, slot=args.slot)
         try:
+            if args.command == 'peer-id':
+                print(identity.instance_id)
+                return 0
             config = RemoteInstanceConfig(identity)
             pending = RemoteInstanceConfig(identity, pending=True)
             if pending.path.exists() and args.command in ("allow-instance", "show-instance"):

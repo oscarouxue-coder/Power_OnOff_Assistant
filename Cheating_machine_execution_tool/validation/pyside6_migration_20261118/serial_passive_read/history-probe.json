@@ -1,0 +1,27 @@
+{
+  "samples": [
+    {
+      "received_bytes": 1048576,
+      "cursor": 1048576,
+      "history_bytes": 1048576
+    },
+    {
+      "received_bytes": 2097152,
+      "cursor": 2097152,
+      "history_bytes": 2097152
+    },
+    {
+      "received_bytes": 4194304,
+      "cursor": 4194304,
+      "history_bytes": 4194304
+    },
+    {
+      "received_bytes": 8388608,
+      "cursor": 8388608,
+      "history_bytes": 8388608
+    }
+  ],
+  "writes": 0,
+  "log_enabled": false,
+  "driver_closed": true
+}

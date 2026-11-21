@@ -177,6 +177,8 @@ class SessionDeletionTests(DeletionFixture, unittest.TestCase):
 
 class SessionManagerTests(DeletionFixture, unittest.TestCase):
     def setUp(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         super().setUp()
         gc.collect()
         self.root = tk.Tk()

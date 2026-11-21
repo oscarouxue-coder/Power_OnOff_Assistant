@@ -45,6 +45,26 @@ REQUIRED_FILES = (
     "VERSION_INFO.txt", "BUILD_INFO.txt", "python39.dll", "_socket.pyd",
     "_ssl.pyd", "_ctypes.pyd", "tcl86t.dll", "tk86t.dll", "certifi/cacert.pem",
 )
+REQUIRED_QT_MODULES = (
+    'src.ui.qt.application', 'src.ui.qt.workspace_controller', 'src.ui.qt.project_detail',
+    'src.services.qt_workspace_adapter', 'src.services.qt_execution_adapter',
+    'src.services.workspace_service', 'src.services.legacy_power_test_service',
+    'src.services.power_test_resume_service', 'src.services.serial_upgrade_service',
+    'src.services.web_gateway_upgrade_service', 'src.core.sample_parameter_table',
+    'test_case.powe_on_off_telnet', 'test_case.power_on_off_ssh',
+    'test_case.wifi_connect_case', 'common.wifi_connect',
+    'serial', 'serial.serialwin32', 'paramiko', 'tftpy', 'openpyxl', 'xlrd',
+)
+REQUIRED_QT_FILES = (
+    'PySide6/plugins/platforms/qwindows.dll', 'PySide6/QtCore.pyd',
+    'PySide6/QtGui.pyd', 'PySide6/QtWidgets.pyd',
+    'PySide6/Qt6Core.dll', 'PySide6/Qt6Gui.dll', 'PySide6/Qt6Widgets.dll',
+    'python39.dll', '_socket.pyd', '_ssl.pyd', '_ctypes.pyd', 'certifi/cacert.pem',
+    'qt_licenses/GPL-3.0-only.txt', 'qt_licenses/LGPL-3.0-only.txt', 'qt_licenses/QT-SOURCES.md',
+    'qt_licenses/PySide6-Essentials/LicenseRef-Qt-Commercial.txt',
+    'qt_licenses/shiboken6/LicenseRef-Qt-Commercial.txt',
+    'assets/icons/line_check_assistant_network_topology_v1.ico',
+)
 
 
 def inspect_archive(exe: Path, excluded: list[str]) -> dict:
@@ -125,13 +145,95 @@ def inspect_portable(exe: Path, portable_zip: Path) -> dict:
     return {"zip_bytes": portable_zip.stat().st_size, "zip_sha256": actual, "zip_crc": "passed"}
 
 
-def inspect_case_snapshot(exe: Path, portable_zip: Path, snapshot: Path) -> dict:
+def inspect_qt_imports(files: dict) -> dict:
+    """Resolve direct and delay-loaded Qt libraries inside the portable layout."""
+    import pefile
+
+    available = {name.casefold() for name in files}
+    imports = {}
+    missing = []
+    tables = ('IMAGE_DIRECTORY_ENTRY_IMPORT', 'IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT')
+    for name, path in sorted(files.items()):
+        if not name.startswith(('PySide6/', 'shiboken6/')) or path.suffix.lower() not in ('.dll', '.pyd'):
+            continue
+        with pefile.PE(str(path), fast_load=True) as image:
+            image.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY[table] for table in tables])
+            deps = sorted({row.dll.decode('ascii') for table in ('DIRECTORY_ENTRY_IMPORT', 'DIRECTORY_ENTRY_DELAY_IMPORT')
+                           for row in getattr(image, table, ()) if row.dll.lower().startswith(b'qt6')})
+        imports[name] = deps
+        for dll in deps:
+            # Qt's DLL directory and the importing image's own directory are
+            # available at runtime. A similarly named file elsewhere is insufficient.
+            locations = (str(Path(name).with_name(dll).as_posix()), 'PySide6/' + dll, dll)
+            if not any(location.casefold() in available for location in locations):
+                missing.append(f'{name} -> {dll}')
+    if missing:
+        raise ValueError('Unresolved portable Qt DLL imports: ' + ', '.join(missing))
+    return imports
+
+
+def inspect_qt_directory(exe: Path, portable_zip: Path, excluded: list[str]) -> dict:
+    import pefile
+
+    archive = CArchiveReader(str(exe))
+    modules = archive.open_embedded_archive('PYZ-00.pyz').toc
+    directory = exe.parent
+    files = {path.relative_to(directory).as_posix(): path for path in directory.rglob('*') if path.is_file()}
+    missing = sorted(set(REQUIRED_QT_MODULES) - modules.keys()) + sorted(set(REQUIRED_QT_FILES) - files.keys())
+    if missing:
+        raise ValueError('Qt package is missing required entries: ' + ', '.join(missing))
+    qt_imports = inspect_qt_imports(files)
+    if not {'run_dutpilot_qt', 'pyi_rth_pyside6'}.issubset(archive.toc):
+        raise ValueError('Qt entry point or PyInstaller runtime hook is missing')
+
+    package_names = {name.replace('/', '.').lower() for name in (*modules, *files)}
+    unwanted = {name for name in package_names if any(name == prefix.lower() or name.startswith(prefix.lower() + '.')
+                for prefix in excluded) or 'openblas' in name}
+    if unwanted:
+        raise ValueError('Excluded dependency still bundled: ' + ', '.join(sorted(unwanted)))
+
+    with pefile.PE(str(exe)) as image:
+        if image.FILE_HEADER.Machine != 0x8664 or image.OPTIONAL_HEADER.Subsystem != 2:
+            raise ValueError('The Qt entry is not a Windows x64 GUI executable')
+        version = getattr(image, 'VS_FIXEDFILEINFO', ())
+        if not version or (version[0].ProductVersionMS, version[0].ProductVersionLS) != (0x00010003, 0):
+            raise ValueError('Windows product version differs from 1.3.0')
+        if not {3, 14}.issubset({entry.id for entry in image.DIRECTORY_ENTRY_RESOURCE.entries}):
+            raise ValueError('The Windows executable icon resources are missing')
+
+    source = Path(__file__).resolve().parents[1]
+    if (directory / 'VERSION_INFO.txt').read_bytes() != (
+            source / 'line_check_assistant/packaging_assets/QT_VERSION_INFO.txt').read_bytes():
+        raise ValueError('Qt validation version information differs from the source')
+    icon = 'assets/icons/line_check_assistant_network_topology_v1.ico'
+    if files[icon].read_bytes() != (source / icon).read_bytes():
+        raise ValueError('Qt application icon differs from the source')
+    with zipfile.ZipFile(portable_zip) as bundle:
+        root = 'DUTPilot_portable/'
+        zipped = [name.removeprefix(root) for name in bundle.namelist() if not name.endswith('/')]
+        if sorted(zipped) != sorted(files):
+            raise ValueError('Qt ZIP and portable directory file lists differ')
+        for name, path in files.items():
+            if hashlib.sha256(bundle.read(root + name)).digest() != hashlib.sha256(path.read_bytes()).digest():
+                raise ValueError('Qt ZIP entry differs from the portable file: ' + name)
+    return dict(exe_bytes=exe.stat().st_size, exe_sha256=hashlib.sha256(exe.read_bytes()).hexdigest(),
+                archive_entries=len(archive.toc), python_modules=len(modules), windows_gui_x64=True,
+                product_version='1.3.0', directory_files=len(files), qt_zip_files_match=True,
+                qt_libraries=sorted(name for name in files if name.startswith('PySide6/') and name.endswith('.dll')),
+                required_modules=list(REQUIRED_QT_MODULES), required_files=list(REQUIRED_QT_FILES), qt_imports=qt_imports,
+                excluded_modules=excluded)
+
+
+def inspect_case_snapshot(exe: Path, portable_zip: Path, snapshot: Path, *, gui="Tk") -> dict:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from src.services.ai_case_store import SNAPSHOT_NAME, validate_snapshot
     expected = snapshot.read_bytes()
     payload = validate_snapshot(json.loads(expected.decode("utf-8")))
-    archive = CArchiveReader(str(exe))
-    if archive.extract(SNAPSHOT_NAME) != expected:
+    bundled = ((exe.parent / SNAPSHOT_NAME).read_bytes() if gui == 'Qt'
+               else CArchiveReader(str(exe)).extract(SNAPSHOT_NAME))
+    if bundled != expected:
+        if gui == 'Qt':
+            raise ValueError("Qt directory case snapshot differs from the build snapshot")
         raise ValueError("Embedded case snapshot differs from the build snapshot")
     with zipfile.ZipFile(portable_zip) as bundle:
         if bundle.read("DUTPilot_portable/" + SNAPSHOT_NAME) != expected:
@@ -147,18 +249,21 @@ def main() -> None:
     parser.add_argument("--zip", required=True, type=Path)
     parser.add_argument("--case-snapshot", required=True, type=Path)
     parser.add_argument("--exclude", action="append", default=[])
+    parser.add_argument("--gui", choices=("Tk", "Qt"), default="Tk")
     args = parser.parse_args()
-    report = inspect_archive(args.exe, args.exclude)
+    report = (inspect_qt_directory(args.exe, args.zip, args.exclude) if args.gui == 'Qt'
+              else inspect_archive(args.exe, args.exclude))
     report.update(inspect_portable(args.exe, args.zip))
-    report.update(inspect_case_snapshot(args.exe, args.zip, args.case_snapshot))
+    report.update(inspect_case_snapshot(args.exe, args.zip, args.case_snapshot, gui=args.gui))
     report.update({
+        "gui": args.gui,
         "python": platform.python_version(),
         "architecture": platform.machine(),
         "build_dependencies": dict(sorted((d.metadata["Name"], d.version) for d in importlib.metadata.distributions())),
         "exe_launched": False,
         "acceptance": "Archive/source checks only; target Windows and real-device verification pending.",
     })
-    path = args.exe.parent / "PACKAGING_REPORT.json"
+    path = (args.zip.parent if args.gui == 'Qt' else args.exe.parent) / "PACKAGING_REPORT.json"
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"PACKAGE_ARCHIVE_OK exe={report['exe_bytes']} zip={report['zip_bytes']} report={path}")
 

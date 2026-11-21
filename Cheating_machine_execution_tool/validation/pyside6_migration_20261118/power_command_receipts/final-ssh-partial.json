@@ -1,0 +1,93 @@
+{
+  "parent": 55376,
+  "cases": [
+    {
+      "entry": "direct",
+      "original_reported_state": "failed",
+      "rejected_power_on": "5501a00003a2",
+      "protocol": "ssh",
+      "failure_mode": "partial",
+      "accepted_frames": 2,
+      "failure_reported": true,
+      "pid": 53440,
+      "events": [
+        {
+          "event": "serial_open",
+          "seconds": 0.11,
+          "port": "COM239",
+          "baudrate": 19200
+        },
+        {
+          "event": "frame",
+          "seconds": 1.11,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "frame",
+          "seconds": 1.625,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "serial_write_error",
+          "seconds": 5.157,
+          "hex": "5501a00003a2",
+          "mode": "partial"
+        },
+        {
+          "event": "serial_close",
+          "seconds": 5.657
+        },
+        {
+          "event": "mail_transport_calls",
+          "seconds": 5.657,
+          "count": 2
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "entry": "qt",
+      "original_reported_state": "failed",
+      "rejected_power_on": "5501a00003a2",
+      "protocol": "ssh",
+      "failure_mode": "partial",
+      "accepted_frames": 2,
+      "failure_reported": true,
+      "pid": 18892,
+      "events": [
+        {
+          "event": "serial_open",
+          "seconds": 0.11,
+          "port": "COM239",
+          "baudrate": 19200
+        },
+        {
+          "event": "frame",
+          "seconds": 1.125,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "frame",
+          "seconds": 1.625,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "serial_write_error",
+          "seconds": 5.157,
+          "hex": "5501a00003a2",
+          "mode": "partial"
+        },
+        {
+          "event": "serial_close",
+          "seconds": 5.657
+        },
+        {
+          "event": "mail_transport_calls",
+          "seconds": 5.657,
+          "count": 2
+        }
+      ],
+      "blocked": []
+    }
+  ]
+}

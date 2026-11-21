@@ -15,6 +15,8 @@ class WorkspaceTests(unittest.TestCase):
     stop_services = conversation_fixtures.ConversationTests.stop_services
 
     def setUp(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         conversation_fixtures.ConversationTests.setUp(self)
         gc.collect()
         self.root = tk.Tk()

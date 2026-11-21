@@ -60,21 +60,21 @@ class IdentityTests(unittest.TestCase):
         key = "serial:fake-" + uuid.uuid4().hex
         lock = HostResourceLock([key]).acquire()
         self.addCleanup(lock.close)
-        script = ("from src.core.host_resource_lock import HostResourceLock; "
-                  "lock=HostResourceLock([" + repr(key) + "]); lock.acquire(); lock.close()")
-        result = subprocess.run([sys.executable, "-X", "utf8", "-c", script], capture_output=True)
+        script = ("import sys; from src.core.host_resource_lock import HostResourceLock; "
+                  "lock=HostResourceLock([sys.argv[1]]); lock.acquire(); lock.close()")
+        result = subprocess.run([sys.executable, "-X", "utf8", "-c", script, key], capture_output=True)
         self.assertNotEqual(0, result.returncode)
         self.assertIn(b"HostResourceBusy", result.stderr)
         lock.close()
-        result = subprocess.run([sys.executable, "-c", script], capture_output=True)
+        result = subprocess.run([sys.executable, "-c", script, key], capture_output=True)
         self.assertEqual(0, result.returncode, result.stderr)
 
     def test_partial_acquisition_rolls_back(self):
         key = "serial:" + uuid.uuid4().hex
         # A genuinely different process must hold the lock; local nested locks are valid.
-        script = ("from src.core.host_resource_lock import HostResourceLock; "
-                  "lock=HostResourceLock([" + repr(key) + "]).acquire(); print('ready',flush=True); input()")
-        process = subprocess.Popen([sys.executable, "-c", script], stdin=subprocess.PIPE,
+        script = ("import sys; from src.core.host_resource_lock import HostResourceLock; "
+                  "lock=HostResourceLock([sys.argv[1]]).acquire(); print('ready',flush=True); input()")
+        process = subprocess.Popen([sys.executable, "-c", script, key], stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         try:
             self.assertEqual("ready", process.stdout.readline().strip())

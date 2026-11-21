@@ -62,6 +62,8 @@ class SerialInventoryTests(unittest.TestCase):
 class ResourceOptionsTkTests(unittest.TestCase):
     def setUp(self):
         # 复用真实主界面装配和相关回调；跳过应用初始化，不访问本机配置/设备。
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         self.root = Tk()
         self.root.withdraw()
         self.addCleanup(self.close_root)

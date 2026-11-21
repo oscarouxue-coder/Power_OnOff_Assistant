@@ -1,0 +1,179 @@
+Project root: F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool
+
+  [OK  ] py_compile - 382 files compiled
+  [OK  ] compile_inventory - 372 source files covered
+  [OK  ] capability_coverage - GUI actions and business inventory reviewed
+  [OK  ] gui_test_coverage - GUI test ownership preflight passed
+  [FAIL] unittest - non-zero exit; tail: onnectionServiceTests) ... ok
+test_ipv4_wait_guard_failure_also_uses_four_attempts (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_manual_unsupported_mode_is_environment_error (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_master_off_ignores_all_wireless_only_validation (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_native_scheduler_keeps_reservation_across_ping (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_other_dut_with_same_ssid_never_passes_and_keeps_retry_budget (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_per_band_skips_unselected_target (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_permanent_scan_error_exits_without_retry_or_connect (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_ping_environment_errors_still_do_not_retry (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_ping_failure_does_not_reconnect_or_start_second_band (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_ping_guard_cleanup_failure_starts_no_retry (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_ping_guard_disconnect_timeout_starts_no_retry (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_post_ping_guard_failure_retries_and_unified_mode_recovers (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_prior_ping_reply_cannot_pass_later_attempt_with_no_replies (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_resume_after_scan_error_starts_fresh_attempts (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_same_ssid_requires_both_actual_bssids_and_pings_each_band (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_scan_connection_and_ping_guard_failures_share_four_attempts (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_scan_failure_retries_in_existing_attempt_budget_then_recovers (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_scan_near_deadline_cannot_submit_connection_after_budget (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_scan_timeout_uses_twenty_seconds_per_attempt_and_only_four_attempts (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_second_band_scanning_waits_for_confirmed_stable_disconnect (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_stop_wins_over_ping_guard_failure (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_stop_wins_over_scan_error_or_state_query_error (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_unified_mode_runs_once_even_when_saved_band_flags_off (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_wrong_band_during_ping_retries_in_shared_budget_without_false_success (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_api_error_translation_failure_does_not_hide_original_code (test_wifi_connection_service.NativeScanTests) ... ok
+test_api_return_classification_does_not_retry_permanent_or_unknown_errors (test_wifi_connection_service.NativeScanTests) ... ok
+test_failure_reason_is_copied_in_callback_and_decoded_only_in_worker (test_wifi_connection_service.NativeScanTests) ... ok
+test_first_terminal_result_wins_and_next_scan_clears_old_failure (test_wifi_connection_service.NativeScanTests) ... ok
+test_ignores_non_target_source_guid_and_inactive_notifications (test_wifi_connection_service.NativeScanTests) ... ok
+test_interface_state_queries_real_state_and_releases_buffer (test_wifi_connection_service.NativeScanTests) ... ok
+test_invalid_interface_state_buffer_is_rejected_and_freed (test_wifi_connection_service.NativeScanTests) ... ok
+test_reason_translation_error_retains_numeric_code (test_wifi_connection_service.NativeScanTests) ... ok
+test_unknown_missing_and_short_reason_data_still_report_scan_failure (test_wifi_connection_service.NativeScanTests) ... ok
+test_auto_prefers_supported_sae_and_manual_mixed_string_works (test_wifi_connection_service.SecurityTests) ... ok
+test_native_connection_is_temporary_bssid_scoped_and_never_saves_profiles (test_wifi_connection_service.SecurityTests) ... ok
+test_native_windows_structure_abi (test_wifi_connection_service.SecurityTests) ... ok
+test_profile_escapes_credentials_and_keeps_manual_connection (test_wifi_connection_service.SecurityTests) ... ok
+test_rsn_and_wpa_ie_parse_and_truncated_or_wep_not_guessed (test_wifi_connection_service.SecurityTests) ... ok
+test_mapping_uses_real_instances_and_returns_bssids_without_password_logs (test_wifi_connection_service.TargetReaderTests) ... ok
+test_missing_mapping_is_not_replaced_by_fixed_indices (test_wifi_connection_service.TargetReaderTests) ... ok
+test_same_ssid_does_not_infer_dual_band_flag (test_wifi_connection_service.TargetReaderTests) ... ok
+test_single_band_does_not_read_unselected_band (test_wifi_connection_service.TargetReaderTests) ... ok
+test_stop_prevents_readonly_commands (test_wifi_connection_service.TargetReaderTests) ... ok
+test_unified_can_use_one_confirmed_band_but_missing_both_is_error (test_wifi_connection_service.TargetReaderTests) ... ok
+test_names_are_trimmed_deduplicated_and_keep_discovery_order (test_wifi_interfaces.WifiInterfaceTests) ... ok
+test_form_fields_reach_formal_request_and_confirmation (test_wifi_test_controls.WifiConfigTests) ... ok
+test_formal_request_rejects_unsupported_solution_and_invalid_enabled_ping (test_wifi_test_controls.WifiConfigTests) ... ok
+test_legacy_config_defaults_do_not_write_files_or_change_old_choices (test_wifi_test_controls.WifiConfigTests) ... ok
+test_new_settings_roundtrip_preserves_disabled_ping_target_and_manual_values (test_wifi_test_controls.WifiConfigTests) ... ok
+test_added_controls_fit_configuration_tab_without_showing_device_windows (test_wifi_test_controls.WifiControlsTests) ... ok
+test_auto_manual_and_ping_toggle_keep_values_on_reload (test_wifi_test_controls.WifiControlsTests) ... ok
+test_enabled_ping_requires_target_but_master_off_can_keep_empty (test_wifi_test_controls.WifiControlsTests) ... ok
+test_native_checks_mode_switch_preserves_band_selections (test_wifi_test_controls.WifiControlsTests) ... ok
+test_app_restores_and_remembers_window_size_without_recording_position (test_window_size_state.ModuleWindowSizeStateTests) ... ok
+test_load_clamps_saved_size_and_invalid_data_falls_back_to_defaults (test_window_size_state.ModuleWindowSizeStateTests) ... ok
+test_sample_upgrade_minimum_size_is_820_by_620 (test_window_size_state.ModuleWindowSizeStateTests) ... ok
+test_save_and_load_keep_each_module_size_independent (test_window_size_state.ModuleWindowSizeStateTests) ... ok
+test_app_exit_closes_history_before_destroying_main_window (test_window_size_state.PowerTestHistoryWindowStateTests) ... can't invoke "event" command: application has been destroyed
+    while executing
+"event generate $w <<ThemeChanged>>"
+    (procedure "ttk::ThemeChanged" line 6)
+    invoked from within
+"ttk::ThemeChanged"
+can't invoke "event" command: application has been destroyed
+    while executing
+"event generate $w <<ThemeChanged>>"
+    (procedure "ttk::ThemeChanged" line 6)
+    invoked from within
+"ttk::ThemeChanged"
+can't invoke "event" command: application has been destroyed
+    while executing
+"event generate $w <<ThemeChanged>>"
+    (procedure "ttk::ThemeChanged" line 6)
+    invoked from within
+"ttk::ThemeChanged"
+ok
+test_close_button_and_titlebar_both_save_size_and_restore_for_other_channel (test_window_size_state.PowerTestHistoryWindowStateTests) ... ok
+test_corrupt_state_falls_back_and_failed_save_does_not_block_repeated_close (test_window_size_state.PowerTestHistoryWindowStateTests) ... ok
+test_first_open_is_non_modal_owned_window_with_existing_default_size (test_window_size_state.PowerTestHistoryWindowStateTests) ... ok
+test_recreated_app_restores_persisted_size (test_window_size_state.PowerTestHistoryWindowStateTests) ... ok
+test_reset_closes_history_and_remembers_size (test_window_size_state.PowerTestHistoryWindowStateTests) ... ok
+test_switching_channel_reuses_window_without_resetting_size_or_history (test_window_size_state.PowerTestHistoryWindowStateTests) ... ok
+test_dns_pending_cancellation_retains_buffers_until_completion (test_wireless_ping.DnsTests) ... ok
+test_dns_timeout_cancels_query_without_default_interface_fallback (test_wireless_ping.DnsTests) ... ok
+test_native_dns_uses_explicit_interface_and_first_a_record (test_wireless_ping.DnsTests) ... ok
+test_stop_before_dns_submission_never_queries_and_releases_buffers (test_wireless_ping.DnsTests) ... ok
+test_echo_reply_requires_ip_id_sequence_payload_and_checksum (test_wireless_ping.TargetAndPacketTests) ... ok
+test_ipv4_domain_idna_and_invalid_targets (test_wireless_ping.TargetAndPacketTests) ... ok
+test_cancel_during_ipv4_wait_and_during_reply_wait (test_wireless_ping.WirelessPingTests) ... ok
+test_changed_bssid_after_reply_does_not_produce_success (test_wireless_ping.WirelessPingTests) ... ok
+test_dns_failure_prevents_all_icmp_packets (test_wireless_ping.WirelessPingTests) ... ok
+test_four_packets_bind_wireless_source_and_interface_and_report_statistics (test_wireless_ping.WirelessPingTests) ... ok
+test_hostname_resolves_on_wireless_and_pins_first_a_record (test_wireless_ping.WirelessPingTests) ... ok
+test_interface_option_failure_never_sends_or_falls_back (test_wireless_ping.WirelessPingTests) ... ok
+test_local_ip_and_subnet_broadcast_not_counted_as_wireless_connectivity (test_wireless_ping.WirelessPingTests) ... ok
+test_lost_source_address_stops_later_packets (test_wireless_ping.WirelessPingTests) ... ok
+test_no_replies_fails_without_reconnection_or_default_interface (test_wireless_ping.WirelessPingTests) ... ok
+test_one_reply_passes_but_all_four_probes_still_run (test_wireless_ping.WirelessPingTests) ... ok
+test_permission_preflight_is_explicit (test_wireless_ping.WirelessPingTests) ... ok
+test_waits_for_wireless_ip_not_other_interface (test_wireless_ping.WirelessPingTests) ... ok
+test_wireless_unreachable_does_not_use_reachable_wired_interface (test_wireless_ping.WirelessPingTests) ... ok
+test_wrong_source_reply_not_counted (test_wireless_ping.WirelessPingTests) ... ok
+test_form_wheel_scrolls_the_page_without_editing_values (test_workbench_panels.WorkbenchPanelsTests) ... ok
+test_high_volume_display_retains_bounded_tail (test_workbench_panels.WorkbenchPanelsTests) ... ok
+test_large_single_line_and_empty_display_are_bounded (test_workbench_panels.WorkbenchPanelsTests) ... ok
+test_small_window_scrolls_to_existing_controls_and_logs_resize (test_workbench_panels.WorkbenchPanelsTests) ... ok
+test_aging_capability_is_explicitly_presented_as_power_cycling (test_workbench_status.WorkbenchStatusTests) ... ok
+test_different_channel_rounds_do_not_become_a_single_percentage (test_workbench_status.WorkbenchStatusTests) ... ok
+test_equal_rounds_and_explicit_results_are_projected_without_mutation (test_workbench_status.WorkbenchStatusTests) ... ok
+test_invalid_historical_start_time_does_not_break_overview (test_workbench_status.WorkbenchStatusTests) ... ok
+test_retained_channels_from_a_previous_run_are_not_aggregated (test_workbench_status.WorkbenchStatusTests) ... ok
+test_client_first_poll_sees_attached_project_and_start_failure_drains_worker (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_close_waits_for_receipt_after_agent_worker_finishes (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_failed_incoming_receipt_releases_only_its_own_project (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_local_project_revocation_does_not_expand_to_another_project (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_other_principal_is_rejected_before_project_listing (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_repeated_receipt_after_switch_does_not_move_or_reexecute_original (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_requires_explicit_project_before_forwarding (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_selection_and_explicit_prefix_keep_original_signed_request (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_invalid_authentication_does_not_kill_listener_or_accept_request (test_workspace_instance.WorkspaceInstanceTests) ... ok
+test_second_launch_forwards_project_without_starting_another_manager (test_workspace_instance.WorkspaceInstanceTests) ... ok
+test_approval_after_switch_returns_to_original_project (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_duplicate_names_require_explicit_id (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_explicit_project_message_strips_only_routing_prefix (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_feishu_direct_message_project_routing (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_no_project_selection_never_executes (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_removed_project_is_not_executed_or_listed (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_switch_routes_new_messages_without_replaying_old_message (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_two_projects_share_one_transport (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_untrusted_group_does_not_receive_project_listing (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+
+======================================================================
+ERROR: test_all_sixteen_channels_reach_original_worker_and_keep_individual_results (test_qt_execution_adapter.QtExecutionAdapterTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_qt_execution_adapter.py", line 501, in test_all_sixteen_channels_reach_original_worker_and_keep_individual_results
+    identifier = self.adapter.confirm(confirmation.token)
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\src\services\qt_execution_adapter.py", line 525, in confirm
+    result = self.capabilities.execute(confirmation.operation, arguments, authority)
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\src\models\dependency_repair.py", line 53, in guarded
+    return function(self, *args, **kwargs)
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\src\services\capability_service.py", line 131, in execute
+    return spec.handler(arguments, authority)
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\src\services\capability_device_services.py", line 134, in <lambda>
+    self._add("aging.start", "启动老化/开关机测试", lambda a, auth: self._pipeline(a, auth, ("legacy_power_test",)))
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\src\services\capability_device_services.py", line 260, in _pipeline
+    return self._job(identifier, arguments, authority, run, power_test='legacy_power_test' in tasks)
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\src\services\capability_device_services.py", line 209, in _job
+    return self.service.jobs.start(identifier, dict(arguments, **(recorded_extra or {}), target_binding=binding), authority, resources,
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\src\services\capability_jobs.py", line 116, in start
+    return self._start(capability, arguments, authority, resources, runner, risk=risk,
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\src\services\capability_jobs.py", line 142, in _start
+    self.resources.acquire(identifier, resources)
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\src\services\resource_lease_service.py", line 60, in acquire
+    raise CapabilityError("resource_busy", str(error)) from None
+src.models.capabilities.CapabilityError: 物理资源已被其它进程占用或无法取得系统保护：adapter:fixture-guid-channel_3
+
+----------------------------------------------------------------------
+Ran 3252 tests in 617.503s
+
+FAILED (errors=1, skipped=2)
+  [OK  ] must_exist: bbfdm.operate - hit in src\core\dut_ubus_config.py (+1)
+  [OK  ] must_exist: tclinux_allinone - hit in src\core\tftp_transport.py (+1)
+  [OK  ] must_exist: 192.168.1.1 - hit in src\core\telnet_transport.py (+5)
+  [OK  ] must_exist: vlan_to_serial_port - hit in src\core\__init__.py (+11)
+  [OK  ] must_exist: MAX_PARALLEL_UPGRADES = 8 - hit in line_check_assistant\sample_upgrade_settings_store.py
+  [OK  ] must_exist: clamp_parallel_count - hit in src\services\firmware_upgrade_service.py (+2)
+  [OK  ] must_exist: source_address=(bind_ip, 0) - hit in src\core\telnet_transport.py (+3)
+  [OK  ] must_exist: Device.Firewall.<X_SDMC_>Security.AccessCtrl - hit in src\core\ubus_enable_telnet.py
+  [OK  ] must_not_exist: 0.0.0.0 - absent from code lines of src/core/tftp_transport.py,src/core/telnet_transport.py
+
+FAILED: 1 check(s) failed

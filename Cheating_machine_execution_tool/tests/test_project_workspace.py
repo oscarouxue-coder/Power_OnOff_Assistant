@@ -8,7 +8,7 @@ import unittest
 import gc
 from unittest.mock import patch
 
-from tk_test_windows import OffscreenTkWindows
+from tk_test_windows import install_offscreen_windows
 from src.services.workspace_service import WorkspaceService
 from src.ui.project_workspace import ProjectWorkspace
 from src.models.project_task import project_task_scope
@@ -23,9 +23,7 @@ class ProjectWorkspaceTests(unittest.TestCase):
         self.addCleanup(lambda: ProjectWorkspaceTests._release_ui_graph(self))
         self.temporary = tempfile.TemporaryDirectory(prefix='工作区 test ')
         self.addCleanup(self.temporary.cleanup)
-        self.windows = OffscreenTkWindows()
-        self.windows.__enter__()
-        self.addCleanup(self.windows.__exit__, None, None, None)
+        self.windows = install_offscreen_windows(self)
         self.patches = [patch('line_check_assistant.app.' + name, return_value=[]) for name in
                         ('list_adapter_display_names', 'list_prolific_ports', 'list_serial_port_names')]
         self.patches += [patch('line_check_assistant.app.LineCheckAssistant._show_startup_warnings'),
@@ -98,6 +96,164 @@ class ProjectWorkspaceTests(unittest.TestCase):
             self.assertEqual(self.root.sidebar.winfo_manager(), 'pack')
         finally:
             a.power_test_running = False
+
+    def test_dashboard_is_default_and_switching_preserves_background_run(self):
+        self.root.update()
+        self.assertEqual(self.root.page, 'overview')
+        self.assertTrue(self.root.dashboard.winfo_ismapped())
+        view = self.add('长期挂测')
+        self.root.update()
+        view.power_test_running = True
+        try:
+            self.root.show_dashboard()
+            self.root.update()
+            self.assertIsNone(self.root.current_view())
+            self.assertTrue(view.power_test_running)
+            self.assertFalse(view.winfo_ismapped())
+            self.assertTrue(self.root.dashboard.winfo_ismapped())
+            self.root.select_project(view.project_context.identity.project_id)
+            self.root.update()
+            self.assertIs(self.root.current_view(), view)
+            self.assertTrue(view.power_test_running)
+        finally:
+            view.power_test_running = False
+
+    def test_dashboard_and_detail_share_real_status_including_partial_failure(self):
+        view = self.add('部分异常')
+        context = view.project_context
+        snapshot = self.service.projects.snapshot(context)
+        self.service.status.begin(context, 'observed-failure', snapshot, 'test')
+        self.service.status.complete('observed-failure', state='failed')
+        view.power_test_running = True
+        try:
+            self.root.after_cancel(self.root._poll_id)
+            self.root.next_status = 0
+            self.root._poll()
+            key = context.identity.project_id
+            status = self.service.status.snapshot(context)
+            self.assertEqual(status.label, '运行中 !')
+            self.assertEqual(self.root.dashboard.table.item(key, 'values')[0], status.label)
+            self.assertEqual(self.root.tree.item(key, 'values')[0], status.label)
+            self.assertEqual(self.root.detail_state.get(), status.label)
+            self.assertIn('需关注  1', self.root.dashboard.metrics.get())
+        finally:
+            view.power_test_running = False
+
+    def test_sidebar_search_hides_only_rows_and_keeps_project_configuration(self):
+        a, b = self.add('项目甲'), self.add('项目乙')
+        self.root.update()
+        self.root.project_search.set('甲')
+        self.root.update()
+        self.assertEqual(self.root.tree.get_children('__other'), (a.project_context.identity.project_id,))
+        self.assertEqual(len(self.root.views), 2)
+        self.assertTrue(b.winfo_exists())
+        self.assertIn(b.project_context.identity.project_id, self.service.projects.opened)
+        self.root.project_search.set('')
+        self.root.update()
+        self.assertEqual(len(self.root.tree.get_children('__other')), 2)
+
+    def test_folded_panels_preserve_inputs_and_continue_file_logging(self):
+        view = self.add('折叠')
+        self.root.update()
+        panels = view.workbench_panels
+        original = view.device_ip_var.get()
+        self.assertFalse(panels.config_visible)
+        panels.toggle_log()
+        view._log('折叠期间仍然记录的测试消息')
+        self.root.update()
+        self.assertFalse(panels.config_visible)
+        self.assertFalse(panels.log_visible)
+        self.assertIn('折叠期间仍然记录', view.log_text.get('1.0', 'end'))
+        self.assertIn('折叠期间仍然记录', view.log_path.read_text(encoding='utf-8'))
+        panels.toggle_config()
+        panels.toggle_log()
+        self.root.update()
+        self.assertEqual(view.device_ip_var.get(), original)
+        self.assertTrue(view.power_serial_combo.winfo_ismapped())
+        self.assertTrue(view.log_text.winfo_ismapped())
+
+    def test_auto_scroll_can_be_disabled_without_stopping_log_collection(self):
+        view = self.add('阅读日志')
+        view.log_autoscroll_var.set(False)
+        with patch.object(view.log_text, 'see') as see:
+            view._log('向上阅读时的新消息')
+            see.assert_not_called()
+            view.log_autoscroll_var.set(True)
+            view._log('恢复自动滚动')
+            see.assert_called_once()
+        self.assertIn('向上阅读时的新消息', view.log_path.read_text(encoding='utf-8'))
+
+    def test_card_list_mode_is_persisted_without_modifying_project_or_task(self):
+        import json
+        from src.services.project_store import configuration_digest
+        view = self.add('视图偏好')
+        before = configuration_digest(view.project_context.config_dir)
+        view.power_test_running = True
+        try:
+            self.root.show_dashboard()
+            self.root.dashboard.set_mode('list')
+            self.root.update()
+            self.assertTrue(self.root.dashboard.table.winfo_ismapped())
+            preference = json.loads((self.service.directory / 'workbench_ui.json').read_text(encoding='utf-8'))
+            self.assertEqual(preference['overview_mode'], 'list')
+            self.root.dashboard.set_mode('cards')
+            self.root._restore_view_mode()
+            self.assertEqual(self.root.dashboard.mode, 'cards')
+            self.assertTrue(view.power_test_running)
+            self.assertEqual(configuration_digest(view.project_context.config_dir), before)
+        finally:
+            view.power_test_running = False
+
+    def test_bounded_visible_logs_keep_complete_file(self):
+        view = self.add('长期日志')
+        view._log('BOUND_START\n' + 'record\n' * 6000 + 'BOUND_END')
+        self.assertNotIn('BOUND_START', view.log_text.get('1.0', 'end'))
+        self.assertIn('BOUND_END', view.log_text.get('1.0', 'end'))
+        self.assertIn('BOUND_START', view.log_path.read_text(encoding='utf-8'))
+
+    def test_workbench_navigation_wraps_and_running_card_is_first_at_minimum_size(self):
+        view = self.add('最小窗口')
+        self.root.geometry('1100x720')
+        self.root.update()
+        toolbar = view._workbench_toolbar
+        self.assertTrue(all(button.winfo_rootx() + button.winfo_width() <= toolbar.winfo_rootx() + toolbar.winfo_width()
+                            for button in toolbar._navigation_widgets))
+        self.assertTrue(all(button.winfo_manager() == 'grid' for button in toolbar._navigation_widgets))
+        cards = view.workbench_panels.content.pack_slaves()
+        self.assertIn(view.progress, cards[0].winfo_children()[0].winfo_children())
+        self.assertEqual(view.cget('background'), '#eef2f5')
+        self.assertEqual(str(view.workbench_panels.content.cget('style')), 'App.TFrame')
+        self.windows.assert_offscreen()
+
+    def test_compact_config_and_primary_actions_fit_with_sixteen_channels(self):
+        view = self.add('紧凑配置')
+        for channel in view.channels:
+            channel.enabled = True
+        view._rebuild_channel_config_rows()
+        self.root.geometry('1100x720')
+        panel = view.workbench_panels
+        panel.toggle_config()
+        view.power_test_channel_progresses = {n: (3, 100, 'testing') for n in range(1, 17)}
+        view._render_power_test_channel_overview()
+        self.root.update()
+        width = panel.config_canvas.winfo_width()
+        self.assertLessEqual(panel.config_canvas.bbox('all')[2], width + 1)
+        for fields in view.channel_row_combos.values():
+            for combo in fields.values():
+                self.assertLessEqual(combo.winfo_rootx() + combo.winfo_width(), panel.config_canvas.winfo_rootx() + width)
+        self.assertTrue(view.stop_power_test_button.winfo_viewable())
+        self.assertGreaterEqual(view.stop_power_test_button.winfo_rooty(), panel.winfo_rooty())
+        self.assertLessEqual(view.stop_power_test_button.winfo_rooty() + view.stop_power_test_button.winfo_height(),
+                             panel.winfo_rooty() + panel.winfo_height())
+        self.assertFalse(self.errors)
+
+    def test_single_project_card_uses_available_overview_width(self):
+        view = self.add('单项目')
+        self.root.show_dashboard()
+        self.root.update()
+        dashboard = self.root.dashboard
+        card = dashboard.cards[view.project_context.identity.project_id][0]
+        self.assertGreater(card.winfo_width(), dashboard.canvas.winfo_width() * .9)
 
     def test_closing_background_project_keeps_current_selection(self):
         a, b = self.add('A'), self.add('B')

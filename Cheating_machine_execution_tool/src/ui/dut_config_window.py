@@ -2,6 +2,17 @@
 from __future__ import annotations
 
 from src.ui.module_theme import apply_module_theme
+from src.models.dut_voice_tr069_form import (
+    voice_status_form_values, tr069_status_form_values, voice_choice_options,
+)
+from src.models.dut_wifi_form import (
+    WIFI_CHANNEL_OPTIONS, WIFI_SSID_INDEX_OPTIONS, WIFI_TRANSMIT_POWER_OPTIONS, wifi_choice_options, wifi_status_form_values
+)
+from src.models.dut_wan_form import (
+    WAN_BRIDGE_SERVICE_TYPES, WAN_LAN_PORTS, WAN_LAN_PORT_MASK, WAN_ROUTER_SERVICE_TYPES,
+    WanFormRules, _port_bind_mask_value, normalize_wan_address_modes, resolve_wan_form_rules,
+    wan_connection_form_values, wan_lan_ports_from_port_bind, wan_port_bind_from_lan_ports,
+)
 
 import json
 from collections.abc import Callable, Iterable, Mapping
@@ -45,30 +56,6 @@ DUT_CHECK_BACKGROUND = "#ffffff"
 DUT_CHECK_FOREGROUND = "#17202a"
 DUT_TARGET_SELECTED_MARK = "☑"
 DUT_TARGET_UNSELECTED_MARK = "☐"
-WAN_ROUTER_SERVICE_TYPES = (
-    "INTERNET",
-    "TR069",
-    "VOICE",
-    "TR069_VOICE",
-    "TR069_INTERNET",
-    "VOICE_INTERNET",
-    "TR069_VOICE_INTERNET",
-    "IPTV",
-    "OTHER",
-)
-WAN_BRIDGE_SERVICE_TYPES = ("IPTV", "INTERNET", "OTHER")
-WAN_LAN_PORTS = tuple(range(1, 9))
-WAN_LAN_PORT_MASK = sum(1 << (port - 1) for port in WAN_LAN_PORTS)
-WIFI_SSID_INDEX_OPTIONS = tuple(str(index) for index in range(1, 9))
-WIFI_CHANNEL_OPTIONS = {
-    "2.4G": ("auto", *(str(channel) for channel in range(1, 14))),
-    "5G": (
-        "auto", "36", "40", "44", "48", "52", "56", "60", "64",
-        "100", "104", "108", "112", "116", "120", "124", "128",
-        "132", "136", "140", "144", "149", "153", "157", "161", "165",
-    ),
-}
-WIFI_TRANSMIT_POWER_OPTIONS = ("20", "40", "60", "80", "100")
 DUT_CONFIG_UI_STATE_PATH = Path.home() / ".aouxue_dut_config.json"
 DUT_CONFIG_DEFAULT_WIDTH = 1530
 DUT_CONFIG_DEFAULT_HEIGHT = 880
@@ -211,328 +198,28 @@ def save_dut_window_size(path: Path, width: object, height: object) -> bool:
     return _save_dut_config_ui_state(path, payload)
 
 
-def _port_bind_mask_value(value: str) -> int:
-    """把查询值或旧组合文本转换为非负位掩码；无效值按 0 处理。"""
-    try:
-        parts = [part.strip() for part in str(value).split("&&")]
-        if not parts or any(not part for part in parts):
-            return 0
-        mask = sum(int(part) for part in parts)
-        return mask if mask >= 0 else 0
-    except (TypeError, ValueError):
-        return 0
 
 
-def wan_lan_ports_from_port_bind(value: str) -> tuple[int, ...]:
-    """把 ``PortBind`` 位掩码转换为界面应勾选的 LAN1–LAN8。"""
-    mask = _port_bind_mask_value(value)
-    return tuple(port for port in WAN_LAN_PORTS if mask & (1 << (port - 1)))
 
 
-def wan_port_bind_from_lan_ports(
-    ports: Iterable[int], *, preserved_mask: int = 0
-) -> str:
-    """把已勾选 LAN 口转换为 UBUS 位掩码，并保留不在界面展示的旧绑定。"""
-    mask = max(0, int(preserved_mask))
-    for port in ports:
-        if port in WAN_LAN_PORTS:
-            mask |= 1 << (port - 1)
-    return str(mask)
 
 
-def voice_status_form_values(settings: DutVoiceSettings) -> dict[str, object]:
-    """把只读语音状态映射为当前表单值。"""
-    return {
-        "line_index": settings.line_index,
-        "account_enabled": settings.account_enabled,
-        "display_name": settings.display_name,
-        "auth_username": settings.auth_username,
-        "auth_password": settings.auth_password,
-        "proxy_server": settings.proxy_server,
-        "proxy_port": settings.proxy_port,
-        "outbound_proxy": settings.outbound_proxy,
-        "outbound_proxy_port": settings.outbound_proxy_port,
-        "registrar_server": settings.registrar_server,
-        "registrar_server_port": settings.registrar_server_port,
-        "dtmf_method": settings.dtmf_method,
-        "register_expires": settings.register_expires,
-        "sip_mode": settings.sip_mode,
-        "digit_map": settings.digit_map,
-        "codecs": settings.codecs,
-    }
 
 
-def tr069_status_form_values(settings: DutTr069Settings) -> dict[str, object]:
-    """把只读TR069状态映射为当前表单值，不改动手动Inform动作选项。"""
-    return {
-        "acs_url": settings.acs_url,
-        "acs_username": settings.acs_username,
-        "acs_password": settings.acs_password,
-        "periodic_inform_enabled": settings.periodic_inform_enabled,
-        "periodic_inform_interval": settings.periodic_inform_interval,
-        "connection_request_enabled": settings.connection_request_enabled,
-        "connection_request_username": settings.connection_request_username,
-        "connection_request_password": settings.connection_request_password,
-        "certificate_enabled": settings.certificate_enabled,
-    }
 
 
-def wifi_status_form_values(settings: DutWifiSettings) -> dict[str, object]:
-    """把只读WiFi状态映射为公共参数和两套Radio表单值。"""
-    values: dict[str, object] = {
-        "ssid_index": settings.ssid_index,
-        "ssid": settings.ssid,
-        "password": settings.password,
-        "channel": settings.channel,
-        "channel_bandwidth": settings.channel_bandwidth,
-        "dual_band_enabled": settings.dual_band_enabled,
-        "enabled": settings.enabled,
-        "hidden": settings.hidden,
-        "security_mode": settings.security_mode,
-        "operating_mode": settings.operating_mode,
-        "transmit_power": settings.transmit_power,
-        "max_associations": settings.max_associations,
-        "wmm_enabled": settings.wmm_enabled,
-    }
-    peer_band = "5G" if settings.band == "2.4G" else "2.4G"
-    peer = settings.peer_radio or DutWifiRadioSettings(
-        band=peer_band,
-        channel_bandwidth="20/40MHz" if peer_band == "2.4G" else "160MHz",
-        operating_mode="b,g,n,ax" if peer_band == "2.4G" else "a,n,ac,ax",
-    )
-    values.update(
-        {
-            "peer_channel": peer.channel,
-            "peer_channel_bandwidth": peer.channel_bandwidth,
-            "peer_operating_mode": peer.operating_mode,
-        }
-    )
-    return values
 
 
-def voice_choice_options(settings: DutVoiceSettings) -> dict[str, tuple[str, ...]]:
-    """按 DUT 查询能力生成语音只读下拉候选；缺能力字段时兼容兜底。"""
-
-    current_by_key = {
-        "dtmf_method": (settings.dtmf_method,),
-        "sip_mode": (settings.sip_mode,),
-        "codecs": settings.codecs,
-    }
-    supported_by_key = {
-        "dtmf_method": settings.supported_dtmf_methods,
-        "sip_mode": settings.supported_sip_modes,
-        "codecs": settings.supported_codecs,
-    }
-    fallback_by_key = {
-        "dtmf_method": VOICE_DTMF_OPTIONS,
-        "sip_mode": VOICE_SIP_MODE_OPTIONS,
-        "codecs": tuple(sorted(VOICE_CODEC_OPTIONS)),
-    }
-    options_by_key: dict[str, tuple[str, ...]] = {}
-    for key in supported_by_key:
-        options = tuple(
-            dict.fromkeys(
-                str(value).strip()
-                for value in (supported_by_key[key] or fallback_by_key[key])
-                if str(value).strip()
-            )
-        )
-        current_values = tuple(
-            str(value).strip() for value in current_by_key[key] if str(value).strip()
-        )
-        missing_current = tuple(value for value in current_values if value not in options)
-        options_by_key[key] = tuple(dict.fromkeys((*missing_current, *options)))
-    return options_by_key
 
 
-def wifi_choice_options(settings: DutWifiSettings) -> dict[str, tuple[str, ...]]:
-    """按 DUT 查询能力生成 WiFi 只读下拉候选；缺能力字段时使用兼容兜底。"""
-
-    band = settings.band if settings.band in WIFI_CHANNEL_OPTIONS else "2.4G"
-    supported_by_key = {
-        "security_mode": settings.supported_security_modes,
-        "channel": settings.supported_channels,
-        "channel_bandwidth": settings.supported_bandwidths,
-        "operating_mode": settings.supported_modes,
-        "transmit_power": settings.supported_transmit_powers,
-    }
-    fallback_by_key = {
-        "security_mode": WIFI_SECURITY_MODE_OPTIONS,
-        "channel": WIFI_CHANNEL_OPTIONS[band],
-        "channel_bandwidth": WIFI_BANDWIDTH_OPTIONS[band],
-        "operating_mode": WIFI_MODE_OPTIONS[band],
-        "transmit_power": WIFI_TRANSMIT_POWER_OPTIONS,
-    }
-    current_by_key = {
-        "security_mode": settings.security_mode,
-        "channel": settings.channel,
-        "channel_bandwidth": settings.channel_bandwidth,
-        "operating_mode": settings.operating_mode,
-        "transmit_power": settings.transmit_power,
-    }
-    options_by_key: dict[str, tuple[str, ...]] = {}
-    for key in supported_by_key:
-        options = tuple(
-            dict.fromkeys(
-                str(value).strip()
-                for value in (supported_by_key[key] or fallback_by_key[key])
-                if str(value).strip()
-            )
-        )
-        current = str(current_by_key[key]).strip()
-        if current and current not in options:
-            options = (current, *options)
-        options_by_key[key] = options
-    peer_band = "5G" if band == "2.4G" else "2.4G"
-    peer = settings.peer_radio or DutWifiRadioSettings(
-        band=peer_band,
-        channel_bandwidth="20/40MHz" if peer_band == "2.4G" else "160MHz",
-        operating_mode="b,g,n,ax" if peer_band == "2.4G" else "a,n,ac,ax",
-    )
-    if peer is not None:
-        peer_supported = {
-            "peer_channel": peer.supported_channels,
-            "peer_channel_bandwidth": peer.supported_bandwidths,
-            "peer_operating_mode": peer.supported_modes,
-        }
-        peer_fallback = {
-            "peer_channel": WIFI_CHANNEL_OPTIONS[peer.band],
-            "peer_channel_bandwidth": WIFI_BANDWIDTH_OPTIONS[peer.band],
-            "peer_operating_mode": WIFI_MODE_OPTIONS[peer.band],
-        }
-        peer_current = {
-            "peer_channel": peer.channel,
-            "peer_channel_bandwidth": peer.channel_bandwidth,
-            "peer_operating_mode": peer.operating_mode,
-        }
-        for key in peer_supported:
-            options = tuple(
-                dict.fromkeys(
-                    str(value).strip()
-                    for value in (peer_supported[key] or peer_fallback[key])
-                    if str(value).strip()
-                )
-            )
-            current = str(peer_current[key]).strip()
-            if current and current not in options:
-                options = (current, *options)
-            options_by_key[key] = options
-
-        if settings.dual_band_enabled:
-            primary_powers = tuple(
-                settings.supported_transmit_powers or WIFI_TRANSMIT_POWER_OPTIONS
-            )
-            peer_powers = set(
-                peer.supported_transmit_powers or WIFI_TRANSMIT_POWER_OPTIONS
-            )
-            shared_powers = tuple(
-                value for value in primary_powers if value in peer_powers
-            )
-            if settings.transmit_power and settings.transmit_power not in shared_powers:
-                shared_powers = (settings.transmit_power, *shared_powers)
-            options_by_key["transmit_power"] = shared_powers
-    return options_by_key
 
 
-@dataclass(frozen=True)
-class WanFormRules:
-    """WAN 当前选择对应的可见字段；不包含任何 UBUS 业务执行。"""
-
-    show_index: bool
-    show_config: bool
-    show_router: bool
-    show_pppoe_credentials: bool
-    show_multicast_vlan: bool
-    show_ipv4_selector: bool
-    show_ipv4_static: bool
-    show_ipv6_selector: bool
-    show_ipv6_static: bool
-    mtu_default: str
 
 
-def normalize_wan_address_modes(
-    access_type: str,
-    ip_protocol: str,
-    ipv4_type: str,
-    ipv6_type: str,
-    *,
-    changed: str = "",
-) -> tuple[str, str]:
-    """把地址方式收敛到 WAN 协议封装实际支持的组合。"""
-    if access_type == "PPPoE":
-        return "DHCP", ipv6_type if ipv6_type in {"SLAAC", "DHCPv6"} else "SLAAC"
-    if ip_protocol != "IPv4+IPv6（双栈）":
-        return ipv4_type, ipv6_type
-    if changed == "ipv4_type":
-        return ("静态", "静态") if ipv4_type == "静态" else ("DHCP", "SLAAC" if ipv6_type == "静态" else ipv6_type)
-    if changed == "ipv6_type":
-        return ("静态", "静态") if ipv6_type == "静态" else ("DHCP" if ipv4_type == "静态" else ipv4_type, ipv6_type)
-    if "静态" in {ipv4_type, ipv6_type}:
-        return "静态", "静态"
-    return "DHCP", ipv6_type
 
 
-def resolve_wan_form_rules(
-    operation: str,
-    mode: str,
-    access_type: str,
-    ip_protocol: str,
-    ipv4_type: str,
-    ipv6_type: str,
-    service_type: str = "",
-) -> WanFormRules:
-    """返回 WAN 表单显隐规则，供 Tk 界面和无界面测试共同使用。"""
-    show_config = operation != "删除"
-    show_router = show_config and mode == "路由"
-    show_ipv4 = show_router and ip_protocol in {"IPv4", "IPv4+IPv6（双栈）"}
-    show_ipv6 = show_router and ip_protocol in {"IPv6", "IPv4+IPv6（双栈）"}
-    return WanFormRules(
-        show_index=operation in {"修改", "删除"},
-        show_config=show_config,
-        show_router=show_router,
-        show_pppoe_credentials=show_router and access_type == "PPPoE",
-        show_multicast_vlan=show_config and service_type.strip().upper() == "IPTV",
-        show_ipv4_selector=show_ipv4,
-        show_ipv4_static=show_ipv4 and ipv4_type == "静态",
-        show_ipv6_selector=show_ipv6,
-        show_ipv6_static=show_ipv6 and ipv6_type == "静态",
-        mtu_default="1492" if access_type == "PPPoE" else "1500",
-    )
 
 
-def wan_connection_form_values(info: DutWanConnectionInfo) -> dict[str, str | bool | None]:
-    """把业务模型值转换为 WAN 表单使用的中文枚举和值。"""
-    protocol = {
-        "IPv4AndIPv6": "IPv4+IPv6（双栈）",
-        "IPv4/IPv6": "IPv4+IPv6（双栈）",
-        "IPv4IPv6": "IPv4+IPv6（双栈）",
-    }.get(info.ip_protocol, info.ip_protocol)
-    return {
-        "mode": "桥接" if info.mode.lower() == "bridge" else "路由" if info.mode else "",
-        "service_type": info.service_type.replace("-", "_").upper(),
-        "vlan_id": info.vlan_id,
-        "multicast_vlan_id": info.multicast_vlan_id,
-        "vlan_priority": info.vlan_priority,
-        "port_bind": info.port_bind,
-        "mtu": info.mtu,
-        "nat_enabled": info.nat_enabled,
-        "access_type": info.access_type,
-        "ip_protocol": protocol,
-        "ipv4_type": "静态" if info.ipv4_type.lower() == "static" else "DHCP" if info.ipv4_type else "",
-        "ipv4_address": info.ipv4_address,
-        "ipv4_netmask": info.ipv4_netmask,
-        "ipv4_gateway": info.ipv4_gateway,
-        "ipv4_primary_dns": info.ipv4_primary_dns,
-        "ipv4_secondary_dns": info.ipv4_secondary_dns,
-        "ipv6_type": "静态" if info.ipv6_type.lower() == "static" else info.ipv6_type,
-        "ipv6_address": info.ipv6_address,
-        "ipv6_prefix": info.ipv6_prefix,
-        "ipv6_gateway": info.ipv6_gateway,
-        "ipv6_primary_dns": info.ipv6_primary_dns,
-        "ipv6_secondary_dns": info.ipv6_secondary_dns,
-        "pppoe_username": info.pppoe_username,
-        "pppoe_password": info.pppoe_password,
-    }
 
 
 class DutConfigWindow:

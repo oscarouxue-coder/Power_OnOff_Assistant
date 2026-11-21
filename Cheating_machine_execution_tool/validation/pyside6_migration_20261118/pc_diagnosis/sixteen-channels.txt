@@ -1,0 +1,8 @@
+GUI_TEST_COVERAGE_OK
+test_all_sixteen_channels_reach_original_worker_and_keep_individual_results (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 1.706s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

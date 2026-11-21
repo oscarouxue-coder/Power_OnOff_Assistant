@@ -1,0 +1,21 @@
+{
+  "directory": "C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\migration-backups\\20261118-095226",
+  "branch": "feature/pyside6-migration",
+  "head": "5b36f59dad916959dc1b17418f3c46be39250b71",
+  "source_files": 910,
+  "data_files": 1060,
+  "data_failures": 0,
+  "artifact_copies": [
+    {
+      "name": "LineCheckAssistant.exe",
+      "bytes": 63275835,
+      "sha256": "4fe10a51db918b50942759c5425866fad6659fe765e58f5a7ceece38f7d6c014",
+      "executed": false,
+      "version_match": "not established; existing artifact only"
+    }
+  ],
+  "source_zip_sha256": "583f2aa690ad2e9d4bdbf25f9c6e5cba93f269487d5628b3f908d398e0b327a1",
+  "data_zip_sha256": "58fcd3828dfb94bc5da180b07a511a5b465e9d54604cc4ffaa3564f94a905f72",
+  "original_environment_modified": false,
+  "data_consistency": "per-file / SQLite online snapshots; not a transaction across all files"
+}

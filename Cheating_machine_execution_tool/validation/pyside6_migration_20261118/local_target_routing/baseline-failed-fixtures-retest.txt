@@ -1,0 +1,12 @@
+GUI_TEST_COVERAGE_OK
+test_semantically_equal_upgrade_arguments_reuse_completed_job_in_same_turn (test_capabilities.CapabilityConversationTests) ... ok
+test_confirmation_is_one_use_even_after_successful_execution (test_qt_dut_configuration.QtDutConfigurationTests) ... ok
+test_window_close_and_reopen_preserve_live_job_and_reject_old_token (test_qt_dut_configuration.QtDutConfigurationTests) ... ok
+test_real_tool_loop_starts_job_without_discovery_or_review (test_capabilities.CapabilityConversationTests) ... ok
+test_slow_gateway_does_not_delay_power_stop_during_workspace_exit (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 4.218s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

@@ -1,0 +1,56 @@
+﻿{
+  "simulated_driver": true,
+  "ports": 1,
+  "packet_bytes": 4096,
+  "writes": 0,
+  "samples": [
+    {
+      "received_bytes": 1048576,
+      "history_bytes": 1048576,
+      "snapshot_chars": 65536,
+      "python_traced_bytes": 1223483
+    },
+    {
+      "received_bytes": 2097152,
+      "history_bytes": 2097152,
+      "snapshot_chars": 65536,
+      "python_traced_bytes": 2426777
+    },
+    {
+      "received_bytes": 3145728,
+      "history_bytes": 3145728,
+      "snapshot_chars": 65536,
+      "python_traced_bytes": 3427057
+    },
+    {
+      "received_bytes": 4194304,
+      "history_bytes": 4194304,
+      "snapshot_chars": 65536,
+      "python_traced_bytes": 4326788
+    },
+    {
+      "received_bytes": 5242880,
+      "history_bytes": 5242880,
+      "snapshot_chars": 65536,
+      "python_traced_bytes": 5460700
+    },
+    {
+      "received_bytes": 6291456,
+      "history_bytes": 6291456,
+      "snapshot_chars": 65536,
+      "python_traced_bytes": 6898772
+    },
+    {
+      "received_bytes": 7340032,
+      "history_bytes": 7340032,
+      "snapshot_chars": 65536,
+      "python_traced_bytes": 7756204
+    },
+    {
+      "received_bytes": 8388608,
+      "history_bytes": 8388608,
+      "snapshot_chars": 65536,
+      "python_traced_bytes": 8719620
+    }
+  ]
+}

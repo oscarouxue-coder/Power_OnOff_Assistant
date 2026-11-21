@@ -3,6 +3,7 @@ from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
+import shutil
 import threading
 import uuid
 
@@ -33,6 +34,33 @@ def read_startup(app_dir):
     if not isinstance(value, dict) or value.get("mode") not in ("direct", "gateway") or type(value.get("slot")) is not int or not 1 <= value["slot"] <= 64:
         raise ValueError("多实例启动设置无效，请在多实例管理页重新保存")
     return dict(mode=value["mode"], slot=value["slot"])
+
+
+def _save_pending_startup(pending, value, startup_path, startup, emit):
+    # Keep a byte-exact encrypted copy. Restoring by rename also works when
+    # the second file could not be written because the volume was full.
+    backup = pending.path.with_suffix("." + uuid.uuid4().hex + ".bak")
+    existed = pending.path.exists()
+    if existed:
+        try:
+            shutil.copyfile(pending.path, backup)
+        except OSError:
+            backup.unlink(missing_ok=True)
+            raise
+    try:
+        pending.save(value)
+        atomic_json(startup_path, startup)
+    except Exception:
+        if existed:
+            os.replace(backup, pending.path)
+        else:
+            pending.path.unlink(missing_ok=True)
+        raise
+    if existed:
+        try:
+            backup.unlink()
+        except OSError:
+            emit("[多实例管理] 启动配置已写入；旧的加密临时备份未能清理：" + backup.name)
 
 
 def selected_gateway_slot(app_dir, environ=None):
@@ -78,8 +106,9 @@ class RemoteInstanceManagement:
             finally:
                 identity.close()
 
-    def capabilities(self):
-        registry = self.registry()
+    def capabilities(self, registry=None):
+        if registry is None:
+            registry = self.registry()
         if registry is None:
             return []
         # Only remote-capable business APIs; never control-plane or extension grants.
@@ -126,15 +155,17 @@ class RemoteInstanceManagement:
             return self.slot(number)
 
     @maintenance_operation
-    def save_instance(self, mode, number, url, vpn, channels, capabilities):
+    def save_instance(self, mode, number, url, vpn, channels, capabilities, *, registry=None):
         with self.lock:
             self._admit()
             if mode not in ("direct", "gateway") or type(number) is not int or not 1 <= number <= 64:
                 raise ValueError("请选择接入模式和1至64的槽位")
+            startup_path = project_directory(self.app_dir) / "instance_startup.json"
+            startup = dict(mode=mode, slot=number)
             if mode == "gateway":
                 if not channels or any(type(n) is not int or not 1 <= n <= 16 for n in channels):
                     raise ValueError("请明确选择允许通道1至16")
-                allowed = {v["capability_id"] for v in self.capabilities()}
+                allowed = {v["capability_id"] for v in self.capabilities(registry)}
                 if not capabilities or set(capabilities) - allowed:
                     raise ValueError("请从当前已注册且支持远程的能力中选择允许范围")
                 GatewayConnection(url, vpn=vpn)  # Validate endpoint, without opening a connection.
@@ -144,8 +175,9 @@ class RemoteInstanceManagement:
                     value = (pending if pending.path.exists() else original).load()
                     value.update(url=url, vpn=bool(vpn), enabled=True,
                                  channel_ids=sorted(set(channels)), capability_ids=sorted(set(capabilities)))
-                    pending.save(value)  # Never mutate the active runtime's whitelist/config.
-            atomic_json(project_directory(self.app_dir) / "instance_startup.json", dict(mode=mode, slot=number))
+                    _save_pending_startup(pending, value, startup_path, startup, self.emit)
+            else:
+                atomic_json(startup_path, startup)
             self.emit("[多实例管理] 启动配置已保存；模式=" + mode + "；槽位=" + str(number) +
                       "；通道=" + ",".join(map(str, channels)) + "；能力=" + ",".join(capabilities) + "；下次启动生效")
 
@@ -191,6 +223,8 @@ class RemoteInstanceManagement:
     def start_gateway(self):
         with self.lock:
             self._admit()
+            if getattr(self.runtime(), 'mode', '') == 'project_peers':
+                raise ValueError('项目路由模式已启用，请退出该模式后启动旧网关')
             value = self.gateway_config()
             self.emit("[多实例管理] 开始启动网关；监听=" + value["host"] + ":" + str(value["port"]))
             self.host.start(value, self.platform_configs(value["platforms"]))
@@ -220,7 +254,10 @@ class RemoteInstanceManagement:
 
     def status(self):
         current = self.runtime()
-        return dict(current_mode="error" if getattr(self, 'startup_error', False) else "gateway" if current is not None else "direct", gateway_state=self.host.state(),
+        mode = getattr(current, 'mode', 'gateway') if current is not None else 'direct'
+        if getattr(self, 'startup_error', False):
+            mode = 'error'
+        return dict(current_mode=mode, gateway_state=self.host.state(),
                     current_slot=current.identity.slot if current else None,
                     instance_id=current.identity.instance_id if current else "",
                     run_id=current.identity.run_id if current else "",

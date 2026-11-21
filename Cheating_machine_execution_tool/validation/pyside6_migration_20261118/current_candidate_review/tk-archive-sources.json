@@ -1,0 +1,1062 @@
+﻿{
+  "tag": "v1.2.10",
+  "tag_commit": "b7e7111f79002b0cf5e07b5b71b2a1f63f1afeec",
+  "backup_head": "5b36f59dad916959dc1b17418f3c46be39250b71",
+  "exe_sha256": "d34d5d5a29c2537285f53e0a199f305e53b3b63c531e81a98a3432fb54e259c2",
+  "backup_sha256": "583f2aa690ad2e9d4bdbf25f9c6e5cba93f269487d5628b3f908d398e0b327a1",
+  "modules": 175,
+  "tag_matches": 175,
+  "backup_matches": 121,
+  "results": [
+    {
+      "module": "UI",
+      "path": "Auto_power_on_off_tool/UI/__init__.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "UI.config_device_wifi_param_ui",
+      "path": "Auto_power_on_off_tool/UI/config_device_wifi_param_ui.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "clients",
+      "path": "Auto_power_on_off_tool/clients/__init__.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "clients.ssh",
+      "path": "Auto_power_on_off_tool/clients/ssh.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "clients.telnet_client",
+      "path": "Auto_power_on_off_tool/clients/telnet_client.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "common",
+      "path": "Auto_power_on_off_tool/common/__init__.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "common.create_float_data",
+      "path": "Auto_power_on_off_tool/common/create_float_data.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "common.dingtalk_send_message",
+      "path": "Auto_power_on_off_tool/common/dingtalk_send_message.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "common.execute_network_card_ping",
+      "path": "Auto_power_on_off_tool/common/execute_network_card_ping.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "common.fuzzy_match",
+      "path": "Auto_power_on_off_tool/common/fuzzy_match.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "common.get_network_card_ip",
+      "path": "Auto_power_on_off_tool/common/get_network_card_ip.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "common.my_logging",
+      "path": "Auto_power_on_off_tool/common/my_logging.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "common.new_write_funs",
+      "path": "Auto_power_on_off_tool/common/new_write_funs.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "common.power_on_off",
+      "path": "Auto_power_on_off_tool/common/power_on_off.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "common.send_email",
+      "path": "Auto_power_on_off_tool/common/send_email.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "common.serilal_client",
+      "path": "Auto_power_on_off_tool/common/serilal_client.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "common.web_page_open_telnet",
+      "path": "Auto_power_on_off_tool/common/web_page_open_telnet.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "common.wifi_connect",
+      "path": "Auto_power_on_off_tool/common/wifi_connect.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "config",
+      "path": "Auto_power_on_off_tool/config/__init__.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "config.config_driver",
+      "path": "Auto_power_on_off_tool/config/config_driver.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "line_check_assistant",
+      "path": "line_check_assistant/__init__.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "line_check_assistant.app",
+      "path": "line_check_assistant/app.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "line_check_assistant.config_store",
+      "path": "line_check_assistant/config_store.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "line_check_assistant.legacy_ui_defaults_store",
+      "path": "line_check_assistant/legacy_ui_defaults_store.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "line_check_assistant.network_ops",
+      "path": "line_check_assistant/network_ops.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "line_check_assistant.onu_registration_store",
+      "path": "line_check_assistant/onu_registration_store.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "line_check_assistant.page_upgrade",
+      "path": "line_check_assistant/page_upgrade.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "line_check_assistant.paths",
+      "path": "line_check_assistant/paths.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "line_check_assistant.pipeline_window",
+      "path": "line_check_assistant/pipeline_window.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "line_check_assistant.sample_upgrade_settings_store",
+      "path": "line_check_assistant/sample_upgrade_settings_store.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "line_check_assistant.serial_ports",
+      "path": "line_check_assistant/serial_ports.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "line_check_assistant.subprocess_window",
+      "path": "line_check_assistant/subprocess_window.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "line_check_assistant.test_item_config_store",
+      "path": "line_check_assistant/test_item_config_store.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "run_line_check_assistant",
+      "path": "run_line_check_assistant.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src",
+      "path": "src/__init__.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.config",
+      "path": "src/config.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core",
+      "path": "src/core/__init__.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.ai_client",
+      "path": "src/core/ai_client.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.core.ai_credentials",
+      "path": "src/core/ai_credentials.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.ai_debug_transport",
+      "path": "src/core/ai_debug_transport.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.core.ai_local_executor",
+      "path": "src/core/ai_local_executor.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.ai_network_probe",
+      "path": "src/core/ai_network_probe.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.ai_serial_diagnostics",
+      "path": "src/core/ai_serial_diagnostics.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.bind_socket",
+      "path": "src/core/bind_socket.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.dingtalk_robot",
+      "path": "src/core/dingtalk_robot.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.dut_ubus_config",
+      "path": "src/core/dut_ubus_config.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.dut_wifi_config",
+      "path": "src/core/dut_wifi_config.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.fuzzy_match_runner",
+      "path": "src/core/fuzzy_match_runner.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.gateway_browser",
+      "path": "src/core/gateway_browser.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.gateway_cdp",
+      "path": "src/core/gateway_cdp.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.gateway_proxy",
+      "path": "src/core/gateway_proxy.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.github_release_client",
+      "path": "src/core/github_release_client.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.core.network_adapter",
+      "path": "src/core/network_adapter.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.parameter_session",
+      "path": "src/core/parameter_session.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.power_supply",
+      "path": "src/core/power_supply.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.core.sample_parameter_table",
+      "path": "src/core/sample_parameter_table.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.serial_inventory",
+      "path": "src/core/serial_inventory.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.serial_transport",
+      "path": "src/core/serial_transport.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.core.telnet_transport",
+      "path": "src/core/telnet_transport.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.core.tftp_transport",
+      "path": "src/core/tftp_transport.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.ubus_enable_telnet",
+      "path": "src/core/ubus_enable_telnet.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.ubus_http_client",
+      "path": "src/core/ubus_http_client.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.wifi_interfaces",
+      "path": "src/core/wifi_interfaces.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.wifi_target_reader",
+      "path": "src/core/wifi_target_reader.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.windows_wifi",
+      "path": "src/core/windows_wifi.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.wireless_ip",
+      "path": "src/core/wireless_ip.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.wireless_ping",
+      "path": "src/core/wireless_ping.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.zte_c300_onu",
+      "path": "src/core/zte_c300_onu.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.zte_c600_onu",
+      "path": "src/core/zte_c600_onu.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.zte_olt_registered_query",
+      "path": "src/core/zte_olt_registered_query.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.core.zte_olt_telnet",
+      "path": "src/core/zte_olt_telnet.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.models",
+      "path": "src/models/__init__.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.models.ai_actions",
+      "path": "src/models/ai_actions.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.models.ai_conversation",
+      "path": "src/models/ai_conversation.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.models.ai_diagnostics",
+      "path": "src/models/ai_diagnostics.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.models.ai_permissions",
+      "path": "src/models/ai_permissions.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.models.app_update",
+      "path": "src/models/app_update.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.models.boot_entry",
+      "path": "src/models/boot_entry.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.models.dut_config_models",
+      "path": "src/models/dut_config_models.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.models.network_adapter",
+      "path": "src/models/network_adapter.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.models.onu_batch_delete",
+      "path": "src/models/onu_batch_delete.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.models.onu_registration_models",
+      "path": "src/models/onu_registration_models.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.models.sample_parameter_models",
+      "path": "src/models/sample_parameter_models.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.models.serial_delivery",
+      "path": "src/models/serial_delivery.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.models.serial_models",
+      "path": "src/models/serial_models.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.models.test_item_pretest_models",
+      "path": "src/models/test_item_pretest_models.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.models.upgrade_stop",
+      "path": "src/models/upgrade_stop.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.models.wifi_test_models",
+      "path": "src/models/wifi_test_models.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services",
+      "path": "src/services/__init__.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.adapter_rename_service",
+      "path": "src/services/adapter_rename_service.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.ai_action_service",
+      "path": "src/services/ai_action_service.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.ai_context_budget",
+      "path": "src/services/ai_context_budget.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.ai_context_usage",
+      "path": "src/services/ai_context_usage.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.ai_conversation_service",
+      "path": "src/services/ai_conversation_service.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.ai_debug_service",
+      "path": "src/services/ai_debug_service.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.ai_diagnostic_service",
+      "path": "src/services/ai_diagnostic_service.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.ai_event_adapter",
+      "path": "src/services/ai_event_adapter.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.ai_evidence_context",
+      "path": "src/services/ai_evidence_context.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.ai_permission_service",
+      "path": "src/services/ai_permission_service.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.ai_serial_client",
+      "path": "src/services/ai_serial_client.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.ai_store",
+      "path": "src/services/ai_store.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.ai_trigger_service",
+      "path": "src/services/ai_trigger_service.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.app_update_service",
+      "path": "src/services/app_update_service.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.device_project_info_service",
+      "path": "src/services/device_project_info_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.dut_advanced_config_service",
+      "path": "src/services/dut_advanced_config_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.dut_config_service",
+      "path": "src/services/dut_config_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.dut_status_query_service",
+      "path": "src/services/dut_status_query_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.dut_wan_query_service",
+      "path": "src/services/dut_wan_query_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.legacy_power_test_service",
+      "path": "src/services/legacy_power_test_service.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.message_push_config_service",
+      "path": "src/services/message_push_config_service.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.onu_batch_delete_service",
+      "path": "src/services/onu_batch_delete_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.onu_batch_registration_service",
+      "path": "src/services/onu_batch_registration_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.onu_command_edit_service",
+      "path": "src/services/onu_command_edit_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.onu_registration_service",
+      "path": "src/services/onu_registration_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.pipeline_orchestrator",
+      "path": "src/services/pipeline_orchestrator.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.pipeline_runtime",
+      "path": "src/services/pipeline_runtime.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.power_on_service",
+      "path": "src/services/power_on_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.power_test_log_service",
+      "path": "src/services/power_test_log_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.power_test_resume_service",
+      "path": "src/services/power_test_resume_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.power_test_wifi_history_service",
+      "path": "src/services/power_test_wifi_history_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.power_test_wifi_log_service",
+      "path": "src/services/power_test_wifi_log_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.power_test_wifi_service",
+      "path": "src/services/power_test_wifi_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.sample_parameter_service",
+      "path": "src/services/sample_parameter_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.sdmc_boot_entry",
+      "path": "src/services/sdmc_boot_entry.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.serial_diagnostic_receiver",
+      "path": "src/services/serial_diagnostic_receiver.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.serial_upgrade_service",
+      "path": "src/services/serial_upgrade_service.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.services.telnet_post_login_confirmation_service",
+      "path": "src/services/telnet_post_login_confirmation_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.telnet_post_login_service",
+      "path": "src/services/telnet_post_login_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.test_item_execution_service",
+      "path": "src/services/test_item_execution_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.test_item_pretest_service",
+      "path": "src/services/test_item_pretest_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.upgrade_stop_service",
+      "path": "src/services/upgrade_stop_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.web_gateway_upgrade_service",
+      "path": "src/services/web_gateway_upgrade_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.services.wifi_connection_service",
+      "path": "src/services/wifi_connection_service.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.ui",
+      "path": "src/ui/__init__.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.ui.adapter_rename_dialog",
+      "path": "src/ui/adapter_rename_dialog.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.ai_action_approval",
+      "path": "src/ui/ai_action_approval.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.ai_assistant_controller",
+      "path": "src/ui/ai_assistant_controller.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.ai_chat_markdown",
+      "path": "src/ui/ai_chat_markdown.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.ui.ai_chat_panel",
+      "path": "src/ui/ai_chat_panel.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.ai_chat_status",
+      "path": "src/ui/ai_chat_status.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.ui.ai_context_status",
+      "path": "src/ui/ai_context_status.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.ui.ai_diagnostics_window",
+      "path": "src/ui/ai_diagnostics_window.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.ai_monitor_window",
+      "path": "src/ui/ai_monitor_window.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.ai_permission_control",
+      "path": "src/ui/ai_permission_control.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.ai_reports_window",
+      "path": "src/ui/ai_reports_window.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.ai_serial_bridge",
+      "path": "src/ui/ai_serial_bridge.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.ai_session_manager",
+      "path": "src/ui/ai_session_manager.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.app_update_dialog",
+      "path": "src/ui/app_update_dialog.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.application_icon",
+      "path": "src/ui/application_icon.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.channel_list",
+      "path": "src/ui/channel_list.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.ui.closable_notebook",
+      "path": "src/ui/closable_notebook.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.ui.dut_config_window",
+      "path": "src/ui/dut_config_window.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.ui.main_log_filter",
+      "path": "src/ui/main_log_filter.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.message_push_tab",
+      "path": "src/ui/message_push_tab.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.module_theme",
+      "path": "src/ui/module_theme.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.onu_command_editor",
+      "path": "src/ui/onu_command_editor.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.ui.onu_registered_list",
+      "path": "src/ui/onu_registered_list.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.ui.pipeline_ui",
+      "path": "src/ui/pipeline_ui.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.ui.power_test_resume_menu",
+      "path": "src/ui/power_test_resume_menu.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.ui.project_name_badge",
+      "path": "src/ui/project_name_badge.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.ui.serial_terminal",
+      "path": "src/ui/serial_terminal.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.test_item_pretest_controls",
+      "path": "src/ui/test_item_pretest_controls.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.tk_lifecycle",
+      "path": "src/ui/tk_lifecycle.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.ui.wifi_test_controls",
+      "path": "src/ui/wifi_test_controls.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.ui.window_paint",
+      "path": "src/ui/window_paint.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.ui.window_size_state",
+      "path": "src/ui/window_size_state.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.utils.ai_output",
+      "path": "src/utils/ai_output.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.utils.ai_redaction",
+      "path": "src/utils/ai_redaction.py",
+      "matches_tag": true,
+      "matches_backup": false
+    },
+    {
+      "module": "src.utils.bounded_mailbox",
+      "path": "src/utils/bounded_mailbox.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "src.utils.wifi_log_summary",
+      "path": "src/utils/wifi_log_summary.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "test_case",
+      "path": "Auto_power_on_off_tool/test_case/__init__.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "test_case.Onu_config",
+      "path": "Auto_power_on_off_tool/test_case/Onu_config.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "test_case.powe_on_off_telnet",
+      "path": "Auto_power_on_off_tool/test_case/powe_on_off_telnet.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "test_case.power_on_off_ssh",
+      "path": "Auto_power_on_off_tool/test_case/power_on_off_ssh.py",
+      "matches_tag": true,
+      "matches_backup": true
+    },
+    {
+      "module": "test_case.wifi_connect_case",
+      "path": "Auto_power_on_off_tool/test_case/wifi_connect_case.py",
+      "matches_tag": true,
+      "matches_backup": true
+    }
+  ]
+}

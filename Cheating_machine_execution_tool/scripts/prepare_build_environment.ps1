@@ -1,11 +1,19 @@
 param(
     [string]$BasePython = "",
-    [string]$EnvironmentDirectory = (Join-Path $env:LOCALAPPDATA "LineCheckAssistant\build-env-py39")
+    [string]$EnvironmentDirectory = "",
+    [ValidateSet("Tk", "Qt")][string]$Gui = "Tk"
 )
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$tkEnvironment = Join-Path $env:LOCALAPPDATA "LineCheckAssistant\build-env-py39"
+if (-not $EnvironmentDirectory) {
+    $EnvironmentDirectory = if ($Gui -eq "Qt") { Join-Path $env:LOCALAPPDATA "LineCheckAssistant\qt-build-py39" } else { $tkEnvironment }
+}
 $EnvironmentDirectory = [System.IO.Path]::GetFullPath($EnvironmentDirectory)
+if ($Gui -eq "Qt" -and $EnvironmentDirectory.TrimEnd('\') -eq $tkEnvironment) {
+    throw "The Qt build needs its own environment directory"
+}
 $buildPython = Join-Path $EnvironmentDirectory "Scripts\python.exe"
 
 if (-not (Test-Path -LiteralPath $buildPython -PathType Leaf)) {
@@ -41,9 +49,13 @@ if ($LASTEXITCODE -ne 0) { throw "The packaging environment is not isolated CPyt
 
 & $buildPython -I -X utf8 -m pip install --disable-pip-version-check -r (Join-Path $projectRoot "requirements-build.txt")
 if ($LASTEXITCODE -ne 0) { throw "Unable to install the locked packaging dependencies" }
+if ($Gui -eq "Qt") {
+    & $buildPython -I -X utf8 -m pip install --disable-pip-version-check --require-hashes -r (Join-Path $projectRoot "requirements-qt.txt")
+    if ($LASTEXITCODE -ne 0) { throw "Unable to install the locked Qt packaging dependencies" }
+}
 & $buildPython -I -X utf8 -m pip check
 if ($LASTEXITCODE -ne 0) { throw "The packaging dependencies are inconsistent" }
-& $buildPython -I -X utf8 (Join-Path $projectRoot "scripts\check_build_environment.py")
+& $buildPython -I -X utf8 (Join-Path $projectRoot "scripts\check_build_environment.py") --gui $Gui
 if ($LASTEXITCODE -ne 0) { throw "The packaging environment does not match the standard; use a fresh EnvironmentDirectory if extra packages were installed." }
 
 Write-Host "Packaging Python: $buildPython"

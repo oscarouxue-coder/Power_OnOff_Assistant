@@ -63,16 +63,27 @@ class TelnetSessionTests(unittest.TestCase):
                 TelnetSession("192.168.29.115", "192.168.29.1")
 
     def test_constructor_with_loopback_succeeds_and_cursor_returns_zero(self):
-        port = free_port()
-        with _FakeSampleServer(("127.0.0.1", port), _FakeSampleHandler) as server:
+        send_prompt = threading.Event()
+
+        class _GatedLoginHandler(_FakeSampleHandler):
+            def handle(self):
+                if send_prompt.wait(5.0):
+                    super().handle()
+
+        with _FakeSampleServer(("127.0.0.1", 0), _GatedLoginHandler) as server:
+            port = server.server_address[1]
             server_thread = threading.Thread(target=server.serve_forever, daemon=True)
             server_thread.start()
             try:
                 session = TelnetSession("127.0.0.1", "127.0.0.1", device_port=port)
                 try:
                     self.assertEqual(session.cursor(), 0)
-                    self.assertIn(session.device_host, "127.0.0.1")
+                    self.assertEqual(session.device_host, "127.0.0.1")
+                    send_prompt.set()
+                    self.assertEqual(session.wait_for_any(("login: ",), 3.0, 0), "login: ")
+                    self.assertEqual(session.cursor(), len(b"login: "))
                 finally:
+                    send_prompt.set()
                     session.close()
             finally:
                 server.shutdown()

@@ -1,0 +1,6 @@
+{
+  "simulated_host": true,
+  "exit_waited_for_original_close": true,
+  "stop_calls": 1,
+  "worker_exited": true
+}

@@ -1,0 +1,45 @@
+{
+  "result": "用户停止，旧业务子进程已终止",
+  "ok": false,
+  "grace_seconds": 10.0,
+  "stop_to_return_seconds": 10.25,
+  "child_exited": true,
+  "trace_at_blocked_write": {
+    "pid": 8788,
+    "events": [
+      {
+        "event": "serial_open",
+        "seconds": 0.078,
+        "port": "COM239",
+        "baudrate": 19200
+      },
+      {
+        "event": "frame",
+        "seconds": 0.078,
+        "hex": "5501a10003a3"
+      },
+      {
+        "event": "frame",
+        "seconds": 0.594,
+        "hex": "5501a10009a9"
+      },
+      {
+        "event": "channel_start",
+        "seconds": 1.109,
+        "channel": 3
+      },
+      {
+        "event": "channel_start",
+        "seconds": 2.109,
+        "channel": 9
+      },
+      {
+        "event": "serial_write_error",
+        "seconds": 4.125,
+        "hex": "5501a00003a2",
+        "mode": "blocked"
+      }
+    ],
+    "blocked": []
+  }
+}

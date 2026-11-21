@@ -1,0 +1,28 @@
+{
+  "recorded_actions": 415,
+  "current_actions": 413,
+  "changed_files": [
+    {
+      "path": "line_check_assistant/app.py",
+      "recorded": 121,
+      "current": 122
+    },
+    {
+      "path": "src/ui/workbench_dashboard.py",
+      "recorded": 12,
+      "current": 12
+    },
+    {
+      "path": "src/ui/workbench_panels.py",
+      "recorded": 14,
+      "current": 11
+    }
+  ],
+  "catalog": {
+    "connected": 66,
+    "partial": 16,
+    "pending": 5,
+    "manual_control": 17
+  },
+  "matrix_stale": true
+}

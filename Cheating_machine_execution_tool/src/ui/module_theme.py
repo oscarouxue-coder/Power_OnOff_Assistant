@@ -8,7 +8,7 @@ from tkinter import ttk
 MODULE_BACKGROUND = "#eef2f5"
 
 
-def apply_module_theme(window, background=MODULE_BACKGROUND):
+def apply_module_theme(window, background=MODULE_BACKGROUND, *, preserve_views=False):
     """构造完成后调用；后续映射的动态控件也使用同一背景。"""
     if not isinstance(window, tk.Misc):
         return  # 兼容只测试窗口编排的最小替身。
@@ -27,6 +27,12 @@ def apply_module_theme(window, background=MODULE_BACKGROUND):
         try:
             if widget.winfo_toplevel() != window:
                 return
+            if preserve_views:
+                parent = widget
+                while parent is not None and parent is not window:
+                    if vars(parent).get('_module_theme_preserve'):
+                        return
+                    parent = parent.master
             kind = widget.winfo_class()
             if kind in ("Toplevel", "Frame", "Labelframe", "Label", "Panedwindow"):
                 widget.configure(background=background)

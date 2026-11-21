@@ -3,7 +3,7 @@
 封装 `ACCEPTANCE_BASELINE.md §0 / §1.3 / §1.4` 的全部检查,作为提交前必跑的最低门禁
 (参见 `AGENTS.md` 规则 13 与 `.claude/skills/line-check-dev/SKILL.md §5 / §11`)。
 
-执行 7 类检查:
+执行 8 类检查:
 1. **py_compile**: 全量 `src/` + `line_check_assistant/` 下的关键模块能编译
 2. **compile_inventory**: `src/` / `line_check_assistant/` 的每个 Python 源文件都必须纳入编译清单
 3. **unittest**: 全量测试通过,且能解析 `Ran N tests` 行(防止静默 0 项 / 误报 OK)
@@ -12,6 +12,7 @@
 6. **must_not_exist**: §1.3 / §1.4 的禁止模式(`0.0.0.0` 等)不能在指定文件的**代码行**中出现
    (跳过注释 / 文档字符串,避免反向语义误报)
 7. **capability_coverage**: 新增/改变GUI业务动作必须审查，业务覆盖清单不能遗漏或虚报。
+8. **gui_test_coverage**: GUI测试离屏覆盖预检，失败不启动测试；运行时严格守卫保留失败退出码。
 
 退出码: 0 全部通过 / 1 任一失败。
 
@@ -25,6 +26,7 @@
 """
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -51,8 +53,111 @@ class CheckResult(NamedTuple):
 
 # 1. py_compile 文件清单(以 `ACCEPTANCE_BASELINE.md §0` + 当前 `src/` / `line_check_assistant/`
 #    下全部 .py 为准;新增 .py 后必须手工补到本列表)。
-PY_COMPILE_SCRIPT_FILES: tuple[str, ...] = ('scripts/run_remote_gateway.py', 'scripts/restart_source_after_exit.py', 'scripts/source_environment_guard.py', 'run_line_check_assistant.py')
+PY_COMPILE_SCRIPT_FILES: tuple[str, ...] = ('scripts/run_remote_gateway.py', 'scripts/restart_source_after_exit.py', 'scripts/source_environment_guard.py', 'run_line_check_assistant.py', 'scripts/run_tests.py', 'scripts/run_gui_child.py', 'scripts/verify_gui_test_coverage.py', 'scripts/qt_test_guard.py', 'scripts/verify_qt_migration.py', 'run_dutpilot_qt.py')
 PY_COMPILE_FILES: tuple[str, ...] = (
+    'src/models/workbench_presentation.py',
+    'src/ui/qt/__init__.py',
+    'src/ui/qt/application.py',
+    'src/ui/qt/main_window.py',
+    'src/ui/qt/theme.py',
+    'src/ui/qt/demo_data.py',
+    'src/ui/qt/dashboard.py',
+    'src/ui/qt/system_health_panel.py',
+    'src/ui/qt/project_detail.py',
+    'src/ui/qt/pipeline_dialog.py',
+    'src/ui/qt/log_panel.py',
+    'src/ui/qt/log_presentation.py',
+    'src/ui/qt/log_history_dialog.py',
+    'src/ui/qt/channel_history_dialog.py',
+    'src/ui/qt/archived_logs_dialog.py',
+    'src/ui/qt/imported_connection_dialog.py',
+    'src/ui/qt/instance_status_dialog.py',
+    'src/ui/qt/instance_pairing_dialog.py',
+    'src/ui/qt/instance_startup_dialog.py',
+    'src/services/qt_instance_startup.py',
+    'src/ui/qt/gateway_config_dialog.py',
+    'src/ui/qt/remote_project_scope.py',
+    'src/ui/qt/unknown_task_dialog.py',
+    'src/ui/qt/job_review_dialog.py',
+    'src/ui/qt/model_settings_dialog.py',
+    'src/ui/qt/model_settings_controller.py',
+    'src/ui/qt/ai_chat_dialog.py',
+    'src/ui/qt/ai_chat_transcript.py',
+    'src/ui/qt/ai_chat_controller.py',
+    'src/ui/qt/ai_report_dialog.py',
+    'src/ui/qt/ai_case_dialog.py',
+    'src/ui/qt/app_update_dialog.py',
+    'src/ui/qt/device_inventory_dialog.py',
+    'src/ui/qt/single_power_dialog.py',
+    'src/ui/qt/workspace_controller.py',
+    'src/services/qt_workspace_adapter.py',
+    'src/services/qt_window_state.py',
+    'src/services/qt_imported_connections.py',
+    'src/services/qt_remote_project_scope.py',
+    'src/services/qt_execution_adapter.py',
+    'src/services/qt_editor_recovery.py',
+    'src/services/qt_pipeline_serial.py',
+    'src/services/qt_pretest.py',
+    'src/services/qt_version_query.py',
+    'src/services/qt_push_trial.py',
+    'src/services/qt_power_resume.py',
+    'src/services/qt_power_logs.py',
+    'src/services/qt_configuration_service.py',
+    'src/models/qt_configuration.py',
+    'src/models/qt_log_history.py',
+    'src/models/channel_resource_options.py',
+    'src/ui/qt/configuration_dialog.py',
+    'src/services/qt_channel_configuration.py',
+    'src/services/qt_adapter_rename.py',
+    'src/services/qt_host_inventory.py',
+    'src/services/qt_log_export.py',
+    'src/services/qt_log_history.py',
+    'src/services/qt_job_review.py',
+    'src/services/qt_model_settings.py',
+    'src/models/qt_model_settings.py',
+    'src/models/qt_ai_chat.py',
+    'src/services/qt_ai_chat.py',
+    'src/ui/qt/ai_session_manager_dialog.py',
+    'src/models/qt_ai_reports.py',
+    'src/services/qt_ai_reports.py',
+    'src/services/qt_ai_report_handoff.py',
+    'src/services/qt_app_update.py',
+    'src/models/qt_device_inventory.py',
+    'src/models/qt_window_placement.py',
+    'src/models/qt_ai_cases.py',
+    'src/services/qt_ai_cases.py',
+    'src/services/qt_archived_logs.py',
+    'src/services/qt_single_power.py',
+    'src/services/qt_serial_terminal.py',
+    'src/services/qt_dut_configuration.py',
+    'src/services/qt_firmware_upgrade.py',
+    'src/services/qt_firmware_observation.py',
+    'src/services/qt_serial_observation.py',
+    'src/services/qt_parameter_writer.py',
+    'src/services/qt_onu_query.py',
+    'src/services/qt_onu_management.py',
+    'src/services/qt_onu_registration.py',
+    'src/services/qt_onu_save.py',
+    'src/ui/qt/serial_observation_dialog.py',
+    'src/ui/qt/parameter_writer_dialog.py',
+    'src/ui/qt/parameter_writer_controller.py',
+    'src/ui/qt/onu_query_dialog.py',
+    'src/ui/qt/onu_provision_page.py',
+    'src/ui/qt/onu_query_controller.py',
+    'src/ui/qt/firmware_upgrade_dialog.py',
+    'src/models/dut_wan_form.py',
+    'src/models/dut_wifi_form.py',
+    'src/services/qt_dut_wifi.py',
+    'src/models/dut_voice_tr069_form.py',
+    'src/services/qt_dut_voice_tr069.py',
+    'src/ui/qt/dut_voice_tr069_panel.py',
+    'src/ui/qt/dut_wifi_panel.py',
+    'src/ui/qt/dut_wan_panel.py',
+    'src/ui/qt/dut_configuration_dialog.py',
+    'src/ui/qt/serial_terminal_dialog.py',
+    'src/ui/qt/window_placement.py',
+    'src/ui/qt/channel_configuration_dialog.py',
+    'src/ui/qt/channel_table_model.py',
     "src/core/workspace_instance.py",
     "src/models/project.py",
     "src/models/project_task.py",
@@ -64,8 +169,12 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/services/project_ai_store.py",
     "src/services/project_diagnostic_transport.py",
     "src/services/project_execution.py",
+    "src/services/power_worker_lifetime.py",
     "src/services/project_store.py",
     "src/services/workspace_gateway.py",
+    "src/core/project_peer_transport.py",
+    "src/services/project_peer_router.py",
+    "src/services/project_peer_runtime.py",
     "src/services/workspace_platforms.py",
     "src/services/workspace_resources.py",
     "src/services/workspace_service.py",
@@ -73,6 +182,10 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/ui/project_editor_recovery.py",
     "src/ui/project_view_frame.py",
     "src/ui/project_workspace.py",
+    "src/ui/workbench_dashboard.py",
+    "src/ui/workbench_panels.py",
+    "src/ui/form_wheel.py",
+    "src/services/workbench_status_service.py",
 
     "src/core/ai_reply_cards.py",
     "src/services/ai_reply_stream_service.py",
@@ -191,6 +304,7 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     "src/ui/ai_serial_bridge.py",
     "src/ui/ai_assistant_controller.py",
     "src/utils/ai_redaction.py",
+    "src/utils/ai_chat_markdown.py",
     "src/utils/ai_output.py",
     # line_check_assistant 包
     "line_check_assistant/__init__.py",
@@ -324,10 +438,64 @@ PY_COMPILE_FILES: tuple[str, ...] = (
 # 关键已验收行为的回归用例。全量 unittest 必须实际执行这些 ID，避免测试文件或
 # 用例在重构时被静默删除 / 改名而使已验收边界失去保护。
 REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
+    'test_gui_test_coverage.GuiRuntimeTests.test_retired_interpreter_is_collected_on_runner_main_thread',
+    'test_gui_test_coverage.GuiCoverageTests.test_qt_and_tk_require_their_own_scopes',
+    'test_qt_migration_contract.QtMigrationContractTests.test_existing_ui_exports_keep_their_identity',
+    'test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_original_project_lifecycle_preserves_values_and_identity',
+    'test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_old_running_and_queued_history_never_starts_hardware',
+    'test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_unconfirmed_dirty_close_keeps_worker_and_data_until_explicit_choice',
+    'test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_project_gateway_close_waits_for_receipts_and_workbench_waits_for_client',
+    'test_workspace_gateway.WorkspaceGatewayTests.test_close_waits_for_receipt_after_agent_worker_finishes',
+    'test_workspace_gateway.WorkspaceGatewayTests.test_client_first_poll_sees_attached_project_and_start_failure_drains_worker',
+    'test_workspace_gateway.WorkspaceGatewayTests.test_unready_receipt_is_not_replayed_after_project_controller_attaches',
+    'test_workspace_gateway.WorkspaceGatewayTests.test_exports_only_proven_current_boot_receipts_and_keeps_legacy_rows',
+    'test_project_peer_routing.ProjectPeerTests.test_platform_received_on_b_only_a_executes_once_and_returns_version',
+    'test_project_peer_routing.ProjectPeerTests.test_closed_offline_reopened_never_replays',
+    'test_project_peer_routing.ProjectPeerTests.test_lost_receipt_and_concurrent_duplicate',
+    'test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_peer_mode_delivers_version_through_project_chat_and_local_approval',
+    'test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_configured_gateway_restart_routes_project_controls_over_loopback',
+    'test_workspace_gateway.WorkspaceGatewayTests.test_failed_incoming_receipt_releases_only_its_own_project',
+    'test_qt_execution_adapter.QtExecutionAdapterTests.test_original_orchestrator_receives_original_request_and_callbacks',
+    'test_qt_execution_adapter.QtExecutionAdapterTests.test_config_changes_or_expiration_prevent_dispatch',
+    'test_qt_execution_adapter.QtExecutionAdapterTests.test_stop_waits_for_engine_and_keeps_resources',
+    'test_qt_execution_adapter.QtExecutionAdapterTests.test_disjoint_project_power_jobs_keep_separate_snapshots_stops_and_leases',
+    'test_qt_execution_adapter.QtExecutionAdapterTests.test_power_failure_after_stop_request_preserves_original_failure',
+    'test_remote_instance_management.ManagementTests.test_startup_write_failure_restores_previous_pending_scope',
+    'test_qt_execution_adapter.QtExecutionAdapterTests.test_unknown_result_remains_fenced_and_no_automatic_retry',
+    'test_qt_configuration_service.QtConfigurationTests.test_six_domains_save_through_original_stores_and_commit_project_revision',
+    'test_qt_configuration_service.QtConfigurationTests.test_external_change_blocks_save_and_reload_returns_new_revision',
+    'test_qt_configuration_service.QtConfigurationTests.test_project_commit_failure_restores_original_draft_bytes',
+    'test_qt_configuration_service.QtConfigurationTests.test_failed_rollback_keeps_unknown_protection',
+    'test_qt_channel_configuration.QtChannelConfigurationTests.test_selected_only_save_matches_original_serializer_and_derives_ips',
+    'test_qt_channel_configuration.QtChannelConfigurationTests.test_failed_commit_does_not_undo_another_writer',
+    'test_qt_channel_configuration.QtChannelConfigurationTests.test_failed_restore_keeps_unknown_fence',
+    'test_qt_channel_configuration.QtChannelConfigurationTests.test_editors_and_task_admission_are_mutually_exclusive',
+    'test_qt_serial_terminal.QtSerialTerminalTests.test_manual_text_empty_enter_and_control_lock_never_replay',
+    'test_qt_dut_configuration.QtDutConfigurationTests.test_original_services_receive_selected_requests_parallelism_and_safe_logs',
+    'test_qt_dut_voice_tr069.QtDutVoiceTr069Tests.test_voice_query_uses_line_and_private_caps_block_unsupported_write',
+    'test_qt_dut_voice_tr069.QtDutVoiceTr069Tests.test_tr069_query_capabilities_filter_original_payload_and_inform',
+    'test_qt_dut_voice_tr069.QtDutVoiceTr069Tests.test_tr069_manual_inform_stop_keeps_worker_until_safe_point',
+    'test_qt_dut_wifi.QtDutWifiTests.test_shared_maps_keep_original_exports_and_exact_tk_defaults',
+    'test_qt_dut_wifi.QtDutWifiTests.test_increment_batch_preserves_order_one_shared_wait_and_verified_outcomes',
+    'test_qt_dut_wifi.QtDutWifiTests.test_stopped_shared_wait_never_reports_applied_but_unverified_as_success',
+    'test_qt_dut_wifi.QtDutWifiTests.test_real_query_caps_block_unsupported_values_and_client_cannot_forge_lists',
+    'test_qt_dut_wan.QtDutWanTests.test_modify_calls_original_payload_with_selected_targets_and_unmodified_password',
+    'test_qt_dut_wan.QtDutWanTests.test_old_target_credentials_and_invented_name_cannot_use_a_cached_query',
+    'test_qt_dut_wan.QtDutWanTests.test_shared_model_has_no_tk_import_and_original_exports_are_identical',
+    'test_qt_dut_configuration.QtDutConfigurationTests.test_stop_keeps_resource_ownership_until_original_worker_returns',
+    'test_qt_dut_configuration.QtDutConfigurationTests.test_window_close_and_reopen_preserve_live_job_and_reject_old_token',
+    'test_qt_serial_terminal.QtSerialTerminalTests.test_open_all_preserves_original_log_name_timestamps_and_tail_on_close',
+    'test_qt_serial_terminal.QtSerialTerminalTests.test_closing_one_monitor_keeps_other_owner_and_rejects_stale_delivery',
+    'test_gui_test_coverage.GuiCoverageTests.test_missing_fixture_and_import_only_fail',
+    'test_gui_test_coverage.GuiCoverageTests.test_late_or_conditional_installation_fails',
+    'test_gui_test_coverage.GuiRuntimeTests.test_caught_missing_scope_fails_before_native_constructor',
+    'test_verify_baseline.GuiTestGateIntegrationTests.test_coverage_failure_prevents_test_start',
     "test_project_completion.StatusAndBackupTests.test_import_has_verified_original_bytes_before_conversion",
     "test_project_completion.StatusAndBackupTests.test_worker_uses_frozen_config_and_ui_callback_returns_to_draft",
     "test_multi_project_business_validation.MultiProjectBusinessTests.test_four_projects_execute_every_business_kind_with_isolated_commands_and_results",
     "test_multi_project_business_validation.MultiProjectBusinessTests.test_stopping_one_real_job_does_not_cancel_or_release_the_other_three",
+    "test_power_worker_lifetime.PowerWorkerLifetimeTests.test_two_project_events_release_only_after_last_owner_exits",
+    "test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_persisted_job_review_binds_original_job_and_releases_only_its_protection",
     "test_project_completion.CompletionGuiTests.test_gui_unknown_preserves_resource_guard_until_explicit_local_review",
     "test_ui_lifecycle_runtime.MailboxTests.test_consumer_and_producer_never_wait_for_busy_mutex",
     "test_ui_lifecycle_runtime.PipelineRuntimeTests.test_expired_request_never_executes_later",
@@ -335,6 +503,16 @@ REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
     "test_ui_lifecycle_runtime.PipelineRuntimeTests.test_main_exit_polls_serial_completion_without_join_or_destroying_early",
     "test_tk_lifecycle_process.TkLifecycleProcessTests.test_eight_readers_gc_close_reopen_and_complete_logs",
     "test_serial_transport.SerialTransportTests.test_async_close_waits_for_inflight_callback_and_reserves_port",
+    "test_qt_serial_terminal.QtSerialTerminalTests.test_passive_reader_limits_bytes_at_read_time_during_driver_burst",
+    "test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_old_local_device_session_accepts_retained_evidence_only",
+    "test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_explicit_local_channel_routes_from_send_and_preserves_report_and_project_scope",
+    "test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_local_natural_target_routing_cancels_late_results_and_rechecks_project",
+    "test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_local_channel_passive_serial_rechecks_binding_and_never_writes",
+    "test_serial_transport.SerialTransportTests.test_open_failure_releases_driver_log_and_port_before_retry",
+    "test_serial_transport.SerialTransportTests.test_driver_close_error_fences_normal_release_and_failed_start_rollback",
+    "test_serial_transport.SerialTransportTests.test_close_thread_failure_keeps_control_and_bulk_shutdown_can_retry",
+    "test_serial_transport.SerialTransportTests.test_workspace_release_failure_completes_ticket_and_preserves_port_fence",
+    "test_qt_serial_terminal.QtSerialTerminalTests.test_driver_failure_reaches_terminal_without_discarding_other_channel",
     "test_wifi_connection_service.ConnectionServiceTests.test_same_ssid_requires_both_actual_bssids_and_pings_each_band",
     "test_wifi_connection_service.ConnectionServiceTests.test_unified_mode_runs_once_even_when_saved_band_flags_off",
     "test_wifi_connection_service.ConnectionServiceTests.test_other_dut_with_same_ssid_never_passes_and_keeps_retry_budget",
@@ -369,6 +547,10 @@ REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
     "test_power_test_wifi.IntegrationTests.test_sensitive_telnet_read_never_logs_or_saves_response",
     "test_power_test_resume.ResumeTests.test_wifi_cancelled_channel_remains_cancelled_after_detach",
     "test_legacy_power_initialization.SelectedPowerInitializationTests.test_wifi_cancel_has_separate_result_and_ready_messages",
+    "test_power_command_receipts.PowerCommandReceiptTests.test_receipt_after_write_and_stop_discards_next_channel",
+    "test_power_command_receipts.PowerCommandReceiptTests.test_partial_write_latches_failure_without_repower_or_cached_success",
+    "test_qt_execution_adapter.QtExecutionAdapterTests.test_selected_wifi_profile_reserves_host_before_a_power_job",
+    "test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_qt_serial_admission_and_project_close_wait_for_safe_stop",
     "test_wifi_interfaces.WifiInterfaceTests.test_names_are_trimmed_deduplicated_and_keep_discovery_order",
     "test_network_ops.PrepareNetworkForSampleTests.test_reads_adapter_enabled_state_and_ipv4_prefix",
     "test_network_ops.PrepareNetworkForSampleTests.test_reuses_ready_adapter_without_enable_or_set",
@@ -597,10 +779,13 @@ def run_py_compile(project_root: Path) -> CheckResult:
             False,
             f"missing files: {', '.join(Path(m).name for m in missing)}",
         )
+    # Windows CreateProcess has a command-line size limit. py_compile accepts
+    # the same explicit file list over stdin and still reports all failures.
     proc = subprocess.run(
-        [sys.executable, "-m", "py_compile", *files],
+        [sys.executable, "-X", "utf8", "-m", "py_compile", "-"],
+        input="\n".join(files) + "\n" if files else "",
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         cwd=str(project_root),
     )
     if proc.returncode == 0:
@@ -660,9 +845,10 @@ def check_required_baseline_tests(unittest_output: str) -> CheckResult:
 def run_unittest(project_root: Path) -> tuple[CheckResult, str]:
     """运行全量单测，并返回 verbose 输出供关键测试执行检查复用。"""
     proc = subprocess.run(
-        [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
+        [sys.executable, "scripts/run_tests.py", "discover", "-s", "tests", "-v"],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
+        env=dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8"),
         cwd=str(project_root),
     )
     output = proc.stdout + proc.stderr
@@ -763,6 +949,15 @@ def collect_results(project_root: Path) -> list[CheckResult]:
     coverage_errors = check_capability_coverage(project_root)
     results.append(CheckResult("capability_coverage", not coverage_errors,
                                "; ".join(coverage_errors) if coverage_errors else "GUI actions and business inventory reviewed"))
+    from verify_gui_test_coverage import check as check_gui_test_coverage
+    gui_errors = check_gui_test_coverage(project_root)
+    results.append(CheckResult('gui_test_coverage', not gui_errors,
+                               '; '.join(gui_errors) if gui_errors else 'GUI test ownership preflight passed'))
+    if gui_errors:
+        results.append(CheckResult('unittest', False, 'not run: GUI test coverage preflight failed'))
+        results.extend(check_must_exist(project_root))
+        results.extend(check_must_not_exist(project_root))
+        return results
     unittest_result, unittest_output = run_unittest(project_root)
     results.append(unittest_result)
     if unittest_result.passed:
@@ -791,4 +986,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # The packaging entry uses Python isolated mode. Resolve sibling checks
+    # from this script rather than relying on cwd, PYTHONPATH or site-packages.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     sys.exit(main())

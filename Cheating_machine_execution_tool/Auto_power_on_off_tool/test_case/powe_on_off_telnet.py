@@ -9,7 +9,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 from common.fuzzy_match import Fuzzy_Match
 
-from common.power_on_off import PowerOnOff
+from common.power_on_off import PowerCommandCancelled, PowerOnOff
 from common.execute_network_card_ping import Cmd
 from clients.telnet_client import TelnetClient
 from common.send_email import SendEmail
@@ -971,6 +971,9 @@ class PowerOnOffTelnet(QThread):
                     else:
                         time.sleep(1)
                         return True
+                except PowerCommandCancelled:
+                    self.run_status_list[power_num - 1] = 0
+                    return None
                 except WifiConnectionCancelled:
                     self.run_status_list[power_num - 1] = 0
                     self.logger.info(f'[WiFi测试] 通道{power_num} 第{times}轮 取消：用户停止，保留已完成轮次')

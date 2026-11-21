@@ -192,7 +192,8 @@ class MultichannelDispatchTests(unittest.TestCase):
         if os.environ.get("LINECHECK_MULTICHANNEL_TK_CHILD") != "1":
             env = dict(os.environ, LINECHECK_MULTICHANNEL_TK_CHILD="1", PYTHONIOENCODING="utf-8")
             env["PYTHONPATH"] = str(Path(__file__).parent) + os.pathsep + env.get("PYTHONPATH", "")
-            result = subprocess.run([sys.executable, "-m", "unittest",
+            from tk_test_windows import run_gui_child
+            result = run_gui_child([sys.executable, "-m", "unittest",
                 "test_ai_multichannel_dispatch.MultichannelDispatchTests." + self._testMethodName],
                 cwd=str(Path(__file__).resolve().parents[1]), env=env, capture_output=True, text=True,
                 encoding="utf-8", timeout=30)

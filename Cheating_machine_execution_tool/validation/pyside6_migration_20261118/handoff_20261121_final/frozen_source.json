@@ -1,0 +1,11 @@
+{
+  "snapshot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\dutpilot-qt-candidate-kkgnzxq2",
+  "project": "Cheating_machine_execution_tool",
+  "branch": "feature/pyside6-migration",
+  "head": "5b36f59dad916959dc1b17418f3c46be39250b71",
+  "fingerprint_files": 581,
+  "fingerprint": "37d8f6e5fd6096dfc9257550c43e4468bad965c7f603f23434efb671697aca85",
+  "all_input_files": 848,
+  "all_input_fingerprint": "e7ec3849657738ac37fc39192f5ae7d2ce172c189b10e01423f5cd980706d8c8",
+  "algorithm": "sha256(sorted(path UTF-8 + NUL + sha256(file) binary))"
+}

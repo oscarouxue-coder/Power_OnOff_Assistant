@@ -1,0 +1,205 @@
+Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Requirement already satisfied: pyserial==3.5 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 1)) (3.5)
+Requirement already satisfied: tftpy==0.8.7 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 2)) (0.8.7)
+Requirement already satisfied: requests<3,>=2.31 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 3)) (2.31.0)
+Requirement already satisfied: requests-toolbelt<2,>=1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 4)) (1.0.0)
+Requirement already satisfied: paramiko<4,>=3.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 5)) (3.1.0)
+Requirement already satisfied: ping3<5,>=4.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 6)) (4.0.4)
+Requirement already satisfied: pywifi<2,>=1.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 7)) (1.1.12)
+Requirement already satisfied: configobj<6,>=5.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 8)) (5.0.9)
+Requirement already satisfied: psutil<8,>=5.9 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 9)) (5.9.5)
+Requirement already satisfied: openpyxl<4,>=3.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 10)) (3.1.2)
+Requirement already satisfied: xlrd<3,>=2.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 11)) (2.0.2)
+Requirement already satisfied: websockets==15.0.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 12)) (15.0.1)
+Requirement already satisfied: lark-oapi==1.7.5 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 13)) (1.7.5)
+Requirement already satisfied: charset-normalizer==3.1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 8)) (3.1.0)
+Requirement already satisfied: idna==3.4 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 9)) (3.4)
+Requirement already satisfied: urllib3==2.0.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 10)) (2.0.2)
+Requirement already satisfied: certifi==2023.5.7 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 11)) (2023.5.7)
+Requirement already satisfied: bcrypt==4.0.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 13)) (4.0.1)
+Requirement already satisfied: cryptography==40.0.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 14)) (40.0.2)
+Requirement already satisfied: cffi==1.15.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 15)) (1.15.1)
+Requirement already satisfied: pycparser==2.21 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 16)) (2.21)
+Requirement already satisfied: PyNaCl==1.5.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 17)) (1.5.0)
+Requirement already satisfied: comtypes==1.1.14 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 21)) (1.1.14)
+Requirement already satisfied: et-xmlfile==1.1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 25)) (1.1.0)
+Requirement already satisfied: pycryptodome==3.23.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 29)) (3.23.0)
+Requirement already satisfied: httpx==0.28.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 30)) (0.28.1)
+Requirement already satisfied: httpcore==1.0.9 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 31)) (1.0.9)
+Requirement already satisfied: h11==0.16.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 32)) (0.16.0)
+Requirement already satisfied: anyio==4.12.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 33)) (4.12.1)
+Requirement already satisfied: exceptiongroup==1.3.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 34)) (1.3.1)
+Requirement already satisfied: typing-extensions==4.16.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 35)) (4.16.0)
+Requirement already satisfied: pyinstaller==5.10.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 36)) (5.10.1)
+Requirement already satisfied: pyinstaller-hooks-contrib==2023.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 37)) (2023.2)
+Requirement already satisfied: setuptools==58.1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 38)) (58.1.0)
+Requirement already satisfied: altgraph==0.17.3 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 39)) (0.17.3)
+Requirement already satisfied: pefile==2023.2.7 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 40)) (2023.2.7)
+Requirement already satisfied: pywin32-ctypes==0.2.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 41)) (0.2.2)
+Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Requirement already satisfied: PySide6-Essentials==6.8.3 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-qt.txt (line 2)) (6.8.3)
+Requirement already satisfied: shiboken6==6.8.3 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-qt.txt (line 3)) (6.8.3)
+No broken requirements found.
+BUILD_ENVIRONMENT_OK Qt CPython 3.9.10 x64; locked dependencies; numpy/lxml/PyQt5 absent
+Packaging Python: C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-build-py39\Scripts\python.exe
+Project root: F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool
+
+  [OK  ] py_compile - 381 files compiled
+  [OK  ] compile_inventory - 371 source files covered
+  [OK  ] capability_coverage - GUI actions and business inventory reviewed
+  [OK  ] gui_test_coverage - GUI test ownership preflight passed
+  [FAIL] unittest - non-zero exit; tail: _without_repeating_inserted_rows (test_qt_log_history.QtLogHistoryTests) ... ok
+test_legacy_runs_distinguish_pending_and_reviewed_unknown_without_mutating_ledger (test_qt_log_history.QtLogHistoryTests) ... ok
+test_legacy_runs_page_equal_timestamps_without_jobs_or_other_projects (test_qt_log_history.QtLogHistoryTests) ... ok
+test_missing_database_and_large_or_unstructured_records (test_qt_log_history.QtLogHistoryTests) ... ok
+test_power_results_revalidate_the_saved_run_and_original_channels (test_qt_log_history.QtLogHistoryTests) ... ok
+test_short_job_query_honors_cancel_and_long_event_scan_interrupts_sqlite (test_qt_log_history.QtLogHistoryTests) ... ok
+test_display_unknowns_are_not_defaulted_to_normal_or_zero (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_existing_ui_exports_keep_their_identity (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_frozen_qt_defaults_to_workspace_while_source_requires_a_mode (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_native_verification_keeps_timeout_diagnostics_and_checks_every_scale (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_ui_package_no_longer_eagerly_imports_tk (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_business_save_preserves_connection_and_invalidates_preview (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c300_cleanup_dispatches_frozen_candidate_through_original_retry (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c300_cleanup_query_confirmation_cancels_and_cannot_retarget (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c300_cleanup_rejects_changed_identity_at_original_execution_boundary (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c300_cleanup_rejects_wrong_family_batch_stale_option_and_missing_sn (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c300_plan_uses_original_service_and_cancel_invalidates_preview (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c300_save_checks_the_original_binding_and_global_admission (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c300_save_requires_new_local_decision_and_does_not_replay_after_decline (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c300_stopped_save_remains_unknown_with_origin_registration_success (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c600_failed_registration_does_not_start_save (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c600_save_admission_error_is_visible_and_does_not_retry (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c600_save_option_is_frozen_and_runs_once_after_validated_registration (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c600_save_timeout_retains_protection_without_repeat (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c600_stopped_registration_does_not_start_save (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_delete_decline_stale_scope_and_unlisted_interface_never_run (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_delete_keeps_confirmed_identity_and_original_per_item_behavior (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_delete_retains_uncertain_result_and_skips_remaining_targets (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_original_queries_bind_each_family_and_discard_the_temporary_read_grant (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_profiles_use_saved_project_store_and_preserve_existing_business_fields (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_query_confirmation_cancels_and_stale_project_cannot_connect (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_registration_dispatches_exact_confirmed_plan_and_keeps_per_pon_scopes (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_registration_rejects_changed_selection_and_duplicate_ids (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_stop_waits_for_original_job_and_editor_authority_is_local (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_whole_olt_discovery_cannot_be_reused_for_registered_management (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_confirmation_cancel_stale_version_and_table_edit_never_dispatch (test_qt_parameter_writer.QtParameterWriterTests) ... ok
+test_generate_uses_original_rules_and_local_path (test_qt_parameter_writer.QtParameterWriterTests) ... ok
+test_missing_target_host_uses_original_project_host_without_changing_transport (test_qt_parameter_writer.QtParameterWriterTests) ... ok
+test_original_runner_options_and_independent_target_failures (test_qt_parameter_writer.QtParameterWriterTests) ... ok
+test_original_serial_fallback_observes_each_session_and_rejects_late_callbacks (test_qt_parameter_writer.QtParameterWriterTests) ... ok
+test_setting_updates_preserve_upgrade_profile_and_load_real_table (test_qt_parameter_writer.QtParameterWriterTests) ... ok
+test_stop_waits_for_original_cleanup_and_result_survives_reopen (test_qt_parameter_writer.QtParameterWriterTests) ... ok
+test_bounded_inactive_buffer_and_old_subscription_isolation (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_close_failure_remains_visible_and_blocks_reopen_and_shutdown (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_closing_one_monitor_keeps_other_owner_and_rejects_stale_delivery (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_dangerous_confirmation_cancel_expiry_and_binding_change (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_detach_releases_sessions_when_window_preferences_are_unwritable (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_diagnostic_snapshot_preserves_ownership_input_and_original_history (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_directory_persistence_failure_does_not_change_current_path (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_directory_restore_preserves_geometry_and_existing_session_file (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_existing_different_serial_settings_are_not_silently_reconfigured (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_failed_release_restores_subscription_with_new_identity (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_manual_text_empty_enter_and_control_lock_never_replay (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_only_gui_sources_registered_no_agent_raw_write_expansion (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_open_all_preserves_original_log_name_timestamps_and_tail_on_close (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_partial_detach_can_retry_without_releasing_another_monitor (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_partial_open_failure_keeps_other_monitor_and_reports_real_error (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_passive_read_reports_incompatible_settings_without_changing_session (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_reader_error_visible_without_log_event_delivery (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_show_selected_targets_does_not_open_devices_and_uses_legacy_fallback (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_shutdown_waits_for_real_reader_callback_and_flushes_tail (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_stale_window_token_cannot_stop_or_send (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_write_failure_releases_only_manual_control_and_never_retries (test_qt_serial_terminal.QtSerialTerminalTests) ... ok
+test_adapter_rename_rechecks_guid_and_protects_after_partial_project_write (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_ai_case_edits_reuse_shared_store_and_preserve_version_protection (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_ai_log_projection_preserves_archive_and_does_not_displace_live_alerts (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_ai_reports_reuse_project_store_and_reject_a_busy_deletion_batch (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_ai_session_manager_rejects_cross_project_and_busy_batches_and_deletes_related_records (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_bad_configuration_admission_releases_the_project_lease (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_close_project_releases_sql_reader_before_reopen_and_keeps_other_project_reads (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_close_workspace_interrupts_active_sql_scan_and_settles_each_read_once (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_concurrent_log_burst_keeps_every_record_on_disk_with_bounded_handoff (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_corrupt_recents_warn_without_rewriting_at_startup (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_device_inventory_retains_last_success_per_source (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_display_backlog_limits_preserve_the_workspace_file (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_gateway_operations_wait_for_original_service_without_blocking_workspace (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_health_tracks_actual_log_failure_and_recovery_separately_from_task_logs (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_health_uses_current_leases_and_actual_inventory_result (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_host_refresh_does_not_replace_a_newer_verified_adapter_binding (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_host_refresh_keeps_existing_resource_authority_and_ignores_late_results_on_exit (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_host_refresh_shares_one_reader_and_does_not_delay_project_commands (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_imported_connection_rejects_changed_or_enabled_dingtalk_candidate (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_imported_connection_uses_original_encrypted_store_and_keeps_platform_disabled (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_instance_direct_startup_recovers_corrupt_settings_and_an_occupied_slot (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_invalid_operations_preserve_configuration_and_emit_failure (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_legacy_import_creates_original_backup_and_leaves_source_intact (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_legacy_import_rejects_an_overlapping_destination_without_writes (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_local_chat_reuses_project_history_and_cancels_before_store_close (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_local_review_reuses_original_receipt_and_persists_unknown_result (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_model_configuration_shares_accounts_but_keeps_project_selection_and_secrets_local (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_model_probe_uses_original_request_profile_and_discards_stale_capability (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_module_sizes_share_the_tk_file_and_save_only_the_current_project (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_old_running_and_queued_history_never_starts_hardware (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_open_project_directory_rejects_closed_project_and_reports_shell_failure (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_original_project_lifecycle_preserves_values_and_identity (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_pairing_reuses_original_single_use_store_without_granting_runtime_access (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_persisted_job_review_binds_original_job_and_releases_only_its_protection (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_project_close_waits_for_review_of_its_registered_capabilities (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_project_gateway_close_waits_for_receipts_and_workbench_waits_for_client (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_qt_serial_admission_and_project_close_wait_for_safe_stop (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_recent_projects_persist_reorder_and_forget_keeps_open_project (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_refresh_is_coalesced_and_file_commands_run_off_main_thread (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_remote_scope_save_rechecks_open_contexts_and_original_grants (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_report_chat_analyzes_retained_evidence_without_live_collection (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_report_handoff_freezes_reviewed_report_and_legacy_target (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_selected_channels_are_unknown_not_claimed_running (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_slow_archive_reader_does_not_delay_workspace_work_or_exit (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_slow_gateway_does_not_delay_power_stop_during_workspace_exit (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_slow_sql_history_keeps_project_commands_available_and_read_results_in_order (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_start_time_follows_project_ledger_after_reopen (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_unconfirmed_dirty_close_keeps_worker_and_data_until_explicit_choice (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_window_placement_reads_old_state_merges_preferences_and_handles_write_failure (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_sleep_fn_callable_returns_false_on_cancel (test_regression_sleep_fn.WaitCancellableRegressionTests)
+契约:可调用 sleep_fn,一旦 cancel 触发即刻返回 False,不再 sleep。 ... ok
+test_sleep_fn_callable_runs_through_and_returns_true (test_regression_sleep_fn.WaitCancellableRegressionTests)
+契约:可调用 sleep_fn 在 cancel 未触发时应返回 True。 ... ok
+test_sleep_fn_none_raises_none_type_not_callable (test_regression_sleep_fn.WaitCancellableRegressionTests)
+契约:任何 sleep_fn 形参都必须可调用;传 None 时立即报 ``'NoneType' object is not callable``。 ... ok
+test_unknown_quarantine_survives_new_service_and_requires_original_resolution (test_remote_gateway.FenceTests) ... ok
+test_actual_websocket_pair_auth_forward_ack_and_revoke (test_remote_gateway.GatewayTests) ... ok
+test_admin_pairing_does_not_reset_live_connections (test_remote_gateway.GatewayTests) ... ok
+test_commands_are_per_member_and_duplicates_do_not_change_selection (test_remote_gateway.GatewayTests) ... ok
+test_duplicate_message_remains_on_original_target_after_switch (test_remote_gateway.GatewayTests) ... ok
+test_gateway_recovery_marks_unconfirmed_requests_uncertain_not_queued (test_remote_gateway.GatewayTests) ... ok
+test_heartbeat_expiry_requires_reselection (test_remote_gateway.GatewayTests) ... ok
+test_inbox_dedup_changed_request_expiry_and_restart (test_remote_gateway.GatewayTests) ... ok
+test_member_and_tenant_cannot_select_or_query_another_scope (test_remote_gateway.GatewayTests) ... ok
+test_offline_new_run_and_simultaneous_takeover (test_remote_gateway.GatewayTests) ... ok
+test_pair_code_single_use_expiry_and_independent_revocation (test_remote_gateway.GatewayTests) ... ok
+test_persisted_ack_and_no_automatic_redelivery (test_remote_gateway.GatewayTests) ... ok
+test_platform_outbox_dedup_and_unknown_send_do_not_reexecute (test_remote_gateway.GatewayTests) ... ok
+test_real_websocket_pairing_and_forged_credential (test_remote_gateway.GatewayTests) ... ok
+test_reject_forged_authority_or_wrong_start (test_remote_gateway.GatewayTests) ... ok
+test_sequence_signature_and_reflection (test_remote_gateway.GatewayTests) ... ok
+test_slot_config_encrypts_credentials_and_pairing_does_not_enable_execution (test_remote_gateway.GatewayTests) ... ok
+test_unprotected_public_or_unspecified_bind_rejected (test_remote_gateway.GatewayTests) ... ok
+test_disallowed_channel_and_capability_and_permission_claim_are_rejected (test_remote_gateway_agent.GatewayAgentTests) ...
+  [OK  ] must_exist: bbfdm.operate - hit in src\core\dut_ubus_config.py (+1)
+  [OK  ] must_exist: tclinux_allinone - hit in src\core\tftp_transport.py (+1)
+  [OK  ] must_exist: 192.168.1.1 - hit in src\core\telnet_transport.py (+5)
+  [OK  ] must_exist: vlan_to_serial_port - hit in src\core\__init__.py (+11)
+  [OK  ] must_exist: MAX_PARALLEL_UPGRADES = 8 - hit in line_check_assistant\sample_upgrade_settings_store.py
+  [OK  ] must_exist: clamp_parallel_count - hit in src\services\firmware_upgrade_service.py (+2)
+  [OK  ] must_exist: source_address=(bind_ip, 0) - hit in src\core\telnet_transport.py (+3)
+  [OK  ] must_exist: Device.Firewall.<X_SDMC_>Security.AccessCtrl - hit in src\core\ubus_enable_telnet.py
+  [OK  ] must_not_exist: 0.0.0.0 - absent from code lines of src/core/tftp_transport.py,src/core/telnet_transport.py
+
+FAILED: 1 check(s) failed
+Baseline failed; packaging is blocked
+At F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\build_line_check_assistant.ps1:94 char:32
++ ... LASTEXITCODE -ne 0) { throw "Baseline failed; packaging is blocked" }
++                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Baseline failed; packaging is blocked:String) [], RuntimeException
+    + FullyQualifiedErrorId : Baseline failed; packaging is blocked
+ 

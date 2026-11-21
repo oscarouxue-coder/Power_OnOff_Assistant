@@ -515,6 +515,8 @@ class SerialDiagnosticsTests(unittest.TestCase):
 class ApprovalUiTests(ActionServiceTests):
     # 仅复用fixture，不继承其测试：下面的load_tests在模块底部限制发现。
     def test_approval_window_themes_minimum_layout_session_switch_and_cancel(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         root = tk.Tk()
         root.geometry("940x660")
         root.update()

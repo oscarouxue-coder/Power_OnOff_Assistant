@@ -79,6 +79,8 @@ class MarkdownContentTests(unittest.TestCase):
 
 class MarkdownWidgetTests(unittest.TestCase):
     def setUp(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         gc.collect()
         self.root = tk.Tk()
         self.root.geometry("940x660")

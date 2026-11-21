@@ -81,6 +81,28 @@ class ManagementTests(unittest.TestCase):
         raw = RemoteInstanceConfig(identity, FakeCipher(), pending=True).path.read_text(encoding="utf-8")
         self.assertNotIn("synthetic-secret", raw)
 
+    def test_startup_write_failure_restores_previous_pending_scope(self):
+        identity = self.configured_identity()
+        self.addCleanup(identity.close)
+        self.runtime = Mock(identity=identity)
+        pending = RemoteInstanceConfig(identity, FakeCipher(), pending=True)
+        active = RemoteInstanceConfig(identity, FakeCipher())
+        options = ("gateway", 1, "ws://127.0.0.1:18761", False)
+        with patch('src.services.remote_instance_management.atomic_json', side_effect=OSError("fixture write failure")):
+            with self.assertRaises(OSError):
+                self.management.save_instance(*options, [2], ["firmware.upgrade"])
+        self.assertFalse(pending.path.exists())
+        self.assertEqual(active.load()["channel_ids"], [1])
+        self.assertEqual(read_startup(self.app)["mode"], "direct")
+        self.management.save_instance(*options, [3], ["firmware.upgrade"])
+        before = pending.path.read_bytes()
+        with patch('src.services.remote_instance_management.atomic_json', side_effect=OSError("fixture write failure")):
+            with self.assertRaises(OSError):
+                self.management.save_instance(*options, [2, 16], ["firmware.upgrade"])
+        self.assertEqual(pending.path.read_bytes(), before)
+        self.assertEqual(pending.load()["channel_ids"], [3])
+        self.assertEqual(active.load()["channel_ids"], [1])
+
     def test_pending_promoted_on_next_runtime_and_run_id_changes(self):
         identity = self.configured_identity()
         first_run = identity.run_id

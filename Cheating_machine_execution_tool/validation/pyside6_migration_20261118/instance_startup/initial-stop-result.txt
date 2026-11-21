@@ -1,0 +1,19 @@
+GUI_TEST_COVERAGE_OK
+test_disjoint_project_power_jobs_keep_separate_snapshots_stops_and_leases (test_qt_execution_adapter.QtExecutionAdapterTests) ... FAIL
+
+======================================================================
+FAIL: test_disjoint_project_power_jobs_keep_separate_snapshots_stops_and_leases (test_qt_execution_adapter.QtExecutionAdapterTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_qt_execution_adapter.py", line 366, in test_disjoint_project_power_jobs_keep_separate_snapshots_stops_and_leases
+    self.assertEqual(self.adapter.jobs[first]['status']['state'], 'stopped')
+AssertionError: 'failed' != 'stopped'
+- failed
++ stopped
+
+
+----------------------------------------------------------------------
+Ran 1 test in 1.351s
+
+FAILED (failures=1)
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

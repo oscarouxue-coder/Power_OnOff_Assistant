@@ -224,6 +224,8 @@ class ServiceTests(unittest.TestCase):
 
 class UiTests(unittest.TestCase):
     def setUp(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         gc.collect()
         self.temp = tempfile.TemporaryDirectory()
         self.store = DiagnosticStore(self.temp.name, FakeCipher())
@@ -349,6 +351,8 @@ class UiTests(unittest.TestCase):
         verify(self.dialog.window)
 
     def test_module_theme_preserves_global_styles_status_color_and_checkbox_semantics(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         from tkinter import ttk
         from src.ui.module_theme import apply_module_theme
         style = ttk.Style(self.root)

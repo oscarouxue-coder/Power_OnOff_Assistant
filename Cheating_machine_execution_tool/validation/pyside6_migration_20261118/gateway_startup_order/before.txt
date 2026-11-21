@@ -1,0 +1,45 @@
+GUI_TEST_COVERAGE_OK
+python.exe : F
+所在位置 行:2 字符: 1
++ & "$env:LOCALAPPDATA/LineCheckAssistant/qt-build-py39/Scripts/python. ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (F:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+======================================================================
+FAIL: test_client_first_poll_sees_attached_project_and_start_failure_drains_worker (test_workspace_gateway.WorkspaceGat
+ewayTests) (fail_network=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_workspace_gateway.py", line 128, in 
+test_client_first_poll_sees_attached_project_and_start_failure_drains_worker
+    self.assertIn('A · a', observed[0])
+AssertionError: 'A · a' not found in '请先选择项目：切换项目 项目ID\n'
+
+======================================================================
+FAIL: test_client_first_poll_sees_attached_project_and_start_failure_drains_worker (test_workspace_gateway.WorkspaceGat
+ewayTests) (fail_network=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_workspace_gateway.py", line 122, in 
+test_client_first_poll_sees_attached_project_and_start_failure_drains_worker
+    self.assertIs(service.gateway_runtime, runtime)
+AssertionError: None is not <src.services.remote_gateway_runtime.RemoteGatewayRuntime object at 0x0000019F315ED820>
+
+======================================================================
+FAIL: test_client_first_poll_sees_attached_project_and_start_failure_drains_worker (test_workspace_gateway.WorkspaceGat
+ewayTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_workspace_gateway.py", line 136, in 
+test_client_first_poll_sees_attached_project_and_start_failure_drains_worker
+    identity.close.assert_called_once_with()
+  File "C:\Python\Python39\lib\unittest\mock.py", line 918, in assert_called_once_with
+    raise AssertionError(msg)
+AssertionError: Expected 'mock' to be called once. Called 0 times.
+
+----------------------------------------------------------------------
+Ran 1 test in 0.474s
+
+FAILED (failures=3)
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

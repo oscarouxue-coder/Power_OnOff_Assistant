@@ -11,7 +11,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 from common.dingtalk_send_message import DingTalk
 from common.fuzzy_match import Fuzzy_Match
 from common.my_logging import creat_logger
-from common.power_on_off import PowerOnOff
+from common.power_on_off import PowerCommandCancelled, PowerCommandError, PowerOnOff
 from common.execute_network_card_ping import Cmd
 from clients.ssh import SSHClient
 from common.send_email import SendEmail
@@ -387,8 +387,11 @@ class PowerOnOffSsh(QThread):
                         # continue
                         self.logger.info(f'{power_num} stop func')
                         return False
+                except PowerCommandCancelled:
+                    self.run_status_list[power_num - 1] = 0
+                    return None
                 except Exception as e:
-                    if 'WinError' in str(e):
+                    if not isinstance(e, PowerCommandError) and 'WinError' in str(e):
                         timestamp = time.strftime('%Y_%m_%d %H:%M:%S ', time.localtime(time.time()))
                         file.write(f'{timestamp}出现一次{str(e)}异常，等待20s后再次连接\n'.encode())
                         time.sleep(20)

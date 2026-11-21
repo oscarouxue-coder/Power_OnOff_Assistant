@@ -1,0 +1,20 @@
+{
+  "size": "1480x900",
+  "scale": 1,
+  "simulated": true,
+  "errors": [],
+  "window": [
+    1480,
+    900
+  ],
+  "config_canvas": [
+    286,
+    [
+      0,
+      0,
+      406,
+      571
+    ]
+  ],
+  "log_height": 155
+}

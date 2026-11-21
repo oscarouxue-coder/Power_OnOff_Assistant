@@ -14,6 +14,8 @@ from src.ui.module_theme import MODULE_BACKGROUND
 
 class TargetDialogTests(unittest.TestCase):
     def setUp(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         gc.collect()
         self.root = tk.Tk()
         self.root.geometry("800x500")

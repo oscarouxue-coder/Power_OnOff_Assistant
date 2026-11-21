@@ -1,0 +1,1038 @@
+{
+  "parent": 60704,
+  "cases": [
+    {
+      "entry": "direct",
+      "state": "succeeded",
+      "completed_cycles_per_channel": 2,
+      "pid": 13076,
+      "events": [
+        {
+          "event": "serial_open",
+          "seconds": 0.063,
+          "port": "COM239",
+          "baudrate": 19200
+        },
+        {
+          "event": "frame",
+          "seconds": 0.078,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "frame",
+          "seconds": 0.578,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "channel_start",
+          "seconds": 1.078,
+          "channel": 3
+        },
+        {
+          "event": "channel_start",
+          "seconds": 2.094,
+          "channel": 9
+        },
+        {
+          "event": "frame",
+          "seconds": 4.11,
+          "hex": "5501a00003a2"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 4.11,
+          "channel": 3,
+          "duration": 10
+        },
+        {
+          "event": "frame",
+          "seconds": 8.125,
+          "hex": "5501a00009a8"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 8.125,
+          "channel": 9,
+          "duration": 10
+        },
+        {
+          "event": "frame",
+          "seconds": 14.266,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 15.766,
+          "channel": 3,
+          "duration": 2
+        },
+        {
+          "event": "frame",
+          "seconds": 17.781,
+          "hex": "5501a00003a2"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 17.781,
+          "channel": 3,
+          "duration": 10
+        },
+        {
+          "event": "frame",
+          "seconds": 21.797,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 23.313,
+          "channel": 9,
+          "duration": 2
+        },
+        {
+          "event": "frame",
+          "seconds": 25.344,
+          "hex": "5501a00009a8"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 25.344,
+          "channel": 9,
+          "duration": 10
+        },
+        {
+          "event": "serial_close",
+          "seconds": 35.485
+        },
+        {
+          "event": "mail_transport_calls",
+          "seconds": 35.485,
+          "count": 2
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "entry": "qt",
+      "state": "succeeded",
+      "completed_cycles_per_channel": 2,
+      "pid": 16812,
+      "events": [
+        {
+          "event": "serial_open",
+          "seconds": 0.078,
+          "port": "COM239",
+          "baudrate": 19200
+        },
+        {
+          "event": "frame",
+          "seconds": 0.078,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "frame",
+          "seconds": 0.594,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "channel_start",
+          "seconds": 1.094,
+          "channel": 3
+        },
+        {
+          "event": "channel_start",
+          "seconds": 2.109,
+          "channel": 9
+        },
+        {
+          "event": "frame",
+          "seconds": 4.125,
+          "hex": "5501a00003a2"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 4.125,
+          "channel": 3,
+          "duration": 10
+        },
+        {
+          "event": "frame",
+          "seconds": 8.156,
+          "hex": "5501a00009a8"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 8.156,
+          "channel": 9,
+          "duration": 10
+        },
+        {
+          "event": "frame",
+          "seconds": 14.25,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 15.75,
+          "channel": 3,
+          "duration": 2
+        },
+        {
+          "event": "frame",
+          "seconds": 17.765,
+          "hex": "5501a00003a2"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 17.765,
+          "channel": 3,
+          "duration": 10
+        },
+        {
+          "event": "frame",
+          "seconds": 21.797,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 23.297,
+          "channel": 9,
+          "duration": 2
+        },
+        {
+          "event": "frame",
+          "seconds": 25.312,
+          "hex": "5501a00009a8"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 25.312,
+          "channel": 9,
+          "duration": 10
+        },
+        {
+          "event": "serial_close",
+          "seconds": 35.469
+        },
+        {
+          "event": "mail_transport_calls",
+          "seconds": 35.469,
+          "count": 2
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "entry": "qt_stop",
+      "state": "stopped",
+      "retained_business_ok": false,
+      "pid": 34544,
+      "events": [
+        {
+          "event": "serial_open",
+          "seconds": 0.078,
+          "port": "COM239",
+          "baudrate": 19200
+        },
+        {
+          "event": "frame",
+          "seconds": 0.078,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "frame",
+          "seconds": 0.594,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "channel_start",
+          "seconds": 1.094,
+          "channel": 3
+        },
+        {
+          "event": "channel_start",
+          "seconds": 2.109,
+          "channel": 9
+        },
+        {
+          "event": "frame",
+          "seconds": 4.125,
+          "hex": "5501a00003a2"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 4.125,
+          "channel": 3,
+          "duration": 10
+        },
+        {
+          "event": "serial_close",
+          "seconds": 7.141
+        },
+        {
+          "event": "mail_transport_calls",
+          "seconds": 7.141,
+          "count": 0
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "entry": "direct_ping_error",
+      "state": "failed",
+      "failed_channels": [
+        3,
+        9
+      ],
+      "pid": 60784,
+      "events": [
+        {
+          "event": "serial_open",
+          "seconds": 0.078,
+          "port": "COM239",
+          "baudrate": 19200
+        },
+        {
+          "event": "frame",
+          "seconds": 0.078,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "frame",
+          "seconds": 0.593,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "channel_start",
+          "seconds": 1.109,
+          "channel": 3
+        },
+        {
+          "event": "channel_start",
+          "seconds": 2.109,
+          "channel": 9
+        },
+        {
+          "event": "frame",
+          "seconds": 4.14,
+          "hex": "5501a00003a2"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 4.14,
+          "channel": 3,
+          "duration": 10
+        },
+        {
+          "event": "frame",
+          "seconds": 8.156,
+          "hex": "5501a00009a8"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 8.156,
+          "channel": 9,
+          "duration": 10
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.265,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.281,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.281,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.281,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.281,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.281,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.281,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.281,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.281,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.281,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.281,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.281,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.281,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.281,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.281,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "serial_close",
+          "seconds": 18.296
+        },
+        {
+          "event": "mail_transport_calls",
+          "seconds": 18.296,
+          "count": 2
+        }
+      ],
+      "blocked": []
+    },
+    {
+      "entry": "qt_ping_error",
+      "state": "failed",
+      "failed_channels": [
+        3,
+        9
+      ],
+      "pid": 17052,
+      "events": [
+        {
+          "event": "serial_open",
+          "seconds": 0.062,
+          "port": "COM239",
+          "baudrate": 19200
+        },
+        {
+          "event": "frame",
+          "seconds": 0.078,
+          "hex": "5501a10003a3"
+        },
+        {
+          "event": "frame",
+          "seconds": 0.578,
+          "hex": "5501a10009a9"
+        },
+        {
+          "event": "channel_start",
+          "seconds": 1.094,
+          "channel": 3
+        },
+        {
+          "event": "channel_start",
+          "seconds": 2.094,
+          "channel": 9
+        },
+        {
+          "event": "frame",
+          "seconds": 4.125,
+          "hex": "5501a00003a2"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 4.125,
+          "channel": 3,
+          "duration": 10
+        },
+        {
+          "event": "frame",
+          "seconds": 8.14,
+          "hex": "5501a00009a8"
+        },
+        {
+          "event": "configured_wait",
+          "seconds": 8.14,
+          "channel": 9,
+          "duration": 10
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 14.25,
+          "source": "192.0.2.3"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "simulated_ping_error",
+          "seconds": 18.265,
+          "source": "192.0.2.9"
+        },
+        {
+          "event": "serial_close",
+          "seconds": 18.297
+        },
+        {
+          "event": "mail_transport_calls",
+          "seconds": 18.297,
+          "count": 2
+        }
+      ],
+      "blocked": []
+    }
+  ]
+}

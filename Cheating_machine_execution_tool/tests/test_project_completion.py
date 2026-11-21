@@ -334,6 +334,13 @@ class CompletionGuiTests(unittest.TestCase):
         self.root.after_cancel(self.root._poll_id)
         self.root._poll()
         self.assertIn(owner, dict(self.service.resources.unknown_gui()))
+        from src.services.power_worker_lifetime import ACTIVE, CapabilityError
+        with patch.dict(self.service.status.records[owner], operation='_on_start'), \
+                patch('src.services.power_worker_lifetime.power_worker_notice', return_value=ACTIVE):
+            with self.assertRaisesRegex(CapabilityError, ACTIVE):
+                self.service.resolve_gui_unknown(owner, '模拟执行器仍在运行')
+            self.assertIn(owner, dict(self.service.resources.unknown_gui()))
+            self.assertFalse((self.service.directory / 'reconciliations').exists())
         self.service.resolve_gui_unknown(owner, 'simulated-only local evidence')
         self.service.refresh_status(a.project_context)
         self.assertEqual(0, self.service.status.snapshot(a.project_context).unknown_task_count)

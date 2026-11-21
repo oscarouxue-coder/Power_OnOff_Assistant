@@ -17,6 +17,14 @@ from src.core.host_resource_lock import HostResourceLock
 Subscriber = Callable[[SerialEvent], None]
 
 
+class SerialCloseError(RuntimeError):
+    """The session could not confirm clean shutdown of all serial resources."""
+
+
+class SerialCloseStartError(RuntimeError):
+    """No worker started. The original serial ownership is still in effect."""
+
+
 class SerialCloseTicket:
     """Data-only completion; failures never transport a reader traceback to Tk."""
     def __init__(self):
@@ -65,6 +73,7 @@ class PySerialSession:
         self._close_done = threading.Event()
         self._close_started = False
         self._closer_ident = None
+        self._close_error = ""
         self._reader: threading.Thread | None = None
         self._log_handle = None
         self._rx_log_line_buffer = ""
@@ -72,6 +81,8 @@ class PySerialSession:
         register_session(self, "serial", settings.port)
 
     def open(self) -> None:
+        if self._closed:
+            raise RuntimeError(f"串口 {self.settings.port} 会话已结束，请重新取得会话")
         if self._serial is not None:
             return
         try:
@@ -93,12 +104,21 @@ class PySerialSession:
                 self._host_resource_lock.close()
                 self._host_resource_lock = None
             raise RuntimeError(f"打开串口 {self.settings.port} 失败：{exc}") from exc
-        if self.log_path is not None:
-            self.log_path.parent.mkdir(parents=True, exist_ok=True)
-            self._log_handle = self.log_path.open("a", encoding="utf-8", errors="replace")
-        self._reader = threading.Thread(target=self._reader_loop, name=f"serial-reader-{self.settings.port}", daemon=True)
-        self._reader.start()
-        self._emit("STATE", b"OPEN", "串口已打开")
+        try:
+            if self.log_path is not None:
+                self.log_path.parent.mkdir(parents=True, exist_ok=True)
+                self._log_handle = self.log_path.open("a", encoding="utf-8", errors="replace")
+            self._reader = threading.Thread(target=self._reader_loop, name=f"serial-reader-{self.settings.port}", daemon=True)
+            self._reader.start()
+            self._emit("STATE", b"OPEN", "串口已打开")
+        except BaseException as open_error:
+            # The driver is already open, even if the reader never started.
+            try:
+                self.close()
+            except SerialCloseError as close_error:
+                raise SerialCloseError(f"串口 {self.settings.port} 启动失败：{open_error}；"
+                                       f"收尾失败：{close_error}") from close_error
+            raise
 
     def cursor(self) -> int:
         with self._condition:
@@ -178,6 +198,8 @@ class PySerialSession:
     def close(self) -> None:
         with self._close_lock:
             if self._close_done.is_set():
+                if self._close_error:
+                    raise SerialCloseError(self._close_error)
                 return
             other_closer = self._close_started
             same_closer = self._closer_ident == threading.get_ident()
@@ -188,8 +210,10 @@ class PySerialSession:
             if same_closer:
                 return  # a CLOSED subscriber may call close() idempotently
             self._close_done.wait()
+            if self._close_error:
+                raise SerialCloseError(self._close_error)
             return
-        serial_closed = self._serial is None
+        driver_error = ""
         try:
             self._closed = True
             self._stop.set()
@@ -202,25 +226,36 @@ class PySerialSession:
                     pass
                 try:
                     self._serial.close()
-                    serial_closed = True
-                except Exception:
-                    pass
+                except Exception as exc:
+                    driver_error = f"串口 {self.settings.port} 驱动关闭失败：{exc}"
             with self._condition:
                 self._condition.notify_all()
             if self._reader is threading.current_thread():
                 raise RuntimeError('串口读线程不能同步关闭自身')
-            if self._reader is not None:
+            if self._reader is not None and self._reader.ident is not None:
                 # Only background owners / close workers call this blocking API.
                 # Do not close the log under a still-executing reader callback.
                 self._reader.join()
-            self._flush_pending_rx_log_line()
-            self._emit("STATE", b"CLOSED", "串口已关闭")
-            if self._log_handle is not None:
-                self._log_handle.close()
-                self._log_handle = None
-            if serial_closed and self._host_resource_lock:
+            try:
+                self._flush_pending_rx_log_line()
+                if driver_error:
+                    self._emit("ERROR", b"", driver_error)
+                else:
+                    self._emit("STATE", b"CLOSED", "串口已关闭")
+            finally:
+                if self._log_handle is not None:
+                    self._log_handle.close()
+                    self._log_handle = None
+            if driver_error:
+                raise SerialCloseError(driver_error)
+            if self._host_resource_lock:
                 self._host_resource_lock.close()
                 self._host_resource_lock = None
+        except Exception as exc:
+            self._close_error = str(exc) or type(exc).__name__
+            if isinstance(exc, SerialCloseError):
+                raise
+            raise SerialCloseError(self._close_error) from exc
         finally:
             self._close_done.set()
             retire_session(self)
@@ -342,6 +377,16 @@ class SerialSessionManager:
                 try:
                     session = PySerialSession(settings, log_path)
                     session.open()
+                except SerialCloseError as exc:
+                    # Rollback failed after opening the driver. Fence the port
+                    # exactly as for a failure closing an admitted session.
+                    ticket = SerialCloseTicket()
+                    ticket.error = str(exc)
+                    self._closing[port] = ticket
+                    ticket.done.set()
+                    if coordinator is not None:
+                        coordinator.release(self._workspace_owner(port), uncertain=True)
+                    raise
                 except BaseException:
                     if coordinator is not None:
                         coordinator.release(self._workspace_owner(port))
@@ -352,31 +397,45 @@ class SerialSessionManager:
                 self._controllers[port] = owner
             return session
 
+    def _begin_close(self, key, session, wait):
+        # Caller holds the manager lock. Commit the handoff only after a worker
+        # exists, so a refused nonblocking close leaves every owner intact.
+        ticket = SerialCloseTicket()
+        if not wait:
+            worker = threading.Thread(target=self._close_session, args=(key, session, ticket),
+                                      name=f"serial-close-{key}", daemon=True)
+            try:
+                worker.start()
+            except RuntimeError as error:
+                if worker.ident is None:
+                    raise SerialCloseStartError(str(error)) from error
+        self._closing[key] = ticket
+        del self._sessions[key]
+        self._owners.pop(key, None)
+        self._controllers.pop(key, None)
+        return ticket
+
     def release(self, owner: str, port: str, *, wait: bool = True):
         key = port.upper()
         with self._lock:
             if key in self._closing:
                 return self._closing[key]
-            if self._controllers.get(key) == owner:
-                self._controllers.pop(key, None)
-            self._owners[key].discard(owner)
-            if self._owners[key]:
+            session = self._sessions.get(key)
+            if session is None:
+                ticket = SerialCloseTicket()
+                ticket.done.set()
+                return ticket
+            owners = self._owners[key]
+            if owners != {owner}:
+                owners.discard(owner)
+                if self._controllers.get(key) == owner:
+                    self._controllers.pop(key)
                 return
-            session = self._sessions.pop(key, None)
-            self._owners.pop(key, None)
-            ticket = SerialCloseTicket()
-            if session is not None:
-                self._closing[key] = ticket
-        if session is not None:
-            if wait:
-                self._close_session(key, session, ticket)
-                if ticket.error:
-                    raise RuntimeError(ticket.error)
-            else:
-                threading.Thread(target=self._close_session, args=(key, session, ticket),
-                                 name=f"serial-close-{key}", daemon=True).start()
-        else:
-            ticket.done.set()
+            ticket = self._begin_close(key, session, wait)
+        if wait:
+            self._close_session(key, session, ticket)
+            if ticket.error:
+                raise RuntimeError(ticket.error)
         return ticket
 
     def _close_session(self, key, session, ticket):
@@ -388,10 +447,14 @@ class SerialSessionManager:
             with self._lock:
                 # A failed close remains reserved; reopening an unknown driver
                 # state could create a second reader on the physical port.
+                if self._resource_coordinator is not None:
+                    try:
+                        self._resource_coordinator.release(self._workspace_owner(key), uncertain=bool(ticket.error))
+                    except Exception as exc:
+                        message = f"串口 {key} 的工作区资源释放未确认：{type(exc).__name__}: {exc}"
+                        ticket.error = (ticket.error + "；" if ticket.error else "") + message
                 if not ticket.error:
                     self._closing.pop(key, None)
-                if self._resource_coordinator is not None:
-                    self._resource_coordinator.release(self._workspace_owner(key), uncertain=bool(ticket.error))
             ticket.done.set()
 
     def manual_writable(self, port: str) -> bool:
@@ -427,23 +490,15 @@ class SerialSessionManager:
 
     def shutdown_all(self, *, wait: bool = True):
         with self._lock:
-            sessions = tuple(self._sessions.items())
-            self._sessions.clear()
-            self._owners.clear()
-            self._controllers.clear()
             work = []
-            for key, session in sessions:
-                ticket = SerialCloseTicket()
-                self._closing[key] = ticket
-                work.append((key, session, ticket))
+            for key, session in tuple(self._sessions.items()):
+                ticket = self._begin_close(key, session, wait)
+                if wait:
+                    work.append((key, session, ticket))
             tickets = tuple(self._closing.values())
-        for key, session, ticket in work:
-            if wait:
-                self._close_session(key, session, ticket)
-            else:
-                threading.Thread(target=self._close_session, args=(key, session, ticket),
-                                 name=f"serial-close-{key}", daemon=True).start()
         if wait:
+            for key, session, ticket in work:
+                self._close_session(key, session, ticket)
             for ticket in tickets:
                 ticket.done.wait()
         return tickets

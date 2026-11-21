@@ -1,0 +1,13 @@
+{
+  "ProductVersion": null,
+  "FileVersion": null,
+  "SizeExe": 19418964,
+  "SizeZip": 18979194,
+  "ExeSHA256": "D34D5D5A29C2537285F53E0A199F305E53B3B63C531E81A98A3432FB54E259C2",
+  "ZipSHA256": "616F7DAE89ACFE7668719A595AD1E3DFACA5C94C4B6DD6BA74CF88592FB56A71",
+  "ExeMatchesRecord": true,
+  "ZipMatchesRecord": true,
+  "zip_crc_ok": true,
+  "zip_exe_matches": true,
+  "zip_version_contains_v1210": true
+}

@@ -1,0 +1,25 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "DUTPilot: 测试（离屏预检）",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": ["scripts/run_tests.py", "discover", "-s", "tests", "-v"],
+      "options": {"cwd": "${workspaceFolder}/Cheating_machine_execution_tool", "env": {"PYTHONUTF8": "1"}},
+      "problemMatcher": [],
+      "group": {"kind": "test", "isDefault": true}
+    },
+    {
+      "label": "DUTPilot: 指定测试（离屏预检）",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": ["scripts/run_tests.py", "${input:dutpilotTestId}", "-v"],
+      "options": {"cwd": "${workspaceFolder}/Cheating_machine_execution_tool", "env": {"PYTHONUTF8": "1"}},
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {"id": "dutpilotTestId", "type": "promptString", "description": "测试模块、类或方法 ID", "default": "test_tk_test_windows"}
+  ]
+}

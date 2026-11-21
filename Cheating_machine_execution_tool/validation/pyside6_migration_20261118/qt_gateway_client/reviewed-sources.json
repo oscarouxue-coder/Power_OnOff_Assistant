@@ -1,0 +1,26 @@
+{
+  "Auto_power_on_off_tool/common/power_on_off.py": {
+    "before": "324b7827ecfce9f094f486e152a95d31b03a9f441206d5019c8b91d8f71793cb",
+    "after": "6e206065be0aab814115dd809fa73bbcaecc71d0a06bf76ea1ab35f86f3af9ce"
+  },
+  "Auto_power_on_off_tool/common/serilal_client.py": {
+    "before": "2b1d8cc34b67f7a3a4668b68aaace3f26da1acc8ab0e8033a7bf59423939469a",
+    "after": "f96f8d7ee14082ff773bc365e26225ec114fccec91028d32e52b5fd67e1a8006"
+  },
+  "Auto_power_on_off_tool/test_case/powe_on_off_telnet.py": {
+    "before": "1f3424140074d24f00b515d474535464ff9f2ca8f5284f28c4155d92f5db0a20",
+    "after": "3fca1a3eb1d91679e49404aeedb5f50b1e6a9d7f526b1e034b94f6c64592b5cf"
+  },
+  "Auto_power_on_off_tool/test_case/power_on_off_ssh.py": {
+    "before": "9ec1dfeba18eff0683d5ce909a21af03b557d3aa672fda75fb532720fef69501",
+    "after": "c0e195393a84044d2fce4c65200fc2ed72759fe0ed8fc7428891337b6aa592d6"
+  },
+  "src/services/legacy_power_test_service.py": {
+    "before": "584a72f69b8aa2a8848e363aedcc3ba9d0753408398b22073e1678daef878695",
+    "after": "55e12018438ec7770be69b63d17558e9460b4603feb1069d242b2696f9e0c4e7"
+  },
+  "src/core/remote_gateway_transport.py": {
+    "before": "350b4b3448a97b9f52bd250d691fb7c9102cac6c79fcddd24766cd18788bfcdf",
+    "after": "e138ad96cf759e4d62d6de717ba91e992a6627be1d34ba686fa9fe0f6a7d476a"
+  }
+}

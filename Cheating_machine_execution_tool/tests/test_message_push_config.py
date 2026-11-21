@@ -240,6 +240,8 @@ class RemoteSetupNavigationTests(unittest.TestCase):
 
 class MessagePushWindowTests(unittest.TestCase):
     def setUp(self):
+        from tk_test_windows import install_offscreen_windows
+        install_offscreen_windows(self)
         self.root = tk.Tk()
         self.root.withdraw()
         self.addCleanup(self._close_test_root)

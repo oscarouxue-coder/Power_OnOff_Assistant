@@ -1,0 +1,26 @@
+{
+  "comparison": {
+    "immutable_config_observed_on_every_start": true,
+    "diagnostic_start_matches_project_and_batch": true,
+    "diagnostic_start_events": 2,
+    "workspace_job_id_equals_diagnostic_id": false,
+    "local_channel": 3,
+    "power_events_available": 16,
+    "qt_evidence_after_select": 0,
+    "original_evidence_after_refresh": 16,
+    "observed_sources": [
+      "channel_ready",
+      "channel_result",
+      "diagnostic_settings",
+      "log",
+      "result_log_created",
+      "stage"
+    ],
+    "wrong_channel_records": 0,
+    "model_calls": 0
+  },
+  "power_result": "completed",
+  "power_frames": 8,
+  "real_serial_opens": 0,
+  "external_requests": 0
+}

@@ -1,0 +1,4 @@
+dist/qt-20261121-110646-bc54506d/DUTPilot_portable
+Unresolved portable Qt DLL imports: PySide6/plugins/imageformats/qpdf.dll -> Qt6Pdf.dll, PySide6/plugins/platforminputcontexts/qtvirtualkeyboardplugin.dll -> Qt6VirtualKeyboard.dll
+Complete remaining PE images scanned: 39
+Unresolved portable Qt DLL imports: PySide6/QtWidgets.pyd -> Qt6Widgets.dll, PySide6/plugins/styles/qmodernwindowsstyle.dll -> Qt6Widgets.dll

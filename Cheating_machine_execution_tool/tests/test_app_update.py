@@ -67,7 +67,76 @@ def response(status=200, *, chunks=(), headers=None, payload=None):
     return item
 
 
+class QtUpdateLogTests(unittest.TestCase):
+    def test_slow_action_log_keeps_order_and_defers_close_until_last_write(self):
+        from src.services.qt_app_update import QtAppUpdate
+
+        first_write, release_first = threading.Event(), threading.Event()
+        last_write, release_last = threading.Event(), threading.Event()
+        service = Mock()
+        service.check_for_update.return_value = update_result()
+        writers = []
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'update.log'
+
+            def write(message):
+                writers.append(threading.get_ident())
+                if message == 'first':
+                    first_write.set()
+                    if not release_first.wait(5):
+                        raise RuntimeError('first write timed out')
+                if message == 'last':
+                    last_write.set()
+                    if not release_last.wait(5):
+                        raise RuntimeError('last write timed out')
+                with path.open('a', encoding='utf-8') as stream:
+                    stream.write(message + '\n')
+
+            worker = QtAppUpdate(directory, write, service_factory=lambda: service)
+            try:
+                worker.log('first')
+                self.assertTrue(first_write.wait(2))
+                self.assertFalse(worker.finish_close())
+                with patch('src.services.qt_app_update.qt_release_version', return_value='1.3.0'):
+                    self.assertTrue(worker.start('check'))
+                    worker.log('last')
+                    service.check_for_update.assert_not_called()
+                    release_first.set()
+                    self.assertTrue(last_write.wait(2))
+                    _, result = worker.poll()
+                self.assertEqual(result[:2], ('check', 'success'))
+                self.assertTrue(worker.idle)
+                self.assertFalse(worker.finish_close())
+                release_last.set()
+                worker._last_action_log.result(timeout=2)
+                self.assertTrue(worker.finish_close())
+            finally:
+                release_first.set()
+                release_last.set()
+                worker._worker.shutdown()
+            self.assertEqual(path.read_text(encoding='utf-8').splitlines(),
+                             ['first', '[检查更新] 开始手动检查，当前版本 1.3.0。',
+                              '[检查更新] 发现新版 v1.1.10。', 'last'])
+            self.assertEqual(len(set(writers)), 1)
+            self.assertNotIn(threading.get_ident(), writers)
+            service.close.assert_called_once_with()
+
+
 class AppUpdateModelCompatibilityTests(unittest.TestCase):
+    def test_qt_version_uses_source_and_installed_metadata(self):
+        from src.services.qt_app_update import qt_release_version
+
+        source = Path(__file__).resolve().parents[1]
+        self.assertEqual(qt_release_version(source), '1.3.0')
+        with tempfile.TemporaryDirectory() as directory:
+            installed = Path(directory) / 'VERSION_INFO.txt'
+            installed.write_text('DUTPilot V1.4.2 · PySide6\n', encoding='utf-8-sig')
+            with patch.object(sys, 'frozen', True, create=True), patch.object(sys, 'executable', str(installed.parent / 'DUTPilot.exe')):
+                self.assertEqual(qt_release_version(source), '1.4.2')
+                installed.write_text('DUTPilot version unavailable', encoding='utf-8')
+                with self.assertRaisesRegex(AppUpdateError, '无法识别'):
+                    qt_release_version(source)
+
     def test_models_support_python39_dataclass_and_remain_frozen(self):
         # 在较新的 Python 上也使用 3.9 的参数签名，防止再次引入 slots 等新参数。
         def python39_dataclass(cls=None, *, init=True, repr=True, eq=True,

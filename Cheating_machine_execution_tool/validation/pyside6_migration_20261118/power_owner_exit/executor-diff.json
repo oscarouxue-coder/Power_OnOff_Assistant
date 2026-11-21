@@ -1,0 +1,10 @@
+{
+  "module": "src/services/legacy_power_test_service.py",
+  "previous_packaged_source": "5553968d60251cdfa20921ece4880509d2f67f8b9de58e827d009a0cf355a7df",
+  "after": "55e12018438ec7770be69b63d17558e9460b4603feb1069d242b2696f9e0c4e7",
+  "restored_sha256_without_registration": "5553968d60251cdfa20921ece4880509d2f67f8b9de58e827d009a0cf355a7df",
+  "only_added_code": [
+    "        from src.services.power_worker_lifetime import publish_power_worker",
+    "        publish_power_worker(tool_root)"
+  ]
+}

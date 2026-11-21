@@ -234,6 +234,6 @@ class GatewayInstanceClient:
     def close(self):
         self.begin_close()
         for thread in (self.network, self.worker):
-            if thread:
+            if thread is not None and thread.ident is not None:
                 thread.join(12)
         # Do not close the Agent, its job database, its transports or its job stop tokens.

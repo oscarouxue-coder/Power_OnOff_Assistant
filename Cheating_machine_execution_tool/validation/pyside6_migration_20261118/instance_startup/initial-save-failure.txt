@@ -1,0 +1,16 @@
+GUI_TEST_COVERAGE_OK
+test_startup_write_failure_restores_previous_pending_scope (test_remote_instance_management.ManagementTests) ... FAIL
+
+======================================================================
+FAIL: test_startup_write_failure_restores_previous_pending_scope (test_remote_instance_management.ManagementTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\test_remote_instance_management.py", line 94, in test_startup_write_failure_restores_previous_pending_scope
+    self.assertFalse(pending.path.exists())
+AssertionError: True is not false
+
+----------------------------------------------------------------------
+Ran 1 test in 0.709s
+
+FAILED (failures=1)
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

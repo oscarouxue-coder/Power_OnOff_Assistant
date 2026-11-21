@@ -395,7 +395,8 @@ class ApplicationIconTests(unittest.TestCase):
                 root.destroy()
             print('NATIVE_ICON_OK windows=4 small_and_large=8 identity=verified offscreen_violations=0')
         ''')
-        result = subprocess.run([sys.executable, "-X", "utf8", "-c", probe, mode], cwd=ROOT,
+        from tk_test_windows import run_gui_child
+        result = run_gui_child([sys.executable, "-X", "utf8", "-c", probe, mode], cwd=ROOT,
                                 capture_output=True, text=True, encoding="utf-8", timeout=25)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("NATIVE_FIRST_SHOW_OK" if mode == "first_show" else "NATIVE_ICON_OK", result.stdout)

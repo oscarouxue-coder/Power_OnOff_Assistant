@@ -1,0 +1,63 @@
+GUI_TEST_COVERAGE_OK
+test_ask_user_waits_then_preserves_plan_when_answered (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_budget_requests_final_advice_without_additional_tools (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_diagnosis_hides_and_blocks_modifications_even_with_full_access (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_duplicate_failure_is_not_executed_again_and_task_concludes (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_empty_final_response_does_not_claim_diagnostic_advice (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_inflight_supplement_skips_unstarted_checks_and_is_used_next_round (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_memory_plan_and_quoted_evidence_survive_next_request (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_more_than_five_rounds_and_ten_calls_without_protocol_loss (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_pc_scope_uses_only_pc_tools_and_preserves_other_permissions (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_restart_marks_task_interrupted_and_does_not_replay_queries (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_stop_keeps_supplement_and_never_resumes_automatically (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_time_budget_cancels_unapproved_login_without_connecting (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_chat_stream_assembles_fragmented_tools_and_reasoning (test_ai_diagnostic_task.StreamTests) ... ok
+test_json_only_provider_is_accepted_without_resubmitting (test_ai_diagnostic_task.StreamTests) ... ok
+test_responses_stream_uses_completed_canonical_output (test_ai_diagnostic_task.StreamTests) ... ok
+test_split_model_key_never_appears_in_previews (test_ai_diagnostic_task.StreamTests) ... ok
+test_stop_closes_stream_without_finalizing_tools (test_ai_diagnostic_task.StreamTests) ... ok
+test_truncated_stream_never_returns_executable_calls (test_ai_diagnostic_task.StreamTests) ... ok
+test_menu_sends_diagnostic_task_and_progress_is_on_demand (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_new_session_failure_preserves_selection_and_draft (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_new_session_first_send_stays_in_new_general_session (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_new_session_is_first_and_creates_blank_without_stopping_old_work (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_new_session_menu_disables_during_routing_and_callback_guards_it (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_new_session_rejects_unsaved_profile_and_shutdown_without_creating (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_stream_preview_is_not_persisted_and_final_text_replaces_it (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_task_progress_does_not_pollute_main_log_summary (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_budgets_duplicate_checks_and_supplement_invalidation (test_ai_diagnostic_task.TaskUnitTests) ... ok
+test_different_queries_with_no_new_evidence_also_stop (test_ai_diagnostic_task.TaskUnitTests) ... ok
+test_plan_requires_existing_evidence_and_keeps_observations_separate (test_ai_diagnostic_task.TaskUnitTests) ... ok
+test_ambiguous_target_asks_without_collecting (test_ai_session_router.RouterTests) ... ok
+test_bare_target_answer_resumes_original_problem_once (test_ai_session_router.RouterTests) ... ok
+test_changed_configuration_during_resolution_does_not_create_or_send (test_ai_session_router.RouterTests) ... ok
+test_clarification_carries_only_user_description_to_device (test_ai_session_router.RouterTests) ... ok
+test_disabled_entry_cancels_before_session_creation (test_ai_session_router.RouterTests) ... ok
+test_explicit_new_creates_separate_session (test_ai_session_router.RouterTests) ... ok
+test_first_send_refresh_does_not_invalidate_route_or_keep_sent_draft (test_ai_session_router.RouterTests) ... ok
+test_general_question_with_no_targets_uses_no_tools_or_dut_executor (test_ai_session_router.RouterTests) ... ok
+test_implicit_remote_followup_after_target_change_gets_current_snapshot (test_ai_session_router.RouterTests) ... ok
+test_invalid_model_route_never_sends_old_target (test_ai_session_router.RouterTests) ... ok
+test_mention_of_other_channel_keeps_current (test_ai_session_router.RouterTests) ... ok
+test_model_cannot_execute_tools_during_route (test_ai_session_router.RouterTests) ... ok
+test_natural_language_com_port_resolves_and_preserves_user_text (test_ai_session_router.RouterTests) ... ok
+test_pc_busy_prevents_local_generic_operation (test_ai_session_router.RouterTests) ... ok
+test_pc_device_call_rejected_in_execution_service (test_ai_session_router.RouterTests) ... ok
+test_pc_session_is_independent_and_tools_exclude_device (test_ai_session_router.RouterTests) ... ok
+test_pc_snapshot_has_no_fake_device_identity (test_ai_session_router.RouterTests) ... ok
+test_queued_switch_does_not_stop_previous_session (test_ai_session_router.RouterTests) ... ok
+test_route_json_protocol_supports_responses (test_ai_session_router.RouterTests) ... ok
+test_router_shutdown_cancels_and_idle_tracks_recognition (test_ai_session_router.RouterTests) ... ok
+test_scope_participates_in_authorization_binding (test_ai_session_router.RouterTests) ... ok
+test_scope_tools_work_for_both_protocols (test_ai_session_router.RouterTests) ... ok
+test_selected_historical_session_stays_material_only (test_ai_session_router.RouterTests) ... ok
+test_source_identity_never_reuses_other_members_or_platforms (test_ai_session_router.RouterTests) ... ok
+test_switch_reuses_latest_matching_target_and_preserves_history (test_ai_session_router.RouterTests) ... ok
+test_unknown_channel_never_falls_back_to_first (test_ai_session_router.RouterTests) ... ok
+test_local_chat_reuses_project_history_and_cancels_before_store_close (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+
+----------------------------------------------------------------------
+Ran 56 tests in 19.996s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 19, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

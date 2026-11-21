@@ -1,0 +1,10 @@
+{
+  "qt_scope": "pc",
+  "original_scope": "pc",
+  "qt_continuous": true,
+  "original_continuous": false,
+  "model_turns": 0,
+  "qt_intent_calls": 1,
+  "serial_opens": 0,
+  "external_requests": 0
+}

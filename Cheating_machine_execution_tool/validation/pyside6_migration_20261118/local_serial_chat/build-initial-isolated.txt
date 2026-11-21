@@ -1,0 +1,238 @@
+Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Requirement already satisfied: pyserial==3.5 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements.txt (line 1)) (3.5)
+Requirement already satisfied: tftpy==0.8.7 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements.txt (line 2)) (0.8.7)
+Requirement already satisfied: requests<3,>=2.31 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements.txt (line 3)) (2.31.0)
+Requirement already satisfied: requests-toolbelt<2,>=1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements.txt (line 4)) (1.0.0)
+Requirement already satisfied: paramiko<4,>=3.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements.txt (line 5)) (3.1.0)
+Requirement already satisfied: ping3<5,>=4.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements.txt (line 6)) (4.0.4)
+Requirement already satisfied: pywifi<2,>=1.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements.txt (line 7)) (1.1.12)
+Requirement already satisfied: configobj<6,>=5.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements.txt (line 8)) (5.0.9)
+Requirement already satisfied: psutil<8,>=5.9 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements.txt (line 9)) (5.9.5)
+Requirement already satisfied: openpyxl<4,>=3.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements.txt (line 10)) (3.1.2)
+Requirement already satisfied: xlrd<3,>=2.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements.txt (line 11)) (2.0.2)
+Requirement already satisfied: websockets==15.0.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements.txt (line 12)) (15.0.1)
+Requirement already satisfied: lark-oapi==1.7.5 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements.txt (line 13)) (1.7.5)
+Requirement already satisfied: charset-normalizer==3.1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 8)) (3.1.0)
+Requirement already satisfied: idna==3.4 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 9)) (3.4)
+Requirement already satisfied: urllib3==2.0.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 10)) (2.0.2)
+Requirement already satisfied: certifi==2023.5.7 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 11)) (2023.5.7)
+Requirement already satisfied: bcrypt==4.0.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 13)) (4.0.1)
+Requirement already satisfied: cryptography==40.0.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 14)) (40.0.2)
+Requirement already satisfied: cffi==1.15.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 15)) (1.15.1)
+Requirement already satisfied: pycparser==2.21 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 16)) (2.21)
+Requirement already satisfied: PyNaCl==1.5.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 17)) (1.5.0)
+Requirement already satisfied: comtypes==1.1.14 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 21)) (1.1.14)
+Requirement already satisfied: et-xmlfile==1.1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 25)) (1.1.0)
+Requirement already satisfied: pycryptodome==3.23.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 29)) (3.23.0)
+Requirement already satisfied: httpx==0.28.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 30)) (0.28.1)
+Requirement already satisfied: httpcore==1.0.9 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 31)) (1.0.9)
+Requirement already satisfied: h11==0.16.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 32)) (0.16.0)
+Requirement already satisfied: anyio==4.12.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 33)) (4.12.1)
+Requirement already satisfied: exceptiongroup==1.3.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 34)) (1.3.1)
+Requirement already satisfied: typing-extensions==4.16.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 35)) (4.16.0)
+Requirement already satisfied: pyinstaller==5.10.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 36)) (5.10.1)
+Requirement already satisfied: pyinstaller-hooks-contrib==2023.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 37)) (2023.2)
+Requirement already satisfied: setuptools==58.1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 38)) (58.1.0)
+Requirement already satisfied: altgraph==0.17.3 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 39)) (0.17.3)
+Requirement already satisfied: pefile==2023.2.7 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 40)) (2023.2.7)
+Requirement already satisfied: pywin32-ctypes==0.2.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-build.txt (line 41)) (0.2.2)
+Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Requirement already satisfied: PySide6-Essentials==6.8.3 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-qt.txt (line 2)) (6.8.3)
+Requirement already satisfied: shiboken6==6.8.3 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\requirements-qt.txt (line 3)) (6.8.3)
+No broken requirements found.
+BUILD_ENVIRONMENT_OK Qt CPython 3.9.10 x64; locked dependencies; numpy/lxml/PyQt5 absent
+Packaging Python: C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-build-py39\Scripts\python.exe
+Project root: C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool
+
+  [OK  ] py_compile - 382 files compiled
+  [OK  ] compile_inventory - 372 source files covered
+  [OK  ] capability_coverage - GUI actions and business inventory reviewed
+  [OK  ] gui_test_coverage - GUI test ownership preflight passed
+  [FAIL] unittest - non-zero exit; tail: wifi_connection_service.ConnectionServiceTests) ... ok
+test_each_ping_connection_guard_failure_can_recover_then_start_next_band (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_fifo_owner_is_retained_through_ping_guard_retry (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_fifo_reservation_covers_disconnect_confirmation (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_four_scan_failures_are_environment_error_and_never_connect (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_interface_state_error_keeps_actual_reason_without_retrying_disconnect (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_invalid_options_and_disabled_ping_target (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_ipv4_wait_guard_failure_also_uses_four_attempts (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_manual_unsupported_mode_is_environment_error (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_master_off_ignores_all_wireless_only_validation (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_native_scheduler_keeps_reservation_across_ping (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_other_dut_with_same_ssid_never_passes_and_keeps_retry_budget (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_per_band_skips_unselected_target (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_permanent_scan_error_exits_without_retry_or_connect (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_ping_environment_errors_still_do_not_retry (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_ping_failure_does_not_reconnect_or_start_second_band (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_ping_guard_cleanup_failure_starts_no_retry (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_ping_guard_disconnect_timeout_starts_no_retry (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_post_ping_guard_failure_retries_and_unified_mode_recovers (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_prior_ping_reply_cannot_pass_later_attempt_with_no_replies (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_resume_after_scan_error_starts_fresh_attempts (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_same_ssid_requires_both_actual_bssids_and_pings_each_band (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_scan_connection_and_ping_guard_failures_share_four_attempts (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_scan_failure_retries_in_existing_attempt_budget_then_recovers (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_scan_near_deadline_cannot_submit_connection_after_budget (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_scan_timeout_uses_twenty_seconds_per_attempt_and_only_four_attempts (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_second_band_scanning_waits_for_confirmed_stable_disconnect (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_stop_wins_over_ping_guard_failure (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_stop_wins_over_scan_error_or_state_query_error (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_unified_mode_runs_once_even_when_saved_band_flags_off (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_wrong_band_during_ping_retries_in_shared_budget_without_false_success (test_wifi_connection_service.ConnectionServiceTests) ... ok
+test_api_error_translation_failure_does_not_hide_original_code (test_wifi_connection_service.NativeScanTests) ... ok
+test_api_return_classification_does_not_retry_permanent_or_unknown_errors (test_wifi_connection_service.NativeScanTests) ... ok
+test_failure_reason_is_copied_in_callback_and_decoded_only_in_worker (test_wifi_connection_service.NativeScanTests) ... ok
+test_first_terminal_result_wins_and_next_scan_clears_old_failure (test_wifi_connection_service.NativeScanTests) ... ok
+test_ignores_non_target_source_guid_and_inactive_notifications (test_wifi_connection_service.NativeScanTests) ... ok
+test_interface_state_queries_real_state_and_releases_buffer (test_wifi_connection_service.NativeScanTests) ... ok
+test_invalid_interface_state_buffer_is_rejected_and_freed (test_wifi_connection_service.NativeScanTests) ... ok
+test_reason_translation_error_retains_numeric_code (test_wifi_connection_service.NativeScanTests) ... ok
+test_unknown_missing_and_short_reason_data_still_report_scan_failure (test_wifi_connection_service.NativeScanTests) ... ok
+test_auto_prefers_supported_sae_and_manual_mixed_string_works (test_wifi_connection_service.SecurityTests) ... ok
+test_native_connection_is_temporary_bssid_scoped_and_never_saves_profiles (test_wifi_connection_service.SecurityTests) ... ok
+test_native_windows_structure_abi (test_wifi_connection_service.SecurityTests) ... ok
+test_profile_escapes_credentials_and_keeps_manual_connection (test_wifi_connection_service.SecurityTests) ... ok
+test_rsn_and_wpa_ie_parse_and_truncated_or_wep_not_guessed (test_wifi_connection_service.SecurityTests) ... ok
+test_mapping_uses_real_instances_and_returns_bssids_without_password_logs (test_wifi_connection_service.TargetReaderTests) ... ok
+test_missing_mapping_is_not_replaced_by_fixed_indices (test_wifi_connection_service.TargetReaderTests) ... ok
+test_same_ssid_does_not_infer_dual_band_flag (test_wifi_connection_service.TargetReaderTests) ... ok
+test_single_band_does_not_read_unselected_band (test_wifi_connection_service.TargetReaderTests) ... ok
+test_stop_prevents_readonly_commands (test_wifi_connection_service.TargetReaderTests) ... ok
+test_unified_can_use_one_confirmed_band_but_missing_both_is_error (test_wifi_connection_service.TargetReaderTests) ... ok
+test_names_are_trimmed_deduplicated_and_keep_discovery_order (test_wifi_interfaces.WifiInterfaceTests) ... ok
+test_form_fields_reach_formal_request_and_confirmation (test_wifi_test_controls.WifiConfigTests) ... ok
+test_formal_request_rejects_unsupported_solution_and_invalid_enabled_ping (test_wifi_test_controls.WifiConfigTests) ... ok
+test_legacy_config_defaults_do_not_write_files_or_change_old_choices (test_wifi_test_controls.WifiConfigTests) ... ok
+test_new_settings_roundtrip_preserves_disabled_ping_target_and_manual_values (test_wifi_test_controls.WifiConfigTests) ... ok
+test_added_controls_fit_configuration_tab_without_showing_device_windows (test_wifi_test_controls.WifiControlsTests) ... ok
+test_auto_manual_and_ping_toggle_keep_values_on_reload (test_wifi_test_controls.WifiControlsTests) ... ok
+test_enabled_ping_requires_target_but_master_off_can_keep_empty (test_wifi_test_controls.WifiControlsTests) ... ok
+test_native_checks_mode_switch_preserves_band_selections (test_wifi_test_controls.WifiControlsTests) ... ok
+test_app_restores_and_remembers_window_size_without_recording_position (test_window_size_state.ModuleWindowSizeStateTests) ... ok
+test_load_clamps_saved_size_and_invalid_data_falls_back_to_defaults (test_window_size_state.ModuleWindowSizeStateTests) ... ok
+test_sample_upgrade_minimum_size_is_820_by_620 (test_window_size_state.ModuleWindowSizeStateTests) ... ok
+test_save_and_load_keep_each_module_size_independent (test_window_size_state.ModuleWindowSizeStateTests) ... ok
+test_app_exit_closes_history_before_destroying_main_window (test_window_size_state.PowerTestHistoryWindowStateTests) ... can't invoke "event" command: application has been destroyed
+    while executing
+"event generate $w <<ThemeChanged>>"
+    (procedure "ttk::ThemeChanged" line 6)
+    invoked from within
+"ttk::ThemeChanged"
+can't invoke "event" command: application has been destroyed
+    while executing
+"event generate $w <<ThemeChanged>>"
+    (procedure "ttk::ThemeChanged" line 6)
+    invoked from within
+"ttk::ThemeChanged"
+can't invoke "event" command: application has been destroyed
+    while executing
+"event generate $w <<ThemeChanged>>"
+    (procedure "ttk::ThemeChanged" line 6)
+    invoked from within
+"ttk::ThemeChanged"
+ok
+test_close_button_and_titlebar_both_save_size_and_restore_for_other_channel (test_window_size_state.PowerTestHistoryWindowStateTests) ... ok
+test_corrupt_state_falls_back_and_failed_save_does_not_block_repeated_close (test_window_size_state.PowerTestHistoryWindowStateTests) ... ok
+test_first_open_is_non_modal_owned_window_with_existing_default_size (test_window_size_state.PowerTestHistoryWindowStateTests) ... ok
+test_recreated_app_restores_persisted_size (test_window_size_state.PowerTestHistoryWindowStateTests) ... ok
+test_reset_closes_history_and_remembers_size (test_window_size_state.PowerTestHistoryWindowStateTests) ... ok
+test_switching_channel_reuses_window_without_resetting_size_or_history (test_window_size_state.PowerTestHistoryWindowStateTests) ... ok
+test_dns_pending_cancellation_retains_buffers_until_completion (test_wireless_ping.DnsTests) ... ok
+test_dns_timeout_cancels_query_without_default_interface_fallback (test_wireless_ping.DnsTests) ... ok
+test_native_dns_uses_explicit_interface_and_first_a_record (test_wireless_ping.DnsTests) ... ok
+test_stop_before_dns_submission_never_queries_and_releases_buffers (test_wireless_ping.DnsTests) ... ok
+test_echo_reply_requires_ip_id_sequence_payload_and_checksum (test_wireless_ping.TargetAndPacketTests) ... ok
+test_ipv4_domain_idna_and_invalid_targets (test_wireless_ping.TargetAndPacketTests) ... ok
+test_cancel_during_ipv4_wait_and_during_reply_wait (test_wireless_ping.WirelessPingTests) ... ok
+test_changed_bssid_after_reply_does_not_produce_success (test_wireless_ping.WirelessPingTests) ... ok
+test_dns_failure_prevents_all_icmp_packets (test_wireless_ping.WirelessPingTests) ... ok
+test_four_packets_bind_wireless_source_and_interface_and_report_statistics (test_wireless_ping.WirelessPingTests) ... ok
+test_hostname_resolves_on_wireless_and_pins_first_a_record (test_wireless_ping.WirelessPingTests) ... ok
+test_interface_option_failure_never_sends_or_falls_back (test_wireless_ping.WirelessPingTests) ... ok
+test_local_ip_and_subnet_broadcast_not_counted_as_wireless_connectivity (test_wireless_ping.WirelessPingTests) ... ok
+test_lost_source_address_stops_later_packets (test_wireless_ping.WirelessPingTests) ... ok
+test_no_replies_fails_without_reconnection_or_default_interface (test_wireless_ping.WirelessPingTests) ... ok
+test_one_reply_passes_but_all_four_probes_still_run (test_wireless_ping.WirelessPingTests) ... ok
+test_permission_preflight_is_explicit (test_wireless_ping.WirelessPingTests) ... ok
+test_waits_for_wireless_ip_not_other_interface (test_wireless_ping.WirelessPingTests) ... ok
+test_wireless_unreachable_does_not_use_reachable_wired_interface (test_wireless_ping.WirelessPingTests) ... ok
+test_wrong_source_reply_not_counted (test_wireless_ping.WirelessPingTests) ... ok
+test_form_wheel_scrolls_the_page_without_editing_values (test_workbench_panels.WorkbenchPanelsTests) ... ok
+test_high_volume_display_retains_bounded_tail (test_workbench_panels.WorkbenchPanelsTests) ... ok
+test_large_single_line_and_empty_display_are_bounded (test_workbench_panels.WorkbenchPanelsTests) ... ok
+test_small_window_scrolls_to_existing_controls_and_logs_resize (test_workbench_panels.WorkbenchPanelsTests) ... ok
+test_aging_capability_is_explicitly_presented_as_power_cycling (test_workbench_status.WorkbenchStatusTests) ... ok
+test_different_channel_rounds_do_not_become_a_single_percentage (test_workbench_status.WorkbenchStatusTests) ... ok
+test_equal_rounds_and_explicit_results_are_projected_without_mutation (test_workbench_status.WorkbenchStatusTests) ... ok
+test_invalid_historical_start_time_does_not_break_overview (test_workbench_status.WorkbenchStatusTests) ... ok
+test_retained_channels_from_a_previous_run_are_not_aggregated (test_workbench_status.WorkbenchStatusTests) ... ok
+test_client_first_poll_sees_attached_project_and_start_failure_drains_worker (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_close_waits_for_receipt_after_agent_worker_finishes (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_exports_only_proven_current_boot_receipts_and_keeps_legacy_rows (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_failed_incoming_receipt_releases_only_its_own_project (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_local_project_revocation_does_not_expand_to_another_project (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_other_principal_is_rejected_before_project_listing (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_repeated_receipt_after_switch_does_not_move_or_reexecute_original (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_requires_explicit_project_before_forwarding (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_selection_and_explicit_prefix_keep_original_signed_request (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_unready_receipt_is_not_replayed_after_project_controller_attaches (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_invalid_authentication_does_not_kill_listener_or_accept_request (test_workspace_instance.WorkspaceInstanceTests) ... ok
+test_second_launch_forwards_project_without_starting_another_manager (test_workspace_instance.WorkspaceInstanceTests) ... ok
+test_approval_after_switch_returns_to_original_project (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_duplicate_names_require_explicit_id (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_explicit_project_message_strips_only_routing_prefix (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_feishu_direct_message_project_routing (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_no_project_selection_never_executes (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_removed_project_is_not_executed_or_listed (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_switch_routes_new_messages_without_replaying_old_message (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_two_projects_share_one_transport (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_untrusted_group_does_not_receive_project_listing (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+
+======================================================================
+ERROR: test_peer_mode_delivers_version_through_project_chat_and_local_approval (test_qt_workspace_adapter.QtWorkspaceAdapterTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Python\Python39\lib\unittest\mock.py", line 1226, in _dot_lookup
+    return getattr(thing, comp)
+AttributeError: module 'src.services' has no attribute 'project_peer_runtime'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_tool\tests\test_qt_workspace_adapter.py", line 83, in test_peer_mode_delivers_version_through_project_chat_and_local_approval
+    scope.enter_context(patch('src.services.project_peer_runtime.PeerPlatforms.start'))
+  File "C:\Python\Python39\lib\contextlib.py", line 448, in enter_context
+    result = _cm_type.__enter__(cm)
+  File "C:\Python\Python39\lib\unittest\mock.py", line 1388, in __enter__
+    self.target = self.getter()
+  File "C:\Python\Python39\lib\unittest\mock.py", line 1563, in <lambda>
+    getter = lambda: _importer(target)
+  File "C:\Python\Python39\lib\unittest\mock.py", line 1239, in _importer
+    thing = _dot_lookup(thing, comp, import_path)
+  File "C:\Python\Python39\lib\unittest\mock.py", line 1228, in _dot_lookup
+    __import__(import_path)
+ModuleNotFoundError: No module named 'src.services.project_peer_runtime'
+
+----------------------------------------------------------------------
+Ran 3266 tests in 621.505s
+
+FAILED (errors=1, skipped=2)
+  [OK  ] must_exist: bbfdm.operate - hit in src\core\dut_ubus_config.py (+1)
+  [OK  ] must_exist: tclinux_allinone - hit in src\core\tftp_transport.py (+1)
+  [OK  ] must_exist: 192.168.1.1 - hit in src\core\telnet_transport.py (+5)
+  [OK  ] must_exist: vlan_to_serial_port - hit in src\core\__init__.py (+11)
+  [OK  ] must_exist: MAX_PARALLEL_UPGRADES = 8 - hit in line_check_assistant\sample_upgrade_settings_store.py
+  [OK  ] must_exist: clamp_parallel_count - hit in src\services\firmware_upgrade_service.py (+2)
+  [OK  ] must_exist: source_address=(bind_ip, 0) - hit in src\core\telnet_transport.py (+3)
+  [OK  ] must_exist: Device.Firewall.<X_SDMC_>Security.AccessCtrl - hit in src\core\ubus_enable_telnet.py
+  [OK  ] must_not_exist: 0.0.0.0 - absent from code lines of src/core/tftp_transport.py,src/core/telnet_transport.py
+
+FAILED: 1 check(s) failed
+Baseline failed; packaging is blocked
+At C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\local-channel-0d686fd9\Cheating_machine_execution_
+tool\build_line_check_assistant.ps1:94 char:32
++ ... LASTEXITCODE -ne 0) { throw "Baseline failed; packaging is blocked" }
++                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Baseline failed; packaging is blocked:String) [], RuntimeException
+    + FullyQualifiedErrorId : Baseline failed; packaging is blocked
+ 

@@ -1,0 +1,1 @@
+GUI_TEST_COVERAGE_OK: 84 GUI construction sites reviewed

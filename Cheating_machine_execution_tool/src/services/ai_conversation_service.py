@@ -223,7 +223,8 @@ class AiConversationService:
         return identifier
 
     def create_session(self, target, profile, title="", report=None, source_report_id="", *,
-                       source=None, default_permission=None, scope="device", batch_targets=None, batch_parent=None):
+                       source=None, default_permission=None, scope="device", batch_targets=None, batch_parent=None,
+                       diagnosis_only=False):
         if self.shutdown.is_set():
             raise RuntimeError("AI对话正在退出")
         if not profile or not profile.model.strip():
@@ -246,6 +247,10 @@ class AiConversationService:
                    "status": "可继续", "pending": None, "source_report_id": source_report_id}
         if source is not None:
             payload["source"] = dict(source)
+        if diagnosis_only:
+            if scope not in ("pc", "device"):
+                raise ValueError("连续诊断须绑定本机电脑或单个设备")
+            payload["diagnosis_only"] = True
         if batch_targets:
             payload.update(batch_targets=batch_targets, batch_children={})
         if batch_parent:
@@ -269,6 +274,12 @@ class AiConversationService:
             self.stop(session["id"])
             raise ValueError("会话模型配置已变更或删除，请用当前配置新建会话；历史记录保留")
         return current
+
+    def tools_for_turn(self, state, scope):
+        return conversation_tools(state["enabled"], state["capable"], scope)
+
+    def capabilities_for(self, identifier):
+        return getattr(self, "capabilities", None)
 
     def collection_status(self, identifier):
         """实时资格，不持久化授权；UI、每次请求和执行前使用同一规则。"""
@@ -394,7 +405,7 @@ class AiConversationService:
         if _submit_guard is not None and not _submit_guard():
             raise InterruptedError("本条发送已取消，未入队")
         self.permissions.activate(identifier)
-        capability = getattr(self, "capabilities", None)
+        capability = self.capabilities_for(identifier)
         if capability is not None:
             capability.accept_confirmation(identifier, text)
         with self.lock:
@@ -563,7 +574,7 @@ class AiConversationService:
                 self.message(identifier, "system", self.redactor.text(str(exc)), "error")
                 self.emit(f"会话{identifier[:8]}{status}：{exc}")
             finally:
-                capability_runtime = getattr(self, "capabilities", None)
+                capability_runtime = self.capabilities_for(identifier)
                 if capability_runtime is not None:
                     capability_runtime.service.metrics.finish(identifier)
                 if stop.is_set():
@@ -666,7 +677,7 @@ class AiConversationService:
             self._save_usage(identifier, snapshot)
             self.emit(f"会话{identifier[:8]}独立风险审查请求；模型={profile.model}，估算输入{estimated} Token")
             try:
-                capability = getattr(self, 'capabilities', None)
+                capability = self.capabilities_for(identifier)
                 if capability is not None:
                     capability.service.metrics.model(identifier)
                 reply = client.complete(history, [], stop)
@@ -683,7 +694,7 @@ class AiConversationService:
             client.close()
 
     def _run(self, identifier, text, stop, profile, key):
-        capability = getattr(self, "capabilities", None)
+        capability = self.capabilities_for(identifier)
         metrics = capability.service.metrics if capability is not None else None
         if metrics:
             metrics.begin(identifier, only_if_missing=True)
@@ -693,7 +704,7 @@ class AiConversationService:
         target = DiagnosticTarget(**session["target"]) if session.get("target") else None
         scope = session_scope(session)
         profile = self._profile(session)  # 排队期间容量设置可能已变化，模型身份仍须相同。
-        if self.version_queries.try_run(identifier, text, stop, profile, key):
+        if capability is not None and self.version_queries.try_run(identifier, text, stop, profile, key):
             return
         self.refresh_evidence(identifier)
         groups = self.store.chat_items(identifier, group=True)
@@ -757,7 +768,7 @@ class AiConversationService:
                     state = self.collection_status(identifier)
                     limit = task.limit_reason() if task else ""
                     exhausted = bool(limit) if task else turn >= 4 or used >= 10
-                    tools = [] if exhausted else conversation_tools(state["enabled"], state["capable"], scope)
+                    tools = [] if exhausted else self.tools_for_turn(state, scope)
                     if session.get('capability_business_batch') and not exhausted:
                         tools = [t for t in conversation_tools(state['enabled'], state['capable'], 'pc')
                                  if t['name'] in ('ask_user', 'read_test_evidence')]
@@ -786,7 +797,8 @@ class AiConversationService:
                         current[0]["content"] = self.redactor.dumps(info)
                         budget.current = task.compact(current)
                     permission = self.permissions.status(identifier)
-                    runtime = {"enabled": state["enabled"] and bool(tools), "reason": reason,
+                    available = state["enabled"] or state.get("passive_serial", False)
+                    runtime = {"enabled": available and bool(tools), "reason": reason,
                                "full_access": permission["mode"] == FULL,
                                "permission_mode": permission["mode"],
                                "approval": PERMISSION_DESCRIPTIONS[permission["mode"]],

@@ -27,7 +27,7 @@ class GatewayPlatforms:
         if not config.get("enabled") or (message.robot, message.corp, message.group) != (config["robot_code"], config["corp"], config["group"]):
             return
         principal = RemotePrincipal("dingtalk", message.robot, message.corp, "group", message.group, message.sender)
-        self.receive(principal, message.id, message.text)
+        self.receive_event(principal, message.id, message.text, data.get('createAt'))
 
     def receive_feishu(self, data, bot_id):
         config = self.configs["feishu"]
@@ -36,7 +36,11 @@ class GatewayPlatforms:
                    or config.get("p2p_enabled") and message.chat_type == "p2p")
         if not config.get("enabled") or not allowed or message.corp != config["corp"]:
             return
-        self.receive(RemotePrincipal("feishu", message.robot, message.corp, message.chat_type, message.group, message.sender), message.id, message.text)
+        self.receive_event(RemotePrincipal("feishu", message.robot, message.corp, message.chat_type, message.group, message.sender),
+                           message.id, message.text, data['event']['message'].get('create_time'))
+
+    def receive_event(self, principal, message_id, text, created_ms):
+        self.receive(principal, message_id, text)
 
     def receive(self, principal, message_id, text):
         # Called by authenticated platform SDK callbacks only, never a public relay RPC.
@@ -81,6 +85,9 @@ class GatewayPlatforms:
                 text += "\n" + receipt["answer"]
             self._queue(digest((request_id, receipt)), principal, text, instance_id, run_id)
 
+    def may_send(self, principal, target):
+        return not target or any(v['instance_id'] == target for v in self.store.instances(principal, online_only=False))
+
     def send_one(self):
         with self.store.lock, self.store.db:
             row = self.store.db.execute("SELECT id,principal,payload,instance FROM replies WHERE state='pending' ORDER BY rowid LIMIT 1").fetchone()
@@ -91,7 +98,7 @@ class GatewayPlatforms:
         state = "unknown"
         try:
             principal = RemotePrincipal.parse(json.loads(row[1]))
-            if row[3] and not any(v["instance_id"] == row[3] for v in self.store.instances(principal, online_only=False)):
+            if not self.may_send(principal, row[3]):
                 raise ValueError("结果发送前实例范围已经撤销")
             if principal.platform in self.senders:
                 self.senders[principal.platform](principal, row[2], row[0])
@@ -151,7 +158,7 @@ class GatewayPlatforms:
         self.stop.set()
         for transport in self.transports:
             transport.begin_close()
-        if self.worker:
+        if self.worker and self.worker.ident is not None:
             self.worker.join(12)
         deadline = time.monotonic() + 20
         while any(not transport.idle for transport in self.transports) and time.monotonic() < deadline:

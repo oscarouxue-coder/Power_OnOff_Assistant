@@ -1,0 +1,15 @@
+{
+  "error": "simulated close worker refusal",
+  "state_after_refusal": {
+    "port": "COM7959",
+    "opened_in_program": false,
+    "closing_in_program": true,
+    "monitor_owners": [],
+    "control_owner": ""
+  },
+  "shutdown_completed": [
+    false
+  ],
+  "driver_closed": false,
+  "driver_writes": 0
+}

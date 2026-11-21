@@ -1,0 +1,11 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_2631aa1e666d42238f2144c7b5677abf'}
+
+test_qt_wifi_actual_caps_dual_sync_password_and_responsive_forms (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_instance_startup_save_requires_local_scope_and_survives_reopen (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_operator_stop_waits_for_original_process_receipt (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 8.256s
+
+OK

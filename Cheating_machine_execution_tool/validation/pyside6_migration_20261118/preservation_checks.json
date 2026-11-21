@@ -1,0 +1,18 @@
+{
+  "original_core_and_services": {
+    "files": 162,
+    "changed": []
+  },
+  "original_legacy_business": {
+    "files": 31,
+    "changed": []
+  },
+  "local_compatible_configuration": {
+    "files": 10,
+    "changed": []
+  },
+  "original_app": {
+    "files": 1,
+    "changed": []
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "pyz_matching": 299,
+  "namespace_packages": [
+    "src.utils"
+  ],
+  "pyz_missing_source": [],
+  "pyz_mismatch": [],
+  "core_and_controls_present": true,
+  "sha256": "59083acf5d26e07d793571a222608c3b181fc40ae0316454825887619db19adc",
+  "sha256_ok": true,
+  "zip_crc": true,
+  "zip_size": 55367579,
+  "pe_version": "1.3.0",
+  "zip_directory_match": true,
+  "directory_files": 247,
+  "windows_x64_gui": true,
+  "exe_executed": false
+}

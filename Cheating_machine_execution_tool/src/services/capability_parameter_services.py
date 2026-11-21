@@ -33,9 +33,10 @@ class ParameterCapabilities:
                           ("channel_ids", "table_path")), self.write, risk="dangerous", execution_mode="job",
             resource_requirements=("device-business", "serial", "adapter"), cancellation="cooperative"))
 
-    def _prepare(self, arguments, authority, snapshot=None):
+    def _prepare(self, arguments, authority, snapshot=None, *, records=None):
         snapshot, channels = self.service.devices.selected(arguments, authority, snapshot)
-        records = load_parameter_records(Path(arguments["table_path"]).expanduser().resolve())
+        if records is None:
+            records = load_parameter_records(Path(arguments["table_path"]).expanduser().resolve())
         ports, indexed = [], {}
         from src.core.serial_transport import vlan_to_serial_port
         for channel in channels:
@@ -66,11 +67,16 @@ class ParameterCapabilities:
         self.service.emit(f"[能力执行] 参数表已生成：{output}，{len(records)}台")
         return dict(ok=True, path=str(output), count=len(records))
 
-    def write(self, arguments, authority):
+    def write(self, arguments, authority, *, confirmed_table=None, observe_serial=None):
         # Capture the exact preflight table, then recheck the file under admission.
         # The worker consumes these records, never a different later file at this path.
         table_info = self.service.files.information(arguments['table_path'])
-        prepared = self._prepare(arguments, authority)
+        records = None
+        if confirmed_table is not None:
+            expected_digest, records = confirmed_table
+            if table_info['sha256'] != expected_digest:
+                raise CapabilityError('parameter_table_changed', '参数表自本机确认后发生变化，未写参')
+        prepared = self._prepare(arguments, authority, records=records)
         def precheck():
             if self.service.files.information(arguments['table_path'])['sha256'] != table_info['sha256']:
                 raise CapabilityError('parameter_table_changed', '参数表自预检后发生变化，未写参')
@@ -86,6 +92,8 @@ class ParameterCapabilities:
             for target in result.targets:
                 channel = indexed[target.vlan.lower()]
                 bind_ip, host = channel.network_card_ip.strip(), channel.device_manage_ip.strip()
+                if confirmed_table is not None and not host:
+                    host = snapshot.get('device_ip', '').strip()
                 if bind_ip and host and bind_ip == host:
                     raise CapabilityError("invalid_target", "写参源IP与样机IP相同")
                 factory_bind = channel.factory_bind_ip or (factory_bind_ip_for(bind_ip) if bind_ip else "")
@@ -100,8 +108,13 @@ class ParameterCapabilities:
                 network[target.vlan.lower()] = (channel.adapter_alias or channel.vlan_name, channel.subnet_mask)
             context.stop.checkpoint()
             context.event("parameters", "调用共用写参应用服务，保留原重试/等待/二次登录/读回校验", dispatched=True)
-            values = self.runner(requests, arguments.get("parallel_count", 1), context.stop.event, self.service.manager,
-                network, lambda line: context.event("parameters", line))
+            runner_args = (requests, arguments.get("parallel_count", 1), context.stop.event,
+                           self.service.manager, network, lambda line: context.event("parameters", line))
+            if observe_serial is None:
+                values = self.runner(*runner_args)
+            else:
+                with observe_serial(requests) as ready:
+                    values = self.runner(*runner_args, on_session_ready=ready)
             items = []
             for value in values:
                 item = asdict(value)

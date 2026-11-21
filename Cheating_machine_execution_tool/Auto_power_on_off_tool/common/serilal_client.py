@@ -46,7 +46,9 @@ class Serial(object):
         self.ser.close()
 
     def write(self, cmd):
-        self.ser.write(cmd)
+        written = self.ser.write(cmd)
+        if written != len(cmd):
+            raise IOError(f'串口仅写入 {written}/{len(cmd)} 字节')
 
     def serial_write(self, cmd):
         cmd = cmd.encode('utf-8') + b'\n'

@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from src.ui import project_dialogs as messagebox
 
+from src.models.channel_resource_options import (
+    FIRST_VLAN_ID, POWER_SERIAL_OPTIONS, POWER_SUPPLY_COUNT, VLAN_PER_POWER_SUPPLY,
+    _power_serial_group_index, serial_options_for_power_serial_port, vlan_options_for_power_serial_port,
+)
 from src.models.upgrade_stop import UpgradeStopped, UpgradeStoppedResult
 from src.services.upgrade_stop_service import UpgradeRun, result_state, summarize_results
 from src.models.boot_entry import BOOT_ENTRY_LOGIN, BOOT_ENTRY_OPTIONS, normalize_boot_entry
@@ -24,6 +28,7 @@ from src.ui.project_name_badge import ProjectNameBadge
 from src.ui.main_log_filter import (FeishuConnectionLogState, ai_main_log_tag, format_main_log_message,
                                     is_ai_log_message, is_dut_log_message, is_resource_monitor_log_message)
 from src.ui.module_theme import apply_module_theme
+from src.ui.form_wheel import configure_form_wheel
 from src.ui.application_icon import apply_application_icon, set_taskbar_application_id
 from src.ui.onu_registered_list import RegisteredOnuList, confirm_batch_delete
 from src.services.onu_batch_delete_service import OnuBatchDeleteService
@@ -190,10 +195,7 @@ def _remote_config(view, kind):
     return FeishuConfigStore(APP_DIR)
 
 
-POWER_SUPPLY_COUNT = 6
 TOTAL_CHANNEL_COUNT = 16
-VLAN_PER_POWER_SUPPLY = 8
-FIRST_VLAN_ID = 101
 POWER_ON_WAIT_SECONDS = 0
 POWER_ACTION_ON = "上电"
 POWER_ACTION_OFF = "下电"
@@ -236,72 +238,6 @@ def power_channel_from_section(section: str) -> int:
         return 0
 
 
-def _power_serial_group_index(serial_port: str) -> int:
-    normalized_port = (port_from_display(serial_port) or serial_port or "").strip().upper()
-    port_number = normalized_port[3:] if normalized_port.startswith("COM") else ""
-    try:
-        raw_index = int(port_number)
-    except ValueError:
-        return 0
-    if 101 <= raw_index < 101 + POWER_SUPPLY_COUNT:
-        return raw_index - 100
-    if 1 <= raw_index <= POWER_SUPPLY_COUNT:
-        # 兼容操作员口头所说的 COM1 / COM2；实际程控电源项仍为 COM101 / COM102。
-        return raw_index
-    return 0
-
-
-def serial_options_for_power_serial_port(serial_port: str) -> list[str]:
-    """按程控电源分组返回样机串口候选，每组连续8个COM口。"""
-    power_index = _power_serial_group_index(serial_port)
-    if not power_index:
-        return [f"COM{index}" for index in range(1, POWER_SUPPLY_COUNT * VLAN_PER_POWER_SUPPLY + 1)]
-    start_port = (power_index - 1) * VLAN_PER_POWER_SUPPLY + 1
-    return [f"COM{index}" for index in range(start_port, start_port + VLAN_PER_POWER_SUPPLY)]
-
-
-def vlan_options_for_power_serial_port(adapters: list[str], serial_port: str) -> list[str]:
-    """返回指定程控电源 COM 口对应的 VLAN 网卡候选。
-
-    每台程控电源管理连续 8 个 VLAN：COM101 对应 VLAN101–108、
-    COM102 对应 VLAN109–116，依此类推。未选择 COM 时展示所有识别
-    网卡；传入未知 COM 口时保留全部 VLAN 网卡，避免异常配置导致
-    配置页没有可选项。
-    """
-    normalized_port = (port_from_display(serial_port) or serial_port or "").strip().upper()
-    if not normalized_port:
-        options_by_alias: dict[str, str] = {}
-        for adapter in adapters:
-            alias = adapter_alias_from_display(adapter)
-            if alias:
-                options_by_alias.setdefault(alias.lower(), adapter)
-        return sorted(options_by_alias.values(), key=lambda value: adapter_alias_from_display(value).lower())
-
-    power_index = _power_serial_group_index(normalized_port)
-
-    start_vlan = FIRST_VLAN_ID + (power_index - 1) * VLAN_PER_POWER_SUPPLY
-    end_vlan = start_vlan + VLAN_PER_POWER_SUPPLY - 1
-
-    options_by_alias: dict[str, str] = {}
-    for adapter in adapters:
-        alias = adapter_alias_from_display(adapter)
-        match = re.fullmatch(r"vlan(\d+)", alias, flags=re.IGNORECASE)
-        if not match:
-            continue
-        vlan_id = int(match.group(1))
-        if power_index and not start_vlan <= vlan_id <= end_vlan:
-            continue
-        options_by_alias.setdefault(alias.lower(), adapter)
-
-    return sorted(
-        options_by_alias.values(),
-        key=lambda value: (
-            int(re.search(r"\d+", adapter_alias_from_display(value)).group())
-            if re.search(r"\d+", adapter_alias_from_display(value))
-            else 999999,
-            adapter_alias_from_display(value).lower(),
-        ),
-    )
 CHANNEL_TABLE_COMBO_WIDTH = 32
 CHANNEL_TABLE_SERIAL_COMBO_WIDTH = 12
 CHANNEL_TABLE_GROUP_GAP = 24
@@ -385,6 +321,7 @@ class LineCheckAssistant(ProjectViewFrame):
         icon_messages.extend(apply_application_icon(window))
         self.title(MAIN_WINDOW_TITLE)
         super().__init__(master or window, background=COLOR_BG)
+        self._module_theme_preserve = workspace is not None
         if master is None:
             self.pack(fill="both", expand=True)
         self.geometry("1200x780")
@@ -587,6 +524,8 @@ class LineCheckAssistant(ProjectViewFrame):
             "<ButtonPress-1>", self._bring_main_window_to_front, add="+"
         )
         self._load_current_channel()
+        if vars(self).get('workbench_panels') is not None:
+            self.workbench_panels.toggle_config()
         self._show_startup_warnings()
         self.after_idle(self._maximize_window)
         self.after(200, self._drain_log_queue)
@@ -923,6 +862,7 @@ class LineCheckAssistant(ProjectViewFrame):
         return bool(self._on_onu_register_selected_clicked())
 
     def _configure_theme(self) -> None:
+        configure_form_wheel(self)
         style = ttk.Style(self)
         if "clam" in style.theme_names():
             style.theme_use("clam")
@@ -977,6 +917,7 @@ class LineCheckAssistant(ProjectViewFrame):
         style.configure("TLabelframe.Label", background=COLOR_SURFACE, foreground=COLOR_TEXT, font=(FONT_FAMILY, 10, "bold"))
 
     def _build_ui(self) -> None:
+        workspace = vars(self).get('workspace')
         root = ttk.Frame(self, style="App.TFrame", padding=(20, 16, 20, 18))
         root.pack(fill="both", expand=True)
 
@@ -992,7 +933,8 @@ class LineCheckAssistant(ProjectViewFrame):
             background=COLOR_PRIMARY_SOFT, foreground=COLOR_PRIMARY_DARK,
         )
         self.project_name_badge.pack(side="left", padx=(0, 16))
-        ttk.Label(toolbar_commands, text="常用工具", style="CardTitle.TLabel").pack(side="left", padx=(2, 16))
+        ttk.Label(toolbar_commands, text="运行概览" if workspace is not None else "常用工具",
+                  style="CardTitle.TLabel").pack(side="left", padx=(2, 16))
         ttk.Button(toolbar_commands, text="自动上/下电", command=self._launch_power_on, style="Primary.TButton").pack(side="left")
         ttk.Button(toolbar_commands, text="样机升级", command=self._open_upgrade_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar_commands, text="写样机参数", command=self._open_sample_parameter_writer, style="Tool.TButton").pack(side="left", padx=(8, 0))
@@ -1012,13 +954,36 @@ class LineCheckAssistant(ProjectViewFrame):
             text=admin_text,
             style="Success.TLabel" if admin_ok else "Danger.TLabel",
         ).pack(side="right", padx=(0, 16))
-        arrange_update_toolbar(toolbar, toolbar_commands, toolbar_actions)
+        if workspace is None:
+            arrange_update_toolbar(toolbar, toolbar_commands, toolbar_actions)
+        else:
+            # Project tools are local navigation; global actions live in the shell.
+            from src.ui.workbench_panels import wrap_navigation
+            style = ttk.Style(self)
+            style.configure('Workbench.Nav.TButton', background=COLOR_SURFACE, foreground=COLOR_PRIMARY_DARK,
+                            padding=(9, 7), borderwidth=0, font=(FONT_FAMILY, 10))
+            style.map('Workbench.Nav.TButton', background=[('active', COLOR_PRIMARY_SOFT)])
+            for button in toolbar_commands.winfo_children():
+                if isinstance(button, ttk.Button):
+                    button.configure(style='Workbench.Nav.TButton')
+            wrap_navigation(toolbar_commands)
+            toolbar_commands.pack(fill="x")
+            self._workbench_toolbar = toolbar_commands
 
         body = ttk.Frame(root, style="App.TFrame")
         body.pack(fill="both", expand=True)
 
-        left = ttk.Frame(body, style="Surface.TFrame", padding=14)
-        left.pack(side="left", fill="y", padx=(0, 14))
+        if workspace is not None:
+            from src.ui.workbench_panels import WorkbenchPanels
+            self.workbench_panels = WorkbenchPanels(body)
+            self.workbench_panels.pack(fill="both", expand=True)
+        panels = vars(self).get('workbench_panels')
+        left = ttk.Frame(panels.config_content if panels is not None else body,
+                         style="Surface.TFrame", padding=14)
+        if panels is not None:
+            left.pack(fill="x")
+        else:
+            left.pack(side="left", fill="y", padx=(0, 14))
         ttk.Label(left, text="1  选择测试通道", style="CardTitle.TLabel", font=(FONT_FAMILY, 12, "bold")).pack(anchor="w")
         self.channel_list = ChannelList(
             left,
@@ -1032,6 +997,11 @@ class LineCheckAssistant(ProjectViewFrame):
             highlightcolor=COLOR_PRIMARY,
         )
         self.channel_list.pack(fill="both", expand=True, pady=(0, 10))
+        if panels is not None:
+            self.channel_list._tree.configure(height=6)
+            channel_scroll = ttk.Scrollbar(left, orient="vertical", command=self.channel_list.yview)
+            channel_scroll.pack(side="right", fill="y", before=self.channel_list)
+            self.channel_list._tree.configure(yscrollcommand=channel_scroll.set)
         self.channel_list.bind("<<ListboxSelect>>", self._on_channel_selected)
         self.channel_list.bind("<Button-1>", self._on_channel_list_press)
         self.channel_list.bind("<ButtonRelease-1>", self._on_channel_list_click)
@@ -1057,16 +1027,30 @@ class LineCheckAssistant(ProjectViewFrame):
         ttk.Button(selection_actions, text="全选", command=lambda: self._set_all_channels_enabled(True), style="Secondary.TButton").pack(side="left", fill="x", expand=True)
         ttk.Button(selection_actions, text="清除", command=lambda: self._set_all_channels_enabled(False), style="Secondary.TButton").pack(side="left", fill="x", expand=True, padx=(8, 0))
 
-        right = ttk.Frame(body, style="App.TFrame")
-        right.pack(side="left", fill="both", expand=True)
+        if panels is not None:
+            right = panels.content
+        else:
+            right = ttk.Frame(body, style="App.TFrame")
+            right.pack(side="left", fill="both", expand=True)
 
-        config_card = ttk.Frame(right, style="Surface.TFrame", padding=14)
+        config_card = ttk.Frame(panels.config_content if panels is not None else right,
+                                style="Surface.TFrame", padding=14)
         config_card.pack(fill="x", pady=(0, 12))
+        if panels is not None:
+            config_card.pack_configure(before=left)
         config_header = ttk.Frame(config_card, style="Surface.TFrame")
         config_header.pack(fill="x")
         ttk.Label(config_header, text="2  配置测试参数", style="CardTitle.TLabel", font=(FONT_FAMILY, 12, "bold")).pack(side="left")
         ttk.Button(config_header, text="测试项配置", command=self._open_test_item_config, style="Tool.TButton").pack(side="right")
-        ttk.Label(config_card, text="修改自动保存", style="CardHint.TLabel").pack(anchor="w", pady=(3, 10))
+        panels = vars(self).get('workbench_panels')
+        if panels is not None:
+            config_scroll = ttk.Frame(config_card, style="Surface.TFrame")
+            config_scroll.pack(fill="x")
+            config_parent = config_scroll
+        else:
+            config_parent = config_card
+        config_hint = ttk.Label(config_parent, text="修改自动保存", style="CardHint.TLabel")
+        config_hint.pack(anchor="w", pady=(3, 10))
 
         self.enabled_var = BooleanVar(value=True)
         self.vlan_var = StringVar()
@@ -1076,7 +1060,7 @@ class LineCheckAssistant(ProjectViewFrame):
         self.mask_var = StringVar(value=DEFAULT_SUBNET_MASK)
         self.channel_row_vars = {}
 
-        power_form = ttk.Frame(config_card, style="Surface.TFrame")
+        power_form = ttk.Frame(config_parent, style="Surface.TFrame")
         power_form.pack(fill="x", pady=(0, 10))
         self.power_serial_var = StringVar(value=self.power_serial_port)
         ttk.Label(power_form, text="程控电源串口", style="Surface.TLabel").grid(row=0, column=0, sticky="w")
@@ -1107,8 +1091,15 @@ class LineCheckAssistant(ProjectViewFrame):
             highlightthickness=0,
             borderwidth=0,
         ).grid(row=0, column=4, sticky="w", padx=(4, 0))
+        if panels is not None:
+            power_form.columnconfigure(5, weight=0)
+            power_form.columnconfigure(0, weight=1)
+            for row, widget in enumerate(power_form.winfo_children()):
+                widget.grid_configure(row=row, column=0, columnspan=1, sticky="ew", padx=0, pady=(2, 6))
+                if isinstance(widget, (ttk.Entry, ttk.Combobox)):
+                    widget.configure(width=1)
 
-        form = ttk.Frame(config_card, style="Surface.TFrame")
+        form = ttk.Frame(config_parent, style="Surface.TFrame")
         form.pack(fill="x")
         form.columnconfigure(1, weight=1)
         self.channel_table = Frame(form, background=COLOR_SURFACE)
@@ -1119,7 +1110,10 @@ class LineCheckAssistant(ProjectViewFrame):
         run_card.pack(fill="x", pady=(0, 12))
         run_copy = ttk.Frame(run_card, style="Surface.TFrame")
         run_copy.pack(side="left", fill="x", expand=True)
-        ttk.Label(run_copy, text="3  环境检查与开关机测试", style="CardTitle.TLabel", font=(FONT_FAMILY, 12, "bold")).pack(anchor="w")
+        run_title = ttk.Label(run_copy, text="3  环境检查与开关机测试", style="CardTitle.TLabel", font=(FONT_FAMILY, 12, "bold"))
+        run_title.pack(anchor="w", fill="x")
+        if panels is not None:
+            run_title.bind('<Configure>', lambda event: run_title.configure(wraplength=max(100, event.width)))
         from src.ui.ai_monitor_status import AiMonitorStatusRow
         power_test_status_row = AiMonitorStatusRow(run_copy, FONT_FAMILY)
         power_test_status_row.pack(fill="x", pady=(3, 8))
@@ -1167,7 +1161,7 @@ class LineCheckAssistant(ProjectViewFrame):
             style="CardHint.TLabel",
         )
         self.power_test_channel_detail_label.pack(anchor="w", pady=(4, 0))
-        run_actions = ttk.Frame(run_card, style="Surface.TFrame")
+        run_actions = ttk.Frame(panels.action_host if panels is not None else run_card, style="Surface.TFrame")
         run_actions.pack(side="right", padx=(20, 0))
         ttk.Button(
             run_actions,
@@ -1184,14 +1178,36 @@ class LineCheckAssistant(ProjectViewFrame):
         )
         self.stop_power_test_button.pack(side="right", padx=(0, 8))
 
-        log_card = ttk.Frame(right, style="Surface.TFrame", padding=14)
+        if panels is not None:
+            run_actions.pack_forget()
+            run_actions.pack(fill="x")
+            panels.attach_config(config_card, config_header,
+                [(config_scroll, dict(fill="x")), (left, dict(fill="x"))],
+                lambda: f"电源串口：{self.power_serial_var.get() or '未选择'}  ·  "
+                        f"管理IP：{self.device_ip_var.get() or '未填写'}  ·  "
+                        f"已选通道：{sum(channel.enabled for channel in self.channels)}\n" +
+                        "VLAN / COM：" + "；".join(
+                            f"{channel.vlan_name or '未配置'}/{channel.serial_port or '未绑定'}"
+                            for channel in self.channels if channel.enabled))
+            wrap_navigation(config_header)
+
+        log_card = ttk.Frame(panels.log_host if panels is not None else right,
+                             style="Surface.TFrame", padding=14)
         log_card.pack(fill="both", expand=True)
         log_header = ttk.Frame(log_card, style="Surface.TFrame")
         log_header.pack(fill="x")
         ttk.Label(log_header, text="执行日志", style="CardTitle.TLabel").pack(side="left")
         ttk.Button(log_header, text="清空日志", command=self._clear_log, style="Secondary.TButton").pack(side="right")
+        log_body = ttk.Frame(log_card, style="Surface.TFrame")
+        log_body.pack(fill="both", expand=True)
+        if panels is not None:
+            panels.attach_log(log_header, log_body)
+            self.log_autoscroll_var = BooleanVar(self, value=True)
+            Checkbutton(log_header, text="自动滚动", variable=self.log_autoscroll_var,
+                        background=COLOR_SURFACE, activebackground=COLOR_SURFACE,
+                        highlightthickness=0).pack(side="right", padx=8)
         self.log_text = Text(
-            log_card,
+            log_body,
             height=18,
             wrap="word",
             font=("Consolas", 10),
@@ -1205,6 +1221,9 @@ class LineCheckAssistant(ProjectViewFrame):
             padx=10,
             pady=8,
         )
+        log_scroll = ttk.Scrollbar(log_body, orient="vertical", command=self.log_text.yview)
+        self.log_text.configure(yscrollcommand=log_scroll.set)
+        log_scroll.pack(side="right", fill="y")
         self.log_text.pack(fill="both", expand=True)
         self._configure_log_tags()
         self._log_section("操作步骤")
@@ -7106,7 +7125,8 @@ class LineCheckAssistant(ProjectViewFrame):
             Label(self.channel_table, text="请在左侧勾选需要配置的通道。", foreground=COLOR_MUTED, background=COLOR_SURFACE).grid(row=0, column=0, sticky="w", pady=(0, 8))
             return
 
-        group_count = 2 if len(selected_channels) > CHANNEL_TABLE_ROWS_PER_GROUP else 1
+        compact = vars(self).get('workbench_panels') is not None
+        group_count = 1 if compact else 2 if len(selected_channels) > CHANNEL_TABLE_ROWS_PER_GROUP else 1
         rows_per_group = (len(selected_channels) + group_count - 1) // group_count
         headers = ["通道", "启用检查", "通道对应 VLAN", "通道对应 COM口"]
         for group in range(group_count):
@@ -7115,6 +7135,8 @@ class LineCheckAssistant(ProjectViewFrame):
                 self.channel_table.columnconfigure(base_column - 1, minsize=CHANNEL_TABLE_GROUP_GAP)
             self.channel_table.columnconfigure(base_column + 2, weight=1)
             for column, text in enumerate(headers):
+                if compact:
+                    continue
                 Label(self.channel_table, text=text, background=COLOR_SURFACE, foreground=COLOR_MUTED, font=(FONT_FAMILY, 9, "bold")).grid(
                     row=0,
                     column=base_column + column,
@@ -7129,6 +7151,9 @@ class LineCheckAssistant(ProjectViewFrame):
             group = index // rows_per_group
             row = index % rows_per_group + 1
             base_column = group * 5
+            if compact:
+                row = index * 4
+                self.channel_table.columnconfigure(1, weight=1)
             enabled_var = BooleanVar(value=channel.enabled)
             vlan_var = StringVar(value=channel.vlan_name or channel.adapter_alias)
             serial_var = StringVar(value=self._serial_port_for_channel(channel))
@@ -7138,7 +7163,7 @@ class LineCheckAssistant(ProjectViewFrame):
                 "serial_port": serial_var,
             }
 
-            Label(self.channel_table, text=channel.section, width=12, anchor="w", background=COLOR_SURFACE, foreground=COLOR_TEXT).grid(row=row, column=base_column, sticky="w", padx=(0, 8), pady=4)
+            Label(self.channel_table, text=channel.section, width=10 if compact else 12, anchor="w", background=COLOR_SURFACE, foreground=COLOR_TEXT).grid(row=row, column=base_column, sticky="w", padx=(0, 8), pady=4)
             Checkbutton(
                 self.channel_table,
                 variable=enabled_var,
@@ -7173,6 +7198,14 @@ class LineCheckAssistant(ProjectViewFrame):
                 "vlan": vlan_combo,
                 "serial_port": serial_combo,
             }
+            if compact:
+                self.channel_table.columnconfigure(2, weight=0)
+                vlan_combo.configure(width=1)
+                serial_combo.configure(width=1)
+                vlan_combo.grid_configure(row=row + 1, column=1, sticky="ew", padx=0)
+                serial_combo.grid_configure(row=row + 2, column=1, sticky="ew", padx=0)
+                Label(self.channel_table, text="VLAN", background=COLOR_SURFACE, foreground=COLOR_MUTED).grid(row=row + 1, column=0, sticky="w")
+                Label(self.channel_table, text="COM", background=COLOR_SURFACE, foreground=COLOR_MUTED).grid(row=row + 2, column=0, sticky="w")
 
     def _on_row_enabled_changed(self, section: str) -> None:
         channel = self._channel_by_section(section)
@@ -7296,7 +7329,7 @@ class LineCheckAssistant(ProjectViewFrame):
     def _build_power_serial_options(self) -> list[str]:
         if self.show_all_resources_var.get():
             return ["", *self.all_serial_ports]
-        return ["", *[f"COM{101 + index}" for index in range(POWER_SUPPLY_COUNT)]]
+        return list(POWER_SERIAL_OPTIONS)
 
     def _read_all_serial_ports(self) -> None:
         try:
@@ -7639,6 +7672,8 @@ class LineCheckAssistant(ProjectViewFrame):
             child.destroy()
         for column in range(4):
             self.power_test_channel_grid.columnconfigure(column, weight=1)
+            if vars(self).get('workbench_panels') is not None:
+                self.power_test_channel_grid.columnconfigure(column, uniform='workbench_channel')
         from src.ui.power_test_resume_menu import bind_resume_menu
         for index, number in enumerate(channel_numbers):
             completed, total, stage = progresses[number]
@@ -7663,6 +7698,10 @@ class LineCheckAssistant(ProjectViewFrame):
                 anchor="w",
             )
             tile.grid(row=index // 4, column=index % 4, sticky="ew", padx=(0, 5), pady=2)
+            if vars(self).get('workbench_panels') is not None:
+                tile.configure(width=1)
+                tile.bind('<Configure>', lambda event, label=tile: label.configure(
+                    wraplength=max(60, event.width - 14)))
             bind_resume_menu(self, tile, number)
             tile.bind(
                 "<Button-1>",
@@ -8535,8 +8574,13 @@ class LineCheckAssistant(ProjectViewFrame):
                 self.log_text.insert(END, display_message + "\n", tag)
             else:
                 self.log_text.insert(END, display_message + "\n")
+            if vars(self).get('workbench_panels') is not None:
+                from src.ui.workbench_panels import trim_log_display
+                trim_log_display(self.log_text)
             self.log_text.configure(state="disabled")
-            self.log_text.see(END)
+            autoscroll = vars(self).get('log_autoscroll_var')
+            if autoscroll is None or autoscroll.get():
+                self.log_text.see(END)
         if file_message is not None:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with self.log_path.open("a", encoding="utf-8") as file:

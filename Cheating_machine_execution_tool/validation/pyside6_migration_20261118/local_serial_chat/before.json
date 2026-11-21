@@ -1,0 +1,12 @@
+{
+  "old_passive_reader_received_marker": true,
+  "qt_offered_tools": [
+    "ask_user",
+    "read_test_evidence"
+  ],
+  "qt_retained_serial_marker": false,
+  "same_monitor": true,
+  "device_writes": 0,
+  "physical_serial_opens": 0,
+  "external_requests": 0
+}

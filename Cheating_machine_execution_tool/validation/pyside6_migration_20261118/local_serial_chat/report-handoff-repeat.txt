@@ -1,0 +1,23 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_2a74ca118fb3433e89186a508b4d0506'}
+ test_report_handoff_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_report_handoff_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_report_handoff_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_report_handoff_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_report_handoff_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_report_handoff_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_report_handoff_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_report_handoff_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_report_handoff_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_report_handoff_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_report_handoff_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_report_handoff_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_report_handoff_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_report_handoff_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+test_report_handoff_with_command_trace (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 31.355s
+
+OK
+

@@ -1,0 +1,8 @@
+{
+  "cycles": 50,
+  "driver_closes": 50,
+  "serial_writes": 0,
+  "terminated_readers": 50,
+  "complete_logs": 50,
+  "released_port_checks": 50
+}

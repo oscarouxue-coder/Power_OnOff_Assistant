@@ -14,6 +14,23 @@ PROVIDERS = {
 }
 
 
+def diagnostic_progress_text(session):
+    """Display only the progress retained with this conversation."""
+    try:
+        memory = session.get("diagnostic_task") or {}
+        lines = ["目标：" + memory.get("goal", "本会话尚未开始连续诊断"), "状态：" + session.get("status", "无")]
+        labels = {"pending": "待检查", "in_progress": "检查中", "completed": "已检查"}
+        lines += [labels.get(s["status"], s["status"]) + "：" + s["text"] for s in memory.get("steps", [])]
+        lines += ["取证：" + c["tool"] + " ｜ " + c["evidence_id"] + ("（失败/受阻）" if c["failed"] else "")
+                  for c in memory.get("checks", [])]
+        lines += ["观察笔记（须核对证据）：" + f["observation"] + " ｜ " + f["evidence_id"] for f in memory.get("findings", [])]
+        if memory.get("reason"):
+            lines.append("结束原因：" + memory["reason"])
+        return "\n".join(lines)
+    except (AttributeError, KeyError, TypeError):
+        return "留存进展记录不完整，请核对原会话记录。"
+
+
 @dataclass(frozen=True)
 class ProviderProfile:
     id: str = field(default_factory=lambda: uuid.uuid4().hex)

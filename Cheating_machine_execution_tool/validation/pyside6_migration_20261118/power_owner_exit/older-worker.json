@@ -1,0 +1,97 @@
+{
+  "owner_exit": 47,
+  "worker_pid": 37668,
+  "entry": "qt",
+  "owner_exit_seconds_from_worker": 3.157,
+  "frames_after_confirmed_exit": [
+    {
+      "event": "frame",
+      "seconds": 13.235,
+      "hex": "5501a10003a3"
+    },
+    {
+      "event": "frame",
+      "seconds": 16.766,
+      "hex": "5501a00003a2"
+    }
+  ],
+  "trace": {
+    "pid": 37668,
+    "events": [
+      {
+        "event": "serial_open",
+        "seconds": 0.078,
+        "port": "COM7682",
+        "baudrate": 19200
+      },
+      {
+        "event": "frame",
+        "seconds": 0.078,
+        "hex": "5501a10003a3"
+      },
+      {
+        "event": "channel_start",
+        "seconds": 0.578,
+        "channel": 3
+      },
+      {
+        "event": "frame",
+        "seconds": 3.11,
+        "hex": "5501a00003a2"
+      },
+      {
+        "event": "configured_wait",
+        "seconds": 3.11,
+        "channel": 3,
+        "duration": 10
+      },
+      {
+        "event": "frame",
+        "seconds": 13.235,
+        "hex": "5501a10003a3"
+      },
+      {
+        "event": "configured_wait",
+        "seconds": 14.735,
+        "channel": 3,
+        "duration": 2
+      },
+      {
+        "event": "frame",
+        "seconds": 16.766,
+        "hex": "5501a00003a2"
+      },
+      {
+        "event": "configured_wait",
+        "seconds": 16.766,
+        "channel": 3,
+        "duration": 10
+      },
+      {
+        "event": "serial_close",
+        "seconds": 26.907
+      },
+      {
+        "event": "mail_transport_calls",
+        "seconds": 26.907,
+        "count": 1
+      }
+    ],
+    "blocked": []
+  },
+  "physical_serial_opens": 0,
+  "reopened_project_state": "unknown",
+  "new_start_rejected": true,
+  "while_alive": {
+    "display": "\u539f\u5f00\u5173\u673a\u5b50\u8fdb\u7a0b\u4ecd\u5728\u8fd0\u884c\uff0c\u9000\u51fa\u524d\u4e0d\u80fd\u89e3\u9664\u4fdd\u62a4\uff08PID 37668\uff09",
+    "review_blocked": true,
+    "service_blocked": true,
+    "protected": true
+  },
+  "after_exit": {
+    "protected_before_confirmation": true,
+    "explicit_outcome": "failed",
+    "protection_released_after_confirmation": true
+  },
+  "legacy_child": true
+}

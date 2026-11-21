@@ -1,0 +1,69 @@
+﻿GUI_TEST_COVERAGE_OK
+python.exe : test_cancelled_history_read_skips_missing_database_and_closes_new_connection (test_qt_log_history.QtLogHistoryTests) ... ok
+所在位置 行:4 字符: 1
++ & $qtPython -X utf8 scripts/run_tests.py test_qt_log_history test_qt_ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (test_cancelled_...ryTests) ... ok:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+test_channel_retry_history_pages_original_rounds_and_filters_before_limiting (test_qt_log_history.QtLogHistoryTests) ... ok
+test_full_job_filter_pages_matches_and_shows_original_long_record_excerpt (test_qt_log_history.QtLogHistoryTests) ... ok
+test_jobs_and_events_page_by_project_and_task_without_repeating_inserted_rows (test_qt_log_history.QtLogHistoryTests) ... ok
+test_legacy_runs_distinguish_pending_and_reviewed_unknown_without_mutating_ledger (test_qt_log_history.QtLogHistoryTests) ... ok
+test_legacy_runs_page_equal_timestamps_without_jobs_or_other_projects (test_qt_log_history.QtLogHistoryTests) ... ok
+test_missing_database_and_large_or_unstructured_records (test_qt_log_history.QtLogHistoryTests) ... ok
+test_power_results_revalidate_the_saved_run_and_original_channels (test_qt_log_history.QtLogHistoryTests) ... ok
+test_short_job_query_honors_cancel_and_long_event_scan_interrupts_sqlite (test_qt_log_history.QtLogHistoryTests) ... ok
+test_invalid_or_failed_output_does_not_leave_a_partial_file (test_qt_log_export.QtLogExportTests) ... ok
+test_writes_utf8_selected_records_with_full_identity_without_overwriting (test_qt_log_export.QtLogExportTests) ... ok
+test_adapter_rename_rechecks_guid_and_protects_after_partial_project_write (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_ai_case_edits_reuse_shared_store_and_preserve_version_protection (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_ai_log_projection_preserves_archive_and_does_not_displace_live_alerts (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_ai_reports_reuse_project_store_and_reject_a_busy_deletion_batch (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_ai_session_manager_rejects_cross_project_and_busy_batches_and_deletes_related_records (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_bad_configuration_admission_releases_the_project_lease (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_close_project_releases_sql_reader_before_reopen_and_keeps_other_project_reads (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_close_workspace_interrupts_active_sql_scan_and_settles_each_read_once (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_concurrent_log_burst_keeps_every_record_on_disk_with_bounded_handoff (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_corrupt_recents_warn_without_rewriting_at_startup (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_device_inventory_retains_last_success_per_source (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_display_backlog_limits_preserve_the_workspace_file (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_health_tracks_actual_log_failure_and_recovery_separately_from_task_logs (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_health_uses_current_leases_and_actual_inventory_result (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_host_refresh_does_not_replace_a_newer_verified_adapter_binding (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_host_refresh_keeps_existing_resource_authority_and_ignores_late_results_on_exit (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_host_refresh_shares_one_reader_and_does_not_delay_project_commands (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_imported_connection_rejects_changed_or_enabled_dingtalk_candidate (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_imported_connection_uses_original_encrypted_store_and_keeps_platform_disabled (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_invalid_operations_preserve_configuration_and_emit_failure (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_legacy_import_creates_original_backup_and_leaves_source_intact (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_legacy_import_rejects_an_overlapping_destination_without_writes (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_local_chat_reuses_project_history_and_cancels_before_store_close (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_local_review_reuses_original_receipt_and_persists_unknown_result (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_model_configuration_shares_accounts_but_keeps_project_selection_and_secrets_local (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_model_probe_uses_original_request_profile_and_discards_stale_capability (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_module_sizes_share_the_tk_file_and_save_only_the_current_project (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_old_running_and_queued_history_never_starts_hardware (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_open_project_directory_rejects_closed_project_and_reports_shell_failure (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_original_project_lifecycle_preserves_values_and_identity (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_persisted_job_review_binds_original_job_and_releases_only_its_protection (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_qt_serial_admission_and_project_close_wait_for_safe_stop (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_recent_projects_persist_reorder_and_forget_keeps_open_project (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_refresh_is_coalesced_and_file_commands_run_off_main_thread (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_report_chat_analyzes_retained_evidence_without_live_collection (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_report_handoff_freezes_reviewed_report_and_legacy_target (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_selected_channels_are_unknown_not_claimed_running (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_slow_archive_reader_does_not_delay_workspace_work_or_exit (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_slow_sql_history_keeps_project_commands_available_and_read_results_in_order (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_start_time_follows_project_ledger_after_reopen (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_unconfirmed_dirty_close_keeps_worker_and_data_until_explicit_choice (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_window_placement_reads_old_state_merges_preferences_and_handles_write_failure (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_current_manifest_and_business_entries_are_consistent (test_capability_coverage.CapabilityCoverageTests) ... ok
+test_new_widget_and_changed_callback_are_detected (test_capability_coverage.CapabilityCoverageTests) ... ok
+test_pending_businesses_remain_visible_and_manual_actions_are_explicit (test_capability_coverage.CapabilityCoverageTests) ... ok
+
+----------------------------------------------------------------------
+Ran 56 tests in 25.993s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

@@ -27,3 +27,17 @@ Cheating_machine_execution_tool/logs/
 **/test_results/
 
 # Application configuration files are tracked; Python caches remain ignored.
+
+# Reproducible layout previews and per-scale Qt test captures
+/.claude/plans/workspace-layout-preview.png
+/.claude/plans/workspace-layout-preview-150.png
+/Cheating_machine_execution_tool/validation/pyside6_migration_*/**/scale-*/*.png
+
+# Local comparison captures retained for the 2026-11 GUI migration
+/Cheating_machine_execution_tool/validation/ui_visual_20261118/before/*.png
+/Cheating_machine_execution_tool/validation/ui_visual_20261118/stage1/*.png
+/Cheating_machine_execution_tool/validation/pyside6_migration_20261118/tk_baseline/*.png
+/Cheating_machine_execution_tool/validation/pyside6_migration_20261118/tk_onu_query/onu-tk-before.png
+/Cheating_machine_execution_tool/validation/pyside6_migration_20261118/tk_parameter_writer/parameters-tk-before.png
+/Cheating_machine_execution_tool/validation/pyside6_migration_20261118/handoff_20261121_final/channel_detail/*.png
+/Cheating_machine_execution_tool/validation/pyside6_migration_20261118/qt_job_history_responsive_focus/task-history-older-page.png

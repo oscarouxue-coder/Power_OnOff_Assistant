@@ -2,6 +2,7 @@
 import tkinter as tk
 from tkinter.scrolledtext import ScrolledText
 
+from src.models.ai_diagnostics import diagnostic_progress_text
 from src.ui.module_theme import apply_module_theme
 from src.ui.window_paint import center_toplevel_on_parent
 
@@ -57,15 +58,6 @@ class DiagnosticTaskControl:
         if not panel.selected:
             return
         session = panel.service.store.chat(panel.selected)
-        memory = session.get("diagnostic_task", {})
-        lines = ["目标：" + memory.get("goal", "本会话尚未开始连续诊断"), "状态：" + session.get("status", "无")]
-        labels = {"pending": "待检查", "in_progress": "检查中", "completed": "已检查"}
-        lines += [labels.get(s["status"], s["status"]) + "：" + s["text"] for s in memory.get("steps", [])]
-        lines += ["取证：" + c["tool"] + " ｜ " + c["evidence_id"] + ("（失败/受阻）" if c["failed"] else "")
-                  for c in memory.get("checks", [])]
-        lines += ["观察笔记（须核对证据）：" + f["observation"] + " ｜ " + f["evidence_id"] for f in memory.get("findings", [])]
-        if memory.get("reason"):
-            lines.append("结束原因：" + memory["reason"])
         if self.window is None or not self.window.winfo_exists():
             self.window = tk.Toplevel(panel.owner.window)
             self.window.title("连续诊断进展")
@@ -77,7 +69,7 @@ class DiagnosticTaskControl:
             center_toplevel_on_parent(self.window, panel.owner.window)
         self.output.configure(state="normal")
         self.output.delete("1.0", "end")
-        self.output.insert("1.0", "\n".join(lines))
+        self.output.insert("1.0", diagnostic_progress_text(session))
         self.output.configure(state="disabled")
         self.window.deiconify()
         self.window.lift()

@@ -1,0 +1,10 @@
+GUI_TEST_COVERAGE_OK
+BACKGROUND_REFRESH modal=True recovered=True
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_8bc1b3d6c66e40ec93afbdcccdae3d2b'}
+ test_background_refresh_with_exclusive_fixture_file (validation.pyside6_migration_20261118.local_serial_chat.trace_handoff.TracedHandoff) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 3.310s
+
+OK
+
