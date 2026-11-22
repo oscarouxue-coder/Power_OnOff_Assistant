@@ -1,6 +1,6 @@
 """Qt views only: serial ownership and all I/O live in the service adapter."""
-from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QTextCursor
+from PySide6.QtCore import QEvent, QPoint, Qt, Signal
+from PySide6.QtGui import QAction, QTextCursor
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
     QWidget, QPlainTextEdit, QLineEdit, QFileDialog, QMessageBox, QMenu)
 
@@ -9,9 +9,12 @@ from src.ui.qt.theme import BACKGROUND, assert_gui_thread, button, label
 
 class SerialTerminalDialog(QDialog):
     command_requested = Signal(str, dict)
+    window_state_changed = Signal(str)
 
-    def __init__(self, snapshot, parent=None):
-        super().__init__(parent)
+    def __init__(self, snapshot):
+        super().__init__(None, Qt.WindowType.Window | Qt.WindowType.WindowTitleHint |
+                         Qt.WindowType.WindowSystemMenuHint | Qt.WindowType.WindowMinimizeButtonHint |
+                         Qt.WindowType.WindowCloseButtonHint)
         self.setWindowTitle(snapshot['project_name'] + ' · 串口日志')
         self.setStyleSheet(f'QDialog {{ background: {BACKGROUND}; }}')
         self.resize(1040, 660)
@@ -23,8 +26,14 @@ class SerialTerminalDialog(QDialog):
         self.busy = False
         self.detaching = False
         self._allow_close = False
+        self.pin_action = QAction('窗口置顶', self)
+        self.pin_action.setCheckable(True)
+        self.pin_action.triggered.connect(self._set_pinned, Qt.ConnectionType.QueuedConnection)
         layout = QVBoxLayout(self)
-        layout.addWidget(label(snapshot['project_name'] + ' · 串口日志', 'title'))
+        title = label(self.windowTitle(), 'title')
+        title.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        title.customContextMenuRequested.connect(lambda point: self._title_menu(title.mapToGlobal(point)))
+        layout.addWidget(title)
         controls = QHBoxLayout()
         self.open_button = button('打开全部', lambda: self.request('open_all'), 'primary')
         self.stop_button = button('停止全部', lambda: self.request('stop_all'))
@@ -105,6 +114,8 @@ class SerialTerminalDialog(QDialog):
         menu.addSeparator()
         menu.addAction('查看串口诊断快照…', lambda: self.request('diagnostics', dict(target=target, port=port)))
         menu.addAction('清屏（仅清显示）', output.clear)
+        menu.addSeparator()
+        menu.addAction(self.pin_action)
         return menu
 
     def output_menu(self, target, point):
@@ -112,6 +123,31 @@ class SerialTerminalDialog(QDialog):
         menu = self.create_output_menu(target)
         menu.exec(output.mapToGlobal(point))
         menu.deleteLater()
+
+    def _title_menu(self, position):
+        menu = QMenu(self)
+        menu.addAction(self.pin_action)
+        menu.exec(position)
+        menu.deleteLater()
+
+    def _set_pinned(self, pinned):
+        if not self.isVisible():
+            return
+        geometry = self.normalGeometry()
+        state = self.windowState() & ~Qt.WindowState.WindowActive
+        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, pinned)
+        # Changing a QWidget window flag hides the window and can reset its position.
+        self.setGeometry(geometry)
+        self.setWindowState(state)
+        self.show()
+        self.window_state_changed.emit('已置顶' if pinned else '已取消置顶')
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.WindowStateChange:
+            was_minimized = bool(event.oldState() & Qt.WindowState.WindowMinimized)
+            if was_minimized != self.isMinimized():
+                self.window_state_changed.emit('已最小化' if self.isMinimized() else '已恢复窗口')
 
     def show_diagnostics(self, snapshot):
         if self.diagnostic_window is not None:

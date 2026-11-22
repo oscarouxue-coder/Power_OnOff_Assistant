@@ -10,7 +10,11 @@ def current_placement(dialog):
     if dialog.isMaximized() or dialog.isMinimized():
         rect = dialog.normalGeometry()
         if rect.isValid():
-            return WindowPlacement(rect.width(), rect.height(), rect.x(), rect.y())
+            position = rect.topLeft()
+            if dialog.isMinimized():
+                # normalGeometry uses the client origin, while saved positions use the frame origin.
+                position -= dialog.geometry().topLeft() - dialog.pos()
+            return WindowPlacement(rect.width(), rect.height(), position.x(), position.y())
     return WindowPlacement(dialog.width(), dialog.height(), dialog.x(), dialog.y())
 
 
@@ -27,10 +31,12 @@ def _saved_position(placement, screen):
     return QPoint(x, y)
 
 
-def restore_placement(dialog, placement):
+def restore_placement(dialog, placement, *, reference_window=None):
     if placement is None:
-        return
-    parent = dialog.parentWidget()
+        if reference_window is None:
+            return
+        placement = WindowPlacement(dialog.width(), dialog.height())
+    parent = reference_window if reference_window is not None else dialog.parentWidget()
     screen = parent.screen() if parent is not None else dialog.screen()
     width, height = placement.width, placement.height
     position = _saved_position(placement, QGuiApplication.primaryScreen() if placement.legacy else screen)

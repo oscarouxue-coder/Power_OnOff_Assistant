@@ -5089,7 +5089,7 @@
   },
   {
     "file": "src/ui/qt/serial_terminal_dialog.py",
-    "file_code_sha256": "f06604cd800dbf0bf68fdc993314ceed931a83e04310eb3054d2f5124fd83aa4",
+    "file_code_sha256": "20254b28f85bae9e9fa926511e482f4cd12bfce9c9414132edc278a3f71e2a50",
     "action": "1dfefa4852f5c7a4cc28746dbf59a26ac5042b38249535ccbd0f11ba73a5e93b",
     "expression": "self.tabs.tabCloseRequested.connect(self.close_tab)",
     "callbacks": {
@@ -5098,7 +5098,7 @@
   },
   {
     "file": "src/ui/qt/serial_terminal_dialog.py",
-    "file_code_sha256": "f06604cd800dbf0bf68fdc993314ceed931a83e04310eb3054d2f5124fd83aa4",
+    "file_code_sha256": "20254b28f85bae9e9fa926511e482f4cd12bfce9c9414132edc278a3f71e2a50",
     "action": "2b9a20b5484103c78255607210098e230ed84322c4eb655700abadf5b8bfd28b",
     "expression": "menu.addAction('打开日志目录', lambda : self.request('folder'))",
     "callbacks": {
@@ -5107,7 +5107,7 @@
   },
   {
     "file": "src/ui/qt/serial_terminal_dialog.py",
-    "file_code_sha256": "f06604cd800dbf0bf68fdc993314ceed931a83e04310eb3054d2f5124fd83aa4",
+    "file_code_sha256": "20254b28f85bae9e9fa926511e482f4cd12bfce9c9414132edc278a3f71e2a50",
     "action": "3eee1f8cbc6e55be1da09f0737b5e94b817d92338144580ad3d9f013ea73c38b",
     "expression": "menu.addAction('查看串口诊断快照…', lambda : self.request('diagnostics', dict(target=target, port=port)))",
     "callbacks": {
@@ -5116,7 +5116,16 @@
   },
   {
     "file": "src/ui/qt/serial_terminal_dialog.py",
-    "file_code_sha256": "f06604cd800dbf0bf68fdc993314ceed931a83e04310eb3054d2f5124fd83aa4",
+    "file_code_sha256": "20254b28f85bae9e9fa926511e482f4cd12bfce9c9414132edc278a3f71e2a50",
+    "action": "59526cfd3e339999b9fa91ab64393eb8e6960980bf4265e6f1a46ea91eb7cdf7",
+    "expression": "title.customContextMenuRequested.connect(lambda point: self._title_menu(title.mapToGlobal(point)))",
+    "callbacks": {
+      "_title_menu": "de3750d21e410d66aed9845ee8e074be4304af9ad248e74b42ec517d4320dd33"
+    }
+  },
+  {
+    "file": "src/ui/qt/serial_terminal_dialog.py",
+    "file_code_sha256": "20254b28f85bae9e9fa926511e482f4cd12bfce9c9414132edc278a3f71e2a50",
     "action": "5fc0847180ee063bb4ba491d036c2b34f4667e2197fb18f1ecaa59853712dd11",
     "expression": "output.customContextMenuRequested.connect(lambda point: self.output_menu(key, point))",
     "callbacks": {
@@ -5125,14 +5134,14 @@
   },
   {
     "file": "src/ui/qt/serial_terminal_dialog.py",
-    "file_code_sha256": "f06604cd800dbf0bf68fdc993314ceed931a83e04310eb3054d2f5124fd83aa4",
+    "file_code_sha256": "20254b28f85bae9e9fa926511e482f4cd12bfce9c9414132edc278a3f71e2a50",
     "action": "66e838d7dbdbf73d5b83a8d90914ce26b0c8c7a056eb0c171078efeb6d21e464",
     "expression": "window.finished.connect(lambda : setattr(self, 'diagnostic_window', None))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/serial_terminal_dialog.py",
-    "file_code_sha256": "f06604cd800dbf0bf68fdc993314ceed931a83e04310eb3054d2f5124fd83aa4",
+    "file_code_sha256": "20254b28f85bae9e9fa926511e482f4cd12bfce9c9414132edc278a3f71e2a50",
     "action": "6eb90b7bbb0668a24b124c1ffaef743f6806b5b2fa002578fc41eed5815da759",
     "expression": "command.returnPressed.connect(lambda target=key: self.prepare_send(target))",
     "callbacks": {
@@ -5141,25 +5150,34 @@
   },
   {
     "file": "src/ui/qt/serial_terminal_dialog.py",
-    "file_code_sha256": "f06604cd800dbf0bf68fdc993314ceed931a83e04310eb3054d2f5124fd83aa4",
+    "file_code_sha256": "20254b28f85bae9e9fa926511e482f4cd12bfce9c9414132edc278a3f71e2a50",
     "action": "8dcde0cab21497a636cd7a261db332af536f5b39581351743fa053a497bbd9bf",
     "expression": "menu.addAction('清屏（仅清显示）', output.clear)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/serial_terminal_dialog.py",
-    "file_code_sha256": "f06604cd800dbf0bf68fdc993314ceed931a83e04310eb3054d2f5124fd83aa4",
+    "file_code_sha256": "20254b28f85bae9e9fa926511e482f4cd12bfce9c9414132edc278a3f71e2a50",
     "action": "b443d464abcbc56c592ad4a2aedce8f7cf446dab933a80b1009b3cf1f2301977",
     "expression": "self.finished.connect(window.close)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/serial_terminal_dialog.py",
-    "file_code_sha256": "f06604cd800dbf0bf68fdc993314ceed931a83e04310eb3054d2f5124fd83aa4",
+    "file_code_sha256": "20254b28f85bae9e9fa926511e482f4cd12bfce9c9414132edc278a3f71e2a50",
     "action": "bbb5710f4f234c225a493f5ef6459619b247182d7a01ee9e424df295574c6282",
     "expression": "self.path.customContextMenuRequested.connect(self.directory_menu)",
     "callbacks": {
       "directory_menu": "05c26b7c761c77f3cae75686e7c5946887ffba017ef4d577cd08bc59135aefb2"
+    }
+  },
+  {
+    "file": "src/ui/qt/serial_terminal_dialog.py",
+    "file_code_sha256": "20254b28f85bae9e9fa926511e482f4cd12bfce9c9414132edc278a3f71e2a50",
+    "action": "d256389092690947c1ecfc6a8cd234a826dac8eb083a6de676be8cfe952cf264",
+    "expression": "self.pin_action.triggered.connect(self._set_pinned, Qt.ConnectionType.QueuedConnection)",
+    "callbacks": {
+      "_set_pinned": "b09a52ef0b0264f835e9846c4ddd11b849ef3c07354c198a8c3327f89de64145"
     }
   },
   {
@@ -5198,35 +5216,35 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "01b3b51306abe530fb3d7ec070010656ff9895b8a32f1bfa6efaf98a96e2a590",
     "expression": "dialog.finished.connect(finished)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "01b3b51306abe530fb3d7ec070010656ff9895b8a32f1bfa6efaf98a96e2a590",
     "expression": "dialog.finished.connect(finished)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "01b3b51306abe530fb3d7ec070010656ff9895b8a32f1bfa6efaf98a96e2a590",
     "expression": "dialog.finished.connect(finished)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "029e1a41063ccf83df92e1ed13a8ba43664c7599cfdf6ecd4ee1a33a17fabd52",
     "expression": "self.remote_scope_dialog.finished.connect(lambda _: setattr(self, 'remote_scope_dialog', None))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "04163bfac87e95611f07d92efb5c9f1c7c587aa68dca673d9cbf8cf3e859a0d3",
     "expression": "window.devices_action.triggered.connect(self.open_device_inventory)",
     "callbacks": {
@@ -5235,7 +5253,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "0885c04438198ccd96c32545425faadb2cf26ddc16901f836f285f0f9c6ad1cb",
     "expression": "menu.addAction('重命名…', self.rename_project)",
     "callbacks": {
@@ -5244,7 +5262,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "0e61d85aaae49b0972b6d760b50093f1e501e258363d69b5473eaf6f9bab2130",
     "expression": "dialog.checkpoint_requested.connect(lambda values, key=identifier: self._configuration_submit('configuration_checkpoint', key, values))",
     "callbacks": {
@@ -5253,7 +5271,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "0f458c5da3f0324a2ba89c778079afb31b8b9e82cb8b8a7104fc0a24e12809e6",
     "expression": "self.window.detail.serial_requested.connect(self.open_serial)",
     "callbacks": {
@@ -5262,7 +5280,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "10134d133bd90fc941cd0165a9bfcb4e9981661f13c6b98974e304e0eb3811e6",
     "expression": "self.window.detail.start_button.clicked.connect(self.start_test)",
     "callbacks": {
@@ -5271,7 +5289,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "1772b56fe23c9de73f3084767ed6ace3e40e27bd735ee48311148c99ae712215",
     "expression": "dialog.review_confirmed.connect(self._confirm_unknown_task)",
     "callbacks": {
@@ -5280,7 +5298,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "177cb8322fdc5e1d91884ea6261d11b473f31aaba1bf50d3c33ff4481730725e",
     "expression": "menu.addAction('打开项目…', self.open_project)",
     "callbacks": {
@@ -5289,7 +5307,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "17a61715a0eabdf787828ddc41fbf6c85645547e4089290045213165c2e1e316",
     "expression": "self.window.detail.channels_configuration_requested.connect(self.open_channels)",
     "callbacks": {
@@ -5298,7 +5316,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "17f174c356b070b73d2e91fff9d77f1bb610828b633afee601ed41b8e00def24",
     "expression": "dialog.selection_requested.connect(self._select_imported_connection)",
     "callbacks": {
@@ -5307,7 +5325,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "1e5631af0616a5695b8f640c9631b5d10bf75c7fbcde8f610861b0c50206adaa",
     "expression": "dialog.version_requested.connect(lambda values, key=identifier: self._configuration_submit('configuration_version_preview', key, values))",
     "callbacks": {
@@ -5316,7 +5334,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "1e91f928c06bb07694c2cd0ab10070503570e6422df006a8b9f7a93ef9113508",
     "expression": "dialog.start_requested.connect(lambda tasks: self._start_pipeline(identifier, tasks))",
     "callbacks": {
@@ -5325,7 +5343,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "236aa82844ed9c592cda2d9c1bd90a97baa9796439868a5f0ede0e392465165e",
     "expression": "dialog.inventory_requested.connect(self.refresh_resources)",
     "callbacks": {
@@ -5334,7 +5352,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "24586bff1791672e0c33005f26df9ef6b479a125bd8f01727f5e91ca8589c37e",
     "expression": "self.recent_menu.aboutToShow.connect(self._populate_recent_menu)",
     "callbacks": {
@@ -5343,7 +5361,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "24a3dfde9d32c88d320e0ed18fd2088d0091702e00675b4fdd4647cec740ec8b",
     "expression": "window.navigation.customContextMenuRequested.connect(self.project_menu)",
     "callbacks": {
@@ -5352,7 +5370,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "35e76120581765ca911d456dd9a7d163c740bda1df07d91156fdcdf21ce5e3f3",
     "expression": "menu.addAction('保存当前项目', self.save_project)",
     "callbacks": {
@@ -5361,7 +5379,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "370ad5d7ff9c8fb61f25e77cde6df85a6184a6d2bc3d1d8a1620d9858c1f088a",
     "expression": "self.window.detail.configuration_requested.connect(self.open_configuration)",
     "callbacks": {
@@ -5370,7 +5388,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "392f4564004b8e637f3f280a267fb30646ade42f6f41c5784ab250ecc54ec40b",
     "expression": "dialog.command_requested.connect(lambda action, values, key=identifier: self._upgrade_submit(key, action, values))",
     "callbacks": {
@@ -5379,7 +5397,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "3a2e67ef1b2eb3b84f5a9ea2317844a2f82d2b1d32dcfae1564e7dc534b4a902",
     "expression": "dialog.resources_requested.connect(self.refresh_resources)",
     "callbacks": {
@@ -5388,7 +5406,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "3f19cb586c2f69cd5e508b9e41f1e59e9451b79895dc95760313790e13f42d31",
     "expression": "menu.addAction('选择导入的接入配置…', self.open_imported_connections)",
     "callbacks": {
@@ -5397,14 +5415,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "3fe2e4c7cb4598202abb88ce5ed26348e0ffa73789edb864a413242af31ff5fa",
     "expression": "window.model_settings_action.triggered.connect(self.model_settings.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "423011568b9ef1775e20cac5b4b015c4530085b8aec18a8f95fe3c274f492624",
     "expression": "window.detail.resume_requested.connect(self.resume_channel)",
     "callbacks": {
@@ -5413,7 +5431,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "46f3b069cec034c6680a60b5c25ec7c84b6dca8a7898b37e88ddfc14fcdddf62",
     "expression": "menu.addAction('关闭当前项目', self.close_project)",
     "callbacks": {
@@ -5422,7 +5440,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "4d8fe351698f2cbc97ac3ad82415a1aa15f09fbf511412b69b018625d50f37f1",
     "expression": "dialog.finished.connect(lambda _: self._forget_pipeline(identifier, dialog))",
     "callbacks": {
@@ -5431,7 +5449,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "54a6c6dada27fb4ae6fa0dd5ad400a6a6524242bc2848f0196eabd4650a44be7",
     "expression": "dialog.pretest_stop_requested.connect(lambda values, key=identifier: self._configuration_submit('configuration_pretest_stop', key, values))",
     "callbacks": {
@@ -5440,7 +5458,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "57cb65f48ed66ee521c25c7ffb363a8d69949ecb3c0c84266a6cd5e83410c1f7",
     "expression": "dialog.finished.connect(lambda outcome, key=identifier, token=draft.token, editor_kind=kind: self._configuration_closed(key, token, editor_kind, getattr(dialog, 'discard_revision', '')))",
     "callbacks": {
@@ -5449,14 +5467,21 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "action": "57e227eb2da5ef475a2e5454ac1389f0bb28ad3c16971f37da94f97b40fd438b",
+    "expression": "dialog.window_state_changed.connect(lambda state, key=identifier, name=result.payload['project_name']: self.adapter.record_serial_window_state(key, name, state))",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/workspace_controller.py",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "5a0df0dbae8e097b0c3ea0e73365de9b060d352692ad7011b61f87d324a6d7cf",
     "expression": "menu.addAction('归档日志…', self.archived_logs.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "5e38bec567a4c7ad6910eff492d1f9dcb4cf4cc7634c76bf9beef42fad8333ff",
     "expression": "dialog.defaults_requested.connect(lambda values, key=identifier: self._configuration_submit('configuration_defaults', key, values))",
     "callbacks": {
@@ -5465,7 +5490,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "5f49d42ba6a3902d0eb2a2139bf86e83759455a69810f475c8a9ef5b0276e261",
     "expression": "self.window.dashboard.open_requested.connect(self.open_project)",
     "callbacks": {
@@ -5474,7 +5499,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "65d475e50fb557ce4f07b3c841a205b04bc64dc6c9056c1b18da7d6628486b58",
     "expression": "window.detail.power_log_requested.connect(self.open_power_log)",
     "callbacks": {
@@ -5483,7 +5508,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "662993a11275e8bc3cd264929c92cc85ae8af90e790433dfc9654ea851070473",
     "expression": "self.window.detail.environment_button.clicked.connect(self.check_environment)",
     "callbacks": {
@@ -5492,14 +5517,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "6758c423c5ce2bff89a9d740c38c19d8b961c14eac9d4a69d5219bb47658736b",
     "expression": "menu.addAction('任务历史…', self.log_history.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "6905f7543dd91c05daae9f8720df29fcd9412a9324dab6567ded003a3b02c729",
     "expression": "menu.addAction('核实未知任务…', self.open_unknown_tasks)",
     "callbacks": {
@@ -5508,7 +5533,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "72a19f4b9d8659bcadfb866c1282784d4f34173d8baa77290b70f5d14525ba5a",
     "expression": "self.device_inventory_dialog.finished.connect(self._device_inventory_closed)",
     "callbacks": {
@@ -5517,14 +5542,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "79c5fa3f345ed7b6631599cbabb900bc35e6b4f548fc69f2bad8386403c3527b",
     "expression": "window.detail.channel_history_requested.connect(self.channel_history.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "82f57a061c614e26e2cc2dace7f75488b71438d84a29f219f22b674bc212e064",
     "expression": "dialog.save_requested.connect(lambda values, key=identifier, op=save_op: self._configuration_submit(op, key, values))",
     "callbacks": {
@@ -5533,7 +5558,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "86b5a1b325b4688d0fe44303a62c97ddf734417b500ade47d85ee6c46095635d",
     "expression": "dialog.review_requested.connect(lambda target: self._review_single_power(dialog.project_id, target))",
     "callbacks": {
@@ -5542,21 +5567,21 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "893ce6d1fa22052971a207d0ebbfea1a2b298d9d72cdff7968febd21664d749f",
     "expression": "dialog.finished.connect(lambda _: self.adapter.remember_window_placement(identifier, module, current_placement(dialog)))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "8b056c462f336e48b8fa19e77d10dae27895baacd22bfcc436ff2830bc5220d4",
     "expression": "window.detail.ai_chat_requested.connect(self.ai_chat.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "8b80bda613d1ea3c3c7fcfbc747112d77a441f5d129837cf358cb36591fbb99f",
     "expression": "self.recent_menu.addAction(str(name).replace('&', '&&'), lambda checked=False, path=path: self.open_project(path))",
     "callbacks": {
@@ -5565,7 +5590,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "8d01d9f7355d50c79ef1d762797918b7626e0d19f4bc8aafd3a23d2a861dab13",
     "expression": "dialog.command_requested.connect(lambda action, values, key=identifier: self._dut_submit(key, action, values))",
     "callbacks": {
@@ -5574,14 +5599,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "8d738a581ad8cd21110949a6c5f2080b297d823d3b74fff92e5fa136eba29c80",
     "expression": "window.ai_chat_action.triggered.connect(self.ai_chat.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "8f21d1372967ef38768d47a1deb7480512c19ade522872aff694da248edc7474",
     "expression": "menu.addAction('从最近列表移除', self.forget_recent_project)",
     "callbacks": {
@@ -5590,14 +5615,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "9240a77fbea8da4c8bf00fb02e3a4273c1022d606cd423af4f793ecb60a918ae",
     "expression": "settings.addAction('检查更新…', self.app_update.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "94f055237e3c18a411e1021b747bbe55b93abc4a17d7e2f05599557b55f31a3e",
     "expression": "dialog.configuration_requested.connect(lambda code: self._pipeline_configure(identifier, code))",
     "callbacks": {
@@ -5606,14 +5631,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "a49c8462924ea1cb1223283990b1a253d0d665ce1da2f70349971df0e38c88ad",
     "expression": "dialog.finished.connect(lambda _: setattr(self, '_single_power_dialog', None))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "a580e89c333ca449a7188361f264a0298d7dbc1c4816f15f2976833a80c0535f",
     "expression": "menu.addAction('另存为独立项目…', self.duplicate_project)",
     "callbacks": {
@@ -5622,14 +5647,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "a779e023982fe8ef8808bbfe8d626cd023c7a9fb8159140c03be7701082c3a38",
     "expression": "dialog.finished.connect(lambda _: setattr(self, 'unknown_task_dialog', None))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "a8dffc93056d454c2e0b4675b565968bf149d19d0f1cf2827ab93af45ebbe72b",
     "expression": "self.window.detail.stop_button.clicked.connect(self.stop_test)",
     "callbacks": {
@@ -5638,7 +5663,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "aa0e04c50297110010b49b13214e25a6c72887cb4f1bee871b642a2a76bd48d4",
     "expression": "dialog.command_requested.connect(lambda action, values, key=identifier: self._serial_submit(key, action, values))",
     "callbacks": {
@@ -5647,7 +5672,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "abc04afdb5aa972c93dcef482631fcaabbfe743f87ec11384336f4fa90be2bc9",
     "expression": "self.window.detail.single_power_requested.connect(self.open_single_power)",
     "callbacks": {
@@ -5656,7 +5681,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "b424e55cea490677c5964302b3008e68f9c40c541a05025292654d25aa13c730",
     "expression": "self.window.detail.pipeline_button.clicked.connect(self.open_pipeline)",
     "callbacks": {
@@ -5665,7 +5690,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "b4ee5aac45afd25c7e2dc2ac10425e36823dea0c93a2778255482c3013038132",
     "expression": "dialog.pretest_requested.connect(lambda values, key=identifier: self._configuration_submit('configuration_pretest_preview', key, values))",
     "callbacks": {
@@ -5674,7 +5699,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "b848ef1f1a7ab9636d58d45bffb7b65fc149b32d8a3b97e23d9ccacb36a388bc",
     "expression": "window.logs.export_requested.connect(self.export_logs)",
     "callbacks": {
@@ -5683,7 +5708,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "b90758808498fc2fbdfe1f718d6e8d8de6aa5f5409fbf464e98823bfb800c589",
     "expression": "dialog.rename_requested.connect(lambda values, key=identifier: self._configuration_submit('channels_editor_rename_preview', key, values))",
     "callbacks": {
@@ -5692,7 +5717,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "b988693ec013170ceccb490c6d83cf2fa2873460d3e39146470048819ee35be5",
     "expression": "dialog.reload_requested.connect(lambda values, key=identifier, op=reload_op: self._configuration_submit(op, key, values))",
     "callbacks": {
@@ -5701,14 +5726,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "b9e59237084c5fc33822ef1d7326c686ffc5511a9d10454f511bd02fd9e7e2b1",
     "expression": "dialog.finished.connect(lambda _: setattr(self, '_imported_connection_dialog', None))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "c2b8fb1ee8d4fc2dfddddf9617f5212970f770f9fffd530640afc8fbfe003ca7",
     "expression": "menu.addAction('导入旧配置目录…', self.import_legacy_project)",
     "callbacks": {
@@ -5717,14 +5742,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "c37d17899c2db59490983e39b364c0c0fbbe3d6788ac1af272c00c81f9c26552",
     "expression": "self.instance_status_dialog.finished.connect(lambda _: setattr(self, 'instance_status_dialog', None))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "c6d8b0c7d01d5d56f36529253b1260fb1f6349201827f27168fcdb83ed7784e1",
     "expression": "menu.addAction('打开项目目录', self.open_project_directory)",
     "callbacks": {
@@ -5733,14 +5758,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "cdc10b62c9ed93a4dfda0c01ffc5606da43f814b6d0db9a38664cbc4a57b48e0",
     "expression": "window.detail.model_settings_requested.connect(self.model_settings.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "d76d82bbdd7566d0e09e8c1dfd2bb3b4086b644a7f22088ec9b597f584b96371",
     "expression": "self.window.dashboard.new_requested.connect(self.new_project)",
     "callbacks": {
@@ -5749,7 +5774,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "d86a27b510e75d205c3c919d87104847de62d660aae0955458b09981d7df0259",
     "expression": "menu.addAction('远程可访问项目…', self.open_remote_scope)",
     "callbacks": {
@@ -5758,14 +5783,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "db272048da89ee095484a2dab20d1ec765dbc8f69e2405b7e133b077206d1bc3",
     "expression": "dialog.status_heights_changed.connect(lambda heights, key=identifier: self.adapter.remember_window_placement(key, 'dut', status_heights=heights))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "e133cd904bb1aecd69764a09c8befbe735b2c5a0050d95eee7721f6e726dbb1c",
     "expression": "dialog.wifi_interfaces_requested.connect(lambda values, key=identifier: self._configuration_submit('configuration_wifi_interfaces', key, values))",
     "callbacks": {
@@ -5774,7 +5799,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "e27d545eec43ae2594697d5e58e7575a7da3fd02be0b6ec947c5550674ed622a",
     "expression": "self.window.detail.upgrade_requested.connect(self.open_upgrade)",
     "callbacks": {
@@ -5783,7 +5808,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "eab4dd270f980fc0b439f5a7e3a25b34dada71f1cb21577c8c94416f26dcce0a",
     "expression": "dialog.finished.connect(lambda _, key=identifier, view=dialog: self._serial_finished(key, view))",
     "callbacks": {
@@ -5792,7 +5817,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "efc90075faf4084b3d07b117cb0b55dd5d879f93102056a166eb76a15ed7b78e",
     "expression": "window.resource_refresh_action.triggered.connect(self.refresh_resources)",
     "callbacks": {
@@ -5801,7 +5826,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "f39fc213134a282e1c4175589cf0f9d26a7fd71d47249277bf67651b9e6f2463",
     "expression": "self.window.detail.dut_requested.connect(self.open_dut)",
     "callbacks": {
@@ -5810,7 +5835,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "f4d25a06b8e1d150569dde239a4f2db9a3b6e6ae590d0f5ae8a2950366321a4a",
     "expression": "self.timer.timeout.connect(self.poll)",
     "callbacks": {
@@ -5819,7 +5844,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "f54bc7df45799587db320693af862d032649bb2eb2113f6e2ca56b762e465f4c",
     "expression": "menu.addAction('新建项目…', self.new_project)",
     "callbacks": {
@@ -5828,7 +5853,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "f5ce1ad3f2fae6b814b86318bc5ce62a6fe17244ad750004c7d24d59bfa12517",
     "expression": "settings.addAction('多实例接入状态…', self.open_instance_status)",
     "callbacks": {
@@ -5837,7 +5862,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "f75d08c1015380e283459ffa30167ed93d9eac7eb2c417599e0ca179935420ef",
     "expression": "dialog.push_trial_requested.connect(lambda values, key=identifier: self._configuration_submit('configuration_push_preview', key, values))",
     "callbacks": {
@@ -5846,7 +5871,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "9e42f5daafbe058c0ec4bbb0a4021c88ac3318e315d1e4268f8591d7fd093371",
+    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
     "action": "f8d15cfb341ceedf0e575d0e7c2b577f51dd3006ded15aaa7e88b72830372bf1",
     "expression": "dialog.refresh_requested.connect(lambda : self._refresh_pipeline(identifier))",
     "callbacks": {

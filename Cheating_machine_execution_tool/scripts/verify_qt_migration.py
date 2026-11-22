@@ -102,6 +102,7 @@ REQUIRED = (
     'test_qt_serial_close_worker_refusal_keeps_live_output_until_retry',
     'test_qt_serial_shared_owner_close_confirmation_and_control_lock',
     'test_qt_serial_passive_snapshot_after_display_clear',
+    'test_qt_serial_window_minimize_and_pin_preserve_live_session',
     'test_qt_serial_scroll_project_switch_and_exit_wait_for_reader',
     'test_qt_tool_windows_restore_project_geometry_and_save_on_parent_close',
     'test_qt_module_windows_restore_legacy_sizes_and_save_through_project_lifecycle',

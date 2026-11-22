@@ -242,6 +242,10 @@ class QtWorkspaceAdapter:
     def record_update_log(self, message):
         self._record(LogView(datetime.now().strftime('%H:%M:%S'), 'INFO', '', '软件更新', message))
 
+    def record_serial_window_state(self, project_id, project_name, state):
+        self._record(LogView(datetime.now().strftime('%H:%M:%S'), 'INFO', project_id, project_name,
+                             '[串口日志] ' + state))
+
     def remember_window_placement(self, project_id, window, placement=None, *, status_heights=None):
         with self.lock:
             if self._accepting:

@@ -504,11 +504,13 @@ class WorkspaceController(QObject):
             return
         if suffix == 'show' and dialog is None and not self.closing:
             from src.ui.qt.serial_terminal_dialog import SerialTerminalDialog
-            dialog = SerialTerminalDialog(result.payload, self.window)
+            dialog = SerialTerminalDialog(result.payload)
             dialog.command_requested.connect(lambda action, values, key=identifier: self._serial_submit(key, action, values))
+            dialog.window_state_changed.connect(lambda state, key=identifier, name=result.payload['project_name']:
+                self.adapter.record_serial_window_state(key, name, state))
             self.serial_windows[identifier] = dialog
             dialog.finished.connect(lambda _, key=identifier, view=dialog: self._serial_finished(key, view))
-            restore_placement(dialog, result.payload['placement'])
+            restore_placement(dialog, result.payload['placement'], reference_window=self.window)
             dialog.show()
         if dialog is None:
             return

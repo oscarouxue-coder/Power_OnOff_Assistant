@@ -1,5 +1,14 @@
 # 开发记录
 
+## 2026-11-22 - 支持串口日志最小化与置顶
+
+- 功能。项目串口终端可用 Windows 标题栏最小化并恢复原窗口。在窗口内的标题文字或日志区右键勾选「窗口置顶」，默认关闭，当前窗口恢复后仍保留勾选。窗口状态切换记录在项目执行日志中。
+- 工作台继续按项目管理终端、恢复窗口位置并等待串口收尾。最小化期间模拟串口持续接收并落盘。原生回归发现最小化状态的位置保存使用了客户区坐标，已统一换算为窗口外框坐标。
+- 源码改动在 `Cheating_machine_execution_tool/src/ui/qt/{serial_terminal_dialog,window_placement,workspace_controller}.py` 和 `Cheating_machine_execution_tool/src/services/qt_workspace_adapter.py`。测试改动在 `Cheating_machine_execution_tool/tests/qt_workbench_probe.py` 和 `Cheating_machine_execution_tool/scripts/verify_qt_migration.py`。通过 `scripts/verify_capability_coverage.py --update` 同步 `scripts/capability_gui_actions.json` 和 `CAPABILITY_COVERAGE.md`，并更新 `Cheating_machine_execution_tool/line_check_assistant_README.md` 和 `ACCEPTANCE_BASELINE.md`。
+- 以锁定 Qt 解释器通过 `run_gui_child(..., framework='qt', native_render=True)` 运行 `scripts/run_tests.py`。新增 `test_qt_serial_window_minimize_and_pin_preserve_live_session` 在 `QT_SCALE_FACTOR=1`、`1.25`、`1.5` 各通过一次，另有 8 项串口及窗口回归通过。原生隔离违规为零，未生成截图。局部 `py_compile`、能力覆盖和 `git diff --check` 通过。
+- `python scripts/run_tests.py test_serial_terminal test_qt_workspace_adapter -q` 通过 113 项，离屏窗口隔离违规为零。
+- 桌面控制的 Windows 管道不可用，任务栏实点恢复及切换其他应用时的层级效果待源码版人工核对。本轮未运行完整基线，未构建 EXE。
+
 ## 2026-11-21 - 接入 Qt 实时诊断与批量排障
 
 - 类型：功能

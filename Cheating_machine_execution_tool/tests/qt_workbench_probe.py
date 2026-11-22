@@ -3852,6 +3852,112 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.assertFalse(self.serial_harness.drivers['COM216'].closed)
         manager.release('fixture-other-owner', 'COM216')
 
+    def test_qt_serial_window_minimize_and_pin_preserve_live_session(self):
+        from ctypes import WinDLL, wintypes
+        from PySide6.QtWidgets import QLabel, QMenu
+        from src.ui.qt.window_placement import current_placement
+
+        user32 = WinDLL('user32')
+        user32.GetWindowLongW.argtypes = (wintypes.HWND, wintypes.INT)
+        user32.GetWindowLongW.restype = wintypes.LONG
+        user32.GetWindow.argtypes = (wintypes.HWND, wintypes.UINT)
+        user32.GetWindow.restype = wintypes.HWND
+        user32.IsIconic.argtypes = (wintypes.HWND,)
+        user32.IsIconic.restype = wintypes.BOOL
+        user32.SendMessageW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+        user32.SendMessageW.restype = wintypes.LPARAM
+
+        identifier, dialog = self._open_serial_fixture()
+        session = self.serial_harness.sessions['COM222']
+        driver = self.serial_harness.drivers['COM222']
+        view = dialog.views['vlan122']
+        dialog.tabs.setCurrentWidget(view['page'])
+        output = view['output']
+        driver.input.put(('\n'.join(f'pin fixture {n}' for n in range(240)) + '\n').encode())
+        self.wait_for(lambda: 'pin fixture 239' in output.toPlainText())
+        output.verticalScrollBar().setValue(output.verticalScrollBar().maximum() // 2)
+        line = output.firstVisibleBlock().text()
+        geometry = dialog.geometry()
+        placement = current_placement(dialog)
+
+        def extended_style():
+            return user32.GetWindowLongW(int(dialog.winId()), -20)  # GWL_EXSTYLE
+
+        hwnd = int(dialog.winId())
+        self.assertTrue(user32.GetWindowLongW(hwnd, -16) & 0x20000)  # WS_MINIMIZEBOX
+        self.assertFalse(user32.GetWindow(hwnd, 4))  # GW_OWNER
+        self.assertFalse(extended_style() & 0x88)  # WS_EX_TOOLWINDOW | WS_EX_TOPMOST
+
+        menu = dialog.create_output_menu('vlan122')
+        action = next(action for action in menu.actions() if action.text() == '窗口置顶')
+        self.assertTrue(action.isCheckable())
+        self.assertFalse(action.isChecked())
+        action.trigger()
+        menu.deleteLater()
+        self.wait_for(lambda: extended_style() & 0x8)  # WS_EX_TOPMOST
+        self.assertEqual(dialog.geometry(), geometry)
+        self.assertEqual(dialog.active, 'vlan122')
+        self.assertEqual(output.firstVisibleBlock().text(), line)
+
+        user32.SendMessageW(int(dialog.winId()), 0x112, 0xF020, 0)  # WM_SYSCOMMAND / SC_MINIMIZE
+        self.wait_for(lambda: dialog.isMinimized() and user32.IsIconic(int(dialog.winId())))
+        self.assertEqual(current_placement(dialog), placement)
+        self.assertFalse(self.window.isMinimized())
+        driver.input.put(b'recorded while minimized\n')
+        self.wait_for(lambda: 'recorded while minimized' in session.log_path.read_text(encoding='utf-8'))
+        self.assertIs(self.serial_harness.sessions['COM222'], session)
+        self.assertFalse(driver.closed)
+
+        self.controller.submit('create', self.root / 'other-serial', '另一个串口项目')
+        self.wait_for(lambda: len(self.window.projects) == 2 and self.window.selected_project != identifier)
+        other = self.window.selected_project
+        self.controller.open_serial()
+        self.wait_for(lambda: other in self.controller.serial_windows)
+        self.assertFalse(self.controller.serial_windows[other].pin_action.isChecked())
+        self.assertTrue(dialog.isMinimized())
+
+        user32.SendMessageW(int(dialog.winId()), 0x112, 0xF120, 0)  # WM_SYSCOMMAND / SC_RESTORE
+        self.wait_for(lambda: not dialog.isMinimized() and not user32.IsIconic(int(dialog.winId())))
+        self.assertTrue(extended_style() & 0x8)
+        dialog.showMinimized()
+        self.window.select_project(identifier)
+        self.controller.open_serial()
+        self.wait_for(lambda: not dialog.isMinimized() and 'recorded while minimized' in output.toPlainText())
+        self.assertIs(self.controller.serial_windows[identifier], dialog)
+        self.assertTrue(action.isChecked())
+        self.assertTrue(extended_style() & 0x8)
+        self.assertEqual(dialog.geometry(), geometry)
+        self.assertEqual(output.firstVisibleBlock().text(), line)
+
+        title = next(widget for widget in dialog.findChildren(QLabel) if widget.text() == dialog.windowTitle())
+        title_actions = []
+
+        def select_pin():
+            for title_menu in dialog.findChildren(QMenu):
+                title_actions.extend(title_menu.actions())
+                if action in title_menu.actions():
+                    QTest.mouseClick(title_menu, Qt.MouseButton.LeftButton,
+                                     pos=title_menu.actionGeometry(action).center())
+                title_menu.close()
+
+        QTimer.singleShot(0, select_pin)
+        title.customContextMenuRequested.emit(title.rect().center())
+        self.assertEqual(title_actions, [action])
+        self.wait_for(lambda: not extended_style() & 0x8)
+        self.assertEqual(dialog.geometry(), geometry)
+        self.assertEqual(dialog.active, 'vlan122')
+        self.assertEqual(output.firstVisibleBlock().text(), line)
+        messages = {'[串口日志] 已置顶', '[串口日志] 已取消置顶', '[串口日志] 已最小化', '[串口日志] 已恢复窗口'}
+        self.wait_for(lambda: messages <= {entry.message for entry in self.window.logs.entries
+                                           if entry.project_id == identifier})
+
+        dialog.showMinimized()
+        self.wait_for(dialog.isMinimized)
+        self.window.close()
+        self.wait_for(lambda: self.controller.adapter.closed.is_set() and not self.window.isVisible())
+        self.assertFalse(self.controller.serial_windows)
+        self.assertTrue(driver.closed)
+
     def test_qt_serial_scroll_project_switch_and_exit_wait_for_reader(self):
         identifier, dialog = self._open_serial_fixture()
         view = dialog.views['vlan116']
