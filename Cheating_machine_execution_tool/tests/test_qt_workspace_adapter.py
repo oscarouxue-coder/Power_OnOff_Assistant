@@ -945,6 +945,190 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
             send.assert_not_called()
             collect.assert_not_called()
 
+    def test_qt_active_diagnostics_and_serial_batch_use_confirmed_project_targets(self):
+        from contextlib import ExitStack
+        from dataclasses import replace
+        from functools import partial
+        from qt_execution_fakes import continue_chat_intent
+        from qt_serial_fakes import SerialHarness
+        from line_check_assistant.config_store import ChannelConfig, ChannelConfigStore
+        from src.core.ai_client import DiagnosticModelClient
+        from src.models.ai_diagnostics import ModelReply, ProviderProfile
+        from src.services.ai_case_store import open_shared_cases
+        from src.services.ai_diagnostic_service import AiDiagnosticService
+        from src.services.ai_store import profile_fingerprint
+
+        observations, queries, probes, monitor_calls = [], [], [], []
+        pause_probe = threading.Event()
+        blocked = threading.Event()
+        failed_channels = set()
+        class Client(DiagnosticModelClient):
+            def complete(self, history, tools, stop):
+                instructions = history[0]['content']
+                if '只分解多样机任务' in instructions:
+                    stage = dict(scope='device', select='all', instruction='读取系统状态', read_only=True, probe='none')
+                    return ModelReply(json.dumps({'stages': [stage]}), [], history)
+                if '只汇总本次多样机任务结果' in instructions:
+                    return ModelReply('模拟跨通道汇总', [], history)
+                if '自动监控' not in instructions:
+                    return continue_chat_intent(self, history, tools, stop)
+                monitor_calls.append({tool['name'] for tool in tools})
+                calls = [] if len(monitor_calls) > 1 else [
+                    dict(id='monitor-state', name='read_dut_state', arguments={'category': 'system'})]
+                return ModelReply('模拟监控报告', calls, history)
+
+            def complete_stream(self, history, tools, stop, on_text=None):
+                observations.append({tool['name'] for tool in tools})
+                calls = [] if getattr(self, 'queried', False) else [
+                    dict(id='read-state', name='read_dut_state', arguments={'category': 'system'})]
+                self.queried = True
+                return ModelReply('模拟完成' if not calls else '', calls, history)
+
+        def ping(target, settings, path, stop, emit, busy):
+            self.assertFalse(stop.is_set() or busy(target))
+            probes.append((target.channel, path))
+            if pause_probe.is_set():
+                blocked.set()
+                if not stop.wait(5):
+                    raise AssertionError('模拟探测未收到停止')
+                raise InterruptedError('模拟探测已停止')
+            return {'result': {'ok': target.channel not in failed_channels}}
+
+        with ExitStack() as stack:
+            stack.enter_context(patch('src.services.ai_project_store.default_ai_data_dir', return_value=self.root / 'models'))
+            stack.enter_context(patch('src.services.ai_case_store.open_shared_cases',
+                side_effect=lambda emit: open_shared_cases(emit, root=self.root / 'cases')))
+            stack.enter_context(patch('src.services.qt_ai_chat.AiDiagnosticService',
+                side_effect=partial(AiDiagnosticService, client_factory=Client)))
+            physical = stack.enter_context(patch('serial.Serial', side_effect=AssertionError('physical COM')))
+            external = stack.enter_context(patch('socket.socket.connect', side_effect=AssertionError('external connection')))
+            harness = SerialHarness().start()
+            stack.callback(harness.stop)
+            project = self.command('create', self.root / 'diagnostics', '诊断专项').project_id
+            service = self.adapter._service
+            ctx = service.projects.opened[project]
+            config = ChannelConfigStore(ctx.config_dir / 'network_card_ip.ini')
+            rows = [ChannelConfig('channel_' + str(n), enabled=True, serial_port='COM79' + str(n),
+                        vlan_name='vlan10' + str(n), network_card_ip='192.0.2.' + str(n),
+                        device_manage_ip='192.0.2.1') for n in (7, 9)]
+            config.save(rows)
+            profile = service.models.save_profile(ProviderProfile(model='fixture', context_tokens=65536), 'fixture-key')
+            service.models.save_profile(replace(profile, capability='可自动诊断', tested_fingerprint=profile_fingerprint(profile)))
+            self.command('ai_chat_open', project)
+            origin = self.command('ai_chat_new', project).payload.selected
+            chat = self.adapter._ai_chats[project]
+            policy = ((7, 9), ('ping',), 3, 60, (), (), True, 'ask')
+            view = self.command('ai_chat_monitor_settings', project).payload
+            config.save(rows[:1])
+            self.command('ai_chat_monitor_apply', project, view['token'], *policy, expected_error=True)
+            self.assertFalse(chat.diagnostic.trigger.enabled)
+            config.save(rows)
+            view = self.command('ai_chat_monitor_settings', project).payload
+            self.command('ai_chat_monitor_apply', project, view['token'], *policy)
+            self.assertTrue(chat.diagnostic.trigger.enabled)
+            from src.models.capabilities import CapabilityAuthority, CapabilityError
+            remote = CapabilityAuthority('model', 'session', 'test', (7, 9), source='local', approved=True)
+            with self.assertRaises(CapabilityError) as denied:
+                chat.access.execution.capabilities.execute('diagnostics.qt.configure',
+                    dict(token=view['token'], channel_ids=[7, 9], features=['ping'], threshold=3,
+                         cooldown=60, keywords=[], codes=[], monitor=True, permission='ask'), remote)
+            self.assertEqual(denied.exception.code, 'source_forbidden')
+            self.assertEqual(chat.diagnostic.trigger.policy.channels, (7, 9))
+            self.assertNotIn('run_dut_command', {tool['name'] for tool in chat.diagnostic.monitor.tools()})
+
+            target = chat.handoff._target(7)
+            session, release, stop = chat.access.acquire_serial(target, threading.Event())
+            try:
+                self.assertTrue(chat.access.execution.manager.control_owner(target.port))
+                self.assertFalse(stop.is_set())
+            finally:
+                release()
+            self.assertFalse(chat.access.execution.manager.control_owner(target.port))
+            from src.core.ai_debug_transport import DiagnosticTransport
+            from test_ai_debug import Session
+            from qt_execution_fakes import install_native_fixture_locks
+            install_native_fixture_locks(self)
+            initialize = DiagnosticTransport.__init__
+            def initialize_transport(transport, target, *args, **kwargs):
+                class SyntheticDevice(Session):
+                    def send_line(self, command, sensitive=False):
+                        queries.append((target.channel, command))
+                        super().send_line(command, sensitive)
+                def connect_device(**connection):
+                    self.assertEqual((connection['bind_ip'], connection['device_host']), (target.bind_ip, target.host))
+                    return SyntheticDevice()
+                initialize(transport, target, *args, telnet_factory=connect_device, **kwargs)
+            stack.enter_context(patch.object(DiagnosticTransport, '__init__', initialize_transport))
+            selected = self.command('ai_chat_send', project, origin, '切换到通道7').payload.selected
+            self.command('ai_chat_send', project, selected, '读取设备系统状态')
+            self.wait_for(lambda: len(queries) == 1 and not chat.conversation.running)
+            self.assertEqual(queries[0][0], 7)
+            self.assertIn('uname', queries[0][1])
+            self.assertIn('read_dut_state', observations[0])
+            self.assertNotIn('run_dut_command', observations[0])
+
+            stack.enter_context(patch('src.services.qt_device_diagnostics.probe_connectivity', ping))
+            self.command('ai_chat_send', project, selected, '通道7、9 Ping')
+            self.wait_for(lambda: chat._intent is None and chat.selected != selected and not chat.conversation.running)
+            parent = chat.store.chat(chat.selected)
+            self.assertEqual(probes, [(7, 'wired'), (9, 'wired')], [r.message for r in self.logs[-20:]])
+            self.assertEqual([r['status'] for r in parent['batch']['rows']], ['reachable', 'reachable'])
+            self.assertTrue(self.command('ai_chat_open', project).payload.writable)
+            pause_probe.set()
+            self.command('ai_chat_send', project, parent['id'], '通道7、9 Ping')
+            self.assertTrue(blocked.wait(5))
+            self.command('ai_chat_stop', project, parent['id'])
+            self.wait_for(lambda: not chat.conversation.running)
+            stopped = chat.store.chat(parent['id'])['batch']['rows']
+            self.assertEqual([r['status'] for r in stopped], ['stopped', 'stopped'])
+            self.assertEqual(probes[2:], [(7, 'wired')])
+            pause_probe.clear()
+            self.command('ai_chat_send', project, parent['id'], '继续剩余')
+            self.wait_for(lambda: len(probes) == 5 and not chat.conversation.running)
+            self.assertEqual(probes[3:], [(7, 'wired'), (9, 'wired')])
+            stack.enter_context(patch('src.services.ai_debug_service.DiagnosticToolExecutor.pc_environment',
+                                      return_value='synthetic PC'))
+            failed_channels.add(9)
+            self.command('ai_chat_send', project, parent['id'], '通道7、9 Ping')
+            self.wait_for(lambda: len(probes) == 7 and not chat.conversation.running)
+            self.assertEqual([r['status'] for r in chat.store.chat(parent['id'])['batch']['rows']], ['reachable', 'unreachable'])
+            failed_channels.clear()
+            self.command('ai_chat_send', project, parent['id'], '重查失败通道')
+            self.wait_for(lambda: len(probes) == 8 and not chat.conversation.running)
+            self.assertEqual(probes[-1], (9, 'wired'))
+            self.command('ai_chat_send', project, parent['id'], '通道7、9 逐台读取设备系统状态')
+            self.wait_for(lambda: len(queries) == 3 and not chat.conversation.running)
+            inspected = chat.store.chat(parent['id'])['batch']['rows']
+            self.assertEqual([(r['channel'], r['status']) for r in inspected], [(7, 'completed'), (9, 'completed')])
+            for row in inspected:
+                self.assertEqual(row['observations'][0]['tool'], 'read_dut_state')
+            event = chat.access.execution.observe_ai_event
+            event(dict(type='diagnostic_start', run_id='fixture-run'))
+            self.wait_for(lambda: chat.diagnostic.run_active)
+            from src.models.serial_models import SerialEvent
+            observe_serial = chat.access.execution.terminal.diagnostic_receiver
+            observe_serial('vlan109', SerialEvent('COM799', 'RX', b'', 'fixture-monitor-serial\n'))
+            observe_serial('vlan107', SerialEvent('COM799', 'RX', b'', 'fixture-other-channel\n'))
+            self.assertIn('fixture-monitor-serial', chat.diagnostic.trigger.context(9))
+            self.assertNotIn('fixture-other-channel', chat.diagnostic.trigger.context(7))
+            event(dict(type='diagnostic_event', run_id='fixture-run', channel=9, stage='ping',
+                       status='failed', detail='synthetic failure', feature='ping'))
+            self.wait_for(lambda: chat.diagnostic.monitor_status().waiting_approval == 1)
+            action = self.command('ai_chat_monitor_review', project).payload
+            self.assertEqual(action['target']['channel'], 9)
+            self.command('ai_chat_monitor_decide', project, action['id'], 'obsolete', True, expected_error=True)
+            self.command('ai_chat_monitor_decide', project, action['id'], action['fingerprint'], True)
+            self.wait_for(lambda: any(row[2]['status'] == '完成' for row in chat.store.reports()))
+            self.assertEqual([n for n, _ in queries], [7, 7, 9, 9])
+            self.assertNotIn('run_dut_command', monitor_calls[0])
+            self.command('ai_chat_monitor_off', project)
+            self.assertFalse(chat.conversation.collection_status(parent['id'])['enabled'])
+            self.assertIsNone(chat.access.execution.terminal.diagnostic_receiver)
+            with self.assertRaises(ValueError):
+                chat.access.acquire_serial(target, threading.Event())
+            physical.assert_not_called()
+            external.assert_not_called()
+
     def test_local_channel_passive_serial_rechecks_binding_and_never_writes(self):
         from contextlib import ExitStack
         from dataclasses import replace

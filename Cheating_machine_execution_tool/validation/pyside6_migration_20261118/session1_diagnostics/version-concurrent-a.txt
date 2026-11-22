@@ -1,0 +1,25 @@
+GUI_TEST_COVERAGE_OK
+test_one_failure_continues_and_preserves_real_results (test_ai_version_query.VersionQueryTests) ... FAIL
+test_one_failure_continues_and_preserves_real_results (test_ai_version_query.VersionQueryTests) ... ok
+test_one_failure_continues_and_preserves_real_results (test_ai_version_query.VersionQueryTests) ... ok
+test_one_failure_continues_and_preserves_real_results (test_ai_version_query.VersionQueryTests) ... ok
+test_one_failure_continues_and_preserves_real_results (test_ai_version_query.VersionQueryTests) ... ok
+test_one_failure_continues_and_preserves_real_results (test_ai_version_query.VersionQueryTests) ... ok
+test_one_failure_continues_and_preserves_real_results (test_ai_version_query.VersionQueryTests) ... ok
+test_one_failure_continues_and_preserves_real_results (test_ai_version_query.VersionQueryTests) ... ok
+test_one_failure_continues_and_preserves_real_results (test_ai_version_query.VersionQueryTests) ... ok
+test_one_failure_continues_and_preserves_real_results (test_ai_version_query.VersionQueryTests) ... ok
+
+======================================================================
+FAIL: test_one_failure_continues_and_preserves_real_results (test_ai_version_query.VersionQueryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 132, in test_one_failure_continues_and_preserves_real_results
+    self.assertEqual(len(self.seen), 3, [m['text'] for m in self.store.chat_items(identifier) if m.get('kind') == 'error'])
+AssertionError: 0 != 3 : ['版本查询未准入：{"status": "blocked", "code": "resource_busy", "error": "物理资源已被其它进程占用或无法取得系统保护：adapter:vlan21", "dispatched": false, "action_id": "d4dfc898ac304aa69dd9dc24232b881f", "action_state": "failed"}']
+
+----------------------------------------------------------------------
+Ran 10 tests in 7.649s
+
+FAILED (failures=1)
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

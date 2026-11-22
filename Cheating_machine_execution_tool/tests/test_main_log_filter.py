@@ -995,6 +995,11 @@ class AiMainLogFilterTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertEqual(format_main_log_message(message), message)
         self.assertFalse(is_ai_log_message('[旧工具Logs][INFO] [AI对话] 测试'))
+        for prefix in ('[Ai助手]', '[AI诊断]', '[AI 诊断]'):
+            message = prefix + ' 开始：通道2，厂商/模型，light'
+            with self.subTest(prefix=prefix):
+                self.assertTrue(is_ai_log_message(message))
+                self.assertEqual(format_main_log_message(message), message)
         self.assertTrue(is_ai_log_message('[AI对话] [AI Debug][telnet] TX：ls'))
         self.assertTrue(is_ai_log_message('[AI Debug][telnet] TX：ls'))
 

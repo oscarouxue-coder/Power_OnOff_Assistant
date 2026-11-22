@@ -1,0 +1,816 @@
+{
+  "entry": "direct",
+  "original_reported_state": "succeeded",
+  "complete_serial_sequences": true,
+  "expected_per_channel": [
+    "off",
+    "on",
+    "off",
+    "on"
+  ],
+  "observed_per_channel": {
+    "1": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ],
+    "2": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ],
+    "3": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ],
+    "4": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ],
+    "5": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ],
+    "6": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ],
+    "7": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ],
+    "8": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ],
+    "9": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ],
+    "10": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ],
+    "11": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ],
+    "12": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ],
+    "13": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ],
+    "14": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ],
+    "15": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ],
+    "16": [
+      "off",
+      "on",
+      "off",
+      "on"
+    ]
+  },
+  "pid": 17668,
+  "events": [
+    {
+      "event": "serial_open",
+      "seconds": 0.094,
+      "port": "COM239",
+      "baudrate": 19200
+    },
+    {
+      "event": "frame",
+      "seconds": 0.109,
+      "hex": "5501a10001a1"
+    },
+    {
+      "event": "frame",
+      "seconds": 0.609,
+      "hex": "5501a10002a2"
+    },
+    {
+      "event": "frame",
+      "seconds": 1.125,
+      "hex": "5501a10003a3"
+    },
+    {
+      "event": "frame",
+      "seconds": 1.625,
+      "hex": "5501a10004a4"
+    },
+    {
+      "event": "frame",
+      "seconds": 2.14,
+      "hex": "5501a10005a5"
+    },
+    {
+      "event": "frame",
+      "seconds": 2.64,
+      "hex": "5501a10006a6"
+    },
+    {
+      "event": "frame",
+      "seconds": 3.14,
+      "hex": "5501a10007a7"
+    },
+    {
+      "event": "frame",
+      "seconds": 3.656,
+      "hex": "5501a10008a8"
+    },
+    {
+      "event": "frame",
+      "seconds": 4.156,
+      "hex": "5501a10009a9"
+    },
+    {
+      "event": "frame",
+      "seconds": 4.672,
+      "hex": "5501a1000aaa"
+    },
+    {
+      "event": "frame",
+      "seconds": 5.172,
+      "hex": "5501a1000bab"
+    },
+    {
+      "event": "frame",
+      "seconds": 5.687,
+      "hex": "5501a1000cac"
+    },
+    {
+      "event": "frame",
+      "seconds": 6.187,
+      "hex": "5501a1000dad"
+    },
+    {
+      "event": "frame",
+      "seconds": 6.703,
+      "hex": "5501a1000eae"
+    },
+    {
+      "event": "frame",
+      "seconds": 7.203,
+      "hex": "5501a1000faf"
+    },
+    {
+      "event": "frame",
+      "seconds": 7.719,
+      "hex": "5501a10010b0"
+    },
+    {
+      "event": "channel_start",
+      "seconds": 8.219,
+      "channel": 1
+    },
+    {
+      "event": "channel_start",
+      "seconds": 9.234,
+      "channel": 2
+    },
+    {
+      "event": "channel_start",
+      "seconds": 10.234,
+      "channel": 3
+    },
+    {
+      "event": "channel_start",
+      "seconds": 11.234,
+      "channel": 4
+    },
+    {
+      "event": "frame",
+      "seconds": 12.25,
+      "hex": "5501a00001a0"
+    },
+    {
+      "event": "channel_start",
+      "seconds": 12.25,
+      "channel": 5
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 12.25,
+      "channel": 1,
+      "duration": 1
+    },
+    {
+      "event": "channel_start",
+      "seconds": 13.265,
+      "channel": 6
+    },
+    {
+      "event": "channel_start",
+      "seconds": 14.265,
+      "channel": 7
+    },
+    {
+      "event": "channel_start",
+      "seconds": 15.281,
+      "channel": 8
+    },
+    {
+      "event": "channel_start",
+      "seconds": 16.281,
+      "channel": 9
+    },
+    {
+      "event": "frame",
+      "seconds": 17.265,
+      "hex": "5501a00002a3"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 17.265,
+      "channel": 2,
+      "duration": 1
+    },
+    {
+      "event": "channel_start",
+      "seconds": 17.297,
+      "channel": 10
+    },
+    {
+      "event": "channel_start",
+      "seconds": 18.312,
+      "channel": 11
+    },
+    {
+      "event": "channel_start",
+      "seconds": 19.328,
+      "channel": 12
+    },
+    {
+      "event": "channel_start",
+      "seconds": 20.328,
+      "channel": 13
+    },
+    {
+      "event": "channel_start",
+      "seconds": 21.344,
+      "channel": 14
+    },
+    {
+      "event": "frame",
+      "seconds": 22.297,
+      "hex": "5501a00003a2"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 22.297,
+      "channel": 3,
+      "duration": 1
+    },
+    {
+      "event": "channel_start",
+      "seconds": 22.359,
+      "channel": 15
+    },
+    {
+      "event": "channel_start",
+      "seconds": 23.359,
+      "channel": 16
+    },
+    {
+      "event": "frame",
+      "seconds": 26.312,
+      "hex": "5501a10001a1"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 27.828,
+      "channel": 1,
+      "duration": 2
+    },
+    {
+      "event": "frame",
+      "seconds": 32.89,
+      "hex": "5501a00004a5"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 32.89,
+      "channel": 4,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 36.906,
+      "hex": "5501a10002a2"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 38.406,
+      "channel": 2,
+      "duration": 2
+    },
+    {
+      "event": "frame",
+      "seconds": 43.437,
+      "hex": "5501a00005a4"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 43.437,
+      "channel": 5,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 47.453,
+      "hex": "5501a10003a3"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 48.969,
+      "channel": 3,
+      "duration": 2
+    },
+    {
+      "event": "frame",
+      "seconds": 49.969,
+      "hex": "5501a00006a7"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 49.969,
+      "channel": 6,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 53.984,
+      "hex": "5501a00001a0"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 53.984,
+      "channel": 1,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 58.0,
+      "hex": "5501a00007a6"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 58.0,
+      "channel": 7,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 62.031,
+      "hex": "5501a00008a9"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 62.031,
+      "channel": 8,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 66.062,
+      "hex": "5501a00009a8"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 66.062,
+      "channel": 9,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 70.078,
+      "hex": "5501a0000aab"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 70.078,
+      "channel": 10,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 74.094,
+      "hex": "5501a10004a4"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 75.594,
+      "channel": 4,
+      "duration": 2
+    },
+    {
+      "event": "frame",
+      "seconds": 75.609,
+      "hex": "5501a0000baa"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 75.609,
+      "channel": 11,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 79.64,
+      "hex": "5501a00002a3"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 79.64,
+      "channel": 2,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 83.656,
+      "hex": "5501a0000cad"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 83.656,
+      "channel": 12,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 87.656,
+      "hex": "5501a0000dac"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 87.656,
+      "channel": 13,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 91.672,
+      "hex": "5501a0000eaf"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 91.672,
+      "channel": 14,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 95.672,
+      "hex": "5501a0000fae"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 95.672,
+      "channel": 15,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 99.687,
+      "hex": "5501a10005a5"
+    },
+    {
+      "event": "frame",
+      "seconds": 101.187,
+      "hex": "5501a00010b1"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 101.187,
+      "channel": 5,
+      "duration": 2
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 101.203,
+      "channel": 16,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 105.219,
+      "hex": "5501a10006a6"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 106.734,
+      "channel": 6,
+      "duration": 2
+    },
+    {
+      "event": "frame",
+      "seconds": 106.75,
+      "hex": "5501a00003a2"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 106.75,
+      "channel": 3,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 110.75,
+      "hex": "5501a10007a7"
+    },
+    {
+      "event": "frame",
+      "seconds": 112.265,
+      "hex": "5501a10008a8"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 112.265,
+      "channel": 7,
+      "duration": 2
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 113.781,
+      "channel": 8,
+      "duration": 2
+    },
+    {
+      "event": "frame",
+      "seconds": 113.797,
+      "hex": "5501a10009a9"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 115.297,
+      "channel": 9,
+      "duration": 2
+    },
+    {
+      "event": "frame",
+      "seconds": 115.297,
+      "hex": "5501a1000aaa"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 116.812,
+      "channel": 10,
+      "duration": 2
+    },
+    {
+      "event": "frame",
+      "seconds": 116.812,
+      "hex": "5501a1000bab"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 118.312,
+      "channel": 11,
+      "duration": 2
+    },
+    {
+      "event": "frame",
+      "seconds": 118.328,
+      "hex": "5501a00004a5"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 118.328,
+      "channel": 4,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 122.344,
+      "hex": "5501a1000cac"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 123.859,
+      "channel": 12,
+      "duration": 2
+    },
+    {
+      "event": "frame",
+      "seconds": 123.859,
+      "hex": "5501a1000dad"
+    },
+    {
+      "event": "frame",
+      "seconds": 125.359,
+      "hex": "5501a1000eae"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 125.359,
+      "channel": 13,
+      "duration": 2
+    },
+    {
+      "event": "frame",
+      "seconds": 126.875,
+      "hex": "5501a1000faf"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 126.875,
+      "channel": 14,
+      "duration": 2
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 128.39,
+      "channel": 15,
+      "duration": 2
+    },
+    {
+      "event": "frame",
+      "seconds": 128.39,
+      "hex": "5501a10010b0"
+    },
+    {
+      "event": "frame",
+      "seconds": 129.89,
+      "hex": "5501a00005a4"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 129.89,
+      "channel": 16,
+      "duration": 2
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 129.89,
+      "channel": 5,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 133.906,
+      "hex": "5501a00006a7"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 133.906,
+      "channel": 6,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 137.922,
+      "hex": "5501a00007a6"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 137.922,
+      "channel": 7,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 141.922,
+      "hex": "5501a00008a9"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 141.922,
+      "channel": 8,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 145.953,
+      "hex": "5501a00009a8"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 145.953,
+      "channel": 9,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 149.969,
+      "hex": "5501a0000aab"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 149.969,
+      "channel": 10,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 153.984,
+      "hex": "5501a0000baa"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 153.984,
+      "channel": 11,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 157.984,
+      "hex": "5501a0000cad"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 157.984,
+      "channel": 12,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 162.015,
+      "hex": "5501a0000dac"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 162.015,
+      "channel": 13,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 166.015,
+      "hex": "5501a0000eaf"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 166.015,
+      "channel": 14,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 170.047,
+      "hex": "5501a0000fae"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 170.047,
+      "channel": 15,
+      "duration": 1
+    },
+    {
+      "event": "frame",
+      "seconds": 174.062,
+      "hex": "5501a00010b1"
+    },
+    {
+      "event": "configured_wait",
+      "seconds": 174.062,
+      "channel": 16,
+      "duration": 1
+    },
+    {
+      "event": "serial_close",
+      "seconds": 177.062
+    },
+    {
+      "event": "mail_transport_calls",
+      "seconds": 177.062,
+      "count": 16
+    }
+  ],
+  "blocked": []
+}

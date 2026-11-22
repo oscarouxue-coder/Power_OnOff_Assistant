@@ -20,18 +20,19 @@ class AiChatDialog(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.project_id = project.project_id
         self.project_name = project.name
+        self.monitor_dialog = None
         self.manager = None
         self.progress_dialog = None
         self.review_dialog = None
         self.progress_text = None
-        self.setWindowTitle('AI 诊断 · ' + project.name)
+        self.setWindowTitle('Ai助手 · ' + project.name)
         available = self.screen().availableGeometry()
         self.resize(min(940, int(available.width() * .94)), min(640, int(available.height() * .90)))
         self.view = None
         self.busy = False
         layout = QVBoxLayout(self)
         header = QHBoxLayout()
-        title = label('AI 诊断 · ' + project.name, 'title')
+        title = label('Ai助手 · ' + project.name, 'title')
         title.setWordWrap(True)
         header.addWidget(title, 1)
         self.reports_button = button('诊断报告…', self.reports_requested.emit)
@@ -51,6 +52,7 @@ class AiChatDialog(QDialog):
         self.new_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         new_menu = QMenu(self.new_button)
         self.new_pc_action = new_menu.addAction('新建本机电脑连续诊断', lambda: self._submit('ai_chat_new_pc'))
+        self.monitor_action = new_menu.addAction('实时诊断与监控…', lambda: self._submit('ai_chat_monitor_settings'))
         self.new_button.setMenu(new_menu)
         side_layout.addWidget(self.new_button)
         self.sessions = QListWidget()
@@ -194,8 +196,11 @@ class AiChatDialog(QDialog):
             self._submit('ai_chat_send', self.view.selected, self.composer.toPlainText())
 
     def show_view(self, view):
+        from dataclasses import asdict
         prior = self.view
         self.view = view
+        if self.monitor_dialog is not None and view.monitor_status is not None:
+            self.monitor_dialog.update_status(asdict(view.monitor_status))
         if (view.retry_input and prior is not None and prior.selected == view.selected
                 and prior.retry_input != view.retry_input and not self.composer.toPlainText()):
             self.composer.setPlainText(view.retry_input)
@@ -269,13 +274,22 @@ class AiChatDialog(QDialog):
         self.progress_dialog = None
         self.progress_text = None
 
-    def review_action_result(self, identifier, action):
-        if self.view is None or identifier != self.view.selected:
+    def show_monitor(self, view):
+        from src.ui.qt.ai_monitor_dialog import AiMonitorDialog
+        if self.monitor_dialog is not None:
+            self.monitor_dialog.close()
+        panel = self.monitor_dialog = AiMonitorDialog(view, self)
+        panel.requested.connect(lambda operation, args: self._submit(operation, *args))
+        panel.finished.connect(lambda _: setattr(self, 'monitor_dialog', None))
+        panel.show()
+
+    def review_action_result(self, identifier, action, *, monitor=False):
+        if not monitor and (self.view is None or identifier != self.view.selected):
             return
         if self.review_dialog is not None:
             self.review_dialog.close()
         if not action:
-            self.feedback.setText('当前会话没有待确认操作')
+            self.feedback.setText('监控没有待确认操作' if monitor else '当前会话没有待确认操作')
             return
         from src.models.ai_session_scope import target_label
         target = action.get('target') or {}
@@ -289,7 +303,7 @@ class AiChatDialog(QDialog):
         review = self.review_dialog = QDialog(self)
         review.finished.connect(lambda _: setattr(self, 'review_dialog', None))
         review.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        review.setWindowTitle('确认 AI 具体操作 · ' + self._selected_row().title)
+        review.setWindowTitle('确认监控操作 · ' + self.project_name if monitor else '确认 AI 具体操作 · ' + self._selected_row().title)
         layout = QVBoxLayout(review)
         content = QPlainTextEdit()
         content.setReadOnly(True)
@@ -297,7 +311,9 @@ class AiChatDialog(QDialog):
         layout.addWidget(content)
         def decide(approved):
             review.close()
-            if self.view and identifier == self.view.selected:
+            if monitor:
+                self._submit('ai_chat_monitor_decide', action['id'], action['fingerprint'], approved)
+            elif self.view and identifier == self.view.selected:
                 self._submit('ai_chat_decide', identifier, action['id'], action['fingerprint'], approved)
         actions = QHBoxLayout()
         for title, callback in (('批准本次操作', lambda: decide(True)), ('拒绝', lambda: decide(False)),

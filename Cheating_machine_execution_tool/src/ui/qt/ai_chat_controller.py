@@ -122,6 +122,10 @@ class AiChatController:
                 dialog.manager.feedback.setText(result.error)
         elif result.operation == 'ai_chat_progress':
             dialog.show_progress(*result.payload)
+        elif result.operation == 'ai_chat_monitor_settings':
+            dialog.show_monitor(result.payload)
+        elif result.operation == 'ai_chat_monitor_review':
+            dialog.review_action_result('', result.payload, monitor=True)
         elif result.operation == 'ai_chat_permissions':
             dialog.show_permissions(*result.payload)
         elif result.operation == 'ai_chat_review':

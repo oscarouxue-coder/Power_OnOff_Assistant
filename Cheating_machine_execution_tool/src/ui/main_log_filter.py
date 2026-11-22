@@ -8,7 +8,7 @@ from src.utils.wifi_log_summary import WifiLogSummary
 
 
 _AI_PREFIX = re.compile(r'^\[(?:AI(?:诊断|对话|监控|配置|案例|界面| Debug|采集|执行|网络检查|资料|证据)'
-                        r'|钉钉接入|飞书接入)\](?= |\[)')
+                        r'|Ai助手|AI 诊断|钉钉接入|飞书接入)\](?= |\[)')
 _CHAT = '[AI对话] '
 _MONITOR = '[AI监控] '
 _SESSION = r'会话[0-9a-f]{8}'

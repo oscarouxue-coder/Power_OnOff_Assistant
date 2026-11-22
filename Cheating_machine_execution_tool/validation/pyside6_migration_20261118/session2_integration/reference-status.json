@@ -1,0 +1,34 @@
+{
+  "prior_package": "qt-20261121-194426-f1cfb93a",
+  "prior_zip_sha256": "180642fc5714b6b54134c99c1f5bd5bf2409518ec7ad3204f37323bc36966449",
+  "reference_native": [
+    {
+      "scale": "1",
+      "tests": 100,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scale": "1.25",
+      "tests": 100,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scale": "1.5",
+      "tests": 100,
+      "passed": true,
+      "violations": []
+    }
+  ],
+  "reference_baseline": {
+    "tests": 3266,
+    "failures": 4,
+    "skipped": 2,
+    "failed_suite": "test_network_ops.PrepareNetworkForSampleTests",
+    "reported_resource": "adapter:vlan107"
+  },
+  "reference_build_log": "C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-source\\local-intent-26b1c43f\\Cheating_machine_execution_tool\\validation\\pyside6_migration_20261118\\local_chat_intent\\build.txt",
+  "reference_packaged_sources_present": false,
+  "reference_dist_present": false
+}

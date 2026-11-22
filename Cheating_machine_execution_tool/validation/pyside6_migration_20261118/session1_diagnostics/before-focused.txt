@@ -1,0 +1,13 @@
+﻿GUI_TEST_COVERAGE_OK
+python.exe : ................................................................................
+所在位置 行:4 字符: 1
++ & 'C:/Users/Administrator/AppData/Local/LineCheckAssistant/qt-build-p ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 80 tests in 48.450s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 2, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

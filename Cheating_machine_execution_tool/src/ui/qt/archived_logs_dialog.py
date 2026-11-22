@@ -93,6 +93,7 @@ class ArchivedLogsDialog(QDialog):
             index = next((i for i, entry in enumerate(files) if entry == old), 0)
             if files:
                 self.files.setCurrentIndex(index)
+        self.cursor = None
         self.set_busy(False)
         self._choose_file()
 

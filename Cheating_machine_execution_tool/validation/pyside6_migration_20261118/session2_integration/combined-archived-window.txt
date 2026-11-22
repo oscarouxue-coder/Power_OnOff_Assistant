@@ -1,0 +1,10 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_fe0978bf020e48fca49827c91937a49b'}
+
+test_copied_projects_in_workspace (validation.pyside6_migration_20261118.session2_integration.check_archived_window.ArchivedWindowTests) ... ok
+test_qt_archived_logs_pages_original_workspace_and_serial_text_with_local_export (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 7.739s
+
+OK

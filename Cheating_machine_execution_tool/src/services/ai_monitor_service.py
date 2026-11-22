@@ -266,8 +266,9 @@ class AiMonitorService:
                 raise ValueError("Ping参数无效")
             settings = (d.conversation.context.target_settings(context["run_id"], target.channel)
                         if d.conversation is not None else {})
-            return probe_connectivity(target, settings, params["path"], stop, self.emit,
-                                      getattr(d, "shared_busy", d.busy) if params["path"] == "wireless" else d.busy)
+            probe = getattr(d, 'probe_connectivity', probe_connectivity)
+            return probe(target, settings, params['path'], stop, self.emit,
+                         getattr(d, 'shared_busy', d.busy) if params['path'] == 'wireless' else d.busy)
         return executor.execute(name, params, deep=True)
 
     def before_dispatch(self, identifier, name, target, stop):

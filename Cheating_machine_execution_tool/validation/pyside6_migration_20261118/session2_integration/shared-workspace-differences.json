@@ -1,0 +1,125 @@
+{
+  "observed": "after session 2 archive fix",
+  "differences": [
+    {
+      "path": "line_check_assistant_README.md",
+      "reference": "064181ca7bdd2db041df509b0ba8e4f8e2b3603152d82744e324ad7a06a59688",
+      "shared": "73626f7330c014d737ced5b28eb3307b54b17a239b9315fb57fee1bbda785d79"
+    },
+    {
+      "path": "run_dutpilot_qt.py",
+      "reference": "3753ca7c4b76f6c34e9cf3e4433c76ff241dd13bb8866306ac60e393dd5b99aa",
+      "shared": "f1032535d54f2c6b75116de2559a26736a00ad3c17c4f840f87b53affa01c272"
+    },
+    {
+      "path": "scripts/capability_gui_actions.json",
+      "reference": "725a62245deb6151040709f7694b16acff16b59880a8c36b5e68182ab6f0968d",
+      "shared": "951d513623c7e36f8818ff995554fdb4dbe167fcb14d49b39cc0fc24f7815d14"
+    },
+    {
+      "path": "scripts/run_remote_gateway.py",
+      "reference": "e92779deaaa741c38fb25163cf9c8ac991395cf31bf7cdfcbebdaf85121b15eb",
+      "shared": "ad4a6375762b0f8419cc96f860fffdd83f080fd4f578a8c5debf2f1d9c83d12e"
+    },
+    {
+      "path": "scripts/verify_baseline.py",
+      "reference": "8b4e8634b332f99975fae5527f399de9443c247a45e7bfc550ed2d172da8c205",
+      "shared": "1a605818db8ccfe4160e18833429ed48ae47f2c769d1bdb837af49287307acc1"
+    },
+    {
+      "path": "scripts/verify_qt_migration.py",
+      "reference": "3a29eed8b646270ca7c453c0dd87fd4cb8d93e052fa8a83cc104dd42aa3cfdb9",
+      "shared": "e8d97ae165e1f4b2e5162f1918b3fa992a216d4731bbd42b48488a1efe74c6f8"
+    },
+    {
+      "path": "src/core/project_peer_transport.py",
+      "reference": null,
+      "shared": "321513e8334e59d6b91d2ebe7edb041c135033cfb8f75a87894036da4a660157"
+    },
+    {
+      "path": "src/services/ai_conversation_service.py",
+      "reference": "391a2ac0da46ba9673611d9c38f726e57fe9ae5c1290d44607d03ecc395a4c02",
+      "shared": "3b441b7f6f3e34914b37e7d0cd576c530149d752d1c463b45a14cd1fa83f4809"
+    },
+    {
+      "path": "src/services/ai_session_router.py",
+      "reference": "b1023c4e857b174524c0bc56144101646552bd8340437a3f4ae8b5227aca92fa",
+      "shared": "5cd922baeb653bfb13392bfd493206900c98a3beb36cdf6dc2c04a7e7b06ee1e"
+    },
+    {
+      "path": "src/services/ai_version_query_service.py",
+      "reference": "9b5a515989f2bf3a328d23957abf5811ee9032f60586e52d63ff3373b0d44356",
+      "shared": "1993c23915abd8441c19bd43bcddbe2e3624374999fbc4886733f072bfa8ff24"
+    },
+    {
+      "path": "src/services/project_peer_router.py",
+      "reference": null,
+      "shared": "d5b7e2f84fd7556097c74ecdcbde8d89b63bfd307bf05deba585c88a75d41513"
+    },
+    {
+      "path": "src/services/project_peer_runtime.py",
+      "reference": null,
+      "shared": "7a42863dd3a701adcd37de1cf2cd4e76c5d15454a3b46fbf565832db22902b09"
+    },
+    {
+      "path": "src/services/qt_ai_chat.py",
+      "reference": "ee166978859d8fd1c4e7c7b1cfae913d791c832b742f14ac5d650aba0fa11ecd",
+      "shared": "77b8c9f4020952d1e3c39c508a44083936c3e4771ebe3a458ae6f15b45f6b108"
+    },
+    {
+      "path": "src/services/qt_workspace_adapter.py",
+      "reference": "f49398ed6bb6f5ef0f72da0631906d58eaa102bbb065fd63debdc4f244c37c9a",
+      "shared": "cb22374ee2fe0c5156456f6b5fbcb86ee1d86bf432a8b308dfcfd2889cdd93e6"
+    },
+    {
+      "path": "src/services/remote_gateway_platforms.py",
+      "reference": "dff50d9b30af0bcfd147641a34e1f71e0735bbd583e0665925f88487d461d40f",
+      "shared": "2bcb858fa33d5f52aab51310f8961ad3e7e961b87190dd6a25720b2179ac3f28"
+    },
+    {
+      "path": "src/services/remote_instance_management.py",
+      "reference": "fb317152e5ecdb5aa85d7591080655983866b599526d28649ae3095df602a2c1",
+      "shared": "ad7196a959531f3c3cdf1b7273a91876c6315eea86e14a188eac7d2e66156767"
+    },
+    {
+      "path": "src/services/remote_instance_service.py",
+      "reference": "d77c467c22a1abb1e2395b2f277d6514fe60d17b3330dd67f684ae426d0f62be",
+      "shared": "2f30860e7e38d9b75315351cafe4c65697b2287704e60f332df767015e14d748"
+    },
+    {
+      "path": "src/services/workspace_gateway.py",
+      "reference": "e428146eb772d579ba9797e9e28a7a2667229e427f10efffe6c13ed498b16980",
+      "shared": "2325b435843c8e1b46ba5daf8b1c5879ee68ee162558cbfbbef7bbe9bac25d03"
+    },
+    {
+      "path": "src/services/workspace_service.py",
+      "reference": "503d78169b504fcb747eab07cbedf5a84cfc2a5a52afbafad6b0318eb2a3dda7",
+      "shared": "44db0790d1a162850f59c2eaaa8f7485299be06bd6139c1d92edf2d4a1857b4a"
+    },
+    {
+      "path": "src/ui/qt/archived_logs_dialog.py",
+      "reference": "7c59b3370e3b5007baa90b42e3e41f0845d82234f077667263148f249e24e9cf",
+      "shared": "9703635a613f00ebd1d9430096b0e409789d1630541b157396fe668d080211c2"
+    },
+    {
+      "path": "src/ui/qt/instance_status_dialog.py",
+      "reference": "7aa609635be0913e6a7ee0b1aef456d2d8e9bbd74dd55db3116210e979009d67",
+      "shared": "bf45fa759ca79aa428bc23eee52d7b4b9471367be66669cc2f48a81d3e55dd21"
+    },
+    {
+      "path": "tests/qt_workbench_probe.py",
+      "reference": "d556bb08d5e6947fb206a07cc680f13dbf9ed00f6a3e6e99cf2bf86effb6e5b7",
+      "shared": "4638afe285fcded0892083f5972ea4cd58ea199bbe376e1df4745f2c74d00609"
+    },
+    {
+      "path": "tests/test_project_peer_routing.py",
+      "reference": null,
+      "shared": "b66dee7fbe97dc879d6d50f8f643036d72e47a4667cecf9e573ef834b51732eb"
+    },
+    {
+      "path": "tests/test_qt_workspace_adapter.py",
+      "reference": "059899e59c97c939e0d0cbe13c42e5d28d2be6a3f4a1ba515e7cc5b2362f83cb",
+      "shared": "5903119d6fddadd9a8f5b5b5fd63532de792352d00ead73988b8f5061e55d6ce"
+    }
+  ]
+}

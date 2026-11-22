@@ -10,6 +10,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = (
+    'test_qt_monitor_confirms_only_checked_project_channels',
     'test_qt_manual_update_uses_verified_download_and_waits_for_cancel_cleanup',
     'test_qt_device_management_shows_readonly_inventory_and_active_workspace_leases',
     'test_qt_ai_report_dialog_follows_up_on_retained_material',

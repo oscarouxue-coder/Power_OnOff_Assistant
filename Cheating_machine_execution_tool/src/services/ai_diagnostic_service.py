@@ -45,7 +45,7 @@ SYSTEM_INSTRUCTIONS = """你是Windows光猫/路由器测试诊断助手。日�
 class AiDiagnosticService:
     def __init__(self, emit, serial_acquire, serial_read, busy, store=None,
                  client_factory=DiagnosticModelClient, tool_factory=DiagnosticToolExecutor,
-                 manual_path=None):
+                 manual_path=None, monitor_factory=AiMonitorService):
         self.emit_sink = emit
         self.store = store if store is not None else DiagnosticStore(case_store=open_shared_cases(emit))
         if self.store.migrate_full_access_defaults():
@@ -76,7 +76,7 @@ class AiDiagnosticService:
         self.run_id = ""
         self.run_active = False
         self.monitor_bound_run = None
-        self.monitor = AiMonitorService(self)
+        self.monitor = monitor_factory(self)
         self.serial_receiver = SerialDiagnosticReceiver(self.lock, self.shutdown, self.trigger, self.redactor)
         self.serial_pending = self.serial_receiver.pending
         self.event_thread = threading.Thread(target=self._event_loop, name="ai-event-observer", daemon=True)
@@ -118,7 +118,7 @@ class AiDiagnosticService:
             self.monitor_bound_run = self.run_id if enabled and self.run_active else None
             if enabled:
                 self.monitor.on_enable(True)
-        self.emit("[AI监控] " + ("本次已启用：最终失败或同阶段连续3次异常触发" if enabled else "已关闭，原测试继续"))
+        self.emit("[AI监控] " + (f"本次已启用：最终失败或同阶段连续{self.trigger.policy.threshold}次异常触发" if enabled else "已关闭，原测试继续"))
 
     def monitor_status(self):
         with self.lock:
@@ -207,7 +207,7 @@ class AiDiagnosticService:
     @maintenance_operation
     def submit(self, question, channel, level="light", event=None, automatic=False):
         if self.shutdown.is_set():
-            raise RuntimeError("AI诊断正在退出")
+            raise RuntimeError("Ai助手正在退出")
         with self.lock:
             target = self.targets.get(channel)
             if target is None:
@@ -227,13 +227,13 @@ class AiDiagnosticService:
             self.store.save_report(job.id, snapshot)
             if not profile.model.strip():
                 self.notify("report", (job.id, snapshot))
-                self.emit("[AI诊断] 本地快照已保存，尚未填写模型ID")
+                self.emit("[Ai助手] 本地快照已保存，尚未填写模型ID")
                 return job.id
             try:
                 key = self.store.key(profile)
             except Exception as exc:
                 self.notify("report", (job.id, snapshot))
-                self.emit("[AI诊断] 本地快照已保存，未调用模型：" + str(exc))
+                self.emit("[Ai助手] 本地快照已保存，未调用模型：" + str(exc))
                 return job.id
             self.redactor.add_secrets((key,))
             stop = threading.Event()
@@ -245,7 +245,7 @@ class AiDiagnosticService:
             except queue.Full:
                 self.stops.discard((job.id, channel, stop))
                 self.monitor_jobs.pop(job.id, None)
-                self.emit("[AI诊断] 任务队列已满，仅保留本地快照")
+                self.emit("[Ai助手] 任务队列已满，仅保留本地快照")
             return job.id
 
     def cancel_channel(self, channel):
@@ -291,7 +291,7 @@ class AiDiagnosticService:
                                 report=self.redactor.text(str(exc)) + "\n本地恢复状态：" + snapshot.get("recovery", "无临时修改"))
                 self.store.save_report(job.id, self.redactor.object(snapshot))
                 self.notify("report", (job.id, snapshot))
-                self.emit("[AI诊断] " + snapshot["status"] + "：" + snapshot["report"])
+                self.emit("[Ai助手] " + snapshot["status"] + "：" + snapshot["report"])
             finally:
                 with self.lock:
                     self.active_jobs -= 1
@@ -330,8 +330,8 @@ class AiDiagnosticService:
         return "\n".join(parts)
 
     def _diagnose(self, job, key, stop, snapshot):
-        self.emit(f"[AI诊断] 开始：通道{job.target.channel}，{job.profile.provider}/{job.profile.model}，{job.level}")
-        self.emit(f"[AI诊断] 真实诊断信息（含材料中的账号、密码）将发送至：{job.profile.provider} / {job.profile.base_url}；模型服务API密钥仅用于请求认证")
+        self.emit(f"[Ai助手] 开始：通道{job.target.channel}，{job.profile.provider}/{job.profile.model}，{job.level}")
+        self.emit(f"[Ai助手] 真实诊断信息（含材料中的账号、密码）将发送至：{job.profile.provider} / {job.profile.base_url}；模型服务API密钥仅用于请求认证")
         client = self.client_factory(job.profile, key, self.redactor)
         executor = self.tool_factory(job.target, stop, self.emit, self.store, self.redactor,
                                      self.serial_acquire, self.serial_read, self.busy)
@@ -425,7 +425,7 @@ class AiDiagnosticService:
                             report=self.redactor.text(answer) + "\n\n本地恢复状态：" + executor.recovery_state)
             self.store.save_report(job.id, self.redactor.object(snapshot))
             self.notify("report", (job.id, snapshot))
-            self.emit("[AI诊断] 完成，报告已保存；AI原因假设尚未人工确认")
+            self.emit("[Ai助手] 完成，报告已保存；AI原因假设尚未人工确认")
         finally:
             self._monitor_stage(job.id, "cleaning")
             snapshot["recovery"] = executor.recovery_state

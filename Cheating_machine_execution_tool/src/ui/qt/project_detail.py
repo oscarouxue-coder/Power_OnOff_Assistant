@@ -152,7 +152,7 @@ class ProjectDetail(QWidget):
         self.tabs = QTabBar()
         self.tabs.setExpanding(False)
         self.tabs.setUsesScrollButtons(True)
-        for index, name in enumerate(('运行概览', '自动上/下电', '样机升级', '写样机参数', 'ONU注册', '串口日志', 'DUT配置', 'AI 模型连接', 'AI 诊断')):
+        for index, name in enumerate(('运行概览', '自动上/下电', '样机升级', '写样机参数', 'ONU注册', '串口日志', 'DUT配置', 'AI 模型连接', 'Ai助手')):
             self.tabs.addTab(name)
             if index > 0:
                 self.tabs.setTabEnabled(index, False)

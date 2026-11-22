@@ -1,0 +1,26 @@
+﻿[
+    {
+        "directory":  "validation/pyside6_migration_20261118/session2_integration/native-final",
+        "before":  428,
+        "recycled":  428,
+        "retained":  [
+
+                     ]
+    },
+    {
+        "directory":  "validation/pyside6_migration_20261118/session2_integration/native-release",
+        "before":  429,
+        "recycled":  420,
+        "retained":  [
+                         "scale-1/ai-current-power-evidence.png",
+                         "scale-1/archived-empty-after-refresh.png",
+                         "scale-1/dut-status-height-small.png",
+                         "scale-1.25/ai-current-power-evidence.png",
+                         "scale-1.25/archived-empty-after-refresh.png",
+                         "scale-1.25/dut-status-height-small.png",
+                         "scale-1.5/ai-current-power-evidence.png",
+                         "scale-1.5/archived-empty-after-refresh.png",
+                         "scale-1.5/dut-status-height-small.png"
+                     ]
+    }
+]

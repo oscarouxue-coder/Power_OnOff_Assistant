@@ -1,12 +1,11 @@
 """Reuse original project conversations for local questions and retained reports."""
 from concurrent.futures import Future, ThreadPoolExecutor
-from functools import partial
 import threading
 from dataclasses import dataclass
 import json
 import queue
 
-from src.models.ai_diagnostics import ProviderProfile, diagnostic_progress_text
+from src.models.ai_diagnostics import DiagnosticTarget, ProviderProfile, diagnostic_progress_text
 from src.models.ai_permissions import PERMISSION_LABELS
 from src.models.dependency_repair import maintenance_operation
 from src.models.ai_session_scope import session_scope, source_identity
@@ -14,7 +13,8 @@ from src.models.qt_ai_chat import ChatMessageView, ChatSessionView, ChatWorkspac
 from src.models.qt_ai_cases import CASE_OPERATIONS
 from src.models.qt_ai_reports import REPORT_HANDOFF_OPERATIONS, REPORT_OPERATIONS
 from src.services.ai_conversation_service import AiConversationService
-from src.services.ai_debug_service import DiagnosticToolExecutor, tool_schemas
+from src.services.ai_debug_service import tool_schemas
+from src.services.qt_device_diagnostics import DIAGNOSTIC_TOOLS, QtDeviceDiagnostics, QtDiagnosticMonitor
 from src.services.ai_diagnostic_service import AiDiagnosticService
 from src.services.ai_record_titles import AiRecordTitles
 from src.services.ai_session_router import explicit_channel_route
@@ -37,15 +37,13 @@ class _PendingIntent:
     future: Future
 
 
-def _unavailable(*_args, **_options):
-    raise RuntimeError('Qt 设备诊断桥尚未接入')
-
-
 def _local_chat_mode(session, current_run):
     if (session.get('batch_parent') or session.get('capability_business_batch') or
             source_identity(session.get('source')) != source_identity(None)):
         return ''
     scope = session_scope(session)
+    if scope == 'batch' and session.get('qt_batch_diagnostics') and session.get('run_id') == current_run:
+        return 'batch'
     if scope == 'general' and not session.get('target'):
         return 'general'
     if scope == 'pc' and not session.get('target'):
@@ -90,10 +88,20 @@ class QtLocalConversation(AiConversationService):
                     or self.execution.other_jobs_active()):
                 state = dict(state, enabled=False, reason='项目正在收尾、编辑配置或其他项目正在使用设备')
             return dict(state, project_peer=True)
+        parent = session.get('batch_parent')
         mode = self.local_mode(session)
+        if parent and self.local_mode(self.store.chat(parent)) == 'batch':
+            mode = 'batch_child'
         if not mode:
             return {'enabled': False, 'capable': False, 'reason': '当前 Qt 会话仅查看历史'}
         state = super().collection_status(identifier)
+        if mode in ('batch', 'batch_child'):
+            root = self.store.chat(parent) if parent else session
+            valid = state['enabled'] and all(self.access.active(DiagnosticTarget(**t)) for t in root['batch_targets'])
+            return dict(state, enabled=valid, diagnostic_scope=True,
+                        reason='已确认的批量诊断通道' if valid else '本批通道或诊断授权已变化')
+        if mode == 'channel' and state['enabled'] and self.access.active(DiagnosticTarget(**session['target'])):
+            return dict(state, diagnostic_scope=True)
         if mode == 'channel':
             passive = bool(state['enabled'] and session['target'].get('port')
                            and not self.execution.closing and not self.execution.closed)
@@ -107,6 +115,8 @@ class QtLocalConversation(AiConversationService):
 
     def tools_for_turn(self, state, scope):
         tools = super().tools_for_turn(state, scope)
+        if state.get('diagnostic_scope'):
+            return [tool for tool in tools if tool['name'] in DIAGNOSTIC_TOOLS]
         if state.get('project_peer'):
             return [tool for tool in tools if tool['name'] == 'ask_user']
         if state.get('passive_serial'):
@@ -114,7 +124,10 @@ class QtLocalConversation(AiConversationService):
         return tools
 
     def _collect(self, identifier, name, params, target, settings, stop, executor):
-        if name != 'read_serial_log' or self.local_mode(self.store.chat(identifier)) != 'channel':
+        state = self.collection_status(identifier)
+        if state.get('diagnostic_scope') and name not in DIAGNOSTIC_TOOLS:
+            raise ValueError('此工具不属于通道诊断范围')
+        if state['enabled'] or name != 'read_serial_log' or self.local_mode(self.store.chat(identifier)) != 'channel':
             return super()._collect(identifier, name, params, target, settings, stop, executor)
         if stop.is_set() or not self.collection_status(identifier).get('passive_serial'):
             raise ValueError('已取消或目标串口的读取条件已变化，本次跳过')
@@ -130,9 +143,10 @@ class QtLocalConversation(AiConversationService):
 class QtAiChat:
     def __init__(self, store, workspace, emit, context, execution):
         self.store = store
-        self.diagnostic = AiDiagnosticService(emit, _unavailable, execution.read_chat_serial, lambda *_: True,
+        self.access = QtDeviceDiagnostics(execution, store)
+        self.diagnostic = AiDiagnosticService(emit, self.access.acquire_serial, execution.read_chat_serial, self.access.busy,
             store=store, manual_path=workspace.source_root / 'line_check_assistant_README.md',
-            tool_factory=partial(DiagnosticToolExecutor, transport_factory=_unavailable))
+            tool_factory=self.access.tool_factory, monitor_factory=QtDiagnosticMonitor)
         try:
             self.conversation = QtLocalConversation(self.diagnostic, execution)
         except BaseException:
@@ -147,6 +161,9 @@ class QtAiChat:
         self.reports = QtAiReports(self.diagnostic, self.titles)
         self.handoff = QtAiReportHandoff(context, self.conversation)
         self.conversation.target_current = lambda target: self.handoff._target(target.channel) == target
+        self.conversation.access = self.access
+        self.access.bind(self)
+        self.diagnostic.shared_busy = self.conversation.shared_busy = self.access.shared_busy
         self.cases = QtAiCases(self.diagnostic)
         self.selected = self.conversation.router.current()
         self.cursor = None
@@ -201,6 +218,8 @@ class QtAiChat:
         selected_scope = session_scope(self.store.chat(identifier))
         if selected_scope == 'device':
             self.store.update_chat(identifier, qt_channel_analysis=True)
+        elif selected_scope == 'batch':
+            self.store.update_chat(identifier, qt_batch_diagnostics=True)
         elif selected_scope == 'pc':
             self.store.update_chat(identifier, qt_pc_analysis=True)
         self._select(identifier, from_route=True)
@@ -212,7 +231,7 @@ class QtAiChat:
             raise ValueError('此历史会话当前仅可查看；请新建普通问答')
         if self._intent is not None:
             raise ValueError('上一条消息仍在识别目标，请等待或停止本轮')
-        if mode in ('general', 'pc', 'pc_regular', 'channel'):
+        if mode in ('general', 'pc', 'pc_regular', 'channel', 'batch'):
             profile = self._profile()
             text = text.strip()
             if not 1 <= len(text) <= 32768:
@@ -223,7 +242,8 @@ class QtAiChat:
             self.diagnostic.configure(profile, targets)
             self._route_errors.pop(identifier, None)
             router = self.conversation.router
-            if explicit_channel_route(text, session):
+            batch_reply = mode == 'batch' and self.conversation.batch.fast_route(text, session, targets, False)
+            if not batch_reply and explicit_channel_route(text, session):
                 router.send(text, profile, selected=identifier, diagnosis_only=False,
                             explicit_device_only=True, on_selected=self._select_channel_route)
             else:
@@ -249,6 +269,11 @@ class QtAiChat:
             if (self._profile() != pending.profile or self.handoff.configured_targets() != pending.targets
                     or self.conversation.context.run_id != pending.run_id):
                 raise ValueError('识别期间目标、批次或模型已变化，请重新发送')
+            if decision.get('scope') == 'batch' and decision.get('workflow') != 'business' and decision.get('intent') != 'clarify':
+                channels = decision.get('channels') or [t['channel'] for t in self.store.chat(pending.origin).get('batch_targets', ())]
+                valid = {t.channel for t in pending.targets if self.access.active(t)}
+                if not channels or any(c not in valid for c in channels):
+                    raise ValueError('请先在“实时诊断与监控”确认本次批量目标')
             self.conversation.router.send(pending.text, pending.profile, selected=pending.origin,
                 local_intent=decision, diagnosis_only=self.store.chat(pending.origin).get('diagnosis_only') is True,
                 on_selected=self._select_channel_route)
@@ -288,6 +313,23 @@ class QtAiChat:
             return None if self.closing else self._poll()
         if self.closing:
             raise ValueError('AI 会话正在关闭')
+        if operation == 'ai_chat_monitor_settings':
+            return self.access.view()
+        if operation == 'ai_chat_monitor_apply':
+            self.access.confirm(*args)
+            return self.snapshot()
+        if operation == 'ai_chat_monitor_off':
+            self.access.disable()
+            return self.snapshot()
+        if operation == 'ai_chat_monitor_review':
+            return self.diagnostic.monitor.pending()
+        if operation == 'ai_chat_monitor_decide':
+            action_id, fingerprint, approved = args
+            action = self.diagnostic.monitor.pending()
+            if not action or (action['id'], action['fingerprint']) != (action_id, fingerprint):
+                raise ValueError('待确认监控操作已变化，请重新查看')
+            self.diagnostic.monitor.actions.decide(action['session_id'], action_id, fingerprint, approved)
+            return self.snapshot()
         if operation in REPORT_OPERATIONS:
             return self.reports.execute(operation, args)
         if operation in REPORT_HANDOFF_OPERATIONS:
@@ -307,7 +349,7 @@ class QtAiChat:
             identifier, = args
             self._selected_session(identifier)
             status = self.conversation.permissions.status(identifier)
-            self.diagnostic.emit('[AI 诊断] 已读取当前会话权限')
+            self.diagnostic.emit('[Ai助手] 已读取当前会话权限')
             details = identifier, PERMISSION_LABELS[status['preferred_mode']], status['label'], status['enabled']
             if self.conversation.collection_status(identifier).get('passive_serial'):
                 return (*details, True)
@@ -316,7 +358,7 @@ class QtAiChat:
             identifier = args[0]
             self._selected_session(identifier)
             if operation == 'ai_chat_review':
-                self.diagnostic.emit('[AI 诊断] 核对当前会话待批准操作')
+                self.diagnostic.emit('[Ai助手] 核对当前会话待批准操作')
                 if not self.conversation.collection_status(identifier)['enabled']:
                     return identifier, None
                 action = self.conversation.actions.pending(identifier)
@@ -357,7 +399,7 @@ class QtAiChat:
             identifier = args[0]
             session = self._selected_session(identifier)
             if operation == 'ai_chat_progress':
-                self.diagnostic.emit('[AI 诊断] 已读取当前会话的留存排查进展')
+                self.diagnostic.emit('[Ai助手] 已读取当前会话的留存排查进展')
                 return identifier, diagnostic_progress_text(session)
             if operation == 'ai_chat_evidence':
                 return tuple((row['source'], row['timing'], row['text']) for row in self.store.chat_evidence(identifier))
@@ -386,7 +428,7 @@ class QtAiChat:
                 break
             changed = True
         running = self._is_running()
-        if changed or (self._last_view is not None and running != self._last_view.running):
+        if changed or (self._last_view is not None and (running != self._last_view.running or self.diagnostic.monitor_status() != self._last_view.monitor_status)):
             return self.snapshot()
         return None
 
@@ -429,7 +471,7 @@ class QtAiChat:
         view_rows = tuple(ChatSessionView(row['id'], row['title'], row['target_label'], row['model'],
                           row['status'], row.get('origin', ''), row['created'], row['id'] in busy) for row in rows)
         if selected is None:
-            self._last_view = ChatWorkspaceView(view_rows, '', (), deleted=deleted)
+            self._last_view = ChatWorkspaceView(view_rows, '', (), deleted=deleted, monitor_status=self.diagnostic.monitor_status())
             return self._last_view
         with self.store.lock:
             messages = self.store.db.execute('SELECT id,payload FROM chat_messages WHERE session_id=? AND id<? '
@@ -453,9 +495,10 @@ class QtAiChat:
         draft = self.conversation.draft_message(self.selected) if self.cursor is None else None
         next_page = messages[CHAT_PAGE - 1][0] if len(messages) > CHAT_PAGE else None
         self._last_view = ChatWorkspaceView(view_rows, self.selected, page, draft['text'] if draft else '',
-            self._context_text(), self._is_running(), bool(mode), next_page, history_analysis=mode in ('report', 'archived', 'channel') and not passive,
+            self._context_text(), self._is_running(), bool(mode), next_page, history_analysis=mode in ('report', 'archived') or (mode == 'channel' and not passive and not self.conversation.collection_status(self.selected)['enabled']),
             deleted=deleted, latest_status=latest_status, pc_diagnosis=(mode == 'pc'), passive_serial=passive,
-            routing=self._intent is not None, retry_input=self._route_errors.get(self.selected, ('', ''))[0])
+            routing=self._intent is not None, retry_input=self._route_errors.get(self.selected, ('', ''))[0],
+            monitor_status=self.diagnostic.monitor_status())
         return self._last_view
 
     def begin_close(self):

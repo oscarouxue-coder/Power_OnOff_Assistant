@@ -47,7 +47,7 @@ CHAT_INSTRUCTIONS = """你是Windows光猫/路由器测试排障与操作助手�
 未执行线路Ping或其它连通性验证时，不得宣称线路连接正常。管理员身份不能排除串口访问限制。
 普通问答与故障排查分别处理：
 身份、模型、术语等简单问题，默认用1～3句话直接回答当前问题，不套用诊断报告结构。
-例如问“你是谁？”，可答“我是这个程序里的AI诊断助手，帮助你分析光猫和路由器测试中的问题。”
+例如问“你是谁？”，可答“我是这个程序里的Ai助手，帮助你分析光猫和路由器测试中的问题。”
 简单问答不主动重复通道、IP、权限边界、工具状态、上轮故障或继续排障邀请；仅在与当前问题直接相关时说明。
 不知道的信息直接简短说明，不猜测；没有可信模型标识时，简短说明无法确认具体模型，并指向“模型接入”查看。
 简单问答无需为了附带证据而检索历史，也不调用与当前问题无关的采集工具。
@@ -1021,8 +1021,9 @@ class AiConversationService:
                 raise ValueError("未绑定设备目标，不能执行设备出口Ping")
             if set(params) != {"path"}:
                 raise ValueError("Ping参数不正确")
-            return probe_connectivity(target, settings, params["path"], stop, self.diagnostic.emit,
-                                      self.shared_busy if params["path"] == "wireless" else self.diagnostic.busy)
+            probe = getattr(self.diagnostic, 'probe_connectivity', probe_connectivity)
+            return probe(target, settings, params['path'], stop, self.diagnostic.emit,
+                         self.shared_busy if params['path'] == 'wireless' else self.diagnostic.busy)
         return executor.execute(name, params, deep=True)
 
     def scope_busy(self, target):

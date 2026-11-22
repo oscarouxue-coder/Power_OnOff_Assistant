@@ -1,0 +1,223 @@
+﻿Project root: C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool
+
+  [OK  ] py_compile - 383 files compiled
+  [OK  ] compile_inventory - 373 source files covered
+  [OK  ] capability_coverage - GUI actions and business inventory reviewed
+  [OK  ] gui_test_coverage - GUI test ownership preflight passed
+  [FAIL] unittest - non-zero exit; tail: t_wireless_ping.WirelessPingTests) ... ok
+test_changed_bssid_after_reply_does_not_produce_success (test_wireless_ping.WirelessPingTests) ... ok
+test_dns_failure_prevents_all_icmp_packets (test_wireless_ping.WirelessPingTests) ... ok
+test_four_packets_bind_wireless_source_and_interface_and_report_statistics (test_wireless_ping.WirelessPingTests) ... ok
+test_hostname_resolves_on_wireless_and_pins_first_a_record (test_wireless_ping.WirelessPingTests) ... ok
+test_interface_option_failure_never_sends_or_falls_back (test_wireless_ping.WirelessPingTests) ... ok
+test_local_ip_and_subnet_broadcast_not_counted_as_wireless_connectivity (test_wireless_ping.WirelessPingTests) ... ok
+test_lost_source_address_stops_later_packets (test_wireless_ping.WirelessPingTests) ... ok
+test_no_replies_fails_without_reconnection_or_default_interface (test_wireless_ping.WirelessPingTests) ... ok
+test_one_reply_passes_but_all_four_probes_still_run (test_wireless_ping.WirelessPingTests) ... ok
+test_permission_preflight_is_explicit (test_wireless_ping.WirelessPingTests) ... ok
+test_waits_for_wireless_ip_not_other_interface (test_wireless_ping.WirelessPingTests) ... ok
+test_wireless_unreachable_does_not_use_reachable_wired_interface (test_wireless_ping.WirelessPingTests) ... ok
+test_wrong_source_reply_not_counted (test_wireless_ping.WirelessPingTests) ... ok
+test_form_wheel_scrolls_the_page_without_editing_values (test_workbench_panels.WorkbenchPanelsTests) ... ok
+test_high_volume_display_retains_bounded_tail (test_workbench_panels.WorkbenchPanelsTests) ... ok
+test_large_single_line_and_empty_display_are_bounded (test_workbench_panels.WorkbenchPanelsTests) ... ok
+test_small_window_scrolls_to_existing_controls_and_logs_resize (test_workbench_panels.WorkbenchPanelsTests) ... ok
+test_aging_capability_is_explicitly_presented_as_power_cycling (test_workbench_status.WorkbenchStatusTests) ... ok
+test_different_channel_rounds_do_not_become_a_single_percentage (test_workbench_status.WorkbenchStatusTests) ... ok
+test_equal_rounds_and_explicit_results_are_projected_without_mutation (test_workbench_status.WorkbenchStatusTests) ... ok
+test_invalid_historical_start_time_does_not_break_overview (test_workbench_status.WorkbenchStatusTests) ... ok
+test_retained_channels_from_a_previous_run_are_not_aggregated (test_workbench_status.WorkbenchStatusTests) ... ok
+test_client_first_poll_sees_attached_project_and_start_failure_drains_worker (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_close_waits_for_receipt_after_agent_worker_finishes (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_exports_only_proven_current_boot_receipts_and_keeps_legacy_rows (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_failed_incoming_receipt_releases_only_its_own_project (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_local_project_revocation_does_not_expand_to_another_project (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_other_principal_is_rejected_before_project_listing (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_repeated_receipt_after_switch_does_not_move_or_reexecute_original (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_requires_explicit_project_before_forwarding (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_selection_and_explicit_prefix_keep_original_signed_request (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_unready_receipt_is_not_replayed_after_project_controller_attaches (test_workspace_gateway.WorkspaceGatewayTests) ... ok
+test_invalid_authentication_does_not_kill_listener_or_accept_request (test_workspace_instance.WorkspaceInstanceTests) ... ok
+test_second_launch_forwards_project_without_starting_another_manager (test_workspace_instance.WorkspaceInstanceTests) ... ok
+test_approval_after_switch_returns_to_original_project (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_duplicate_names_require_explicit_id (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_explicit_project_message_strips_only_routing_prefix (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_feishu_direct_message_project_routing (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_no_project_selection_never_executes (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_removed_project_is_not_executed_or_listed (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_switch_routes_new_messages_without_replaying_old_message (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_two_projects_share_one_transport (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+test_untrusted_group_does_not_receive_project_listing (test_workspace_platforms.WorkspacePlatformsTests) ... ok
+
+======================================================================
+ERROR: test_unknown_job_recovers_successful_rows_from_durable_events (test_ai_version_query.VersionQueryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 302, in test_unknown_job_recovers_successful_rows_from_durable_events
+    result = self.service.version_queries._observe(identifier, job_id, self.service.capabilities.authority(identifier))
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\src\services\ai_version_query_service.py", line 179, in _observe
+    status = owner.capabilities.service.jobs.status(job_id, authority, cursor)
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\src\services\capability_jobs.py", line 80, in status
+    result = self._row(identifier)
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\src\services\capability_jobs.py", line 71, in _row
+    raise CapabilityError("job_not_found", "任务不存在")
+src.models.capabilities.CapabilityError: 任务不存在
+
+======================================================================
+FAIL: test_ask_mode_requires_approval_before_any_device_call (test_ai_version_query.VersionQueryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 251, in test_ask_mode_requires_approval_before_any_device_call
+    self.assertEqual(len(self.seen), 3)
+AssertionError: 0 != 3
+
+======================================================================
+FAIL: test_endpoint_change_after_last_permission_check_is_rejected_at_admission (test_ai_version_query.VersionQueryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 326, in test_endpoint_change_after_last_permission_check_is_rejected_at_admission
+    self.assertTrue(any("原会话快照" in m["text"] for m in self.store.chat_items(identifier)))
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_explicit_business_cancel_stops_remaining_targets (test_ai_version_query.VersionQueryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 262, in test_explicit_business_cancel_stops_remaining_targets
+    self.assertTrue(started.wait(2))
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_feishu_and_dingtalk_sources_use_same_job_and_original_identity (test_ai_version_query.VersionQueryTests) (kind='feishu')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 229, in test_feishu_and_dingtalk_sources_use_same_job_and_original_identity
+    self.assertEqual(self.record(identifier)["state"], "completed")
+AssertionError: 'not_admitted' != 'completed'
+- not_admitted
++ completed
+
+
+======================================================================
+FAIL: test_feishu_and_dingtalk_sources_use_same_job_and_original_identity (test_ai_version_query.VersionQueryTests) (kind='dingtalk')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 229, in test_feishu_and_dingtalk_sources_use_same_job_and_original_identity
+    self.assertEqual(self.record(identifier)["state"], "completed")
+AssertionError: 'not_admitted' != 'completed'
+- not_admitted
++ completed
+
+
+======================================================================
+FAIL: test_job_lookup_handles_an_admitted_operation_with_missing_ack (test_ai_version_query.VersionQueryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 290, in test_job_lookup_handles_an_admitted_operation_with_missing_ack
+    self.assertEqual(len(self.seen), 3)
+AssertionError: 0 != 3
+
+======================================================================
+FAIL: test_model_explanation_cannot_call_tools (test_ai_version_query.VersionQueryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 183, in test_model_explanation_cannot_call_tools
+    self.assertEqual(self.record(identifier)["summary"], "failed")
+AssertionError: 'pending' != 'failed'
+- pending
++ failed
+
+
+======================================================================
+FAIL: test_one_failure_continues_and_preserves_real_results (test_ai_version_query.VersionQueryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 132, in test_one_failure_continues_and_preserves_real_results
+    self.assertEqual(len(self.seen), 3)
+AssertionError: 0 != 3
+
+======================================================================
+FAIL: test_read_only_lookup_is_scoped_to_original_principal_and_operation (test_ai_version_query.VersionQueryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 213, in test_read_only_lookup_is_scoped_to_original_principal_and_operation
+    self.assertIsNotNone(self.capabilities.jobs.find("device.version", authority))
+AssertionError: unexpectedly None
+
+======================================================================
+FAIL: test_recovery_only_reads_original_job_and_deduplicates_projection (test_ai_version_query.VersionQueryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 195, in test_recovery_only_reads_original_job_and_deduplicates_projection
+    self.assertEqual(len(self.store.chat_items(identifier)), before)
+AssertionError: 5 != 4
+
+======================================================================
+FAIL: test_single_target_does_not_expand_to_all (test_ai_version_query.VersionQueryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 121, in test_single_target_does_not_expand_to_all
+    self.assertEqual(self.seen, [self.targets[1].bind_ip])
+AssertionError: Lists differ: [] != ['192.168.1.22']
+
+Second list contains 1 additional elements.
+First extra element 0:
+'192.168.1.22'
+
+- []
++ ['192.168.1.22']
+
+======================================================================
+FAIL: test_stopping_model_does_not_cancel_admitted_job_or_hide_results (test_ai_version_query.VersionQueryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 161, in test_stopping_model_does_not_cancel_admitted_job_or_hide_results
+    self.assertTrue(started.wait(2))
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_summary_failure_never_changes_query_result_or_requeries (test_ai_version_query.VersionQueryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 175, in test_summary_failure_never_changes_query_result_or_requeries
+    self.assertEqual(len(self.seen), 3)
+AssertionError: 0 != 3
+
+======================================================================
+FAIL: test_target_change_halts_remaining_without_using_new_source (test_ai_version_query.VersionQueryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 147, in test_target_change_halts_remaining_without_using_new_source
+    self.assertEqual(len(self.seen), 1)
+AssertionError: 0 != 1
+
+======================================================================
+FAIL: test_three_same_ip_devices_one_job_and_only_one_model_explanation (test_ai_version_query.VersionQueryTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\tests\test_ai_version_query.py", line 106, in test_three_same_ip_devices_one_job_and_only_one_model_explanation
+    self.assertEqual(self.seen, [t.bind_ip for t in self.targets])
+AssertionError: Lists differ: [] != ['192.168.1.21', '192.168.1.22', '192.168.1.23']
+
+Second list contains 3 additional elements.
+First extra element 0:
+'192.168.1.21'
+
+- []
++ ['192.168.1.21', '192.168.1.22', '192.168.1.23']
+
+----------------------------------------------------------------------
+Ran 3267 tests in 629.648s
+
+FAILED (failures=15, errors=1, skipped=2)
+  [OK  ] must_exist: bbfdm.operate - hit in src\core\dut_ubus_config.py (+1)
+  [OK  ] must_exist: tclinux_allinone - hit in src\core\tftp_transport.py (+1)
+  [OK  ] must_exist: 192.168.1.1 - hit in src\core\telnet_transport.py (+5)
+  [OK  ] must_exist: vlan_to_serial_port - hit in src\core\__init__.py (+11)
+  [OK  ] must_exist: MAX_PARALLEL_UPGRADES = 8 - hit in line_check_assistant\sample_upgrade_settings_store.py
+  [OK  ] must_exist: clamp_parallel_count - hit in src\services\firmware_upgrade_service.py (+2)
+  [OK  ] must_exist: source_address=(bind_ip, 0) - hit in src\core\telnet_transport.py (+3)
+  [OK  ] must_exist: Device.Firewall.<X_SDMC_>Security.AccessCtrl - hit in src\core\ubus_enable_telnet.py
+  [OK  ] must_not_exist: 0.0.0.0 - absent from code lines of src/core/tftp_transport.py,src/core/telnet_transport.py
+
+FAILED: 1 check(s) failed

@@ -56,7 +56,7 @@ class AiDiagnosticsWindow:
             self.multi_panel = None
         self.window = tk.Toplevel(self.master)
         self.window.configure(background=self.background_color)
-        self.window.title("AI 诊断助手")
+        self.window.title("Ai助手")
         self.window.geometry("1080x780")
         self.window.minsize(940, 660)
         self.window.protocol("WM_DELETE_WINDOW", self.hide)
@@ -206,7 +206,7 @@ class AiDiagnosticsWindow:
 
     def _error(self, exc):
         self.service.emit("[AI界面] 操作失败：" + str(exc))
-        messagebox.showerror("AI 诊断助手", self.service.redactor.text(str(exc)), parent=self.window)
+        messagebox.showerror("Ai助手", self.service.redactor.text(str(exc)), parent=self.window)
 
     def _update_source_ip_button(self, *_args):
         value = self.vars["source_ip"].get()

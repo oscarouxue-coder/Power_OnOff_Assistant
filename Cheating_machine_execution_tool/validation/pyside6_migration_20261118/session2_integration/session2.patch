@@ -1,0 +1,155 @@
+--- a/Cheating_machine_execution_tool/src/ui/qt/archived_logs_dialog.py
++++ b/Cheating_machine_execution_tool/src/ui/qt/archived_logs_dialog.py
+@@ -93,6 +93,7 @@
+             index = next((i for i, entry in enumerate(files) if entry == old), 0)
+             if files:
+                 self.files.setCurrentIndex(index)
++        self.cursor = None
+         self.set_busy(False)
+         self._choose_file()
+ 
+--- a/Cheating_machine_execution_tool/tests/qt_workbench_probe.py
++++ b/Cheating_machine_execution_tool/tests/qt_workbench_probe.py
+@@ -2021,6 +2021,20 @@
+         self.assertIn(expected.splitlines()[0], contents)
+         self.assertNotIn('发送原文', contents)
+         self.assertEqual(serial_file.read_bytes(), original_serial)
++        # A log can be rotated out of the directory while its newest page is open.
++        with serial_file.open('a', encoding='utf-8') as stream:
++            stream.writelines(f'archived line {n}\n' for n in range(180))
++        dialog.latest.click()
++        self.wait_for(lambda: not dialog.busy and dialog.older.isEnabled())
++        serial_file.rename(serial_file.with_suffix('.rotated'))
++        dialog.refresh_files.click()
++        self.wait_for(lambda: not dialog.busy and dialog.files.count() == 0)
++        self.assertIsNone(dialog.cursor)
++        self.assertFalse(dialog.older.isEnabled())
++        self.assertFalse(dialog.latest.isEnabled())
++        self.assertEqual(dialog.logs.text.toPlainText(), '')
++        if output:
++            self.assertTrue(dialog.grab().save(str(Path(output) / 'archived-empty-after-refresh.png')))
+         main_directory = path / 'logs/main'
+         monitor_directory = main_directory / 'resource_monitor'
+         monitor_directory.mkdir(parents=True)
+@@ -5446,8 +5460,20 @@
+         heights = {'telnet': 3, 'wan': 4, 'wifi_2g': 5, 'wifi_5g': 6, 'voice': 7, 'tr069': 16}
+         state.write_text(json.dumps({'current_status_heights': dict(heights, unknown='keep'), 'other': True}), encoding='utf-8')
+ 
+-        def persisted():
+-            return json.loads(state.read_text(encoding='utf-8'))
++        # Read the real JSON on the workspace worker after each atomic replace.
++        # Polling the destination concurrently can deny the replace on Windows.
++        from src.services.qt_window_state import save_window_placement
++        saved_state = json.loads(state.read_text(encoding='utf-8'))
++
++        def observe_save(context, window, **preferences):
++            nonlocal saved_state
++            save_window_placement(context, window, **preferences)
++            if window == 'dut' and context.identity.project_id == project:
++                saved_state = json.loads(state.read_text(encoding='utf-8'))
++
++        observer = patch('src.services.qt_workspace_adapter.save_window_placement', new=observe_save)
++        observer.start()
++        self.addCleanup(observer.stop)
+ 
+         def settle(dialog):
+             self.wait_for(lambda: not dialog._status_layout_timer.isActive()
+@@ -5470,9 +5496,9 @@
+         QTest.mousePress(handle, Qt.MouseButton.LeftButton, pos=start)
+         QTest.mouseMove(handle, target, delay=20)
+         QTest.mouseRelease(handle, Qt.MouseButton.LeftButton, pos=target)
+-        self.wait_for(lambda: persisted()['current_status_heights']['telnet'] == 5)
++        self.wait_for(lambda: saved_state['current_status_heights']['telnet'] == 5)
+         settle(dialog)
+-        self.assertNotIn('window_size', persisted())
++        self.assertNotIn('window_size', saved_state)
+         for index, feature in enumerate(('wan', 'wifi_2g', 'wifi_5g', 'voice'), 1):
+             dialog.tabs.setCurrentIndex(index)
+             settle(dialog)
+@@ -5485,7 +5511,7 @@
+         dialog.tabs.setCurrentIndex(5)
+         settle(dialog)
+         self.assertLess(dialog.status_heights['tr069'], 16)
+-        self.wait_for(lambda: persisted()['current_status_heights']['tr069'] == dialog.status_heights['tr069'])
++        self.wait_for(lambda: saved_state['current_status_heights']['tr069'] == dialog.status_heights['tr069'])
+         output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
+         if output:
+             dialog.page_scroll.ensureWidgetVisible(dialog.status)
+@@ -5499,9 +5525,9 @@
+         restored = self.controller.dut_windows[project]
+         settle(restored)
+         self.assertEqual(restored.status_heights, saved_rows)
+-        self.assertEqual(persisted()['window_size'], {'width': 560, 'height': 460})
+-        self.assertEqual(persisted()['current_status_heights']['unknown'], 'keep')
+-        self.assertTrue(persisted()['other'])
++        self.assertEqual(saved_state['window_size'], {'width': 560, 'height': 460})
++        self.assertEqual(saved_state['current_status_heights']['unknown'], 'keep')
++        self.assertTrue(saved_state['other'])
+ 
+     def test_qt_module_windows_restore_legacy_sizes_and_save_through_project_lifecycle(self):
+         from PySide6.QtWidgets import QMessageBox
+--- a/Cheating_machine_execution_tool/scripts/capability_gui_actions.json
++++ b/Cheating_machine_execution_tool/scripts/capability_gui_actions.json
+@@ -3545,7 +3545,7 @@
+   },
+   {
+     "file": "src/ui/qt/archived_logs_dialog.py",
+-    "file_code_sha256": "059be7f00817a5f7143238fcfef890c13d6e3ccdfdd7a9ec6645566c501d8cab",
++    "file_code_sha256": "ce4d504705fc6a9f4e345803a604d6ab35101266cdd32df2de76c1401614085b",
+     "action": "408817cbf612af782b933e1974d36708aaad4aec68449d9d86134b69a9abd8c3",
+     "expression": "self.source.currentIndexChanged.connect(self.refresh_source)",
+     "callbacks": {
+@@ -3554,14 +3554,14 @@
+   },
+   {
+     "file": "src/ui/qt/archived_logs_dialog.py",
+-    "file_code_sha256": "059be7f00817a5f7143238fcfef890c13d6e3ccdfdd7a9ec6645566c501d8cab",
++    "file_code_sha256": "ce4d504705fc6a9f4e345803a604d6ab35101266cdd32df2de76c1401614085b",
+     "action": "5d205ef073eda9b59903b310f8e3082e0e26897da2adcd61b25545d4d6f5ff37",
+     "expression": "dialog.finished.connect(lambda _: setattr(self, 'dialog', None))",
+     "callbacks": {}
+   },
+   {
+     "file": "src/ui/qt/archived_logs_dialog.py",
+-    "file_code_sha256": "059be7f00817a5f7143238fcfef890c13d6e3ccdfdd7a9ec6645566c501d8cab",
++    "file_code_sha256": "ce4d504705fc6a9f4e345803a604d6ab35101266cdd32df2de76c1401614085b",
+     "action": "70f9a037b9510e1613435659518a5c928ac5896eeba16eaa55f681b27ca2143d",
+     "expression": "self.files.currentIndexChanged.connect(self._choose_file)",
+     "callbacks": {
+@@ -3570,14 +3570,14 @@
+   },
+   {
+     "file": "src/ui/qt/archived_logs_dialog.py",
+-    "file_code_sha256": "059be7f00817a5f7143238fcfef890c13d6e3ccdfdd7a9ec6645566c501d8cab",
++    "file_code_sha256": "ce4d504705fc6a9f4e345803a604d6ab35101266cdd32df2de76c1401614085b",
+     "action": "90e794dfd45aef3b1d577d441bb6454d9037bc3a136fbcc1a0099ea5f111c8bc",
+     "expression": "dialog.logs.export_requested.connect(lambda entries, description: self.workspace.export_logs(entries, description, dialog))",
+     "callbacks": {}
+   },
+   {
+     "file": "src/ui/qt/archived_logs_dialog.py",
+-    "file_code_sha256": "059be7f00817a5f7143238fcfef890c13d6e3ccdfdd7a9ec6645566c501d8cab",
++    "file_code_sha256": "ce4d504705fc6a9f4e345803a604d6ab35101266cdd32df2de76c1401614085b",
+     "action": "beb39d24e4f71297dab5632c33435776eda140784042cf4e1e05545ce70189ad",
+     "expression": "dialog.files_requested.connect(lambda source: self._submit('archive_' + source + '_files'))",
+     "callbacks": {
+@@ -3586,7 +3586,7 @@
+   },
+   {
+     "file": "src/ui/qt/archived_logs_dialog.py",
+-    "file_code_sha256": "059be7f00817a5f7143238fcfef890c13d6e3ccdfdd7a9ec6645566c501d8cab",
++    "file_code_sha256": "ce4d504705fc6a9f4e345803a604d6ab35101266cdd32df2de76c1401614085b",
+     "action": "f003b2908a2cde3d25797d8925d7935814f6fd30435a7964a0aeb68498be2678",
+     "expression": "dialog.page_requested.connect(self._read)",
+     "callbacks": {
+--- a/Cheating_machine_execution_tool/line_check_assistant_README.md
++++ b/Cheating_machine_execution_tool/line_check_assistant_README.md
+@@ -36,7 +36,7 @@
+ 
+ 在 Qt 主窗口按 Ctrl+N 新建项目、Ctrl+O 打开项目、Ctrl+S 保存当前项目。要在资源管理器查看项目文件，选中左侧项目后从「项目」菜单或项目右键菜单选择「打开项目目录」。
+ 
+-「项目 → 归档日志…」可翻阅工作区日志原文。选中项目再打开归档窗，可切换到该项目的串口文件，或选「项目主日志」查看原主执行日志和资源监测记录。文件按时间从新到旧排列。用「最新日志」重新读取追加内容，「更早日志」向前翻页。搜索和导出只作用于当前页，导出使用新的 TXT 文件。结构化业务任务仍从「任务历史…」查看。[归档日志报告](validation/pyside6_migration_20261118/ARCHIVED_LOGS_QT_REPORT.md)
++「项目 → 归档日志…」可翻阅工作区日志原文。选中项目再打开归档窗，可切换到该项目的串口文件，或选「项目主日志」查看原主执行日志和资源监测记录。文件按时间从新到旧排列。用「最新日志」重新读取追加内容，「更早日志」向前翻页。归档文件移走后，点击「刷新文件」。当前来源没有可读文件时，「最新日志」和「更早日志」均停用。搜索和导出只作用于当前页，导出使用新的 TXT 文件。结构化业务任务仍从「任务历史…」查看。[归档日志报告](validation/pyside6_migration_20261118/ARCHIVED_LOGS_QT_REPORT.md)
+ 
+ 要查旧工作台直接启动的测试，先选中项目，打开「项目 → 任务历史…」，将「来源」切换为「旧工作台运行记录」。每页最多 50 条，可用「更早记录」向前翻页，用「最新记录」回到首页。表格列出运行 ID、操作、结果、配置版本和起止时间。缺失的时间显示为「—」。「结果未知，待核实」表示原记录缺少确定结果，「已核实（原结果未知）」表示操作员已核实过该记录。切回「业务任务」可继续查看任务事件。[旧工作台运行记录报告](validation/pyside6_migration_20261118/LEGACY_RUN_HISTORY_QT_REPORT.md)
+ 

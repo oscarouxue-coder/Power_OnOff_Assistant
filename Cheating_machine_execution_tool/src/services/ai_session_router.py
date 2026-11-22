@@ -220,7 +220,7 @@ class AiSessionRouter:
             if source_identity(source) != source_identity(None) or current is None:
                 raise ValueError("本机目标识别来源已变化")
             result = local_intent
-            if result["scope"] == "batch" or result.get("workflow") == "business":
+            if result.get("workflow") == "business":
                 raise ValueError("当前 Qt 本机会话尚未接入此批量或业务任务")
             diagnosis_only = bool(diagnosis_only and result["scope"] == "pc" and result["intent"] != "clarify")
         elif explicit_device_only:

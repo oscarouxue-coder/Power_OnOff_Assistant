@@ -1,0 +1,8 @@
+{
+  "power_command_receipts/check_sixteen.py": "19a072dc3364365bf0f816283bfffbc2661062787936790969ff82cc4bb6baa0",
+  "power_command_receipts/check_timing.py": "635be8287172755d6d40014adae74311ab5e26796167473ee53b008b0ef92ff1",
+  "parallel_power/check_parallel_workers.py": "0722d2ae60d936caa0365d1b6a517166d18dd66117e7308f3fb1f647e185e976",
+  "power_owner_exit/check_owner_exit.py": "50a019c98b76bdf471af16a97d5d7ecc8de778b27854985060fe51a2bc690f59",
+  "archived_projects/check_archived_projects.py": "74b53cfffdda93d99576b5ed92c6722becf8e8ab1c503940a00ccf39da342c73",
+  "power_worker_replay/replay.py": "02996bbe9a0698c462a0079f578f5d950fba2711246fff71123ae224e5f78419"
+}

@@ -1,0 +1,35 @@
+GUI_TEST_COVERAGE_OK
+..................................................................E.................................................................................
+======================================================================
+ERROR: test_real_query_caps_block_unsupported_values_and_client_cannot_forge_lists (test_qt_dut_wifi.QtDutWifiTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session2-integration-20261121\Cheating_machine_execution_tool\tests\test_qt_dut_wifi.py", line 133, in test_real_query_caps_block_unsupported_values_and_client_cannot_forge_lists
+    query=self.query()['wifi_queries']['wifi_2g']
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session2-integration-20261121\Cheating_machine_execution_tool\tests\test_qt_dut_wifi.py", line 49, in query
+    self.execute(self.preview(feature,query=True,ids=ids,index=index));return self.finish()
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session2-integration-20261121\Cheating_machine_execution_tool\tests\test_qt_dut_wifi.py", line 46, in execute
+    self.execution.dut_command('execute',dict(token=self.token,confirmation=confirmation['confirmation']))
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session2-integration-20261121\Cheating_machine_execution_tool\src\services\qt_execution_adapter.py", line 214, in dut_command
+    return self.capabilities.execute(identifier, arguments, authority)
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session2-integration-20261121\Cheating_machine_execution_tool\src\models\dependency_repair.py", line 53, in guarded
+    return function(self, *args, **kwargs)
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session2-integration-20261121\Cheating_machine_execution_tool\src\services\capability_service.py", line 131, in execute
+    return spec.handler(arguments, authority)
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session2-integration-20261121\Cheating_machine_execution_tool\src\services\qt_dut_configuration.py", line 313, in execute
+    result = self.capabilities.devices._job('dut.editor.execute',
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session2-integration-20261121\Cheating_machine_execution_tool\src\services\capability_device_services.py", line 209, in _job
+    return self.service.jobs.start(identifier, dict(arguments, **(recorded_extra or {}), target_binding=binding), authority, resources,
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session2-integration-20261121\Cheating_machine_execution_tool\src\services\capability_jobs.py", line 116, in start
+    return self._start(capability, arguments, authority, resources, runner, risk=risk,
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session2-integration-20261121\Cheating_machine_execution_tool\src\services\capability_jobs.py", line 142, in _start
+    self.resources.acquire(identifier, resources)
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session2-integration-20261121\Cheating_machine_execution_tool\src\services\resource_lease_service.py", line 60, in acquire
+    raise CapabilityError("resource_busy", str(error)) from None
+src.models.capabilities.CapabilityError: 物理资源已被其它进程占用或无法取得系统保护：serial:com1
+
+----------------------------------------------------------------------
+Ran 148 tests in 30.462s
+
+FAILED (errors=1)
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

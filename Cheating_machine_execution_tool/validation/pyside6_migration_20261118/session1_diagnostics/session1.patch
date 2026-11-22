@@ -1,0 +1,700 @@
+--- a/ACCEPTANCE_BASELINE.md
++++ b/ACCEPTANCE_BASELINE.md
+@@ -724,6 +724,8 @@
+ 
+ - Qt 通道菜单的被动诊断沿用原会话的非消费式读取。未打开的 COM 不触发打开，参数不匹配时保留原会话，已占用的控制权继续由原任务持有。已通过模拟驱动及 Windows 原生窗口专项。[验证范围](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/serial_diagnostics/REPORT.md)
+ 
++- **Qt 当前通道挂测证据，模拟回放通过，现场待验。** 读取范围绑定到本项目实际收到的诊断开始事件、任务配置快照和会话目标。报告、旧批次和远程历史沿用各自留存材料。原业务与 Qt 的逐条对照见[专项交接](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/session1_diagnostics/REPORT.md)。
++
+ - Qt 本机电脑连续诊断沿用原 `pc` 会话、原模型工具资格、只读取证和停止状态。创建或重开窗口不会自行查询电脑环境。真实模型与本机网络取证仍待验收。[阶段记录](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/pc_diagnosis/REPORT.md)
+ 
+ - Qt 16 通道模拟专项已通过。从 Qt 确认到原开关机子进程边界的请求与已保存配置一致，乱序回执仍归到对应通道，旧批次成功消息未覆盖本批次失败。包含实例配对的 Windows 候选已标准验包。§3 的真实通道时序、逐台 500 次、长挂与目标机验收继续待现场。[本批记录](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/instance_pairing/REPORT.md)
+@@ -811,6 +813,8 @@
+ 
+ ## 3. 待确认 / 疑似过时内容
+ 
++- **Qt 当前通道挂测证据**　负责人待在现场项目核对实际日志行时间、通道身份及换批后的留存记录。真实 DUT 与长期挂测的结论由现场提供。
++
+ - 被动串口读取已用模拟驱动验证，不涉及设备发包。真实串口、模型和设备诊断联动须由现场验证。[验证记录](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/local_serial_chat/REPORT.md)
+ 
+ - 本机通道材料会话已完成模拟回归，设备实时取证、真实平台及现场会话联动待验。[Qt 通道切换](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/local_target_routing/REPORT.md)
+--- a/DEVELOPMENT_LOG.md
++++ b/DEVELOPMENT_LOG.md
+@@ -1,4 +1,12 @@
+ # 开发记录
++
++## 2026-11-21 - 接入 Qt 当前通道挂测证据
++
++- 类型：BUG 修复。通道 3 的原挂测回放取得 16 条记录，Qt 选择后取得 0 条。
++- 完成内容：开始通知和不可变快照核对项目及目标，选择、证据窗口和追问使用原有缓存、尾读、脱敏与批量去重。增加跨项目、目标变更、历史和远程反例。
++- 修改文件、验证命令、失败样本和截图见[会话 1 专项报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/session1_diagnostics/REPORT.md)及同目录 files.json。
++- 验证结果：修正后双方记录逐条相同，128 项专项通过。停止目标识别后原挂测完成 8 帧。Windows 原生三档各 100 项通过。两批共生成 852 张 PNG，已将 849 张过程截图移入回收站，保留三档的当前通道证据窗口各 1 张。两进程复现了独立 Fake 台架争用相同网卡名，版本查询和网关专项已采用已有的测试进程台架标识，保留原系统互斥及断言。最终完整基线运行 3,267 项，命中全部 266 项必跑用例，八类检查全部通过。
++- 后续待办：交会话 2 集成、验包，真实模型与 DUT 长挂待现场复验。
+ 
+ ## 2026-11-21 - Qt 本机通道会话被动读取串口
+ 
+--- a/PROJECT_STATUS.md
++++ b/PROJECT_STATUS.md
+@@ -1,4 +1,6 @@
+ # 项目交接状态
++
++Qt 会话 1 已接入本机当前通道的挂测证据。会话 2 可从独立副本合并源码，并按清单复验。主动设备诊断、批量任务和现场验收范围见[专项交接](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/session1_diagnostics/REPORT.md)。
+ 
+ Windows Qt 候选 qt-20261121-181751-f6f47fda 包含网关同槽位重启修正和串口收尾未受理时的监控保护与重试。完整基线通过 3,263 项，262 项指定用例全部命中。Windows 原生界面在 100%、125%、150% 缩放下各通过 97 项，共 291 次。 [便携 ZIP](Cheating_machine_execution_tool/dist/qt-20261121-181751-f6f47fda/DUTPilot_portable.zip) · [本次验证](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/serial_close_worker/REPORT.md)
+ 
+--- a/Cheating_machine_execution_tool/line_check_assistant_README.md
++++ b/Cheating_machine_execution_tool/line_check_assistant_README.md
+@@ -93,6 +93,8 @@
+ 在项目的「AI 诊断」中选中旧挂测批次的本机设备会话，可以继续询问当时保存的串口记录和其他证据。输入区显示「仅分析留存材料」。打开或选择会话时不会发送问题；点击发送后使用该会话原先保存的模型配置。
+ 
+ 在 Qt 本机普通问答、电脑诊断或已切换的通道会话中发送「切换到通道7」，可选择当前项目已启用的通道 7。单独切换时不会调用模型。发送「通道7 分析上次的超时」可在该通道会话中继续询问留存材料。配置变更后再次切换，会按新目标选择会话。无效通道会列出本项目的有效通道供核对。历史报告和旧批次始终保留原来的目标。
++
++在当前挂测通道的会话上点右键，选择「查看留存证据…」，可查看该项目本批次的阶段、通道结果、诊断设置和日志。选择通道、打开证据或继续提问都会刷新记录。日志最多读取末尾 64 KiB，故障时间以日志行内记录为准。若提示目标已变化或运行快照无法核对，会话会保留先前材料。日志暂时不可读时，可在文件恢复后再次打开证据。
+ 
+ Qt 本机普通问答、电脑诊断和本批次通道会话也支持自然语言选择目标，例如「请把排查对象换到七号测试位」。除可直接识别的单通道表达外，原会话路由会向所选模型发送本项目有效目标的标识、当前问题和最近对话，识别完成后才选择会话。识别期间可以停止本轮或切换会话。目标配置、批次或选用模型发生变化时，窗口会提示重新发送。仅切换目标不会启动测试。
+ 
+--- a/Cheating_machine_execution_tool/src/services/ai_conversation_service.py
++++ b/Cheating_machine_execution_tool/src/services/ai_conversation_service.py
+@@ -222,6 +222,9 @@
+         self.emit(f"空白新会话{identifier[:8]}已创建，等待发送问题")
+         return identifier
+ 
++    def initial_target_settings(self, run_id, target):
++        return self.context.target_settings(run_id, target.channel) if target else {}
++
+     def create_session(self, target, profile, title="", report=None, source_report_id="", *,
+                        source=None, default_permission=None, scope="device", batch_targets=None, batch_parent=None,
+                        diagnosis_only=False):
+@@ -243,7 +246,7 @@
+                  f"通道{target.channel}" if target else ("本机电脑" if scope == "pc" else "普通问答"))
+         payload = {"id": identifier, "created": timestamp(), "title": title.strip() or label + ("排障" if scope != "general" else ""),
+                    "run_id": run_id, "scope": scope, "target": asdict(target) if target else None, "profile": asdict(profile),
+-                   "settings": self.context.target_settings(run_id, target.channel) if target else {},
++                   "settings": self.initial_target_settings(run_id, target),
+                    "status": "可继续", "pending": None, "source_report_id": source_report_id}
+         if source is not None:
+             payload["source"] = dict(source)
+--- a/Cheating_machine_execution_tool/src/services/qt_ai_chat.py
++++ b/Cheating_machine_execution_tool/src/services/qt_ai_chat.py
+@@ -6,7 +6,7 @@
+ import json
+ import queue
+ 
+-from src.models.ai_diagnostics import ProviderProfile, diagnostic_progress_text
++from src.models.ai_diagnostics import DiagnosticTarget, ProviderProfile, diagnostic_progress_text
+ from src.models.ai_permissions import PERMISSION_LABELS
+ from src.models.dependency_repair import maintenance_operation
+ from src.models.ai_session_scope import session_scope, source_identity
+@@ -107,10 +107,39 @@
+         self.message(identifier, 'system', '正在读取已打开的串口：' + target.port, 'progress')
+         return executor.execute(name, params, deep=True)
+ 
++    def initial_target_settings(self, run_id, target):
++        # The route identifies a local channel only after create_session returns.
++        return {}
++
+     def refresh_evidence(self, identifier):
+-        # Device follow-ups in this workspace use only their persisted evidence.
+-        if session_scope(self.store.chat(identifier)) != 'device':
+-            super().refresh_evidence(identifier)
++        session = self.store.chat(identifier)
++        if self.local_mode(session) != 'channel':
++            return
++        target = DiagnosticTarget(**session['target'])
++        try:
++            items, settings, snapshot_id = self.context.for_channel(
++                session['run_id'], target, session.get('qt_power_snapshot'))
++        except ValueError as error:
++            reason = str(error)
++            if session.get('qt_evidence_notice') != reason:
++                self.store.update_chat(identifier, qt_evidence_notice=reason)
++                self.message(identifier, 'system', reason, 'progress')
++                self.emit(f'通道{target.channel}挂测证据刷新跳过，{reason}')
++            return
++        settings = self.redactor.object(settings)
++        with self.store.lock:
++            # Selection and a model turn can finish reading concurrently. Pin the
++            # verified snapshot before inserting anything, including on retry.
++            session = self.store.chat(identifier)
++            if session.get('qt_power_snapshot') not in (None, snapshot_id):
++                return
++            if (settings != session.get('settings') or snapshot_id != session.get('qt_power_snapshot')
++                    or session.get('qt_evidence_notice')):
++                self.store.update_chat(identifier, settings=settings, qt_power_snapshot=snapshot_id, qt_evidence_notice='')
++            self.store.add_chat_evidence_batch(identifier, (self.redactor.object(item) for item in items))
++        if session.get('qt_evidence_notice'):
++            self.message(identifier, 'system', '已恢复读取本批次挂测记录', 'progress')
++        self.emit(f'通道{target.channel}已核对本批次挂测记录 {len(items)} 条')
+ 
+ 
+ class QtAiChat:
+@@ -165,6 +194,7 @@
+         self.selected = identifier
+         self.cursor = None
+         self.conversation.router.select(identifier)
++        self.conversation.refresh_evidence(identifier)
+ 
+     def _select_channel_route(self, identifier):
+         selected_scope = session_scope(self.store.chat(identifier))
+@@ -329,6 +359,7 @@
+                 self.diagnostic.emit('[AI 诊断] 已读取当前会话的留存排查进展')
+                 return identifier, diagnostic_progress_text(session)
+             if operation == 'ai_chat_evidence':
++                self.conversation.refresh_evidence(identifier)
+                 return tuple((row['source'], row['timing'], row['text']) for row in self.store.chat_evidence(identifier))
+             if operation == 'ai_chat_page':
+                 cursor = args[1]
+--- a/Cheating_machine_execution_tool/src/services/qt_ai_report_handoff.py
++++ b/Cheating_machine_execution_tool/src/services/qt_ai_report_handoff.py
+@@ -33,7 +33,10 @@
+ 
+     def configured_targets(self, number=None):
+         ProjectStore._validate_paths(self.context)
+-        directory = self.context.config_dir
++        return self.targets_from_config(self.context.config_dir, number)
++
++    @classmethod
++    def targets_from_config(cls, directory, number=None):
+         channels_path, telnet_path = directory / 'network_card_ip.ini', directory / 'test_project_config.ini'
+         if any(path.resolve() != path for path in (channels_path, telnet_path)):
+             raise ValueError('项目配置文件指向重定向位置')
+@@ -47,7 +50,7 @@
+         if not unique:
+             return ()
+         telnet = TestItemConfigStore(telnet_path).load(required=True).telnet
+-        return tuple(self._configured_target(key, channel, telnet) for key, channel in unique)
++        return tuple(cls._configured_target(key, channel, telnet) for key, channel in unique)
+ 
+     def _target(self, number):
+         return next(iter(self.configured_targets(number)), None)
+--- a/Cheating_machine_execution_tool/src/services/qt_execution_adapter.py
++++ b/Cheating_machine_execution_tool/src/services/qt_execution_adapter.py
+@@ -17,7 +17,7 @@
+ from src.models.capabilities import CapabilityAuthority, CapabilityError
+ from src.models.qt_log_history import job_event_view
+ from src.models.workbench_presentation import LogView
+-from src.services.ai_evidence_context import AiEvidenceContext
++from src.services.qt_power_evidence import QtPowerEvidence
+ from src.services.capability_jobs import TERMINAL
+ from src.services.pipeline_orchestrator import SUBTASK_LABELS
+ from src.services.qt_pipeline_serial import PipelineSerialPrestart
+@@ -53,7 +53,7 @@
+     def __init__(self, workspace, context, record, other_jobs_active=lambda: False, *,
+                  workspace_close_requested=lambda: False, adapter_rename=None, other_power_blocked=None):
+         self.workspace, self.context, self.record = workspace, context, record
+-        self.ai_evidence = AiEvidenceContext()
++        self.ai_evidence = QtPowerEvidence(context)
+         self.ai_event_listener = None
+         self.capabilities = None
+         self.manager = None
+--- /dev/null
++++ b/Cheating_machine_execution_tool/src/services/qt_power_evidence.py
+@@ -0,0 +1,71 @@
++"""Read the original evidence cache only for a verified local project run and target."""
++from configparser import Error as ConfigError
++import json
++
++from src.models.project_task import task_path
++from src.services.ai_evidence_context import AiEvidenceContext
++from src.services.qt_ai_report_handoff import QtAiReportHandoff
++
++
++class QtPowerEvidence(AiEvidenceContext):
++    def __init__(self, project):
++        super().__init__()
++        self.project = project
++        self.config = None
++        self.start_targets = ()
++
++    def _snapshot_targets(self, directory):
++        root = directory.parent.parent
++        metadata = root / 'run.json'
++        if (root.parent != self.project.root / 'runs' or directory != root / 'Auto_power_on_off_tool/config'
++                or directory.resolve() != directory or metadata.resolve() != metadata):
++            raise ValueError('运行配置来源无法核对')
++        record = json.loads(metadata.read_text('utf-8-sig'))
++        if (not isinstance(record, dict) or record.get('project_id') != self.project.identity.project_id
++                or record.get('run_id') != root.name):
++            raise ValueError('运行配置身份无法核对')
++        return QtAiReportHandoff.targets_from_config(directory)
++
++    def observe(self, message):
++        directory = task_path(self.project.config_dir)
++        starting = message.get('type') == 'diagnostic_start'
++        if starting:
++            try:
++                targets = self._snapshot_targets(directory)
++            except (OSError, ConfigError, ValueError, RuntimeError):
++                targets = ()
++        with self.lock:
++            if starting:
++                run = str(message['run_id'])
++                if self.run_id != run:
++                    self.config = directory if targets else None
++                    self.start_targets = targets
++                elif directory != self.config or targets != self.start_targets:
++                    # Conflicting starts cannot rebind records already collected for this ID.
++                    self.config = None
++            elif self.config is not None and (directory != self.config or message.get('run_id') != self.run_id):
++                return
++            super().observe(message)
++
++    def for_channel(self, run, target, saved_snapshot):
++        with self.lock:
++            directory = self.config
++            if run != self.run_id or directory is None:
++                raise ValueError('缺少可核对的本批次配置，保留已有材料')
++            snapshot_id = directory.parent.parent.name
++            if saved_snapshot and saved_snapshot != snapshot_id:
++                raise ValueError('会话所属的运行快照已变化，保留已有材料')
++            if target not in self.start_targets:
++                raise ValueError('通道目标与批次开始时不一致，保留已有材料')
++        try:
++            frozen = self._snapshot_targets(directory)
++            current = QtAiReportHandoff.targets_from_config(self.project.config_dir, target.channel)
++        except (OSError, ConfigError, ValueError, RuntimeError) as error:
++            raise ValueError('运行快照或项目配置无法读取或核对，保留已有材料') from error
++        if target not in frozen or current != (target,):
++            raise ValueError('通道目标与运行快照或当前配置不一致，保留已有材料')
++        items = self.snapshot(run, target.channel)
++        with self.lock:
++            if run != self.run_id or directory != self.config:
++                raise ValueError('取证期间批次已变化，保留已有材料')
++            return items, self.target_settings(run, target.channel), snapshot_id
+--- a/Cheating_machine_execution_tool/tests/qt_workbench_probe.py
++++ b/Cheating_machine_execution_tool/tests/qt_workbench_probe.py
+@@ -1130,6 +1130,18 @@
+             self.wait_for(lambda: dialog.view and dialog.view.selected and not dialog.busy)
+             general = dialog.view.selected
+             backend = self.controller.adapter._ai_chats[project]
++            from src.models.project_task import project_task_scope
++            from PySide6.QtWidgets import QDialog, QPlainTextEdit
++            context = service.projects.opened[project]
++            service.projects.save(context)
++            run = service.projects.snapshot(context)
++            execution = backend.conversation.execution
++            with project_task_scope(context.config_dir, run / 'Auto_power_on_off_tool/config'):
++                execution.observe_ai_event(dict(type='diagnostic_start', run_id='native-evidence'))
++                execution.observe_ai_event(dict(type='stage', run_id='native-evidence',
++                                                channel=7, message='原批次七号通道记录'))
++                execution.observe_ai_event(dict(type='stage', run_id='native-evidence',
++                                                channel=8, message='其他通道标记'))
+             with patch.object(backend.conversation, 'send', side_effect=AssertionError('仅切换会话')) as submit, \
+                     patch.object(backend.diagnostic, 'client_factory', side_effect=AssertionError('无需模型识别')) as model:
+                 dialog.composer.setPlainText('切换到通道7')
+@@ -1144,6 +1156,19 @@
+                 output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
+                 if output:
+                     self.assertTrue(dialog.grab().save(str(Path(output) / 'ai-local-channel-switch.png')))
++                next(action for action in dialog.session_menu.actions() if '查看留存证据' in action.text()).trigger()
++                def evidence_window():
++                    return next((box for box in dialog.findChildren(QDialog)
++                                 if box.isVisible() and box.windowTitle() == '当前会话留存证据'), None)
++                self.wait_for(evidence_window)
++                evidence = evidence_window()
++                material = evidence.findChild(QPlainTextEdit).toPlainText()
++                self.assertIn('原批次七号通道记录', material)
++                self.assertNotIn('其他通道标记', material)
++                self.assertIn('故障时/测试过程中记录', material)
++                if output:
++                    self.assertTrue(evidence.grab().save(str(Path(output) / 'ai-current-power-evidence.png')))
++                evidence.close()
+                 submit.assert_not_called()
+                 model.assert_not_called()
+ 
+--- a/Cheating_machine_execution_tool/tests/test_qt_workspace_adapter.py
++++ b/Cheating_machine_execution_tool/tests/test_qt_workspace_adapter.py
+@@ -844,6 +844,139 @@
+             self.command('ai_report_handoff', first, detail.identifier, detail.revision, expected_error=True)
+             send.assert_not_called()
+             collect.assert_not_called()
++
++    def test_power_evidence_only_follows_the_verified_local_channel(self):
++        from dataclasses import replace
++        from line_check_assistant.config_store import ChannelConfig, ChannelConfigStore
++        from src.core.ai_client import DiagnosticModelClient
++        from src.models.ai_diagnostics import ModelReply, ProviderProfile
++        from src.models.project_task import project_task_scope
++        from src.services.ai_case_store import open_shared_cases
++
++        prompts = []
++
++        class Client(DiagnosticModelClient):
++            from qt_execution_fakes import continue_chat_intent as complete
++
++            def complete_stream(self, history, tools, stop, on_text=None):
++                prompts.append(json.dumps(history, ensure_ascii=False))
++                if len(prompts) == 1:
++                    return ModelReply('', [dict(id='path-check', name='read_test_evidence',
++                        arguments={'query': '挂测', 'path': str(private)})], history)
++                return ModelReply('已核对模拟证据', [], history)
++
++        def observe(chat, directory, kind, run='parallel', channel=7, **payload):
++            execution = chat.conversation.execution
++            with project_task_scope(execution.context.config_dir, directory):
++                execution.observe_ai_event(dict(type=kind, run_id=run, channel=channel, **payload))
++
++        with patch('src.services.ai_project_store.default_ai_data_dir', return_value=self.root / 'models'), patch(
++                'src.services.ai_case_store.open_shared_cases',
++                side_effect=lambda emit: open_shared_cases(emit, root=self.root / 'cases')):
++            channel = ChannelConfig('channel_7', enabled=True, vlan_name='VLAN107', serial_port='COM7963')
++            projects = self.adapter._service.projects
++            def setup_project(name, marker):
++                key = self.command('create', self.root / name, name).project_id
++                context = projects.opened[key]
++                store = ChannelConfigStore(context.config_dir / 'network_card_ip.ini')
++                store.save([channel])
++                projects.save(context)
++                directory = projects.snapshot(context) / 'Auto_power_on_off_tool/config'
++                self.command('ai_chat_open', key)
++                chat = self.adapter._ai_chats[key]
++                observe(chat, directory, 'diagnostic_start')
++                observe(chat, directory, 'stage', message=marker)
++                return key, chat, directory, store
++
++            key, chat, directory, store = setup_project('first', 'only-project-A7')
++            other, second, _, _ = setup_project('second', 'only-project-B7')
++            from src.services.ai_store import profile_fingerprint
++            models = self.adapter._service.models
++            profile = models.save_profile(ProviderProfile(model='fixture', context_tokens=65536), 'fixture-key')
++            profile = models.save_profile(replace(profile, capability='可自动诊断',
++                                                  tested_fingerprint=profile_fingerprint(profile)))
++
++            def select(key):
++                origin = self.command('ai_chat_new', key).payload.selected
++                return self.command('ai_chat_send', key, origin, '切换到通道7').payload.selected
++
++            observe(chat, directory, 'stage', channel=8, message='only-project-A8')
++            observe(chat, directory, 'diagnostic_settings', settings=dict(note='only-A-settings'))
++            private = self.root / 'unrelated.log'
++            private.write_text('private-file-marker', 'utf-8')
++            path = self.root / 'result.log'
++            path.write_text('initial-tail', 'utf-8')
++            observe(chat, directory, 'result_log_created', path=str(path))
++            selected = select(key)
++            selected_b = select(other)
++            def records(owner, identifier):
++                return json.dumps(owner.store.chat_evidence(identifier), ensure_ascii=False)
++            self.assertIn('only-project-B7', records(second, selected_b))
++            self.assertNotIn('only-project-A7', records(second, selected_b))
++            original = chat.store.chat_evidence(selected)
++            self.assertIn('initial-tail', records(chat, selected))
++            self.command('ai_chat_select', key, selected)
++            self.assertEqual(chat.store.chat_evidence(selected), original)
++            self.assertEqual(chat.store.chat(selected)['settings'], {'note': 'only-A-settings'})
++
++            path.write_text('new-tail-after-select', 'utf-8')
++            with patch.object(chat.diagnostic, 'client_factory', Client):
++                self.command('ai_chat_send', key, selected, '请分析本次挂测结果')
++                self.wait_for(lambda: prompts and not chat._is_running() and chat._intent is None)
++            self.assertIn('new-tail-after-select', prompts[-1])
++            self.assertEqual(len(prompts), 2)
++            self.assertIn('检索参数不正确', records(chat, selected))
++            for marker in ('only-project-B7', 'only-project-A8', 'private-file-marker'):
++                self.assertNotIn(marker, prompts[-1] + records(chat, selected))
++            path.unlink()
++            self.command('ai_chat_select', key, selected)
++            self.assertIn('日志不可读取', records(chat, selected))
++            self.assertIn('initial-tail', records(chat, selected))
++            path.write_text('recovered-tail', 'utf-8')
++            self.command('ai_chat_select', key, selected)
++            self.assertIn('recovered-tail', records(chat, selected))
++
++            target = chat.handoff._target(7)
++            for flags in (dict(source_report_id='report-marker'), dict(source={'kind': 'dingtalk'})):
++                history = chat.conversation.create_session(target, profile, **flags)
++                chat.conversation.add_evidence(history, '留存', 'history-marker')
++                chat.store.update_chat(history, qt_channel_analysis=True)
++                self.command('ai_chat_select', key, history)
++                self.assertEqual(chat.store.chat(history)['settings'], {})
++                self.assertNotIn('only-project-A7', records(chat, history))
++                self.assertIn('history-marker', records(chat, history))
++
++            observe(chat, directory, 'stage', message='after-config-change')
++            store.save([replace(channel, serial_port='COM7964')])
++            self.command('ai_chat_select', key, selected)
++            self.assertIn('目标', chat.store.chat(selected)['qt_evidence_notice'])
++            newer = select(key)
++            self.assertEqual(chat.store.chat_evidence(newer), [])
++            frozen = ChannelConfigStore(directory / 'network_card_ip.ini')
++            frozen.save([replace(channel, serial_port='COM7964')])
++            self.command('ai_chat_select', key, newer)
++            self.assertEqual(chat.store.chat_evidence(newer), [])
++            frozen.save([channel])
++            store.save([channel])
++            manifest = directory.parent.parent / 'run.json'
++            meta = json.loads(manifest.read_text('utf-8'))
++            manifest.write_text(json.dumps(dict(meta, project_id=other)), 'utf-8')
++            self.command('ai_chat_select', key, selected)
++            self.assertNotIn('after-config-change', records(chat, selected))
++            manifest.unlink()
++            self.command('ai_chat_select', key, selected)
++            self.assertIn('保留已有材料', chat.store.chat(selected)['qt_evidence_notice'])
++            self.assertNotIn('after-config-change', records(chat, selected))
++            observe(chat, directory, 'diagnostic_start', run='replacement')
++            observe(chat, directory, 'stage', run='replacement', message='only-new-run')
++            self.command('ai_chat_select', key, selected)
++            self.assertNotIn('only-new-run', records(chat, selected))
++            self.assertIn('only-project-A7', records(chat, selected))
++            new_directory = projects.snapshot(projects.opened[key]) / 'Auto_power_on_off_tool/config'
++            observe(chat, new_directory, 'diagnostic_start', run='parallel')
++            observe(chat, new_directory, 'stage', message='reused-id-different-snapshot')
++            self.command('ai_chat_select', key, selected)
++            self.assertNotIn('reused-id-different-snapshot', records(chat, selected))
+ 
+     def test_local_channel_passive_serial_rechecks_binding_and_never_writes(self):
+         from contextlib import ExitStack
+--- a/Cheating_machine_execution_tool/scripts/verify_baseline.py
++++ b/Cheating_machine_execution_tool/scripts/verify_baseline.py
+@@ -102,6 +102,7 @@
+     'src/services/qt_push_trial.py',
+     'src/services/qt_power_resume.py',
+     'src/services/qt_power_logs.py',
++    'src/services/qt_power_evidence.py',
+     'src/services/qt_configuration_service.py',
+     'src/models/qt_configuration.py',
+     'src/models/qt_log_history.py',
+@@ -498,6 +499,7 @@
+     "test_serial_transport.SerialTransportTests.test_async_close_waits_for_inflight_callback_and_reserves_port",
+     "test_qt_serial_terminal.QtSerialTerminalTests.test_passive_reader_limits_bytes_at_read_time_during_driver_burst",
+     "test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_old_local_device_session_accepts_retained_evidence_only",
++    "test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_power_evidence_only_follows_the_verified_local_channel",
+     "test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_explicit_local_channel_routes_from_send_and_preserves_report_and_project_scope",
+     "test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_local_natural_target_routing_cancels_late_results_and_rechecks_project",
+     "test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_local_channel_passive_serial_rechecks_binding_and_never_writes",
+--- a/Cheating_machine_execution_tool/validation/pyside6_migration_20261118/local_chat_intent/check_selection.py
++++ b/Cheating_machine_execution_tool/validation/pyside6_migration_20261118/local_chat_intent/check_selection.py
+@@ -59,7 +59,7 @@
+         chat = ui.adapter._ai_chats[project]
+         text = '请把排查对象换到七号测试位' if case == 'natural' else '切换到通道7'
+         ui.command('ai_chat_send', project, original, text)
+-        ui.wait(lambda: not chat._is_running())
++        ui.wait(lambda: chat._intent is None and not chat._is_running())
+         qt_session = chat.store.chat(chat.selected)
+         qt_scope = qt_session['scope']
+         qt_intent_calls=len(intent_calls)
+--- /dev/null
++++ b/Cheating_machine_execution_tool/validation/pyside6_migration_20261118/session1_diagnostics/check_power_parity.py
+@@ -0,0 +1,90 @@
++"""Compare project-scoped Qt and original evidence capture after a simulated original power run."""
++from collections import Counter
++from datetime import datetime
++import hashlib
++import json
++import os
++from pathlib import Path
++import sys
++import tempfile
++from unittest.mock import patch
++
++STAGES = Path(__file__).resolve().parents[1]
++sys.path.insert(0, str(STAGES/'qt_gateway_client'))
++import check_live_power as power
++from src.models.ai_diagnostics import ProviderProfile
++from src.services.qt_execution_adapter import QtExecutionAdapter
++from src.services.ai_conversation_service import AiConversationService
++
++
++def observe(root):
++    original = power.RelayWorkspace.command
++    evidence = {}
++    starts = []
++    original_event = QtExecutionAdapter.observe_ai_event
++
++    def observe_event(execution, event):
++        if event.get('type') == 'diagnostic_start':
++            starts.append((execution.context.identity.project_id, event['run_id']))
++        original_event(execution, event)
++
++    def command(ui, operation, *args):
++        result = original(ui, operation, *args)
++        if operation != 'refresh' or evidence:
++            return result
++        row = next((r for r in ui.rows.values() if r.state == 'completed'), None)
++        if row is None:
++            return result
++        key = row.project_id
++        ui.adapter._service.models.save_profile(ProviderProfile(model='fixture'), 'fixture-key')
++        original(ui, 'ai_chat_open', key)
++        origin = original(ui, 'ai_chat_new', key).payload.selected
++        chat = ui.adapter._ai_chats[key]
++        with patch.object(chat.diagnostic, 'client_factory', side_effect=AssertionError('pure session selection')) as model:
++            selected = original(ui, 'ai_chat_send', key, origin, '切换到通道3').payload.selected
++            record = chat.store.chat(selected)
++            assert record['scope'] == 'device' and record['target']['channel'] == 3
++            run = record['run_id']
++            raw = chat.conversation.context.snapshot(run, 3)
++            assert set(starts) == {(key, run)} and raw and all(r['channel'] == 3 and r['run_id'] == run for r in raw), (starts, key, run, len(raw))
++            before = chat.store.chat_evidence(selected)
++            control = chat.conversation.create_session(chat.handoff._target(3), chat._profile(), source_report_id='control')
++            AiConversationService.refresh_evidence(chat.conversation, control)
++            after = chat.store.chat_evidence(control)
++            model.assert_not_called()
++        def comparable(rows):
++            return [(r['source'], r['text'], r['run_id'], r['channel'], r['timing']) for r in rows]
++        assert before and comparable(before) == comparable(after)
++        for qt_row, original_row in zip(before, after):
++            assert datetime.fromisoformat(qt_row['created']).tzinfo is not None
++            if '读取时间' not in qt_row['timing']:
++                assert qt_row['created'] == original_row['created']
++        original(ui, 'ai_chat_select', key, selected)
++        assert chat.store.chat_evidence(selected) == before
++        assert all(r['channel'] == 3 and r['run_id'] == run for r in after)
++        fields = json.dumps(comparable(before), ensure_ascii=False).encode('utf-8')
++        evidence.update(project=key, diagnostic_run=run, workspace_job=row.run_id,
++                        snapshot=chat.store.chat(selected)['qt_power_snapshot'],
++                        source_counts=dict(Counter(item['source'].split(' / ')[0] for item in before)),
++                        compared_rows_sha256=hashlib.sha256(fields).hexdigest(),
++                        rows_equal=True, event_times_equal=True, repeated_select_unchanged=True,
++                        diagnostic_start_matches_project_and_batch=True, diagnostic_start_events=len(starts),
++                        workspace_job_id_equals_diagnostic_id=(run == row.run_id), local_channel=3, power_events_available=len(raw),
++                        qt_evidence_after_select=len(before), original_evidence_after_refresh=len(after),
++                        observed_sources=sorted({str(item['source']).split(' / ')[0] for item in after}),
++                        wrong_channel_records=0, model_calls=0)
++        return result
++
++    with patch.object(power.RelayWorkspace, 'command', command), patch.object(QtExecutionAdapter, 'observe_ai_event', observe_event):
++        trace = power.observe(root)
++    assert evidence and len(trace['frames']) == 8
++    return dict(comparison=evidence, power_result=trace['result'], power_frames=len(trace['frames']),
++                real_serial_opens=trace['physical_serial_opens'], external_requests=trace['external_requests'])
++
++
++if __name__ == '__main__':
++    with tempfile.TemporaryDirectory(prefix='dutpilot-readonly-power-evidence-') as temp:
++        root = Path(temp).resolve()
++        os.environ.update(LOCALAPPDATA=str(root/'local'), APPDATA=str(root/'roaming'), PROGRAMDATA=str(root/'machine'),
++                          LINECHECK_GATEWAY_SLOT='', LINECHECK_DISABLE_CAPABILITIES='0')
++        print(json.dumps(observe(root), ensure_ascii=False, indent=2))
+--- /dev/null
++++ b/Cheating_machine_execution_tool/validation/pyside6_migration_20261118/session1_diagnostics/check_phase5_scope.py
+@@ -0,0 +1,96 @@
++"""Exercise local diagnostic admission using synthetic projects and a simulated intent model."""
++from contextlib import ExitStack
++from dataclasses import replace
++import json
++import os
++from pathlib import Path
++import sys
++import tempfile
++from unittest.mock import patch
++
++STAGES = Path(__file__).resolve().parents[1]
++sys.path.insert(0, str(STAGES / 'archived_projects'))
++from check_archived_projects import Workspace, block_external_io
++from line_check_assistant.config_store import ChannelConfig, ChannelConfigStore
++from src.core.ai_client import DiagnosticModelClient
++from src.models.ai_diagnostics import ModelReply, ProviderProfile
++from src.models.project_task import project_task_scope
++from src.services.ai_store import profile_fingerprint
++
++
++def check(root):
++    external = []
++    block_external_io(external)
++    with ExitStack() as guards:
++        serial = guards.enter_context(patch('serial.Serial', side_effect=AssertionError('physical serial')))
++        ui = Workspace(root)
++        guards.callback(ui.close)
++        project = ui.command('create', root / 'project', '诊断范围回放').project_id
++        workspace = ui.adapter._service
++        ctx = workspace.projects.opened[project]
++        channels = [ChannelConfig(f'channel_{i}', enabled=True, vlan_name=f'VLAN{100+i}',
++                                  serial_port=f'COM{7900+i}') for i in (3, 7)]
++        ChannelConfigStore(ctx.config_dir / 'network_card_ip.ini').save(channels)
++        profile = workspace.models.save_profile(ProviderProfile(model='fixture', context_tokens=65536), 'fixture-key')
++        workspace.models.save_profile(replace(profile, capability='可自动诊断', tested_fingerprint=profile_fingerprint(profile)))
++        ui.command('ai_chat_open', project)
++        general = ui.command('ai_chat_new', project).payload.selected
++        chat = ui.adapter._ai_chats[project]
++        text = '一起检查两个测试位的近期情况'
++        decisions = []
++        class Client(DiagnosticModelClient):
++            def complete(self, history, tools, stop):
++                assert not tools and json.loads(history[1]['content'])['message'] == text
++                decisions.append(text)
++                return ModelReply(json.dumps(dict(intent='switch', scope='batch', channels=[3, 7],
++                    channel=None, selection='all', question=text, clarification='')), [], history)
++
++        with patch.object(chat.diagnostic, 'client_factory', Client), patch.object(
++                chat.conversation.batch, 'submit', side_effect=AssertionError('unexpected batch')) as submit:
++            ui.command('ai_chat_send', project, general, text)
++            ui.wait(lambda: chat._intent is None)
++            status = ui.command('ai_chat_open', project).payload
++            assert decisions == [text] and status.selected == general and status.retry_input == text
++            assert '尚未接入此批量' in status.latest_status.text and len(chat.store.chats()) == 1
++            submit.assert_not_called()
++        selected = ui.command('ai_chat_send', project, general, '切换到通道7').payload.selected
++        authority = chat.conversation.collection_status(selected)
++        tools = sorted(tool['name'] for tool in chat.conversation.tools_for_turn(authority, 'device'))
++        assert tools == ['ask_user', 'read_serial_log', 'read_test_evidence'] and not authority['enabled']
++        review = ui.command('ai_chat_review', project, selected).payload
++        assert review == (selected, None) and not chat.diagnostic.trigger.enabled
++        workspace.projects.save(ctx)
++        run_root = workspace.projects.snapshot(ctx)
++        config = run_root / 'Auto_power_on_off_tool/config'
++        execution = chat.conversation.execution
++        # These are IPC fixture events. Only the admitted task owns the run.
++        with project_task_scope(ctx.config_dir, config):
++            execution.observe_ai_event(dict(type='diagnostic_start', run_id='origin-check'))
++            execution.observe_ai_event(dict(type='stage', run_id='origin-check', channel=7,
++                                            message='owned-record fixture-key'))
++        execution.observe_ai_event(dict(type='stage', run_id='origin-check', channel=7,
++                                        message='unbound-event-marker'))
++        ui.command('ai_chat_select', project, general)
++        current = ui.command('ai_chat_send', project, general, '切换到通道7').payload.selected
++        retained = chat.store.chat_evidence(current)
++        material = json.dumps(retained, ensure_ascii=False)
++        assert 'owned-record' in material and 'fixture-key' not in material and 'unbound-event-marker' not in material
++        execution.observe_ai_event(dict(type='diagnostic_start', run_id='origin-check'))
++        with project_task_scope(ctx.config_dir, config):
++            execution.observe_ai_event(dict(type='stage', run_id='origin-check', channel=7,
++                                            message='after-conflict'))
++        ui.command('ai_chat_evidence', project, current)
++        assert chat.store.chat_evidence(current) == retained and chat.store.chat(current)['qt_evidence_notice']
++        assert not external and serial.call_count == 0
++        return dict(foreign_event_ignored=True, conflicting_start_retains_material=True, model_key_redacted=True,
++                    batch_receipt=status.latest_status.text, input_restored=True, batch_created=False,
++                    channel_tools=tools, active_collection=authority['enabled'], monitor_enabled=False,
++                    pending_channel_approval=review[1], physical_serial_opens=0, external_requests=0)
++
++
++if __name__ == '__main__':
++    with tempfile.TemporaryDirectory(prefix='qt-phase5-scope-') as temp:
++        root = Path(temp).resolve()
++        os.environ.update(LOCALAPPDATA=str(root / 'local'), APPDATA=str(root / 'roaming'),
++                          PROGRAMDATA=str(root / 'machine'), LINECHECK_GATEWAY_SLOT='')
++        print(json.dumps(check(root), ensure_ascii=False, indent=2))
+--- a/Cheating_machine_execution_tool/tests/test_ai_version_query.py
++++ b/Cheating_machine_execution_tool/tests/test_ai_version_query.py
+@@ -63,6 +63,9 @@
+     stop_services = fixture.ConversationTests.stop_services
+ 
+     def setUp(self):
++        from qt_execution_fakes import install_native_fixture_locks
++        # The three simulated devices are private to this test process.
++        install_native_fixture_locks(self)
+         fixture.ConversationTests.setUp(self)
+         self.targets = tuple(replace(TARGET, channel=n, port="COM" + str(n), bind_ip="192.168.1." + str(20+n)) for n in (1, 2, 3))
+         self.diag.configure(self.profile, self.targets)
+@@ -129,7 +132,7 @@
+             return self.device(request, emit)
+         with patch(MODULE+"query_device_project_info", side_effect=device):
+             identifier = self.query()
+-        self.assertEqual(len(self.seen), 3)
++        self.assertEqual(len(self.seen), 3, [m['text'] for m in self.store.chat_items(identifier) if m.get('kind') == 'error'])
+         job = self.capabilities.jobs.status(self.record(identifier)["job_id"], self.service.capabilities.authority(identifier))
+         self.assertEqual(job["state"], "failed")
+         self.assertEqual([i["status"] for i in job["result"]["items"]], ["succeeded", "failed", "succeeded"])
+--- a/Cheating_machine_execution_tool/tests/test_remote_gateway_agent.py
++++ b/Cheating_machine_execution_tool/tests/test_remote_gateway_agent.py
+@@ -19,6 +19,9 @@
+ 
+ class GatewayAgentTests(unittest.TestCase):
+     def setUp(self):
++        from qt_execution_fakes import install_native_fixture_locks
++        # The relay and its fake firmware engine share one simulated bench.
++        install_native_fixture_locks(self)
+         capability_fixture.CapabilityConversationTests.setUp(self)
+         root = Path(self.temp.name)
+         self.identity = RemoteInstanceIdentity(root / "install", storage_root=root / "identities")

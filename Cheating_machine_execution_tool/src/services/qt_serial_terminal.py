@@ -17,8 +17,8 @@ from src.utils.bounded_mailbox import BoundedMailbox
 
 class DisplayDelivery(SerialDelivery):
     """Never retains an unbounded driver packet or any QWidget reference."""
-    def __init__(self, vlan, mailbox):
-        super().__init__(vlan, mailbox)
+    def __init__(self, vlan, mailbox, observer=None):
+        super().__init__(vlan, mailbox, observer)
         self.trimmed = 0
 
     def __call__(self, event):
@@ -42,6 +42,7 @@ class QtSerialTerminal:
         self.state_file = context.root / 'ui/serial.json'
         self.log_dir = context.root / 'logs/serial'
         self._restored = False
+        self.diagnostic_receiver = None
         token = dict(type='string', minLength=32, maxLength=32)
         target = dict(type='string', minLength=1, maxLength=200)
         schemas = {
@@ -153,6 +154,12 @@ class QtSerialTerminal:
             raise
         self.last_open_errors.pop(item['port'], None)
 
+    def set_diagnostic_receiver(self, receiver):
+        self.diagnostic_receiver = receiver
+        for item in self.tabs.values():
+            if item.get('delivery') is not None:
+                item['delivery'].observer = receiver
+
     def _open_monitor(self, vlan, item):
         owner = 'qt-terminal:' + self.token + ':' + vlan
         path = self.log_dir / f"{vlan}_{item['port']}_{date.today():%Y%m%d}.log"
@@ -164,7 +171,7 @@ class QtSerialTerminal:
         # The original manager reuses an existing session with its actual
         # settings; a monitor must never reconfigure another owner's port.
         session = self.manager.acquire_monitor(owner, settings, path)
-        delivery = DisplayDelivery(vlan, self.events)
+        delivery = DisplayDelivery(vlan, self.events, self.diagnostic_receiver)
         try:
             from src.core.transport_observation import label_session
             label_session(session, vlan=vlan)

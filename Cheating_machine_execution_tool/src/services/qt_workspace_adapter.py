@@ -1168,7 +1168,7 @@ class QtWorkspaceAdapter:
                             raise ValueError('项目正在关闭，AI 会话操作已取消')
                         if chat is None:
                             if operation != 'ai_chat_open':
-                                raise ValueError('请先在本机打开项目 AI 诊断')
+                                raise ValueError('请先在本机打开项目 Ai助手')
                             chat = self._project_chat(context)
                         payload = chat.execute(operation, args[1:])
                         continue

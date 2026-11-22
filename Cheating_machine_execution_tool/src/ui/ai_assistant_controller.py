@@ -267,7 +267,7 @@ class AiAssistantController:
                 self.feishu_remote.begin_close()
             self.dialog.begin_close()
             self.service.begin_close()
-            self.service.emit("[AI诊断] 程序退出，等待采集清理及网络请求结束")
+            self.service.emit("[Ai助手] 程序退出，等待采集清理及网络请求结束")
         if (not self.service.idle or self.dialog.background or self.service.worker_thread.is_alive()
                 or self.service.event_thread.is_alive() or self.conversation.worker.is_alive()):
             return False

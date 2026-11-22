@@ -941,7 +941,7 @@ class LineCheckAssistant(ProjectViewFrame):
         ttk.Button(toolbar_commands, text="ONU注册", command=self._open_onu_registration_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar_commands, text="串口日志", command=self._open_serial_log_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(toolbar_commands, text="DUT配置", command=self._open_dut_config_module, style="Tool.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(toolbar_commands, text="AI诊断", command=self._open_ai_assistant, style="Tool.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(toolbar_commands, text="Ai助手", command=self._open_ai_assistant, style="Tool.TButton").pack(side="left", padx=(8, 0))
         self.app_update_dialog = AppUpdateDialog(self, RELEASE_VERSION, log=self.log_queue.put)
         self.check_updates_button = ttk.Button(
             toolbar_actions, text="检查更新", command=self.app_update_dialog.open, style="Secondary.TButton",
@@ -5927,7 +5927,7 @@ class LineCheckAssistant(ProjectViewFrame):
             if config["isolated"]:
                 self._open_ai_assistant(show=False)
         except Exception:
-            self._log("[钉钉接入] 后台初始化失败，请在AI诊断助手的远程管理页检查配置（凭据省略）")
+            self._log("[钉钉接入] 后台初始化失败，请在Ai助手的远程管理页检查配置（凭据省略）")
 
     def _configure_dingtalk_remote(self, push_control=None):
         self._open_ai_assistant(show=False)
@@ -5984,7 +5984,7 @@ class LineCheckAssistant(ProjectViewFrame):
             if config["isolated"]:
                 self._open_ai_assistant(show=False)
         except Exception:
-            self._log("[飞书接入] 后台初始化失败，请在AI诊断助手的远程管理页检查配置（凭据省略）")
+            self._log("[飞书接入] 后台初始化失败，请在Ai助手的远程管理页检查配置（凭据省略）")
 
     def _configure_feishu_remote(self, push_control=None):
         self._open_ai_assistant(show=False)
@@ -6072,7 +6072,7 @@ class LineCheckAssistant(ProjectViewFrame):
         assistant = self.__dict__.get("ai_assistant")
         if assistant is None or assistant.service.prepare_device_action():
             return True
-        self._log("[AI诊断] 已停止新增采集，等待当前临时操作恢复后可重新启动设备任务。")
+        self._log("[Ai助手] 已停止新增采集，等待当前临时操作恢复后可重新启动设备任务。")
         messagebox.showinfo("等待AI采集清理", "当前AI临时采集正在恢复，请在清理完成后重新启动设备任务。", parent=self)
         return False
 

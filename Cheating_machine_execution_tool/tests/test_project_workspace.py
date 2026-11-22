@@ -373,7 +373,10 @@ class ProjectWorkspaceTests(unittest.TestCase):
         root = Path(self.temporary.name)
         with patch('src.services.ai_project_store.default_ai_data_dir', return_value=root / 'legacy'), \
                 patch('src.services.ai_case_store.open_shared_cases', side_effect=lambda emit: SharedCaseStore(root / 'cases')):
-            a._open_ai_assistant(show=False)
+            button = next(widget for widget in a._workbench_toolbar._navigation_widgets
+                          if widget.cget('text') == 'Ai助手')
+            button.invoke()
+            self.assertEqual(a.ai_assistant.dialog.window.title(), 'Ai助手 · AI A')
             b._open_ai_assistant(show=False)
         ai_a, ai_b = a.ai_assistant, b.ai_assistant
         self.assertIs(ai_a.service.store.models, ai_b.service.store.models)

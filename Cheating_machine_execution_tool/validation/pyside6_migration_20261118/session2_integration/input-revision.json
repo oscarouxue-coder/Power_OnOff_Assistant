@@ -1,0 +1,13 @@
+{
+  "initial": "98c8c60efe11e7e3cbae7fdcfc7ac2832928cfe153bc44aff29f00e5f2c60060",
+  "peer_fixture_update": "4b25c16ef77f5482cb4eb9adb554898507f6bb1cba511927a2da313fb3e2f40d",
+  "final": "f91d2bf1af28881d0b72a591717bce6ed4c64a1b4f365f2a98a73a201210b77c",
+  "peer_fixture_changes": [
+    "tests/test_ai_version_query.py",
+    "tests/test_remote_gateway_agent.py"
+  ],
+  "native_save_check_changes": [
+    "tests/qt_workbench_probe.py"
+  ],
+  "file_count": 840
+}

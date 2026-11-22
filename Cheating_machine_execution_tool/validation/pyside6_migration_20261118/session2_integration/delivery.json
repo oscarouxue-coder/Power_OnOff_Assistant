@@ -1,0 +1,34 @@
+{
+  "build_source": "C:\\Users\\Administrator\\AppData\\Local\\LineCheckAssistant\\qt-source\\session2-integration-20261121\\Cheating_machine_execution_tool",
+  "verified_source_inputs": "f91d2bf1af28881d0b72a591717bce6ed4c64a1b4f365f2a98a73a201210b77c",
+  "file_count": 252,
+  "matched_files": true,
+  "files": {
+    "DUTPilot_portable/DUTPilot.exe": {
+      "path": "F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool\\dist\\qt-20261121-220335-19897b67\\DUTPilot_portable\\DUTPilot.exe",
+      "sha256": "e802ec6b819d70c991c43e71fc3a3388d9e71df3bb1f48b142f44c1955de5e76",
+      "bytes": 17315287
+    },
+    "DUTPilot_portable.zip": {
+      "path": "F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool\\dist\\qt-20261121-220335-19897b67\\DUTPilot_portable.zip",
+      "sha256": "7311b9dfb77c3154896941f355a6b82d6387f476f54f44878d81b9ce667ca1ac",
+      "bytes": 55371693
+    },
+    "DUTPilot_portable.zip.sha256.txt": {
+      "path": "F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool\\dist\\qt-20261121-220335-19897b67\\DUTPilot_portable.zip.sha256.txt",
+      "sha256": "b9f9522384edbd5d8c142e2d239e3dfa52c8ee2e73b2f13dd1fc8b9bff11791a",
+      "bytes": 89
+    },
+    "PACKAGING_REPORT.json": {
+      "path": "F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool\\dist\\qt-20261121-220335-19897b67\\PACKAGING_REPORT.json",
+      "sha256": "3a5df672839effa7ee24c785c6b2625f317e49170927fa5b18a76eff5aaba1ee",
+      "bytes": 7797
+    },
+    "THIRD_PARTY_NOTICES.md": {
+      "path": "F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool\\dist\\qt-20261121-220335-19897b67\\THIRD_PARTY_NOTICES.md",
+      "sha256": "65734a5264287506575976cc3404037bbbae2fbd6407209138b6118e38fc840e",
+      "bytes": 3025
+    }
+  },
+  "executable_launched": false
+}

@@ -1,0 +1,143 @@
+GUI_TEST_COVERAGE_OK
+test_long_utf8_line_advances_and_rotated_archive_rejects_old_cursor (test_qt_archived_logs.ArchivedLogsTests) ... ok
+test_project_main_logs_use_original_names_and_reject_other_directories (test_qt_archived_logs.ArchivedLogsTests) ... ok
+test_serial_files_require_project_location_and_original_filename (test_qt_archived_logs.ArchivedLogsTests) ... ok
+test_workspace_pages_preserve_original_records_and_append_cursor (test_qt_archived_logs.ArchivedLogsTests) ... ok
+test_cancel_and_expired_confirmation_never_write (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_clear_selection_and_empty_power_stay_empty_without_fallback (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_concurrent_change_after_preview_is_not_overwritten (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_editors_and_task_admission_are_mutually_exclusive (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_factory_fields_survive_binding_change (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_failed_commit_does_not_undo_another_writer (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_failed_restore_keeps_unknown_fence (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_gui_only_configuration_does_not_expand_device_authority (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_invalid_and_duplicate_targets_are_rejected_without_writing (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_open_has_16_disabled_slots_but_does_not_persist_or_start_devices (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_project_commit_failure_restores_network_file_and_cache (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_resource_refresh_is_read_only_and_failure_retains_last_success (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_save_confirmation_cannot_be_replayed (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_selected_only_save_matches_original_serializer_and_derives_ips (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_store_lock_failure_releases_configuration_admission (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_unselected_bindings_remain_in_session_but_not_old_format_file (test_qt_channel_configuration.QtChannelConfigurationTests) ... ok
+test_display_unknowns_are_not_defaulted_to_normal_or_zero (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_existing_ui_exports_keep_their_identity (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_frozen_qt_defaults_to_workspace_while_source_requires_a_mode (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_native_verification_keeps_timeout_diagnostics_and_checks_every_scale (test_qt_migration_contract.QtMigrationContractTests) ... QT_NATIVE_SCALE 1 FAIL
+QT_NATIVE_SCALE 1.25 FAIL
+QT_NATIVE_SCALE 1.5 FAIL
+ok
+test_ui_package_no_longer_eagerly_imports_tk (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_env_check_status_complete (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_env_check_status_missing_multiple_fields (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_env_check_status_missing_vlan (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_env_check_status_no_enabled_channels (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_legacy_power_test_status_missing_tool_root (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_legacy_power_test_status_ready (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_onu_registration_status_complete (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_onu_registration_status_missing_olt_ip (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_onu_registration_status_requires_bound_source_ip (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_order_execution_is_not_a_pipeline_subtask (test_pipeline_orchestrator.ComputeSubTaskStatusTests)
+测试项配置保留为编辑器，但不得再出现在全流程状态或调度入口。 ... ok
+test_power_cycle_status_missing_operation (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_power_cycle_status_with_complete_config (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_power_cycle_status_without_com_is_ready_to_skip (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_power_cycle_up_only_sends_turn_on_commands (test_pipeline_orchestrator.ComputeSubTaskStatusTests)
+管道选择上电时只发开启帧，不能走断电再上电的旧接口。 ... ok
+test_power_cycle_without_com_logs_skip_and_continues (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_sample_parameter_write_status_complete (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_sample_parameter_write_status_missing_table (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_sample_parameter_write_status_table_file_not_exist (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_sample_upgrade_status_complete (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_sample_upgrade_status_missing_credentials (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_sample_upgrade_status_missing_firmware (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_sample_upgrade_status_page_mode_ok (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_serial_terminal_status_no_channels (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_serial_terminal_status_with_channels (test_pipeline_orchestrator.ComputeSubTaskStatusTests) ... ok
+test_non_fatal_subtasks_contains_only_serial (test_pipeline_orchestrator.ConstantsTests) ... ok
+test_subtask_codes_in_order (test_pipeline_orchestrator.ConstantsTests) ... ok
+test_subtask_labels_numbering_is_one_to_seven (test_pipeline_orchestrator.ConstantsTests)
+编号从 1 开始到 7，且 `[order]` 执行不得回到全流程。 ... ok
+test_empty_versions_skip_query_and_start_selected_channels (test_pipeline_orchestrator.LegacyPowerTestDispatchTests) ... ok
+test_empty_versions_still_reject_stop_config_change_and_read_failure (test_pipeline_orchestrator.LegacyPowerTestDispatchTests) ... ok
+test_legacy_power_test_delegates_to_headless_service (test_pipeline_orchestrator.LegacyPowerTestDispatchTests) ... ok
+test_legacy_power_test_does_not_start_when_any_version_differs (test_pipeline_orchestrator.LegacyPowerTestDispatchTests) ... ok
+test_legacy_power_test_does_not_start_when_version_query_fails (test_pipeline_orchestrator.LegacyPowerTestDispatchTests) ... ok
+test_legacy_power_test_requires_all_three_project_info_baselines (test_pipeline_orchestrator.LegacyPowerTestDispatchTests) ... ok
+test_each_completed_subtask_waits_120_seconds_before_the_next_task (test_pipeline_orchestrator.PipelineRunOrderTests) ... ok
+test_execution_order_keeps_serial_unselected_tasks_unchanged (test_pipeline_orchestrator.PipelineRunOrderTests) ... ok
+test_fatal_subtask_failure_raises_pipeline_error (test_pipeline_orchestrator.PipelineRunOrderTests) ... ok
+test_non_fatal_subtask_failure_continues (test_pipeline_orchestrator.PipelineRunOrderTests)
+「串口日志」失败不阻塞后续。 ... ok
+test_power_only_does_not_wait_after_pipeline_finishes (test_pipeline_orchestrator.PipelineRunOrderTests) ... ok
+test_request_stop_skips_subsequent_subtasks (test_pipeline_orchestrator.PipelineRunOrderTests) ... ok
+test_run_all_seven_subtasks_in_order (test_pipeline_orchestrator.PipelineRunOrderTests) ... ok
+test_run_only_selected_subtasks (test_pipeline_orchestrator.PipelineRunOrderTests) ... ok
+test_serial_prestart_and_env_check_completion_skip_120_second_wait (test_pipeline_orchestrator.PipelineRunOrderTests) ... ok
+test_serial_terminal_prestart_is_marshaled_to_tk_ui_thread (test_pipeline_orchestrator.PipelineRunOrderTests) ... ok
+test_wait_between_subtasks_can_be_stopped (test_pipeline_orchestrator.PipelineRunOrderTests) ... ok
+test_async_subtasks_use_main_program_completion_bridges (test_pipeline_orchestrator.SampleUpgradeDispatchTests)
+真实主程序有桥接时，管道不能只启动线程就进入下一项。 ... ok
+test_full_package_upgrade_uses_main_program_unified_parallel_entry (test_pipeline_orchestrator.SampleUpgradeDispatchTests)
+Tftp指令 / Tftp Put 必须共用当前存在的主程序并行入口，再由其内部独立分流。 ... ok
+test_onu_registration_uses_completion_waiting_bridge (test_pipeline_orchestrator.SampleUpgradeDispatchTests) ... ok
+test_unattended_execution_forwards_one_time_confirmation_authorization (test_pipeline_orchestrator.SampleUpgradeDispatchTests) ... ok
+test_subtask_result_failure (test_pipeline_orchestrator.SubTaskResultTests) ... ok
+test_subtask_result_ok (test_pipeline_orchestrator.SubTaskResultTests) ... ok
+test_404_rate_limit_timeout_propagate_as_failure (test_app_update.AppUpdateCheckTests) ... ok
+test_cancel_before_and_after_release_prevents_followup_request (test_app_update.AppUpdateCheckTests) ... ok
+test_cancel_during_checksum_read_is_cancelled_result (test_app_update.AppUpdateCheckTests) ... ok
+test_check_logs_actual_release_and_checksum_requests (test_app_update.AppUpdateCheckTests) ... ok
+test_checksum_must_identify_the_exact_zip (test_app_update.AppUpdateCheckTests) ... ok
+test_draft_and_prerelease_are_not_offered (test_app_update.AppUpdateCheckTests) ... ok
+test_incomplete_new_pair_never_falls_back_to_complete_legacy_pair (test_app_update.AppUpdateCheckTests) ... ok
+test_invalid_current_version_stops_before_request (test_app_update.AppUpdateCheckTests) ... ok
+test_invalid_new_asset_url_does_not_fall_back (test_app_update.AppUpdateCheckTests) ... ok
+test_invalid_remote_version_is_failure (test_app_update.AppUpdateCheckTests) ... ok
+test_legacy_release_is_checked_and_downloaded_with_its_own_checksum (test_app_update.AppUpdateCheckTests) ... ok
+test_mismatched_new_checksum_does_not_fall_back (test_app_update.AppUpdateCheckTests) ... ok
+test_missing_each_required_asset_is_incomplete_release (test_app_update.AppUpdateCheckTests) ... ok
+test_mixed_names_and_incomplete_legacy_pair_are_rejected (test_app_update.AppUpdateCheckTests) ... ok
+test_new_pair_wins_even_when_legacy_assets_are_first (test_app_update.AppUpdateCheckTests) ... ok
+test_non_https_asset_and_malformed_asset_list_fail (test_app_update.AppUpdateCheckTests) ... ok
+test_numeric_comparison_handles_multi_digit_patch_and_version_prefix (test_app_update.AppUpdateCheckTests) ... ok
+test_same_or_older_remote_never_prompts_downgrade_or_reads_checksum (test_app_update.AppUpdateCheckTests) ... ok
+test_cancel_after_download_and_during_verification_cleans_part (test_app_update.AppUpdateDownloadTests) ... ok
+test_cancel_before_download_does_not_request_or_touch_target (test_app_update.AppUpdateDownloadTests) ... ok
+test_confirmed_overwrite_replaces_only_after_success (test_app_update.AppUpdateDownloadTests) ... ok
+test_existing_file_is_preserved_without_overwrite_permission (test_app_update.AppUpdateDownloadTests) ... ok
+test_file_appearing_during_download_is_not_overwritten (test_app_update.AppUpdateDownloadTests) ... ok
+test_final_rename_failure_does_not_report_success_or_leave_part (test_app_update.AppUpdateDownloadTests) ... ok
+test_hash_correct_non_zip_is_still_rejected (test_app_update.AppUpdateDownloadTests) ... ok
+test_hash_mismatch_preserves_existing_target_and_cleans_only_own_part (test_app_update.AppUpdateDownloadTests) ... ok
+test_invalid_destination_or_missing_directory_prevents_download (test_app_update.AppUpdateDownloadTests) ... ok
+test_invalid_result_or_checksum_prevents_download (test_app_update.AppUpdateDownloadTests) ... ok
+test_network_error_after_cancel_is_reported_as_cancelled (test_app_update.AppUpdateDownloadTests) ... ok
+test_stream_cancel_or_failure_preserves_target_and_removes_partial_file (test_app_update.AppUpdateDownloadTests) ... ok
+test_success_finalizes_only_verified_zip_and_reports_both_phases (test_app_update.AppUpdateDownloadTests) ... ok
+test_truncated_download_fails_size_check (test_app_update.AppUpdateDownloadTests) ... ok
+test_models_support_python39_dataclass_and_remain_frozen (test_app_update.AppUpdateModelCompatibilityTests) ... ok
+test_qt_version_uses_source_and_installed_metadata (test_app_update.AppUpdateModelCompatibilityTests) ... ok
+test_checksum_decodes_bom_and_rejects_non_text (test_app_update.GitHubReleaseClientTests) ... ok
+test_checksum_text_is_bounded_and_response_is_closed_on_failure (test_app_update.GitHubReleaseClientTests) ... ok
+test_core_cancel_before_start_does_not_open_network_or_file (test_app_update.GitHubReleaseClientTests) ... ok
+test_core_stream_failure_closes_response (test_app_update.GitHubReleaseClientTests) ... ok
+test_core_streams_to_exclusive_file_and_reports_progress (test_app_update.GitHubReleaseClientTests) ... ok
+test_https_cdn_redirect_is_followed_and_both_responses_are_closed (test_app_update.GitHubReleaseClientTests) ... ok
+test_latest_request_is_public_https_verified_and_has_finite_timeouts (test_app_update.GitHubReleaseClientTests) ... ok
+test_malformed_json_or_non_object_release_is_rejected (test_app_update.GitHubReleaseClientTests) ... ok
+test_rate_limit_and_server_errors_are_distinct_failures (test_app_update.GitHubReleaseClientTests) ... ok
+test_redirect_to_plain_http_is_rejected_before_request (test_app_update.GitHubReleaseClientTests) ... ok
+test_redirect_without_location_and_redirect_loop_fail (test_app_update.GitHubReleaseClientTests) ... ok
+test_timeout_and_tls_failure_are_chinese_errors (test_app_update.GitHubReleaseClientTests) ... ok
+test_unavailable_or_missing_release_is_a_failure (test_app_update.GitHubReleaseClientTests) ... ok
+test_slow_action_log_keeps_order_and_defers_close_until_last_write (test_app_update.QtUpdateLogTests) ... ok
+test_slow_sql_history_keeps_project_commands_available_and_read_results_in_order (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_close_project_releases_sql_reader_before_reopen_and_keeps_other_project_reads (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_slow_archive_reader_does_not_delay_workspace_work_or_exit (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_other_project_cannot_acquire_same_physical_resources (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+
+----------------------------------------------------------------------
+Ran 127 tests in 8.341s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

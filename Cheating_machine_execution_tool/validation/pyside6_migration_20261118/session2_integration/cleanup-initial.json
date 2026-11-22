@@ -1,0 +1,20 @@
+﻿[
+    {
+        "directory":  "validation/pyside6_migration_20261118/session2_integration/native",
+        "before":  429,
+        "recycled":  429,
+        "retained":  [
+
+                     ]
+    },
+    {
+        "directory":  "validation/pyside6_migration_20261118/session1_diagnostics",
+        "before":  592,
+        "recycled":  589,
+        "retained":  [
+                         "native-final/scale-1/ai-current-power-evidence.png",
+                         "native-final/scale-1.25/ai-current-power-evidence.png",
+                         "native-final/scale-1.5/ai-current-power-evidence.png"
+                     ]
+    }
+]

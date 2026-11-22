@@ -138,6 +138,44 @@ class QtWorkbenchTests(unittest.TestCase):
         QTest.mouseClick(spin, Qt.LeftButton, pos=arrow.center())
         self.assertEqual(spin.value(), 6)
 
+    def test_qt_monitor_confirms_only_checked_project_channels(self):
+        from src.models.qt_ai_chat import ChatWorkspaceView
+        from src.ui.qt.ai_chat_dialog import AiChatDialog
+
+        dialog = AiChatDialog(self.window.projects[0], self.window)
+        dialog.show_view(ChatWorkspaceView((), '', ()))
+        dialog.set_busy(False)
+        dialog.show()
+        submitted = []
+        dialog.action_requested.connect(lambda op, args: submitted.append((op, args)))
+        dialog.monitor_action.trigger()
+        self.assertEqual(submitted.pop(), ('ai_chat_monitor_settings', ()))
+        dialog.show_monitor(dict(token='fixture', model='fixture', provider='fixture',
+            permission='ask', targets=[(2, 'CH2'), (7, 'CH7')], active=[], policy=dict(features=['ping']),
+            status=dict(enabled=False, queued=0, running=0, cleaning=0, waiting_approval=0)))
+        panel = dialog.monitor_dialog
+        panel.channels.item(1).setCheckState(Qt.Checked)
+        panel.automatic.setChecked(True)
+        panel.threshold.setValue(5)
+        panel.keywords.setText('断流;超时')
+        output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
+        if output:
+            self.app.processEvents()
+            self.assertTrue(panel.grab().save(str(Path(output) / 'qt-channel-diagnostics.png')))
+        QTest.mouseClick(panel.apply_button, Qt.LeftButton)
+        self.assertEqual(submitted, [('ai_chat_monitor_apply',
+            ('fixture', (7,), ('ping',), 5, 60, ('断流', '超时'), (), True, 'ask'))])
+        from PySide6.QtWidgets import QPushButton
+        dialog.review_action_result('', dict(id='pending-monitor', name='read_dut_state', fingerprint='fixture',
+            target=dict(channel=7, vlan='vlan107', port='COM7', bind_ip='192.0.2.7', host='192.0.2.1', telnet_port=23),
+            params=dict(category='system'), assessment=dict(reason='模拟首次登录')), monitor=True)
+        review = dialog.review_dialog
+        self.assertIn('确认监控操作', review.windowTitle())
+        reject = next(b for b in review.findChildren(QPushButton) if b.text() == '拒绝')
+        QTest.mouseClick(reject, Qt.LeftButton)
+        self.assertEqual(submitted[-1], ('ai_chat_monitor_decide', ('pending-monitor', 'fixture', False)))
+        dialog.close()
+
     def test_qt_chat_formats_markdown_preserves_selection_and_uses_original_shortcuts(self):
         from dataclasses import replace
         from PySide6.QtGui import QFont, QTextCursor
@@ -919,7 +957,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
                 patch.object(DiagnosticModelClient, 'complete_stream', reply), \
                 patch('src.services.ai_pc_conversation.read_network_state',
                       side_effect=lambda category, *_: 'fixture-' + category) as readings, \
-                patch('src.services.qt_ai_chat._unavailable', side_effect=AssertionError('DUT I/O')) as device:
+                patch('src.services.project_diagnostic_transport.ProjectDiagnosticTransport.open', side_effect=AssertionError('DUT I/O')) as device:
             self.controller.submit('create', self.root / 'pc-project', '本机取证项目')
             self.wait_for(lambda: len(self.window.projects) == 1 and self.window.ai_chat_action.isEnabled())
             project = self.window.selected_project
@@ -1236,11 +1274,14 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             first = self.window.selected_project
             self.controller.adapter._service.models.save_profile(
                 ProviderProfile(model='fixture-chat', context_tokens=65536), 'synthetic-chat-key')
+            self.assertEqual(self.window.ai_chat_action.text(), 'Ai助手')
+            self.assertEqual(self.window.detail.tabs.tabText(8), 'Ai助手')
             self.window.ai_chat_action.trigger()
             chat = self.controller.ai_chat
             self.wait_for(lambda: first in chat.windows and not chat.windows[first].busy)
             dialog = chat.windows[first]
             self.assertFalse(dialog.send_button.isEnabled())
+            self.assertEqual(dialog.windowTitle(), 'Ai助手 · AI 会话项目 A')
             self.assertLessEqual(dialog.width(), dialog.screen().availableGeometry().width())
             self.assertLessEqual(dialog.height(), dialog.screen().availableGeometry().height())
             QTest.mouseClick(dialog.new_button, Qt.MouseButton.LeftButton)
@@ -1996,6 +2037,20 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.assertIn(expected.splitlines()[0], contents)
         self.assertNotIn('发送原文', contents)
         self.assertEqual(serial_file.read_bytes(), original_serial)
+        # A log can be rotated out of the directory while its newest page is open.
+        with serial_file.open('a', encoding='utf-8') as stream:
+            stream.writelines(f'archived line {n}\n' for n in range(180))
+        dialog.latest.click()
+        self.wait_for(lambda: not dialog.busy and dialog.older.isEnabled())
+        serial_file.rename(serial_file.with_suffix('.rotated'))
+        dialog.refresh_files.click()
+        self.wait_for(lambda: not dialog.busy and dialog.files.count() == 0)
+        self.assertIsNone(dialog.cursor)
+        self.assertFalse(dialog.older.isEnabled())
+        self.assertFalse(dialog.latest.isEnabled())
+        self.assertEqual(dialog.logs.text.toPlainText(), '')
+        if output:
+            self.assertTrue(dialog.grab().save(str(Path(output) / 'archived-empty-after-refresh.png')))
         main_directory = path / 'logs/main'
         monitor_directory = main_directory / 'resource_monitor'
         monitor_directory.mkdir(parents=True)
@@ -5434,8 +5489,20 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         heights = {'telnet': 3, 'wan': 4, 'wifi_2g': 5, 'wifi_5g': 6, 'voice': 7, 'tr069': 16}
         state.write_text(json.dumps({'current_status_heights': dict(heights, unknown='keep'), 'other': True}), encoding='utf-8')
 
-        def persisted():
-            return json.loads(state.read_text(encoding='utf-8'))
+        # Read the real JSON on the workspace worker after each atomic replace.
+        # Polling the destination concurrently can deny the replace on Windows.
+        from src.services.qt_window_state import save_window_placement
+        saved_state = json.loads(state.read_text(encoding='utf-8'))
+
+        def observe_save(context, window, **preferences):
+            nonlocal saved_state
+            save_window_placement(context, window, **preferences)
+            if window == 'dut' and context.identity.project_id == project:
+                saved_state = json.loads(state.read_text(encoding='utf-8'))
+
+        observer = patch('src.services.qt_workspace_adapter.save_window_placement', new=observe_save)
+        observer.start()
+        self.addCleanup(observer.stop)
 
         def settle(dialog):
             self.wait_for(lambda: not dialog._status_layout_timer.isActive()
@@ -5458,9 +5525,9 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         QTest.mousePress(handle, Qt.MouseButton.LeftButton, pos=start)
         QTest.mouseMove(handle, target, delay=20)
         QTest.mouseRelease(handle, Qt.MouseButton.LeftButton, pos=target)
-        self.wait_for(lambda: persisted()['current_status_heights']['telnet'] == 5)
+        self.wait_for(lambda: saved_state['current_status_heights']['telnet'] == 5)
         settle(dialog)
-        self.assertNotIn('window_size', persisted())
+        self.assertNotIn('window_size', saved_state)
         for index, feature in enumerate(('wan', 'wifi_2g', 'wifi_5g', 'voice'), 1):
             dialog.tabs.setCurrentIndex(index)
             settle(dialog)
@@ -5473,7 +5540,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         dialog.tabs.setCurrentIndex(5)
         settle(dialog)
         self.assertLess(dialog.status_heights['tr069'], 16)
-        self.wait_for(lambda: persisted()['current_status_heights']['tr069'] == dialog.status_heights['tr069'])
+        self.wait_for(lambda: saved_state['current_status_heights']['tr069'] == dialog.status_heights['tr069'])
         output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
         if output:
             dialog.page_scroll.ensureWidgetVisible(dialog.status)
@@ -5487,9 +5554,9 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         restored = self.controller.dut_windows[project]
         settle(restored)
         self.assertEqual(restored.status_heights, saved_rows)
-        self.assertEqual(persisted()['window_size'], {'width': 560, 'height': 460})
-        self.assertEqual(persisted()['current_status_heights']['unknown'], 'keep')
-        self.assertTrue(persisted()['other'])
+        self.assertEqual(saved_state['window_size'], {'width': 560, 'height': 460})
+        self.assertEqual(saved_state['current_status_heights']['unknown'], 'keep')
+        self.assertTrue(saved_state['other'])
 
     def test_qt_module_windows_restore_legacy_sizes_and_save_through_project_lifecycle(self):
         from PySide6.QtWidgets import QMessageBox

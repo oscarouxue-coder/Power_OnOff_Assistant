@@ -1,0 +1,9 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_f063e41dc156459fa59f4d9c6b57671d'}
+
+test_copied_projects_in_workspace (validation.pyside6_migration_20261118.session2_integration.check_archived_window.ArchivedWindowTests) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 5.143s
+
+OK

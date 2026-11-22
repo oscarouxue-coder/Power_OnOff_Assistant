@@ -1,0 +1,42 @@
+﻿GUI_TEST_COVERAGE_OK
+python.exe : .................................................................F........................................
+......................
+所在位置 行:4 字符: 1
++ & 'C:/Users/Administrator/AppData/Local/LineCheckAssistant/qt-build-p ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+======================================================================
+FAIL: test_power_evidence_only_follows_the_verified_local_channel (test_qt_workspace_adapter.QtWorkspaceAdapterTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machin
+e_execution_tool\tests\test_qt_workspace_adapter.py", line 925, in test_power_evidence_only_follows_the_verified_local_
+channel
+    self.wait_for(lambda: prompts and not chat._is_running() and chat._intent is None)
+AssertionError: '检索参数不正确' not found in '[{"source": "stage", "text": "{\\"type\\": \\"stage\\", \\"run_id\\": \\"parall
+el\\", \\"channel\\": 7, \\"message\\": \\"only-project-A7\\"}", "run_id": "parallel", "channel": 7, "timing": "故障时/测试过
+程中记录", "created": "2026-11-21T21:02:30+08:00", "id": "90cf5d75540418a4f15d3b7e44fa1ac787b2278170b33777226ae9cccfb2d359"
+}, {"source": "diagnostic_settings", "text": "{\\"type\\": \\"diagnostic_settings\\", \\"run_id\\": \\"parallel\\", \\"
+channel\\": 7, \\"settings\\": {\\"note\\": \\"only-A-settings\\"}}", "run_id": "parallel", "channel": 7, "timing": "故障
+时/测试过程中记录", "created": "2026-11-21T21:02:30+08:00", "id": "d6a611b5832b8b6eeb9c85994826c18c139a9705bd69c42dd15bc1d6eaa3
+768a"}, {"source": "result_log_created", "text": "{\\"type\\": \\"result_log_created\\", \\"run_id\\": \\"parallel\\", 
+\\"channel\\": 7, \\"path\\": \\"C:\\\\\\\\Users\\\\\\\\Administrator\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\qt
+-project-oc_2g9ll\\\\\\\\result.log\\"}", "run_id": "parallel", "channel": 7, "timing": "故障时/测试过程中记录", "created": "2026
+-11-21T21:02:30+08:00", "id": "1133c5b69a3e08baf9859ef70142cc34f469c4aa2105f0c54c871ff77af52a0e"}, {"source": "result_l
+og_created / 续跑0 / C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Temp\\\\qt-project-oc_2g9ll\\\\result.log", "tex
+t": "initial-tail", "run_id": "parallel", "channel": 7, "timing": "测试日志原文（最多64KiB尾部）；此时间为读取时间，故障时间以行内记录为准", "created": 
+"2026-11-21T21:02:30+08:00", "id": "9b44c40caffa342fac6e182b452c581b28d84fdd7767adc905b476a3412b731e"}, {"source": "res
+ult_log_created / 续跑0 / C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Temp\\\\qt-project-oc_2g9ll\\\\result.log",
+ "text": "new-tail-after-select", "run_id": "parallel", "channel": 7, "timing": "测试日志原文（最多64KiB尾部）；此时间为读取时间，故障时间以行内记录为准
+", "created": "2026-11-21T21:02:30+08:00", "id": "c8d7b9fbc330a38f9330e75b85861fd5169688052b701cd2b7eb93b8255ee790"}, {
+"source": "工具/read_test_evidence/path-check", "text": "{\\"error\\": \\"工具未开放、未知工具或达到本次工具上限，未执行；本机通道会话仅分析留存材料\\", \\"st
+atus\\": \\"跳过/失败，不能据此判定DUT根因\\"}", "run_id": "parallel", "channel": 7, "timing": "本轮当前查询/交互，不代表故障时状态", "created": "202
+6-11-21T21:02:30+08:00", "id": "6ee415d797ddfeefd7aae03a83781e8044210e071887551bd77f8f680689515a"}]'
+
+----------------------------------------------------------------------
+Ran 128 tests in 67.163s
+
+FAILED (failures=1)
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 2, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

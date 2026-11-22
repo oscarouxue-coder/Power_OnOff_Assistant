@@ -1,0 +1,9 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_2f05eb4ca78143e187e28fc70a0cf0b6'}
+
+test_qt_dut_status_height_restores_adjusts_and_saves_each_tab (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 3.016s
+
+OK

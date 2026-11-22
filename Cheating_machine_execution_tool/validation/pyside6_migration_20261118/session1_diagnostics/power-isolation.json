@@ -1,0 +1,29 @@
+﻿{
+  "power": {
+    "relay_receipt": {
+      "state": "rejected",
+      "request_id": "b4c0fb4e-50af-4733-be68-8f50a136f2bc",
+      "notice": "当前没有就绪的项目业务会话，本条业务消息已拒绝，未提交"
+    },
+    "duplicate_preserved": true,
+    "lease_held_after_revocation": true,
+    "result": "completed",
+    "physical_serial_opens": 0,
+    "external_requests": 0,
+    "frames": [
+      "5501a10003a3",
+      "5501a10009a9",
+      "5501a00003a2",
+      "5501a00009a8",
+      "5501a10003a3",
+      "5501a10009a9",
+      "5501a00003a2",
+      "5501a00009a8"
+    ],
+    "worker_pid": 27108
+  },
+  "local_intent_cancelled": true,
+  "workspace_refresh_while_waiting": true,
+  "power_lease_after_chat_stop": true,
+  "local_target_changed": false
+}

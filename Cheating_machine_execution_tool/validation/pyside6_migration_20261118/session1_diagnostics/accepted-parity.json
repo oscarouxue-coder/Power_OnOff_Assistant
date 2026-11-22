@@ -1,0 +1,30 @@
+﻿{
+  "comparison": {
+    "project": "5b9ef65d-03bf-429b-a122-6656f2087200",
+    "diagnostic_run": "2d68e79a84db4a709cb6d0c472751b39",
+    "workspace_job": "855bd65211224deba1f4138962778036",
+    "rows_equal": true,
+    "repeated_select_unchanged": true,
+    "diagnostic_start_matches_project_and_batch": true,
+    "diagnostic_start_events": 2,
+    "workspace_job_id_equals_diagnostic_id": false,
+    "local_channel": 3,
+    "power_events_available": 16,
+    "qt_evidence_after_select": 16,
+    "original_evidence_after_refresh": 16,
+    "observed_sources": [
+      "channel_ready",
+      "channel_result",
+      "diagnostic_settings",
+      "log",
+      "result_log_created",
+      "stage"
+    ],
+    "wrong_channel_records": 0,
+    "model_calls": 0
+  },
+  "power_result": "completed",
+  "power_frames": 8,
+  "real_serial_opens": 0,
+  "external_requests": 0
+}

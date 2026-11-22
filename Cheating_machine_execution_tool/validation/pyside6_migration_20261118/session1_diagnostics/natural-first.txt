@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\validation\pyside6_migration_20261118\local_chat_intent\check_selection.py", line 95, in <module>
+    print(json.dumps(verify(root, case), indent=2))
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\validation\pyside6_migration_20261118\local_chat_intent\check_selection.py", line 77, in verify
+    result = chat.conversation.router.send(text, profile, selected=original)
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\src\models\dependency_repair.py", line 53, in guarded
+    return function(self, *args, **kwargs)
+  File "C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-source\session1-diagnostics-20261121\Cheating_machine_execution_tool\src\services\ai_session_router.py", line 187, in send
+    raise ValueError("正在识别上一条消息，请稍后重试")
+ValueError: 正在识别上一条消息，请稍后重试

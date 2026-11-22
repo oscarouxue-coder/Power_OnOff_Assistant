@@ -117,6 +117,8 @@ PY_COMPILE_FILES: tuple[str, ...] = (
     'src/models/qt_model_settings.py',
     'src/models/qt_ai_chat.py',
     'src/services/qt_ai_chat.py',
+    'src/services/qt_device_diagnostics.py',
+    'src/ui/qt/ai_monitor_dialog.py',
     'src/ui/qt/ai_session_manager_dialog.py',
     'src/models/qt_ai_reports.py',
     'src/services/qt_ai_reports.py',
@@ -438,6 +440,7 @@ PY_COMPILE_FILES: tuple[str, ...] = (
 # 关键已验收行为的回归用例。全量 unittest 必须实际执行这些 ID，避免测试文件或
 # 用例在重构时被静默删除 / 改名而使已验收边界失去保护。
 REQUIRED_BASELINE_TEST_IDS: tuple[str, ...] = (
+    'test_qt_workspace_adapter.QtWorkspaceAdapterTests.test_qt_active_diagnostics_and_serial_batch_use_confirmed_project_targets',
     'test_gui_test_coverage.GuiRuntimeTests.test_retired_interpreter_is_collected_on_runner_main_thread',
     'test_gui_test_coverage.GuiCoverageTests.test_qt_and_tk_require_their_own_scopes',
     'test_qt_migration_contract.QtMigrationContractTests.test_existing_ui_exports_keep_their_identity',

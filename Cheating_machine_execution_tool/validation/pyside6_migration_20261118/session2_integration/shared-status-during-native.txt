@@ -1,0 +1,28 @@
+## feature/pyside6-migration
+ M ../ACCEPTANCE_BASELINE.md
+ M ../CAPABILITY_COVERAGE.md
+ M line_check_assistant/app.py
+ M line_check_assistant/packaging_assets/VERSION_INFO.txt
+ M line_check_assistant_README.md
+ M scripts/capability_gui_actions.json
+ M scripts/verify_capability_coverage.py
+ M src/services/ai_conversation_service.py
+ M src/services/ai_diagnostic_service.py
+ M src/services/qt_ai_chat.py
+ M src/services/qt_workspace_adapter.py
+ M src/ui/ai_assistant_controller.py
+ M src/ui/ai_diagnostics_window.py
+ M src/ui/ai_monitor_window.py
+ M src/ui/main_log_filter.py
+ M src/ui/qt/ai_chat_dialog.py
+ M src/ui/qt/archived_logs_dialog.py
+ M src/ui/qt/main_window.py
+ M src/ui/qt/project_detail.py
+ M tests/qt_workbench_probe.py
+ M tests/test_main_log_filter.py
+ M tests/test_project_workspace.py
+ M validation/pyside6_migration_20261118/MIGRATION_PROGRESS.md
+ M ../DEVELOPMENT_LOG.md
+ M ../PROJECT_STATUS.md
+?? validation/pyside6_migration_20261118/session1_diagnostics/
+?? validation/pyside6_migration_20261118/session2_integration/

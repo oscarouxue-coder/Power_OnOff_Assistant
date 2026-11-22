@@ -30,6 +30,7 @@ class AiBatchService:
         self.owner, self.store = owner, owner.store
         self.lock = threading.RLock()
         self.results = {}
+        self.host_busy = lambda: self.owner.scope_busy(None)
 
     def related(self, identifier):
         session = self.store.chat(identifier)
@@ -321,7 +322,7 @@ class AiBatchService:
                 with self.owner.lock:
                     self.owner.running[child] = stop
                 try:
-                    if stage.scope == "pc" and self.owner.scope_busy(None):
+                    if stage.scope == "pc" and self.host_busy():
                         raise BatchSharedFailure("设备或共享资源正被测试占用，整批暂停")
                     self.store.update_chat(child, status="处理中")
                     text = ("用户原始任务：\n" + request["original"] + "\n本次用户补充：\n" + request["text"] +

@@ -1,5 +1,92 @@
 # 开发记录
 
+## 2026-11-21 - 接入 Qt 实时诊断与批量排障
+
+- 类型：功能
+- 背景：V1.3.0 的第 5 阶段需要在 Qt 工作台完成主动设备诊断、异常监控与多通道排障。
+- 完成内容：项目「Ai助手」菜单接入通道与监控策略确认、首次登录审批和监控结果。受控配置能力绑定本项目、模型、通道与批次。多通道复用原父子任务、顺序调度、停止、继续和失败重查。
+- 修改文件：下列源码以主源码目录为准，根目录文档另列。完整路径和职责也列在[阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/qt_channel_diagnostics/REPORT.md)。
+  - `src/services/qt_device_diagnostics.py`
+  - `src/services/qt_ai_chat.py`
+  - `src/services/qt_serial_terminal.py`
+  - `src/services/ai_batch_service.py`
+  - `src/services/ai_conversation_service.py`
+  - `src/services/ai_diagnostic_service.py`
+  - `src/services/ai_monitor_service.py`
+  - `src/services/ai_session_router.py`
+  - `src/services/capability_catalog.py`
+  - `src/models/qt_ai_chat.py`
+  - `src/ui/qt/ai_monitor_dialog.py`
+  - `src/ui/qt/ai_chat_controller.py`
+  - `src/ui/qt/ai_chat_dialog.py`
+  - `tests/test_qt_workspace_adapter.py`
+  - `tests/qt_workbench_probe.py`
+  - `scripts/verify_baseline.py`
+  - `scripts/verify_qt_migration.py`
+  - `scripts/verify_capability_coverage.py`
+  - `scripts/capability_gui_actions.json`
+  - `line_check_assistant_README.md`
+  - `validation/pyside6_migration_20261118/MIGRATION_PROGRESS.md`
+  - `validation/pyside6_migration_20261118/qt_channel_diagnostics/REPORT.md` 及本阶段验证收据
+  - 仓库根 `CAPABILITY_COVERAGE.md`
+  - 仓库根 `ACCEPTANCE_BASELINE.md`
+  - 仓库根 `PROJECT_STATUS.md`
+  - 仓库根 `DEVELOPMENT_LOG.md`
+- 验证方法：通过 `scripts/run_tests.py` 运行工作区、监控、原诊断传输及批量调度专项；更新并检查能力动作清单；在项目独立 Qt 环境执行 `scripts/verify_baseline.py`，通过 `scripts/verify_qt_migration.py` 验证三档 Windows 原生界面。
+- 验证结果：96 项专项通过，含主动查询与独占、两通道批量、失败重查、停止续查、事件触发及审批。[专项输出](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/qt_channel_diagnostics/focused-final.txt) 完整基线 3,280 项通过，270 项指定用例实际执行，八类门禁均通过。[完整基线](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/qt_channel_diagnostics/baseline-final.txt) 三档 Windows 原生各通过 102 项，共 306 次，每档 1,886 个受管窗口，隔离违规为零。[三档结果](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/qt_channel_diagnostics/native-verified/results.json)
+- 截图清理：本阶段三次原生批次共 1,283 张 PNG，已将 1,280 张过程图移入回收站，保留报告引用的三档设置窗口截图。
+- 后续待办：真实设备、模型及物理串口验收沿用现场清单。
+
+
+## 2026-11-21 - 交付两路集成的本地 Qt 候选包
+
+- 从共同起点合入会话 1 最终 17 个文件的交接，保留操作员手册和原生工作台用例双方修改。两份补丁可逐字节复现 840 个输入，指纹为 `f91d2bf1af28881d0b72a591717bce6ed4c64a1b4f365f2a98a73a201210b77c`。共享区另行开发的跨实例业务转发和“Ai助手”改名保留在原工作区。
+- 归档日志窗口在文件移走后刷新会清空游标并停用翻页。修正 `src/ui/qt/archived_logs_dialog.py`、扩展 `tests/qt_workbench_probe.py`，更新覆盖清单和操作员手册。`tests/qt_workbench_probe.py` 中的 DUT 高度专项改为在实际保存完成后读取结果，消除 Windows 文件替换竞争。完整的变更路径、会话 1 的证据服务、源码差异、专项与失败复验收据见[交付报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/session2_integration/REPORT.md)。
+- 旧项目真实副本 2 份。原入口及 Qt 的 16 通道两轮各 64 帧，本机通道证据 16 条逐条一致。最终原生三档各 100 项、1,877 个受管窗口、违规为零。标准构建完整基线 3,267 项，指定 266 项全部命中，8 类门禁通过。
+- 本地成品 `dist/qt-20261121-220335-19897b67/DUTPilot_portable.zip`，SHA256 为 `7311b9dfb77c3154896941f355a6b82d6387f476f54f44878d81b9ce667ca1ac`。静态核对 EXE/PYZ 的 333 个项目模块、原业务、入口、便携目录、ZIP、同批哈希及第三方声明。构建机未启动 EXE，未公开发布。
+- 本批三轮原生截图回收 1,277 张、保留报告引用的 9 张。独立目录另回收 589 张交接副本截图、保留其报告引用的 3 张。干净目标机、真实样机及平台、每 DUT 500 轮和 24/72 小时挂测待负责人现场验收。持续开机独立执行器、多 DUT 故障恢复与 7 天运行仍待接入或验收。
+
+## 2026-11-21 - 将 AI 诊断入口改名为 Ai助手
+
+- 类型：修改
+- 背景：按负责人指定的大小写统一 Qt 和 Tk 两个入口的模块名称。
+- 完成内容：更新工具栏、项目详情、窗口、错误提示、身份示例与操作说明。新模块日志使用 `[Ai助手]`，日志过滤器兼容 `[AI诊断]` 和 `[AI 诊断]`。诊断报告、诊断分析等操作沿用原名称。
+- 修改文件（主源码目录相对路径）：
+  - `line_check_assistant/app.py`
+  - `line_check_assistant/packaging_assets/VERSION_INFO.txt`
+  - `line_check_assistant_README.md`
+  - `src/ui/ai_assistant_controller.py`
+  - `src/ui/ai_diagnostics_window.py`
+  - `src/ui/ai_monitor_window.py`
+  - `src/ui/main_log_filter.py`
+  - `src/ui/qt/main_window.py`
+  - `src/ui/qt/project_detail.py`
+  - `src/ui/qt/ai_chat_dialog.py`
+  - `src/services/ai_diagnostic_service.py`
+  - `src/services/ai_conversation_service.py`
+  - `src/services/qt_ai_chat.py`
+  - `src/services/qt_workspace_adapter.py`
+  - `scripts/verify_capability_coverage.py`
+  - `scripts/capability_gui_actions.json`
+  - `tests/test_project_workspace.py`
+  - `tests/test_main_log_filter.py`
+  - `tests/qt_workbench_probe.py`
+  - `../CAPABILITY_COVERAGE.md`
+  - `../PROJECT_STATUS.md`
+  - `../DEVELOPMENT_LOG.md`
+- 验证方法：对 16 个改动的 Python 文件运行 `python -m py_compile`。`python scripts/run_tests.py test_project_workspace.ProjectWorkspaceTests.test_two_real_ai_controllers_share_models_but_not_conversations_or_business_storage test_main_log_filter test_ai_trigger test_ai_workspace test_ai_integration test_ai_conversation`；`python scripts/run_tests.py test_ai_monitor_status test_ai_monitor_permissions test_capability_coverage`。在 Windows Qt 非输入桌面通过 `run_gui_child` 运行 `scripts/run_tests.py qt_workbench_probe.QtProjectWorkspaceTests.test_qt_ai_chat_sends_and_reopens_original_persisted_history`。执行能力清单更新及复查 `python scripts/verify_capability_coverage.py --update`、`python scripts/verify_capability_coverage.py` 和 `git diff --check`。
+- 验证结果：首次 Tk 入口断言漏计多项目窗口的项目名后缀，修正断言后 199 项全部通过，另 43 项通过。Qt 原生用例通过工具栏打开会话并从项目详情重开，校验了模块名、项目名和原会话记录。合计 243 项通过，窗口隔离无违规，编译、能力覆盖及差异格式通过。本轮仅做专项验证，未运行完整基线或构建。
+- 后续待办：无。
+
+## 2026-11-21 - 复验旧项目与双入口模拟挂测
+
+- 类型：BUG 修复、测试、文档
+- 背景：会话 2 接管非 AI 页面和组合交付。旧项目日志轮转清空了文件列表，归档窗口的“更早日志”仍可用。
+- 完成内容：重置归档分页状态，用同一窗口留存失败和修正回执，分别回放两份原项目、原执行器和 Qt 入口。同步操作员手册、动作登记、验收基线、项目状态和迁移进度。
+- 修改文件：`src/ui/qt/archived_logs_dialog.py`、`tests/qt_workbench_probe.py`、`scripts/capability_gui_actions.json`、`line_check_assistant_README.md`、`validation/pyside6_migration_20261118/session2_integration/` 及上述项目文档。
+- 验证方法与结果：11 个页面专项模块共 148 项通过，日志及工作区等另 127 项通过；16 个模拟通道两轮，每入口 64 帧。归档回归在 Windows 私有桌面修正前失败、修正后通过。[命令、逐项结果与后续交付](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/session2_integration/REPORT.md)
+- 后续待办：组合源码与成品的验证另按本批报告记录，干净目标机、真实设备和长挂待现场。
+
 ## 2026-11-21 - PySide6 迁移双会话执行交接
 
 已按共同源码指纹划分两路工作。会话 1 负责本机诊断、原挂测证据及专项回归；会话 2 同步核对非 AI 页面和核心业务，并统一集成、验包及登记现场待验项。本次交付两份计划书，沿用既有测试与现场状态。[会话 1 执行计划](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/SESSION_1_QT_DIAGNOSTICS.md) · [会话 2 执行计划](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/SESSION_2_INTEGRATION_ACCEPTANCE.md)

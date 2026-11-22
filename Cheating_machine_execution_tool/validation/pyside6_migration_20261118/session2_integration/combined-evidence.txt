@@ -1,0 +1,41 @@
+{
+  "comparison": {
+    "project": "5eb9e6a7-2a5d-44d6-940d-513277ba6b25",
+    "diagnostic_run": "9d3289ae9c334e9d85e4c1b575e32437",
+    "workspace_job": "d0666c884f284748bc910c8e22f27f75",
+    "snapshot": "9c306788bef94c3fa9fa182580109b57",
+    "source_counts": {
+      "diagnostic_settings": 1,
+      "stage": 1,
+      "result_log_created": 2,
+      "log": 10,
+      "channel_result": 1,
+      "channel_ready": 1
+    },
+    "compared_rows_sha256": "b8062f3fd8a2852d16aea6edc57ff7e2112c2c1a5609c6ffe5cbc7324390e768",
+    "rows_equal": true,
+    "event_times_equal": true,
+    "repeated_select_unchanged": true,
+    "diagnostic_start_matches_project_and_batch": true,
+    "diagnostic_start_events": 2,
+    "workspace_job_id_equals_diagnostic_id": false,
+    "local_channel": 3,
+    "power_events_available": 16,
+    "qt_evidence_after_select": 16,
+    "original_evidence_after_refresh": 16,
+    "observed_sources": [
+      "channel_ready",
+      "channel_result",
+      "diagnostic_settings",
+      "log",
+      "result_log_created",
+      "stage"
+    ],
+    "wrong_channel_records": 0,
+    "model_calls": 0
+  },
+  "power_result": "completed",
+  "power_frames": 8,
+  "real_serial_opens": 0,
+  "external_requests": 0
+}

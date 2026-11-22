@@ -1,0 +1,1 @@
+GUI动作发生变化，须审查业务覆盖并更新capability_gui_actions.json

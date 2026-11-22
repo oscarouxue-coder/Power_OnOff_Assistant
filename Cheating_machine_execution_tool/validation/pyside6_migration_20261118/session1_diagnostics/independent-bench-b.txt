@@ -1,0 +1,45 @@
+GUI_TEST_COVERAGE_OK
+test_ask_mode_requires_approval_before_any_device_call (test_ai_version_query.VersionQueryTests) ... ok
+test_count_mismatch_clarifies_without_a_device_or_model_call (test_ai_version_query.VersionQueryTests) ... ok
+test_endpoint_change_after_last_permission_check_is_rejected_at_admission (test_ai_version_query.VersionQueryTests) ... ok
+test_explicit_business_cancel_stops_remaining_targets (test_ai_version_query.VersionQueryTests) ... ok
+test_failed_queue_admission_restores_previous_business_turn (test_ai_version_query.VersionQueryTests) ... ok
+test_feishu_and_dingtalk_sources_use_same_job_and_original_identity (test_ai_version_query.VersionQueryTests) ... ok
+test_job_lookup_handles_an_admitted_operation_with_missing_ack (test_ai_version_query.VersionQueryTests) ... ok
+test_missing_original_job_is_not_resubmitted_on_recovery (test_ai_version_query.VersionQueryTests) ... ok
+test_model_explanation_cannot_call_tools (test_ai_version_query.VersionQueryTests) ... ok
+test_one_failure_continues_and_preserves_real_results (test_ai_version_query.VersionQueryTests) ... ok
+test_read_only_lookup_is_scoped_to_original_principal_and_operation (test_ai_version_query.VersionQueryTests) ... ok
+test_recovery_covers_admission_ack_loss_without_job_id (test_ai_version_query.VersionQueryTests) ... ok
+test_recovery_only_reads_original_job_and_deduplicates_projection (test_ai_version_query.VersionQueryTests) ... ok
+test_single_target_does_not_expand_to_all (test_ai_version_query.VersionQueryTests) ... ok
+test_stopping_model_does_not_cancel_admitted_job_or_hide_results (test_ai_version_query.VersionQueryTests) ... ok
+test_summary_failure_never_changes_query_result_or_requeries (test_ai_version_query.VersionQueryTests) ... ok
+test_target_change_halts_remaining_without_using_new_source (test_ai_version_query.VersionQueryTests) ... ok
+test_three_same_ip_devices_one_job_and_only_one_model_explanation (test_ai_version_query.VersionQueryTests) ... ok
+test_unknown_job_recovers_successful_rows_from_durable_events (test_ai_version_query.VersionQueryTests) ... ok
+test_ambiguous_counts_invalid_duplicates_and_missing_targets_clarify (test_ai_version_query.VersionRouteTests) ... ok
+test_clear_requests_skip_model_and_preserve_order (test_ai_version_query.VersionRouteTests) ... ok
+test_compound_historical_and_unrelated_text_never_shortcuts (test_ai_version_query.VersionRouteTests) ... ok
+test_current_scope_is_reused_but_fresh_is_not_an_operation (test_ai_version_query.VersionRouteTests) ... ok
+test_disallowed_channel_and_capability_and_permission_claim_are_rejected (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_exception_after_agent_enqueue_is_unknown_and_never_resubmitted (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_fake_upgrade_once_survives_gateway_disconnect_and_reports_original_job (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_local_rejection_is_confirmed_without_disconnect_or_execution (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_new_remote_session_does_not_inherit_local_full_grant (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_scope_change_invalidates_full_grant_and_generic_shell_is_blocked (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_unknown_upgrade_is_not_retried_with_a_new_message_id (test_remote_gateway_agent.GatewayAgentTests) ... ok
+test_child_gui_power_and_adapter_operations_are_rejected_before_io (test_remote_instance_identity.IdentityTests) ... ok
+test_cross_process_contention_and_release (test_remote_instance_identity.IdentityTests) ... ok
+test_explicit_busy_slot_and_copied_identity_are_rejected (test_remote_instance_identity.IdentityTests) ... ok
+test_normalization_unifies_power_and_serial_bus (test_remote_instance_identity.IdentityTests) ... ok
+test_partial_acquisition_rolls_back (test_remote_instance_identity.IdentityTests) ... ok
+test_restart_preserves_permanent_id_and_changes_run (test_remote_instance_identity.IdentityTests) ... ok
+test_same_directory_multiple_slots_are_independent (test_remote_instance_identity.IdentityTests) ... ok
+test_same_install_path_on_distinct_local_stores_gets_distinct_identity (test_remote_instance_identity.IdentityTests) ... ok
+
+----------------------------------------------------------------------
+Ran 38 tests in 14.243s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

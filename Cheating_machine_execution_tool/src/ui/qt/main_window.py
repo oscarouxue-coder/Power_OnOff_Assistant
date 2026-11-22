@@ -58,7 +58,7 @@ class MainWindow(QMainWindow):
         self.resource_refresh_action.setToolTip('只读刷新本机串口和网卡候选')
         self.model_settings_action = toolbar.addAction('AI 模型连接')
         self.model_settings_action.setEnabled(False)
-        self.ai_chat_action = toolbar.addAction('AI 诊断')
+        self.ai_chat_action = toolbar.addAction('Ai助手')
         self.ai_chat_action.setEnabled(False)
         self.devices_action = toolbar.addAction('设备管理')
         self.devices_action.setEnabled(False)

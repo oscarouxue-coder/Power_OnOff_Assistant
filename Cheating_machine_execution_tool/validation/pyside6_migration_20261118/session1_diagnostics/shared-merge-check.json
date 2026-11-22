@@ -1,0 +1,104 @@
+[
+  {
+    "path": "ACCEPTANCE_BASELINE.md",
+    "shared_sha256": "60fc35477c31a29a81a51621336da83eaf3388bd0d47ea50d0d1033d0e793772",
+    "shared_matches_reference": false,
+    "patch_applies": false
+  },
+  {
+    "path": "DEVELOPMENT_LOG.md",
+    "shared_sha256": "0335c5dbfc38b1f1e807b815283762e75dcf03db39d8de0e33b9d2117b97daa1",
+    "shared_matches_reference": false,
+    "patch_applies": false
+  },
+  {
+    "path": "PROJECT_STATUS.md",
+    "shared_sha256": "ee5957b7abf10d70dae5f4e2cb991bff1636771bf53bd9ee0a7f50d3c8ce5584",
+    "shared_matches_reference": false,
+    "patch_applies": false
+  },
+  {
+    "path": "Cheating_machine_execution_tool/line_check_assistant_README.md",
+    "shared_sha256": "73626f7330c014d737ced5b28eb3307b54b17a239b9315fb57fee1bbda785d79",
+    "shared_matches_reference": false,
+    "patch_applies": true
+  },
+  {
+    "path": "Cheating_machine_execution_tool/src/services/ai_conversation_service.py",
+    "shared_sha256": "3b441b7f6f3e34914b37e7d0cd576c530149d752d1c463b45a14cd1fa83f4809",
+    "shared_matches_reference": false,
+    "patch_applies": true
+  },
+  {
+    "path": "Cheating_machine_execution_tool/src/services/qt_ai_chat.py",
+    "shared_sha256": "77b8c9f4020952d1e3c39c508a44083936c3e4771ebe3a458ae6f15b45f6b108",
+    "shared_matches_reference": false,
+    "patch_applies": true
+  },
+  {
+    "path": "Cheating_machine_execution_tool/src/services/qt_ai_report_handoff.py",
+    "shared_sha256": "aa05de7142490c0f5e0f9f9c413b7027c3fc7e0f44901c699dd819e603fd2ce0",
+    "shared_matches_reference": true,
+    "patch_applies": true
+  },
+  {
+    "path": "Cheating_machine_execution_tool/src/services/qt_execution_adapter.py",
+    "shared_sha256": "e732daa92841facfd99f44f75ec7992ebb55b19bb9637c7d3a08a6733b4e2c3e",
+    "shared_matches_reference": true,
+    "patch_applies": true
+  },
+  {
+    "path": "Cheating_machine_execution_tool/src/services/qt_power_evidence.py",
+    "shared_sha256": null,
+    "shared_matches_reference": true,
+    "patch_applies": true
+  },
+  {
+    "path": "Cheating_machine_execution_tool/tests/qt_workbench_probe.py",
+    "shared_sha256": "4638afe285fcded0892083f5972ea4cd58ea199bbe376e1df4745f2c74d00609",
+    "shared_matches_reference": false,
+    "patch_applies": true
+  },
+  {
+    "path": "Cheating_machine_execution_tool/tests/test_qt_workspace_adapter.py",
+    "shared_sha256": "5903119d6fddadd9a8f5b5b5fd63532de792352d00ead73988b8f5061e55d6ce",
+    "shared_matches_reference": false,
+    "patch_applies": true
+  },
+  {
+    "path": "Cheating_machine_execution_tool/scripts/verify_baseline.py",
+    "shared_sha256": "1a605818db8ccfe4160e18833429ed48ae47f2c769d1bdb837af49287307acc1",
+    "shared_matches_reference": false,
+    "patch_applies": true
+  },
+  {
+    "path": "Cheating_machine_execution_tool/validation/pyside6_migration_20261118/local_chat_intent/check_selection.py",
+    "shared_sha256": "a941a7ae0b7c157a4b2a5f6e30c18a3399c984263230f56d3f752013e37ffb17",
+    "shared_matches_reference": true,
+    "patch_applies": true
+  },
+  {
+    "path": "Cheating_machine_execution_tool/validation/pyside6_migration_20261118/session1_diagnostics/check_power_parity.py",
+    "shared_sha256": null,
+    "shared_matches_reference": true,
+    "patch_applies": true
+  },
+  {
+    "path": "Cheating_machine_execution_tool/validation/pyside6_migration_20261118/session1_diagnostics/check_phase5_scope.py",
+    "shared_sha256": null,
+    "shared_matches_reference": true,
+    "patch_applies": true
+  },
+  {
+    "path": "Cheating_machine_execution_tool/tests/test_ai_version_query.py",
+    "shared_sha256": "7ed476fb2fac7fb39cb09a282b6ff1a837ff4027addbdd8b3a9c18db44dccad3",
+    "shared_matches_reference": true,
+    "patch_applies": true
+  },
+  {
+    "path": "Cheating_machine_execution_tool/tests/test_remote_gateway_agent.py",
+    "shared_sha256": "bd948c3b7c221bfa87624c5a8514885e27ba3fe65eb43ce6d8f9f15ca44eb154",
+    "shared_matches_reference": true,
+    "patch_applies": true
+  }
+]

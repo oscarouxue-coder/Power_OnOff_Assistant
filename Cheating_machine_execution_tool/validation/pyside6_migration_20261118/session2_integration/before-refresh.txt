@@ -1,0 +1,6 @@
+Qt 100%, private desktop DUTPilot_render_3a4d9ee8aaa3469fbfb0fba375010f06, 4 managed windows, violations=[]
+test_qt_archived_logs_pages_original_workspace_and_serial_text_with_local_export ... FAIL
+self.assertFalse(dialog.older.isEnabled())
+AssertionError: True is not false
+Ran 1 test in 2.410s
+FAILED (failures=1)

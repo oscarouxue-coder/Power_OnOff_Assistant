@@ -1,0 +1,9 @@
+{
+  "actions": 727,
+  "updated": 6,
+  "changed_fields": [
+    "file_code_sha256"
+  ],
+  "file": "src/ui/qt/archived_logs_dialog.py",
+  "callback_or_authority_changes": 0
+}

@@ -1,0 +1,18 @@
+{
+  "foreign_event_ignored": true,
+  "conflicting_start_retains_material": true,
+  "model_key_redacted": true,
+  "batch_receipt": "目标识别失败：当前 Qt 本机会话尚未接入此批量或业务任务",
+  "input_restored": true,
+  "batch_created": false,
+  "channel_tools": [
+    "ask_user",
+    "read_serial_log",
+    "read_test_evidence"
+  ],
+  "active_collection": false,
+  "monitor_enabled": false,
+  "pending_channel_approval": null,
+  "physical_serial_opens": 0,
+  "external_requests": 0
+}

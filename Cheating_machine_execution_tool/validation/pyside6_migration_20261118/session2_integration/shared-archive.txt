@@ -1,0 +1,9 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_e40bb1bf1ebc4b25891255d4485cdab9'}
+
+test_qt_archived_logs_pages_original_workspace_and_serial_text_with_local_export (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 3.065s
+
+OK

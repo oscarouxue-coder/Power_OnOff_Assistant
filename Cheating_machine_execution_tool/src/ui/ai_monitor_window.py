@@ -122,7 +122,7 @@ class AiMonitorWindow:
                 targets = [t for t in self.owner.targets if t.channel in policy.channels]
                 scope = "\n".join(f"通道{t.channel} | {t.vlan} | {t.port} | {t.bind_ip} → {t.host}:{t.telnet_port}"
                                   for t in targets)
-                details = ("允许AI诊断本次异常、执行必要修复并验证恢复。\n权限：" + PERMISSION_LABELS[mode] +
+                details = ("允许Ai助手诊断本次异常、执行必要修复并验证恢复。\n权限：" + PERMISSION_LABELS[mode] +
                            "\n监控目标：\n" + scope + "\n模型：" + self.service.profile.model + "\n")
                 if mode == FULL:
                     details += ("\n本次监控允许本机PowerShell、文件读取/覆盖及当前目标样机命令；包括登录、升级、重启、"
@@ -133,7 +133,7 @@ class AiMonitorWindow:
                 else:
                     details += "首次登录和危险或不明操作须具体批准；请求批准模式下通用操作也逐项确认。\n"
                 if self.enabled.get() and not messagebox.askyesno(
-                        "授权本次监控完全访问" if mode == FULL else "启用本次AI诊断", details +
+                        "授权本次监控完全访问" if mode == FULL else "启用本次自动诊断", details +
                         "\n真实诊断信息（含材料中的账号、密码）将发送至：" +
                         self.service.profile.provider + " / " + self.service.profile.base_url,
                         parent=self.window or self.owner.window, default="no"):

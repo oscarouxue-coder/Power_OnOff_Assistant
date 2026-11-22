@@ -1,0 +1,30 @@
+{
+  "manifest_sha256": "da46b79e5cf435c6c37c7b2e665be63f80d71e5fc45745fdff1f41a18a959192",
+  "patch_sha256": "3eb64d779bc2f31997f4458c35e39dee2486b0dcb46f4da38af6357adfb034b5",
+  "files": 17,
+  "artifacts": 57,
+  "manually_checked_overlap": [
+    "Cheating_machine_execution_tool/line_check_assistant_README.md",
+    "Cheating_machine_execution_tool/tests/qt_workbench_probe.py"
+  ],
+  "after": {
+    "ACCEPTANCE_BASELINE.md": "2759f8b87c260a3ecfd958ba7d12dd370ec96f1570280dfec9104e95b95fee86",
+    "DEVELOPMENT_LOG.md": "ba0878eb09bc07708c2d0ec3c3ad6a0d399b3e2ee3cfc7b352a3bc920ab3d498",
+    "PROJECT_STATUS.md": "3017338704b16db57a650863b08a1baf205da5bb024545ebff597a5d00798065",
+    "Cheating_machine_execution_tool/line_check_assistant_README.md": "43d76bf1a0bc2910acfd43da9abc56d5c9b9d3bda2c871dfbff5b11c9a26cf18",
+    "Cheating_machine_execution_tool/src/services/ai_conversation_service.py": "9d66804cee429857c52ae6359ee6225aaa83917bbbbc92eea0cb62a194a7c251",
+    "Cheating_machine_execution_tool/src/services/qt_ai_chat.py": "640a5f6b53f18d3aae34e0111f65679d25a9cb1a4eea3697793eacbb7483d5d9",
+    "Cheating_machine_execution_tool/src/services/qt_ai_report_handoff.py": "fedf1732368a9fffd78a736a84b8aa9cbec265bb179852b5f06eadf169ea5a00",
+    "Cheating_machine_execution_tool/src/services/qt_execution_adapter.py": "e4d55b8a8fec49b55835d2fea73fe9907e6a170af4ce9dda8c4397d8768199ce",
+    "Cheating_machine_execution_tool/src/services/qt_power_evidence.py": "caf5c885e12e4f47fdfc71f66362f29cb6f9e839bc30f82a4b286c8b6f5c6817",
+    "Cheating_machine_execution_tool/tests/qt_workbench_probe.py": "674c311c35a00d94b053160a425f5cb2bdd0db6c4ea329701d69f21a82285b50",
+    "Cheating_machine_execution_tool/tests/test_qt_workspace_adapter.py": "654b3ba085c78a4946bae26ea2a0a57f9baa80266127aa2a0a1075af2b18976f",
+    "Cheating_machine_execution_tool/scripts/verify_baseline.py": "c2c6b83ac2e67ca2d1ee61e64e327ff5ab67b85667d3e40a1c19bee22ee771d9",
+    "Cheating_machine_execution_tool/validation/pyside6_migration_20261118/local_chat_intent/check_selection.py": "c6803236f11fb3a1c058b78177a569cb673245df3c1856c750d9f880020ffe25",
+    "Cheating_machine_execution_tool/validation/pyside6_migration_20261118/session1_diagnostics/check_power_parity.py": "178748739da51c5dc4ae507bf5c664b32cfe10cd62431f69ca2bdabdbdcc08f6",
+    "Cheating_machine_execution_tool/validation/pyside6_migration_20261118/session1_diagnostics/check_phase5_scope.py": "318ee41d3c7780db236d6217bb3d615d1fee4a7344d24bf04e19ee7d1b5eb693",
+    "Cheating_machine_execution_tool/tests/test_ai_version_query.py": "7b042c5ddc8c78c95fb8ea6baac8e01fec854877ec77435da2487c663521054c",
+    "Cheating_machine_execution_tool/tests/test_remote_gateway_agent.py": "86d764c648345c11f3da90d908badfd35704da4ff971d38343643e697c3a6fbb"
+  },
+  "first_intake_manifest": "8b3291aa67881803864402129859570ae6bc0bbaef47f2ef0b0b8292472c20d5"
+}

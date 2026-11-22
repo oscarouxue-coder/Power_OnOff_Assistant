@@ -1,0 +1,47 @@
+{
+  "projects": [
+    {
+      "channels_in_config": 1,
+      "displayed_channels": 16,
+      "draft_files": 6,
+      "previous_revision_files": 18,
+      "run_config_files": 0,
+      "previous_logs": 6,
+      "database_jobs": 0,
+      "database_events": 0,
+      "legacy_gui_runs": 0,
+      "succeeded_runs": 0,
+      "unknown_runs": 0,
+      "main_log_files": 3,
+      "monitor_files": 3,
+      "source_log_lines": 152
+    },
+    {
+      "channels_in_config": 3,
+      "displayed_channels": 16,
+      "draft_files": 6,
+      "previous_revision_files": 48,
+      "run_config_files": 24,
+      "previous_logs": 18,
+      "database_jobs": 0,
+      "database_events": 0,
+      "legacy_gui_runs": 4,
+      "succeeded_runs": 2,
+      "unknown_runs": 2,
+      "main_log_files": 9,
+      "monitor_files": 9,
+      "source_log_lines": 828
+    }
+  ],
+  "single_project_import": {
+    "source_files": 15,
+    "imported_ini_files": 6,
+    "checked_request_fields": 25,
+    "selected_channels": 3,
+    "source_files_preserved": true
+  },
+  "archived_workspace_log_lines": 72,
+  "changes_to_archive": false,
+  "external_io": [],
+  "physical_serial_opens": 0
+}
