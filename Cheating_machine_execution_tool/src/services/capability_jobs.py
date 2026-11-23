@@ -20,9 +20,9 @@ class JobContext:
         self.service, self.job_id, self.stop = service, identifier, stop
         self.dispatched = False
 
-    def event(self, stage, message="", dispatched=False):
+    def event(self, stage, message="", dispatched=False, **log_fields):
         self.dispatched |= dispatched
-        self.service.event(self.job_id, stage, message)
+        self.service.event(self.job_id, stage, message, **log_fields)
 
 
 class CapabilityJobs:
@@ -50,6 +50,7 @@ class CapabilityJobs:
                             "WHERE state NOT IN ('succeeded','failed','stopped','skipped','unknown')", (time.time(),))
         self.resources, self.emit, self.metrics = resources, emit, metrics
         self.event_output = None
+        self.structured_event_output = None
         self.threads, self.controls = {}, {}
         self.closing = False
         self.project_context = project_context
@@ -97,14 +98,17 @@ class CapabilityJobs:
             row = self.db.execute("SELECT id FROM jobs WHERE request_key=?", (request_key,)).fetchone()
         return self.status(row[0], authority) if row else None
 
-    def event(self, identifier, stage, message=""):
+    def event(self, identifier, stage, message="", *, dut_id='', channel=None, step='', level=''):
         with self.lock, self.db:
             self.db.execute("UPDATE jobs SET stage=?,updated=? WHERE id=?", (stage, time.time(), identifier))
             created = time.time()
             self.db.execute("INSERT INTO job_events(job_id,created,stage,message) VALUES(?,?,?,?)",
                             (identifier, created, stage, str(message)))
         if message:
-            if self.event_output is None:
+            if self.structured_event_output is not None and (dut_id or channel is not None or step or level):
+                self.structured_event_output(identifier, created, stage, str(message),
+                                             dut_id=dut_id, channel=channel, step=step, level=level)
+            elif self.event_output is None:
                 self.emit(f"[业务任务 {identifier[:8]}][{stage}] {message}")
             else:
                 self.event_output(identifier, created, stage, str(message))
@@ -135,7 +139,8 @@ class CapabilityJobs:
             # Unknown results block a new operation even after a process restart.
             for old_id, payload, principal in self.db.execute("SELECT id,payload,principal FROM jobs WHERE state='unknown'"):
                 old = json.loads(payload)
-                affected = {r for r in old.get("resources", ()) if r.startswith(("channel:", "serial:", "adapter:", "olt:", "pon:"))}
+                affected = {r for r in old.get("resources", ()) if r.startswith(
+                    ("channel:", "serial:", "adapter:", "olt:", "pon:", "dut:", "adb:"))}
                 if not observational and affected & set(resources):
                     raise CapabilityError("previous_result_unknown", "相关资源存在结果未知的历史任务，须先核实处理")
             identifier = uuid.uuid4().hex

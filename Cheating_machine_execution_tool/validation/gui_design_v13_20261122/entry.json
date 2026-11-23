@@ -1,0 +1,20 @@
+{
+  "exit_code": 0,
+  "stdout": "SHOWCASE_LAUNCH_OK ['DUTPilot · GUI 组件展示']\n",
+  "guard": {
+    "passed": true,
+    "managed_windows": 3,
+    "violations": [],
+    "isolation": "private_desktop",
+    "desktop": "DUTPilot_render_3123db5b3e97409faea230f08588af18",
+    "qt": {
+      "passed": true,
+      "managed_windows": 3,
+      "violations": [],
+      "isolation": "private_desktop",
+      "desktop": "DUTPilot_render_3123db5b3e97409faea230f08588af18",
+      "framework": "qt",
+      "platform": "windows"
+    }
+  }
+}

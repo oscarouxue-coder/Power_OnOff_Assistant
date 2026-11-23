@@ -45,7 +45,7 @@ def source_environment(root):
                 (line.lower().split("=", 1) for line in cfg.read_text(encoding="utf-8").splitlines() if "=" in line)}
     if settings.get("include-system-site-packages") != "false":
         raise ValueError("虚拟环境必须与全局依赖隔离，未安装")
-    if not (root / "run_line_check_assistant.py").is_file():
+    if not (root / "run_dutpilot_qt.py").is_file():
         raise ValueError("源码入口不存在，未安装")
     locked_versions(root)
     try:

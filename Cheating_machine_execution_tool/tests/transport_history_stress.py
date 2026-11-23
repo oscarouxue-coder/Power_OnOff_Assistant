@@ -147,7 +147,9 @@ def child(args):
     for channel, session in sessions.items():
         session.close()
         driver, state = drivers[channel], expected[channel]
-        memory_hash = hashlib.sha256(session._history).hexdigest()
+        history_hash = hashlib.sha256()
+        for block in session.iter_rx_history():
+            history_hash.update(block)
         actual_hash = hashlib.sha256(); count = missing = duplicates = 0
         previous = -1
         path = captures / f"channel_{channel:02d}.log"
@@ -165,9 +167,10 @@ def child(args):
         results.append({"channel": channel, "records_generated": state["records"], "records_on_disk": count,
                         "source_bytes": driver.offered, "driver_received_bytes": driver.received,
                         "memory_history_bytes": len(session._history), "disk_file_bytes": path.stat().st_size,
+                        "history_spilled_bytes": session._history_offset,
                         "pending_rx_chars_after_close": len(session._rx_log_line_buffer),
                         "source_to_receive_bytes_equal": driver.offered == driver.received,
-                        "source_to_memory_sha256_equal": state["raw_hash"].hexdigest() == memory_hash,
+                        "source_to_history_sha256_equal": state["raw_hash"].hexdigest() == history_hash.hexdigest(),
                         "source_to_driver_sha256_equal": state["raw_hash"].hexdigest() == driver.raw_hash.hexdigest(),
                         "normalized_text_sha256_equal": state["text_hash"].hexdigest() == actual_hash.hexdigest(),
                         "missing_records": missing, "duplicate_or_reordered_records": duplicates,
@@ -182,7 +185,7 @@ def child(args):
     retained = sum(ref() is not None for ref in references)
     elapsed = time.monotonic()-start
     passed = (not errors and elapsed >= args.seconds and not remaining and retained == 0
-              and all(r["source_to_receive_bytes_equal"] and r["source_to_memory_sha256_equal"]
+              and all(r["source_to_receive_bytes_equal"] and r["source_to_history_sha256_equal"]
                       and r["source_to_driver_sha256_equal"] and r["normalized_text_sha256_equal"]
                       and not r["missing_records"] and not r["duplicate_or_reordered_records"]
                       and r["reader_stopped"] and r["log_handle_closed"] for r in results))

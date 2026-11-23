@@ -1,15 +1,31 @@
 """Application-wide admission, retaining host locks and durable unknown fences."""
 from pathlib import Path
+from collections import defaultdict
+import ipaddress
+import sqlite3
 import threading
 import uuid
 import json
 
 from src.core.host_resource_lock import HostResourceLock, physical_key
 from src.models.capabilities import CapabilityError
+from src.models.qt_device_inventory import ResourceLeaseEntry
 from src.services.host_resource_fence import HostResourceFence
 
 
-PHYSICAL_PREFIXES = ("serial:", "power:", "adapter:", "olt:", "pon:", "wifi:", "tftp:")
+PHYSICAL_PREFIXES = ("serial:", "power:", "adapter:", "olt:", "pon:", "wifi:", "tftp:", "dut:", "adb:")
+
+
+def _pon_parent(value):
+    # Current ONU adapters produce <host>:gpon-olt_1/2/3 (or :OLT).
+    # Earlier callers may supply <host>/<target>. Preserve complete IPv6 hosts.
+    head = value.split('/', 1)[0]
+    try:
+        ipaddress.ip_address(head.strip('[]'))
+    except ValueError:
+        host, separator, _ = head.rpartition(':')
+        return host if separator else head
+    return head
 
 
 class WorkspaceResources:
@@ -30,6 +46,11 @@ class WorkspaceResources:
                 self.fence.db.execute("ALTER TABLE workspace_owners ADD COLUMN label TEXT DEFAULT ''")
             if 'keys' not in {row[1] for row in self.fence.db.execute('PRAGMA table_info(workspace_owners)')}:
                 self.fence.db.execute("ALTER TABLE workspace_owners ADD COLUMN keys TEXT")
+            self.fence.db.execute("CREATE INDEX IF NOT EXISTS pending_workspace_groups "
+                                  "ON workspace_owners(group_id) WHERE state != 'done'")
+        # Sampling must not wait behind another process's writer on the command thread.
+        database = (Path(directory) / 'resource_fence.sqlite3').resolve()
+        self._lease_reader = sqlite3.connect(database.as_uri() + '?mode=ro', uri=True, timeout=0, check_same_thread=False)
 
     def register_adapter(self, alias, guid):
         if alias and guid:
@@ -53,8 +74,7 @@ class WorkspaceResources:
                 value = self.aliases.get(value, value)
                 key = "adapter:" + value
             if kind == "pon":
-                # Existing PON resource keys are nested under the OLT identity.
-                result.add("olt:" + value.split("/", 1)[0])
+                result.add("olt:" + _pon_parent(value))
             result.add(key)
         return tuple(sorted(result))
 
@@ -97,6 +117,60 @@ class WorkspaceResources:
             if not self.inventory_ready and any(key.startswith('adapter:') for key in keys):
                 return True
             return any(project != project_id and keys.intersection(held) for project, held in self.owners.values())
+
+    def lease_entries(self):
+        """Actual local reservations and durable protection with no verified local owner."""
+        with self.lock:
+            rows = set()
+            assigned = defaultdict(set)
+            for owner, (project, keys) in self.owners.items():
+                group = self.run_id + ':' + project
+                assigned[group].update(keys)
+                for key in keys:
+                    rows.add(ResourceLeaseEntry(key, project, self.labels.get(owner, ''), owner, 'held'))
+
+            # Both halves read one SQLite snapshot. Old completed jobs never imply a
+            # current reservation, and per-job key lists cannot outlive their fence.
+            records = self._lease_reader.execute("""
+                SELECT owner,resource,NULL,NULL,NULL FROM fence
+                UNION ALL
+                SELECT group_id,NULL,owner,label,keys FROM workspace_owners
+                WHERE state != 'done' AND group_id IN (SELECT owner FROM fence)
+            """).fetchall()
+            fenced = defaultdict(set)
+            names = defaultdict(set)
+            unmapped = set()
+            for group, key, _, _, _ in records:
+                if key is not None:
+                    fenced[group].add(key)
+            for group, key, owner, name, payload in records:
+                if key is not None:
+                    continue
+                if name:
+                    names[group].add(name)
+                if owner in self.owners and group == self.run_id + ':' + self.owners[owner][0]:
+                    continue
+                try:
+                    owned = json.loads(payload) if payload is not None else None
+                except (TypeError, ValueError, RecursionError):
+                    owned = None
+                if not isinstance(owned, list) or not all(isinstance(k, str) for k in owned):
+                    unmapped.add(group)
+                    continue
+                project = group.partition(':')[2]
+                for retained in fenced[group].intersection(owned):
+                    rows.add(ResourceLeaseEntry(retained, project, name or '', owner, 'unresolved'))
+                    assigned[group].add(retained)
+            for group, keys in fenced.items():
+                for key in keys if group in unmapped else keys - assigned[group]:
+                    # A legacy row or interrupted handoff may retain a key without
+                    # any per-job mapping. Do not invent an owner from a group ID.
+                    run, _, project = group.partition(':')
+                    if len(run) != 32 or any(ch not in '0123456789abcdef' for ch in run):
+                        project = ''
+                    label = next(iter(names[group])) if len(names[group]) == 1 else ''
+                    rows.add(ResourceLeaseEntry(key, project, label, '', 'unresolved'))
+            return tuple(sorted(rows, key=lambda row: (row.resource_key, row.state, row.project_id, row.owner_id)))
 
     def _refresh_fence(self, group):
         """Keep only resources still owned by active or unreviewed operations."""
@@ -165,4 +239,5 @@ class WorkspaceResources:
         with self.lock:
             for owner in tuple(self.owners):
                 self.release(owner, uncertain=True)
+            self._lease_reader.close()
             self.fence.db.close()

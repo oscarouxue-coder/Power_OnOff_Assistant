@@ -1,5 +1,27 @@
 # 项目交接状态
 
+2026-11-24，Qt 已接入钉钉/飞书应用配置、群绑定、直连启停、飞书试发及挂测通知、源码 SDK 修复、受控扩展审阅和任务历史安全停止。全流程窗口在任务受理后收起，7 项旧流程指定回归已有对应核对。平台现场复验及其余 Tk 回归迁移仍待完成，旧窗口继续保留。[退役核对](docs/TK_RETIREMENT_AUDIT.md)
+
+源码、VS Code 调试与标准打包均以 Qt 为唯一产品界面。2026-11-24 移除旧启动脚本，源码启动及飞书 SDK 修复后重启统一使用 `run_dutpilot_qt.py`。Tk 源码及历史回归保留，后续界面开发使用 Qt。[启动与打包](README.md#从这里开始)
+
+2026-11-23，负责人确认 Qt V1.3.0 候选现场验收通过，GUI 升级 Phase 0–7 已收尾。该候选已通过完整基线 3,366 项、三档原生各 117 项及成品静态校验。现场范围包括目标 Windows、真实 DUT 的两类挂测和无人值守稳定性。[候选与现场验收报告](Cheating_machine_execution_tool/validation/gui_guidelines_20261123/REPORT.md)
+
+Qt 界面美化首批已接入正式源码工作台，覆盖总览、自动开关机和全业务老化。[首批集成及验证](Cheating_machine_execution_tool/validation/gui_visual_workbench_20261123/REPORT.md)
+
+第二批串口日志、样机升级、DUT 配置、测试项配置和通道配置已有独立评审稿，待集中确认；从 `run_dutpilot_qt.py --visual-preview` 的「业务窗口预览」进入。第三批项目准备及设备操作、第四批历史、AI 与设置，待进入预览。[业务窗口前后对照](Cheating_machine_execution_tool/validation/gui_visual_module_windows_20261123/REPORT.md)
+
+Qt 源码工作台会恢复上次正常退出时打开的项目和选中位置。现场运行的任务仍按原流程核实。[多项目工作区操作说明](Cheating_machine_execution_tool/line_check_assistant_README.md#单实例多项目工作区2026-11-17源码版待现场复验)
+
+项目向导新增型号模板；工作台设备管理可查看锁定资源、所属项目和待核实的持有者，支持显式声明 ADB 标识。重开已结束的开关机任务时，总览可恢复原批次进度与时长。[工作台入口与复验](Cheating_machine_execution_tool/validation/gui_resources_presets_20261122/REPORT.md)
+
+全业务老化源码已接入逐 DUT 在线心跳、明确离线、启动标识变化及设备实测运行时长。现场适配器可逐项接入；旧项目保留原始订阅设置。[状态来源与复验](Cheating_machine_execution_tool/validation/gui_dut_presence_20261122/REPORT.md)
+
+全业务老化向导已支持逐业务选择现场采集。工作台按真实批次生成 DUT 映射并读取本地 JSONL，历史及导出保存来源、事件标识和观测时间。负责人计划后续逐项适配现场协议。[采集接口与复验](Cheating_machine_execution_tool/validation/gui_aging_feed_20261122/REPORT.md)
+
+2026-11-22 整合候选包含两类项目向导、逐 DUT 准备核验、开关机详情、持续业务老化及串口长挂改进。该冻结版本通过 3,360 项完整基线、每档 116 项 Windows 原生 Qt 测试和静态验包。后续候选加入启动路径、项目会话恢复、单次电源回执和串口窗口更新，现场验收记录见本页最新条目。[整合候选报告](Cheating_machine_execution_tool/validation/gui_v13x_integrated_20261122/REPORT.md) · [分阶段进度](docs/GUI_UPGRADE_EXECUTION_PLAN.md)
+
+V1.3.x 的 Qt 工作台已接入共享项目状态、按项目 ID 去重的六项总览统计、保存版本模板索引、设备缓存入口和全局日志项目筛选。独立组件用 `run_dutpilot_qt.py --showcase` 预览，正式工作台用 `run_dutpilot_qt.py --workspace` 打开。项目向导、两类挂测工作台及现场验收的进度见[源码审计及实施顺序](docs/GUI_UPGRADE_EXECUTION_PLAN.md)。
+
 Qt 源码的「Ai助手」已接入当前项目的实时通道查询、异常监控和顺序批量排障。可在「新建普通问答」下拉菜单配置。[源码验证及文件清单](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/qt_channel_diagnostics/REPORT.md)
 
 本地 Qt 组合候选包 `qt-20261121-220335-19897b67` 已交付。两份迁移前项目副本验证了原生页面和保存重开，原入口与 Qt 的 16 通道两轮模拟各完成 64 帧，本机会话逐条核对了当前通道的 16 条证据。基线 3,267 项，三档原生各 100 项，成品静态核验通过。干净 Windows、真机及长期运行待验。[报告与交付入口](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/session2_integration/REPORT.md)
@@ -532,7 +554,7 @@ Qt DUT本轮验证汇总：28项相关服务回归（17新DUT）、完整基线3
 
 ## 关键入口
 
-- `Cheating_machine_execution_tool/run_line_check_assistant.py`：源码启动入口。
+- `Cheating_machine_execution_tool/run_dutpilot_qt.py`：Qt 源码启动入口。
 - `Cheating_machine_execution_tool/line_check_assistant/app.py`：Tk 主窗口、功能入口和主执行日志。
 - `Cheating_machine_execution_tool/src/services/serial_upgrade_service.py`：全包升级流程。
 - `Cheating_machine_execution_tool/src/services/sample_parameter_service.py`：批量写参流程。
@@ -559,8 +581,8 @@ Qt DUT本轮验证汇总：28项相关服务回归（17新DUT）、完整基线3
 
 ```powershell
 cd F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool
-python -m pip install -r .\requirements.txt
-python .\run_line_check_assistant.py
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup_qt_environment.ps1 -WithBusinessDependencies
+& "$env:LOCALAPPDATA\LineCheckAssistant\qt-dev-py39\Scripts\python.exe" .\run_dutpilot_qt.py
 ```
 
 - 日常代码改动：按影响范围执行必要的局部编译、相关专项测试及差异检查，不为低影响修改机械新增测试；追加 `DEVELOPMENT_LOG.md`，并按 `AGENTS.md` 同步状态、验收或操作说明。纯文档修改只检查内容一致性、链接和差异格式，不运行代码测试。

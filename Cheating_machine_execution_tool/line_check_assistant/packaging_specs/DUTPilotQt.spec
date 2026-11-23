@@ -22,7 +22,7 @@ icon = project_root / 'assets/icons/line_check_assistant_network_topology_v1.ico
 build_info = Path(workpath) / 'BUILD_INFO.txt'
 build_info.parent.mkdir(parents=True, exist_ok=True)
 build_info.write_text(
-    'DUTPilot V1.3.0 PySide6 validation package\n'
+    'DUTPilot V1.3.0 PySide6 workspace\n'
     f'Build date: {date.today().isoformat()}\n'
     'Toolchain: CPython 3.9.10 x64 / PyInstaller 5.10.1 / Qt for Python 6.8.3\n'
     'Dependency locks: requirements-build.txt and requirements-qt.txt\n'

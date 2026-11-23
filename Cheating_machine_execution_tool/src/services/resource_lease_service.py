@@ -34,7 +34,7 @@ class ResourceLeaseService:
                 try:
                     if self.coordinator is not None:
                         self.coordinator.acquire(owner, self.project_id, self.project_name, keys)
-                    physical = [physical_key(k) for k in keys if k.startswith(("serial:", "adapter:", "power:", "olt:", "pon:"))]
+                    physical = [physical_key(k) for k in keys if k.startswith(("serial:", "adapter:", "power:", "olt:", "pon:", "dut:", "adb:"))]
                     if owner in self._host_locks:
                         physical = list(set(physical) | set(self._host_locks[owner].keys))
                     guard = HostResourceLock(physical).acquire()

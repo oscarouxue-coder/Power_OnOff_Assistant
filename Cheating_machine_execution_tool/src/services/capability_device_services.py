@@ -29,6 +29,10 @@ from src.services.dut_config_service import run_dut_telnet_enable_batch
 from src.services.dut_wan_query_service import run_dut_wan_query_batch
 from src.services.dut_status_query_service import run_dut_status_query_batch
 from src.services.dut_advanced_config_service import run_dut_advanced_config_batch, validate_dut_advanced_request
+from src.models.project_profile import dut_resource_keys
+from src.services.project_power_plan import check_project_power_plan, check_project_power_resume
+from src.services.project_profile_store import project_profile_digest, read_project_profile
+from src.services.project_store import configuration_digest
 
 
 # The original orchestrator wraps both a negative test verdict and a graceful
@@ -165,6 +169,20 @@ class DeviceCapabilities:
     def _job(self, identifier, arguments, authority, run, *, recorded_extra=None, precheck=lambda: None,
              power_test=False):
         snapshot, channels = self.selected(arguments, authority)
+        project = self.service.project_context
+        resume = identifier == 'aging.resume'
+        profile = (read_project_profile(project.saved_root / 'Auto_power_on_off_tool/config')
+                   if project is not None and (power_test or resume) else None)
+        parent = (self.latest_aging[2] if resume and self.latest_aging and
+                  self.latest_aging[:2] == (arguments['parent_job_id'], authority.principal) else None)
+        def check_plan(current_snapshot, current, root=None):
+            if power_test:
+                check_project_power_plan(project, current, config_root=root, expected_profile=profile)
+            elif resume:
+                if profile and (not self.latest_aging or self.latest_aging[2] is not parent):
+                    raise CapabilityError('resume_unavailable', '可续跑的原批次已变化，请重新确认')
+                check_project_power_resume(project, parent, profile, current,
+                                           current_snapshot.get('power_serial_port', ''), config_root=root)
         def identity(current_snapshot, current_channels):
             return fingerprint(dict(channels=[asdict(c) for c in current_channels],
                 power=current_snapshot.get('power_serial_port', ''),
@@ -174,8 +192,11 @@ class DeviceCapabilities:
             current_snapshot, current = self.selected(arguments, authority)
             if identity(current_snapshot, current) != binding:
                 raise CapabilityError("target_changed", "准入前目标通道配置已变化")
+            check_plan(current_snapshot, current)
             precheck()
         resources = ["device-business"]
+        if profile:
+            resources.extend(dut_resource_keys(profile['duts'], arguments['channel_ids']))
         for channel in channels:
             resources.extend(("channel:" + channel.section.rsplit("_", 1)[1],
                               "adapter:" + adapter_alias_from_display(channel.adapter_alias or channel.vlan_name).casefold()))
@@ -189,8 +210,8 @@ class DeviceCapabilities:
         if snapshot.get('power_serial_port') and identifier.startswith(('power.', 'aging.', 'pipeline.')):
             resources.append('power:' + snapshot['power_serial_port'].upper())
         if identifier.startswith(('aging.', 'pipeline.')):
-            if identifier == 'aging.resume' and self.latest_aging:
-                session = self.latest_aging[2].power_test_resume_session
+            if resume and parent is not None:
+                session = parent.power_test_resume_session
                 wifi_enabled = bool(getattr(getattr(session, 'request', None), 'connect_wifi_enable', False))
             elif power_test:
                 from src.services.project_execution import power_test_needs_wifi
@@ -200,13 +221,22 @@ class DeviceCapabilities:
             if wifi_enabled:
                 resources.append('wifi:host')
         def run_admitted(context):
+            root = getattr(context, 'configuration_root', None)
+            check_plan(snapshot, channels, root)
+            if power_test and profile:
+                context.power_profile_digest = project_profile_digest(profile)
+                context.power_serial_port = snapshot.get('power_serial_port', '')
+                context.power_config_digest = configuration_digest(root / 'Auto_power_on_off_tool/config')
             if power_test and 'wifi:host' not in resources:
                 from src.services.project_execution import power_test_needs_wifi
                 root = getattr(context, 'configuration_root', self.root)
                 if power_test_needs_wifi(resolve_config_dir(root), channels):
                     raise CapabilityError('configuration_changed', '挂测方案的无线资源已变化，请重新确认')
             return run(context, snapshot, channels)
-        return self.service.jobs.start(identifier, dict(arguments, **(recorded_extra or {}), target_binding=binding), authority, resources,
+        request = dict(arguments, **(recorded_extra or {}), target_binding=binding)
+        if profile:
+            request['project_profile_digest'] = project_profile_digest(profile)
+        return self.service.jobs.start(identifier, request, authority, resources,
             run_admitted, recheck=recheck,
             risk=self.service.registry.get(identifier).risk)
 

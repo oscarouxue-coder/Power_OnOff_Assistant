@@ -15,10 +15,35 @@ class QtJobReview:
         self.execution = execution
         self.pending = None
 
-    def _guard(self):
+    def _guard(self, operation="核实"):
         execution = self.execution
         if execution.closed or execution.closing or execution.workspace_close_requested():
-            raise CapabilityError('unavailable', '项目正在关闭，未提交核实')
+            raise CapabilityError('unavailable', f'项目正在关闭，未提交{operation}')
+
+    @staticmethod
+    def _authority(row):
+        channels = tuple(row['request'].get('arguments', {}).get('channel_ids', ()))
+        return CapabilityAuthority(row['principal'], 'local-operator', 'local-control', channels,
+            source='gui', mode='full_access', grant_id='local-control', approved=True)
+
+    def stop_active(self, identifier):
+        self._guard('安全停止')
+        execution = self.execution
+        if execution.capabilities is None:
+            raise CapabilityError('job_not_active', '当前进程没有该任务的有效执行记录。')
+        jobs = execution.capabilities.jobs
+        with jobs.lock:
+            row = jobs._row(identifier)
+            worker = jobs.threads.get(identifier)
+            if row['state'] in TERMINAL or not worker or not worker.is_alive() or identifier not in jobs.controls:
+                raise CapabilityError('job_not_active', '该任务已经结束或由其它进程管理，未请求停止。')
+            if row['state'] == 'stop_requested':
+                return dict(job_id=identifier, state='stop_requested', notice='已请求安全停止，等待原任务收尾。')
+            authority = self._authority(row)
+        if identifier in execution.jobs:
+            return execution.stop(identifier)
+        execution._log('[任务历史] 本机已确认，向原任务请求安全停止', job_id=identifier)
+        return jobs.cancel(identifier, authority)
 
     def _read(self, jobs, identifier):
         """Derive the same host-local identity as the legacy task manager."""
@@ -28,9 +53,7 @@ class QtJobReview:
             raise CapabilityError('job_not_unknown', '只可核实已完成收尾且结果未知的任务')
         if row['capability_id'] in POWER_JOB_IDS:
             guard_power_worker_review(self.execution.context)
-        channels = tuple(row['request'].get('arguments', {}).get('channel_ids', ()))
-        authority = CapabilityAuthority(row['principal'], 'local-operator', 'local-control', channels,
-            source='gui', mode='full_access', grant_id='local-control', approved=True)
+        authority = self._authority(row)
         jobs.status(identifier, authority)
         return row, authority
 

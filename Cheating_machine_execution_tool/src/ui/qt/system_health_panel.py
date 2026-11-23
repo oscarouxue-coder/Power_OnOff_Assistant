@@ -9,7 +9,7 @@ class SystemHealthPanel(QWidget):
     layout_changed = Signal()
     HEADERS = ('界面与工作区', '消息积压', '工作区日志写入', '测试任务', '工作区资源占用', '串口 / 网卡枚举')
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, compact_summary=False):
         super().__init__(parent)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -19,6 +19,10 @@ class SystemHealthPanel(QWidget):
         layout.setContentsMargins(12, 6, 12, 8)
         header = QHBoxLayout()
         header.addWidget(label('系统状态', 'section'))
+        self.resource_summary = label('暂无占用采样', 'muted') if compact_summary else None
+        if self.resource_summary is not None:
+            self.resource_summary.setWordWrap(True)
+            header.addWidget(self.resource_summary, 1)
         header.addStretch()
         self.toggle = button('收起', self._toggle_details)
         self.toggle.setAccessibleName('展开或收起系统状态')
@@ -53,8 +57,10 @@ class SystemHealthPanel(QWidget):
             self.cells.append(cell)
             self.values.append(value)
         self.columns = 0
-        self._manually_expanded = False
+        self._manually_expanded = compact_summary
         self._reflow(3)
+        if compact_summary:
+            self._set_expanded(False)
 
     def _toggle_details(self):
         self._manually_expanded = True
@@ -64,6 +70,8 @@ class SystemHealthPanel(QWidget):
         if self.scroll.isHidden() != visible:
             return
         self.scroll.setVisible(visible)
+        if self.resource_summary is not None:
+            self.resource_summary.setVisible(not visible)
         if visible:
             self.scroll.verticalScrollBar().setValue(0)
         self.toggle.setText('收起' if visible else '展开')
@@ -114,8 +122,11 @@ class SystemHealthPanel(QWidget):
             write = f'{at:%H:%M:%S}  最近写入' + ('成功' if write_ok else '失败')
         if health.log_write_failures:
             write += f' · 失败累计 {health.log_write_failures}'
+        slow_write = health.pending_log_writes and health.log_write_age >= 3
+        if slow_write:
+            write += f'\n{health.pending_log_writes} 条待落盘，已等待 {health.log_write_age:.0f} 秒'
 
-        active = sum(project.active_task_count for project in projects)
+        active = sum(project.overview_task_count for project in projects)
         attention = sum(project.attention_count for project in projects)
         task_log = health.task_log_at
         task = f'运行 / 恢复中 {active} · 需关注 {attention}\n'
@@ -132,6 +143,13 @@ class SystemHealthPanel(QWidget):
                 occupation += '\n采样超过 3 秒'
             elif resources.protection_unavailable:
                 occupation += '\n硬件准入保护不可用'
+        if self.resource_summary is not None:
+            summary = occupation.replace('\n', ' · ')
+            style = f'color: {WARNING}' if resource_warning else ''
+            if self.resource_summary.text() != summary:
+                self.resource_summary.setText(summary)
+            if self.resource_summary.styleSheet() != style:
+                self.resource_summary.setStyleSheet(style)
 
         inventory_ok = True
         inventory = '暂无手动枚举记录'
@@ -143,7 +161,7 @@ class SystemHealthPanel(QWidget):
             (f'待处理操作 {health.commands_pending} / {health.command_limit} · 日志批量峰值 {log_batch_peak}\n'
              f'显示队列累计略过 {health.logs_omitted}',
              WARNING if health.logs_omitted else ''),
-            (write, DANGER if not write_ok else WARNING if health.log_write_failures else ''),
+            (write, DANGER if not write_ok else WARNING if health.log_write_failures or slow_write else ''),
             (task, WARNING if attention else ''),
             (occupation, WARNING if resource_warning else ''),
             (inventory, WARNING if not inventory_ok else ''))

@@ -334,6 +334,11 @@ def dispatch_remote(remote, message, kind, value, platform, guard):
                   nickname=message.nickname, robot=message.robot)
     if platform == "feishu":
         source["chat_type"] = message.chat_type
+    prepare = getattr(remote.conversation, 'prepare_direct_turn', None)
+    if prepare is not None:
+        if not remote.conversation.direct_authority(source):
+            raise ValueError('当前直连身份或项目授权已变化，消息已跳过。')
+        prepare()
     if not remote.conversation.router.current(source):
         try:
             legacy = remote._existing(message, remote._selected(message))

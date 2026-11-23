@@ -44,6 +44,28 @@ def run_demo():
     return app.exec()
 
 
+def run_showcase():
+    from src.ui.qt.component_showcase import ComponentShowcase
+
+    app = _create_application()
+    window = ComponentShowcase()
+    available = app.primaryScreen().availableGeometry()
+    window.resize(min(1140, int(available.width() * .94)), min(840, int(available.height() * .92)))
+    window.show()
+    return app.exec()
+
+
+def run_visual_preview():
+    from src.ui.qt.visual_preview import VisualPreview
+
+    app = _create_application()
+    window = VisualPreview()
+    available = app.primaryScreen().availableGeometry()
+    window.resize(min(1440, int(available.width() * .94)), min(900, int(available.height() * .92)))
+    window.show()
+    return app.exec()
+
+
 def run_workspace(project_path=None):
     import queue
     from src.core.workspace_instance import WorkspaceInstance
@@ -51,12 +73,15 @@ def run_workspace(project_path=None):
     from src.ui.qt.workspace_controller import WorkspaceController
     source_root = runtime_root()
     instance = WorkspaceInstance(workspace_data_dir())
+    restart = None
     try:
         if not instance.start(project_path):
             return 0
         app = _create_application()
         window = MainWindow(demo=False)
         controller = WorkspaceController(window, source_root, start_configured_gateway=True)
+        source_arguments = tuple(sys.argv[1:])
+        source_cwd = Path.cwd()
         if project_path:
             pending = [project_path]
             def open_initial():
@@ -84,6 +109,14 @@ def run_workspace(project_path=None):
         result = app.exec()
         if not controller.adapter.wait_closed(5):
             raise RuntimeError('项目文件操作尚未结束，不能确认工作区已安全退出')
-        return result
+        if controller.feishu_repair.restart_requested:
+            restart = (source_arguments, source_cwd)
     finally:
         instance.close()
+    if restart is not None:
+        from src.core.source_restart import launch_restart_helper, report_restart_failure
+        try:
+            launch_restart_helper(source_root, restart[0], cwd=str(restart[1]))
+        except Exception:
+            report_restart_failure()
+    return result

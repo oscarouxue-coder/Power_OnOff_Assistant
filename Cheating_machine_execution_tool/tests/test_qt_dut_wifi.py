@@ -1,5 +1,4 @@
 """WiFi adapter over original batch/single/core with fake UBUS and fake time."""
-import ast
 from dataclasses import asdict, replace
 import json
 import subprocess
@@ -48,22 +47,30 @@ class QtDutWifiTests(unittest.TestCase):
     def query(self,feature='wifi_2g',ids=None,index='1'):
         self.execute(self.preview(feature,query=True,ids=ids,index=index));return self.finish()
 
-    def test_shared_maps_keep_original_exports_and_exact_tk_defaults(self):
-        from src.ui import dut_config_window as tk
-        from src.models import dut_wifi_form as shared
-        for name in ('wifi_choice_options','wifi_status_form_values','WIFI_CHANNEL_OPTIONS'):
-            self.assertIs(getattr(tk,name),getattr(shared,name))
-        import inspect
-        tree=ast.parse(inspect.getsource(tk.DutConfigWindow))
-        builder=next(n for n in tree.body[0].body if isinstance(n,ast.FunctionDef) and n.name=='_build_wifi_tab')
-        nodes=[n for n in builder.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id in ('defaults','peer_band') for t in n.targets)]
-        nodes += [n for n in builder.body if isinstance(n,ast.Expr) and isinstance(n.value,ast.Call) and
-            isinstance(n.value.func,ast.Attribute) and isinstance(n.value.func.value,ast.Name) and n.value.func.value.id=='defaults' and n.value.func.attr=='update']
-        for feature,band in (('wifi_2g','2.4G'),('wifi_5g','5G')):
-            env=dict(band=band)
-            exec(compile(ast.fix_missing_locations(ast.Module(body=nodes,type_ignores=[])),'<original defaults>','exec'),env)
-            values=wifi_status_form_values(wifi_editor_defaults(feature))
-            self.assertEqual({k:values[k] for k in env['defaults']},env['defaults'])
+    def test_shared_wifi_defaults_match_legacy_forms_without_tk(self):
+        # The values below were captured from both original windows.
+        common = {'channel': 'auto',
+         'max_associations': '32',
+         'peer_channel': 'auto',
+         'security_mode': 'WPA2-Personal',
+         'ssid_index': '1',
+         'transmit_power': '100'}
+        variants = {'wifi_2g': {'channel_bandwidth': '20/40MHz',
+                     'operating_mode': 'b,g,n,ax',
+                     'password': 'Sdmc@1234_2G',
+                     'peer_channel_bandwidth': '160MHz',
+                     'peer_operating_mode': 'a,n,ac,ax',
+                     'ssid': 'Test_2G_01'},
+         'wifi_5g': {'channel_bandwidth': '160MHz',
+                     'operating_mode': 'a,n,ac,ax',
+                     'password': 'Sdmc@1234_5G',
+                     'peer_channel_bandwidth': '20/40MHz',
+                     'peer_operating_mode': 'b,g,n,ax',
+                     'ssid': 'Test_5G_01'}}
+        for feature, fields in variants.items():
+            expected = dict(common, **fields)
+            values = wifi_status_form_values(wifi_editor_defaults(feature))
+            self.assertEqual({key: values[key] for key in expected}, expected)
         result=subprocess.run([sys.executable,'-c',"import sys;import src.models.dut_wifi_form;assert 'tkinter' not in sys.modules"],capture_output=True,text=True,timeout=10)
         self.assertEqual(result.returncode,0,result.stderr)
 

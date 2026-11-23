@@ -57,8 +57,12 @@ class QtAppUpdate:
         """Enqueue an operator action from the GUI, ordered with check and download."""
         self._last_action_log = self._worker.submit(self._write_log, message)
 
+    @property
+    def pending_work(self):
+        return not self.idle or self._last_action_log is not None and not self._last_action_log.done()
+
     def finish_close(self):
-        if not self.idle or self._last_action_log is not None and not self._last_action_log.done():
+        if self.pending_work:
             return False
         self._worker.shutdown(wait=False)
         return True

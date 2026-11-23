@@ -18,19 +18,7 @@ from src.core.webhook_target import detect_platform
 from src.services.message_push_config_service import DEFAULTS, MessagePushConfigService, send_test_message
 from src.ui.message_push_tab import MessagePushTab
 from tk_test_windows import OffscreenTkWindows
-
-
-FEISHU = 'https://open.feishu.cn/open-apis/bot/v2/hook/demo-token'
-DINGTALK = 'https://oapi.dingtalk.com/robot/send?access_token=demo-token'
-
-
-def response(payload, status=200):
-    result = Mock(status=status)
-    result.read.return_value = payload if isinstance(payload, bytes) else json.dumps(payload).encode('utf-8')
-    opener = Mock()
-    opener.open.return_value.__enter__ = Mock(return_value=result)
-    opener.open.return_value.__exit__ = Mock(return_value=False)
-    return opener
+from webhook_fakes import DINGTALK, FEISHU, response
 
 
 class WebhookTargetTests(unittest.TestCase):

@@ -1,0 +1,4 @@
+  [OK  ] py_compile - 391 files compiled
+  [OK  ] compile_inventory - 381 source files covered
+CAPABILITY_COVERAGE_OK
+GUI_TEST_COVERAGE_OK

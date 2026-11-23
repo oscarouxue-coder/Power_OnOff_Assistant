@@ -6,6 +6,13 @@ from typing import Optional, Tuple
 from src.models.qt_configuration import PushTrialView, VersionQueryView
 
 
+def power_cycle_percentage(rows, target):
+    """Show a batch percentage only when every DUT has a completed-round receipt."""
+    if not target or not rows or any(row['completed'] is None for row in rows):
+        return None
+    return min(100, min(row['completed'] for row in rows) * 100 // target)
+
+
 @dataclass(frozen=True)
 class ChannelView:
     number: int
@@ -17,6 +24,7 @@ class ChannelView:
     can_resume: bool = False
     detail: str = ''
     stage: str = ''
+    selected: bool = False
 
 
 @dataclass(frozen=True)
@@ -58,6 +66,54 @@ class ProjectView:
     power_history_events: tuple[tuple[int, int], ...] = ()
     started_text: str = ''
     parallel_power_available: bool = False
+    overview_state: str = ''
+    unresolved_tasks: bool = False
+    saved_revision: str = ''
+    count_unit: str = ''
+    observed_active_task_count: int = 0
+    project_type: str = ''
+    test_overview: Optional[dict] = None
+
+    @property
+    def overview_task_count(self):
+        # Managed tasks and the runtime job registry can describe the same job.
+        return max(self.active_task_count, self.observed_active_task_count)
+
+    @property
+    def success_text(self):
+        return '—' if self.success_count is None else f'{self.success_count} {self.count_unit}'.rstrip()
+
+    @property
+    def failure_text(self):
+        return '—' if self.failure_count is None else f'{self.failure_count} {self.count_unit}'.rstrip()
+
+    @property
+    def attention_text(self):
+        if self.attention_count or self.failure_count == 0:
+            return str(self.attention_count)
+        return '—'
+
+
+_OVERVIEW_STATES = frozenset(('idle', 'running', 'queued', 'stopping', 'finishing', 'completed', 'unchecked',
+                              'failed', 'unknown', 'reviewed_unknown', 'recovery_required', 'stopped', 'skipped', 'pending'))
+
+
+def matches_project_filter(project, key):
+    """Count or filter an opened project without reinterpreting its display text."""
+    state = project.overview_state or project.state
+    if state not in _OVERVIEW_STATES:
+        state = 'unknown'
+    if not key:
+        return True
+    if key == 'active':
+        return (project.overview_task_count > 0
+                or project.overview_state in ('running', 'queued', 'stopping', 'finishing'))
+    if key == 'unknown':
+        return project.unresolved_tasks or state in ('unknown', 'recovery_required')
+    if key == 'attention':
+        return (project.attention_count > 0 or project.unresolved_tasks
+                or state in ('failed', 'unchecked', 'unknown', 'recovery_required'))
+    return state == key
 
 
 @dataclass(frozen=True)
@@ -70,6 +126,10 @@ class LogView:
     run_id: str = ''
     channel: Optional[int] = None
     raw: bool = False
+    dut_id: str = ''
+    step: str = ''
+    job_id: str = ''
+    batch_id: str = ''
 
 
 @dataclass(frozen=True)
@@ -92,3 +152,5 @@ class WorkspaceHealthView:
     task_log_at: Optional[datetime]
     inventory_check: Optional[Tuple[datetime, bool]]
     resources: Optional[WorkspaceResourceView]
+    pending_log_writes: int = 0
+    log_write_age: float = 0.

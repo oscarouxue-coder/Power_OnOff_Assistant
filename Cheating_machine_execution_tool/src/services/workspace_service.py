@@ -85,6 +85,23 @@ class WorkspaceService:
         atomic_json(self.recent_path, recent)
         self.recent = recent
 
+    def read_session(self):
+        path = self.directory / 'workspace_session.json'
+        try:
+            session = json.loads(path.read_text(encoding='utf-8'))
+        except FileNotFoundError:
+            return [], ''
+        if not isinstance(session, dict) or not isinstance(session.get('projects'), list):
+            raise ValueError('工作区会话格式无效')
+        return session['projects'], session.get('selected_project', '')
+
+    def session_snapshot(self, selected_project):
+        projects = [dict(project_id=key, path=str(context.root)) for key, context in self.projects.opened.items()]
+        return dict(projects=projects, selected_project=selected_project if selected_project in self.projects.opened else '')
+
+    def write_session(self, session):
+        atomic_json(self.directory / 'workspace_session.json', session)
+
     def list_projects(self):
         with self.projects.lock:
             return [dict(project_id=context.identity.project_id, name=context.identity.name,

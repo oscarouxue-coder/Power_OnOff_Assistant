@@ -1,4 +1,5 @@
 """Positive and swallowed-negative probes for the private-desktop Qt adapter."""
+from importlib import import_module
 import sys
 import threading
 from PySide6 import QtWidgets
@@ -7,6 +8,12 @@ from qt_test_guard import QtTestScope
 
 def main():
     mode = sys.argv[1]
+    if mode in ('tkinter', '_tkinter'):
+        try:
+            import_module(mode)
+        except AssertionError as error:
+            print('EXPECTED_QT_REJECTION', error)
+        return
     if mode == 'missing':
         try:
             getattr(QtWidgets, 'Q' + 'Application')([])
@@ -15,6 +22,7 @@ def main():
         return
     with QtTestScope() as scope:
         if mode == 'managed':
+            assert 'tkinter' not in sys.modules and '_tkinter' not in sys.modules
             window = QtWidgets.QWidget()
             window.resize(360, 200)
             window.show()

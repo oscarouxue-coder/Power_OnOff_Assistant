@@ -406,7 +406,7 @@ class ConfigurationDialog(QDialog):
         self.feedback.setText('。'.join(filter(None, (
             '已恢复未保存的草稿，保存前请核对' if restore else '',
             draft.recovery_warning,
-            '检测到旧版页面草稿，可在原 Tk 配置窗口恢复' if draft.legacy_recovery else '',
+            '已保留旧版页面草稿。请核对已保存的配置并补录未提交的修改' if draft.legacy_recovery else '',
             '缺少配置文件：' + '、'.join(draft.missing_files) + '；已加载原存储默认值，保存前请核对'
             if draft.missing_files else ''))))
 

@@ -6,11 +6,11 @@
 
 2026-11-17起，产品名称统一为 **DUTPilot**，窗口标题显示名称和版本号。后续标准构建交付`DUTPilot.exe`及`DUTPilot_portable.zip`，发布附件仍仅为完整ZIP和对应`.sha256.txt`。本次仅改源码和构建规则，V1.2.10版本号及现有线上发布保持。
 
-旧版更新客户端无法识别新附件名，首次升级须从现有GitHub Releases页面手动下载完整ZIP；新版客户端兼容新旧附件名。换版前退出程序并备份旧目录、配置及独立项目，完整解压新包，按[操作员说明](Cheating_machine_execution_tool/line_check_assistant_README.md)恢复或导入配置、打开原项目。内部源码入口、`LineCheckAssistant`本机数据目录和构建环境路径继续保留，不批量改名或迁移。
+旧版更新客户端无法识别新附件名，首次升级须从现有GitHub Releases页面手动下载完整ZIP；新版客户端兼容新旧附件名。换版前退出程序并备份旧目录、配置及独立项目，完整解压新包，按[操作员说明](Cheating_machine_execution_tool/line_check_assistant_README.md)恢复或导入配置、打开原项目。构建脚本、`LineCheckAssistant` 本机数据目录和构建环境路径继续沿用。
 
 ## 从这里开始
 
-- 用 VS Code 打开本仓库根目录，按 **Ctrl+F5** 启动当前 PySide6 源码工作台。如果运行面板此前选过其他配置，先选择 **DUTPilot V1.3.0 · PySide6 工作台**。该配置使用独立的 `qt-dev-py39` 环境并传入 `--workspace`。旧版可从 **DUTPilot · Tk 旧版工作台** 启动。[启动配置](.vscode/launch.json)
+- 用 VS Code 打开本仓库根目录，按 **Ctrl+F5** 启动当前 PySide6 源码工作台。如果运行面板此前选过其他配置，先选择 **DUTPilot V1.3.0 · PySide6 工作台**。该配置使用独立的 `qt-dev-py39` 环境并传入 `--workspace`。[启动配置](.vscode/launch.json)
 
 - Qt 后续开发遵循[统一 GUI 设计规范](GUI_DESIGN_GUIDELINES.md)。V1.3.0 迁移交接条件、两份指导书的业务口径和 V1.3.x 增量清单见[升级执行记录](docs/GUI_UPGRADE_EXECUTION_PLAN.md)。
 
@@ -30,27 +30,27 @@
 
 - Qt 已接入 DUT 的 Telnet、WAN、2.4G/5G WiFi、语音和 TR069 六页。DUT 阶段完整基线 3,093 项通过，三档 Windows 原生 105 项通过。旧项目导入和后续显示修正见对应检查记录。[DUT 阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/VOICE_TR069_REPORT.md) · [后续报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/QT_FOLLOWUP_REPORT.md)
 
-- Qt WiFi阶段：2.4G/5G 已接入原受控服务并完成三档稳定布局截图。测试与操作边界见[WiFi阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/WIFI_REPORT.md)。默认设备入口仍为Tk。
+- Qt WiFi阶段：2.4G/5G 已接入原受控服务并完成三档稳定布局截图。测试与操作边界见[WiFi阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/WIFI_REPORT.md)。
 
 - 完整迁移目标逐项进度及缺少的验收证据见[迁移进度表](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/MIGRATION_PROGRESS.md)，不会把已完成增量算作整份计划完成。
 
-- PySide6迁移：独立工作台、真实项目基础管理、原开关机控制链、六标签配置编辑、通道选择/绑定/矩阵与列表及基本串口终端已接入，整体迁移/设备复验及其它业务页面仍待完成；正常测试继续使用下方Tk入口。最新[串口终端与截图](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/SERIAL_REPORT.md)、[通道配置](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/CHANNELS_REPORT.md)、[配置编辑](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/CONFIGURATION_REPORT.md)、[开关机接入](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PHASE3_REPORT.md)、[工作台原型](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PHASE1_2_REPORT.md)、[初始审计](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PHASE0_AUDIT.md)及[代码计划](.claude/plans/pyside6-migration.md)分别记录分阶段交付和未完成范围。
+- PySide6迁移：独立工作台、真实项目基础管理、原开关机控制链、六标签配置编辑、通道选择/绑定/矩阵与列表及基本串口终端已接入，整体迁移/设备复验及其它业务页面仍待完成。最新[串口终端与截图](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/SERIAL_REPORT.md)、[通道配置](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/CHANNELS_REPORT.md)、[配置编辑](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/CONFIGURATION_REPORT.md)、[开关机接入](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PHASE3_REPORT.md)、[工作台原型](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PHASE1_2_REPORT.md)、[初始审计](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PHASE0_AUDIT.md)及[代码计划](.claude/plans/pyside6-migration.md)分别记录分阶段交付和未完成范围。
 
-- 多项目主程序验收：在主源码目录执行`python run_line_check_assistant.py`，通过项目菜单新建或打开验收项目。操作及现场记录见[验收清单](Cheating_machine_execution_tool/validation/multi_project_completion_20261117/ACCEPTANCE_CHECKLIST.md)。自动化结果不代替可见Windows或真实设备验收。
+- 多项目主程序验收：在主源码目录执行 `python run_dutpilot_qt.py`，通过项目菜单新建或打开验收项目。操作及现场记录见[验收清单](Cheating_machine_execution_tool/validation/multi_project_completion_20261117/ACCEPTANCE_CHECKLIST.md)。自动化结果不代替可见Windows或真实设备验收。
 
-- 单实例多项目入口：启动源码后使用可收起项目侧栏或“项目”菜单，新建/打开/保存独立项目；旧目录通过“导入旧配置目录”迁入，操作见主源码操作员说明。兼容回退参数为`--legacy-single-project`。本轮源码改造的验证和待验收边界见`PROJECT_STATUS.md`及`ACCEPTANCE_BASELINE.md §2.18`。
+- 单实例多项目入口：启动源码后使用可收起项目侧栏或“项目”菜单，新建/打开/保存独立项目；旧目录通过“导入旧配置目录”迁入，操作见主源码操作员说明。本轮源码改造的验证和待验收边界见`PROJECT_STATUS.md`及`ACCEPTANCE_BASELINE.md §2.18`。
 
 - 主源码与运行目录：`Cheating_machine_execution_tool/`
-- 源码入口：`Cheating_machine_execution_tool/run_line_check_assistant.py`
-- 运行：进入主源码目录后执行 `python run_line_check_assistant.py`
+- Qt 源码入口：`Cheating_machine_execution_tool/run_dutpilot_qt.py`
+- 进入主源码目录执行 `python run_dutpilot_qt.py`。如需打开指定项目，执行 `python run_dutpilot_qt.py "项目目录/project.linecheck.json"`。旧脚本 `run_line_check_assistant.py` 已移除，快捷方式、批处理和计划任务改用 `run_dutpilot_qt.py`，原启动参数可沿用。
 - 日常修改默认只运行相关检查：按影响范围执行必要的局部编译、相关专项测试及差异检查；纯文档只检查内容一致性、链接和差异格式，不运行代码测试。
 - 完整基线：仅在用户明确要求、提交代码前、标准打包（包括 `-CheckOnly`）或已验收功能结构调整时，进入主源码目录执行 `python scripts/verify_baseline.py`。局部行为或显示修改不因涉及已验收功能自动触发完整基线，原复验要求仍保留；详细规则见 [AGENTS.md](AGENTS.md) 和 [开发工作流 §5](.claude/skills/line-check-dev/SKILL.md#5-验证范围与完整基线触发条件)。
 
 ## 开发测试与窗口隔离
 
-Qt源码预览：在主源码目录执行`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_qt_environment.ps1 -WithBusinessDependencies`，使用输出的独立Python运行`run_dutpilot_qt.py --demo`查看明确演示数据，或`run_dutpilot_qt.py --workspace [原项目路径]`操作真实项目。Qt入口不替换Tk默认入口；真实项目的开关机/环境检查须明确确认，配置编辑与任务互斥，其它未迁移按钮禁用。原项目格式、配置值和运行记录沿用，实际设备验收尚未完成。源码运行说明见[操作员说明](Cheating_machine_execution_tool/line_check_assistant_README.md)。
+源码环境：在主源码目录执行`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_qt_environment.ps1 -WithBusinessDependencies`，使用输出的独立Python运行`run_dutpilot_qt.py --demo`查看明确演示数据，或`run_dutpilot_qt.py --workspace [原项目路径]`操作真实项目。真实项目的开关机/环境检查须明确确认，配置编辑与任务互斥，其它未迁移按钮禁用。原项目格式、配置值和运行记录沿用，实际设备验收尚未完成。源码运行说明见[操作员说明](Cheating_machine_execution_tool/line_check_assistant_README.md)。
 
-Qt迁移必跑专项：`python scripts/verify_qt_migration.py --output validation/本次Qt验证目录`；可用`--python`指定已安装锁定依赖的独立解释器。三档Qt缩放和所有指定原生用例逐项核对，缺环境、插件、私有桌面或证据均失败，不跳过、不退回当前用户桌面。它与原Tk完整基线分别运行；测试从私有桌面中调用同一个`run_tests.py`，不会在原构建环境安装Qt。Qt显式缩放不代替真实Windows系统缩放/实体多屏验收。
+Qt 迁移专项从主源码目录运行 `python scripts/verify_qt_migration.py --output validation/本次Qt验证目录`，可用 `--python` 指定安装了锁定依赖的解释器。100%、125%、150% 三档原生用例要求完整的私有桌面证据。Qt 私有桌面测试拒绝导入 Tk，旧回归继续使用 Tk 隔离守卫。实际 Windows 系统缩放及实体多屏按现场范围核对。[Tk 退役核对](docs/TK_RETIREMENT_AUDIT.md)
 
 含设备任务的模拟专项仍使用原主机资源锁；Qt原生专项与相关服务回归请依次执行，避免两套测试同时占用相同模拟COM/VLAN。资源冲突必须按失败处理，不绕过保护。
 
@@ -106,19 +106,18 @@ powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\Cheating_m
 
 ## 在另一台 Windows 电脑打包
 
-项目统一采用已由负责人确认异机正常运行的精简方式：独立CPython **3.9.10 x64**、固定`requirements-build.txt`依赖和PyInstaller **5.10.1**，排除NumPy/OpenBLAS、lxml、PyQt5，禁用外部UPX。17.23MiB是当前版本结果，后续体积可随功能变化。
+标准构建使用独立 CPython 3.9.10 x64、PyInstaller 5.10.1 及锁定的业务和 PySide6 依赖。Qt 目录包包含 Windows 平台插件和运行库。
 
-1. 同步完整工程，包括`requirements-build.txt`、`scripts/`、`tests/fixtures/`、`line_check_assistant/packaging_specs/`和图标/资源；不要复制原电脑的虚拟环境、`build/`或`dist/`。通过Git换电脑时，这些源码改动需先提交/同步；本轮不会自动提交。
+1. 同步完整工程，包括 `requirements-build.txt`、`requirements-qt.txt`、`scripts/`、`tests/fixtures/`、`line_check_assistant/packaging_specs/`和图标/资源；不要复制原电脑的虚拟环境、`build/`或`dist/`。通过Git换电脑时，这些源码改动需先提交/同步；本轮不会自动提交。
 2. 安装[Python 3.9.10 Windows 64-bit](https://www.python.org/downloads/release/python-3910/)，保留Tcl/Tk和pip，建议安装`py`启动器。无需把默认Python切换成3.9；脚本优先使用`py -3.9`，再查找PATH中的Python，版本和位数必须准确匹配。
 3. 在仓库根目录打开PowerShell，执行：
 
 ```powershell
 cd .\Cheating_machine_execution_tool
-$buildId = Get-Date -Format yyyyMMdd_HHmmss
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1 -OutputDirectory "dist\slim_$buildId" -WorkDirectory "build\slim_$buildId"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1
 ```
 
-脚本首次自动在`%LOCALAPPDATA%\LineCheckAssistant\build-env-py39`创建独立环境并联网安装锁定依赖；以后复用并检查该环境。每次先检查版本、隔离状态和依赖，再运行完整基线；任一步失败即停止构建，不跳过门禁或回退全局环境。使用脚本相对位置解析工程路径，支持移动目录、换盘符、中文及空格路径。每次输出独立目录，保留旧包及正在运行的旧程序。
+脚本首次自动在`%LOCALAPPDATA%\LineCheckAssistant\qt-build-py39`创建独立环境并联网安装锁定依赖；以后复用并检查该环境。每次先检查版本、隔离状态和依赖，再运行完整基线；任一步失败即停止构建，不跳过门禁或回退全局环境。使用脚本相对位置解析工程路径，支持移动目录、换盘符、中文及空格路径。每次输出独立目录，保留旧包及正在运行的旧程序。
 
 如果Python不在PATH且没有`py`启动器，在构建命令末尾加`-BasePython "实际安装目录\python.exe"`。若希望使用另一个独立环境，加`-PythonExecutable "新环境目录\Scripts\python.exe"`，脚本仍会自动准备并严格检查它。环境被装入额外库时会拒绝构建；可指定新的环境目录重新准备，不改全局Python。
 
@@ -128,13 +127,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1 -CheckOnly
 ```
 
-构建输出包括`DUTPilot.exe`、完整便携ZIP、SHA256、版本/构建说明、第三方声明和`PACKAGING_REPORT.json`。构建后校验实际EXE/PYZ关键模块、原生依赖、Tcl/Tk四份布局、排除项、ZIP CRC和哈希。不要在打包电脑启动新EXE；交付到目标电脑按该版本变更范围复验。**统一入口是PowerShell脚本，不直接调用全局`pyinstaller`或单独执行spec来代替完整流程。**
+标准脚本默认构建 Qt，显式参数 `-Gui Qt` 仍可使用。`-Gui Tk` 会提示旧构建已退役并退出。每次在 `dist/qt-<构建批次>/` 下生成完整便携目录、ZIP、SHA256 和构建报告。脚本核验 EXE/PYZ、Qt 插件与动态库、ZIP 内容和哈希。交付时将 ZIP 完整解压，在目标电脑上运行 `DUTPilot_portable/DUTPilot.exe`。[Qt 构建与验证](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/QT_DIRECTORY_BUILD_REPORT.md)
 
-V1.3.0 PySide6 迁移验证版使用同一入口的 Qt 配置。工作环境、构建目录及输出目录独立，输出为包含 Windows 平台插件和 Qt 动态库的目录包及完整便携 ZIP。在独立目标电脑完整解压后，运行便携目录里的 `DUTPilot.exe`。正式替换入口仍按迁移验收条件执行。[Qt 构建与验证](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/QT_DIRECTORY_BUILD_REPORT.md)
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1 -Gui Qt
-```
+当前标准规格为 `DUTPilotQt.spec`。复现 `LineCheckAssistant*.spec` 的历史构建时，请使用对应的历史源码提交。
 
 ## GitHub 发布附件
 

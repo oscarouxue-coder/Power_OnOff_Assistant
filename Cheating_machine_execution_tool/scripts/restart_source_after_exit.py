@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.core.source_restart import wait_and_restart
+from src.core.source_restart import report_restart_failure, wait_and_restart
 
 
 def main():
@@ -14,8 +14,7 @@ def main():
         wait_and_restart(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:])
         return 0
     except Exception:
-        from tkinter import messagebox
-        messagebox.showerror("重启未完成", "未能自动重新启动。请确认原程序已退出，再从原源码入口手动启动。")
+        report_restart_failure()
         return 1
 
 

@@ -1,0 +1,24 @@
+GUI_TEST_COVERAGE_OK
+test_aging_capability_is_explicitly_presented_as_power_cycling (test_workbench_status.WorkbenchStatusTests) ... ok
+test_different_channel_rounds_do_not_become_a_single_percentage (test_workbench_status.WorkbenchStatusTests) ... ok
+test_equal_rounds_and_explicit_results_are_projected_without_mutation (test_workbench_status.WorkbenchStatusTests) ... ok
+test_invalid_historical_start_time_does_not_break_overview (test_workbench_status.WorkbenchStatusTests) ... ok
+test_retained_channels_from_a_previous_run_are_not_aggregated (test_workbench_status.WorkbenchStatusTests) ... ok
+test_display_unknowns_are_not_defaulted_to_normal_or_zero (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_existing_ui_exports_keep_their_identity (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_frozen_qt_defaults_to_workspace_while_source_requires_a_mode (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_native_verification_keeps_timeout_diagnostics_and_checks_every_scale (test_qt_migration_contract.QtMigrationContractTests) ... QT_NATIVE_SCALE 1 FAIL
+QT_NATIVE_SCALE 1.25 FAIL
+QT_NATIVE_SCALE 1.5 FAIL
+ok
+test_ui_package_no_longer_eagerly_imports_tk (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_single_power_manual_acknowledgement_has_no_serial_or_nic_io (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_pretest_unchecked_outcome_is_never_reported_as_test_success (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_pipeline_environment_failure_prevents_aging (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_unknown_result_remains_fenced_and_no_automatic_retry (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.783s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

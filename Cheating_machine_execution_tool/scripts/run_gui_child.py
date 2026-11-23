@@ -6,7 +6,6 @@ from pathlib import Path
 import runpy
 import sys
 import traceback
-from contextlib import ExitStack
 
 
 def bind_render_desktop():
@@ -44,16 +43,16 @@ def main():
     root = Path(__file__).resolve().parents[1]
     sys.path[:0] = [str(root / 'tests'), str(root)]
     guard = None
-    qt_guard = None
     status = 0
     try:
-        bind_render_desktop()  # Before importing Tk or any test/application code.
-        from tk_test_windows import StrictTkGuard
-        guard = StrictTkGuard()
-        with guard, ExitStack() as frameworks:
-            if args.framework == 'qt':
-                from qt_test_guard import QtRuntimeGuard
-                qt_guard = frameworks.enter_context(QtRuntimeGuard())
+        bind_render_desktop()  # Before importing either framework or application code.
+        if args.framework == 'qt':
+            from qt_test_guard import QtRuntimeGuard
+            guard = QtRuntimeGuard()
+        else:
+            from tk_test_windows import StrictTkGuard
+            guard = StrictTkGuard()
+        with guard:
             if command[:1] == ['-c']:
                 sys.argv = ['-c', *command[2:]]
                 exec(compile(command[1], '<gui-test-child>', 'exec'), {'__name__': '__main__'})
@@ -70,11 +69,8 @@ def main():
         status = 1
     evidence = guard.report() if guard is not None else dict(
         passed=False, managed_windows=0, violations=['GUI child bootstrap failed'], isolation='unverified', desktop=None)
-    if qt_guard is not None:
-        qt_evidence = qt_guard.report()
-        evidence['qt'] = qt_evidence
-        evidence['passed'] = evidence['passed'] and qt_evidence['passed']
-        evidence['managed_windows'] += qt_evidence['managed_windows']
+    if args.framework == 'qt' and evidence.get('framework') == 'qt':
+        evidence['qt'] = dict(evidence)
     evidence['passed'] = evidence['passed'] and status == 0
     Path(args.report).write_text(json.dumps(evidence, ensure_ascii=False), encoding='utf-8')
     return status or (0 if evidence['passed'] else 1)

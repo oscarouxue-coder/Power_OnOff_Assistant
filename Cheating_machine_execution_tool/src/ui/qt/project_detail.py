@@ -6,18 +6,23 @@ from PySide6.QtWidgets import (QBoxLayout, QDialog, QDialogButtonBox, QFormLayou
     QAbstractItemView, QHeaderView, QHBoxLayout, QMenu, QProgressBar, QScrollArea, QSizePolicy,
     QSplitter, QStackedWidget, QTabBar, QTableView, QVBoxLayout, QWidget)
 from src.ui.qt.channel_table_model import ChannelTableModel
-from src.ui.qt.theme import (BRAND, GAP, MUTED, assert_gui_thread, button, card, label, status_style)
+from src.ui.qt.test_type_panel import TestTypePanel
+from src.ui.qt.showcase_components import STATUS_STYLES, StatusBadge, semantic_icon
+from src.ui.qt.theme import (BRAND, GAP, MUTED, V13_PALETTE, assert_gui_thread, button, card, label)
 
 
 class ChannelMatrix(QWidget):
     selected = Signal(int)
     context_requested = Signal(int, object)
+    layout_changed = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, refreshed=False):
         super().__init__(parent)
+        self._refreshed = refreshed
         self.grid = QGridLayout(self)
         self.grid.setContentsMargins(0, 0, 0, 0)
         self.grid.setSpacing(6)
+        self._columns = 0
         self.tiles = []
         self.channels = ()
 
@@ -31,6 +36,7 @@ class ChannelMatrix(QWidget):
             tile.hide()
             tile.deleteLater()
         self.tiles.clear()
+        self._columns = 0
         states = {'running': '● 运行中', 'success': '✓ 正常', 'failed': '异常',
                   'unknown': '未知', 'disabled': '未启用', 'stopped': '已停止', 'retry': '重试中'}
         for channel in self.channels:
@@ -38,7 +44,7 @@ class ChannelMatrix(QWidget):
             text = f'CH{channel.number:02d}   {state}'
             if channel.cycle is not None:
                 text += f'\n已完成 {channel.cycle} 轮'
-            tile = button(text, lambda checked=False, number=channel.number: self.selected.emit(number))
+            tile = button(text, lambda checked=False, number=channel.number: self.selected.emit(number), parent=self)
             tile.setProperty('channelTile', True)
             tile.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
             tooltip = f'CH{channel.number:02d} · {state}\n{channel.vlan or "未配置 VLAN"} / {channel.port or "未配置 COM"}'
@@ -50,7 +56,9 @@ class ChannelMatrix(QWidget):
             tile.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
             tile.customContextMenuRequested.connect(lambda point, n=channel.number, control=tile:
                 self.context_requested.emit(n, control.mapToGlobal(point)))
-            if channel.state in ('running', 'success'):
+            if self._refreshed:
+                self._style_tile(tile, channel, state)
+            elif channel.state in ('running', 'success'):
                 tile.setStyleSheet('QPushButton { background: #E9F9EF; color: #166534; border: 1px solid #9CD7AC; }')
             elif channel.state == 'failed':
                 tile.setStyleSheet('QPushButton { background: #FEF2F2; color: #DC2626; border: 1px solid #F2BABA; }')
@@ -58,18 +66,58 @@ class ChannelMatrix(QWidget):
                 tile.setStyleSheet('QPushButton { background: #FFFBEB; color: #D97706; border: 1px solid #F4D9A6; }')
             else:
                 tile.setStyleSheet('QPushButton { background: #F0F3F6; color: #6B7280; border: 1px solid #E5E7EB; }')
+            metrics = tile.fontMetrics()
+            binding = ' / '.join(
+                metrics.elidedText(value, Qt.TextElideMode.ElideRight, width)
+                for value, width in ((channel.vlan, 115), (channel.port, 80)) if value)
+            if binding:
+                tile.setText(tile.text() + '\n' + binding.replace('&', '&&'))
             tile.setMinimumHeight(max(44, tile.sizeHint().height()))
             self.tiles.append(tile)
         self.reflow()
+
+    @staticmethod
+    def _style_tile(tile, channel, caption):
+        statuses = {'running': 'running', 'success': 'healthy', 'failed': 'error', 'retry': 'warning',
+                    'stopped': 'stopped', 'unknown': 'unknown', 'disabled': 'unavailable'}
+        status = STATUS_STYLES[statuses.get(channel.state, 'unknown')]
+        selected_unknown = channel.selected and channel.state == 'unknown'
+        background = V13_PALETTE.selected_background if selected_unknown else status.background
+        ink = V13_PALETTE.selected if selected_unknown else status.ink
+        hover_border = V13_PALETTE.brand if selected_unknown else status.color
+        selection_edge = f'border-left: 3px solid {V13_PALETTE.brand};' if channel.selected else ''
+        text = f'CH{channel.number:02d}  {caption.lstrip("●✓ ")}'
+        if channel.selected:
+            text += '\n已选'
+        cycle = f'已完成 {channel.cycle} 轮' if channel.cycle is not None else ''
+        stage = tile.fontMetrics().elidedText(channel.stage, Qt.TextElideMode.ElideRight, 115)
+        description = ' · '.join(filter(None, (cycle, stage)))
+        if description:
+            text += '\n' + description
+        tile.setText(text)
+        tile.setIcon(semantic_icon(status.icon, status.color))
+        tile.setAccessibleDescription(tile.toolTip())
+        tile.setStyleSheet(f'''
+            QPushButton {{ background: {background}; color: {ink};
+                           border: 1px solid {V13_PALETTE.border}; border-radius: 6px;
+                           text-align: left; padding: 5px 8px; {selection_edge} }}
+            QPushButton:hover {{ border-color: {hover_border}; {selection_edge} }}
+            QPushButton:focus {{ border: 2px solid {V13_PALETTE.info}; {selection_edge} }}
+        ''')
 
     def reflow(self):
         minimum = max(88, max((tile.sizeHint().width() for tile in self.tiles), default=0))
         spacing = self.grid.spacing()
         columns = max(1, min(8, (self.width() + spacing) // (minimum + spacing)))
+        if columns == self._columns:
+            return
+        self._columns = columns
         for index, tile in enumerate(self.tiles):
             self.grid.addWidget(tile, index // columns, index % columns)
         for index in range(8):
             self.grid.setColumnStretch(index, int(index < columns))
+        self.grid.activate()
+        self.layout_changed.emit()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -78,6 +126,11 @@ class ChannelMatrix(QWidget):
 
 class ChannelViewStack(QStackedWidget):
     """Hidden table dimensions must not enlarge the compact channel matrix."""
+
+    def update_current_geometry(self):
+        self.setMinimumHeight(self.minimumSizeHint().height())
+        self.updateGeometry()
+
     def sizeHint(self):
         widget = self.currentWidget()
         return widget.sizeHint() if widget is not None else super().sizeHint()
@@ -103,8 +156,9 @@ class ProjectDetail(QWidget):
     power_log_requested = Signal(str, int, str)
     channel_history_requested = Signal(str, str, int)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, refreshed=False):
         super().__init__(parent)
+        self._refreshed = refreshed
         self.project = None
         self._configuration_snapshot = None
         self.dialogs = []
@@ -135,13 +189,16 @@ class ProjectDetail(QWidget):
         heading.addWidget(self.name)
         heading.addWidget(self.metadata)
         identity.addLayout(heading, 1)
-        self.state = label('')
+        self.state = StatusBadge()
         identity.addWidget(self.state)
         actions = QHBoxLayout()
         actions.addStretch()
         self.header_layout.addLayout(actions)
         self.start_button = button('▷ 开始测试', kind='primary')
         self.stop_button = button('■ 停止测试', kind='danger')
+        if refreshed:
+            self.start_button.setIcon(semantic_icon('play'))
+            self.stop_button.setIcon(semantic_icon('stop'))
         self.environment_button = button('环境检查')
         self.pipeline_button = button('全流程…')
         for control in (self.pipeline_button, self.environment_button, self.start_button, self.stop_button):
@@ -166,22 +223,37 @@ class ProjectDetail(QWidget):
         self.execution_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.execution = QWidget()
         self.execution.setMinimumWidth(0)
+        if refreshed:
+            self.execution.setProperty('executionPage', True)
+            self.execution.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         self.execution_layout = QVBoxLayout(self.execution)
         self.execution_layout.setContentsMargins(0, 0, 2, 0)
         self.execution_layout.setSpacing(GAP)
+        self.test_type_panel = TestTypePanel(refreshed=refreshed)
+        self.test_type_panel.hide()
+        if not refreshed:
+            self.execution_layout.addWidget(self.test_type_panel)
         self.summary = card()
         summary_layout = QVBoxLayout(self.summary)
         summary_layout.setContentsMargins(16, 10, 16, 12)
         status_row = QHBoxLayout()
+        if refreshed:
+            self.test_type_panel.ring.hide()
+            status_row.addWidget(self.test_type_panel.ring)
         self.percent = label('—', 'metric')
         status_row.addWidget(self.percent)
         status_row.addSpacing(16)
         self.progress_text = label('', 'section')
         status_row.addWidget(self.progress_text, 1)
         self.elapsed = label('')
+        if refreshed:
+            self.progress_text.setWordWrap(True)
+            self.elapsed.setProperty('role', 'muted')
         status_row.addWidget(self.elapsed)
         summary_layout.addLayout(status_row)
         self.progress = QProgressBar()
+        if refreshed:
+            self.progress.setAccessibleName('已完成开关机轮次进度')
         self.progress.setTextVisible(False)
         self.progress.setRange(0, 100)
         summary_layout.addWidget(self.progress)
@@ -195,7 +267,7 @@ class ProjectDetail(QWidget):
         self.run_id = label('', 'muted')
         counts.addWidget(self.run_id)
         summary_layout.addLayout(counts)
-        self.stage = label('', 'muted')
+        self.stage = label('', 'section' if refreshed else 'muted')
         self.stage.setWordWrap(True)
         summary_layout.addWidget(self.stage)
         self.execution_layout.addWidget(self.summary)
@@ -208,7 +280,7 @@ class ProjectDetail(QWidget):
         self.channel_title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         controls = QHBoxLayout()
         controls.addWidget(self.channel_title, 1)
-        self.channel_edit_button = button('通道配置', self.channels_configuration_requested.emit)
+        self.channel_edit_button = button('环境配置', self.channels_configuration_requested.emit)
         self.channel_edit_button.setEnabled(False)
         self.matrix_button = button('矩阵', lambda: self.set_channel_mode(0))
         self.table_button = button('列表', lambda: self.set_channel_mode(1))
@@ -216,11 +288,13 @@ class ProjectDetail(QWidget):
             controls.addWidget(control)
         self.matrix_button.setCheckable(True)
         self.table_button.setCheckable(True)
+        for option in (self.matrix_button, self.table_button):
+            option.setProperty('viewMode', refreshed)
         self.matrix_button.setChecked(True)
         channels_layout.addLayout(controls)
-        self.no_channels = label('尚无通道快照', 'muted')
+        self.no_channels = label('暂无已启用通道', 'muted')
         channels_layout.addWidget(self.no_channels)
-        self.channels = ChannelMatrix()
+        self.channels = ChannelMatrix(refreshed=refreshed)
         self.channels.selected.connect(self.open_channel)
         self.channels.context_requested.connect(self.channel_context_menu)
         self.recovery_menu = QMenu(self)
@@ -235,7 +309,11 @@ class ProjectDetail(QWidget):
             action.setEnabled(False)
         self.channel_modes = ChannelViewStack()
         self.channel_modes.addWidget(self.channels)
+        self.channels.layout_changed.connect(self.channel_modes.update_current_geometry)
         self.channel_table = QTableView()
+        if refreshed:
+            self.channel_table.setAlternatingRowColors(True)
+            self.channel_table.verticalHeader().setDefaultSectionSize(26)
         self.channel_table.setMinimumHeight(140)
         self.channel_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.channel_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -250,6 +328,8 @@ class ProjectDetail(QWidget):
         self.channel_modes.addWidget(self.channel_table)
         channels_layout.addWidget(self.channel_modes)
         self.execution_layout.addWidget(self.channel_card)
+        if refreshed:
+            self.execution_layout.addWidget(self.test_type_panel)
         self.execution_layout.addStretch()
         self.execution_scroll.setWidget(self.execution)
         self.splitter.addWidget(self.execution_scroll)
@@ -298,11 +378,24 @@ class ProjectDetail(QWidget):
         if project == self.project:
             return
         self.project = project
+        self.test_type_panel.set_project(project)
+        cycles_visible = project.project_type != 'service_aging'
+        self.tabs.setTabVisible(1, cycles_visible)
+        self.summary.setVisible(cycles_visible)
+        self.channel_card.setVisible(cycles_visible)
+        self.pipeline_button.setVisible(cycles_visible)
+        start_label = '开始测试' if cycles_visible else '开始监测'
+        self.start_button.setText(start_label if self._refreshed else '▷ ' + start_label)
+        if self._refreshed:
+            self.stop_button.setText('停止测试' if cycles_visible else '停止监测')
+            self.percent.setVisible(project.project_type != 'power_cycle')
         self.name.setText(project.name)
         metadata = (f'类型：{project.test_type}', f'DUT：{project.dut}', project.started_text)
         self.metadata.setText('   |   '.join(filter(None, metadata)))
-        self.state.setText(project.state_text)
-        self.state.setStyleSheet(status_style(project.state))
+        if self._refreshed:
+            self.name.setToolTip(project.name)
+            self.metadata.setToolTip(self.metadata.text())
+        self.state.set_project_state(project.state, project.state_text)
         self.start_button.setEnabled(project.can_start or project.parallel_power_available)
         self.environment_button.setEnabled(project.can_start)
         self.stop_button.setEnabled(project.can_stop)
@@ -317,18 +410,24 @@ class ProjectDetail(QWidget):
         self.progress.setValue(project.progress or 0)
         self.progress_text.setText(project.progress_text)
         self.elapsed.setText('运行时间  ' + project.elapsed)
-        self.success.setText('✓ 成功  ' + (str(project.success_count) if project.success_count is not None else '—'))
-        self.failure.setText('异常  ' + str(project.attention_count))
+        self.success.setText('✓ 成功  ' + project.success_text)
+        self.failure.setText('异常  ' + project.attention_text)
         self.run_id.setText(project.run_id or '尚无任务编号')
         stage = '当前阶段：' + project.task_stage if project.task_stage else ''
         self.stage.setText(' · '.join(filter(None, (stage, project.resume_detail))))
+        if self._refreshed:
+            style = f'color: {V13_PALETTE.error.text};' if project.attention_count else ''
+            if self.stage.styleSheet() != style:
+                self.stage.setStyleSheet(style)
         self.stage.setVisible(bool(stage or project.resume_detail))
         self.channel_title.setText('通道运行状态   ' + project.channel_text)
         self.channel_title.setToolTip(project.channel_snapshot_label or '当前项目配置；未收到实际任务事件时不推定运行')
         self.channel_edit_button.setEnabled(project.can_configure and project.editor_kind != 'configuration')
-        self.channels.set_channels(project.channels)
-        self.channel_model.set_channels(project.channels)
-        self.no_channels.setVisible(not bool(project.channels))
+        enabled_channels = tuple(channel for channel in project.channels if channel.selected)
+        self.channels.set_channels(enabled_channels)
+        self.channel_model.set_channels(enabled_channels)
+        self.channel_modes.setVisible(bool(enabled_channels))
+        self.no_channels.setVisible(not enabled_channels)
         snapshot = (project.configuration, bool(project.channel_snapshot_label))
         if snapshot == self._configuration_snapshot:
             return
@@ -343,7 +442,7 @@ class ProjectDetail(QWidget):
         row.setContentsMargins(0, 0, 0, 0)
         row.addWidget(label('任务配置快照' if project.channel_snapshot_label else '测试配置', 'section'))
         row.addStretch()
-        edit = button('编辑配置', self.configuration_requested.emit)
+        edit = button('测试配置', self.configuration_requested.emit)
         self.edit_button = edit
         edit.setEnabled(project.can_configure)
         edit.setToolTip('编辑当前项目配置；已有任务执行或收尾时不可修改，运行快照保持')
@@ -380,7 +479,7 @@ class ProjectDetail(QWidget):
     def set_channel_mode(self, mode):
         assert_gui_thread()
         self.channel_modes.setCurrentIndex(mode)
-        self.channel_modes.updateGeometry()
+        self.channel_modes.update_current_geometry()
         self.matrix_button.setChecked(mode == 0)
         self.table_button.setChecked(mode == 1)
 

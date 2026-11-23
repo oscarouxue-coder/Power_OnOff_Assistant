@@ -1,0 +1,12 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_189b00b786cb4066b6844ee4621e904a'}
+test_global_log_filter_pins_project_identity_across_navigation_and_close (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_overview_metrics_and_filter_follow_project_identity_and_latest_evidence (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_qt_navigation_opens_saved_template_sources_and_cached_devices (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_native_new_project_dialog_calls_original_store_and_switches_without_tasks (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_demo_metrics_keep_task_and_health_distinct (qt_workbench_probe.QtWorkbenchTests) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 3.062s
+
+OK

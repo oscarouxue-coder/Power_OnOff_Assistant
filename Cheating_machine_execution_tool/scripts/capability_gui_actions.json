@@ -3556,37 +3556,46 @@
   },
   {
     "file": "src/ui/qt/application.py",
-    "file_code_sha256": "ac40cff6020e76db2b81f2cfe9322e938efa9e15c93626d37d4dafd879e9f5a7",
+    "file_code_sha256": "541b941aa904fe8e55ee5724888a20e6a4f18ad479618c753c306ce47183a2d1",
     "action": "748fc0533f0ab704a89322c8c0483c3e760320749e44810e00c18064759e2da9",
     "expression": "controller.timer.timeout.connect(open_initial)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/application.py",
-    "file_code_sha256": "ac40cff6020e76db2b81f2cfe9322e938efa9e15c93626d37d4dafd879e9f5a7",
+    "file_code_sha256": "541b941aa904fe8e55ee5724888a20e6a4f18ad479618c753c306ce47183a2d1",
     "action": "afc08a1cc0ca4f0e088b7a13b6cebe2b7da0500fe4ccd721ac62cd087fda5f21",
     "expression": "controller.timer.timeout.connect(forwarded)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/archived_logs_dialog.py",
-    "file_code_sha256": "ce4d504705fc6a9f4e345803a604d6ab35101266cdd32df2de76c1401614085b",
-    "action": "408817cbf612af782b933e1974d36708aaad4aec68449d9d86134b69a9abd8c3",
-    "expression": "self.source.currentIndexChanged.connect(self.refresh_source)",
+    "file_code_sha256": "75a13d867be2437acff666d1b17c77ea56e641313e2df6f30f5a7e94087aae33",
+    "action": "13334129e7770d651487f949c4b6eafaf59f945e3da204da56673137f270eae0",
+    "expression": "control.currentTextChanged.connect(self._filters_changed)",
     "callbacks": {
-      "refresh_source": "d3ad348f5ef24d629dc2ad734ac4c42c38d9e68bf2f62935e874b2b99d122159"
+      "_filters_changed": "bd06eaca640b7a53e146afd95a5c00569b3762c77e227e520e590752cbffefff"
     }
   },
   {
     "file": "src/ui/qt/archived_logs_dialog.py",
-    "file_code_sha256": "ce4d504705fc6a9f4e345803a604d6ab35101266cdd32df2de76c1401614085b",
+    "file_code_sha256": "75a13d867be2437acff666d1b17c77ea56e641313e2df6f30f5a7e94087aae33",
+    "action": "408817cbf612af782b933e1974d36708aaad4aec68449d9d86134b69a9abd8c3",
+    "expression": "self.source.currentIndexChanged.connect(self.refresh_source)",
+    "callbacks": {
+      "refresh_source": "4f96e39a41280069427147fdb90009762d2b10ea17855f9c0cfbcc4ccf3fe5f6"
+    }
+  },
+  {
+    "file": "src/ui/qt/archived_logs_dialog.py",
+    "file_code_sha256": "75a13d867be2437acff666d1b17c77ea56e641313e2df6f30f5a7e94087aae33",
     "action": "5d205ef073eda9b59903b310f8e3082e0e26897da2adcd61b25545d4d6f5ff37",
     "expression": "dialog.finished.connect(lambda _: setattr(self, 'dialog', None))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/archived_logs_dialog.py",
-    "file_code_sha256": "ce4d504705fc6a9f4e345803a604d6ab35101266cdd32df2de76c1401614085b",
+    "file_code_sha256": "75a13d867be2437acff666d1b17c77ea56e641313e2df6f30f5a7e94087aae33",
     "action": "70f9a037b9510e1613435659518a5c928ac5896eeba16eaa55f681b27ca2143d",
     "expression": "self.files.currentIndexChanged.connect(self._choose_file)",
     "callbacks": {
@@ -3595,27 +3604,27 @@
   },
   {
     "file": "src/ui/qt/archived_logs_dialog.py",
-    "file_code_sha256": "ce4d504705fc6a9f4e345803a604d6ab35101266cdd32df2de76c1401614085b",
+    "file_code_sha256": "75a13d867be2437acff666d1b17c77ea56e641313e2df6f30f5a7e94087aae33",
     "action": "90e794dfd45aef3b1d577d441bb6454d9037bc3a136fbcc1a0099ea5f111c8bc",
     "expression": "dialog.logs.export_requested.connect(lambda entries, description: self.workspace.export_logs(entries, description, dialog))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/archived_logs_dialog.py",
-    "file_code_sha256": "ce4d504705fc6a9f4e345803a604d6ab35101266cdd32df2de76c1401614085b",
+    "file_code_sha256": "75a13d867be2437acff666d1b17c77ea56e641313e2df6f30f5a7e94087aae33",
     "action": "beb39d24e4f71297dab5632c33435776eda140784042cf4e1e05545ce70189ad",
     "expression": "dialog.files_requested.connect(lambda source: self._submit('archive_' + source + '_files'))",
     "callbacks": {
-      "_submit": "cb9a88c74dc8bd3689bcd5fac4e26f6516272d00a217fb9bbc0a38735b54ebb9"
+      "_submit": "c0a27323862e6a87e997c80ddb35a0d3545f6d2bf1b979ef4cf82c0e38a1d349"
     }
   },
   {
     "file": "src/ui/qt/archived_logs_dialog.py",
-    "file_code_sha256": "ce4d504705fc6a9f4e345803a604d6ab35101266cdd32df2de76c1401614085b",
+    "file_code_sha256": "75a13d867be2437acff666d1b17c77ea56e641313e2df6f30f5a7e94087aae33",
     "action": "f003b2908a2cde3d25797d8925d7935814f6fd30435a7964a0aeb68498be2678",
     "expression": "dialog.page_requested.connect(self._read)",
     "callbacks": {
-      "_read": "efc4a12b09951099f0af3fb53cca04ad53de878844a92142216ca644530c828b"
+      "_read": "8bc965c7162876a2e695d4607639fd3ade58a36e3db4d328bce3ff4cdeefadb9"
     }
   },
   {
@@ -3714,8 +3723,83 @@
     }
   },
   {
+    "file": "src/ui/qt/component_showcase.py",
+    "file_code_sha256": "e01a5b8a169fadd8fc6089d1209648bc768c53001cc7471cacbb595d47af1d8f",
+    "action": "058e9a8ca11f3d64ad784da45866d634b9eeec843f14ed3e998767ee7a2142df",
+    "expression": "self.progress_slider.valueChanged.connect(self._update_progress)",
+    "callbacks": {
+      "_update_progress": "d4fb7052a4828a2ac836c1d4eeb5b664f6c9db1585026739c67ded32f612954d"
+    }
+  },
+  {
+    "file": "src/ui/qt/component_showcase.py",
+    "file_code_sha256": "e01a5b8a169fadd8fc6089d1209648bc768c53001cc7471cacbb595d47af1d8f",
+    "action": "142922e2f84bafabb89c8e2abff8f3594c12bf70164deb811f96c68f54792200",
+    "expression": "buttons.rejected.connect(self.confirm_dialog.reject)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/component_showcase.py",
+    "file_code_sha256": "e01a5b8a169fadd8fc6089d1209648bc768c53001cc7471cacbb595d47af1d8f",
+    "action": "161f286e10804e86c497bb4c9bf169e5a0b69522410c3d54de77fa09e88cc235",
+    "expression": "self.channel_matrix.selected.connect(self._show_channel)",
+    "callbacks": {
+      "_show_channel": "b178ed23c717d4b76cdced870cf2cebb59092dd0ef43a06914e0254a6f97515d"
+    }
+  },
+  {
+    "file": "src/ui/qt/component_showcase.py",
+    "file_code_sha256": "e01a5b8a169fadd8fc6089d1209648bc768c53001cc7471cacbb595d47af1d8f",
+    "action": "6a535d7e8db861f2f7ea8eeeae973598098e2ed0d6019365cab45f5cceecaaa7",
+    "expression": "self.project_cards.clicked.connect(self._show_project)",
+    "callbacks": {
+      "_show_project": "91fd7ad4d0e59a118144c4af8a627446b47fc029133eee9a783fff8aded69df9"
+    }
+  },
+  {
+    "file": "src/ui/qt/component_showcase.py",
+    "file_code_sha256": "e01a5b8a169fadd8fc6089d1209648bc768c53001cc7471cacbb595d47af1d8f",
+    "action": "722c9c7666fb9b91cd54f653680880221c19cc8e4204d2d66f662c5cb58a52dc",
+    "expression": "self.confirm_dialog.accepted.connect(lambda : self._feedback('已应用示例进度 · ' + self.progress_bar.display_text))",
+    "callbacks": {
+      "_feedback": "2e9767b73e011116c2637925c8b87626913eaa7948cc6e911f571572208b9bce"
+    }
+  },
+  {
+    "file": "src/ui/qt/component_showcase.py",
+    "file_code_sha256": "e01a5b8a169fadd8fc6089d1209648bc768c53001cc7471cacbb595d47af1d8f",
+    "action": "84eeb0996b31ec6317ca57fcbc53b4c11e8932feb25a3ef5baa7e7599fdd426b",
+    "expression": "self.progress_state.currentIndexChanged.connect(self._update_progress)",
+    "callbacks": {
+      "_update_progress": "d4fb7052a4828a2ac836c1d4eeb5b664f6c9db1585026739c67ded32f612954d"
+    }
+  },
+  {
+    "file": "src/ui/qt/component_showcase.py",
+    "file_code_sha256": "e01a5b8a169fadd8fc6089d1209648bc768c53001cc7471cacbb595d47af1d8f",
+    "action": "ac09ddde029f9b9a321d45c52365dfa04cc65384b2f0a7a0f83b2e27cbf4e618",
+    "expression": "self.confirm_dialog.rejected.connect(lambda : self._feedback('已取消应用示例'))",
+    "callbacks": {
+      "_feedback": "2e9767b73e011116c2637925c8b87626913eaa7948cc6e911f571572208b9bce"
+    }
+  },
+  {
+    "file": "src/ui/qt/component_showcase.py",
+    "file_code_sha256": "e01a5b8a169fadd8fc6089d1209648bc768c53001cc7471cacbb595d47af1d8f",
+    "action": "c325d6aff701592428f223dec76889acf1e3a9817df1963d869c5131bf325873",
+    "expression": "buttons.accepted.connect(self.confirm_dialog.accept)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/component_showcase.py",
+    "file_code_sha256": "e01a5b8a169fadd8fc6089d1209648bc768c53001cc7471cacbb595d47af1d8f",
+    "action": "d266b826e0638ccc8d43d58768bed1c064902a35dc40f60656bede1fcde9514a",
+    "expression": "self.view_state.currentIndexChanged.connect(self.state_stack.setCurrentIndex)",
+    "callbacks": {}
+  },
+  {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "0e3079cbd992f86b2f018f25cff09197991297e711945463788c1a8d99f627a7",
     "expression": "field.currentIndexChanged.connect(self._changed)",
     "callbacks": {
@@ -3724,14 +3808,14 @@
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "27c0f7051eb11e0b87c2b7b994fb0051486660f740e2674f47ae0c72a19e7a34",
     "expression": "fields['security_source'].currentIndexChanged.connect(update)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "32c4a05e2cb1fa28c44976e2895cad15a41fc653fea1fc2e51dafaf549ee743b",
     "expression": "menu.addAction('添加期望段', lambda : self.add_segment(row))",
     "callbacks": {
@@ -3740,7 +3824,7 @@
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "390e046bbcf9e32220c4d2655f28b9c171d4dbe661a98829efb92a0c62ef5809",
     "expression": "text.textChanged.connect(self._changed)",
     "callbacks": {
@@ -3749,7 +3833,7 @@
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "3e7071029bf4e490002bf11f1f993ea528ba8918b9248912b97f0cccc99a1911",
     "expression": "negate.toggled.connect(self._changed)",
     "callbacks": {
@@ -3758,14 +3842,14 @@
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "48f48b2f3ac7ddae3e28d64532a44007be2694658f557df48f1a5cc42b6321c2",
     "expression": "fields['connection_test_mode'].currentIndexChanged.connect(update)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "5d9f1d99056dd8447751be9113ea9bfebfa5795aaa2e29254946e495a0f950f2",
     "expression": "field.toggled.connect(self._changed)",
     "callbacks": {
@@ -3774,28 +3858,28 @@
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "665113d51447862f3a73c036ad61e4fa43c1472612292a53d98d2a0b4127912b",
     "expression": "self.version_channel.currentIndexChanged.connect(lambda : self.version_button.setEnabled(self.version_channel.currentData() is not None))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "66b0dc370f2bdbae07adafc1afd9da26dbc22f5651264891e6468c260a546eb7",
     "expression": "fields['wireless_ping_enable'].toggled.connect(update)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "6a9f2238793b1198cff2b5cddf147d022ed63fbd369291acc1796d437332828c",
     "expression": "dict(command=command, retry_times=retry, expected_segments=segments)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "6cc196a6fe3536f5afc94c59226841a896f1311b1a0cca449ae34bbfc075d263",
     "expression": "field.currentIndexChanged.connect(self._credentials_state)",
     "callbacks": {
@@ -3804,7 +3888,7 @@
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "7f8e4b09f14ffbeea8dbe037b193a2a70fbe76d45946964213d0fe581c624305",
     "expression": "self.interval.textChanged.connect(self._changed)",
     "callbacks": {
@@ -3813,21 +3897,21 @@
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "8a97425852a083f65302a5f2d3ad04a0ece615550dc48c880821559f1d95e95a",
     "expression": "dict(widget=group, number=number, command=command, retry=retry, segments=[], layout=content)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "95935459cec01e24a789c70bda6b1d9e875f3ffe8ef726a9d11a39595e11b784",
     "expression": "visible.toggled.connect(lambda checked: field.setEchoMode(QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "a5446bdd27e8a02a6518d84b66eb2720862289ae3943535290e18b1b5c592ff6",
     "expression": "retry.textChanged.connect(self._changed)",
     "callbacks": {
@@ -3836,7 +3920,7 @@
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "b37ce07d7a1f3e4e77bf7c4fb75494dd9f5721132f8b64fb758418e59ddeb58a",
     "expression": "command.textChanged.connect(self._changed)",
     "callbacks": {
@@ -3845,7 +3929,7 @@
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "b6e88c55a530591f3cb52c64708b0b7060a4ff5efa1b3f83b6893650bb5f1662",
     "expression": "self._checkpoint_timer.timeout.connect(self._checkpoint)",
     "callbacks": {
@@ -3854,7 +3938,7 @@
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "c11b944f9afa8505fb2accc72e33e8d0dcb6b242f2ef0a241d4c49a9defcd96c",
     "expression": "field.textChanged.connect(self._changed)",
     "callbacks": {
@@ -3863,14 +3947,14 @@
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "e803f754ee3d3da260c4bd5eecaf04bdf1d54cd10aecf54e7e69ac6abd01e346",
     "expression": "dict(command=row['command'].text(), retry_times=row['retry'].text(), expected_segments=[dict(text=segment['text'].text(), negate=segment['negate'].isChecked()) for segment in row['segments']])",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/configuration_dialog.py",
-    "file_code_sha256": "0d425470e4a3b496167644114e3bdfdf480eec3dbb0d96b150dd2ee89908ff32",
+    "file_code_sha256": "f276b0ecf25aacc6ce5d87fd0eef895e4e2983cc7a16dc5a350ade3e1a08b2cf",
     "action": "ee9bbe24f6868006a6cf65ac4019023ddb2d7c9cfd3dd035f50e541683ab7972",
     "expression": "menu.addAction('删除命令', lambda : self.remove_command(row))",
     "callbacks": {
@@ -3878,8 +3962,49 @@
     }
   },
   {
+    "file": "src/ui/qt/controlled_extensions_dialog.py",
+    "file_code_sha256": "bfacd5ffdcec58ce4c73c87923627006efab2cac80499da27178055234432402",
+    "action": "2004506098e133f69c511c382348ae445f7b7393c38ea4375a93c7568ce671e0",
+    "expression": "review.finished.connect(lambda answer: self.finish_review(payload['token'], answer))",
+    "callbacks": {
+      "finish_review": "f419fc4aef12e002984101199ce4b7f0e763653613729941886b703c20ca2a7a"
+    }
+  },
+  {
+    "file": "src/ui/qt/controlled_extensions_dialog.py",
+    "file_code_sha256": "bfacd5ffdcec58ce4c73c87923627006efab2cac80499da27178055234432402",
+    "action": "242d4e99a05829d4ce1821d089688acfb1a749cc9892383aea48f2b8c0f27b59",
+    "expression": "self.rows.customContextMenuRequested.connect(self.open_actions)",
+    "callbacks": {
+      "open_actions": "eb59e9c9743ca76c6f69c68f00ac129f6c82a46924134e02b45580a5077101ed"
+    }
+  },
+  {
+    "file": "src/ui/qt/controlled_extensions_dialog.py",
+    "file_code_sha256": "bfacd5ffdcec58ce4c73c87923627006efab2cac80499da27178055234432402",
+    "action": "38157e650d2ab84a67a21a73a110188d4c4fcc8e055b3234e0e4a5e2894e2c5d",
+    "expression": "menu.aboutToHide.connect(menu.deleteLater)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/controlled_extensions_dialog.py",
+    "file_code_sha256": "bfacd5ffdcec58ce4c73c87923627006efab2cac80499da27178055234432402",
+    "action": "4256b56831fce8de4d543b5b7fb36476e0b5b0ea61b685bb9be348b316cbafab",
+    "expression": "self.accepted_review.toggled.connect(self.approve.setEnabled)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/controlled_extensions_dialog.py",
+    "file_code_sha256": "bfacd5ffdcec58ce4c73c87923627006efab2cac80499da27178055234432402",
+    "action": "c927d9135be3f7906098f97f48c7d0961cf11271082cc22cd67e95ed44bc925a",
+    "expression": "menu.addAction('停用 / 撤销…' if row['enabled'] else '恢复已审阅模板…', lambda : self.toggle(row))",
+    "callbacks": {
+      "toggle": "fe3c353f2cdcb90afc8a9143a48f5a34d8b084b0d29801b19f5f7e317ae6fd63"
+    }
+  },
+  {
     "file": "src/ui/qt/dashboard.py",
-    "file_code_sha256": "0ad75e4fdd0248f68a04c3600a1c64fda9e9775feb329f8c72a01034a2ec6e00",
+    "file_code_sha256": "5a77b7c00747a84e1946c37a5b460473a2dfd3ceb1a11e61f4cbabd75fa56865",
     "action": "443974a59d44e22544da902eaa4ad656cc8ad22e69ef8b0548cd7df59c78f69c",
     "expression": "self.table.clicked.connect(self._selected)",
     "callbacks": {
@@ -3888,7 +4013,16 @@
   },
   {
     "file": "src/ui/qt/dashboard.py",
-    "file_code_sha256": "0ad75e4fdd0248f68a04c3600a1c64fda9e9775feb329f8c72a01034a2ec6e00",
+    "file_code_sha256": "5a77b7c00747a84e1946c37a5b460473a2dfd3ceb1a11e61f4cbabd75fa56865",
+    "action": "6c5545cf89b702a66a64b1c49827f3b4c68eaf71811dc874feaf688c6ed13b1c",
+    "expression": "self.cards.activated.connect(self._activate_from_keyboard)",
+    "callbacks": {
+      "_activate_from_keyboard": "e1cbc4a79d3787c05943568bbbb609c24fff470d755fc060388301c17fe1e9bb"
+    }
+  },
+  {
+    "file": "src/ui/qt/dashboard.py",
+    "file_code_sha256": "5a77b7c00747a84e1946c37a5b460473a2dfd3ceb1a11e61f4cbabd75fa56865",
     "action": "9233f2c00e5f5a4ba79f30fa6ca951efc38b003fbfd8c5f384a61b6bcd80e2b0",
     "expression": "self.cards.clicked.connect(self._selected)",
     "callbacks": {
@@ -3897,7 +4031,16 @@
   },
   {
     "file": "src/ui/qt/dashboard.py",
-    "file_code_sha256": "0ad75e4fdd0248f68a04c3600a1c64fda9e9775feb329f8c72a01034a2ec6e00",
+    "file_code_sha256": "5a77b7c00747a84e1946c37a5b460473a2dfd3ceb1a11e61f4cbabd75fa56865",
+    "action": "a4bb236a945fbec434342c08b7a6ddbdbae26bc04aa7abc993877f0f8546b485",
+    "expression": "self.table.activated.connect(self._activate_from_keyboard)",
+    "callbacks": {
+      "_activate_from_keyboard": "e1cbc4a79d3787c05943568bbbb609c24fff470d755fc060388301c17fe1e9bb"
+    }
+  },
+  {
+    "file": "src/ui/qt/dashboard.py",
+    "file_code_sha256": "5a77b7c00747a84e1946c37a5b460473a2dfd3ceb1a11e61f4cbabd75fa56865",
     "action": "cc21ae79c2503bc4b96d0a704f8310ef6500e27b4ac2ac47fee64d22a8b0c2f9",
     "expression": "self.state_filter.currentIndexChanged.connect(self._filter)",
     "callbacks": {
@@ -3906,7 +4049,7 @@
   },
   {
     "file": "src/ui/qt/dashboard.py",
-    "file_code_sha256": "0ad75e4fdd0248f68a04c3600a1c64fda9e9775feb329f8c72a01034a2ec6e00",
+    "file_code_sha256": "5a77b7c00747a84e1946c37a5b460473a2dfd3ceb1a11e61f4cbabd75fa56865",
     "action": "dfcb99e795b9fb1fa3923b28416152b61ebe9827d807becd083a6c1d008af25b",
     "expression": "self.search.textChanged.connect(self._filter)",
     "callbacks": {
@@ -4354,7 +4497,7 @@
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "025e8a9b69c15afcc9b5a9fc87273aa6db1fad3b4a3132fe0756972f8cf8a118",
     "expression": "review.confirmed.connect(lambda outcome, evidence: self._confirm_review(dialog, review, outcome, evidence))",
     "callbacks": {
@@ -4363,7 +4506,16 @@
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
+    "action": "18c7dd0f5ed3caf49159f24db93d59dd22f930394a18f1b81a739f23a5971f40",
+    "expression": "dialog.stop_requested.connect(lambda job: self._submit(dialog, 'job_stop_active', job))",
+    "callbacks": {
+      "_submit": "36bc395370846bbd6bd324e295e15a238657eb447144bd95acb1e60c72f6e7bc"
+    }
+  },
+  {
+    "file": "src/ui/qt/log_history_dialog.py",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "1c8da6b248ed37f736def1ebfa7e6bb3b3e65082448ead7540948a79ff25ecd6",
     "expression": "self.job_menu.addAction('现场核实结果…', self._request_review)",
     "callbacks": {
@@ -4372,7 +4524,7 @@
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "239f39a80ee444855224c5fce0dc72a897a53a1aadbf5875eadcdce9bbeb1f8f",
     "expression": "self.logs.level.currentIndexChanged.connect(self._update_filter_feedback)",
     "callbacks": {
@@ -4381,7 +4533,7 @@
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "24ffbd3a885fc42b65547daed1d66a8902c79df803dcbf7ddbd746fafe154c1f",
     "expression": "review.finished.connect(lambda code: self._close_review(dialog, review, code))",
     "callbacks": {
@@ -4390,7 +4542,7 @@
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "2837306678f7099fa0c55b4b7cce5348ab275e820fe18ca518dd8c346954e2dd",
     "expression": "dialog.jobs_requested.connect(lambda before: self._submit(dialog, 'history_jobs', before))",
     "callbacks": {
@@ -4399,7 +4551,7 @@
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "3f952bc402318ab42bf6ec415e58c52e7da9eec7e940673ad4843502b1f1e9c0",
     "expression": "self.logs.scope.currentIndexChanged.connect(self._update_filter_feedback)",
     "callbacks": {
@@ -4408,7 +4560,7 @@
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "45839ab5c894ec2275060523633ea2637c100a98dbc44af3e659cb3f1820fa30",
     "expression": "self.source.currentIndexChanged.connect(self._select_source)",
     "callbacks": {
@@ -4417,7 +4569,7 @@
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "57437ae169a24246ec367f39d430e5ba27cfa53f0eed95037f5bdbcd7c83d124",
     "expression": "dialog.review_requested.connect(lambda job: self._submit(dialog, 'job_review_prepare', job))",
     "callbacks": {
@@ -4426,14 +4578,23 @@
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "59345cd233484d56033472c6b52981c418b63d37e8a53702e5809dcd367e5d94",
     "expression": "files.finished.connect(finished)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
+    "action": "5c96665156b6a2fafb7ce524ad7de7d1f6e26e8a1c4ca347b073548cb018ce84",
+    "expression": "self.job_menu.addAction('请求安全停止…', self._request_stop)",
+    "callbacks": {
+      "_request_stop": "498d70e7a9615eecaaccd04693c548307029cd708b79a268554a880999cdcfde"
+    }
+  },
+  {
+    "file": "src/ui/qt/log_history_dialog.py",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "6d4a791bf0245fd464cbd83e2007408d77b8bf8f154a7ee66866401605421f76",
     "expression": "self.logs.search.textChanged.connect(self._update_filter_feedback)",
     "callbacks": {
@@ -4442,7 +4603,7 @@
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "73356bd50d04f44ae18d29437a9397c23ae5775bff7303ce21b14db734d5ed1b",
     "expression": "dialog.legacy_requested.connect(lambda before: self._submit(dialog, 'history_legacy_runs', before))",
     "callbacks": {
@@ -4451,7 +4612,7 @@
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "84516bb1c81d347258affaac3a892b01b92670233e3d02a3aee2395de3bc5c7b",
     "expression": "dialog.events_requested.connect(lambda job, before, filters: self._submit(dialog, 'history_events', before, job, filters))",
     "callbacks": {
@@ -4460,28 +4621,28 @@
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "89134926eaaa68a3d7110e685f37cad4303bae5c258750b87941edf10af7285b",
     "expression": "files.open_requested.connect(open_file)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "90e794dfd45aef3b1d577d441bb6454d9037bc3a136fbcc1a0099ea5f111c8bc",
     "expression": "dialog.logs.export_requested.connect(lambda entries, description: self.workspace.export_logs(entries, description, dialog))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "bb5beb7149578cbdbf2c6229b560b4362d4994c2c3eb8e733e83f927f4b59ea1",
     "expression": "dialog.finished.connect(lambda _: self.windows.pop(project.project_id, None))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "c67b63df752702631c85ac8958f649779508d98ebf81a0c2183c68c0f1679f4c",
     "expression": "self.job_menu.addAction('查看批次结果文件…', self._request_result_files)",
     "callbacks": {
@@ -4490,7 +4651,7 @@
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "d9808b40d1f85fe5e84a23e5d3d7a4552f644ae5cca8164b0b45e2506f469b35",
     "expression": "dialog.result_files_requested.connect(lambda job: self._submit(dialog, 'history_result_files', job))",
     "callbacks": {
@@ -4499,16 +4660,16 @@
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "edc4715a9733c63bf2583487fb0caa09034994052366aae2274571e7c7b979a6",
     "expression": "self.jobs.customContextMenuRequested.connect(self._job_menu)",
     "callbacks": {
-      "_job_menu": "fdfd492ccf3f17b97e072bb1898c16d70e0abe045c21c9fbc4f52e3335a7b22c"
+      "_job_menu": "94b61441566c26be023ef99c816434c1629831f8523c40030f29c4c1140fcc11"
     }
   },
   {
     "file": "src/ui/qt/log_history_dialog.py",
-    "file_code_sha256": "4cbddf5b876ab09692b46366340cabd86c320973d9dcd471d157028645d1cc86",
+    "file_code_sha256": "f6f8b123db0af3202ac380648896b8d97045433a1e8cf2645ff30d9c2a16136a",
     "action": "f398593f30eb8d871902446491fe11d90c71166273abce6626b9ee5beacfa4bb",
     "expression": "self.jobs.currentIndexChanged.connect(self._select_job)",
     "callbacks": {
@@ -4517,7 +4678,7 @@
   },
   {
     "file": "src/ui/qt/log_panel.py",
-    "file_code_sha256": "42d80f535d4880a5ce17be288f58df4bedf27c560a9bde9963a4e20440395d10",
+    "file_code_sha256": "272bf5b19947df8020b90df2095efe01e65425cafaaea0b431951c0c1a5c46ed",
     "action": "4810d6dc1ffb55a7bc08037801f707dbf9b62ccf407dd820720c78f501c3114b",
     "expression": "self.scope.currentIndexChanged.connect(self.render)",
     "callbacks": {
@@ -4526,7 +4687,16 @@
   },
   {
     "file": "src/ui/qt/log_panel.py",
-    "file_code_sha256": "42d80f535d4880a5ce17be288f58df4bedf27c560a9bde9963a4e20440395d10",
+    "file_code_sha256": "272bf5b19947df8020b90df2095efe01e65425cafaaea0b431951c0c1a5c46ed",
+    "action": "525567331aa125e1b7bae938cf9cffcdab048ff8cfa3116371ab5d6e63d5a791",
+    "expression": "self.project_filter.opening.connect(self._refresh_project_choices)",
+    "callbacks": {
+      "_refresh_project_choices": "678f42d02917cf018cceef2df6098462790716fe1e59aa2073d9accfc8a987aa"
+    }
+  },
+  {
+    "file": "src/ui/qt/log_panel.py",
+    "file_code_sha256": "272bf5b19947df8020b90df2095efe01e65425cafaaea0b431951c0c1a5c46ed",
     "action": "5bd61505a494e15d5fc86f6a2bf290dc5c1e0b13c60835e598aa7bcc1faacbe1",
     "expression": "self.level.currentIndexChanged.connect(self.render)",
     "callbacks": {
@@ -4535,7 +4705,7 @@
   },
   {
     "file": "src/ui/qt/log_panel.py",
-    "file_code_sha256": "42d80f535d4880a5ce17be288f58df4bedf27c560a9bde9963a4e20440395d10",
+    "file_code_sha256": "272bf5b19947df8020b90df2095efe01e65425cafaaea0b431951c0c1a5c46ed",
     "action": "6fccaf3502577c3ef0ea77f7088f77eab3191bfc83c1f9897aed0434ad5b44cf",
     "expression": "self.search.textChanged.connect(self.render)",
     "callbacks": {
@@ -4543,8 +4713,17 @@
     }
   },
   {
+    "file": "src/ui/qt/log_panel.py",
+    "file_code_sha256": "272bf5b19947df8020b90df2095efe01e65425cafaaea0b431951c0c1a5c46ed",
+    "action": "a0d66f3167d3c2a48896919578d9fddbf0070ed2b1b30d94c7a47e30b3a4ff85",
+    "expression": "self.project_filter.currentIndexChanged.connect(self.render)",
+    "callbacks": {
+      "render": "a9ad3b546b6fb94de73674955c6659b3f75cc3088dd9ab079001ad1cc80197ed"
+    }
+  },
+  {
     "file": "src/ui/qt/main_window.py",
-    "file_code_sha256": "f882bd2d9dd987f8ba760a27e7079a4c2a0f513d6be1f5fbb32aaa2142993c23",
+    "file_code_sha256": "dae1b1bb808c7d307924cd6d0f1a63e52ada819450e7992bc08a19644dcfb51d",
     "action": "3a4bbc8e89a5f69d82a4d0ac44521f540652d923a24dd23a604ea6e8871446ad",
     "expression": "self.sidebar_search.textChanged.connect(self._filter_navigation)",
     "callbacks": {
@@ -4553,59 +4732,77 @@
   },
   {
     "file": "src/ui/qt/main_window.py",
-    "file_code_sha256": "f882bd2d9dd987f8ba760a27e7079a4c2a0f513d6be1f5fbb32aaa2142993c23",
+    "file_code_sha256": "dae1b1bb808c7d307924cd6d0f1a63e52ada819450e7992bc08a19644dcfb51d",
     "action": "762bac1449c723a302d6d6e3eaf9083be59fab3616bec1e3134b532827072d82",
     "expression": "self.dashboard.project_requested.connect(self.select_project)",
     "callbacks": {
-      "select_project": "f26756efd5ef2082a0924756ac9a3ebc412f31f2b06c8746d7f1d2c54ae63105"
+      "select_project": "f8f5f4ef2eb7c29c4525728b78bd02b18106276855f990866fb6426d6509f774"
     }
   },
   {
     "file": "src/ui/qt/main_window.py",
-    "file_code_sha256": "f882bd2d9dd987f8ba760a27e7079a4c2a0f513d6be1f5fbb32aaa2142993c23",
+    "file_code_sha256": "dae1b1bb808c7d307924cd6d0f1a63e52ada819450e7992bc08a19644dcfb51d",
     "action": "7fd8c1d81a1c368ca31acbfc35e805860f6e6947bd440134be4c44f2e4e23d24",
     "expression": "self.dashboard.system_health.layout_changed.connect(lambda : self._layout_timer.start(0))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/main_window.py",
-    "file_code_sha256": "f882bd2d9dd987f8ba760a27e7079a4c2a0f513d6be1f5fbb32aaa2142993c23",
+    "file_code_sha256": "dae1b1bb808c7d307924cd6d0f1a63e52ada819450e7992bc08a19644dcfb51d",
     "action": "85f58daa365bdc47115c26cf1dfa9a11a03b2b8447dcd40b33243c899da4dd09",
     "expression": "collapse.triggered.connect(self.toggle_sidebar)",
     "callbacks": {
-      "toggle_sidebar": "915b81fb476e6da4692cc0df41efb59cc736fe236802e80efa8f0d14ac6a9d16"
+      "toggle_sidebar": "eaa9ecaa4b0bff49767a0120a2d2a5cd19ffefdfc9783b5fe78d2337cc600d6a"
     }
   },
   {
     "file": "src/ui/qt/main_window.py",
-    "file_code_sha256": "f882bd2d9dd987f8ba760a27e7079a4c2a0f513d6be1f5fbb32aaa2142993c23",
+    "file_code_sha256": "dae1b1bb808c7d307924cd6d0f1a63e52ada819450e7992bc08a19644dcfb51d",
+    "action": "8a1fe70f9bf00226866a969ce83ab02047887fcbf64f2f1d40d9ddb222d03d34",
+    "expression": "self.templates_page.project_requested.connect(self.select_project)",
+    "callbacks": {
+      "select_project": "f8f5f4ef2eb7c29c4525728b78bd02b18106276855f990866fb6426d6509f774"
+    }
+  },
+  {
+    "file": "src/ui/qt/main_window.py",
+    "file_code_sha256": "dae1b1bb808c7d307924cd6d0f1a63e52ada819450e7992bc08a19644dcfb51d",
+    "action": "99c149f0382d6608748cdc4476eb468b250e3a3b8277b95a99f05ecf7fab6e88",
+    "expression": "self.navigation.activated.connect(self._navigation_selected)",
+    "callbacks": {
+      "_navigation_selected": "9027bd234e61c3d783dd7bde71f433efba7354570c82754aed937b3188c1e836"
+    }
+  },
+  {
+    "file": "src/ui/qt/main_window.py",
+    "file_code_sha256": "dae1b1bb808c7d307924cd6d0f1a63e52ada819450e7992bc08a19644dcfb51d",
     "action": "a11161d95d8037a7a51a62dcffb8cf8de635e0aff570b60a1915cb5aa3fb2c54",
     "expression": "self.detail.back_requested.connect(self.show_dashboard)",
     "callbacks": {
-      "show_dashboard": "f26ed58f9109e725b25ffcb8872da0d736e52828a15023812a572d27c71dd82d"
+      "show_dashboard": "9ae21a2dbfb97031edbe6cb526a6ce36c554ea145ca6185466ca6b03a7c27f5a"
     }
   },
   {
     "file": "src/ui/qt/main_window.py",
-    "file_code_sha256": "f882bd2d9dd987f8ba760a27e7079a4c2a0f513d6be1f5fbb32aaa2142993c23",
+    "file_code_sha256": "dae1b1bb808c7d307924cd6d0f1a63e52ada819450e7992bc08a19644dcfb51d",
     "action": "c077a3b23a772ab5c154ee15905360152e49997bc7f775d954b09c3abecec497",
     "expression": "self.navigation.clicked.connect(self._navigation_selected)",
     "callbacks": {
-      "_navigation_selected": "3fef03dfff4fb09f700d7f06721053b65b53e8b2f11d43ab228209fef4e298be"
+      "_navigation_selected": "9027bd234e61c3d783dd7bde71f433efba7354570c82754aed937b3188c1e836"
     }
   },
   {
     "file": "src/ui/qt/main_window.py",
-    "file_code_sha256": "f882bd2d9dd987f8ba760a27e7079a4c2a0f513d6be1f5fbb32aaa2142993c23",
+    "file_code_sha256": "dae1b1bb808c7d307924cd6d0f1a63e52ada819450e7992bc08a19644dcfb51d",
     "action": "d550cb448e20f4f575aa9cccffacaa8beb47eda610e2d33e359eab27e19c330e",
     "expression": "self._layout_timer.timeout.connect(self._fit_log)",
     "callbacks": {
-      "_fit_log": "0064cd4185235ed796958190b2ab7e6ca32855df1ebbc8168eac47e485ae65ac"
+      "_fit_log": "bcbd360a6794f216aba9e660138d093b280e1fd4215050f7917755397be4a7e9"
     }
   },
   {
     "file": "src/ui/qt/main_window.py",
-    "file_code_sha256": "f882bd2d9dd987f8ba760a27e7079a4c2a0f513d6be1f5fbb32aaa2142993c23",
+    "file_code_sha256": "dae1b1bb808c7d307924cd6d0f1a63e52ada819450e7992bc08a19644dcfb51d",
     "action": "e31d1fbe94d91210b58244090c750fe8069a733de1f6cb553eb7ab573dcfd038",
     "expression": "self.vertical.splitterMoved.connect(self._log_dragged)",
     "callbacks": {
@@ -4614,11 +4811,11 @@
   },
   {
     "file": "src/ui/qt/main_window.py",
-    "file_code_sha256": "f882bd2d9dd987f8ba760a27e7079a4c2a0f513d6be1f5fbb32aaa2142993c23",
+    "file_code_sha256": "dae1b1bb808c7d307924cd6d0f1a63e52ada819450e7992bc08a19644dcfb51d",
     "action": "eca524c69618e0a163b63ae07fe2cd48f9c0399a676fa70f4003eab60f7c784f",
     "expression": "self.logs.expanded_changed.connect(self._log_expanded)",
     "callbacks": {
-      "_log_expanded": "4ff87dbe60f916422e6d1db1cbb6ae267aa0db9b603235c177b1a7fc880f5347"
+      "_log_expanded": "9641dbb56595713c08fd48131c418001a7de1ac293f007a7307199e067b47f06"
     }
   },
   {
@@ -4708,6 +4905,22 @@
     "callbacks": {
       "_delete": "1317b8a50ba0fb6c3775542356f2fad3049aa0a467309608c78ff38de3cbeef5"
     }
+  },
+  {
+    "file": "src/ui/qt/module_visual_preview.py",
+    "file_code_sha256": "8b196161c24d00d46acbde7e7d3ea317a7c51c22a56c47dc71ca9541b701c508",
+    "action": "76579cc614c86bd0f27219266e0736ae9e7297a14dadbc3efa0a992f2c6f5dab",
+    "expression": "self.modules.currentIndexChanged.connect(self._select_module)",
+    "callbacks": {
+      "_select_module": "e7424412d6d071ef30ee50243cdef350204ec1b3888e06a7b4e28fa21b5e46ef"
+    }
+  },
+  {
+    "file": "src/ui/qt/module_visual_preview.py",
+    "file_code_sha256": "8b196161c24d00d46acbde7e7d3ea317a7c51c22a56c47dc71ca9541b701c508",
+    "action": "8bfdba7fd2dda919af5287847fa25a0d9a0562ceb9ef0258d056c8106341d658",
+    "expression": "self.variant_buttons.idClicked.connect(self.versions.setCurrentIndex)",
+    "callbacks": {}
   },
   {
     "file": "src/ui/qt/onu_provision_page.py",
@@ -4986,8 +5199,62 @@
     }
   },
   {
+    "file": "src/ui/qt/platform_configuration_dialog.py",
+    "file_code_sha256": "20504d0617537ac40a2036dbae0585a26952310eb709649276b66b44a78de4ff",
+    "action": "078c63ca511a945c1e351bca2ca721899f3b0f90d66f97f931f4292896e653ed",
+    "expression": "menu.addAction(title, lambda checked=False, mode=channel: self.change_direct(mode))",
+    "callbacks": {
+      "change_direct": "2d0b945858d0e918bc765b7cedba8ea51e7c729de93343d666df734c1ba30389"
+    }
+  },
+  {
+    "file": "src/ui/qt/platform_configuration_dialog.py",
+    "file_code_sha256": "20504d0617537ac40a2036dbae0585a26952310eb709649276b66b44a78de4ff",
+    "action": "13d817c10aeb1b0f233df2669973df1e421a17593ced32cd0be2246f35a07b48",
+    "expression": "field.textChanged.connect(self._sync)",
+    "callbacks": {
+      "_sync": "11e393376fbea49dc079c160ff20eb8f6418d82514c96a4c75a5e67fff0baaad"
+    }
+  },
+  {
+    "file": "src/ui/qt/platform_configuration_dialog.py",
+    "file_code_sha256": "20504d0617537ac40a2036dbae0585a26952310eb709649276b66b44a78de4ff",
+    "action": "516d6516c1391e3ac0f5e924dead4c33b65dc8eb5fa9f15622d4aca9b5ab628d",
+    "expression": "menu.addAction('取消当前绑定', self.cancel_binding)",
+    "callbacks": {
+      "cancel_binding": "8ae5258a9810c590294d442ffdbb637717c2dc07df4d5fe4374d7b11016c2a73"
+    }
+  },
+  {
+    "file": "src/ui/qt/platform_configuration_dialog.py",
+    "file_code_sha256": "20504d0617537ac40a2036dbae0585a26952310eb709649276b66b44a78de4ff",
+    "action": "691c11c71ceaa74b6b1f442f5b3c2fc0d1f2d2389196fe1ab9497d86dd73c5b2",
+    "expression": "menu.addAction('启用飞书挂测通知…', self.change_notifications)",
+    "callbacks": {
+      "change_notifications": "66dcc6148ff9128f7e9d92f2ff161ab10d303189cf3079e6cf42ddadccc194f5"
+    }
+  },
+  {
+    "file": "src/ui/qt/platform_configuration_dialog.py",
+    "file_code_sha256": "20504d0617537ac40a2036dbae0585a26952310eb709649276b66b44a78de4ff",
+    "action": "ec24e10f099118265a5630dcaaa0f3c22765b1342a4ee7bf0c7daae6c58fe799",
+    "expression": "menu.addAction('发送飞书测试消息…', self.start_trial)",
+    "callbacks": {
+      "start_trial": "7946837eef98424862c615ebf4a2648e0d0209d8fdde230bcfc24ff616813d63"
+    }
+  },
+  {
+    "file": "src/ui/qt/platform_configuration_dialog.py",
+    "file_code_sha256": "20504d0617537ac40a2036dbae0585a26952310eb709649276b66b44a78de4ff",
+    "action": "f4d25a06b8e1d150569dde239a4f2db9a3b6e6ae590d0f5ae8a2950366321a4a",
+    "expression": "self.timer.timeout.connect(self.poll)",
+    "callbacks": {
+      "poll": "b085f3368afbfebfcb1d69e8aaf37113722b3ffd92142c5aa8aa7596d63e3b4d"
+    }
+  },
+  {
     "file": "src/ui/qt/project_detail.py",
-    "file_code_sha256": "e439595e0eef033874f7cf8f5281c98bac15419b53392e68764ed02f16a63978",
+    "file_code_sha256": "00e4b3a2e608bac97a1443d0fccd85151fe47cb8ee1094b9251053a839e29cbf",
     "action": "0646d72692b15f61e8dd5ad86f341e2121c26bdb279fbb594f6ad2eebff6180f",
     "expression": "self.channel_table.customContextMenuRequested.connect(self._table_channel_menu)",
     "callbacks": {
@@ -4996,7 +5263,7 @@
   },
   {
     "file": "src/ui/qt/project_detail.py",
-    "file_code_sha256": "e439595e0eef033874f7cf8f5281c98bac15419b53392e68764ed02f16a63978",
+    "file_code_sha256": "00e4b3a2e608bac97a1443d0fccd85151fe47cb8ee1094b9251053a839e29cbf",
     "action": "2907e445e20e1b0ca4929663028f4b1a9ed990433b475cbc406ae52997fe51d4",
     "expression": "self.recovery_menu.addAction(title, partial(self._power_log_menu_selected, kind))",
     "callbacks": {
@@ -5005,14 +5272,21 @@
   },
   {
     "file": "src/ui/qt/project_detail.py",
-    "file_code_sha256": "e439595e0eef033874f7cf8f5281c98bac15419b53392e68764ed02f16a63978",
+    "file_code_sha256": "00e4b3a2e608bac97a1443d0fccd85151fe47cb8ee1094b9251053a839e29cbf",
     "action": "31511bb1ab63a725e3d09ace1a06983a7309084ca98637aebe8a9fe85fe2cb52",
     "expression": "dialog.finished.connect(lambda result: self.dialogs.remove(dialog))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/project_detail.py",
-    "file_code_sha256": "e439595e0eef033874f7cf8f5281c98bac15419b53392e68764ed02f16a63978",
+    "file_code_sha256": "00e4b3a2e608bac97a1443d0fccd85151fe47cb8ee1094b9251053a839e29cbf",
+    "action": "6eab0dcc5473299adbeb2cf0267017a44f14a8849376680301735f17ab272363",
+    "expression": "self.channels.layout_changed.connect(self.channel_modes.update_current_geometry)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/project_detail.py",
+    "file_code_sha256": "00e4b3a2e608bac97a1443d0fccd85151fe47cb8ee1094b9251053a839e29cbf",
     "action": "83f510beaa3ed9304c50602c2437012e76b1c3cb73339e952ff296d87987e7f0",
     "expression": "self.tabs.currentChanged.connect(self._module_clicked)",
     "callbacks": {
@@ -5021,7 +5295,7 @@
   },
   {
     "file": "src/ui/qt/project_detail.py",
-    "file_code_sha256": "e439595e0eef033874f7cf8f5281c98bac15419b53392e68764ed02f16a63978",
+    "file_code_sha256": "00e4b3a2e608bac97a1443d0fccd85151fe47cb8ee1094b9251053a839e29cbf",
     "action": "85f4d0b5c52617a8981d950fc4de30ffa0df3d75789dd04c92cffaeb17a0b830",
     "expression": "self.recovery_menu.addAction('查看本次重试/失败历史…', self._channel_history_menu_selected)",
     "callbacks": {
@@ -5030,7 +5304,7 @@
   },
   {
     "file": "src/ui/qt/project_detail.py",
-    "file_code_sha256": "e439595e0eef033874f7cf8f5281c98bac15419b53392e68764ed02f16a63978",
+    "file_code_sha256": "00e4b3a2e608bac97a1443d0fccd85151fe47cb8ee1094b9251053a839e29cbf",
     "action": "92e98c8c3fbad2e38549586504f55a27793b004dfa590fd0647aa07819d9f455",
     "expression": "self.channels.selected.connect(self.open_channel)",
     "callbacks": {
@@ -5039,14 +5313,14 @@
   },
   {
     "file": "src/ui/qt/project_detail.py",
-    "file_code_sha256": "e439595e0eef033874f7cf8f5281c98bac15419b53392e68764ed02f16a63978",
+    "file_code_sha256": "00e4b3a2e608bac97a1443d0fccd85151fe47cb8ee1094b9251053a839e29cbf",
     "action": "9ae318f5187908399b9f9dcc651faa36a07da5e3277a9320ceac3b9970779bd2",
     "expression": "tile.customContextMenuRequested.connect(lambda point, n=channel.number, control=tile: self.context_requested.emit(n, control.mapToGlobal(point)))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/project_detail.py",
-    "file_code_sha256": "e439595e0eef033874f7cf8f5281c98bac15419b53392e68764ed02f16a63978",
+    "file_code_sha256": "00e4b3a2e608bac97a1443d0fccd85151fe47cb8ee1094b9251053a839e29cbf",
     "action": "a0dd43da7a3934a25236c64e25eaf27db0c5013b90cc6394664750a66e5b15a1",
     "expression": "self.channel_table.doubleClicked.connect(lambda index: self.open_channel(index.data(Qt.ItemDataRole.UserRole)))",
     "callbacks": {
@@ -5055,7 +5329,7 @@
   },
   {
     "file": "src/ui/qt/project_detail.py",
-    "file_code_sha256": "e439595e0eef033874f7cf8f5281c98bac15419b53392e68764ed02f16a63978",
+    "file_code_sha256": "00e4b3a2e608bac97a1443d0fccd85151fe47cb8ee1094b9251053a839e29cbf",
     "action": "e3958a29b3155ca148ae5a6546bc7a41850595c2314a9f3ac3551ed68329e28e",
     "expression": "self.channels.context_requested.connect(self.channel_context_menu)",
     "callbacks": {
@@ -5064,7 +5338,7 @@
   },
   {
     "file": "src/ui/qt/project_detail.py",
-    "file_code_sha256": "e439595e0eef033874f7cf8f5281c98bac15419b53392e68764ed02f16a63978",
+    "file_code_sha256": "00e4b3a2e608bac97a1443d0fccd85151fe47cb8ee1094b9251053a839e29cbf",
     "action": "f3d0eeb07dc4df6cba74dadc34e2c60c938354ebffa6dacbfd758be820147884",
     "expression": "self.recovery_menu.addAction('重新开始（从失败轮次继续）', self._resume_menu_selected)",
     "callbacks": {
@@ -5073,10 +5347,170 @@
   },
   {
     "file": "src/ui/qt/project_detail.py",
-    "file_code_sha256": "e439595e0eef033874f7cf8f5281c98bac15419b53392e68764ed02f16a63978",
+    "file_code_sha256": "00e4b3a2e608bac97a1443d0fccd85151fe47cb8ee1094b9251053a839e29cbf",
     "action": "fadb04c286b1233a2f6bc4f17bb967e1f29015441693c7c0088acd3ca9abe341",
     "expression": "close.rejected.connect(dialog.close)",
     "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/project_preparation_page.py",
+    "file_code_sha256": "581db2214a87fa15d8774dccbc6008f982c83832fa2ba3759cf94d582a3694b1",
+    "action": "251d48ab9f425dba9b676409767a7782ad8955b30396b1a5de4f296b8b377830",
+    "expression": "self.dut.currentIndexChanged.connect(self._render_steps)",
+    "callbacks": {
+      "_render_steps": "36a4e03239f8d396698845caaf87137b9db9e5c848a7540000c4602f20ed7c0b"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_preparation_page.py",
+    "file_code_sha256": "581db2214a87fa15d8774dccbc6008f982c83832fa2ba3759cf94d582a3694b1",
+    "action": "5e67db0eabc2c364a7f528c40da6cc224e2d6d54a7bb82cf8430eb0fc084b5f5",
+    "expression": "self.table.itemSelectionChanged.connect(self._render_step)",
+    "callbacks": {
+      "_render_step": "65748c51e8c3d74ea5e87620a27d893cbce3244a8b7c4adf5a0c8780697d54e2"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_preparation_page.py",
+    "file_code_sha256": "581db2214a87fa15d8774dccbc6008f982c83832fa2ba3759cf94d582a3694b1",
+    "action": "8937c3f48b49c34ef6ce10e8882c63aa2b34ae7e734a8460e31d7c6eaf47cf7c",
+    "expression": "self.operation.currentIndexChanged.connect(self._prompt)",
+    "callbacks": {
+      "_prompt": "a95d855822ee816f49b4d94c262a98a05487d8fb5eccc9bedd7ead74e3606b71"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_templates_page.py",
+    "file_code_sha256": "39fc50afd1c696dddb8594c5c15c138d2b36a5b66f31f1c6f05341a694d334b0",
+    "action": "ff53d556b81efa6817be68bf524910694d1cc46d0ec30b36c811e4303edb304f",
+    "expression": "self.table.activated.connect(self._open_source)",
+    "callbacks": {
+      "_open_source": "641a116bdfb4c6b18bbf263d72de38c38b8409294f4849f144df010b5e8323e1"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_wizard.py",
+    "file_code_sha256": "9fa2ecb2a5755964b6b274be528ea10b99016c0a57a3683dba1b14250a480ef3",
+    "action": "0e7ef0bd4c59584afac042fe8270c6cae173a7ff3a9464031dc6a5af30576539",
+    "expression": "self.preset_choice.currentIndexChanged.connect(lambda index: self.apply_preset.setEnabled(index > 0))",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/project_wizard.py",
+    "file_code_sha256": "9fa2ecb2a5755964b6b274be528ea10b99016c0a57a3683dba1b14250a480ef3",
+    "action": "5578a4c57fcb0dbe16d74d33a7954cb73d54ed49d98da2405d34b8491b70c06d",
+    "expression": "self.pages.currentChanged.connect(self._page_changed)",
+    "callbacks": {
+      "_page_changed": "55ab1ca52d7fdbb06b96627e722bcbd74762661fa82f76ca7637a97ea7364c8d"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_wizard.py",
+    "file_code_sha256": "9fa2ecb2a5755964b6b274be528ea10b99016c0a57a3683dba1b14250a480ef3",
+    "action": "6d3e78672b81393dabf84bb9dbed6657b8fff33134e723dde343b1c59a2e7714",
+    "expression": "widget.toggled.connect(lambda enabled, box=source: self._set_source_enabled(box, enabled))",
+    "callbacks": {
+      "_set_source_enabled": "a2330d015cbfe891d62d6444716f563757abc7bb6fc9af973c094ea4e451b93d"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_wizard.py",
+    "file_code_sha256": "9fa2ecb2a5755964b6b274be528ea10b99016c0a57a3683dba1b14250a480ef3",
+    "action": "901b15b5a8211a155c23241863f2719f7ca88b237bf44888ec8e2e1851fc9f49",
+    "expression": "self.test_type.currentIndexChanged.connect(self._type_changed)",
+    "callbacks": {
+      "_type_changed": "34b0d01ef23cb655ba3d2557a2e1e7c7f1307399828b3e53f97223561d9e2b9e"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_wizard.py",
+    "file_code_sha256": "9fa2ecb2a5755964b6b274be528ea10b99016c0a57a3683dba1b14250a480ef3",
+    "action": "c7fd6adf02f205b45428b7553a883b32609d6b28b5e50f5bde21a50783c85b4d",
+    "expression": "choice.toggled.connect(self._preview_plan)",
+    "callbacks": {
+      "_preview_plan": "44664c776721bcb3239dbabcf99cc7c7dd5ac8290f5e4e289f6e6dd80913d2ff"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_wizard_controller.py",
+    "file_code_sha256": "91a12193455bf62bbe77d1c54196dc72283ef28ba7a06404c1c06d0868b8ad0a",
+    "action": "16016adf556e31ece43956bd43089337c65d6dd5a3506b89559e32ab9139fc3c",
+    "expression": "dialog.finished.connect(lambda _result: self._closed(dialog))",
+    "callbacks": {
+      "_closed": "c3cb3890a6b1eed143b4ba8cf85f53f6a8daa0e56d29aee3fe7376d08a66ed90"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_wizard_controller.py",
+    "file_code_sha256": "91a12193455bf62bbe77d1c54196dc72283ef28ba7a06404c1c06d0868b8ad0a",
+    "action": "316bc022cc35deb2d9da13ced1330bdbc1ec53dec8e860db65c675f0e8aa5579",
+    "expression": "dialog.project_menu.aboutToShow.connect(self._update_preset_action)",
+    "callbacks": {
+      "_update_preset_action": "f3ac26a68b425a07f719cd6515e08ee36909a80ac31ddc3a8ae5c82bcb540f43"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_wizard_controller.py",
+    "file_code_sha256": "91a12193455bf62bbe77d1c54196dc72283ef28ba7a06404c1c06d0868b8ad0a",
+    "action": "424c9d5787810424cfc4360ff0f64bd9f70687ea2ae2e9f12eb714df0621bee5",
+    "expression": "dialog.draft_requested.connect(lambda : self._save(False))",
+    "callbacks": {
+      "_save": "d30175227ead28a136051bf678044810dcc8c6e19f4ae0285884ca4fc9523432"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_wizard_controller.py",
+    "file_code_sha256": "91a12193455bf62bbe77d1c54196dc72283ef28ba7a06404c1c06d0868b8ad0a",
+    "action": "42e9aade9acc652f297a9cb9e35c51ba73edd694c590fcdeab31ecbffd2401eb",
+    "expression": "dialog.preparation.module_requested.connect(self._module)",
+    "callbacks": {
+      "_module": "2b20b773a57b5b197a0e98b010e766bb3c4c3cda1c2472dabab8a9726caac730"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_wizard_controller.py",
+    "file_code_sha256": "91a12193455bf62bbe77d1c54196dc72283ef28ba7a06404c1c06d0868b8ad0a",
+    "action": "5a6249b228a8f4e597d3ebd5ed4aaffe9c11d2adabf5221f079395d596aed09f",
+    "expression": "dialog.preparation.refresh_requested.connect(self._refresh)",
+    "callbacks": {
+      "_refresh": "03eac73b4a4cbbef58647d113f2da5dbd302decc208f68bc5c79335324daae26"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_wizard_controller.py",
+    "file_code_sha256": "91a12193455bf62bbe77d1c54196dc72283ef28ba7a06404c1c06d0868b8ad0a",
+    "action": "8ba9bba6c621e53ed97d00822dd934bb6d8b9ba0618bbc2a9ad6d95be6afba26",
+    "expression": "dialog.start_requested.connect(self._start)",
+    "callbacks": {
+      "_start": "a4a9198f7a23319d4378772e88b38df44dd7d59223ae44974fa6f61cafb128c3"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_wizard_controller.py",
+    "file_code_sha256": "91a12193455bf62bbe77d1c54196dc72283ef28ba7a06404c1c06d0868b8ad0a",
+    "action": "c3ab8d3bd0b0c452568681661da9120837ffed79f8af51e719a934f6a3d4f340",
+    "expression": "dialog.save_preset_action.triggered.connect(self._save_preset)",
+    "callbacks": {
+      "_save_preset": "b602bd2383c91bab7d112fd3928d4d7dc15ed38636f0b5ea0ecc0a64a78929fe"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_wizard_controller.py",
+    "file_code_sha256": "91a12193455bf62bbe77d1c54196dc72283ef28ba7a06404c1c06d0868b8ad0a",
+    "action": "d48a1bb1f7e995697d6d6302f1cd33ce0e13ca0a1b2feb29e896042ae35421bf",
+    "expression": "dialog.commit_requested.connect(lambda : self._save(True))",
+    "callbacks": {
+      "_save": "d30175227ead28a136051bf678044810dcc8c6e19f4ae0285884ca4fc9523432"
+    }
+  },
+  {
+    "file": "src/ui/qt/project_wizard_controller.py",
+    "file_code_sha256": "91a12193455bf62bbe77d1c54196dc72283ef28ba7a06404c1c06d0868b8ad0a",
+    "action": "df5dedf11c4280a4a2c5e92c467ccc357ececaebc5d70251c0a68cb603936eae",
+    "expression": "dialog.preparation.record_requested.connect(self._record)",
+    "callbacks": {
+      "_record": "7e3e6db2a10caf41e9a966003174b2b45e0b71ae0fd27e41388ee38b8a73016f"
+    }
   },
   {
     "file": "src/ui/qt/remote_project_scope.py",
@@ -5181,6 +5615,74 @@
     }
   },
   {
+    "file": "src/ui/qt/service_aging_history_dialog.py",
+    "file_code_sha256": "c74a767a6b3a4a8026d5ee8a65ff00f88151a90864fdbda0465115b90a11b2c4",
+    "action": "14ad174ff74e9c13e33cae836eee375ee5d58348ff5d135b919b58e30ee43bd5",
+    "expression": "dialog.runs_requested.connect(lambda cursor: self._runs(dialog, cursor))",
+    "callbacks": {
+      "_runs": "133b7228a2198cd2925b3cc1883da01202eb7b160ce90307a3653c7204b68c81"
+    }
+  },
+  {
+    "file": "src/ui/qt/service_aging_history_dialog.py",
+    "file_code_sha256": "c74a767a6b3a4a8026d5ee8a65ff00f88151a90864fdbda0465115b90a11b2c4",
+    "action": "29804ed541749ffc985f42349bbb2058020fbab9969858fc8ad145bf5524fb5f",
+    "expression": "dialog.export_requested.connect(lambda : self._export(dialog))",
+    "callbacks": {
+      "_export": "01dfdb096f127acc1f3d4f47bfb0d43c27c1474379abde0b44be096016002786"
+    }
+  },
+  {
+    "file": "src/ui/qt/service_aging_history_dialog.py",
+    "file_code_sha256": "c74a767a6b3a4a8026d5ee8a65ff00f88151a90864fdbda0465115b90a11b2c4",
+    "action": "642b8e0594ec0946458d47a643d4fe02ce63bbbd460b1b40578cbec537035bb1",
+    "expression": "dialog.page_requested.connect(lambda cursor: self._page(dialog, cursor))",
+    "callbacks": {
+      "_page": "ed1fd634c89ef021f00c3d8f782755565f718a7e02ba2c1861d644eb8177ae06"
+    }
+  },
+  {
+    "file": "src/ui/qt/service_aging_history_dialog.py",
+    "file_code_sha256": "c74a767a6b3a4a8026d5ee8a65ff00f88151a90864fdbda0465115b90a11b2c4",
+    "action": "a76d6db099f70275c6e7a2958c1bd0ff4e71437f3a318bed84ee931993dc14ff",
+    "expression": "dialog.finished.connect(lambda _: self.windows.pop(identifier, None))",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/service_aging_history_dialog.py",
+    "file_code_sha256": "c74a767a6b3a4a8026d5ee8a65ff00f88151a90864fdbda0465115b90a11b2c4",
+    "action": "e696fca9c4930c08e859fa601871c1e475d8505b639ca488c7f7d2ebe83b58fe",
+    "expression": "self.kind.currentIndexChanged.connect(self._reset_page)",
+    "callbacks": {
+      "_reset_page": "63fb08162d93a36c62abf50f2aee745daa0fd2a12d6e460d4929c453446b06c4"
+    }
+  },
+  {
+    "file": "src/ui/qt/service_aging_history_dialog.py",
+    "file_code_sha256": "c74a767a6b3a4a8026d5ee8a65ff00f88151a90864fdbda0465115b90a11b2c4",
+    "action": "ef79fe2d43baa27a968b481702397b762782ad0acc96c2760ad255a5dc7ebd28",
+    "expression": "self.table.itemSelectionChanged.connect(self._show_evidence)",
+    "callbacks": {
+      "_show_evidence": "15ff2322c6cb4a9023519a9cef9f3422bdf538dcdaf21591c4bfb93022b116df"
+    }
+  },
+  {
+    "file": "src/ui/qt/service_aging_history_dialog.py",
+    "file_code_sha256": "c74a767a6b3a4a8026d5ee8a65ff00f88151a90864fdbda0465115b90a11b2c4",
+    "action": "f26aefb714914191fab1ff9d7fdad7a4c021ce3b748984bd83b0e238d23b9907",
+    "expression": "self.runs.currentIndexChanged.connect(self._reset_page)",
+    "callbacks": {
+      "_reset_page": "63fb08162d93a36c62abf50f2aee745daa0fd2a12d6e460d4929c453446b06c4"
+    }
+  },
+  {
+    "file": "src/ui/qt/showcase_components.py",
+    "file_code_sha256": "26f57c167bed06d64fa90ccd354460ab1b0d5c25644ef5eec72ec2116d510587",
+    "action": "02247b48f27be9f52247f5051d0af3d79992ff81cebd34d50e3e0707a94e69a2",
+    "expression": "widget.clicked.connect(callback)",
+    "callbacks": {}
+  },
+  {
     "file": "src/ui/qt/single_power_dialog.py",
     "file_code_sha256": "3d584fd8c8c2c994efe59d0116022311ee101aeb148e6c0f9a6c6d68fecbb8dc",
     "action": "a1bfd76968edc18422c862fb2d084b2429221fb82962bb3753b78cd2d6d421fc",
@@ -5190,8 +5692,52 @@
     }
   },
   {
+    "file": "src/ui/qt/test_type_panel.py",
+    "file_code_sha256": "c1548bb97777d59a54c70cd58bec10b3a399718fa1d93c1a3ae7b2b2990a723f",
+    "action": "0518ebae3101b23f26010c3ec7ec5d6edd15090c5910b873dd43b62f28f30774",
+    "expression": "buttons.rejected.connect(dialog.reject)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/test_type_panel.py",
+    "file_code_sha256": "c1548bb97777d59a54c70cd58bec10b3a399718fa1d93c1a3ae7b2b2990a723f",
+    "action": "19a421600cc30bf483ca73d832f6b3fd490fc75a903c9480e3a2189e8edaa381",
+    "expression": "dialog.finished.connect(lambda _: (self._dialogs.remove(dialog), dialog.deleteLater()))",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/test_type_panel.py",
+    "file_code_sha256": "c1548bb97777d59a54c70cd58bec10b3a399718fa1d93c1a3ae7b2b2990a723f",
+    "action": "2ce8c358ab13fb17cf9ebcda1ac579b4a6b5121ef84bfb0f75673c8d4ec5dd3a",
+    "expression": "evidence.textChanged.connect(lambda value: buttons.button(QDialogButtonBox.StandardButton.Save).setEnabled(bool(value.strip())))",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/test_type_panel.py",
+    "file_code_sha256": "c1548bb97777d59a54c70cd58bec10b3a399718fa1d93c1a3ae7b2b2990a723f",
+    "action": "96a35ed04745807186a4a99684f0b361e79ca3aac097d30cbd381dffff82c8ed",
+    "expression": "self.table.itemSelectionChanged.connect(self._selection)",
+    "callbacks": {
+      "_selection": "6fa9c3432104a72a9b35df2544570b1e67c16017f88146ac900a6dbf9289374a"
+    }
+  },
+  {
+    "file": "src/ui/qt/test_type_panel.py",
+    "file_code_sha256": "c1548bb97777d59a54c70cd58bec10b3a399718fa1d93c1a3ae7b2b2990a723f",
+    "action": "ac2b14f12d9ee7bff9d831387f487aa87396044dbd3f4a1673946a3ff16011b1",
+    "expression": "buttons.accepted.connect(dialog.accept)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/test_type_panel.py",
+    "file_code_sha256": "c1548bb97777d59a54c70cd58bec10b3a399718fa1d93c1a3ae7b2b2990a723f",
+    "action": "f7a94b28a78a30f898b9232dec0ce2b7c0e5524340103876897efab333ecb940",
+    "expression": "dialog.accepted.connect(lambda : self.record_requested.emit(project, dict(job_id=job, dut_id=dut_id, collector=collector, outcome=outcome.currentData(), kind=kind.currentData(), evidence=evidence.text().strip())))",
+    "callbacks": {}
+  },
+  {
     "file": "src/ui/qt/theme.py",
-    "file_code_sha256": "b1913c6d2ecd933afde7bfed81500e628202661cadf9cf0be77d2317412255ee",
+    "file_code_sha256": "4fd9e482cf78e73ea966bf86d2cf96568f31f0141bc951e6d6aee66d5be94e3f",
     "action": "02247b48f27be9f52247f5051d0af3d79992ff81cebd34d50e3e0707a94e69a2",
     "expression": "widget.clicked.connect(callback)",
     "callbacks": {}
@@ -5215,45 +5761,93 @@
     }
   },
   {
+    "file": "src/ui/qt/visual_preview.py",
+    "file_code_sha256": "24f6188b33001846834017bd5759fe48b8df3a3cf25905975da7b4966659b42b",
+    "action": "0518ebae3101b23f26010c3ec7ec5d6edd15090c5910b873dd43b62f28f30774",
+    "expression": "buttons.rejected.connect(dialog.reject)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/visual_preview.py",
+    "file_code_sha256": "24f6188b33001846834017bd5759fe48b8df3a3cf25905975da7b4966659b42b",
+    "action": "19d14da86c1e1c80a37c05264d4fc4b7e8f34edc35a0a43e11ff8f631c033656",
+    "expression": "dialog.accepted.connect(lambda : self.statusBar().showMessage(f'已确认{action}模拟任务', 4000))",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/visual_preview.py",
+    "file_code_sha256": "24f6188b33001846834017bd5759fe48b8df3a3cf25905975da7b4966659b42b",
+    "action": "71ebf90b1fd18278581b56186f14776df33f788cd9ca4718c49871b698ba69fa",
+    "expression": "self.detail.start_button.clicked.connect(lambda : self._confirm('启动'))",
+    "callbacks": {
+      "_confirm": "2e3b966ea7a5f56e02b0c2241174f2fa6890c19465490779a892cab5ef1ab417"
+    }
+  },
+  {
+    "file": "src/ui/qt/visual_preview.py",
+    "file_code_sha256": "24f6188b33001846834017bd5759fe48b8df3a3cf25905975da7b4966659b42b",
+    "action": "a8440f185fe3475d29a987d5a0b7b23730304b1625484ce9d1fa922712e96ff0",
+    "expression": "self.variants.idClicked.connect(self._show_variant)",
+    "callbacks": {
+      "_show_variant": "79efa7a09fa1aebba5676c603f450e691b2bbea563e3ac4eae9841bf6c28843f"
+    }
+  },
+  {
+    "file": "src/ui/qt/visual_preview.py",
+    "file_code_sha256": "24f6188b33001846834017bd5759fe48b8df3a3cf25905975da7b4966659b42b",
+    "action": "ac2b14f12d9ee7bff9d831387f487aa87396044dbd3f4a1673946a3ff16011b1",
+    "expression": "buttons.accepted.connect(dialog.accept)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/visual_preview.py",
+    "file_code_sha256": "24f6188b33001846834017bd5759fe48b8df3a3cf25905975da7b4966659b42b",
+    "action": "c2b909d05367910477fd174b02afb06849a2f2aca15f7cb433109aa78a9f30b9",
+    "expression": "self.detail.stop_button.clicked.connect(lambda : self._confirm('停止'))",
+    "callbacks": {
+      "_confirm": "2e3b966ea7a5f56e02b0c2241174f2fa6890c19465490779a892cab5ef1ab417"
+    }
+  },
+  {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "01b3b51306abe530fb3d7ec070010656ff9895b8a32f1bfa6efaf98a96e2a590",
     "expression": "dialog.finished.connect(finished)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "01b3b51306abe530fb3d7ec070010656ff9895b8a32f1bfa6efaf98a96e2a590",
     "expression": "dialog.finished.connect(finished)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "01b3b51306abe530fb3d7ec070010656ff9895b8a32f1bfa6efaf98a96e2a590",
     "expression": "dialog.finished.connect(finished)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "029e1a41063ccf83df92e1ed13a8ba43664c7599cfdf6ecd4ee1a33a17fabd52",
     "expression": "self.remote_scope_dialog.finished.connect(lambda _: setattr(self, 'remote_scope_dialog', None))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "04163bfac87e95611f07d92efb5c9f1c7c587aa68dca673d9cbf8cf3e859a0d3",
     "expression": "window.devices_action.triggered.connect(self.open_device_inventory)",
     "callbacks": {
-      "open_device_inventory": "912e2dbe37df36e45a1022bc315d62f45285305f8371345c3533f33f6f365f29"
+      "open_device_inventory": "bead2fdd1d4ae7dc0a2037f1baaa706dc1d329958c1260c1e332269ac846d024"
     }
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "0885c04438198ccd96c32545425faadb2cf26ddc16901f836f285f0f9c6ad1cb",
     "expression": "menu.addAction('重命名…', self.rename_project)",
     "callbacks": {
@@ -5262,7 +5856,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "0e61d85aaae49b0972b6d760b50093f1e501e258363d69b5473eaf6f9bab2130",
     "expression": "dialog.checkpoint_requested.connect(lambda values, key=identifier: self._configuration_submit('configuration_checkpoint', key, values))",
     "callbacks": {
@@ -5271,7 +5865,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "0f458c5da3f0324a2ba89c778079afb31b8b9e82cb8b8a7104fc0a24e12809e6",
     "expression": "self.window.detail.serial_requested.connect(self.open_serial)",
     "callbacks": {
@@ -5280,16 +5874,23 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "10134d133bd90fc941cd0165a9bfcb4e9981661f13c6b98974e304e0eb3811e6",
     "expression": "self.window.detail.start_button.clicked.connect(self.start_test)",
     "callbacks": {
-      "start_test": "c7c63ed40d8815858fa99476a4beacd9609a7ca1df437de439c88ff8288e0ac6"
+      "start_test": "7f5a199570d194acca816fb4a56b5df054b37425d7a808357122744171b90e6b"
     }
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
+    "action": "132b60522e775d3e3e32f29150a71d05c8832f1c47e3d1988112a096f421146b",
+    "expression": "settings.addAction('安装飞书 SDK…', self.feishu_repair.open)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/workspace_controller.py",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "1772b56fe23c9de73f3084767ed6ace3e40e27bd735ee48311148c99ae712215",
     "expression": "dialog.review_confirmed.connect(self._confirm_unknown_task)",
     "callbacks": {
@@ -5298,7 +5899,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "177cb8322fdc5e1d91884ea6261d11b473f31aaba1bf50d3c33ff4481730725e",
     "expression": "menu.addAction('打开项目…', self.open_project)",
     "callbacks": {
@@ -5307,7 +5908,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "17a61715a0eabdf787828ddc41fbf6c85645547e4089290045213165c2e1e316",
     "expression": "self.window.detail.channels_configuration_requested.connect(self.open_channels)",
     "callbacks": {
@@ -5316,7 +5917,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "17f174c356b070b73d2e91fff9d77f1bb610828b633afee601ed41b8e00def24",
     "expression": "dialog.selection_requested.connect(self._select_imported_connection)",
     "callbacks": {
@@ -5325,7 +5926,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "1e5631af0616a5695b8f640c9631b5d10bf75c7fbcde8f610861b0c50206adaa",
     "expression": "dialog.version_requested.connect(lambda values, key=identifier: self._configuration_submit('configuration_version_preview', key, values))",
     "callbacks": {
@@ -5334,7 +5935,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "1e91f928c06bb07694c2cd0ab10070503570e6422df006a8b9f7a93ef9113508",
     "expression": "dialog.start_requested.connect(lambda tasks: self._start_pipeline(identifier, tasks))",
     "callbacks": {
@@ -5343,7 +5944,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "236aa82844ed9c592cda2d9c1bd90a97baa9796439868a5f0ede0e392465165e",
     "expression": "dialog.inventory_requested.connect(self.refresh_resources)",
     "callbacks": {
@@ -5352,7 +5953,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "24586bff1791672e0c33005f26df9ef6b479a125bd8f01727f5e91ca8589c37e",
     "expression": "self.recent_menu.aboutToShow.connect(self._populate_recent_menu)",
     "callbacks": {
@@ -5361,7 +5962,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "24a3dfde9d32c88d320e0ed18fd2088d0091702e00675b4fdd4647cec740ec8b",
     "expression": "window.navigation.customContextMenuRequested.connect(self.project_menu)",
     "callbacks": {
@@ -5370,7 +5971,32 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
+    "action": "2c75830c0a94114af052c4b3df2d4c1c4de7ecc0b0407c4b18fa11ac8ff4b0c7",
+    "expression": "menu.addAction('项目向导与公共准备…', self.open_project_setup)",
+    "callbacks": {
+      "open_project_setup": "83ef8a290e285c198f974f16a60b3f4bc32766d6f4a394f46644e202673350f2"
+    }
+  },
+  {
+    "file": "src/ui/qt/workspace_controller.py",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
+    "action": "319316d3de2e65f09739c82f779ba265e91bfa0e971a8b241fe87db52f27db5c",
+    "expression": "dialog.finished.connect(lambda _: setattr(self, 'platform_configuration_dialog', None))",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/workspace_controller.py",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
+    "action": "340eaa64177c6afeceb0c813311e82966fa17b65ab0cf5967692ce4d3064d898",
+    "expression": "self.platform_settings_menu.addAction('飞书应用配置…', lambda : self.open_platform_configuration('feishu'))",
+    "callbacks": {
+      "open_platform_configuration": "9e6e49773fc35e2916c2eb99ddece72445683a637f10982b3b7ca98d842a49cd"
+    }
+  },
+  {
+    "file": "src/ui/qt/workspace_controller.py",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "35e76120581765ca911d456dd9a7d163c740bda1df07d91156fdcdf21ce5e3f3",
     "expression": "menu.addAction('保存当前项目', self.save_project)",
     "callbacks": {
@@ -5379,7 +6005,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "370ad5d7ff9c8fb61f25e77cde6df85a6184a6d2bc3d1d8a1620d9858c1f088a",
     "expression": "self.window.detail.configuration_requested.connect(self.open_configuration)",
     "callbacks": {
@@ -5388,7 +6014,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "392f4564004b8e637f3f280a267fb30646ade42f6f41c5784ab250ecc54ec40b",
     "expression": "dialog.command_requested.connect(lambda action, values, key=identifier: self._upgrade_submit(key, action, values))",
     "callbacks": {
@@ -5397,7 +6023,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "3a2e67ef1b2eb3b84f5a9ea2317844a2f82d2b1d32dcfae1564e7dc534b4a902",
     "expression": "dialog.resources_requested.connect(self.refresh_resources)",
     "callbacks": {
@@ -5406,7 +6032,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "3f19cb586c2f69cd5e508b9e41f1e59e9451b79895dc95760313790e13f42d31",
     "expression": "menu.addAction('选择导入的接入配置…', self.open_imported_connections)",
     "callbacks": {
@@ -5415,14 +6041,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "3fe2e4c7cb4598202abb88ce5ed26348e0ffa73789edb864a413242af31ff5fa",
     "expression": "window.model_settings_action.triggered.connect(self.model_settings.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "423011568b9ef1775e20cac5b4b015c4530085b8aec18a8f95fe3c274f492624",
     "expression": "window.detail.resume_requested.connect(self.resume_channel)",
     "callbacks": {
@@ -5431,16 +6057,34 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
-    "action": "46f3b069cec034c6680a60b5c25ec7c84b6dca8a7898b37e88ddfc14fcdddf62",
-    "expression": "menu.addAction('关闭当前项目', self.close_project)",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
+    "action": "43bb483ec92dcac44af9a1215dd8731928648499087e2a944dfd96d7a1d57a2f",
+    "expression": "settings.addAction('受控扩展…', self.open_extensions)",
     "callbacks": {
-      "close_project": "997f198738b04af5f093125bfb1bc7e63a80b8df33f84b734da29dd9112788dc"
+      "open_extensions": "3090fa90a45e3daa29281bf7e8de5ed490f19abba16aa7251f3d3af22890ec5c"
     }
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
+    "action": "46936aa37c42b0049e497c748cfdf89ab0e2350e9b8fc4ff2895493513ecb67b",
+    "expression": "self.window.detail.test_type_panel.record_requested.connect(lambda project_id, values: self.submit('service_aging_record', project_id, values))",
+    "callbacks": {
+      "submit": "455a7c2e1655c938ca61f2dae3108b6bed611702146df476fa07c49e1a286a2b"
+    }
+  },
+  {
+    "file": "src/ui/qt/workspace_controller.py",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
+    "action": "46f3b069cec034c6680a60b5c25ec7c84b6dca8a7898b37e88ddfc14fcdddf62",
+    "expression": "menu.addAction('关闭当前项目', self.close_project)",
+    "callbacks": {
+      "close_project": "21420ba25114467f924fff52fd6a37abd34e6a7c62e216e18a0b64522ebeebcb"
+    }
+  },
+  {
+    "file": "src/ui/qt/workspace_controller.py",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "4d8fe351698f2cbc97ac3ad82415a1aa15f09fbf511412b69b018625d50f37f1",
     "expression": "dialog.finished.connect(lambda _: self._forget_pipeline(identifier, dialog))",
     "callbacks": {
@@ -5449,7 +6093,16 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
+    "action": "5301d834268d495a87024667e763e9738aed455fdd6f9b72061960b161caebfe",
+    "expression": "self.platform_settings_menu.addAction('钉钉应用配置…', lambda : self.open_platform_configuration('dingtalk'))",
+    "callbacks": {
+      "open_platform_configuration": "9e6e49773fc35e2916c2eb99ddece72445683a637f10982b3b7ca98d842a49cd"
+    }
+  },
+  {
+    "file": "src/ui/qt/workspace_controller.py",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "54a6c6dada27fb4ae6fa0dd5ad400a6a6524242bc2848f0196eabd4650a44be7",
     "expression": "dialog.pretest_stop_requested.connect(lambda values, key=identifier: self._configuration_submit('configuration_pretest_stop', key, values))",
     "callbacks": {
@@ -5458,7 +6111,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
+    "action": "554651f6cc94acf2ea4357e8c20b5342753c72c7387c129c74d429f1e91237fe",
+    "expression": "dialog.finished.connect(lambda _: setattr(self, 'extensions_dialog', None))",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/workspace_controller.py",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "57cb65f48ed66ee521c25c7ffb363a8d69949ecb3c0c84266a6cd5e83410c1f7",
     "expression": "dialog.finished.connect(lambda outcome, key=identifier, token=draft.token, editor_kind=kind: self._configuration_closed(key, token, editor_kind, getattr(dialog, 'discard_revision', '')))",
     "callbacks": {
@@ -5467,21 +6127,21 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "57e227eb2da5ef475a2e5454ac1389f0bb28ad3c16971f37da94f97b40fd438b",
     "expression": "dialog.window_state_changed.connect(lambda state, key=identifier, name=result.payload['project_name']: self.adapter.record_serial_window_state(key, name, state))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "5a0df0dbae8e097b0c3ea0e73365de9b060d352692ad7011b61f87d324a6d7cf",
     "expression": "menu.addAction('归档日志…', self.archived_logs.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "5e38bec567a4c7ad6910eff492d1f9dcb4cf4cc7634c76bf9beef42fad8333ff",
     "expression": "dialog.defaults_requested.connect(lambda values, key=identifier: self._configuration_submit('configuration_defaults', key, values))",
     "callbacks": {
@@ -5490,7 +6150,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "5f49d42ba6a3902d0eb2a2139bf86e83759455a69810f475c8a9ef5b0276e261",
     "expression": "self.window.dashboard.open_requested.connect(self.open_project)",
     "callbacks": {
@@ -5499,7 +6159,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "65d475e50fb557ce4f07b3c841a205b04bc64dc6c9056c1b18da7d6628486b58",
     "expression": "window.detail.power_log_requested.connect(self.open_power_log)",
     "callbacks": {
@@ -5508,7 +6168,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "662993a11275e8bc3cd264929c92cc85ae8af90e790433dfc9654ea851070473",
     "expression": "self.window.detail.environment_button.clicked.connect(self.check_environment)",
     "callbacks": {
@@ -5517,14 +6177,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "6758c423c5ce2bff89a9d740c38c19d8b961c14eac9d4a69d5219bb47658736b",
     "expression": "menu.addAction('任务历史…', self.log_history.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "6905f7543dd91c05daae9f8720df29fcd9412a9324dab6567ded003a3b02c729",
     "expression": "menu.addAction('核实未知任务…', self.open_unknown_tasks)",
     "callbacks": {
@@ -5533,7 +6193,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "72a19f4b9d8659bcadfb866c1282784d4f34173d8baa77290b70f5d14525ba5a",
     "expression": "self.device_inventory_dialog.finished.connect(self._device_inventory_closed)",
     "callbacks": {
@@ -5542,14 +6202,23 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "79c5fa3f345ed7b6631599cbabb900bc35e6b4f548fc69f2bad8386403c3527b",
     "expression": "window.detail.channel_history_requested.connect(self.channel_history.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
+    "action": "7c209511397e7eef511563bb2e20ac109cc075862c227ab0400c0d2186293d09",
+    "expression": "history_menu.aboutToShow.connect(self._sync_actions)",
+    "callbacks": {
+      "_sync_actions": "8468d073689a030c427aace9abe1aedc9f27826f5cdd2a0b8a808e5b265c2ec3"
+    }
+  },
+  {
+    "file": "src/ui/qt/workspace_controller.py",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "82f57a061c614e26e2cc2dace7f75488b71438d84a29f219f22b674bc212e064",
     "expression": "dialog.save_requested.connect(lambda values, key=identifier, op=save_op: self._configuration_submit(op, key, values))",
     "callbacks": {
@@ -5558,7 +6227,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "86b5a1b325b4688d0fe44303a62c97ddf734417b500ade47d85ee6c46095635d",
     "expression": "dialog.review_requested.connect(lambda target: self._review_single_power(dialog.project_id, target))",
     "callbacks": {
@@ -5567,21 +6236,30 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
+    "action": "883adc8bfdef7f21f2228c5c379aa07075ae12ebf5873d9bde25cae89101958c",
+    "expression": "menu.aboutToShow.connect(self._sync_actions)",
+    "callbacks": {
+      "_sync_actions": "8468d073689a030c427aace9abe1aedc9f27826f5cdd2a0b8a808e5b265c2ec3"
+    }
+  },
+  {
+    "file": "src/ui/qt/workspace_controller.py",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "893ce6d1fa22052971a207d0ebbfea1a2b298d9d72cdff7968febd21664d749f",
     "expression": "dialog.finished.connect(lambda _: self.adapter.remember_window_placement(identifier, module, current_placement(dialog)))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "8b056c462f336e48b8fa19e77d10dae27895baacd22bfcc436ff2830bc5220d4",
     "expression": "window.detail.ai_chat_requested.connect(self.ai_chat.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "8b80bda613d1ea3c3c7fcfbc747112d77a441f5d129837cf358cb36591fbb99f",
     "expression": "self.recent_menu.addAction(str(name).replace('&', '&&'), lambda checked=False, path=path: self.open_project(path))",
     "callbacks": {
@@ -5590,7 +6268,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "8d01d9f7355d50c79ef1d762797918b7626e0d19f4bc8aafd3a23d2a861dab13",
     "expression": "dialog.command_requested.connect(lambda action, values, key=identifier: self._dut_submit(key, action, values))",
     "callbacks": {
@@ -5599,14 +6277,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "8d738a581ad8cd21110949a6c5f2080b297d823d3b74fff92e5fa136eba29c80",
     "expression": "window.ai_chat_action.triggered.connect(self.ai_chat.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "8f21d1372967ef38768d47a1deb7480512c19ade522872aff694da248edc7474",
     "expression": "menu.addAction('从最近列表移除', self.forget_recent_project)",
     "callbacks": {
@@ -5615,14 +6293,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "9240a77fbea8da4c8bf00fb02e3a4273c1022d606cd423af4f793ecb60a918ae",
     "expression": "settings.addAction('检查更新…', self.app_update.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "94f055237e3c18a411e1021b747bbe55b93abc4a17d7e2f05599557b55f31a3e",
     "expression": "dialog.configuration_requested.connect(lambda code: self._pipeline_configure(identifier, code))",
     "callbacks": {
@@ -5631,14 +6309,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "a49c8462924ea1cb1223283990b1a253d0d665ce1da2f70349971df0e38c88ad",
     "expression": "dialog.finished.connect(lambda _: setattr(self, '_single_power_dialog', None))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "a580e89c333ca449a7188361f264a0298d7dbc1c4816f15f2976833a80c0535f",
     "expression": "menu.addAction('另存为独立项目…', self.duplicate_project)",
     "callbacks": {
@@ -5647,14 +6325,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "a779e023982fe8ef8808bbfe8d626cd023c7a9fb8159140c03be7701082c3a38",
     "expression": "dialog.finished.connect(lambda _: setattr(self, 'unknown_task_dialog', None))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "a8dffc93056d454c2e0b4675b565968bf149d19d0f1cf2827ab93af45ebbe72b",
     "expression": "self.window.detail.stop_button.clicked.connect(self.stop_test)",
     "callbacks": {
@@ -5663,7 +6341,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "aa0e04c50297110010b49b13214e25a6c72887cb4f1bee871b642a2a76bd48d4",
     "expression": "dialog.command_requested.connect(lambda action, values, key=identifier: self._serial_submit(key, action, values))",
     "callbacks": {
@@ -5672,7 +6350,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "abc04afdb5aa972c93dcef482631fcaabbfe743f87ec11384336f4fa90be2bc9",
     "expression": "self.window.detail.single_power_requested.connect(self.open_single_power)",
     "callbacks": {
@@ -5681,7 +6359,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "b424e55cea490677c5964302b3008e68f9c40c541a05025292654d25aa13c730",
     "expression": "self.window.detail.pipeline_button.clicked.connect(self.open_pipeline)",
     "callbacks": {
@@ -5690,7 +6368,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "b4ee5aac45afd25c7e2dc2ac10425e36823dea0c93a2778255482c3013038132",
     "expression": "dialog.pretest_requested.connect(lambda values, key=identifier: self._configuration_submit('configuration_pretest_preview', key, values))",
     "callbacks": {
@@ -5699,7 +6377,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "b848ef1f1a7ab9636d58d45bffb7b65fc149b32d8a3b97e23d9ccacb36a388bc",
     "expression": "window.logs.export_requested.connect(self.export_logs)",
     "callbacks": {
@@ -5708,7 +6386,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "b90758808498fc2fbdfe1f718d6e8d8de6aa5f5409fbf464e98823bfb800c589",
     "expression": "dialog.rename_requested.connect(lambda values, key=identifier: self._configuration_submit('channels_editor_rename_preview', key, values))",
     "callbacks": {
@@ -5717,7 +6395,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
+    "action": "b924018caa337aa8fd28b8ff04486223db26f7518e9d8601d51ffaf437171519",
+    "expression": "window.detail.test_type_panel.history_requested.connect(self.aging_history.open)",
+    "callbacks": {}
+  },
+  {
+    "file": "src/ui/qt/workspace_controller.py",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "b988693ec013170ceccb490c6d83cf2fa2873460d3e39146470048819ee35be5",
     "expression": "dialog.reload_requested.connect(lambda values, key=identifier, op=reload_op: self._configuration_submit(op, key, values))",
     "callbacks": {
@@ -5726,14 +6411,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "b9e59237084c5fc33822ef1d7326c686ffc5511a9d10454f511bd02fd9e7e2b1",
     "expression": "dialog.finished.connect(lambda _: setattr(self, '_imported_connection_dialog', None))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "c2b8fb1ee8d4fc2dfddddf9617f5212970f770f9fffd530640afc8fbfe003ca7",
     "expression": "menu.addAction('导入旧配置目录…', self.import_legacy_project)",
     "callbacks": {
@@ -5742,14 +6427,14 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "c37d17899c2db59490983e39b364c0c0fbbe3d6788ac1af272c00c81f9c26552",
     "expression": "self.instance_status_dialog.finished.connect(lambda _: setattr(self, 'instance_status_dialog', None))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "c6d8b0c7d01d5d56f36529253b1260fb1f6349201827f27168fcdb83ed7784e1",
     "expression": "menu.addAction('打开项目目录', self.open_project_directory)",
     "callbacks": {
@@ -5758,23 +6443,23 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "cdc10b62c9ed93a4dfda0c01ffc5606da43f814b6d0db9a38664cbc4a57b48e0",
     "expression": "window.detail.model_settings_requested.connect(self.model_settings.open)",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "d76d82bbdd7566d0e09e8c1dfd2bb3b4086b644a7f22088ec9b597f584b96371",
     "expression": "self.window.dashboard.new_requested.connect(self.new_project)",
     "callbacks": {
-      "new_project": "0f211aabcdfa64a1c314a58ab528ac1133877e40f2751b828bb5aedecd4226e8"
+      "new_project": "3917157cebfdfa501cd6674b3b0efbfba0ef0471674e353c13dae3c7afad0d62"
     }
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "d86a27b510e75d205c3c919d87104847de62d660aae0955458b09981d7df0259",
     "expression": "menu.addAction('远程可访问项目…', self.open_remote_scope)",
     "callbacks": {
@@ -5783,14 +6468,23 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
+    "action": "dae9faaea5fb3c56d6e87cc4f668465989f7d3447db69a84ea8bc28485e6cf0c",
+    "expression": "window.sidebar_devices_button.clicked.connect(lambda : self.open_device_inventory(refresh_initial=False))",
+    "callbacks": {
+      "open_device_inventory": "bead2fdd1d4ae7dc0a2037f1baaa706dc1d329958c1260c1e332269ac846d024"
+    }
+  },
+  {
+    "file": "src/ui/qt/workspace_controller.py",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "db272048da89ee095484a2dab20d1ec765dbc8f69e2405b7e133b077206d1bc3",
     "expression": "dialog.status_heights_changed.connect(lambda heights, key=identifier: self.adapter.remember_window_placement(key, 'dut', status_heights=heights))",
     "callbacks": {}
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "e133cd904bb1aecd69764a09c8befbe735b2c5a0050d95eee7721f6e726dbb1c",
     "expression": "dialog.wifi_interfaces_requested.connect(lambda values, key=identifier: self._configuration_submit('configuration_wifi_interfaces', key, values))",
     "callbacks": {
@@ -5799,7 +6493,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "e27d545eec43ae2594697d5e58e7575a7da3fd02be0b6ec947c5550674ed622a",
     "expression": "self.window.detail.upgrade_requested.connect(self.open_upgrade)",
     "callbacks": {
@@ -5808,7 +6502,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "eab4dd270f980fc0b439f5a7e3a25b34dada71f1cb21577c8c94416f26dcce0a",
     "expression": "dialog.finished.connect(lambda _, key=identifier, view=dialog: self._serial_finished(key, view))",
     "callbacks": {
@@ -5817,7 +6511,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "efc90075faf4084b3d07b117cb0b55dd5d879f93102056a166eb76a15ed7b78e",
     "expression": "window.resource_refresh_action.triggered.connect(self.refresh_resources)",
     "callbacks": {
@@ -5826,7 +6520,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "f39fc213134a282e1c4175589cf0f9d26a7fd71d47249277bf67651b9e6f2463",
     "expression": "self.window.detail.dut_requested.connect(self.open_dut)",
     "callbacks": {
@@ -5835,25 +6529,25 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "f4d25a06b8e1d150569dde239a4f2db9a3b6e6ae590d0f5ae8a2950366321a4a",
     "expression": "self.timer.timeout.connect(self.poll)",
     "callbacks": {
-      "poll": "071bbfbd6a3f04a4060c23ed5a277aa4316dc151efe44dd3596afa5baaa052c2"
+      "poll": "e677c8f6b084e10a8c61017bb6e3326e729dc0054d0759214c195c92c2f6a0e3"
     }
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "f54bc7df45799587db320693af862d032649bb2eb2113f6e2ca56b762e465f4c",
     "expression": "menu.addAction('新建项目…', self.new_project)",
     "callbacks": {
-      "new_project": "0f211aabcdfa64a1c314a58ab528ac1133877e40f2751b828bb5aedecd4226e8"
+      "new_project": "3917157cebfdfa501cd6674b3b0efbfba0ef0471674e353c13dae3c7afad0d62"
     }
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "f5ce1ad3f2fae6b814b86318bc5ce62a6fe17244ad750004c7d24d59bfa12517",
     "expression": "settings.addAction('多实例接入状态…', self.open_instance_status)",
     "callbacks": {
@@ -5862,7 +6556,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "f75d08c1015380e283459ffa30167ed93d9eac7eb2c417599e0ca179935420ef",
     "expression": "dialog.push_trial_requested.connect(lambda values, key=identifier: self._configuration_submit('configuration_push_preview', key, values))",
     "callbacks": {
@@ -5871,7 +6565,7 @@
   },
   {
     "file": "src/ui/qt/workspace_controller.py",
-    "file_code_sha256": "a3b15851e0150e24d2f20acd816106a76bed58d993a6e1cee98f20951fe19738",
+    "file_code_sha256": "8455abebcf49c12fbce077f1f04c55100597327a1d006493c488dea6e2b3f12b",
     "action": "f8d15cfb341ceedf0e575d0e7c2b577f51dd3006ded15aaa7e88b72830372bf1",
     "expression": "dialog.refresh_requested.connect(lambda : self._refresh_pipeline(identifier))",
     "callbacks": {

@@ -10,32 +10,50 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from functools import partial
 from pathlib import Path
+import math
 import os
 import queue
+import sqlite3
 import threading
 import time
 
 from src.models.workbench_presentation import (ChannelView, LogView, ProjectView,
-    WorkspaceHealthView, WorkspaceResourceView)
+    WorkspaceHealthView, WorkspaceResourceView, power_cycle_percentage)
 from src.models.qt_ai_chat import CHAT_OPERATIONS
 from src.models.qt_ai_cases import CASE_OPERATIONS
 from src.models.qt_ai_reports import REPORT_HANDOFF_OPERATIONS, REPORT_OPERATIONS
 from src.models.qt_device_inventory import DeviceInventoryView, DeviceLeaseView
 from src.services.qt_host_inventory import read_host_inventory
+from src.services.qt_controlled_extensions import EXTENSION_OPERATIONS, QtControlledExtensions
+from src.services.qt_project_wizard_service import QtProjectWizardService, WIZARD_COMMANDS
 from src.services.qt_window_state import (MODULE_WINDOW_NAMES, read_dut_window_state, read_module_window_sizes,
     read_window_placement, save_window_placement)
 
 
-RECENT_CHANGES = frozenset(('create', 'open', 'import_legacy', 'save', 'rename', 'duplicate', 'forget_recent'))
-ARCHIVE_READS = frozenset(('archive_workspace_log', 'archive_serial_files', 'archive_serial_log',
+RECENT_CHANGES = frozenset(('create', 'create_typed', 'open', 'import_legacy', 'save', 'rename', 'duplicate', 'forget_recent'))
+ARCHIVE_READS = frozenset(('archive_workspace_log', 'archive_workspace_events', 'archive_serial_files', 'archive_serial_log',
                            'archive_project_files', 'archive_project_log', 'history_result_files',
                            'channel_history', 'history_legacy_runs'))
+AGING_HISTORY = frozenset(('aging_history_runs', 'aging_history_page', 'aging_history_export'))
 GUI_UNKNOWN_OPERATIONS = frozenset(('gui_unknown_list', 'gui_unknown_resolve'))
 PAIRING_OPERATIONS = frozenset(('gateway_pairing_code', 'gateway_pairing_slot', 'gateway_pair_instance'))
 STARTUP_OPERATIONS = frozenset(('gateway_startup_read', 'gateway_startup_save'))
 GATEWAY_OPERATIONS = PAIRING_OPERATIONS | STARTUP_OPERATIONS | frozenset(('gateway_instances', 'gateway_start', 'gateway_stop',
                                 'gateway_revoke', 'gateway_read_config', 'gateway_save_config'))
-JOB_REVIEW_OPERATIONS = frozenset(('job_review_prepare', 'job_review_cancel', 'job_review_commit'))
+FEISHU_REPAIR_OPERATIONS = frozenset(('feishu_repair_start', 'feishu_repair_release'))
+PLATFORM_CONFIG_OPERATIONS = {
+    'platform_configuration_open': 'open',
+    'platform_configuration_save': 'save',
+    'platform_binding_start': 'start_binding',
+    'platform_binding_state': 'binding_state',
+    'platform_binding_confirm': 'confirm_binding',
+    'platform_binding_cancel': 'cancel_binding',
+    'platform_trial_start': 'start_trial',
+    'platform_notifications_set': 'set_notifications',
+    'platform_direct_set': 'set_direct',
+    'platform_trial_state': 'trial_state',
+}
+JOB_REVIEW_OPERATIONS = frozenset(('job_review_prepare', 'job_review_cancel', 'job_review_commit', 'job_stop_active'))
 MODEL_PROBES = frozenset(('ai_model_refresh', 'ai_model_test'))
 MODEL_OPERATIONS = MODEL_PROBES | {'ai_model_open', 'ai_model_save', 'ai_model_select', 'ai_model_provider',
     'ai_model_delete', 'ai_model_sources', 'ai_model_source_check'}
@@ -52,6 +70,14 @@ def _started_text(record):
         return datetime.fromtimestamp(value).strftime('开始于 %Y-%m-%d %H:%M:%S')
     except (ValueError, OverflowError, OSError):
         return '开始时间待核实'
+
+
+def _task_order(record):
+    # Reviewing an older unknown job updates its timestamp but does not make
+    # it the most recently admitted task. Early ledgers only have updated_at.
+    created = record.get('created_at')
+    updated = record.get('updated_at', 0)
+    return (created if type(created) in (int, float) and math.isfinite(created) else updated, updated)
 
 
 @dataclass(frozen=True)
@@ -100,6 +126,12 @@ class QtWorkspaceAdapter:
         self._gateway_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix='qt-gateway-management')
         self._gateway_request = None
         self._gateway_project = ''
+        self._feishu_repair = None
+        self._feishu_repair_status = ('', None)
+        self._platform_configuration = None
+        self._direct_platforms = None
+        self._feishu_auto_blocked = False
+        self._extensions = QtControlledExtensions()
         self._service_close_started = False
         # Admission is bounded by the same workspace command tickets as foreground operations.
         self._history_reader = ThreadPoolExecutor(max_workers=1, thread_name_prefix='qt-job-history')
@@ -107,14 +139,23 @@ class QtWorkspaceAdapter:
         self._model_settings = None
         self._ai_chats = {}
         self._executions = {}
+        self._wizard = None
+        self._historical_pretests = {}
         self._power_worker_checks = {}
+        self._power_overviews = {}
         self._adapter_rename = None
         self._project_closes = {}
         self._close_receipts = {}
         self._window_placements = {}
         self._module_window_sizes = {}
-        self._file_log_lock = threading.Lock()
+        from src.services.workspace_event_log import WorkspaceEventWriter, associate_run
+        self._log_writer = WorkspaceEventWriter(self._report_log_write,
+            associate=lambda entry: associate_run(entry, self._service.status.records))
+        self._gui_thread = threading.current_thread()
+        self._update_logs_pending = False
         self._close_choices = {}
+        self._selected_at_exit = ''
+        self._session_at_exit = None
         self._closing = threading.Event()
         self.closed = threading.Event()
         self.thread = threading.Thread(target=self._worker, name='qt-workspace-files', daemon=False)
@@ -126,11 +167,17 @@ class QtWorkspaceAdapter:
                              'single_power_options', 'forget_recent', 'instance_status', 'remote_scope_read', 'remote_scope_save',
                              'imported_connection_choices', 'imported_connection_select',
                              *GUI_UNKNOWN_OPERATIONS,
+                             *WIZARD_COMMANDS,
+                             'service_aging_record',
                              *GATEWAY_OPERATIONS,
+                             *FEISHU_REPAIR_OPERATIONS,
+                             *PLATFORM_CONFIG_OPERATIONS,
+                             *EXTENSION_OPERATIONS,
                              *JOB_REVIEW_OPERATIONS,
                              *MODEL_OPERATIONS,
                              *AI_WORKSPACE_OPERATIONS,
                              *ARCHIVE_READS,
+                             *AGING_HISTORY,
                              'prepare_execution', 'confirm_execution', 'cancel_confirmation', 'stop_execution', 'stop_and_close',
                              'pipeline_status',
                              'configuration_open', 'configuration_reload', 'configuration_close', 'configuration_checkpoint', 'configuration_save', 'configuration_defaults',
@@ -154,8 +201,8 @@ class QtWorkspaceAdapter:
                              'onu_save_business', 'onu_prepare_registration', 'onu_register',
                              'onu_prepare_delete', 'onu_delete', 'onu_save_olt', 'onu_prepare_cleanup'):
             raise ValueError('不支持的项目操作')
-        command_args = deepcopy(args) if operation in MODEL_OPERATIONS or operation in GATEWAY_OPERATIONS or operation == 'prepare_execution' or operation.startswith(
-            ('configuration_', 'channels_editor_', 'serial_', 'dut_', 'upgrade_', 'parameter_', 'onu_')) else args
+        command_args = deepcopy(args) if operation in WIZARD_COMMANDS or operation in MODEL_OPERATIONS or operation in GATEWAY_OPERATIONS or operation in PLATFORM_CONFIG_OPERATIONS or operation == 'prepare_execution' or operation.startswith(
+            ('configuration_', 'channels_editor_', 'serial_', 'dut_', 'upgrade_', 'parameter_', 'onu_', 'service_aging_')) else args
         with self.lock:
             if not self._accepting:
                 raise RuntimeError('工作区正在关闭，不再接受项目操作')
@@ -171,11 +218,6 @@ class QtWorkspaceAdapter:
             return identifier
 
     def take_updates(self):
-        with self.lock:
-            projects = self._snapshot
-            logs = tuple(self._logs)
-            self._logs.clear()
-            self._log_chars = 0
         results = []
         while True:
             try:
@@ -185,6 +227,12 @@ class QtWorkspaceAdapter:
             results.append(result)
             if result.identifier:
                 self.capacity.release()
+        # An open/ready receipt must always see at least the snapshot it announced.
+        with self.lock:
+            projects = self._snapshot
+            logs = tuple(self._logs)
+            self._logs.clear()
+            self._log_chars = 0
         return projects, logs, tuple(results)
 
     def health_snapshot(self):
@@ -192,11 +240,63 @@ class QtWorkspaceAdapter:
         with self.lock:
             return WorkspaceHealthView(self._last_worker_tick, self.commands.qsize(), self.MAX_PENDING,
                 self._logs_omitted, self._log_write_failures, self._last_log_write,
-                self._last_task_log, self._last_inventory_check, self._resource_sample)
+                self._last_task_log, self._last_inventory_check, self._resource_sample,
+                *self._log_writer.pending_snapshot())
 
     def device_inventory_snapshot(self):
         with self.lock:
             return self._device_inventory, self._device_leases
+
+    def feishu_repair_status(self):
+        with self.lock:
+            return self._feishu_repair_status
+
+    def _direct_access(self):
+        if self._direct_platforms is None:
+            from src.services.qt_direct_platforms import QtDirectPlatforms
+            self._direct_platforms = QtDirectPlatforms(self._service, self._project_chat,
+                lambda key: self._closing.is_set() or key in self._project_closes)
+        return self._direct_platforms
+
+    def _change_direct_platform_access(self, context, kind, channel, enabled):
+        if self._gateway_request is not None:
+            raise ValueError('正在处理网关操作，请等待完成。')
+        self._direct_access().change(context, kind, channel, enabled)
+
+    def _set_feishu_notifications_blocked(self, blocked):
+        self._feishu_auto_blocked = blocked
+        for execution in self._executions.values():
+            execution.feishu_notifications.set_auto_blocked(blocked)
+
+    def _feishu_repair_busy(self):
+        management = self._service._management
+        gateway_active = management is not None and (management.host.server is not None or management.host.stopping)
+        return (self._closing.is_set() or self._service.gateway_runtime is not None or not self._service.idle
+                or gateway_active or self._gateway_request is not None or self._project_closes or self._inventory_requests
+                or (self._platform_configuration is not None and self._platform_configuration.trials)
+                or self._archive_read is not None or self._history_reads
+                or (self._model_settings is not None and self._model_settings.probe is not None)
+                or any(chat.maintenance_busy for chat in self._ai_chats.values())
+                or any(not execution.ready_to_close or execution.editor_open or execution.pending
+                       or (execution.terminal and execution.terminal.tabs)
+                       for execution in self._executions.values()))
+
+    def _change_feishu_repair(self, operation):
+        if operation == 'feishu_repair_start':
+            from src.services.qt_feishu_repair import QtFeishuRepair
+            if self._feishu_repair is None:
+                self._feishu_repair = QtFeishuRepair(self.source_root, self._service.maintenance, self._emit)
+            self._emit('[飞书依赖] 操作员已确认，开始安装预检')
+            try:
+                self._feishu_repair.start(self._feishu_repair_busy)
+            except (RuntimeError, ValueError, OSError) as error:
+                self._emit('[飞书依赖] 未开始安装：' + str(error), 'WARN')
+                raise ValueError(str(error)) from None
+        elif self._feishu_repair is not None:
+            self._feishu_repair.release()
+        if self._feishu_repair is not None:
+            with self.lock:
+                self._feishu_repair_status = self._feishu_repair.status
 
     def _sample_resources(self, now):
         resources = self._service.resources
@@ -209,28 +309,40 @@ class QtWorkspaceAdapter:
             serial = sum(key.startswith('serial:') for key in keys)
             other = sum(not key.startswith(('serial:', 'adapter:')) for key in keys)
             sample = WorkspaceResourceView(now, serial, len(adapters), other, bool(resources.hardware_error))
+            try:
+                entries = resources.lease_entries()
+            except sqlite3.Error:
+                # Keep the last coherent sample and its actual timestamp; a locked
+                # or unreadable protection database is not an empty inventory.
+                return
             owners = {}
             for owner, (project_id, held) in resources.owners.items():
                 for key in held:
                     if key.startswith(('serial:', 'power:', 'adapter:')):
                         owners.setdefault(key, set()).add(resources.labels.get(owner, project_id))
             leases = DeviceLeaseView(tuple((key, tuple(sorted(names))) for key, names in sorted(owners.items())),
-                                     datetime.now(), sample.protection_unavailable)
+                                     datetime.now(), sample.protection_unavailable, entries)
         finally:
             resources.lock.release()
         with self.lock:
             self._resource_sample = sample
             self._device_leases = leases
 
-    def begin_close(self, choices=None):
+    def begin_close(self, choices=None, *, update_logs_pending=False, selected_project=''):
         with self.lock:
             self._accepting = False
+            self._update_logs_pending = update_logs_pending
             self._close_choices = dict(choices or {})
+            self._selected_at_exit = selected_project
             self._closing.set()
 
     def wait_closed(self, timeout=5):
         self.thread.join(timeout)
         return not self.thread.is_alive()
+
+    def finish_log_close(self):
+        """The GUI polls after the separate update worker finishes its final cancellation log."""
+        return self._log_writer.begin_close()
 
     def _emit(self, message, level='INFO'):
         # Original project management emits names/operations, not credential
@@ -286,23 +398,29 @@ class QtWorkspaceAdapter:
         with self.lock:
             if display is not None:
                 self._append_display_log(display)
-            if entry.run_id:
+            if entry.run_id or entry.job_id:
                 self._last_task_log = datetime.now()
-        directory = self._service.directory
-        with self._file_log_lock:
-            try:
-                with (directory / 'workspace.log').open('a', encoding='utf-8') as stream:
-                    stream.write(entry.time + ' [' + entry.project_id + '] ' + entry.message + '\n')
-            except OSError as error:
-                warning = LogView(entry.time, 'ERROR', entry.project_id, entry.project_name,
-                    '工作区日志写盘失败：' + type(error).__name__ + '，不能确认本次记录完整落盘')
-            else:
-                warning = None
-            with self.lock:
-                self._last_log_write = (datetime.now(), warning is None)
-                if warning is not None:
-                    self._log_write_failures += 1
-                    self._append_display_log(warning)
+        # Only the UI and the workspace command thread may consume the reserve.
+        # A full queue on another producer must never hold the UI state lock.
+        control = threading.current_thread() in (self._gui_thread, self.thread)
+        if not self._log_writer.offer(entry, control=control):
+            self._report_log_write(entry, '写入队列已满或已关闭', 1, 0)
+
+    def _report_log_write(self, entry, problem, count, dropped):
+        with self.lock:
+            previous = self._last_log_write
+            self._last_log_write = (datetime.now(), not (problem or dropped))
+            if problem:
+                self._log_write_failures += count
+                if previous is None or previous[1]:
+                    self._append_display_log(LogView(entry.time, 'ERROR', entry.project_id, entry.project_name,
+                        '工作区日志写盘失败：' + problem + '，不能确认本次记录完整落盘'))
+            if dropped:
+                self._append_display_log(entry)
+
+    def _preparation_log(self, context, message, *, level='INFO', **fields):
+        self._record(LogView(datetime.now().strftime('%H:%M:%S'), level, context.identity.project_id,
+                             context.identity.name, message, **fields))
 
     def _append_display_log(self, entry):
         # Call with self.lock held. The counters measure only this UI handoff buffer.
@@ -317,9 +435,13 @@ class QtWorkspaceAdapter:
 
     def _remember(self, context):
         self._service.remember(context)
-        self._service.status.attach(context)
+        self._load_project_state(context)
         if self._start_configured_gateway:
             self._open_gateway_project(context)
+        return context.identity.project_id
+
+    def _load_project_state(self, context):
+        self._service.status.attach(context)
         identifier = context.identity.project_id
         with self.lock:
             missing_sizes = identifier not in self._module_window_sizes
@@ -327,7 +449,52 @@ class QtWorkspaceAdapter:
             sizes = read_module_window_sizes(context)
             with self.lock:
                 self._module_window_sizes[identifier] = sizes
-        return identifier
+
+    def _restore_session(self):
+        from src.core.host_resource_lock import HostResourceBusy
+        service = self._service
+        try:
+            entries, selected = service.read_session()
+        except (OSError, ValueError, RecursionError):
+            self._emit('上次工作区会话无法读取，请从项目菜单打开项目', 'WARN')
+            return ''
+        rows = []
+        if entries:
+            self._emit(f'正在恢复上次打开的 {len(entries)} 个项目')
+        for entry in entries:
+            context = None
+            path = entry.get('path') if isinstance(entry, dict) else None
+            try:
+                if not isinstance(path, str) or not Path(path).is_absolute():
+                    raise ValueError('项目目录无效')
+                key = entry.get('project_id')
+                if not isinstance(key, str) or not key:
+                    raise ValueError('缺少项目身份')
+                if key in service.projects.opened:
+                    raise ValueError('重复项目记录')
+                context = service.projects.open(path, expected_project_id=key)
+                self._load_project_state(context)
+                project, = self._project_rows((context,))
+                if self._start_configured_gateway:
+                    self._open_gateway_project(context)
+                rows.append(project)
+            except Exception as error:
+                if context is not None:
+                    service.projects.close(context)
+                if isinstance(error, FileNotFoundError):
+                    reason = '项目目录或文件缺失'
+                elif isinstance(error, PermissionError):
+                    reason = '没有读取权限'
+                elif isinstance(error, (ValueError, HostResourceBusy)):
+                    reason = str(error)
+                else:
+                    reason = type(error).__name__
+                self._emit(f'跳过工作区项目 {path or "（无目录）"}：{reason}', 'WARN')
+        with self.lock:
+            self._snapshot = tuple(rows)
+        if entries:
+            self._emit(f'已恢复 {len(rows)}/{len(entries)} 个项目')
+        return selected if isinstance(selected, str) and selected in service.projects.opened else ''
 
     def _recent_projects(self):
         return tuple((item.get('name') or item['path'], item['path'])
@@ -390,12 +557,21 @@ class QtWorkspaceAdapter:
         if not self._service.prepare_project_close(context) or self._cancel_history(project_id):
             self._project_closes[project_id] = choice
             return
+        if self._platform_configuration is not None:
+            self._platform_configuration.close_bindings(project_id)
+            if not self._platform_configuration.close_trials(project_id):
+                self._project_closes[project_id] = choice
+                return
+        if self._direct_platforms is not None and not self._direct_platforms.close_project(project_id):
+            self._project_closes[project_id] = choice
+            return
         chat = self._ai_chats.get(project_id)
         if chat is not None:
             if not chat.begin_close():
                 self._project_closes[project_id] = choice
                 return
             self._ai_chats.pop(project_id)
+        self._extensions.discard(project_id)
         self._service.detach_controller(context)
         if execution is not None:
             execution.close()
@@ -403,6 +579,10 @@ class QtWorkspaceAdapter:
         if self._model_settings is not None:
             self._model_settings.close_project(context)
         self._service.projects.close(context)
+        if self._wizard is not None:
+            self._wizard.preparations.pop(project_id, None)
+        self._historical_pretests.pop(project_id, None)
+        self._power_overviews.pop(project_id, None)
         with self.lock:
             self._module_window_sizes.pop(project_id, None)
             self._power_worker_checks.pop(project_id, None)
@@ -416,6 +596,25 @@ class QtWorkspaceAdapter:
     def _other_active(self, identifier):
         return [item for key, item in self._executions.items() if key != identifier and not item.idle]
 
+    @staticmethod
+    def _parallel_test_allowed(context, operation, others):
+        if not others:
+            return True
+        if operation not in ('aging.start', 'aging.resume', 'service_aging.start'):
+            return False
+        if operation != 'service_aging.start' and all(item.has_only_power_tasks() for item in others):
+            return True
+        if not all(item.has_only_power_tasks(include_continuous=True) for item in others):
+            return False
+        # A manual observation can have no interface or serial mapping. Only the
+        # reviewed physical DUT identities provide a shared lock in that case.
+        from src.services.project_profile_store import read_project_profile
+        for project in (context, *(item.context for item in others)):
+            profile = read_project_profile(project.saved_root / 'Auto_power_on_off_tool/config')
+            if not profile or not profile['duts'] or not all(dut['hardware_id'] for dut in profile['duts']):
+                return False
+        return True
+
     def _execution(self, context):
         from src.services.qt_execution_adapter import QtExecutionAdapter
         from src.services.qt_adapter_rename import QtAdapterRename
@@ -425,8 +624,9 @@ class QtWorkspaceAdapter:
         if identifier not in self._executions:
             self._executions[identifier] = QtExecutionAdapter(self._service, context, self._record,
                 other_jobs_active=lambda: bool(self._other_active(identifier)),
-                other_power_blocked=lambda: any(not item.has_only_power_tasks() for item in self._other_active(identifier)),
+                other_power_blocked=lambda: not self._parallel_test_allowed(context, 'aging.resume', self._other_active(identifier)),
                 workspace_close_requested=self._closing.is_set, adapter_rename=self._adapter_rename)
+            self._executions[identifier].feishu_notifications.set_auto_blocked(self._feishu_auto_blocked)
         return self._executions[identifier]
 
     def _guard_adapter_rename(self, editor):
@@ -539,7 +739,20 @@ class QtWorkspaceAdapter:
         context = replace(self._context(project_id))
         cancel = threading.Event()
         self._emit('[任务历史] 开始读取：' + context.identity.name)
-        future = self._history_reader.submit(read_log_history, context, *options, closing_event=cancel)
+        if operation in AGING_HISTORY:
+            from src.services.service_aging import ServiceAging
+            service = ServiceAging(context)
+            if operation == 'aging_history_runs':
+                before, limit = options
+                future = self._history_reader.submit(service.list_runs, before_id=before, limit=limit)
+            elif operation == 'aging_history_page':
+                job, before, kind, limit = options
+                future = self._history_reader.submit(service.history_page, job, before_id=before, kind=kind, limit=limit)
+            else:
+                job, path = options
+                future = self._history_reader.submit(service.export_history, job, path)
+        else:
+            future = self._history_reader.submit(read_log_history, context, *options, closing_event=cancel)
         self._history_reads[identifier] = (operation, context.identity, cancel, future)
 
     def _cancel_history(self, project_id=None):
@@ -560,7 +773,7 @@ class QtWorkspaceAdapter:
             del self._history_reads[identifier]
             error = ''
             page = None
-            if cancel.is_set():
+            if cancel.is_set() and (operation != 'aging_history_export' or future.cancelled()):
                 error = '项目或工作区正在关闭，已取消任务历史读取'
             else:
                 try:
@@ -571,6 +784,9 @@ class QtWorkspaceAdapter:
                     error = '项目历史暂时无法读取，请核对数据库后重试'
             if error:
                 self._emit(f'[任务历史] {project.name}：{error}', 'WARN')
+            elif operation in AGING_HISTORY:
+                count = page if operation == 'aging_history_export' else len(page['rows'])
+                self._emit(f'[业务老化历史] {project.name} · {operation} 完成，共 {count} 条')
             else:
                 self._emit(f'[任务历史] 已读取 {len(page.entries)} 条：{project.name}')
             self.results.put_nowait(ProjectCommandResult(identifier, operation, project.project_id, error, page))
@@ -584,6 +800,14 @@ class QtWorkspaceAdapter:
         project_id, *options = args
         if operation == 'archive_workspace_log':
             read = partial(read_workspace_log, self._service.directory, *options)
+        elif operation == 'archive_workspace_events':
+            from src.services.workspace_event_log import read_workspace_events
+            filters, cursor = options
+            if not isinstance(filters, dict) or set(filters) - {'project_id', 'dut_id', 'channel', 'level'}:
+                raise ValueError('结构化日志筛选条件无效')
+            if project_id:
+                self._context(project_id)
+            read = partial(read_workspace_events, self._service.directory, before=cursor, limit=101, **filters)
         elif operation in ('archive_project_files', 'archive_project_log'):
             from src.services.qt_archived_logs import project_log_files, read_project_log
             context = replace(self._context(project_id))
@@ -615,6 +839,8 @@ class QtWorkspaceAdapter:
 
         def fetch():
             try:
+                if operation in ('archive_workspace_log', 'archive_workspace_events') and not self._log_writer.flush():
+                    raise ValueError('日志仍在后台写入，请稍后重新读取归档')
                 replies.put((read(), ''))
             except ValueError as error:
                 replies.put((None, str(error)))
@@ -636,6 +862,11 @@ class QtWorkspaceAdapter:
             except queue.Empty:
                 return
         self._archive_read = None
+        if operation == 'archive_workspace_events':
+            if error:
+                self._emit('[归档日志] ' + error, 'WARN')
+            else:
+                self._emit(f'[归档日志] 已查询结构化事件，本页 {min(len(payload), 100)} 条')
         if operation in ('archive_project_files', 'archive_project_log'):
             if error:
                 self._emit('[归档日志] ' + error, 'WARN')
@@ -650,6 +881,8 @@ class QtWorkspaceAdapter:
         self.results.put_nowait(ProjectCommandResult(identifier, operation, project_id, error, payload))
 
     def _request_gateway(self, identifier, operation, args):
+        if operation == 'gateway_start' and any(not pool.idle for pool in self._service.platforms.values()):
+            raise ValueError('请取消直连群绑定并等待平台连接收尾，再启动本机网关。')
         if self._closing.is_set() or self._gateway_request is not None:
             raise ValueError('网关管理正在处理或退出，请稍后重试')
         management = self._service.management()
@@ -730,6 +963,52 @@ class QtWorkspaceAdapter:
 
     def _execute(self, operation, args):
         store = self._service.projects
+        if operation in PLATFORM_CONFIG_OPERATIONS:
+            from src.services.qt_platform_configuration import QtPlatformConfiguration
+            project_id, kind = args[:2]
+            if self._closing.is_set() or project_id in self._project_closes:
+                raise ValueError('项目正在关闭，请重新打开后再编辑远程配置。')
+            context = self._context(project_id)
+            if self._platform_configuration is None:
+                self._platform_configuration = QtPlatformConfiguration(self._service,
+                    lambda record: self._project_chat(record).conversation, self._set_feishu_notifications_blocked,
+                    self._change_direct_platform_access)
+            execution = self._executions.get(project_id)
+            if operation in ('platform_configuration_save', 'platform_binding_start', 'platform_trial_start') and (
+                    self._gateway_request is not None or (execution is not None and
+                    (not execution.ready_to_close or execution.editor_open))):
+                raise ValueError('请等待网关操作、项目任务或配置窗口收尾后再保存。')
+            handler = getattr(self._platform_configuration, PLATFORM_CONFIG_OPERATIONS[operation])
+            result = handler(context, kind, *args[2:])
+            if operation == 'platform_configuration_save':
+                self._publish()
+            return result
+        if operation in WIZARD_COMMANDS:
+            if self._closing.is_set():
+                raise ValueError('工作区正在关闭')
+            if self._wizard is None:
+                self._wizard = QtProjectWizardService(self._service, self._emit, self._preparation_log)
+            if operation == 'create_typed':
+                return self._remember(self._wizard.create(*args))
+            if operation == 'wizard_draft_get':
+                return self._wizard.with_presets(self._wizard.drafts.read())
+            if operation == 'wizard_draft_save':
+                return self._wizard.drafts.write(*args)
+            context = self._context(args[0])
+            if args[0] in self._project_closes:
+                raise ValueError('项目正在关闭')
+            if operation == 'wizard_profile_get':
+                return self._wizard.profile(context)
+            if operation == 'wizard_preset_save':
+                return self._wizard.save_preset(context, *args[1:])
+            if operation == 'preparation_view':
+                return self._wizard.preparation(context).snapshot()
+            execution = self._executions.get(args[0])
+            if operation == 'wizard_profile_save':
+                if execution is not None and (not execution.idle or execution.editor_open):
+                    raise ValueError('请等待项目任务结束并关闭配置编辑器后再修改档案')
+                return self._wizard.save_profile(context, *args[1:])
+            return self._wizard.record(context, args[1])
         if operation == 'instance_status':
             self._emit('[多实例状态] 开始读取本机实例和网关状态')
             status = self._service.management().status()
@@ -765,9 +1044,14 @@ class QtWorkspaceAdapter:
             path, name = args
             return self._remember(store.create(path, name))
         if operation == 'open':
+            already_open = set(store.opened)
             context = store.open(args[0])
-            if context.identity.project_id in self._project_closes:
+            key = context.identity.project_id
+            if key in self._project_closes:
                 raise ValueError('项目正在关闭，请在关闭完成后重新打开')
+            if key in already_open:
+                self._service.remember(context)
+                return key
             return self._remember(context)
         if operation in ('imported_connection_choices', 'imported_connection_select'):
             from src.services.qt_imported_connections import QtImportedConnections
@@ -806,6 +1090,11 @@ class QtWorkspaceAdapter:
         if operation == 'refresh':
             return ''
         context = self._context(args[0])
+        if operation == 'service_aging_record':
+            if self._closing.is_set() or args[0] in self._project_closes:
+                raise ValueError('项目正在关闭')
+            self._execution(context).aging_monitor().record(args[1])
+            return args[0]
         if operation == 'open_project_directory':
             root = context.root
             if self._closing.is_set() or args[0] in self._project_closes or not root.is_dir() or root.resolve() != root:
@@ -841,6 +1130,8 @@ class QtWorkspaceAdapter:
                 return review.prepare(args[1])
             if operation == 'job_review_cancel':
                 return review.cancel(args[1])
+            if operation == 'job_stop_active':
+                return review.stop_active(args[1])
             return review.commit(*args[1:])
         if operation == 'forget_recent':
             self._service.forget(context.root)
@@ -901,7 +1192,7 @@ class QtWorkspaceAdapter:
             if others:
                 from src.models.capabilities import CapabilityError
                 kind = args[1] if operation == 'prepare_execution' else self._execution(context).pending_operation(args[1])
-                if kind not in ('aging.start', 'aging.resume') or not all(item.has_only_power_tasks() for item in others):
+                if not self._parallel_test_allowed(context, kind, others):
                     raise CapabilityError('qt_parallel_pending', '其它项目有设备任务正在执行，请等待收尾后再启动此操作')
         if operation == 'pipeline_status':
             return self._execution(context).pipeline_status()
@@ -937,6 +1228,8 @@ class QtWorkspaceAdapter:
             raise ValueError('项目任务仍在执行或收尾，请先停止并等待；配置和项目保留')
         if operation == 'save':
             store.save(context)
+            if self._wizard is not None and context.identity.project_id in self._wizard.preparations:
+                self._wizard.preparation(context).snapshot()
             return self._remember(context)
         if operation == 'rename':
             store.rename(context, args[1])
@@ -952,11 +1245,113 @@ class QtWorkspaceAdapter:
             return context.identity.project_id
         raise ValueError('不支持的项目操作')
 
+    def _pretest_overview(self, project, latest, execution):
+        from src.services.qt_log_history import pretest_overview_result, read_pretest_overview
+        owner, state = latest['owner'], latest['state']
+        job = (execution.jobs.get(owner, {}).get('status') or {}) if execution is not None else {}
+        result = job.get('result')
+        if job.get('state') == state and job.get('capability_id') == 'pretest.start' and isinstance(result, dict):
+            counts = result.get('result')
+            counts = counts if isinstance(counts, dict) else {}
+            outcome = pretest_overview_result(state, result.get('outcome'), counts.get('unchecked'), counts.get('passed'))
+        else:
+            cached = self._historical_pretests.get(project.project_id)
+            if cached is None or cached[:2] != (owner, state):
+                context = self._service.projects.opened[project.project_id]
+                cached = (owner, state, read_pretest_overview(context, owner, state))
+                self._historical_pretests[project.project_id] = cached
+            outcome = cached[2]
+        return outcome or ('skipped' if state == 'skipped' else 'unknown')
+
+    def _overview_state(self, project, latest, runtime_jobs, execution):
+        """Project-scoped, read-only summary of admitted work and its last result."""
+        states = {job['job_id']: job['state'] for job in runtime_jobs}
+        if execution is not None:
+            for identifier in (execution.latest, execution.resume.recovery_job):
+                item = execution.jobs.get(identifier)
+                if item:
+                    job = item.get('status') or {}
+                    states[identifier] = job.get('state', states.get(identifier, 'queued'))
+        for active, name in (('stop_requested', 'stopping'), ('stopping', 'stopping'),
+                             ('running', 'running'), ('queued', 'queued')):
+            if active in states.values():
+                return name
+        if execution is not None and execution.resume.has_waiting:
+            return 'queued'
+        state = latest.get('state')
+        if execution is not None and not execution.jobs_idle:
+            return 'stopping' if state == 'stopped' else 'finishing'
+        if project.unresolved_tasks:
+            return 'unknown'
+        if state == 'unknown' and latest.get('reconciled') is True:
+            return 'reviewed_unknown'
+        if state in ('succeeded', 'skipped') and latest.get('operation') == 'pretest.start':
+            return self._pretest_overview(project, latest, execution)
+        if state in ('prepared', 'queued', 'running', 'stopping'):
+            return 'unknown'
+        if state == 'succeeded':
+            return 'completed'
+        return state or project.state
+
+    def _typed_project(self, project, context, records, latest):
+        from src.models.project_profile import TEST_TYPES
+        from src.services.project_profile_store import read_project_profile
+        profile = read_project_profile(context.saved_root / 'Auto_power_on_off_tool/config')
+        if profile is not None:
+            kind = profile['test_type']
+            if kind == 'power_cycle':
+                from src.services.power_run_overview import PowerRunOverview
+                key = context.identity.project_id
+                if key not in self._power_overviews:
+                    self._power_overviews[key] = PowerRunOverview()
+                overview = self._power_overviews[key]
+                candidates = (item for item in records if item.get('operation') in ('aging.start', 'pipeline.start'))
+                record = overview.latest_record(context, sorted(candidates, key=_task_order, reverse=True))
+                details = overview.snapshot(context, record, profile)
+                if (details.get('job_id') and record.get('owner') == latest.get('owner')
+                        and record['state'] in ('succeeded', 'failed', 'stopped', 'skipped')
+                        and not project.unresolved_tasks and project.elapsed == '—'):
+                    rows, target = details['rows'], details['target']
+                    percentage = power_cycle_percentage(rows, target)
+                    text = '本批次轮次回执尚不完整'
+                    if percentage is not None:
+                        completed = min(row['completed'] for row in rows)
+                        text = f'各 DUT 至少完成 {completed} / {target} 轮'
+                    elapsed = project.elapsed
+                    start, end = record.get('started_at'), record.get('finished_at')
+                    if all(type(t) in (int, float) and 0 <= t < 1e12 for t in (start, end)) and end >= start:
+                        minutes, seconds = divmod(int(end - start), 60)
+                        hours, minutes = divmod(minutes, 60)
+                        elapsed = f'{hours:02d}:{minutes:02d}:{seconds:02d}'
+                    project = replace(project, progress=percentage, progress_text=text, elapsed=elapsed,
+                                      channel_text=f'{len(rows)} 台 DUT · 本批次运行快照')
+            else:
+                from src.services.service_aging import ServiceAging
+                details = ServiceAging(context).snapshot()
+                if not latest or latest.get('operation') == 'service_aging.start':
+                    abnormal = {row['dut_id'] for row in details.get('rows', ()) if row['state'] == 'abnormal'}
+                    abnormal.update(row['dut_id'] for row in details.get('dut_presence', ()) if row['state'] == 'offline')
+                    elapsed = details.get('elapsed_seconds')
+                    progress = '尚无监测批次' if elapsed is None else f'监测 {int(elapsed) // 3600} 时 {int(elapsed) // 60 % 60} 分'
+                    if details.get('state') == 'target_reached':
+                        progress += ' · 达到计划时长，待验收'
+                    project = replace(project, progress=None, progress_text=progress,
+                                      attention_count=max(project.attention_count, len(abnormal)),
+                                      channel_text=f"{len(profile['duts'])} 台 DUT · 持续供电监测")
+            project = replace(project, project_type=kind, test_type=TEST_TYPES[kind],
+                              dut=profile['model'] or '—', test_overview=details)
+        return project
+
     def _publish(self):
+        rows = self._project_rows(tuple(self._service.projects.opened.values()))
+        with self.lock:
+            self._snapshot = tuple(rows)
+
+    def _project_rows(self, contexts):
         from line_check_assistant.config_store import ChannelConfigStore
         from src.services.workbench_status_service import TASK_NAMES
         rows = []
-        for context in tuple(self._service.projects.opened.values()):
+        for context in contexts:
             self._service.refresh_status(context)
             execution = self._executions.get(context.identity.project_id)
             if execution is not None and execution.capabilities is not None:
@@ -965,9 +1360,13 @@ class QtWorkspaceAdapter:
             status = self._service.status.snapshot(context)
             with self._service.status.lock:
                 records = [dict(r) for r in self._service.status.records.values() if r['project_id'] == context.identity.project_id]
-            latest = max(records, key=lambda r: r.get('updated_at', 0), default={})
+                runtime_jobs, _ = self._service.status.external.get(context.identity.project_id, ((), ()))
+            latest = max(records, key=_task_order, default={})
             # Persisted nonterminal records alone cannot establish a live worker.
             historical_active = any(r['state'] in ('prepared', 'queued', 'running', 'stopping') for r in records)
+            attached_jobs = {job['job_id'] for job in runtime_jobs}
+            unowned_active = historical_active and any(r['state'] in ('prepared', 'queued', 'running', 'stopping')
+                                                       and r['owner'] not in attached_jobs for r in records)
             state = 'unknown' if historical_active else status.state
             state_text = '历史任务待核实' if historical_active else status.label
             if state == 'unknown' and (execution is None or execution.idle):
@@ -993,9 +1392,18 @@ class QtWorkspaceAdapter:
                 channels = [ChannelConfig(**c) for c in execution.channel_editor.snapshot()['channels']]
             else:
                 channels = channel_slots(store.load())
-            display = tuple(ChannelView(int(c.section.rsplit('_', 1)[1]), 'unknown' if c.enabled else 'disabled',
-                                        vlan=c.vlan_name, port=c.serial_port) for c in channels)
             selected = [c for c in channels if c.enabled]
+            snapshot_sections = {c.section for c in selected}
+            configured_sections = snapshot_sections
+            if config_dir != context.config_dir and execution.idle and execution.channel_editor is not None:
+                # The completed run keeps its bindings and reported results. The next run's
+                # selection can already have changed through the channel editor.
+                configured_sections = {row['section'] for row in execution.channel_editor.snapshot()['channels']
+                                       if row['enabled']}
+            display = tuple(ChannelView(int(c.section.rsplit('_', 1)[1]),
+                                        'unknown' if c.section in configured_sections else 'disabled',
+                                        vlan=c.vlan_name, port=c.serial_port, selected=c.section in configured_sections)
+                            for c in channels)
             config = (
                 ('项目版本', (('配置版本', context.identity.revision[:12]), ('历史任务', str(len(records))))),
                 ('基础参数', (('程控电源串口', store.load_power_serial_port() or '未配置'),
@@ -1008,17 +1416,29 @@ class QtWorkspaceAdapter:
                 '待核实' if state == 'unknown' else '—', '尚无实时轮次数据', None,
                 f'已选 {len(selected)} 通道 · 尚无执行快照', int(status.last_result == 'failed'),
                 run_id=latest.get('run_id', ''), channels=display, configuration=config,
-                active_task_count=0, dirty=self._service.projects.dirty(context), can_start=state != 'unknown')
+                active_task_count=0, dirty=self._service.projects.dirty(context), can_start=state != 'unknown',
+                unresolved_tasks=bool(status.unknown_task_count or unowned_active), saved_revision=context.identity.revision)
             if execution is not None:
                 project = execution.present(project)
+                if configured_sections != snapshot_sections:
+                    project = replace(project, channel_text=f'已选 {len(configured_sections)} 通道 · 上次任务快照')
                 if execution.push_trial is not None:
                     project = replace(project, push_trial=execution.push_trial.snapshot())
+            try:
+                project = self._typed_project(project, context, records, latest)
+            except (OSError, ValueError, sqlite3.DatabaseError):
+                project = replace(project, can_start=False, state='unknown', state_text='项目档案或历史读取失败',
+                                  progress_text='请核对本项目的配置版本和历史文件', attention_count=max(1, project.attention_count))
             if project.run_id:
                 # The historical view uses a run directory ID. Live jobs (including
                 # a post-run resume) use the owner ID from the same project ledger.
                 record = (next((row for row in records if row.get('owner') == project.run_id), {})
                           if execution and project.run_id in execution.jobs else latest)
                 project = replace(project, started_text=_started_text(record))
+            active_jobs = sum(job['state'] in ('queued', 'running', 'stop_requested', 'stopping')
+                              for job in runtime_jobs)
+            project = replace(project, overview_state=self._overview_state(project, latest, runtime_jobs, execution),
+                              observed_active_task_count=active_jobs)
             opened = bool(execution and execution.editor_open)
             kind = ('channels' if execution and execution.channel_editor and execution.channel_editor.opened else
                 'configuration' if opened else '')
@@ -1026,13 +1446,15 @@ class QtWorkspaceAdapter:
                 editor_open=opened, editor_kind=kind, can_start=project.can_start and not opened)
             others = self._other_active(context.identity.project_id)
             if others:
+                start = 'service_aging.start' if project.project_type == 'service_aging' else 'aging.start'
                 project = replace(project, can_start=False, parallel_power_available=project.can_start
-                                  and all(item.has_only_power_tasks() for item in others))
+                                  and self._parallel_test_allowed(context, start, others))
             rows.append(project)
-        with self.lock:
-            self._snapshot = tuple(rows)
+        return rows
 
     def _shutdown(self):
+        if self._feishu_repair is not None and self._feishu_repair.service.busy:
+            return False
         contexts = tuple(self._service.projects.opened.values())
         if not self._service_close_started:
             if any(controller is not self._ai_chats.get(key) for key, controller in self._service.controllers.items()):
@@ -1044,16 +1466,24 @@ class QtWorkspaceAdapter:
             execution.begin_close()
         if self._gateway_request is not None:
             return False
+        if self._platform_configuration is not None and not self._platform_configuration.close_trials():
+            return False
         if not self._service_close_started:
+            if self._platform_configuration is not None:
+                self._platform_configuration.close_bindings()
             self._service.begin_close()
             self._service_close_started = True
         if not self._service.idle or any(not execution.ready_to_close for execution in self._executions.values()):
             self._publish()
             return False
+        if self._direct_platforms is not None and not self._direct_platforms.close_project():
+            return False
         chats_closed = all([chat.begin_close() for chat in self._ai_chats.values()])
         models_closed = self._model_settings is None or self._model_settings.begin_close()
-        if not chats_closed or not models_closed or self._history_reads or self._close_receipts:
+        if not chats_closed or not models_closed or self._history_reads or self._close_receipts or self._project_closes:
             return False
+        if self._session_at_exit is None:
+            self._session_at_exit = self._service.session_snapshot(self._selected_at_exit)
         for context in contexts:
             self._close_project(context, self._close_choices.get(context.identity.project_id, ''))
         if self._service.projects.opened:
@@ -1061,6 +1491,12 @@ class QtWorkspaceAdapter:
         self._complete_inventory()
         self._poll_archive(cancel=True)
         self._service.close()
+        try:
+            self._service.write_session(self._session_at_exit)
+        except OSError as error:
+            self._emit('工作区会话保存失败：' + type(error).__name__ + '，下次启动沿用原记录', 'WARN')
+        else:
+            self._emit(f'已保存工作区会话，共 {len(self._session_at_exit["projects"])} 个打开的项目')
         return True
 
     def _finish_project_closes(self):
@@ -1093,6 +1529,7 @@ class QtWorkspaceAdapter:
             # Buffer constructor events until the service exposes its path.
             initial = []
             self._service = factory(self.source_root, directory=self.directory, emit=initial.append)
+            self._log_writer.start(self._service.directory)
             self._service.emit = self._emit
             self._service.projects.emit = self._emit
             self._service.status.emit = self._emit
@@ -1112,9 +1549,12 @@ class QtWorkspaceAdapter:
                 self._emit(message)
             if self._service.recent_error:
                 self._emit(self._service.recent_error, 'WARN')
-            self.results.put_nowait(ProjectCommandResult(0, 'ready',
+            selected = self._restore_session()
+            self.results.put_nowait(ProjectCommandResult(0, 'ready', project_id=selected,
                 payload=(self._recent_projects(), self._service.recent_error)))
             next_sample = 0.0
+            next_platform = 0.0
+            platform_error = None
             while True:
                 now = time.monotonic()
                 with self.lock:
@@ -1122,10 +1562,24 @@ class QtWorkspaceAdapter:
                 if now >= next_sample:
                     self._sample_resources(now)
                     next_sample = now + 1
+                if (now >= next_platform and not self._closing.is_set() and
+                        (self._direct_platforms is not None or self._start_configured_gateway and self._service.remote_projects)):
+                    next_platform = now + 1
+                    try:
+                        self._direct_access().refresh()
+                        platform_error = None
+                    except Exception as error:
+                        if platform_error != type(error).__name__:
+                            platform_error = type(error).__name__
+                            self._emit('[平台接入] 直连状态刷新失败：' + platform_error, 'WARN')
                 self._poll_inventory()
                 self._poll_archive()
                 self._poll_gateway()
                 self._poll_history()
+                if self._feishu_repair is not None:
+                    repair_status = self._feishu_repair.poll()
+                    with self.lock:
+                        self._feishu_repair_status = repair_status
                 for project_id, chat in self._ai_chats.items():
                     if not self._closing.is_set() and project_id not in self._project_closes:
                         chat.finish_intent()
@@ -1144,6 +1598,7 @@ class QtWorkspaceAdapter:
                     try:
                         finished = self._shutdown()
                     except Exception as error:
+                        self._session_at_exit = None
                         self.results.put_nowait(ProjectCommandResult(0, 'close_rejected', error=type(error).__name__ + '：关闭未完成，请核对草稿与活动任务'))
                         with self.lock:
                             self._accepting = True
@@ -1160,6 +1615,21 @@ class QtWorkspaceAdapter:
                 previous_ids = set(self._service.projects.opened)
                 try:
                     self._flush_window_placements()
+                    if operation in FEISHU_REPAIR_OPERATIONS:
+                        self._change_feishu_repair(operation)
+                        continue
+                    if self._service.maintenance.active and operation != 'refresh':
+                        raise ValueError('飞书 SDK 正在安装或等待重启，本次操作未开始。')
+                    if operation in EXTENSION_OPERATIONS:
+                        project_id = args[0]
+                        if self._closing.is_set() or project_id in self._project_closes:
+                            raise ValueError('项目正在关闭，本次受控扩展操作已取消。')
+                        payload = self._extensions.execute(self._execution(self._context(project_id)), operation, args[1:])
+                        continue
+                    if operation in PLATFORM_CONFIG_OPERATIONS:
+                        project_id = args[0]
+                        payload = self._execute(operation, args)
+                        continue
                     if operation in GATEWAY_OPERATIONS:
                         self._request_gateway(identifier, operation, args)
                         deferred = True
@@ -1197,7 +1667,7 @@ class QtWorkspaceAdapter:
                         self._request_inventory(identifier, operation, args)
                         deferred = True
                         continue
-                    if operation in ('history_jobs', 'history_events'):
+                    if operation in ('history_jobs', 'history_events') or operation in AGING_HISTORY:
                         project_id = args[0]
                         self._request_history(identifier, operation, args)
                         deferred = True
@@ -1217,7 +1687,10 @@ class QtWorkspaceAdapter:
                         self._close_receipts.setdefault(value, []).append(identifier)
                         deferred = True
                         continue
-                    if operation in ('export_logs', 'imported_connection_choices', 'imported_connection_select', 'gui_unknown_resolve'):
+                    if operation in WIZARD_COMMANDS and operation != 'create_typed':
+                        project_id = '' if operation.startswith('wizard_draft_') else args[0]
+                        payload = value
+                    elif operation in ('export_logs', 'imported_connection_choices', 'imported_connection_select', 'gui_unknown_resolve'):
                         payload = value
                     elif operation == 'prepare_execution':
                         payload, project_id = value, value.project_id
@@ -1243,7 +1716,8 @@ class QtWorkspaceAdapter:
                     for identifier_to_close in set(self._service.projects.opened) - previous_ids:
                         self._service.projects.close(self._service.projects.opened[identifier_to_close])
                     from src.models.capabilities import CapabilityError
-                    error_text = (str(error) if isinstance(error, CapabilityError) or
+                    from src.models.dependency_repair import MissingFeishuSdkError
+                    error_text = (str(error) if isinstance(error, (CapabilityError, MissingFeishuSdkError)) or
                         isinstance(error, ValueError) and not operation.startswith(('configuration_', 'channels_editor_', 'dut_', 'upgrade_', 'parameter_', 'onu_')) else
                         type(error).__name__ + '：项目操作未完成，原文件和当前草稿保留，请核对输入与目录')
                     self._emit('[项目管理] ' + operation + '失败：' + type(error).__name__, level='ERROR')
@@ -1255,6 +1729,13 @@ class QtWorkspaceAdapter:
                         self.results.put_nowait(ProjectCommandResult(identifier, operation, project_id, error_text, payload))
         except Exception as error:
             self.results.put_nowait(ProjectCommandResult(0, 'initialization_failed', error=type(error).__name__ + '：项目服务不可用'))
+            if self._platform_configuration is not None:
+                self._platform_configuration.close_bindings()
+                while not self._platform_configuration.close_trials():
+                    time.sleep(.05)
+            if self._direct_platforms is not None:
+                while not self._direct_platforms.close_project():
+                    time.sleep(.05)
             peer = getattr(getattr(self, '_service', None), 'gateway_runtime', None)
             if getattr(peer, 'mode', '') == 'project_peers':
                 peer.close()
@@ -1267,6 +1748,10 @@ class QtWorkspaceAdapter:
             for execution in self._executions.values():
                 execution.close()
         finally:
+            if self._feishu_repair is not None:
+                if self._feishu_repair.service.thread is not None:
+                    self._feishu_repair.service.thread.join()
+                self._feishu_repair.release()
             self._gateway_worker.shutdown(wait=True, cancel_futures=True)
             self._poll_gateway()
             self._cancel_history()
@@ -1275,4 +1760,6 @@ class QtWorkspaceAdapter:
             for project_id, receipts in self._close_receipts.items():
                 for request in receipts:
                     self.results.put_nowait(ProjectCommandResult(request, 'close', project_id, '工作区已退出，未确认项目关闭完成'))
+            if not self._update_logs_pending:
+                self._log_writer.close()
             self.closed.set()

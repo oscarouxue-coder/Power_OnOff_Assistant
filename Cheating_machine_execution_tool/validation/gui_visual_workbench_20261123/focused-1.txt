@@ -1,0 +1,31 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 88, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_02f3268f0a7748fbb1ea886453b78bf6', 'framework': 'qt', 'platform': 'windows'}
+
+test_formal_window_refreshes_live_snapshots_and_keeps_manual_controls (qt_visual_preview_probe.VisualPreviewTests) ... ok
+test_layout_and_evidence_match_in_both_versions (qt_visual_preview_probe.VisualPreviewTests) ... ok
+test_switch_filters_and_cancel_simulated_stop (qt_visual_preview_probe.VisualPreviewTests) ... ok
+test_qt_dut_presence_displays_explicit_device_evidence_and_history (qt_typed_status_probe.TypedStatusTests) ... ok
+test_qt_switch_preserves_reported_progress_and_separates_health_sources (qt_typed_status_probe.TypedStatusTests) ... ok
+test_background_thread_cannot_update_presentation (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_cards_table_search_and_navigation_share_identity (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_channel_matrix_and_list_share_the_same_snapshots (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_demo_metrics_keep_task_and_health_distinct (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_form_wheel_scrolls_without_editing_values (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_global_log_filter_pins_project_identity_across_navigation_and_close (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_live_logs_apply_batches_at_capacity_without_rebuilding_document (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_live_refresh_preserves_navigation_selection_and_config_controls (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_log_buffer_is_bounded_and_event_loop_stays_responsive (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_overview_metrics_and_filter_follow_project_identity_and_latest_evidence (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_project_status_is_consistent_across_navigation_cards_table_and_detail (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_project_switch_keeps_snapshots_and_filters_logs (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_qt_chat_formats_markdown_preserves_selection_and_uses_original_shortcuts (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_qt_monitor_confirms_only_checked_project_channels (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_responsive_layout_and_native_captures (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_single_card_uses_available_width_and_logs_are_draggable (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_qt_system_health_shows_live_observations_and_collapses (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_wizard_recovers_typed_duts_prepares_and_upgrades_untyped_project (qt_project_wizard_probe.ProjectWizardTests) ... ok
+
+----------------------------------------------------------------------
+Ran 23 tests in 21.136s
+
+OK

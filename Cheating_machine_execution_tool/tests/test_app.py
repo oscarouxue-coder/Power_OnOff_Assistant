@@ -111,6 +111,26 @@ from src.ui.dut_config_window import (
 )
 
 
+class LegacyUiExportsTests(unittest.TestCase):
+    def test_existing_ui_exports_keep_their_identity(self):
+        from src.ui import SerialTerminalWindow, DutConfigWindow, load_module_window_size
+        from src.ui.serial_terminal import SerialTerminalWindow as OriginalSerial
+        from src.ui.dut_config_window import DutConfigWindow as OriginalDut
+        self.assertIs(SerialTerminalWindow, OriginalSerial)
+        self.assertIs(DutConfigWindow, OriginalDut)
+        self.assertTrue(callable(load_module_window_size))
+
+    def test_legacy_dut_window_reuses_shared_wifi_and_wan_models(self):
+        from src.models import dut_wan_form, dut_wifi_form
+        from src.ui import dut_config_window
+
+        for module, symbols in ((dut_wifi_form, ('wifi_choice_options', 'wifi_status_form_values', 'WIFI_CHANNEL_OPTIONS')),
+                (dut_wan_form, ('WanFormRules', 'normalize_wan_address_modes', 'resolve_wan_form_rules',
+                    'wan_connection_form_values', 'wan_port_bind_from_lan_ports', 'wan_lan_ports_from_port_bind'))):
+            for symbol in symbols:
+                self.assertIs(getattr(dut_config_window, symbol), getattr(module, symbol))
+
+
 class CurrentChannelSelectionTests(unittest.TestCase):
     def test_parameter_generator_labels_xpon_sn_fixed_format_and_sn_length_separately(self):
         import inspect

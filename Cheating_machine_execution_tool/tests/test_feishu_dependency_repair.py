@@ -23,6 +23,7 @@ from src.ui.feishu_setup_window import FeishuSetupWindow
 from src.ui.feishu_dependency_controller import repair_host_busy, FeishuDependencyController
 
 ROOT = Path(__file__).resolve().parents[1]
+QT_ENTRY = ROOT / 'run_dutpilot_qt.py'
 
 
 def wheel(folder, name='lark-oapi', version='1.7.5'):
@@ -106,25 +107,31 @@ class GateAndRepairTests(unittest.TestCase):
     @unittest.skipUnless(os.name == 'nt', 'Windows source entry')
     def test_source_entry_refuses_before_app_import_or_main_when_repair_owns_environment(self):
         import ctypes
-        with patch.object(sys, 'argv', ['run_line_check_assistant.py']), \
+        main = Mock(return_value=0)
+        with patch.object(sys, 'argv', [QT_ENTRY.name]), \
                 patch('scripts.source_environment_guard.ensure_source_environment_available', side_effect=RuntimeError('正在安装')), \
+                patch.object(sys, 'stderr', None), \
                 patch.object(ctypes.windll.user32, 'MessageBoxW') as notice, \
-                patch('line_check_assistant.app.main') as main:
+                patch.dict(sys.modules, {'src.ui.qt.application': Mock(run_workspace=main)}):
             with self.assertRaises(SystemExit) as caught:
-                runpy.run_path(str(ROOT / 'run_line_check_assistant.py'), run_name='__main__')
+                runpy.run_path(str(QT_ENTRY), run_name='__main__')
         self.assertEqual(caught.exception.code, 1)
         notice.assert_called_once()
         main.assert_not_called()
 
     def test_source_entry_keeps_gateway_arguments_and_calls_main_when_not_repairing(self):
-        with patch.object(sys, 'argv', ['run_line_check_assistant.py', '--gateway-slot', '5']), \
+        main = Mock(return_value=0)
+        project = '工程 副本/project.linecheck.json'
+        with patch.object(sys, 'argv', [QT_ENTRY.name, project, '--gateway-slot', '5']), \
                 patch.dict(os.environ, {}, clear=False), \
                 patch('scripts.source_environment_guard.ensure_source_environment_available') as available, \
-                patch('line_check_assistant.app.main') as main:
-            runpy.run_path(str(ROOT / 'run_line_check_assistant.py'), run_name='__main__')
+                patch.dict(sys.modules, {'src.ui.qt.application': Mock(run_workspace=main)}):
+            with self.assertRaises(SystemExit) as caught:
+                runpy.run_path(str(QT_ENTRY), run_name='__main__')
+            self.assertEqual(caught.exception.code, 0)
             self.assertEqual(os.environ['LINECHECK_GATEWAY_SLOT'], '5')
         available.assert_called_once()
-        main.assert_called_once()
+        main.assert_called_once_with(str(Path.cwd() / project))
 
     def test_inflight_operation_blocks_repair_and_new_work_is_blocked_during_repair(self):
         gate = MaintenanceGate()
@@ -332,6 +339,7 @@ class InstallationTests(unittest.TestCase):
         current = Mock(pid=1)
         current.parents.return_value = current.children.return_value = []
         with tempfile.TemporaryDirectory() as folder:
+            current_env = Path(folder) / 'current'
             other_env = Path(folder) / 'other'
             (other_env / 'Scripts').mkdir(parents=True)
             (other_env / 'pyvenv.cfg').touch()
@@ -343,7 +351,11 @@ class InstallationTests(unittest.TestCase):
             other.exe.return_value = getattr(sys, '_base_executable', sys.executable)
             other.cmdline.return_value = [other.exe.return_value]
             other.parents.return_value = [launcher]
-            with patch.object(psutil, 'Process', return_value=current), patch.object(psutil, 'process_iter', return_value=[other]):
+            with patch.object(sys, 'prefix', str(current_env)), \
+                    patch.object(sys, 'executable', str(current_env / 'Scripts/python.exe')), \
+                    patch.object(sys, '_base_executable', other.exe.return_value), \
+                    patch.object(psutil, 'Process', return_value=current), \
+                    patch.object(psutil, 'process_iter', return_value=[other]):
                 install.assert_environment_unoccupied()
 
     def test_existing_lock_contains_target_and_no_unlocked_requirement(self):
@@ -358,6 +370,21 @@ class InstallationTests(unittest.TestCase):
         with patch.object(sys, 'frozen', True, create=True):
             with self.assertRaisesRegex(ValueError, 'EXE'):
                 install.source_environment(ROOT)
+
+    def test_source_environment_requires_the_qt_entry(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder).resolve()
+            venv = root / 'venv'
+            venv.mkdir()
+            (venv / 'pyvenv.cfg').write_text('include-system-site-packages = false\n', encoding='utf-8')
+            (root / 'requirements-build.txt').write_bytes((ROOT / 'requirements-build.txt').read_bytes())
+            with patch.object(sys, 'prefix', str(venv)), patch.object(sys, 'platform', 'win32'), \
+                    patch.object(sys, 'version_info', (3, 9, 10)), \
+                    patch.object(install.struct, 'calcsize', return_value=8):
+                with self.assertRaisesRegex(ValueError, '源码入口不存在'):
+                    install.source_environment(root)
+                (root / QT_ENTRY.name).touch()
+                self.assertEqual(install.source_environment(root), root)
 
     def test_wheels_must_be_locked_exactly_and_contain_sdk(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -441,11 +468,22 @@ class InstallationTests(unittest.TestCase):
 
 
 class RestartTests(unittest.TestCase):
+    def test_helper_failure_uses_native_notice_without_tk(self):
+        from scripts import restart_source_after_exit as helper
+        with patch.object(sys, 'argv', ['restart_source_after_exit.py']), \
+                patch('ctypes.windll.user32.MessageBoxW') as notice:
+            self.assertEqual(helper.main(), 1)
+        parent, message, title, icon = notice.call_args.args
+        self.assertIsNone(parent)
+        self.assertIn('手动启动', message)
+        self.assertEqual(title, '重启未完成')
+        self.assertEqual(icon, 0x10)
+
     def test_real_helper_waits_for_parent_exit_and_launches_fake_entry_once(self):
         with tempfile.TemporaryDirectory(prefix='重启 path ') as directory:
             folder = Path(directory).resolve()
             marker, armed, release = (folder / name for name in ('marker.txt', 'armed.txt', 'release.txt'))
-            entry, parent_script = folder / 'fake_entry.py', folder / 'parent.py'
+            entry, parent_script = folder / QT_ENTRY.name, folder / 'parent.py'
             entry.write_text("from pathlib import Path\nimport sys\nwith Path(sys.argv[1]).open('a') as f: f.write('started\\n')\n", encoding='utf-8')
             helper = ROOT / 'scripts/restart_source_after_exit.py'
             parent_script.write_text(
@@ -514,14 +552,18 @@ class RestartTests(unittest.TestCase):
             root = Path(folder).resolve()
             (root / 'scripts').mkdir()
             (root / 'scripts/restart_source_after_exit.py').touch()
-            (root / 'run_line_check_assistant.py').touch()
+            entry = root / QT_ENTRY.name
             popen = Mock()
-            with patch.object(sys, 'argv', ['run_line_check_assistant.py', '--gateway-slot', '4']), \
+            with self.assertRaisesRegex(RuntimeError, '源码重启入口不可用'):
+                restart.launch_restart_helper(root, popen=popen)
+            popen.assert_not_called()
+            entry.touch()
+            with patch.object(sys, 'argv', [QT_ENTRY.name, '--gateway-slot', '4']), \
                     patch.dict(os.environ, {'PYTHONPATH': 'debugpy', 'PYTHONHOME': 'wrong'}):
                 restart.launch_restart_helper(root, popen=popen)
             args = popen.call_args.args[0]
             self.assertEqual(args[0], sys.executable)
-            self.assertEqual(args[-4:], [sys.executable, str(root / 'run_line_check_assistant.py'), '--gateway-slot', '4'])
+            self.assertEqual(args[-4:], [sys.executable, str(entry), '--gateway-slot', '4'])
             self.assertEqual(args[5], os.getcwd())
             self.assertNotIn('PYTHONPATH', popen.call_args.kwargs['env'])
 
@@ -531,7 +573,7 @@ class RestartTests(unittest.TestCase):
         previous.create_time.return_value = 1.0
         previous.wait.side_effect = lambda **kw: events.append('exited')
         popen = Mock(side_effect=lambda *a, **kw: events.append('spawned'))
-        command = [sys.executable, str(ROOT / 'run_line_check_assistant.py'), '--gateway-slot', '2']
+        command = [sys.executable, str(QT_ENTRY), '--gateway-slot', '2']
         restart.wait_and_restart(123, 1.0, str(ROOT), command, Mock(return_value=previous), popen)
         self.assertEqual(events, ['exited', 'spawned'])
         popen.assert_called_once()
@@ -542,14 +584,14 @@ class RestartTests(unittest.TestCase):
         previous.create_time.return_value = 1.0
         previous.wait.side_effect = psutil.TimeoutExpired(120)
         with self.assertRaisesRegex(RuntimeError, '原程序尚未退出'):
-            restart.wait_and_restart(123, 1.0, str(ROOT), [sys.executable, str(ROOT / 'run_line_check_assistant.py')],
+            restart.wait_and_restart(123, 1.0, str(ROOT), [sys.executable, str(QT_ENTRY)],
                                      Mock(return_value=previous), popen)
         popen.assert_not_called()
 
     def test_already_exited_or_reused_pid_does_not_wait_on_unrelated_process(self):
         import psutil
         popen = Mock()
-        command = [sys.executable, str(ROOT / 'run_line_check_assistant.py')]
+        command = [sys.executable, str(QT_ENTRY)]
         restart.wait_and_restart(123, 1.0, str(ROOT), command, Mock(side_effect=psutil.NoSuchProcess(123)), popen)
         popen.assert_called_once()
         previous = Mock()

@@ -1,5 +1,7 @@
 # Project Notes
 
+- 主界面（2026-11-24）：日常启动、VS Code 调试、后续界面开发和标准构建统一使用 Qt，源码入口为 `Cheating_machine_execution_tool/run_dutpilot_qt.py`。保留 Tk 界面源码及历史回归测试。Qt 目录包使用既有锁定的 `requirements-qt.txt` 和业务依赖，构建及验收说明见根 README。
+
 - After rebuilding the latest `dist\DUTPilot.exe`, do not run it on the current PC. Only verify that packaging completed successfully and report the output path to the user.
 - 打包标准（2026-10-17，负责人已确认17.23MiB精简包在其它电脑正常运行）：以后统一通过`Cheating_machine_execution_tool/build_line_check_assistant.ps1`构建。使用脚本自动准备的仓库外独立CPython3.9.10 x64环境、`requirements-build.txt`固定依赖及PyInstaller5.10.1，排除NumPy/OpenBLAS、lxml、PyQt5，禁用外部UPX；构建前环境检查和完整`verify_baseline.py`、构建后实际EXE/PYZ与便携ZIP/哈希检查必须通过。禁止回退全局环境、直接使用未锁定依赖或旧机器生成的spec。跨电脑步骤见根`README.md`；工程路径必须从脚本位置推导，不写死盘符。若新增功能确需调整依赖/排除项或升级工具链，单独说明并补验证，不为追求固定17.23MiB删除必需功能。本次仅确认异机正常运行，不扩展真实设备验收范围。
 - GitHub 发布规则（2026-10-16）：每次发布新版，先上传并核验新版本及全部附件，确认设为 Latest 且公开可下载后，删除旧版 GitHub Releases 及其附件，最终只保留本次新版本 Release；不删除源码历史或 Git 标签。公开发布说明只写用户可见更新、下载与使用说明，不写构建测试数量、源码提交基准/工作区状态或打包电脑未运行及现场验收声明；这些内部记录保留在 DEVELOPMENT_LOG.md / PROJECT_STATUS.md / ACCEPTANCE_BASELINE.md。
@@ -77,6 +79,8 @@
 24. **新增真实GUI测试必须通过窗口隔离覆盖检查。** 支持的测试入口统一为主源码目录的`python scripts/run_tests.py ...`、VS Code中带“离屏预检”的测试任务，以及完整基线。创建Tk/Toplevel前必须接入`tests/tk_test_windows.py`的离屏作用域；仅导入工具、事后安装或未执行分支中的安装不算接入。创建窗口的子进程必须返回独立隔离证据；未接入、未知/未适配入口、缺少证据、运行时违规或泄漏作用域均失败，异常被测试捕获也不能覆盖失败退出码。普通测试保持真实窗口映射和布局；Windows原生像素专项可使用经系统身份核验的非输入私有桌面，不切换用户桌面，不降低断言或失败回退到用户桌面。不得通过整文件豁免、自动刷新为通过、全隐藏或新增跳过绕开检查。运行方式见根README“开发测试与窗口隔离”。
 
 PySide6 原生测试使用 `scripts/qt_test_guard.py` 的 `QtTestScope` / `install_qt_test_scope`，由 `run_gui_child(..., framework='qt', native_render=True, timeout=...)` 在受核验的非输入桌面内运行同一个 `scripts/run_tests.py`。Qt/Tk 作用域不可互相替代；Qt 构造、错误线程、未适配原生对话框或泄漏仍须失败。Qt 迁移阶段另执行 `python scripts/verify_qt_migration.py --output <验证目录>`，三档缩放、全部指定原生用例与证据必须通过；原 Tk 环境不强装 Qt，Tk 全量通过不代表 Qt 原生验收通过，也不能跳过此专项。
+
+25. **阶段验证通过并完成报告后，必须清理本批次由开发脚本生成的过程 PNG。** 清理前核对项目路径、Git 状态和报告引用，优先移入回收站，并在 `DEVELOPMENT_LOG.md` 记录清理数量与保留项。保留报告引用、待人工比对和现场验收所需的截图。失败批次须在对应问题复验通过并记录后再清理。具体范围见[阶段截图清理](#阶段截图清理)。
 
 ## 阶段截图清理
 

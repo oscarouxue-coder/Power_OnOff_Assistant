@@ -17,16 +17,6 @@
       "justMyCode": true
     },
     {
-      "name": "DUTPilot · Tk 旧版工作台",
-      "type": "debugpy",
-      "request": "launch",
-      "python": "${workspaceFolder}/.venv_serial_upgrade/Scripts/python.exe",
-      "program": "${workspaceFolder}/Cheating_machine_execution_tool/run_line_check_assistant.py",
-      "cwd": "${workspaceFolder}/Cheating_machine_execution_tool",
-      "console": "integratedTerminal",
-      "justMyCode": true
-    },
-    {
       "name": "serial_upgrade",
       "type": "debugpy",
       "request": "launch",

@@ -160,6 +160,90 @@ class QtExecutionAdapterTests(unittest.TestCase):
         self.adapter.poll()
         self.assertEqual(self.adapter.jobs[identifier]['status']['state'], 'succeeded')
 
+    def test_continuous_monitor_confirm_stop_and_history_use_the_selected_project_job(self):
+        from src.services.project_profile_store import write_project_profile
+        write_project_profile(self.context.config_dir, {
+            'test_type': 'service_aging', 'type_config': {'target_hours': 168, 'collectors': ['voice']},
+            'duts': [{'label': '语音样机', 'hardware_id': 'LAB-A', 'channel': 1}],
+        })
+        self.workspace.projects.save(self.context)
+        with self.assertRaisesRegex(ValueError, '准备步骤'):
+            self.adapter.prepare('service_aging.start')
+        with self.assertRaisesRegex(CapabilityError, '持续供电'):
+            self.adapter.prepare('aging.start')
+        monitor = self.adapter.aging_monitor()
+        with patch('src.services.project_preparation.ProjectPreparation.require_ready', return_value={'ready': True}):
+            preview = self.adapter.prepare('service_aging.start')
+            self.assertIn('语音样机', preview.summary)
+            changed = dict(monitor.service.prepare(), binding='changed')
+            with patch.object(monitor.service, 'prepare', return_value=changed):
+                with self.assertRaisesRegex(CapabilityError, '重新确认'):
+                    self.adapter.confirm(preview.token)
+            self.assertFalse(self.workspace.resources.owners)
+            preview = self.adapter.prepare('service_aging.start')
+            identifier = self.adapter.confirm(preview.token)
+        self.addCleanup(lambda: self.adapter.stop(identifier) if not self.adapter.jobs_idle else None)
+        self.wait_for(lambda: monitor.service.snapshot().get('state') == 'running')
+        view = monitor.service.snapshot()
+        self.assertEqual(view['job_id'], identifier)
+        row = next(row for row in view['rows'] if row['collector'] == 'voice')
+        monitor.record(dict(job_id=identifier, dut_id=row['dut_id'], collector='voice', kind='daily',
+                            outcome='healthy', evidence='模拟日检收据'))
+        from src.services.workspace_event_log import associate_run
+        daily = next(event for event in self.events if event.dut_id == row['dut_id'] and event.step == 'voice')
+        archived = associate_run(daily, self.workspace.status.records)
+        self.assertEqual((archived.job_id, archived.channel, archived.batch_id),
+                         (identifier, 1, self.workspace.status.records[identifier]['run_id']))
+        self.assertNotEqual(archived.job_id, archived.batch_id)
+        self.adapter.stop(identifier)
+        self.wait_for(lambda: self.adapter.jobs_idle)
+        self.adapter.poll()
+        self.assertEqual(monitor.service.snapshot()['state'], 'stopped')
+        self.assertEqual(monitor.service.history_page(identifier, kind='daily')['rows'][0]['evidence'], '模拟日检收据')
+        self.assertFalse(self.engine.calls)
+        self.assertFalse(self.workspace.resources.owners)
+
+    def test_field_collector_uses_the_confirmed_job_manifest_and_deduplicates_reports(self):
+        from datetime import datetime, timezone
+        from src.services.project_profile_store import write_project_profile
+        write_project_profile(self.context.config_dir, {
+            'test_type': 'service_aging',
+            'type_config': {'collectors': ['iptv', 'voice'], 'feed_collectors': ['iptv']},
+            'duts': [{'label': 'DUT A', 'hardware_id': 'rack-a'}],
+        })
+        self.workspace.projects.save(self.context)
+        monitor = self.adapter.aging_monitor()
+        monitor.service.interval = .25
+        with patch('src.services.project_preparation.ProjectPreparation.require_ready', return_value={'ready': True}):
+            confirmation = self.adapter.prepare('service_aging.start')
+            job = self.adapter.confirm(confirmation.token)
+        self.addCleanup(lambda: self.adapter.stop(job) if not self.adapter.jobs_idle else None)
+        plan_path = self.context.history / 'aging-input' / (job + '.plan.json')
+        self.wait_for(plan_path.is_file)
+        plan = json.loads(plan_path.read_text(encoding='utf-8'))
+        self.assertEqual(plan['project_id'], self.context.identity.project_id)
+        self.assertEqual(plan['job_id'], job)
+        self.assertEqual(plan['feed_collectors'], ['iptv'])
+        event = dict(project_id=plan['project_id'], job_id=job, dut_id=plan['duts'][0]['dut_id'],
+                     event_id='rack-a-141', collector='iptv', observed_at=datetime.now(timezone.utc).isoformat(),
+                     outcome='abnormal', detail='模拟机顶盒报告画面冻结')
+        input_path = plan_path.with_suffix('').with_suffix('.jsonl')
+        with input_path.open('a', encoding='utf-8') as stream:
+            for record in (dict(event, job_id='other'), event, event):
+                stream.write(json.dumps(record, ensure_ascii=False) + '\n')
+        self.wait_for(lambda: bool(monitor.service.history_page(job, kind='sample')['rows']))
+        self.adapter.stop(job)
+        self.wait_for(lambda: self.adapter.jobs_idle)
+        view = monitor.service.snapshot(job)
+        self.assertEqual(Path(view['feed_path']), input_path)
+        samples = monitor.service.history_page(job, kind='sample')['rows']
+        self.assertEqual([(s['source'], s['event_id'], s['evidence']) for s in samples],
+                         [('jsonl', 'rack-a-141', event['detail'])])
+        streams = {row['collector']: row for row in view['rows']}
+        self.assertEqual((streams['iptv']['checks'], streams['iptv']['failures']), (1, 1))
+        self.assertEqual((streams['voice']['checks'], streams['voice']['source']), (0, 'manual'))
+        self.assertFalse(self.engine.calls)
+
     def test_single_power_reuses_original_frames_order_and_interval_with_temporary_port(self):
         from src.services.power_on_service import turn_off_selected_channels, turn_on_selected_channels
         saved = self.context.config_dir / 'test_project_config.ini'
@@ -210,6 +294,56 @@ class QtExecutionAdapterTests(unittest.TestCase):
         self.assertTrue(status['result']['manual'])
         self.assertFalse(self.workspace.resources.owners)
 
+    def test_single_power_open_denial_fails_before_dispatch_and_releases_resources(self):
+        from serial import SerialException
+        from src.services.power_on_service import turn_off_selected_channels, turn_on_selected_channels
+
+        def deny_open(**options):
+            self.assertEqual(options['port'], 'COM106')
+            raise SerialException("could not open port 'COM106': PermissionError(13, 'Access is denied')")
+
+        for action, engine in (('up', turn_on_selected_channels), ('down', turn_off_selected_channels)):
+            with self.subTest(action=action):
+                selection = self.adapter.single_power.selection(())
+                confirmation = self.adapter.prepare(SINGLE_POWER, SinglePowerTarget('COM106', action, selection.binding))
+                with patch('src.services.qt_single_power.' + engine.__name__,
+                           partial(engine, serial_factory=deny_open, sleep_fn=lambda _: None)):
+                    identifier = self.adapter.confirm(confirmation.token)
+                    self.wait_for(lambda: self.adapter.idle)
+                self.adapter.poll()
+                status = self.adapter.jobs[identifier]['status']
+                self.assertEqual(status['state'], 'failed')
+                self.assertFalse(status['result']['dispatched'])
+                self.assertIn('Access is denied', status['result']['message'])
+                self.assertIn('程控电源指令未下发', status['result']['message'])
+                with self.workspace.status.lock:
+                    self.assertEqual(self.workspace.status.records[identifier]['state'], 'failed')
+                self.assertFalse(self.workspace.resources.owners)
+                self.assertFalse(self.workspace.resources.unknown_for(self.context.identity.project_id))
+
+    def test_single_power_first_write_exception_keeps_result_unknown(self):
+        from src.services.power_on_service import turn_on_selected_channels
+
+        class FailingSerial(FakeSerial):
+            def write(self, data):
+                self.writes.append(data)
+                raise OSError('fixture first write failed')
+
+        fake = FailingSerial()
+        selection = self.adapter.single_power.selection(())
+        confirmation = self.adapter.prepare(SINGLE_POWER, SinglePowerTarget('COM106', 'up', selection.binding))
+        with patch('src.services.qt_single_power.turn_on_selected_channels',
+                   partial(turn_on_selected_channels, serial_factory=lambda **_: fake, sleep_fn=lambda _: None)):
+            identifier = self.adapter.confirm(confirmation.token)
+            self.wait_for(lambda: self.adapter.idle)
+        self.adapter.poll()
+        status = self.adapter.jobs[identifier]['status']
+        self.assertEqual(status['state'], 'unknown')
+        self.assertTrue(status['result']['dispatched'])
+        self.assertEqual(fake.writes, [channel_power_frame(1, True)])
+        self.assertTrue(fake.closed)
+        self.assertIn(identifier, self.workspace.resources.unknown_for(self.context.identity.project_id))
+
     def test_single_power_partial_write_keeps_result_unknown_and_protects_port(self):
         from src.services.power_on_service import turn_on_selected_channels
 
@@ -227,7 +361,9 @@ class QtExecutionAdapterTests(unittest.TestCase):
             identifier = self.adapter.confirm(confirmation.token)
             self.wait_for(lambda: self.adapter.idle)
         self.adapter.poll()
-        self.assertEqual(self.adapter.jobs[identifier]['status']['state'], 'unknown')
+        status = self.adapter.jobs[identifier]['status']
+        self.assertEqual(status['state'], 'unknown')
+        self.assertTrue(status['result']['dispatched'])
         self.assertTrue(self.workspace.resources.unknown_for(self.context.identity.project_id))
         self.assertEqual(fake.writes, [channel_power_frame(1, True)])
         self.assertTrue(fake.closed)
@@ -963,7 +1099,7 @@ class QtExecutionAdapterTests(unittest.TestCase):
         return dict(token=draft.token, revision=draft.revision, values=push)
 
     def test_push_trial_uses_original_adapters_frozen_draft_and_saved_project_name(self):
-        from test_webhook_push import DINGTALK, FEISHU, response
+        from webhook_fakes import DINGTALK, FEISHU, response
         payload = self.push_payload(DINGTALK)
         project_config = self.context.config_dir / 'test_project_config.ini'
         push_config = self.context.config_dir / 'config.ini'
@@ -1003,7 +1139,7 @@ class QtExecutionAdapterTests(unittest.TestCase):
         self.assertNotIn('push-private-signature-fixture', str(self.events))
 
     def test_push_trial_decline_source_and_conflicting_saved_configuration_prevent_dispatch(self):
-        from test_webhook_push import FEISHU
+        from webhook_fakes import FEISHU
         payload = self.push_payload(FEISHU)
         with patch('src.services.qt_push_trial.send_test_message') as send:
             prepared = self.adapter.configuration_command('push_preview', payload)
@@ -1025,7 +1161,7 @@ class QtExecutionAdapterTests(unittest.TestCase):
 
     def test_push_trial_unknown_response_waits_for_close_without_fencing_dut(self):
         from threading import Event
-        from test_webhook_push import FEISHU
+        from webhook_fakes import FEISHU
         payload = self.push_payload(FEISHU)
         entered, release = Event(), Event()
         self.addCleanup(release.set)
@@ -1180,6 +1316,9 @@ class QtExecutionAdapterTests(unittest.TestCase):
                          [channel.network_card_ip for channel in pending.channels])
         result = self.adapter.jobs[run]['status']['result']['result']
         self.assertEqual((result['executed'], result['passed'], result['failed']), (2, 1, 1))
+        view = self.resume_view()
+        self.assertEqual((view.run_id, view.success_count, view.failure_count, view.count_unit),
+                         (run, 1, 1, '条命令'))
         self.assertTrue(any(entry.level == 'SUCCESS' and '匹配通过' in entry.message for entry in self.events))
         self.assertTrue(any(entry.level == 'ERROR' and '期望不匹配' in entry.message for entry in self.events))
         self.assertEqual(config.read_bytes(), original)
@@ -1250,6 +1389,20 @@ class QtExecutionAdapterTests(unittest.TestCase):
         self.assertFalse(result['ok'])
         self.assertEqual(result['outcome'], 'unchecked')
         self.assertEqual(self.adapter.pretest.snapshot()[1:3], ('unchecked', False))
+        view = self.resume_view()
+        self.assertEqual((view.run_id, view.state, view.success_count, view.failure_count, view.count_unit),
+                         (run, 'unchecked', 0, 0, '条命令'))
+        item = self.adapter.jobs[run]
+        with patch.object(self.adapter, 'poll'):
+            for incomplete in ('old text', {'result': 'old text'}, {'result': {'passed': 2}}):
+                with patch.dict(item['status'], result=incomplete):
+                    old = self.resume_view()
+                    self.assertEqual((old.success_count, old.failure_count, old.count_unit), (None, None, ''))
+            later = dict(item, status=dict(item['status'], capability_id='aging.start', state='succeeded', result={}))
+            with patch.dict(self.adapter.jobs, {'later-job': later}), patch.object(self.adapter, 'latest', 'later-job'):
+                following = self.resume_view()
+                self.assertEqual((following.run_id, following.state), ('later-job', 'completed'))
+                self.assertEqual((following.success_count, following.failure_count), (None, None))
 
     def test_single_channel_completion_uses_actual_terminal_state(self):
         configure_project(self.workspace, self.context, (1,))

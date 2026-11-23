@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import codecs
 import re
+import tempfile
 import threading
 import time
+import weakref
 from collections import defaultdict
 from pathlib import Path
 from typing import Callable, Iterable, Optional
@@ -15,6 +18,7 @@ from src.core.host_resource_lock import HostResourceLock
 
 
 Subscriber = Callable[[SerialEvent], None]
+_LINE_END = re.compile(r'\r\n|\n|\r')
 
 
 class SerialCloseError(RuntimeError):
@@ -49,6 +53,10 @@ class PySerialSession:
     driver reads are still detected and no second reader can steal data.
     """
 
+    HISTORY_LIMIT = 256 * 1024
+    READ_CHUNK = 64 * 1024
+    LOG_LINE_LIMIT = 64 * 1024
+
     def __init__(
         self,
         settings: SerialSettings,
@@ -66,6 +74,11 @@ class PySerialSession:
         self._write_lock = threading.Lock()
         self._log_lock = threading.Lock()
         self._history = bytearray()
+        self._history_offset = 0
+        self._history_peak = 0
+        self._unretained_bytes = 0
+        self._history_file = None
+        self._history_error = ''
         self._subscribers: set[Subscriber] = set()
         self._stop = threading.Event()
         self._closed = False
@@ -77,6 +90,10 @@ class PySerialSession:
         self._reader: threading.Thread | None = None
         self._log_handle = None
         self._rx_log_line_buffer = ""
+        self._rx_line_file = None
+        self._rx_line_spilled = 0
+        self._rx_line_cr = False
+        self._rx_log_error = ''
         self.error: Exception | None = None
         register_session(self, "serial", settings.port)
 
@@ -122,16 +139,65 @@ class PySerialSession:
 
     def cursor(self) -> int:
         with self._condition:
-            return len(self._history)
+            return self._history_offset + len(self._history)
+
+    def _append_history(self, data):
+        """Called under _condition. Commit a new absolute offset only after writing the old bytes."""
+        overflow = len(self._history) + len(data) - self.HISTORY_LIMIT
+        if overflow > 0:
+            if self._history_file is None:
+                self._history_file = tempfile.TemporaryFile(mode='w+b', buffering=0, prefix='dutpilot-serial-rx-')
+                # cursor and peek_since remain usable by holders of a closed session.
+                weakref.finalize(self, self._history_file.close)
+            move = min(len(self._history), max(self.READ_CHUNK, overflow))
+            incoming = max(0, overflow - move)
+            self._history_file.seek(self._history_offset)
+            if self._history_file.write(memoryview(self._history)[:move]) != move:
+                raise OSError('临时串口历史写入不完整')
+            if incoming and self._history_file.write(memoryview(data)[:incoming]) != incoming:
+                raise OSError('临时串口历史写入不完整')
+            del self._history[:move]
+            self._history_offset += move + incoming
+            data = memoryview(data)[incoming:]
+        self._history.extend(data)
+        self._history_peak = max(self._history_peak, len(self._history))
+
+    def _history_chunks(self, start, end):
+        while start < end:
+            with self._condition:
+                if self._history_error:
+                    raise RuntimeError(self._history_error)
+                if start < self._history_offset:
+                    size = min(end - start, self._history_offset - start, self.READ_CHUNK)
+                    self._history_file.seek(start)
+                    block = self._history_file.read(size)
+                    if len(block) != size:
+                        raise OSError('临时串口历史读取不完整')
+                else:
+                    size = min(end - start, self.READ_CHUNK)
+                    offset = start - self._history_offset
+                    block = bytes(self._history[offset:offset + size])
+            yield block
+            start += size
+
+    def iter_rx_history(self, cursor=0):
+        """Read the raw history as of this call in bounded chunks, including after close."""
+        with self._condition:
+            if self._history_error:
+                raise RuntimeError(self._history_error)
+            end = self.cursor()
+            start = slice(cursor, None).indices(end)[0]
+        return self._history_chunks(start, end)
 
     def peek_since(self, cursor: int) -> str:
         """从指定游标读取到当前的全部历史数据的解码字符串。
 
         用于诊断（如检测 UTF-8 解码失败标记），不消费也不修改历史。
         """
-        with self._condition:
-            data = bytes(self._history[cursor:])
-        return self._display(data)
+        decoder = codecs.getincrementaldecoder('utf-8')(errors='replace')
+        parts = [decoder.decode(block) for block in self.iter_rx_history(cursor)]
+        parts.append(decoder.decode(b'', final=True))
+        return ''.join(parts)
 
     def subscribe(self, subscriber: Subscriber) -> None:
         with self._condition:
@@ -150,6 +216,8 @@ class PySerialSession:
             )
         if self._closed:
             raise RuntimeError(f"串口 {self.settings.port} 已关闭")
+        if self._history_error:
+            raise RuntimeError(self._history_error)
         try:
             with self._write_lock:
                 self._serial.write(data)
@@ -165,35 +233,53 @@ class PySerialSession:
 
     def wait_for_any(self, markers: Iterable[bytes | str], timeout_seconds: float, cursor: int | None = None) -> str | None:
         normalized = [(item.decode("utf-8") if isinstance(item, bytes) else item).lower() for item in markers]
-        needle_bytes = [item.encode("utf-8") for item in normalized]
+        result = self._wait_markers([s.encode('utf-8') for s in normalized], timeout_seconds, cursor, False)
+        return normalized[result] if result is not None else None
+
+    def wait_for_all(self, markers: Iterable[bytes | str], timeout_seconds: float, cursor: int | None = None) -> bool:
+        needles = [(item.decode("utf-8") if isinstance(item, bytes) else item).lower().encode("utf-8") for item in markers]
+        return self._wait_markers(needles, timeout_seconds, cursor, True) is not None
+
+    def _wait_markers(self, needles, timeout_seconds, cursor, need_all):
         start = self.cursor() if cursor is None else cursor
+        scanned = start
+        overlap_size = max(0, max((len(n) for n in needles), default=0) - 1)
+        overlap = b''
+        found = {i for i, needle in enumerate(needles) if not needle}
         deadline = time.monotonic() + timeout_seconds
-        with self._condition:
-            while not self._stop.is_set():
-                haystack = bytes(self._history[start:]).lower()
-                for marker, needle in zip(normalized, needle_bytes):
-                    if needle in haystack:
-                        return marker
+        while not self._stop.is_set():
+            with self._condition:
+                if self._history_error:
+                    raise RuntimeError(self._history_error)
+                end = self.cursor()
+            if start < 0:
+                # A negative cursor refers to the current suffix, which moves on append.
+                scanned = max(0, end + start)
+                overlap = b''
+                found = {i for i, needle in enumerate(needles) if not needle}
+            for block in self._history_chunks(scanned, end):
+                if self._stop.is_set():
+                    return None
+                segment = overlap + block.lower()
+                found.update(i for i, needle in enumerate(needles) if i not in found and needle in segment)
+                if len(found) == len(needles) or (not need_all and 0 in found):
+                    break
+                overlap = segment[-overlap_size:] if overlap_size else b''
+            if need_all and len(found) == len(needles):
+                return 0
+            if not need_all and found:
+                return min(found)
+            scanned = max(scanned, end)
+            with self._condition:
+                if self._history_error:
+                    raise RuntimeError(self._history_error)
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     return None
-                self._condition.wait(min(remaining, 0.25))
+                if self.cursor() != end:
+                    continue
+                self._condition.wait(min(remaining, threading.TIMEOUT_MAX))
         return None
-
-    def wait_for_all(self, markers: Iterable[bytes | str], timeout_seconds: float, cursor: int | None = None) -> bool:
-        normalized = [(item.decode("utf-8") if isinstance(item, bytes) else item).lower().encode("utf-8") for item in markers]
-        start = self.cursor() if cursor is None else cursor
-        deadline = time.monotonic() + timeout_seconds
-        with self._condition:
-            while not self._stop.is_set():
-                haystack = bytes(self._history[start:]).lower()
-                if all(marker in haystack for marker in normalized):
-                    return True
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    return False
-                self._condition.wait(min(remaining, 0.25))
-        return False
 
     def close(self) -> None:
         with self._close_lock:
@@ -237,12 +323,17 @@ class PySerialSession:
                 # Do not close the log under a still-executing reader callback.
                 self._reader.join()
             try:
+                if self._rx_log_error:
+                    raise SerialCloseError(self._rx_log_error)
                 self._flush_pending_rx_log_line()
                 if driver_error:
                     self._emit("ERROR", b"", driver_error)
                 else:
                     self._emit("STATE", b"CLOSED", "串口已关闭")
             finally:
+                if self._rx_line_file is not None:
+                    self._rx_line_file.close()
+                    self._rx_line_file = None
                 if self._log_handle is not None:
                     self._log_handle.close()
                     self._log_handle = None
@@ -273,9 +364,27 @@ class PySerialSession:
             if not data:
                 continue
             with self._condition:
-                self._history.extend(data)
+                try:
+                    self._append_history(data)
+                except OSError as exc:
+                    self._unretained_bytes += len(data)
+                    self._history_error = f'串口 {self.settings.port} 临时原始历史写入失败，已停止接收：{exc}'
+                    self.error = RuntimeError(self._history_error)
                 self._condition.notify_all()
-            self._emit("RX", data, self._display(data))
+            try:
+                self._emit("RX", data, self._display(data))
+                if self._history_error:
+                    self._emit("ERROR", b'', self._history_error)
+            except OSError as exc:
+                self._rx_log_error = f'串口 {self.settings.port} 日志或临时行缓冲写入失败，已停止接收：{exc}'
+                with self._condition:
+                    self._history_error = self._history_error or self._rx_log_error
+                    self.error = RuntimeError(self._history_error)
+                    self._condition.notify_all()
+                # A failed log destination cannot carry its own diagnostic.
+                self._notify_subscribers(SerialEvent(self.settings.port, 'ERROR', b'', self._rx_log_error, False))
+            if self._history_error:
+                break
 
     def _display(self, data: bytes) -> str:
         # 操作员要求明文显示所有下发/回显内容,不再按 known_secrets 脱敏。
@@ -285,6 +394,9 @@ class PySerialSession:
         event = SerialEvent(self.settings.port, direction, data, text, sensitive)
         if self._log_handle is not None and direction in {"RX", "TX", "ERROR", "STATE"}:
             self._write_timestamped_log_event(direction, text)
+        self._notify_subscribers(event)
+
+    def _notify_subscribers(self, event):
         with self._condition:
             subscribers = tuple(self._subscribers)
         for subscriber in subscribers:
@@ -299,8 +411,7 @@ class PySerialSession:
             if self._log_handle is None:
                 return
             if direction == "RX":
-                self._rx_log_line_buffer += text
-                self._drain_complete_rx_log_lines_locked()
+                self._write_rx_lines_locked(text)
             else:
                 self._flush_pending_rx_log_line_locked()
                 lines = text.splitlines() or [""]
@@ -308,17 +419,51 @@ class PySerialSession:
                     self._write_timestamped_log_line_locked(direction, line)
             self._log_handle.flush()
 
-    def _drain_complete_rx_log_lines_locked(self) -> None:
-        while self._rx_log_line_buffer:
-            line_end = re.search(r"\r\n|\n|\r", self._rx_log_line_buffer)
-            if line_end is None:
+    def _append_rx_text(self, text):
+        if len(self._rx_log_line_buffer) + len(text) <= self.LOG_LINE_LIMIT:
+            self._rx_log_line_buffer += text
+            return
+        if self._rx_line_file is None:
+            self._rx_line_file = tempfile.TemporaryFile(mode='w+t', encoding='utf-8', newline='', prefix='dutpilot-serial-line-')
+        self._rx_line_file.write(self._rx_log_line_buffer)
+        for start in range(0, len(text), self.READ_CHUNK):
+            self._rx_line_file.write(text[start:start + self.READ_CHUNK])
+        self._rx_line_spilled += len(self._rx_log_line_buffer) + len(text)
+        self._rx_log_line_buffer = ''
+
+    def _write_rx_lines_locked(self, text):
+        if not text:
+            return
+        start = 0
+        if self._rx_line_cr:
+            self._finish_rx_line_locked()
+            start = int(text.startswith('\n'))
+        for match in _LINE_END.finditer(text, start):
+            self._append_rx_text(text[start:match.start()])
+            start = match.end()
+            if start == len(text) and match.group() == '\r':
+                self._rx_line_cr = True
                 return
-            if line_end.group(0) == "\r" and line_end.end() == len(self._rx_log_line_buffer):
-                # 等待下一读取块，避免把跨块的 CRLF 拆成两行。
-                return
-            line = self._rx_log_line_buffer[: line_end.start()]
-            self._rx_log_line_buffer = self._rx_log_line_buffer[line_end.end() :]
-            self._write_timestamped_log_line_locked("RX", line)
+            self._finish_rx_line_locked()
+        self._append_rx_text(text[start:])
+
+    def _finish_rx_line_locked(self):
+        if self._rx_line_file is None:
+            self._write_timestamped_log_line_locked('RX', self._rx_log_line_buffer)
+        else:
+            self._rx_line_file.seek(0)
+            self._log_handle.write(time.strftime('%Y-%m-%d_%H:%M:%S') + ' RX ')
+            while True:
+                part = self._rx_line_file.read(self.READ_CHUNK)
+                if not part:
+                    break
+                self._log_handle.write(part)
+            self._log_handle.write(self._rx_log_line_buffer + '\n')
+            self._rx_line_file.close()
+            self._rx_line_file = None
+        self._rx_log_line_buffer = ''
+        self._rx_line_spilled = 0
+        self._rx_line_cr = False
 
     def _flush_pending_rx_log_line(self) -> None:
         with self._log_lock:
@@ -327,13 +472,8 @@ class PySerialSession:
                 self._log_handle.flush()
 
     def _flush_pending_rx_log_line_locked(self) -> None:
-        if not self._rx_log_line_buffer:
-            return
-        line = self._rx_log_line_buffer
-        if line.endswith("\r"):
-            line = line[:-1]
-        self._rx_log_line_buffer = ""
-        self._write_timestamped_log_line_locked("RX", line)
+        if self._rx_log_line_buffer or self._rx_line_cr or self._rx_line_file is not None:
+            self._finish_rx_line_locked()
 
     def _write_timestamped_log_line_locked(self, direction: str, line: str) -> None:
         if self._log_handle is None:

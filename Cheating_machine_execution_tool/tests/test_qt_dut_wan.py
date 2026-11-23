@@ -44,12 +44,18 @@ class QtDutWanTests(unittest.TestCase):
         self.execute(self.preview(ids=ids))
         return self.finish()
 
-    def test_shared_model_has_no_tk_import_and_original_exports_are_identical(self):
-        from src.ui import dut_config_window as old
-        from src.models import dut_wan_form as shared
-        for name in ('WanFormRules','normalize_wan_address_modes','resolve_wan_form_rules',
-                'wan_connection_form_values','wan_port_bind_from_lan_ports','wan_lan_ports_from_port_bind'):
-            self.assertIs(getattr(old,name), getattr(shared,name))
+    def test_shared_wan_model_preserves_rules_without_tk(self):
+        from src.models.dut_wan_form import normalize_wan_address_modes, resolve_wan_form_rules
+
+        ipv4, ipv6 = normalize_wan_address_modes('PPPoE', 'IPv4+IPv6（双栈）', '静态', '静态')
+        self.assertEqual((ipv4, ipv6), ('DHCP', 'SLAAC'))
+        rules = resolve_wan_form_rules('修改', '路由', 'PPPoE', 'IPv4+IPv6（双栈）', ipv4, ipv6, 'IPTV')
+        self.assertTrue(rules.show_index)
+        self.assertTrue(rules.show_pppoe_credentials)
+        self.assertTrue(rules.show_multicast_vlan)
+        self.assertFalse(rules.show_ipv4_static)
+        self.assertFalse(rules.show_ipv6_static)
+        self.assertEqual(rules.mtu_default, '1492')
         result = subprocess.run([sys.executable,'-c',
             "import sys; import src.models.dut_wan_form; assert 'tkinter' not in sys.modules"],
             capture_output=True,text=True,timeout=10)

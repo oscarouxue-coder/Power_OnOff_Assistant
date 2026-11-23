@@ -1,8 +1,13 @@
+[CmdletBinding(DefaultParameterSetName = 'Process')]
 param(
     [Parameter(Mandatory)][ValidateRange(1,2147483647)][int]$TargetProcessId,
     [Parameter(Mandatory)][string]$OutputPath,
     [Parameter(Mandatory)][ValidateRange(1,31536000)][int]$DurationSeconds,
-    [ValidateRange(1,3600)][int]$IntervalSeconds = 60
+    [ValidateRange(1,3600)][int]$IntervalSeconds = 60,
+    [string]$ExpectedStartUtc,
+    [Parameter(Mandatory, ParameterSetName='Candidate')][string]$CandidateZip,
+    [Parameter(Mandatory, ParameterSetName='Candidate')][ValidateNotNullOrEmpty()][string]$ProjectId,
+    [Parameter(Mandatory, ParameterSetName='Candidate')][ValidateNotNullOrEmpty()][string]$RunId
 )
 
 $ErrorActionPreference = 'Stop'
@@ -19,6 +24,34 @@ function Write-Record([hashtable]$Fields) {
     $writer.Flush()
 }
 
+function Get-CandidateEvidence([string]$ZipPath, [string]$ExecutablePath) {
+    $zip = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ZipPath)
+    $checksum = ((Get-Content -LiteralPath "$zip.sha256.txt" -Raw).Trim() -split '\s+', 2)[0]
+    Add-Type -AssemblyName System.IO.Compression
+    $archive = $null
+    $entryStream = $null
+    $zipStream = [IO.File]::OpenRead($zip)
+    try {
+        $zipHash = (Get-FileHash -InputStream $zipStream -Algorithm SHA256).Hash
+        if ($checksum -ne $zipHash) { throw 'Candidate ZIP checksum differs from its sidecar.' }
+        $zipStream.Position = 0
+        $archive = [IO.Compression.ZipArchive]::new($zipStream, [IO.Compression.ZipArchiveMode]::Read, $true)
+        $entry = $archive.GetEntry('DUTPilot_portable/DUTPilot.exe')
+        if ($null -eq $entry) { throw 'Candidate ZIP does not contain DUTPilot_portable/DUTPilot.exe.' }
+        $entryStream = $entry.Open()
+        $exeHash = (Get-FileHash -InputStream $entryStream -Algorithm SHA256).Hash
+        if ($exeHash -ne (Get-FileHash -LiteralPath $ExecutablePath -Algorithm SHA256).Hash) {
+            throw 'The selected process image differs from the candidate ZIP executable.'
+        }
+        return @{candidate_zip_sha256=$zipHash.ToLowerInvariant(); process_exe_sha256=$exeHash.ToLowerInvariant()}
+    }
+    finally {
+        if ($null -ne $entryStream) { $entryStream.Dispose() }
+        if ($null -ne $archive) { $archive.Dispose() }
+        $zipStream.Dispose()
+    }
+}
+
 try {
     $path = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath)
     $stopFile = "$path.stop"
@@ -26,11 +59,23 @@ try {
     $target = [Diagnostics.Process]::GetProcessById($TargetProcessId)
     # Keep this process object's OS handle open to distinguish a later PID reuse.
     $null = $target.Handle
-    $startUtc = $target.StartTime.ToUniversalTime().ToString('o')
-    $name = $target.ProcessName
+    $startTime = $target.StartTime.ToUniversalTime()
+    $startUtc = $startTime.ToString('o')
+    if ($ExpectedStartUtc -and [DateTimeOffset]::Parse($ExpectedStartUtc, [Globalization.CultureInfo]::InvariantCulture).UtcDateTime -ne $startTime) {
+        throw 'The selected PID has a different process start time.'
+    }
+    $header = @{event='start'; process_name=$target.ProcessName; interval_s=$IntervalSeconds; requested_s=$DurationSeconds}
+    if ($PSCmdlet.ParameterSetName -eq 'Candidate') {
+        $identity = Get-CandidateEvidence $CandidateZip $target.MainModule.FileName
+        $header['candidate_zip_sha256'] = $identity.candidate_zip_sha256
+        $header['process_exe_sha256'] = $identity.process_exe_sha256
+        $header['project_id'] = $ProjectId
+        $header['run_id'] = $RunId
+    }
+    if ($target.HasExited) { throw 'The selected process exited before sampling began.' }
     $stream = [IO.File]::Open($path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
     $writer = [IO.StreamWriter]::new($stream, [Text.UTF8Encoding]::new($false))
-    Write-Record @{event='start'; process_name=$name; interval_s=$IntervalSeconds; requested_s=$DurationSeconds}
+    Write-Record $header
     $clock = [Diagnostics.Stopwatch]::StartNew()
     $previousTime = $null
     $previousCpu = $null

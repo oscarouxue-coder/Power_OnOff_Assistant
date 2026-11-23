@@ -1,0 +1,102 @@
+[
+  {
+    "channels": 8,
+    "elapsed_seconds": 2.6569999996572733,
+    "samples": 8,
+    "rss_start_bytes": 29675520,
+    "rss_peak_sampled_bytes": 30253056,
+    "rss_after_release_bytes": 30187520,
+    "history_before_release_bytes": 227785,
+    "pending_rx_chars_peak_sampled": 0,
+    "history_bytes_per_second_ols": 106612.2359024613,
+    "rss_bytes_per_second_ols": 282023.03563702403,
+    "source_bytes": 227785,
+    "received_bytes": 227785,
+    "disk_log_bytes": 253267,
+    "text_and_lifecycle_checks_passed": true,
+    "raw_byte_fidelity_accepted": false,
+    "remaining_threads": [],
+    "retained_sessions": 0,
+    "resident_history_limit_bytes": 2097152,
+    "history_spilled_bytes": 0,
+    "projections": [
+      {
+        "hours": 72,
+        "history_gib": 0.001953125,
+        "rss_gib_linear_estimate": 68.10766305505915,
+        "status": "trend_estimate_only_not_tested"
+      },
+      {
+        "hours": 168,
+        "history_gib": 0.001953125,
+        "rss_gib_linear_estimate": 158.88103048621875,
+        "status": "trend_estimate_only_not_tested"
+      }
+    ],
+    "unavailable_history_samples": 0,
+    "channel_history_mib_per_hour_ols": {
+      "1": 69.1651773499735,
+      "2": 62.43650927667466,
+      "3": 54.67632516408685,
+      "4": 51.620351158714925,
+      "5": 42.57028004773894,
+      "6": 34.60326155134873,
+      "7": 27.05692955705137,
+      "8": 23.895230195768956
+    }
+  },
+  {
+    "channels": 16,
+    "elapsed_seconds": 3.156000000424683,
+    "samples": 8,
+    "rss_start_bytes": 29646848,
+    "rss_peak_sampled_bytes": 30396416,
+    "rss_after_release_bytes": 30158848,
+    "history_before_release_bytes": 280864,
+    "pending_rx_chars_peak_sampled": 0,
+    "history_bytes_per_second_ols": 127955.83074865835,
+    "rss_bytes_per_second_ols": 314811.8717816976,
+    "source_bytes": 280864,
+    "received_bytes": 280864,
+    "disk_log_bytes": 312991,
+    "text_and_lifecycle_checks_passed": true,
+    "raw_byte_fidelity_accepted": false,
+    "remaining_threads": [],
+    "retained_sessions": 0,
+    "resident_history_limit_bytes": 4194304,
+    "history_spilled_bytes": 0,
+    "projections": [
+      {
+        "hours": 72,
+        "history_gib": 0.00390625,
+        "rss_gib_linear_estimate": 76.02282242273542,
+        "status": "trend_estimate_only_not_tested"
+      },
+      {
+        "hours": 168,
+        "history_gib": 0.00390625,
+        "rss_gib_linear_estimate": 177.34977128130453,
+        "status": "trend_estimate_only_not_tested"
+      }
+    ],
+    "unavailable_history_samples": 0,
+    "channel_history_mib_per_hour_ols": {
+      "1": 67.78730370373718,
+      "2": 61.370083762174055,
+      "3": 54.61874870804282,
+      "4": 50.53623519590055,
+      "5": 42.38898389990224,
+      "6": 34.57211661546262,
+      "7": 27.009936243420434,
+      "8": 23.84305509451075,
+      "9": 16.970704040315248,
+      "10": 14.981439294905996,
+      "11": 10.999065938079813,
+      "12": 6.844761882692477,
+      "13": 6.844761882692477,
+      "14": 6.844761882692477,
+      "15": 6.844761882692477,
+      "16": 6.844761882692477
+    }
+  }
+]

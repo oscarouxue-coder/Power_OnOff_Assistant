@@ -2,7 +2,7 @@
 
 本表由 scripts/verify_capability_coverage.py 生成；登记、自动化验证和现场验收分别判断。
 
-业务清单 104 项；已有接口 66 项；部分接入 16 项；待接入 5 项；人工控制面 17 项。
+业务清单 117 项；已有接口 66 项；部分接入 16 项；待接入 5 项；人工控制面 30 项。
 现有诊断/交互接口不代表该组所有管理动作已开放；部分接入见限制列，不将分组数字称为最终覆盖率。
 
 | 功能ID | GUI业务 | 真实入口 | 业务实现 | AI接口 | 状态/限制 | 资源/风险 | 自动化测试入口 |
@@ -92,7 +92,7 @@
 | ai.permissions | 权限切换/批准/拒绝 | _open_ai_assistant | AiPermissionService | local_confirmation | manual_control：必须由真实操作员确认，AI可准备材料但不能自我批准 | human_control/manual | 待接入/人工控制，无执行验收 |
 | remote.dingtalk | 钉钉配置/启停/绑定/取消 | _configure_dingtalk_remote | DingTalkRemoteService | 待接入 | pending：远程业务调用已校验真实来源；接入配置/启停及AI卡片模板仍属本地授权控制面，尚需专用适配；流式为已有会话的显示投影 | external/configuration/modify | 待接入/人工控制，无执行验收 |
 | remote.feishu | 飞书配置/启停/绑定/取消/试发 | _configure_feishu_remote | FeishuRemoteService | 待接入 | pending：远程业务调用已校验真实来源；接入配置/启停及卡片权限仍属本地授权控制面，尚需专用适配；流式为已有会话的显示投影 | external/configuration/modify | 待接入/人工控制，无执行验收 |
-| remote.feishu_sdk_repair | 安装飞书SDK并重启源码 | _install_feishu_sdk | FeishuDependencyRepair | local_confirmation | manual_control：仅本机缺包弹窗由操作员选择安装；修改运行环境并重启，AI不可触发或代确认 | python-environment/process/manual | 待接入/人工控制，无执行验收 |
+| remote.feishu_sdk_repair | 安装飞书SDK并重启源码 | open | FeishuDependencyRepair | local_confirmation | manual_control：仅本机缺包弹窗由操作员选择安装；修改运行环境并重启，AI不可触发或代确认 | python-environment/process/manual | test_feishu_dependency_repair.py, test_qt_workspace_adapter.py, qt_workbench_probe.py；Windows/真实模型及设备待验收 |
 | remote.binding_confirm | 群身份绑定确认 | _build_ai_remote_management | remote.confirm_binding | local_confirmation | manual_control：必须由真实操作员确认，AI可准备材料但不能自我批准 | human_control/manual | 待接入/人工控制，无执行验收 |
 | remote.instances | 多实例接入状态 | _open_ai_assistant | RemoteInstanceManagement.status | remote.instances.status | connected：已有受控接口，真实Windows/模型/DUT验收另列 | configuration/read | test_remote_instance_management.py；Windows/真实模型及设备待验收 |
 | remote.instance_configuration | 实例配对/启动模式/本地范围 | _open_ai_assistant | RemoteInstanceManagement | local_confirmation | manual_control：接入配置、配对、范围、启停及撤销仅本机操作员确认；AI不能生成配对码或自授权 | human_control/manual | 待接入/人工控制，无执行验收 |
@@ -111,10 +111,23 @@
 | projects.remote_scope | 本机确认远程项目范围 | remote_project_range | WorkspaceService / ProjectStore | local_confirmation | manual_control：涉及本地目录所有权、配置版本、运行生命周期或远程授权，限本机操作员；AI不可模拟GUI或自行确认 | project/configuration/manual | test_project_management.py, test_project_workspace.py, test_workspace_platforms.py, test_project_completion.py, test_multi_project_business_validation.py；Windows/真实模型及设备待验收 |
 | projects.resolve_unknown | 本机核实GUI未知任务 | resolve_unknown | WorkspaceService / ProjectStore | local_confirmation | manual_control：涉及本地目录所有权、配置版本、运行生命周期或远程授权，限本机操作员；AI不可模拟GUI或自行确认 | project/configuration/manual | test_project_management.py, test_project_workspace.py, test_workspace_platforms.py, test_project_completion.py, test_multi_project_business_validation.py；Windows/真实模型及设备待验收 |
 | projects.imported_connection | 选择导入的接入配置 | imported_connection | WorkspaceService / ProjectStore | local_confirmation | manual_control：涉及本地目录所有权、配置版本、运行生命周期或远程授权，限本机操作员；AI不可模拟GUI或自行确认 | project/configuration/manual | test_project_management.py, test_project_workspace.py, test_workspace_platforms.py, test_project_completion.py, test_multi_project_business_validation.py；Windows/真实模型及设备待验收 |
+| remote.platform_direct | 本机启停钉钉和飞书直连排障 | change_direct | QtDirectPlatforms / WorkspacePlatformPool / 原平台服务 | local_confirmation | manual_control：启用要求本机授权项目，进入已绑定群或飞书企业单聊，实时核对原平台身份和权限。 | project/configuration/manual | test_qt_workspace_adapter.py；Windows/真实模型及设备待验收 |
+| remote.feishu_automatic_notifications | 启停飞书挂测通知 | change_notifications | QtFeishuNotifications / FeishuNotificationService | local_confirmation | manual_control：使用已绑定群和保存的项目名称，停用会阻止后续自动通知。 | project/configuration/manual | test_qt_workspace_adapter.py, qt_workbench_probe.py；Windows/真实模型及设备待验收 |
+| jobs.local_safe_stop | 本机请求选中任务安全停止 | _request_stop | QtJobReview / CapabilityJobs | local_confirmation | manual_control：仅接受本进程当前项目内的活跃任务，选定任务独立收尾。 | project/run/manual | test_qt_workspace_adapter.py；Windows/真实模型及设备待验收 |
+| extensions.review | 本机审阅登记或启停受控扩展 | import_template | QtControlledExtensions / CapabilityExtensions | local_confirmation | manual_control：绑定项目与审阅哈希，继承目标操作原授权与资源范围。 | project/run/manual | test_qt_workspace_adapter.py, qt_workbench_probe.py；Windows/真实模型及设备待验收 |
+| remote.platform_credentials | 本机编辑钉钉或飞书应用配置 | save | QtPlatformConfiguration / RemoteConfigStore / FeishuConfigStore | local_confirmation | manual_control：只保存平台应用配置，凭据交由原加密存储，保存后保持停用。 | project/configuration/manual | test_qt_workspace_adapter.py, qt_workbench_probe.py；Windows/真实模型及设备待验收 |
+| remote.platform_binding | 本机开始、确认或取消机器人群绑定 | change_binding | QtPlatformConfiguration / WorkspacePlatformPool / 原平台服务 | local_confirmation | manual_control：只启用临时群绑定连接，确认当前项目及群身份，结束后回收连接。 | project/configuration/manual | test_qt_workspace_adapter.py, qt_workbench_probe.py；Windows/真实模型及设备待验收 |
+| remote.feishu_trial | 向绑定群发送一条飞书测试消息 | start_trial | QtPlatformConfiguration / FeishuNotificationService | local_confirmation | manual_control：先确认已保存项目和群 ID，再调用原固定消息队列。平台受理和群收到分别核对。 | project/configuration/manual | test_qt_workspace_adapter.py；Windows/真实模型及设备待验收 |
+| projects.model_presets | 保存和应用产品型号模板 | _save_preset | QtProjectWizardService / ProjectModelPresets | local_confirmation | manual_control：操作员选择已保存版本并确认跨项目共享的型号方案 | project/run/manual | test_qt_workspace_adapter.py, qt_project_wizard_probe.py；Windows/真实模型及设备待验收 |
+| projects.test_profile | 创建或恢复测试项目档案 | _save | ProjectStore / QtProjectWizardService | local_confirmation | manual_control：仅本机选择目录、测试类型和设备映射 | project/run/manual | test_project_profile_store.py, qt_project_wizard_probe.py；Windows/真实模型及设备待验收 |
+| projects.preparation | 关联执行回执或核验准备步骤 | _submit | ProjectPreparation | local_confirmation | manual_control：现场证据由操作者核验，自动步骤关联原业务 Job | project/run/manual | test_project_preparation.py, qt_project_wizard_probe.py；Windows/真实模型及设备待验收 |
+| service_aging.start | 开始持续供电业务老化 | _start | QtServiceAging / ServiceAging | service_aging.start | manual_control：仅 GUI，可追溯到本次确认的项目、DUT 和资源 | project/run/manual | test_qt_execution_adapter.py, test_service_aging.py；Windows/真实模型及设备待验收 |
+| service_aging.record | 记录现场观察、日检或期末检查 | _record | QtServiceAging / ServiceAging | service_aging.record | manual_control：仅 GUI，本机操作人提供实际观测和结果 | project/run/manual | test_service_aging.py；Windows/真实模型及设备待验收 |
+| service_aging.history | 查看及导出指定批次业务证据 | _export | ServiceAgingHistory | local_confirmation | manual_control：仅本机选择项目、批次和导出文件 | project/run/manual | test_service_aging.py, qt_project_wizard_probe.py；Windows/真实模型及设备待验收 |
 
 ## GUI动作审查
 
-当前审查快照包含 733 个按钮/菜单/绑定/变量回调。新增或改变入口会使门禁失败。
+当前审查快照包含 815 个按钮/菜单/绑定/变量回调。新增或改变入口会使门禁失败。
 界面辅助动作（窗口显隐/滚动/复制/显密/清屏等）不计业务覆盖；动态控件须结合运行测试复核。
 
 ## 当前阶段
@@ -125,6 +138,10 @@
 ## Qt迁移入口审查
 
 Qt信号connect、菜单addAction及子目录界面纳入动作快照。Qt项目新建/打开/旧配置导入/保存/重命名/复制/关闭复用WorkspaceService与ProjectStore，沿用projects.*的manual_control边界。旧导入执行原备份、配置和历史转换，启用平台与远程项目范围仍须在原入口重新确认。
+独立组件展示页（--showcase）中的控件只操作窗口内的示例数据。该预览没有项目上下文或业务绑定，属于本机展示交互。
+工作台改版预览（--visual-preview）以同一组模拟快照对比当前版与改版。切页、确认和日志筛选属于本机展示交互，模拟起停只显示窗口反馈。
+高频业务窗口评审从独立工作台预览打开。串口、升级、DUT、测试项和通道配置窗口使用示例快照，窗口交互不接入真实项目或业务控制器。
+持续供电老化的本机向导可将已选业务配置成现场采集来源。service_aging.start 绑定保存的计划与本批 DUT，按清单读取本地观测文件；人工检查仍走 service_aging.record。
 Qt自动开关机、环境检查与三项全流程复用aging.start、network.line_check及pipeline.start，通过原CapabilityService、Jobs和资源准入。全流程本机明确选择三项，复用Qt串口终端逐个预启动已确认通道，日志目录和工序绑定项目。停止只取消当前Qt准入的原任务，不接管旧GUI批次。
 Qt单次自动上/下电通过仅本机界面可用的power.qt_single和一次确认令牌绑定项目、通道、所选电源口及方向，沿用原Jobs资源准入和单次电源服务。空电源口仅记录人工重启确认。通用power.on/off仍使用项目配置电源口。
 Qt最近项目沿用 projects.open 与 projects.forget 的本机人工控制面。菜单使用原工作区最近记录，移除仅改记录文件，项目仍保持打开。新建、打开、保存快捷键复用原菜单动作。打开项目目录仅由本机操作员触发，按所选已打开项目定位目录。
@@ -144,7 +161,7 @@ Qt 管理会话属于本机人工控制面。重命名使用原标题服务，�
 Qt 诊断报告复用 ai.reports 对应的项目报告库、标题服务、删除保护和原报告接手服务。批量删除复核确认名单。旧报告由本机确认同通道目标并复核当前快照，接手只创建留存会话，主动诊断通过本机确认的当前通道会话进入。
 Qt 已确认案例沿用 ai.cases 的共享库、版本检查和启停/删除服务。从报告仅关联来源，新增和修订需操作者填写五项事实并本机确认，属于 ai.case_confirmation 人工控制面。
 Qt 全局设置检查更新使用 updates.check / updates.download 对应的原 AppUpdateService。交互下载由本机选择 ZIP 位置及确认覆盖，沿用原 HTTPS、校验和临时文件保护。下载完成可打开目录，安装仍为人工操作。
-Qt 设备管理复用 resources.refresh 对应的只读主机枚举、现有项目通道快照与工作区活动租约。
+Qt 设备管理复用 resources.refresh 的只读主机枚举，并显示已有通道和资源保护记录。逐 DUT 的 ADB 标识由本机向导声明，租约使用冻结的配置。
 Qt 网卡改名从通道选择触发，channels.editor.rename_* 只供本机 GUI。确认绑定网卡 GUID、项目通道草稿及新名称，复用原单次 Windows 改名和回读，复核后同步所有打开项目。确认未知时保留原资源保护。本机 AI 和远程的 network.rename 权限未扩大。
 Qt失败轮次续跑以原PowerTestResumeSession判定通道资格。aging.qt_resume.confirm仅限本机逐条确认。运行中复用原批次，结束后按确认顺序逐条复核并由aging.resume任务取得原通道资源。安全停止或关闭时取消等待项，等待项不自动恢复。沿用原提交、版本预检、控制队列和停止服务。保留原批次结论及其他通道进度。
 Qt六标签配置编辑复用TestItemConfigStore、LegacyUiDefaultsStore、MessagePushConfigService和原项目版本保存；configuration.editor.*仅gui来源，私有字段不返回AI/远程。保存复核版本与任务占用。预备测试使用本机pretest.editor.*确认的当前测试项和Telnet草稿，经原Job和单次服务执行，关闭先停并等待收尾。version.editor.*绑定单一通道和当前Telnet草稿，经原Job及样机版本服务查询，只读显示。notifications.editor.*仅供本机确认当前Webhook、广播选项和已保存项目名后，经原服务单次试发；不授予AI或远程草稿发送权限。
@@ -163,6 +180,7 @@ Qt 下次启动配置属于本机人工控制面。槽位和已保存的范围�
 Qt 项目和设置菜单共用 projects.remote_scope 本机人工控制面。按完整项目 ID 显示新增和撤销，以默认取消确认；后台复核已打开项目身份及原范围后调用 WorkspaceService.set_remote_projects。AI 和平台没有授权编辑入口。
 Qt归档日志是本机人工阅读入口。工作区原文、当前项目串口、主执行日志和资源监测文件按页只读。筛选导出沿用现有本机保存方式，不授予 AI 或远程访问。
 Qt系统状态面板只读展示工作区响应、日志写入、显示积压、任务日志和现有资源租约。展开与收起只影响显示，不新增业务能力。
+工作台的全局统计和日志按项目 ID 筛选。侧栏项目、历史和设置复用原有操作及权限。测试模板仅导航到已打开的源项目，设备侧栏读取缓存，显式刷新沿用原资源枚举。
 Qt DUT六页通过dut.editor.*仅gui来源接入原查询/配置服务和任务资源管理。本机确认、版本/NIC/查询绑定与安全停止统一；私有字段只供本机回填，任务结果和日志隐藏密码。WiFi原能力/SSID递增/双频/60秒等待、语音线路/编码顺序、TR069能力过滤和手动Inform均沿用原服务。真实设备验收另列。
 Qt样机升级通过firmware.editor.*本机界面控制，任务和执行仍使用firmware.upgrade和原四套引擎。项目升级选项沿用原配置文件和项目版本，编辑凭据仅在本机GUI回填。固件哈希、网卡、安全停止及只读串口观察使用原任务链。缺少程控电源时由Qt本机确认已手动重启；通用能力参数和原远程准入保持。
 Qt写样机参数通过parameters.editor.*本机入口，沿用原参数表预检、生成、受控parameters.write任务及停止。表格、目标及项目版本绑定于本机确认；本机选定路径另存和项目凭据保持本地，外部来源的文件输出与写参范围不扩大。DUT 和写参共用当前项目的本机登录草稿，凭据走原写参显式保存，仅本机显示。串口路径沿原回调，使用和升级共用的只读观察逻辑。Telnet仍使用任务文本日志。

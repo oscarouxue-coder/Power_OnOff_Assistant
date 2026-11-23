@@ -1,0 +1,17 @@
+{
+  "scripts/verify_qt_migration.py": "49b9851698c3ff330dc909c79777ddc957f72ee2fb81b7d8065649febecfd3a2",
+  "src/models/workbench_presentation.py": "3ba876760972399c06f2ca0d78a281fc31aecf326d383b1e28b4fa7cb52cc162",
+  "src/services/qt_execution_adapter.py": "33df6e9d2d37523ca3d83f8e255bf55d0fff6d2c54976f4928fd34db44065579",
+  "src/services/qt_log_history.py": "22e04d8fa6c2c9240a49d8b983a23880a42835edb4550495c57c0173950058db",
+  "src/services/qt_pretest.py": "d334edeb89b2fcbd09b7e04346ff477609b75fba849a9f0ecfdd618be54fe8bc",
+  "src/services/qt_workspace_adapter.py": "97e155dd7313a789fa53ba0788c22947d726263fe04031b94df490d49253f653",
+  "src/ui/qt/dashboard.py": "7333373b821f1d8b572c01721fda391f584c4a28f0a2045e1ec6a68503baba82",
+  "src/ui/qt/log_panel.py": "6b0ae2fb94cf61b7c4c13097540ba8cd33e8898bba1a8f1709e7fc0431364e7d",
+  "src/ui/qt/main_window.py": "a2b62d34dc87b28c7cd3acdab5353e0a34c54567b15ca803c49936f30a374f99",
+  "src/ui/qt/project_detail.py": "8e97dfdfa23c6a0ee3685ea2b860022ad6ce22eac50485912a82ba6b7cd1eaa1",
+  "src/ui/qt/project_templates_page.py": "76c4c43fe316d61931a017bbb5749f2d1d7d885580c543271336d9e7db7151ed",
+  "src/ui/qt/showcase_components.py": "54bba288291632e35e630a20fdce48ee9b3c1d7d38099d1512bb3d0bd59f04a1",
+  "src/ui/qt/system_health_panel.py": "2edb6bb40053062e5cb4bb62122811dc55965d3d8152c1ad0ea6cdba65d6a34b",
+  "src/ui/qt/workspace_controller.py": "c8fb394ee122a8f4b48ab334a91d39f1cb143d7de28774ee7e4e09001ebb3e93",
+  "tests/qt_workbench_probe.py": "da69c1a49314478bab66a5d52e21a118a9e51ecd72581df3006d7fa7f07cfdd3"
+}

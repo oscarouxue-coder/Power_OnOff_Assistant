@@ -1,6 +1,8 @@
 """Qt migration contracts that do not add Qt to the original Tk environment."""
 import json
+import os
 from contextlib import redirect_stderr
+from dataclasses import replace
 from io import StringIO
 from pathlib import Path
 import subprocess
@@ -14,22 +16,61 @@ from src.models.workbench_presentation import ChannelView, ProjectView
 
 
 class QtMigrationContractTests(unittest.TestCase):
-    def test_frozen_qt_defaults_to_workspace_while_source_requires_a_mode(self):
+    def test_frozen_and_source_default_to_workspace_and_keep_explicit_previews(self):
         import run_dutpilot_qt
 
         app = ModuleType('src.ui.qt.application')
         app.run_workspace = Mock(return_value=0)
         app.run_demo = Mock(return_value=0)
+        app.run_showcase = Mock(return_value=0)
+        app.run_visual_preview = Mock(return_value=0)
         with patch.dict(sys.modules, {'src.ui.qt.application': app}), \
                 patch.object(sys, 'frozen', True, create=True):
             self.assertEqual(run_dutpilot_qt.main([]), 0)
             self.assertEqual(run_dutpilot_qt.main(['工程副本/project.linecheck.json']), 0)
             self.assertEqual(run_dutpilot_qt.main(['--demo']), 0)
+            self.assertEqual(run_dutpilot_qt.main(['--showcase']), 0)
+            self.assertEqual(run_dutpilot_qt.main(['--visual-preview']), 0)
+            for extra in (['project.linecheck.json'], ['--project-peers', 'peers.json'], ['--workspace'],
+                          ['--gateway-slot', '1']):
+                for preview in ('--showcase', '--visual-preview'):
+                    with self.subTest(preview=preview, extra=extra), redirect_stderr(StringIO()), self.assertRaises(SystemExit):
+                        run_dutpilot_qt.main([preview, *extra])
         self.assertEqual([call.args for call in app.run_workspace.call_args_list],
-                         [(None,), ('工程副本/project.linecheck.json',)])
+                         [(None,), (str(Path.cwd() / '工程副本/project.linecheck.json'),)])
         app.run_demo.assert_called_once_with()
-        with patch.object(sys, 'frozen', False, create=True), redirect_stderr(StringIO()), self.assertRaises(SystemExit):
-            run_dutpilot_qt.main([])
+        app.run_showcase.assert_called_once_with()
+        app.run_visual_preview.assert_called_once_with()
+        with patch.dict(sys.modules, {'src.ui.qt.application': app}):
+            self.assertEqual(run_dutpilot_qt.main([]), 0)
+            app.run_workspace.assert_called_with(None)
+            app.run_workspace.reset_mock()
+            for slot in ('0', '65'):
+                with self.subTest(slot=slot), redirect_stderr(StringIO()), self.assertRaises(SystemExit):
+                    run_dutpilot_qt.main(['--gateway-slot', slot])
+            with redirect_stderr(StringIO()) as message:
+                self.assertEqual(run_dutpilot_qt.main(['--legacy-single-project']), 2)
+                self.assertIn('导入旧配置目录', message.getvalue())
+            app.run_workspace.assert_not_called()
+
+    def test_missing_qt_forwards_arguments_once_or_reports_setup(self):
+        import run_dutpilot_qt
+        argv = ['工程 副本/project.linecheck.json', '--gateway-slot', '64']
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'LOCALAPPDATA': folder}), \
+                patch.dict(sys.modules, {'PySide6.QtCore': None}), patch('subprocess.call', return_value=7) as launch:
+            sys.modules.pop('src.ui.qt.application', None)
+            python = Path(folder) / 'LineCheckAssistant/qt-dev-py39/Scripts/python.exe'
+            with redirect_stderr(StringIO()) as message:
+                self.assertEqual(run_dutpilot_qt.main(argv), 2)
+                self.assertIn('-WithBusinessDependencies', message.getvalue())
+                launch.assert_not_called()
+            python.parent.mkdir(parents=True)
+            python.touch()
+            self.assertEqual(run_dutpilot_qt.main(argv), 7)
+            launch.assert_called_once_with([str(python), str(Path(run_dutpilot_qt.__file__).resolve()), *argv])
+            with patch.object(sys, 'executable', str(python)), redirect_stderr(StringIO()):
+                self.assertEqual(run_dutpilot_qt.main(argv), 2)
+            self.assertEqual(launch.call_count, 1)
 
     def test_native_verification_keeps_timeout_diagnostics_and_checks_every_scale(self):
         from scripts import verify_qt_migration
@@ -37,7 +78,7 @@ class QtMigrationContractTests(unittest.TestCase):
         timeout = subprocess.TimeoutExpired('simulated native child', 210, output='partial text', stderr=b'partial bytes')
         with tempfile.TemporaryDirectory() as directory, \
              patch('verify_gui_test_coverage.check', return_value=[]), \
-             patch('tk_test_windows.run_gui_child', side_effect=timeout) as native:
+             patch('scripts.gui_test_process.run_gui_child', side_effect=timeout) as native:
             status = verify_qt_migration.main(['--python', sys.executable, '--output', directory])
             self.assertEqual(status, 1)
             self.assertEqual(native.call_count, 3)
@@ -55,14 +96,6 @@ class QtMigrationContractTests(unittest.TestCase):
         result = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_existing_ui_exports_keep_their_identity(self):
-        from src.ui import SerialTerminalWindow, DutConfigWindow, load_module_window_size
-        from src.ui.serial_terminal import SerialTerminalWindow as OriginalSerial
-        from src.ui.dut_config_window import DutConfigWindow as OriginalDut
-        self.assertIs(SerialTerminalWindow, OriginalSerial)
-        self.assertIs(DutConfigWindow, OriginalDut)
-        self.assertTrue(callable(load_module_window_size))
-
     def test_display_unknowns_are_not_defaulted_to_normal_or_zero(self):
         channel = ChannelView(1, 'unknown')
         self.assertIsNone(channel.cycle)
@@ -71,3 +104,8 @@ class QtMigrationContractTests(unittest.TestCase):
         self.assertIsNone(project.progress)
         self.assertIsNone(project.success_count)
         self.assertIsNone(project.failure_count)
+        self.assertEqual((project.success_text, project.failure_text, project.attention_text), ('—', '—', '—'))
+        partial = replace(project, success_count=0, attention_count=3)
+        self.assertEqual((partial.success_text, partial.failure_text, partial.attention_text), ('0', '—', '3'))
+        measured = replace(project, success_count=17, failure_count=2, attention_count=1)
+        self.assertEqual((measured.success_text, measured.failure_text, measured.attention_text), ('17', '2', '1'))

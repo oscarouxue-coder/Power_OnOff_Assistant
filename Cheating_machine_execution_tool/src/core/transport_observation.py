@@ -35,14 +35,19 @@ class HistoryRegistry:
         if not condition.acquire(False):
             return dict(result, sample_status="busy")
         try:
-            result.update(history_bytes=len(session._history),
-                          history_object_bytes=sys.getsizeof(session._history), history_limit_bytes=None,
-                          history_high_water_bytes=len(session._history))
+            resident = len(session._history)
+            spilled = getattr(session, '_history_offset', 0)
+            result.update(history_bytes=resident, history_spilled_bytes=spilled,
+                          history_object_bytes=sys.getsizeof(session._history),
+                          history_limit_bytes=getattr(session, 'HISTORY_LIMIT', None),
+                          history_high_water_bytes=max(resident, getattr(session, '_history_peak', 0)),
+                          received_bytes=resident + spilled + getattr(session, '_unretained_bytes', 0),
+                          received_source='serial_rx_cursor' if hasattr(session, '_history_offset') else 'append_only_history_length')
         finally:
             condition.release()
-        # This is derived, not an independent byte counter: history is currently append-only.
-        result.update(received_bytes=result["history_bytes"], received_source="append_only_history_length",
-                      pending_rx_chars=len(getattr(session, "_rx_log_line_buffer", "")),
+        result.update(pending_rx_chars=(len(getattr(session, "_rx_log_line_buffer", "")) +
+                                        getattr(session, '_rx_line_spilled', 0) + int(getattr(session, '_rx_line_cr', False))),
+                      pending_rx_spilled_chars=getattr(session, '_rx_line_spilled', 0),
                       pending_rx_object_bytes=sys.getsizeof(getattr(session, "_rx_log_line_buffer", "")),
                       reader_alive=bool(session._reader and session._reader.is_alive()),
                       closed=bool(session._closed), receive_error=type(session.error).__name__ if session.error else None,
@@ -61,6 +66,8 @@ class HistoryRegistry:
                 HistoryRegistry.file_metrics(result)
         if not result["closed"] and session._reader is not None and not result["reader_alive"]:
             result["write_status"] = "reader_stopped_unexpectedly"
+        if getattr(session, '_rx_log_error', ''):
+            result["write_error"] = session._rx_log_error
         return result
 
     @staticmethod

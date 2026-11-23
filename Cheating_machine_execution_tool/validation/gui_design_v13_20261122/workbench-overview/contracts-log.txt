@@ -1,0 +1,25 @@
+GUI_TEST_COVERAGE_OK
+QT_NATIVE_SCALE 1 FAIL
+QT_NATIVE_SCALE 1.25 FAIL
+QT_NATIVE_SCALE 1.5 FAIL
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}
+
+test_display_unknowns_are_not_defaulted_to_normal_or_zero (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_existing_ui_exports_keep_their_identity (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_frozen_qt_defaults_to_workspace_while_source_requires_a_mode (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_native_verification_keeps_timeout_diagnostics_and_checks_every_scale (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_ui_package_no_longer_eagerly_imports_tk (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_cancelled_history_read_skips_missing_database_and_closes_new_connection (test_qt_log_history.QtLogHistoryTests) ... ok
+test_channel_retry_history_pages_original_rounds_and_filters_before_limiting (test_qt_log_history.QtLogHistoryTests) ... ok
+test_full_job_filter_pages_matches_and_shows_original_long_record_excerpt (test_qt_log_history.QtLogHistoryTests) ... ok
+test_jobs_and_events_page_by_project_and_task_without_repeating_inserted_rows (test_qt_log_history.QtLogHistoryTests) ... ok
+test_legacy_runs_distinguish_pending_and_reviewed_unknown_without_mutating_ledger (test_qt_log_history.QtLogHistoryTests) ... ok
+test_legacy_runs_page_equal_timestamps_without_jobs_or_other_projects (test_qt_log_history.QtLogHistoryTests) ... ok
+test_missing_database_and_large_or_unstructured_records (test_qt_log_history.QtLogHistoryTests) ... ok
+test_power_results_revalidate_the_saved_run_and_original_channels (test_qt_log_history.QtLogHistoryTests) ... ok
+test_short_job_query_honors_cancel_and_long_event_scan_interrupts_sqlite (test_qt_log_history.QtLogHistoryTests) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 5.682s
+
+OK

@@ -1,0 +1,11 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_0c0b95522b0f4a7e989ec40d9f8a67f7'}
+test_project_status_is_consistent_across_navigation_cards_table_and_detail (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_component_showcase_progress_states_controls_and_native_layout (qt_workbench_probe.ComponentShowcaseTests) ... ok
+test_progress_animation_reuses_transitions_and_stops_when_hidden (qt_workbench_probe.ComponentShowcaseTests) ... ok
+test_cards_table_search_and_navigation_share_identity (qt_workbench_probe.QtWorkbenchTests) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 2.022s
+
+OK

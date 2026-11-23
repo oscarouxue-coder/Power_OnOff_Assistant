@@ -7,9 +7,19 @@ import sys
 from src.core.feishu_dependency_install import subprocess_environment
 
 
+def report_restart_failure():
+    title = '重启未完成'
+    message = '未能自动重新启动。请确认原程序已退出，再从原源码入口手动启动。'
+    if sys.platform == 'win32':
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(None, message, title, 0x10)
+    else:
+        print(f'{title}：{message}', file=sys.stderr)
+
+
 def restart_command(root, arguments=None):
     root = Path(root).resolve()
-    entry = root / "run_line_check_assistant.py"
+    entry = root / "run_dutpilot_qt.py"
     if getattr(sys, "frozen", False) or not entry.is_file():
         raise RuntimeError("源码重启入口不可用，请手动重新启动程序")
     return [sys.executable, str(entry)] + list(sys.argv[1:] if arguments is None else arguments)

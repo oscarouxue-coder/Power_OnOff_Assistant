@@ -65,6 +65,7 @@ def _local_chat_mode(session, current_run):
 class QtLocalConversation(AiConversationService):
     def __init__(self, diagnostic, execution):
         self.execution = execution
+        self.direct_authority = None
         super().__init__(diagnostic, context=execution.ai_evidence)
 
     @maintenance_operation
@@ -76,7 +77,9 @@ class QtLocalConversation(AiConversationService):
 
     def capabilities_for(self, identifier):
         adapter = getattr(self, 'capabilities', None)
-        if adapter and (self.store.chat(identifier).get('source') or {}).get('gateway_instance_id'):
+        source = self.store.chat(identifier).get('source') or {}
+        if adapter and (source.get('gateway_instance_id') or
+                        (self.direct_authority is not None and self.direct_authority(source))):
             return adapter
         return None
 
@@ -89,6 +92,14 @@ class QtLocalConversation(AiConversationService):
                 state = dict(state, enabled=False, reason='项目正在收尾、编辑配置或其他项目正在使用设备')
             return dict(state, project_peer=True)
         parent = session.get('batch_parent')
+        source = session.get('source') or {}
+        if source.get('kind') in ('dingtalk', 'feishu') and self.direct_authority is not None:
+            if not self.direct_authority(source):
+                return {'enabled': False, 'capable': False, 'reason': '直连平台身份或项目授权已变更'}
+            state = super().collection_status(identifier)
+            if self.execution.workspace_close_requested() or self.execution.closing or self.execution.editor_open:
+                state = dict(state, enabled=False, reason='项目正在收尾或编辑配置')
+            return state
         mode = self.local_mode(session)
         if parent and self.local_mode(self.store.chat(parent)) == 'batch':
             mode = 'batch_child'
@@ -178,6 +189,14 @@ class QtAiChat:
         selected = self.store.setting('selected_profile', '')
         return next((profile for profile in profiles if profile.id == selected), profiles[0] if profiles else None)
 
+    @property
+    def maintenance_busy(self):
+        diagnostic = self.diagnostic
+        with diagnostic.lock:
+            return (not diagnostic.idle or self._intent is not None or diagnostic.stops
+                    or diagnostic.monitor.running or diagnostic.monitor.executors
+                    or diagnostic.executors)
+
     def enable_project_peer(self, execution):
         from src.services.ai_capability_adapter import AiCapabilityAdapter
         execution.instance_registry()
@@ -185,6 +204,24 @@ class QtAiChat:
         self.conversation.capabilities = AiCapabilityAdapter(self.conversation, self.capabilities)
         self.conversation.prepare_gateway_turn = self._configure_peer_turn
         self.conversation.peer_ready = lambda: not self.closing and self._profile() is not None
+
+    def enable_direct_platform(self, authorized):
+        from src.services.ai_capability_adapter import AiCapabilityAdapter
+        execution = self.conversation.execution
+        execution.instance_registry()
+        self.capabilities = execution.capabilities
+        self.conversation.capabilities = AiCapabilityAdapter(self.conversation, self.capabilities)
+        self.conversation.direct_authority = authorized
+        self.conversation.prepare_direct_turn = self.refresh_direct_targets
+        self.refresh_direct_targets()
+
+    def refresh_direct_targets(self):
+        profile = self._profile()
+        try:
+            targets = self.handoff.configured_targets()
+        except ValueError:
+            targets = ()
+        self.diagnostic.configure(profile, targets)
 
     def _configure_peer_turn(self):
         execution = self.conversation.execution

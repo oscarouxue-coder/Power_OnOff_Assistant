@@ -1,0 +1,11 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_013acf7dd5394485a9965794a2a5e2be'}
+test_layout_and_evidence_match_in_both_versions (qt_visual_preview_probe.VisualPreviewTests) ... ok
+test_switch_filters_and_cancel_simulated_stop (qt_visual_preview_probe.VisualPreviewTests) ... ok
+test_qt_dut_presence_displays_explicit_device_evidence_and_history (qt_typed_status_probe.TypedStatusTests) ... ok
+test_qt_switch_preserves_reported_progress_and_separates_health_sources (qt_typed_status_probe.TypedStatusTests) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 5.496s
+
+OK

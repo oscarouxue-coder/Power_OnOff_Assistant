@@ -4,7 +4,13 @@ from PySide6.QtWidgets import (QAbstractItemView, QDialog, QHeaderView, QHBoxLay
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from src.core.host_resource_lock import physical_key
+from src.models.project_profile import adb_serial_from_key
 from src.ui.qt.theme import button, label
+
+
+RESOURCE_TYPES = {'serial': '串口 / 电源口', 'adapter': '网卡', 'dut': 'DUT', 'olt': 'OLT',
+                  'pon': 'PON', 'wifi': 'WiFi', 'tftp': 'TFTP', 'adb': 'ADB'}
+LEASE_STATES = {'held': '已持有', 'unresolved': '待核实'}
 
 
 def _table(columns, flexible):
@@ -63,6 +69,10 @@ class DeviceInventoryDialog(QDialog):
         self.adapter_status = self._add_tab('网卡', self.adapters)
         self.port_status = self._add_tab('串口', self.ports)
         self.binding_status = self._add_tab('项目通道', self.bindings)
+        self.resource_table = _table(('保护状态', '资源类型', '资源标识', '项目', '项目 ID', 'Job / 持有者'),
+                                     (2, 3, 4, 5))
+        self.resource_table.setAccessibleName('工作区资源租约与待核实保护明细')
+        self.resource_status = self._add_tab('资源保护', self.resource_table)
         outer.addWidget(self.tabs, 1)
         self.lease_status = label('', 'muted')
         self.lease_status.setWordWrap(True)
@@ -84,11 +94,13 @@ class DeviceInventoryDialog(QDialog):
         self.refresh_button.setText('正在读取…' if refreshing else '刷新串口/网卡')
         stamp = leases.sampled_at.strftime('%H:%M:%S') if leases.sampled_at else '尚未采样'
         self.lease_status.setText('工作区资源保护不可用' if leases.protection_unavailable else f'工作区活动租约 · {stamp}')
+        entries = leases.entries
         bindings = tuple((project.name, f'CH{channel.number:02d}', '未选' if channel.state == 'disabled' else '已选',
                           channel.vlan or '—', channel.port or '—', project.channel_snapshot_label or '项目配置')
                          for project in projects for channel in project.channels
                          if channel.state != 'disabled' or channel.vlan or channel.port)
-        snapshot = (inventory, leases.owners, bindings, len(projects))
+        snapshot = (inventory, leases.owners, entries, leases.protection_unavailable,
+                    leases.sampled_at is not None, bindings, len(projects))
         if snapshot == self._prior:
             return
         self._prior = snapshot
@@ -104,6 +116,33 @@ class DeviceInventoryDialog(QDialog):
         _replace_rows(self.adapters, adapters)
         _replace_rows(self.ports, ports)
         _replace_rows(self.bindings, bindings)
+        self._show_resource_details(leases)
         self.adapter_status.setText(_read_status(adapters, inventory.adapters_at, inventory.adapters_failed))
         self.port_status.setText(_read_status(ports, inventory.ports_at, inventory.ports_failed))
         self.binding_status.setText(f'{len(projects)} 个打开的项目 · {len(bindings)} 条通道记录')
+
+    def _show_resource_details(self, leases):
+        entries = leases.entries
+        if leases.protection_unavailable:
+            summary = '资源保护不可用，部分记录可能缺失'
+        elif leases.sampled_at is None:
+            summary = '尚未采样工作区资源保护'
+        elif entries:
+            held = sum(entry.state == 'held' for entry in entries)
+            unresolved = sum(entry.state == 'unresolved' for entry in entries)
+            summary = f'已持有 {held} 条 · 待核实 {unresolved} 条'
+        else:
+            summary = '本次采样没有活动租约或待核实保护记录'
+        self.resource_status.setText(summary)
+        details = []
+        for entry in entries:
+            kind = entry.resource_key.partition(':')[0]
+            identifier = entry.resource_key or '未记录'
+            if kind == 'adb':
+                serial = adb_serial_from_key(entry.resource_key)
+                if serial is not None:
+                    identifier = f'{serial} · {entry.resource_key}'
+            details.append((LEASE_STATES.get(entry.state, '未知'), RESOURCE_TYPES.get(kind, kind or '未记录'),
+                            identifier, entry.project_name or '未记录',
+                            entry.project_id or '未记录', entry.owner_id or '未记录'))
+        _replace_rows(self.resource_table, details)

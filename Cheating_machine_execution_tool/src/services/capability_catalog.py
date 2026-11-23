@@ -173,6 +173,10 @@ def business_catalog():
             ('test_capability_onu.py',) if group == 'onu' else ('test_capability_ai_data.py',) if group == 'ai' else
             ('test_capability_application.py',) if group in ('config', 'logs', 'serial', 'updates', 'notifications') else ('test_capability_devices.py',)))
         result[-1]['tests'] = list(tests) if capability and not manual else []
+        if identifier == 'remote.feishu_sdk_repair':
+            result[-1].update(gui_file='src/ui/qt/feishu_repair_dialog.py', gui_entry='open',
+                              tests=['test_feishu_dependency_repair.py', 'test_qt_workspace_adapter.py',
+                                     'qt_workbench_probe.py'])
         if identifier == 'remote.instances':
             result[-1]['tests'] = ['test_remote_instance_management.py']
         if identifier == "device.version":
@@ -199,4 +203,57 @@ def business_catalog():
                    '涉及本地目录所有权、配置版本、运行生命周期或远程授权，限本机操作员；AI不可模拟GUI或自行确认',
             tests=['test_project_management.py', 'test_project_workspace.py', 'test_workspace_platforms.py',
                    'test_project_completion.py', 'test_multi_project_business_validation.py']))
+    local_workflows = (
+        ('remote.platform_direct', '本机启停钉钉和飞书直连排障', 'platform_configuration_dialog.py', 'change_direct',
+         'QtDirectPlatforms / WorkspacePlatformPool / 原平台服务', 'local_confirmation',
+         '启用要求本机授权项目，进入已绑定群或飞书企业单聊，实时核对原平台身份和权限。',
+         ['test_qt_workspace_adapter.py']),
+        ('remote.feishu_automatic_notifications', '启停飞书挂测通知', 'platform_configuration_dialog.py', 'change_notifications',
+         'QtFeishuNotifications / FeishuNotificationService', 'local_confirmation',
+         '使用已绑定群和保存的项目名称，停用会阻止后续自动通知。',
+         ['test_qt_workspace_adapter.py', 'qt_workbench_probe.py']),
+        ('jobs.local_safe_stop', '本机请求选中任务安全停止', 'log_history_dialog.py', '_request_stop',
+         'QtJobReview / CapabilityJobs', 'local_confirmation',
+         '仅接受本进程当前项目内的活跃任务，选定任务独立收尾。',
+         ['test_qt_workspace_adapter.py']),
+        ('extensions.review', '本机审阅登记或启停受控扩展', 'controlled_extensions_dialog.py', 'import_template',
+         'QtControlledExtensions / CapabilityExtensions', 'local_confirmation',
+         '绑定项目与审阅哈希，继承目标操作原授权与资源范围。',
+         ['test_qt_workspace_adapter.py', 'qt_workbench_probe.py']),
+        ('remote.platform_credentials', '本机编辑钉钉或飞书应用配置', 'platform_configuration_dialog.py', 'save',
+         'QtPlatformConfiguration / RemoteConfigStore / FeishuConfigStore', 'local_confirmation',
+         '只保存平台应用配置，凭据交由原加密存储，保存后保持停用。',
+         ['test_qt_workspace_adapter.py', 'qt_workbench_probe.py']),
+        ('remote.platform_binding', '本机开始、确认或取消机器人群绑定', 'platform_configuration_dialog.py', 'change_binding',
+         'QtPlatformConfiguration / WorkspacePlatformPool / 原平台服务', 'local_confirmation',
+         '只启用临时群绑定连接，确认当前项目及群身份，结束后回收连接。',
+         ['test_qt_workspace_adapter.py', 'qt_workbench_probe.py']),
+        ('remote.feishu_trial', '向绑定群发送一条飞书测试消息', 'platform_configuration_dialog.py', 'start_trial',
+         'QtPlatformConfiguration / FeishuNotificationService', 'local_confirmation',
+         '先确认已保存项目和群 ID，再调用原固定消息队列。平台受理和群收到分别核对。',
+         ['test_qt_workspace_adapter.py']),
+        ('projects.model_presets', '保存和应用产品型号模板', 'project_wizard_controller.py', '_save_preset',
+         'QtProjectWizardService / ProjectModelPresets', 'local_confirmation', '操作员选择已保存版本并确认跨项目共享的型号方案',
+         ['test_qt_workspace_adapter.py', 'qt_project_wizard_probe.py']),
+        ('projects.test_profile', '创建或恢复测试项目档案', 'project_wizard_controller.py', '_save',
+         'ProjectStore / QtProjectWizardService', 'local_confirmation', '仅本机选择目录、测试类型和设备映射',
+         ['test_project_profile_store.py', 'qt_project_wizard_probe.py']),
+        ('projects.preparation', '关联执行回执或核验准备步骤', 'project_preparation_page.py', '_submit',
+         'ProjectPreparation', 'local_confirmation', '现场证据由操作者核验，自动步骤关联原业务 Job',
+         ['test_project_preparation.py', 'qt_project_wizard_probe.py']),
+        ('service_aging.start', '开始持续供电业务老化', 'project_wizard_controller.py', '_start',
+         'QtServiceAging / ServiceAging', 'service_aging.start', '仅 GUI，可追溯到本次确认的项目、DUT 和资源',
+         ['test_qt_execution_adapter.py', 'test_service_aging.py']),
+        ('service_aging.record', '记录现场观察、日检或期末检查', 'test_type_panel.py', '_record',
+         'QtServiceAging / ServiceAging', 'service_aging.record', '仅 GUI，本机操作人提供实际观测和结果',
+         ['test_service_aging.py']),
+        ('service_aging.history', '查看及导出指定批次业务证据', 'service_aging_history_dialog.py', '_export',
+         'ServiceAgingHistory', 'local_confirmation', '仅本机选择项目、批次和导出文件',
+         ['test_service_aging.py', 'qt_project_wizard_probe.py']),
+    )
+    for identifier, name, filename, entry, service, capability, reason, tests in local_workflows:
+        result.append(dict(feature_id=identifier, name=name, gui_file='src/ui/qt/' + filename, gui_entry=entry,
+                           service=service, resources=(['project', 'configuration'] if identifier.startswith('remote.')
+                                                       else ['project', 'run']), risk='manual', capability_id=capability,
+                           status='manual_control', reason=reason, tests=tests))
     return result

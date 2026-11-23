@@ -1,0 +1,15 @@
+﻿GUI_TEST_COVERAGE_OK
+python.exe : ..........................................................................................................
+.......................................................................................................................
+............
+所在位置 行:4 字符: 1
++ & (Join-Path $env:LOCALAPPDATA 'LineCheckAssistant/qt-dev-py39/Script ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 237 tests in 73.548s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 7, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

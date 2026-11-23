@@ -1,0 +1,39 @@
+{
+  "samples": [
+    {
+      "received_bytes": 1048576,
+      "cursor": 1048576,
+      "resident_bytes": 262144,
+      "spilled_bytes": 786432,
+      "process_rss_bytes": 27811840,
+      "raw_sha256_equal": true
+    },
+    {
+      "received_bytes": 2097152,
+      "cursor": 2097152,
+      "resident_bytes": 262144,
+      "spilled_bytes": 1835008,
+      "process_rss_bytes": 27815936,
+      "raw_sha256_equal": true
+    },
+    {
+      "received_bytes": 4194304,
+      "cursor": 4194304,
+      "resident_bytes": 262144,
+      "spilled_bytes": 3932160,
+      "process_rss_bytes": 27815936,
+      "raw_sha256_equal": true
+    },
+    {
+      "received_bytes": 8388608,
+      "cursor": 8388608,
+      "resident_bytes": 262144,
+      "spilled_bytes": 8126464,
+      "process_rss_bytes": 27815936,
+      "raw_sha256_equal": true
+    }
+  ],
+  "writes": 0,
+  "log_enabled": false,
+  "driver_closed": true
+}

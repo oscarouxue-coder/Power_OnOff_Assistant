@@ -7,7 +7,7 @@
 在主源码目录使用项目Python环境执行：
 
 ```powershell
-python run_line_check_assistant.py
+python run_dutpilot_qt.py
 ```
 
 在主程序“项目”菜单中选择新建或打开，在自行选择的目录准备四个验收项目。通过正常业务界面操作，保留各项目执行日志，并在下表填写实际结果。无需运行独立验收脚本或填写专用JSON报告。

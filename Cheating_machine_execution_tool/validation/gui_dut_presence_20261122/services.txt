@@ -1,0 +1,44 @@
+GUI_TEST_COVERAGE_OK
+test_burst_larger_than_a_reader_page_drains_in_one_sampling_tick (test_service_aging_feed.ServiceAgingFeedTests) ... ok
+test_durable_dedup_time_and_restart_do_not_bridge_missing_evidence (test_service_aging_feed.ServiceAgingFeedTests) ... ok
+test_job_reads_only_frozen_subscription_and_keeps_manual_evidence_separate (test_service_aging_feed.ServiceAgingFeedTests) ... ok
+test_legacy_history_without_feed_table_can_read_export_and_stays_unmodified (test_service_aging_feed.ServiceAgingFeedTests) ... ok
+test_manifest_conflict_keeps_icmp_and_manual_working_then_retries_file_input (test_service_aging_feed.ServiceAgingFeedTests) ... ok
+test_presence_uses_frozen_dut_online_evidence_and_detects_proven_boot_changes_across_gaps (test_service_aging_feed.ServiceAgingFeedTests) ... ok
+test_real_jsonl_presence_updates_only_the_named_dut_and_keeps_metadata_after_stop (test_service_aging_feed.ServiceAgingFeedTests) ... ok
+test_bindings_are_rechecked_before_start_and_each_packet (test_service_aging.ServiceAgingTests) ... ok
+test_daily_final_records_cross_midnight_and_target_duration_never_grant_acceptance (test_service_aging.ServiceAgingTests) ... ok
+test_interruption_and_long_gaps_never_extend_uptime_or_auto_restart (test_service_aging.ServiceAgingTests) ... ok
+test_job_owns_snapshot_and_leases_until_stop_and_project_dut_keys_conflict (test_service_aging.ServiceAgingTests) ... ok
+test_missing_interface_keeps_manual_and_unavailable_sources_distinct (test_service_aging.ServiceAgingTests) ... ok
+test_probe_health_intervals_heartbeat_and_loss_require_actual_consecutive_observations (test_service_aging.ServiceAgingTests) ... ok
+test_raw_probe_binds_ipv4_and_interface_before_send_and_never_falls_back (test_service_aging.ServiceAgingTests) ... ok
+test_seven_daily_inspections_are_separate_from_continuous_verification_and_export_in_full (test_service_aging.ServiceAgingTests) ... ok
+test_boot_evidence_rejects_wrong_stream_state_and_malformed_fields_before_deduplication (test_aging_observation_source.AgingObservationSourceTests) ... ok
+test_dut_presence_requires_a_frozen_subscription_and_preserves_explicit_device_observations (test_aging_observation_source.AgingObservationSourceTests) ... ok
+test_first_poll_reads_new_job_from_beginning_without_modifying_input (test_aging_observation_source.AgingObservationSourceTests) ... ok
+test_invalid_names_and_redirected_files_never_cross_into_another_job_or_touch_external_data (test_aging_observation_source.AgingObservationSourceTests) ... ok
+test_manifest_is_atomic_job_scoped_idempotent_and_contains_only_public_plan_fields (test_aging_observation_source.AgingObservationSourceTests) ... ok
+test_partial_utf8_crlf_and_bom_work_without_emitting_incomplete_facts (test_aging_observation_source.AgingObservationSourceTests) ... ok
+test_read_and_line_limits_do_not_drop_good_rows_after_oversize_unterminated_data (test_aging_observation_source.AgingObservationSourceTests) ... ok
+test_rotation_and_copytruncate_restart_without_joining_incomplete_lines_or_replaying_ids (test_aging_observation_source.AgingObservationSourceTests) ... ok
+test_subscriptions_offsets_timestamps_fields_and_event_identity (test_aging_observation_source.AgingObservationSourceTests) ... ok
+test_corrupt_profile_is_not_silently_reset (test_project_profile_store.ProjectProfileTests) ... ok
+test_dut_presence_is_optional_and_requires_its_own_field_feed (test_project_profile_store.ProjectProfileTests) ... ok
+test_field_feed_sources_require_selected_supported_businesses_and_preserve_old_profile_shape (test_project_profile_store.ProjectProfileTests) ... ok
+test_invalid_or_failed_typed_creation_leaves_original_directory_retryable (test_project_profile_store.ProjectProfileTests) ... ok
+test_manifest_publish_failure_retracts_only_the_new_project_entries (test_project_profile_store.ProjectProfileTests) ... ok
+test_reading_legacy_profile_and_cancelling_an_edit_do_not_type_the_project (test_project_profile_store.ProjectProfileTests) ... ok
+test_stale_editors_cannot_overwrite_the_winning_profile (test_project_profile_store.ProjectProfileTests) ... ok
+test_typed_create_versions_the_imported_inputs_and_restores_unsaved_edits (test_project_profile_store.ProjectProfileTests) ... ok
+test_validates_physical_slots_and_explicit_plan_fields (test_project_profile_store.ProjectProfileTests) ... ok
+test_dut_offline_and_business_alarm_count_the_affected_device_once (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_current_manifest_and_business_entries_are_consistent (test_capability_coverage.CapabilityCoverageTests) ... ok
+test_new_widget_and_changed_callback_are_detected (test_capability_coverage.CapabilityCoverageTests) ... ok
+test_pending_businesses_remain_visible_and_manual_actions_are_explicit (test_capability_coverage.CapabilityCoverageTests) ... ok
+
+----------------------------------------------------------------------
+Ran 37 tests in 7.803s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

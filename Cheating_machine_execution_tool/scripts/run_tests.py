@@ -24,6 +24,12 @@ def main(argv=None):
     for name in ('TEMP', 'TMP', 'TMPDIR'):
         os.environ[name] = temporary
     tempfile.tempdir = temporary
+    from qt_test_guard import active_guard
+    qt_guard = active_guard()
+    if qt_guard is not None:
+        program = unittest.main(module=None, argv=[sys.argv[0], *(sys.argv[1:] if argv is None else argv)], exit=False)
+        return report_result(program, qt_guard.report())
+
     from tk_test_windows import StrictTkGuard
     with StrictTkGuard() as guard:
         class GuardedResult(unittest.TextTestResult):
@@ -47,7 +53,10 @@ def main(argv=None):
                                 testRunner=GuardedRunner, exit=False)
         gc.collect()
         guard.finish_test()
-    report = guard.report()
+    return report_result(program, guard.report())
+
+
+def report_result(program, report):
     print(f"GUI_RUNTIME_REPORT: {report}", flush=True)
     if not program.result.testsRun:
         print('No tests executed; refusing an empty successful run', file=sys.stderr)

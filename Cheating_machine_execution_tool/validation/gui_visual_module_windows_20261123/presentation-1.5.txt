@@ -1,0 +1,9 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 208, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_e9c5c6cf1eca48639b400ff5a583e16e', 'framework': 'qt', 'platform': 'windows'}
+
+test_real_controls_and_fixture_match_in_both_layouts (qt_module_visual_preview_probe.ModuleVisualPreviewTests) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 3.531s
+
+OK

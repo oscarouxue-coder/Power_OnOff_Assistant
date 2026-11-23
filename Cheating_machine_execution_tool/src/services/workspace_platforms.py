@@ -41,6 +41,7 @@ class PooledTransport:
         self.pool, self.project_id = pool, project_id
         self.credentials, self.receive, self.status = credentials, receive, status
         self.closed = False
+        self.stop = threading.Event()
         self.options = dict(options or {})
 
     def start(self):
@@ -48,6 +49,7 @@ class PooledTransport:
 
     def begin_close(self):
         self.closed = True
+        self.stop.set()
         self.pool.remove(self)
 
     @property

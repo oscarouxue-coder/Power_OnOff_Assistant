@@ -240,7 +240,8 @@ class Coverage:
             if not isinstance(node, ast.Call) or not node.args:
                 continue
             name = self.resolve(node.func, aliases)
-            if name not in ('subprocess.run', 'subprocess.Popen', 'tk_test_windows.run_gui_child'):
+            managed_child = name in ('tk_test_windows.run_gui_child', 'scripts.gui_test_process.run_gui_child')
+            if name not in ('subprocess.run', 'subprocess.Popen') and not managed_child:
                 continue
             # Bind constants only from this launch's module/function and only
             # before this launch. Same-named code strings in another test must
@@ -271,7 +272,7 @@ class Coverage:
             first = literal(command.elts[0])
             python = self.resolve(command.elts[0], aliases) == 'sys.executable' or (
                 first is not None and Path(first).name.lower() in ('python', 'python3', 'python.exe', 'python3.exe'))
-            if python and name != 'tk_test_windows.run_gui_child':
+            if python and not managed_child:
                 # A unittest child may import GUI indirectly, so it must use
                 # the evidence wrapper regardless of the selected test name.
                 options = [a for a in command.elts[1:] if not (isinstance(a, ast.Constant) and
@@ -332,7 +333,7 @@ class Coverage:
                 child_module = module + '.__child_' + str(node.lineno)
                 gui, child_aliases = child_gui(child_tree)
                 if gui:
-                    if name != 'tk_test_windows.run_gui_child':
+                    if not managed_child:
                         self.error(relative, node, 'GUI child must use run_gui_child for independent runtime evidence')
                     self.modules[child_module] = (relative + f':child@{node.lineno}', child_tree, child_aliases)
                     self.walk(child_tree.body, child_module)

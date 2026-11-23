@@ -28,4 +28,5 @@ if ($LASTEXITCODE -ne 0) { throw 'Qt dependency consistency check failed' }
 & $qtPython -I -c "import platform,sys;from importlib.metadata import version;from PySide6.QtCore import qVersion;assert sys.version_info[:3]==(3,9,10) and platform.architecture()[0]=='64bit';assert version('PySide6-Essentials')==version('shiboken6')=='6.8.3';print('QT_ENVIRONMENT_OK',qVersion())"
 if ($LASTEXITCODE -ne 0) { throw 'Qt interpreter/version verification failed' }
 Write-Output "Qt Python: $qtPython"
+Write-Output "Workspace: & '$qtPython' '$(Join-Path $sourceRoot 'run_dutpilot_qt.py')'"
 Write-Output "Demo: & '$qtPython' '$(Join-Path $sourceRoot 'run_dutpilot_qt.py')' --demo"

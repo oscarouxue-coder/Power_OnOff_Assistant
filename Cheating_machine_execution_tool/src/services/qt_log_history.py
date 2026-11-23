@@ -83,6 +83,32 @@ def job_database_path(context):
     return database
 
 
+def read_pretest_overview(context, job_id, state):
+    """Obtain only the recorded verification outcome for this project's exact job."""
+    try:
+        database = job_database_path(context)
+        if not database.is_file():
+            return None
+        with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True, timeout=.1)) as connection:
+            row = connection.execute("""
+                SELECT json_extract(result, '$.outcome'), json_extract(result, '$.result.unchecked'),
+                       json_extract(result, '$.result.passed')
+                FROM jobs WHERE id=? AND capability='pretest.start' AND state=? AND json_valid(result)
+            """, (job_id, state)).fetchone()
+            return pretest_overview_result(state, *row) if row else None
+    except (OSError, ValueError, sqlite3.Error):
+        return None
+
+
+def pretest_overview_result(state, outcome, unchecked, passed):
+    if outcome == 'unchecked' or type(unchecked) is int and unchecked > 0:
+        return 'unchecked'
+    checks_passed = type(unchecked) is int and unchecked == 0 and type(passed) is int and passed > 0
+    if state == 'succeeded' and (outcome == 'succeeded' or checks_passed):
+        return 'completed'
+    return None
+
+
 def _event_preview(message, keyword):
     if len(message) <= MAX_MESSAGE_CHARS:
         return message

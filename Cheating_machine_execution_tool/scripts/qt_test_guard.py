@@ -4,12 +4,17 @@ Imported by the GUI child wrapper, never by the product. No offscreen QPA
 fallback: tests exercise the Windows platform plugin and real mapped widgets.
 """
 from contextlib import ExitStack
+import sys
 import threading
 import weakref
 from unittest.mock import patch
 
 
 _active = None
+
+
+def active_guard():
+    return _active
 
 
 class QtRuntimeGuard:
@@ -41,10 +46,12 @@ class QtRuntimeGuard:
 
     def __enter__(self):
         global _active
-        from tk_test_windows import _private_render_desktop
+        from scripts.gui_test_process import _private_render_desktop
         self.desktop = _private_render_desktop()
         if not self.desktop:
             self.reject('Qt native tests require the verified private desktop wrapper')
+        if 'tkinter' in sys.modules or '_tkinter' in sys.modules:
+            self.reject('Tk was loaded before entering the Qt test guard')
         from PySide6 import QtCore, QtWidgets
         import shiboken6
         if _active is not None or QtWidgets.QApplication.instance() is not None:
@@ -52,6 +59,16 @@ class QtRuntimeGuard:
         self.QtCore, self.QtWidgets, self.shiboken = QtCore, QtWidgets, shiboken6
         _active = self
         try:
+            runtime = self
+
+            class RejectTk:
+                def find_spec(self, fullname, path=None, target=None):
+                    if fullname.split('.')[0] in ('tkinter', '_tkinter'):
+                        runtime.reject('Qt-only test imported ' + fullname)
+
+            finder = RejectTk()
+            sys.meta_path.insert(0, finder)
+            self.hooks.callback(sys.meta_path.remove, finder)
             def constructor(original):
                 def initialize(widget, *args, **kwargs):
                     self.require_scope()

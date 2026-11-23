@@ -1,0 +1,207 @@
+﻿Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Requirement already satisfied: pyserial==3.5 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 1)) (3.5)
+Requirement already satisfied: tftpy==0.8.7 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 2)) (0.8.7)
+Requirement already satisfied: requests<3,>=2.31 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 3)) (2.31.0)
+Requirement already satisfied: requests-toolbelt<2,>=1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 4)) (1.0.0)
+Requirement already satisfied: paramiko<4,>=3.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 5)) (3.1.0)
+Requirement already satisfied: ping3<5,>=4.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 6)) (4.0.4)
+Requirement already satisfied: pywifi<2,>=1.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 7)) (1.1.12)
+Requirement already satisfied: configobj<6,>=5.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 8)) (5.0.9)
+Requirement already satisfied: psutil<8,>=5.9 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 9)) (5.9.5)
+Requirement already satisfied: openpyxl<4,>=3.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 10)) (3.1.2)
+Requirement already satisfied: xlrd<3,>=2.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 11)) (2.0.2)
+Requirement already satisfied: websockets==15.0.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 12)) (15.0.1)
+Requirement already satisfied: lark-oapi==1.7.5 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements.txt (line 13)) (1.7.5)
+Requirement already satisfied: charset-normalizer==3.1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 8)) (3.1.0)
+Requirement already satisfied: idna==3.4 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 9)) (3.4)
+Requirement already satisfied: urllib3==2.0.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 10)) (2.0.2)
+Requirement already satisfied: certifi==2023.5.7 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 11)) (2023.5.7)
+Requirement already satisfied: bcrypt==4.0.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 13)) (4.0.1)
+Requirement already satisfied: cryptography==40.0.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 14)) (40.0.2)
+Requirement already satisfied: cffi==1.15.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 15)) (1.15.1)
+Requirement already satisfied: pycparser==2.21 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 16)) (2.21)
+Requirement already satisfied: PyNaCl==1.5.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 17)) (1.5.0)
+Requirement already satisfied: comtypes==1.1.14 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 21)) (1.1.14)
+Requirement already satisfied: et-xmlfile==1.1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 25)) (1.1.0)
+Requirement already satisfied: pycryptodome==3.23.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 29)) (3.23.0)
+Requirement already satisfied: httpx==0.28.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 30)) (0.28.1)
+Requirement already satisfied: httpcore==1.0.9 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 31)) (1.0.9)
+Requirement already satisfied: h11==0.16.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 32)) (0.16.0)
+Requirement already satisfied: anyio==4.12.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 33)) (4.12.1)
+Requirement already satisfied: exceptiongroup==1.3.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 34)) (1.3.1)
+Requirement already satisfied: typing-extensions==4.16.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 35)) (4.16.0)
+Requirement already satisfied: pyinstaller==5.10.1 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 36)) (5.10.1)
+Requirement already satisfied: pyinstaller-hooks-contrib==2023.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 37)) (2023.2)
+Requirement already satisfied: setuptools==58.1.0 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 38)) (58.1.0)
+Requirement already satisfied: altgraph==0.17.3 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 39)) (0.17.3)
+Requirement already satisfied: pefile==2023.2.7 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 40)) (2023.2.7)
+Requirement already satisfied: pywin32-ctypes==0.2.2 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-build.txt (line 41)) (0.2.2)
+Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Requirement already satisfied: PySide6-Essentials==6.8.3 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-qt.txt (line 2)) (6.8.3)
+Requirement already satisfied: shiboken6==6.8.3 in c:\users\administrator\appdata\local\linecheckassistant\qt-build-py39\lib\site-packages (from -r F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\requirements-qt.txt (line 3)) (6.8.3)
+No broken requirements found.
+BUILD_ENVIRONMENT_OK Qt CPython 3.9.10 x64; locked dependencies; numpy/lxml/PyQt5 absent
+Packaging Python: C:\Users\Administrator\AppData\Local\LineCheckAssistant\qt-build-py39\Scripts\python.exe
+Project root: F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool
+
+  [OK  ] py_compile - 413 files compiled
+  [OK  ] compile_inventory - 403 source files covered
+  [OK  ] capability_coverage - GUI actions and business inventory reviewed
+  [OK  ] gui_test_coverage - GUI test ownership preflight passed
+  [FAIL] unittest - non-zero exit; tail: ilities_do_not_grant_remote_or_ai_authority (test_qt_dut_configuration.QtDutConfigurationTests) ... ok
+test_job_request_and_targets_stay_bound_to_original_configuration (test_qt_dut_configuration.QtDutConfigurationTests) ... ok
+test_later_power_job_is_not_reported_as_a_live_dut_batch (test_qt_dut_configuration.QtDutConfigurationTests) ... ok
+test_original_network_failure_has_no_retry_replay_and_unknown_write_outcome (test_qt_dut_configuration.QtDutConfigurationTests) ... ok
+test_original_services_receive_selected_requests_parallelism_and_safe_logs (test_qt_dut_configuration.QtDutConfigurationTests) ... ok
+test_resource_denial_preserves_previous_result_without_dispatch (test_qt_dut_configuration.QtDutConfigurationTests) ... ok
+test_show_has_real_targets_and_never_connects_or_modifies_configuration (test_qt_dut_configuration.QtDutConfigurationTests) ... ok
+test_show_loads_parameter_credentials_from_original_project_settings_file (test_qt_dut_configuration.QtDutConfigurationTests) ... ok
+test_stop_keeps_resource_ownership_until_original_worker_returns (test_qt_dut_configuration.QtDutConfigurationTests) ... ok
+test_unverified_nic_blocks_original_job_and_confirmation_is_consumed (test_qt_dut_configuration.QtDutConfigurationTests) ... ok
+test_window_close_and_reopen_preserve_live_job_and_reject_old_token (test_qt_dut_configuration.QtDutConfigurationTests) ... ok
+test_acs_url_userinfo_is_private_in_query_and_actual_write (test_qt_dut_voice_tr069.QtDutVoiceTr069Tests) ... ok
+test_tr069_manual_inform_failure_is_unknown_after_write (test_qt_dut_voice_tr069.QtDutVoiceTr069Tests) ... ok
+test_tr069_manual_inform_stop_keeps_worker_until_safe_point (test_qt_dut_voice_tr069.QtDutVoiceTr069Tests) ... ok
+test_tr069_query_capabilities_filter_original_payload_and_inform (test_qt_dut_voice_tr069.QtDutVoiceTr069Tests) ... ok
+test_voice_passes_unchanged_secret_and_ordered_codecs_to_original_core (test_qt_dut_voice_tr069.QtDutVoiceTr069Tests) ... ok
+test_voice_query_uses_line_and_private_caps_block_unsupported_write (test_qt_dut_voice_tr069.QtDutVoiceTr069Tests) ... ok
+test_add_and_bridge_iptv_use_original_payload_and_keep_project_files (test_qt_dut_wan.QtDutWanTests) ... ok
+test_cancel_and_expiry_keep_original_query_without_wan_commands (test_qt_dut_wan.QtDutWanTests) ... ok
+test_delete_only_accepts_current_common_name_and_original_delete_payload (test_qt_dut_wan.QtDutWanTests) ... ok
+test_different_complete_details_do_not_autofill_but_common_delete_is_allowed (test_qt_dut_wan.QtDutWanTests) ... ok
+test_failed_new_query_clears_previous_common_connections (test_qt_dut_wan.QtDutWanTests) ... ok
+test_invalid_wan_parameters_fail_before_any_resource_or_device_admission (test_qt_dut_wan.QtDutWanTests) ... ok
+test_json_escaped_pppoe_password_is_sent_exactly_and_hidden_from_logs (test_qt_dut_wan.QtDutWanTests) ... ok
+test_modify_calls_original_payload_with_selected_targets_and_unmodified_password (test_qt_dut_wan.QtDutWanTests) ... ok
+test_old_target_credentials_and_invented_name_cannot_use_a_cached_query (test_qt_dut_wan.QtDutWanTests) ... ok
+test_query_config_change_and_confirmation_changes_never_dispatch (test_qt_dut_wan.QtDutWanTests) ... ok
+test_query_private_common_details_never_enter_job_results_or_logs (test_qt_dut_wan.QtDutWanTests) ... ok
+test_resource_denial_preserves_private_query_for_an_explicit_retry (test_qt_dut_wan.QtDutWanTests) ... ok
+test_safe_stop_waits_for_original_wan_worker_and_skips_pending_targets (test_qt_dut_wan.QtDutWanTests) ... ok
+test_shared_model_has_no_tk_import_and_original_exports_are_identical (test_qt_dut_wan.QtDutWanTests) ... ok
+test_different_target_settings_do_not_return_a_common_configuration (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_dual_band_updates_both_radios_and_original_shared_parameters (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_expiry_cancel_config_and_query_changes_prevent_dispatch (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_increment_batch_preserves_order_one_shared_wait_and_verified_outcomes (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_malformed_ssid_sequence_band_index_and_radio_fail_before_job (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_no_peer_query_does_not_invent_a_peer_power_capability_intersection (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_normal_configuration_uses_original_core_and_each_original_60_second_wait (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_open_auth_omits_wire_key_but_keeps_entered_password_in_request (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_query_actual_mapping_and_caps_are_private_but_public_result_has_no_key (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_query_index_failure_remains_failure_and_never_falls_back_to_first_ssid (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_quoted_key_and_credentials_never_enter_logs_or_durable_metadata (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_readback_mismatch_is_an_unknown_write_outcome_not_success (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_real_query_caps_block_unsupported_values_and_client_cannot_forge_lists (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_shared_maps_keep_original_exports_and_exact_tk_defaults (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_single_increment_keeps_single_device_configure_wait (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_stopped_shared_wait_never_reports_applied_but_unverified_as_success (test_qt_dut_wifi.QtDutWifiTests) ... ok
+test_all_sixteen_channels_reach_original_worker_and_keep_individual_results (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_cancelled_confirmation_is_logged_and_cannot_be_reused (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_channel_stage_and_completed_count_follow_the_same_run_and_channel (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_config_changes_or_expiration_prevent_dispatch (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_confirmation_is_one_use_and_original_jobs_own_execution (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_continuous_monitor_confirm_stop_and_history_use_the_selected_project_job (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_disjoint_project_power_jobs_keep_separate_snapshots_stops_and_leases (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_environment_check_uses_original_registered_operation (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_field_collector_uses_the_confirmed_job_manifest_and_deduplicates_reports (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_late_previous_batch_events_preserve_current_run_channel_and_history (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_original_orchestrator_receives_original_request_and_callbacks (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_other_project_cannot_acquire_same_physical_resources (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_pipeline_environment_failure_prevents_aging (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_pipeline_prestart_cannot_open_serial_after_stop_before_owner_claims_it (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_pipeline_prestarts_confirmed_serial_targets_and_preserves_nonfatal_failure (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_pipeline_requires_explicit_choices_and_rejects_changed_serial_destination (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_power_failure_after_stop_request_preserves_original_failure (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_power_log_open_uses_current_run_or_original_draft_root (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_pretest_decline_and_stale_configuration_prevent_dispatch_and_gate_remote_source (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_pretest_executes_frozen_unsaved_draft_once_per_selected_channel_with_original_runner (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_pretest_stop_waits_for_original_worker_before_closing_editor (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_pretest_unchecked_outcome_is_never_reported_as_test_success (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_push_trial_decline_source_and_conflicting_saved_configuration_prevent_dispatch (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_push_trial_unknown_response_waits_for_close_without_fencing_dut (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_push_trial_uses_original_adapters_frozen_draft_and_saved_project_name (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_qt_postrun_queue_discards_waiting_when_first_result_is_unknown (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_qt_postrun_queue_does_not_dispatch_on_refresh_after_workspace_exit_request (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_qt_postrun_queue_rejects_configuration_changed_during_wait (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_qt_postrun_queue_revalidates_each_target_and_discards_on_close (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_qt_postrun_queue_stop_from_previous_visible_job_cancels_waiting (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_qt_postrun_resume_queue_is_fifo_and_reacquires_only_next_channel (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_qt_resume_after_run_keeps_original_verdict_and_reopens_progress_observation (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_qt_resume_keeps_parent_lease_when_queued_command_falls_back_on_process_exit (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_qt_resume_live_uses_original_queue_only_once (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_qt_resume_rejects_phase_and_nic_changes_and_foreign_source (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_running_targets_keep_saved_snapshot_after_external_draft_edit (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_selected_wifi_profile_reserves_host_before_a_power_job (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_single_channel_completion_uses_actual_terminal_state (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_single_power_manual_acknowledgement_has_no_serial_or_nic_io (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_single_power_partial_write_keeps_result_unknown_and_protects_port (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_single_power_rejects_unapproved_stale_and_busy_targets (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_single_power_reuses_original_frames_order_and_interval_with_temporary_port (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_snapshot_enabling_unreserved_wifi_stops_before_original_engine (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_stop_waits_for_engine_and_keeps_resources (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_unknown_result_remains_fenced_and_no_automatic_retry (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_unverified_nic_never_admits_a_job (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_version_confirmation_decline_scope_and_external_config_changes_prevent_dispatch (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_version_no_login_after_confirmation_for_hash_and_waits_for_read_cleanup (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_version_uses_original_query_on_one_frozen_draft_target (test_qt_execution_adapter.QtExecutionAdapterTests) ... ok
+test_blank_profile_blocks_preview_before_network_check (test_qt_firmware_upgrade.QtFirmwareUpgradeTests) ... ok
+test_cancel_and_changed_firmware_do_not_admit_a_job (test_qt_firmware_upgrade.QtFirmwareUpgradeTests) ... ok
+test_four_modes_dispatch_original_requests_and_preserve_page_parallelism (test_qt_firmware_upgrade.QtFirmwareUpgradeTests) ... ok
+test_full_upgrade_observes_original_session_without_owning_it (test_qt_firmware_upgrade.QtFirmwareUpgradeTests) ... ok
+test_manual_restart_confirmation_does_not_replace_network_preflight (test_qt_firmware_upgrade.QtFirmwareUpgradeTests) ... ok
+test_manual_restart_full_package_modes_keep_empty_power_port_and_original_targets (test_qt_firmware_upgrade.QtFirmwareUpgradeTests) ... ok
+test_manual_restart_requires_explicit_acknowledgement_and_stays_bound_to_power_and_firmware (test_qt_firmware_upgrade.QtFirmwareUpgradeTests) ... ok
+test_manual_restart_stays_local_and_standard_capability_rejects_absent_power (test_qt_firmware_upgrade.QtFirmwareUpgradeTests) ... ok
+test_manual_restart_wait_preserves_confirmation_until_operator_finishes_and_stop_waits_for_engine (test_qt_firmware_upgrade.QtFirmwareUpgradeTests) ... ok
+test_revised_project_and_non_gui_authority_are_rejected (test_qt_firmware_upgrade.QtFirmwareUpgradeTests) ... ok
+test_save_commit_failure_restores_original_bytes (test_qt_firmware_upgrade.QtFirmwareUpgradeTests) ... ok
+test_save_uses_original_store_and_keeps_parameter_fields (test_qt_firmware_upgrade.QtFirmwareUpgradeTests) ... ok
+test_stop_reopen_and_release_wait_for_original_worker (test_qt_firmware_upgrade.QtFirmwareUpgradeTests) ... ok
+test_invalid_or_failed_output_does_not_leave_a_partial_file (test_qt_log_export.QtLogExportTests) ... ok
+test_writes_utf8_selected_records_with_full_identity_without_overwriting (test_qt_log_export.QtLogExportTests) ... ok
+test_cancelled_history_read_skips_missing_database_and_closes_new_connection (test_qt_log_history.QtLogHistoryTests) ... ok
+test_channel_retry_history_pages_original_rounds_and_filters_before_limiting (test_qt_log_history.QtLogHistoryTests) ... ok
+test_full_job_filter_pages_matches_and_shows_original_long_record_excerpt (test_qt_log_history.QtLogHistoryTests) ... ok
+test_jobs_and_events_page_by_project_and_task_without_repeating_inserted_rows (test_qt_log_history.QtLogHistoryTests) ... ok
+test_legacy_runs_distinguish_pending_and_reviewed_unknown_without_mutating_ledger (test_qt_log_history.QtLogHistoryTests) ... ok
+test_legacy_runs_page_equal_timestamps_without_jobs_or_other_projects (test_qt_log_history.QtLogHistoryTests) ... ok
+test_missing_database_and_large_or_unstructured_records (test_qt_log_history.QtLogHistoryTests) ... ok
+test_power_results_revalidate_the_saved_run_and_original_channels (test_qt_log_history.QtLogHistoryTests) ... ok
+test_short_job_query_honors_cancel_and_long_event_scan_interrupts_sqlite (test_qt_log_history.QtLogHistoryTests) ... ok
+test_display_unknowns_are_not_defaulted_to_normal_or_zero (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_existing_ui_exports_keep_their_identity (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_frozen_qt_defaults_to_workspace_while_source_requires_a_mode (test_qt_migration_contract.QtMigrationContractTests) ... FAIL
+test_native_verification_keeps_timeout_diagnostics_and_checks_every_scale (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_ui_package_no_longer_eagerly_imports_tk (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_business_save_preserves_connection_and_invalidates_preview (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c300_cleanup_dispatches_frozen_candidate_through_original_retry (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c300_cleanup_query_confirmation_cancels_and_cannot_retarget (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c300_cleanup_rejects_changed_identity_at_original_execution_boundary (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c300_cleanup_rejects_wrong_family_batch_stale_option_and_missing_sn (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c300_plan_uses_original_service_and_cancel_invalidates_preview (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c300_save_checks_the_original_binding_and_global_admission (test_qt_onu_query.QtOnuQueryTests) ... ok
+test_c300_save_requires_new_local_decision_and_does_not_replay_after_decline (test_qt_onu_query.QtOnuQueryTests) ... ok
+  [OK  ] must_exist: bbfdm.operate - hit in src\core\dut_ubus_config.py (+1)
+  [OK  ] must_exist: tclinux_allinone - hit in src\core\tftp_transport.py (+1)
+  [OK  ] must_exist: 192.168.1.1 - hit in src\core\telnet_transport.py (+5)
+  [OK  ] must_exist: vlan_to_serial_port - hit in src\core\__init__.py (+12)
+  [OK  ] must_exist: MAX_PARALLEL_UPGRADES = 8 - hit in line_check_assistant\sample_upgrade_settings_store.py
+  [OK  ] must_exist: clamp_parallel_count - hit in src\services\firmware_upgrade_service.py (+2)
+  [OK  ] must_exist: source_address=(bind_ip, 0) - hit in src\core\telnet_transport.py (+3)
+  [OK  ] must_exist: Device.Firewall.<X_SDMC_>Security.AccessCtrl - hit in src\core\ubus_enable_telnet.py
+  [OK  ] must_not_exist: 0.0.0.0 - absent from code lines of src/core/tftp_transport.py,src/core/telnet_transport.py
+
+FAILED: 1 check(s) failed
+powershell.exe : Baseline failed; packaging is blocked
+所在位置 行:4 字符: 1
++ & powershell -NoProfile -ExecutionPolicy Bypass -File build_line_chec ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Baseline failed; packaging is blocked:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+At F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\build_line_check_assistant.ps1:94 char:32
++ ... LASTEXITCODE -ne 0) { throw "Baseline failed; packaging is blocked" }
++                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Baseline failed; packaging is blocked:String) [], RuntimeException
+    + FullyQualifiedErrorId : Baseline failed; packaging is blocked
+ 

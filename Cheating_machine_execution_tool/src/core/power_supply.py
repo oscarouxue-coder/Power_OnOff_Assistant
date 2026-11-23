@@ -53,6 +53,7 @@ class ProgrammablePowerSupply:
         serial_factory: SerialFactory = serial.Serial,
         sleep_fn: Callable[[float], None] = time.sleep,
         on_output: OutputCallback | None = None,
+        on_write_attempt: Callable[[], None] | None = None,
     ) -> None:
         normalized_port = port.strip().upper()
         if not re.fullmatch(r"COM\d+", normalized_port):
@@ -64,6 +65,7 @@ class ProgrammablePowerSupply:
         self._serial_factory = serial_factory
         self._sleep = sleep_fn
         self._on_output = on_output
+        self._on_write_attempt = on_write_attempt
         self._serial: SerialPort | None = None
         self._host_resource_lock = None
 
@@ -161,6 +163,8 @@ class ProgrammablePowerSupply:
     def _write_frame(self, frame: bytes, action: str) -> None:
         if self._serial is None:
             raise PowerSupplyError("程控电源串口未打开。")
+        if self._on_write_attempt is not None:
+            self._on_write_attempt()
         try:
             written = self._serial.write(frame)
         except Exception as exc:

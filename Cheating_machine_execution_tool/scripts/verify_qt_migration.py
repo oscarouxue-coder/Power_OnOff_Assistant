@@ -10,6 +10,17 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = (
+    'test_qt_wizard_recovers_typed_duts_prepares_and_upgrades_untyped_project',
+    'test_qt_wizard_saves_selected_field_feed_sources_and_keeps_legacy_defaults',
+    'test_qt_model_presets_derive_saved_plans_and_apply_to_recovered_creation_drafts',
+    'test_qt_device_resource_details_follow_real_leases_and_unresolved_protection',
+    'test_qt_aging_history_pages_and_exports_only_the_bound_batch',
+    'test_qt_switch_preserves_reported_progress_and_separates_health_sources',
+    'test_qt_dut_presence_displays_explicit_device_evidence_and_history',
+    'test_qt_structured_archive_filters_identity_pages_and_drops_late_receipts',
+    'test_progress_animation_reuses_transitions_and_stops_when_hidden',
+    'test_project_status_is_consistent_across_navigation_cards_table_and_detail',
+    'test_component_showcase_progress_states_controls_and_native_layout',
     'test_qt_monitor_confirms_only_checked_project_channels',
     'test_qt_manual_update_uses_verified_download_and_waits_for_cancel_cleanup',
     'test_qt_device_management_shows_readonly_inventory_and_active_workspace_leases',
@@ -47,6 +58,9 @@ REQUIRED = (
     'test_qt_parameter_window_real_preflight_cancel_and_safe_stop',
     'test_qt_dut_and_parameter_writer_share_project_login_draft',
     'test_live_logs_apply_batches_at_capacity_without_rebuilding_document',
+    'test_global_log_filter_pins_project_identity_across_navigation_and_close',
+    'test_qt_navigation_opens_saved_template_sources_and_cached_devices',
+    'test_overview_metrics_and_filter_follow_project_identity_and_latest_evidence',
     'test_qt_full_upgrade_logs_are_readonly_and_close_with_engine',
     'test_qt_full_upgrade_without_power_requires_manual_restart_acknowledgement',
     'test_qt_firmware_preview_cancel_and_safe_stop_survive_window_reopen',
@@ -60,7 +74,13 @@ REQUIRED = (
     'test_qt_dut_confirmation_query_and_responsive_layout',
     'test_qt_dut_close_switch_reopen_and_stop_wait_for_original_job',
     'test_existing_workspace_receives_open_request_without_second_gui',
+    'test_feishu_sdk_repair_is_opt_in_and_requests_safe_close',
+    'test_qt_history_requests_safe_stop_only_after_local_confirmation',
+    'test_qt_controlled_extension_preview_starts_unchecked_and_approves_only_reviewed_hash',
+    'test_qt_feishu_automatic_notifications_require_local_confirmation',
+    'test_platform_credential_dialog_masks_secret_and_saves_only_after_confirmation',
     'test_native_adapter_maps_real_windows_widget',
+    'test_qt_repairs_restart_only_after_worker_and_single_instance_are_closed',
     'test_native_adapter_rejects_missing_scope_wrong_thread_and_dialog',
     'test_close_waits_for_actual_worker_cleanup',
     'test_native_new_project_dialog_calls_original_store_and_switches_without_tasks',
@@ -134,8 +154,8 @@ def main(argv=None):
     if errors:
         print('\n'.join(errors))
         return 1
-    sys.path.insert(0, str(ROOT / 'tests'))
-    from tk_test_windows import run_gui_child
+    sys.path.insert(0, str(ROOT))
+    from scripts.gui_test_process import run_gui_child
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     results = []
@@ -145,7 +165,8 @@ def main(argv=None):
         env = dict(os.environ, QT_SCALE_FACTOR=scale, QT_QPA_PLATFORM='windows',
                    DUTPILOT_QT_CAPTURE_DIRECTORY=str(directory), PYTHONFAULTHANDLER='1')
         try:
-            result = run_gui_child([str(interpreter), str(ROOT / 'scripts/run_tests.py'), 'qt_workbench_probe', '-v'],
+            result = run_gui_child([str(interpreter), str(ROOT / 'scripts/run_tests.py'), 'qt_workbench_probe',
+                                    'qt_project_wizard_probe', 'qt_typed_status_probe', '-v'],
                 framework='qt', native_render=True, cwd=str(ROOT), timeout=NATIVE_TIMEOUT_SECONDS,
                 capture_output=True, text=True, encoding='utf-8', env=env)
             text = result.stdout + '\n' + result.stderr

@@ -1,0 +1,23 @@
+{
+  "scale": "1",
+  "passed": true,
+  "tests": 108,
+  "missing": [],
+  "evidence": {
+    "passed": true,
+    "managed_windows": 1908,
+    "violations": [],
+    "isolation": "private_desktop",
+    "desktop": "DUTPilot_render_ae5ba68e2d144b27a0d5ca90cd4fb717",
+    "qt": {
+      "passed": true,
+      "managed_windows": 1908,
+      "violations": [],
+      "isolation": "private_desktop",
+      "desktop": "DUTPilot_render_ae5ba68e2d144b27a0d5ca90cd4fb717",
+      "framework": "qt",
+      "platform": "windows"
+    }
+  },
+  "inputs_matched": true
+}

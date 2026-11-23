@@ -6,7 +6,7 @@ def projects():
     selected = {1, 2, 7}
     channels = tuple(ChannelView(n, 'running' if n in selected else 'disabled',
         68 if n in selected else None, 100 if n in selected else None,
-        f'VLAN{115+n}', f'COM{15+n}') for n in range(1, 17))
+        f'VLAN{115+n}', f'COM{15+n}', selected=n in selected) for n in range(1, 17))
     config = (
         ('基础参数', (('程控电源串口', 'COM102'), ('样机管理IP', '192.168.1.1'), ('运行通道', '3 / 16'))),
         ('网络与 VLAN', tuple((f'channel_{n}', f'VLAN{115+n}') for n in (1, 2, 7))),

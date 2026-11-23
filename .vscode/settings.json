@@ -1,5 +1,5 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}/.venv_serial_upgrade/Scripts/python.exe",
+  "python.defaultInterpreterPath": "${userHome}/AppData/Local/LineCheckAssistant/qt-dev-py39/Scripts/python.exe",
   "python.terminal.executeInFileDir": true,
   "git.ignoreLimitWarning": true
 }

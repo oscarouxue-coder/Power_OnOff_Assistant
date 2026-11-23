@@ -38,10 +38,10 @@ class TransportHistoryMonitor:
                 if previous:
                     elapsed = now - previous[0]
                     row["history_bytes_per_second"] = (row["history_bytes"] - previous[1]) / elapsed if elapsed > 0 else None
-                    if (row["received_bytes"] > previous[1] and row.get("log_file_bytes") == previous[2]
+                    if (row["received_bytes"] > previous[3] and row.get("log_file_bytes") == previous[2]
                             and row["pending_rx_chars"] == 0 and not row["closed"] and row.get("log_path")):
                         row["write_status"] = "possible_write_stall"
-                self.previous[identifier] = (now, row["history_bytes"], row.get("log_file_bytes"))
+                self.previous[identifier] = (now, row["history_bytes"], row.get("log_file_bytes"), row["received_bytes"])
                 if row.get("final"):
                     key = row["protocol"] + ":" + row["endpoint"]
                     self.closed_received[key] = self.closed_received.get(key, 0) + row["received_bytes"]
@@ -70,7 +70,7 @@ class TransportHistoryMonitor:
         report.update(timestamp=datetime.now().astimezone().isoformat(), elapsed_seconds=now-self.started,
                       pid=self.process.pid, rss_bytes=self.process.memory_info().rss,
                       disk_free_bytes=disk_free, children=children, closed_received_bytes=dict(self.closed_received),
-                      note="Read-only observations; receive count is derived from append-only memory history. File size includes text metadata; flush success and byte fidelity are not proven.")
+                      note="Receive count includes serial bytes delivered by the driver. History bytes measure the resident window. Text file size includes metadata and does not verify flush or byte fidelity.")
         return report
 
     def start(self):

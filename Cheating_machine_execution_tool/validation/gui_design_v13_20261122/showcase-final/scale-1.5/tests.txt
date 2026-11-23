@@ -1,0 +1,8 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_a3f33fdf97624384a3d556d8a7e5a066'}
+test_component_showcase_progress_states_controls_and_native_layout (qt_workbench_probe.ComponentShowcaseTests) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 1.591s
+
+OK

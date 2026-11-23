@@ -1,0 +1,18 @@
+{
+  "python": "3.9.10",
+  "PySide6-Essentials": "6.8.3",
+  "sha256": {
+    "run_dutpilot_qt.py": "7b43588877851e3faf93c36532a31554272d1765900a320c9ee5e3b802b50688",
+    "src/ui/qt/application.py": "8d994dde059412c495e30e0cdae487c1de386399112aace3b955b95eda3981e2",
+    "src/ui/qt/theme.py": "a897dcb84ac665eb476373d35982a4264423a8b3a7fd6de1b728e85dd6f2ebf8",
+    "src/ui/qt/progress_widgets.py": "ad0629bd53c8b41ead0b6b46800e3fca791a3f141509dba39b20dde199fc3026",
+    "src/ui/qt/showcase_components.py": "acdac14ea301e93d6ec3f3d3d938625f41ae7ea2e99df6f0d051ffed46e9a48e",
+    "src/ui/qt/component_showcase.py": "d680cda8ca18f7ed52124cb5b526e9ba8b910b8893c8fcf3a96b2b3365006e0d",
+    "tests/qt_workbench_probe.py": "6a2b08bf51762263ce958bd157eed716cc2cc292b4b782904f834f1f8ad5bac7",
+    "tests/test_qt_migration_contract.py": "467db6b623cdb8d6177dc8c91bf79cb2e6eccac181e4610c40a64661d8757522",
+    "scripts/verify_qt_migration.py": "2f13dccf32e88b9f0a1e02ca3d9233f4879a0882bacb704e6235181701bb287d",
+    "scripts/verify_capability_coverage.py": "03febdd0d208da78803aa89dba1215200da5f99e4971276530b1097e0f61dd76",
+    "scripts/capability_gui_actions.json": "2e5f6e729a5ac3f273aa75ab238745e73c81edecad436e90b88e166796006612",
+    "scripts/verify_baseline.py": "6a3cdd3e3120b3d41fb483934e31a8489d6365150c7ff5315745da8834db6c45"
+  }
+}

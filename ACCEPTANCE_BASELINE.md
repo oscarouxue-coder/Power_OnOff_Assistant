@@ -26,7 +26,7 @@ python scripts\verify_baseline.py
 
 ### 1.1 入口、运行与打包
 
-- 入口：`Cheating_machine_execution_tool/run_line_check_assistant.py` → `line_check_assistant.app.main()`
+- 当前唯一产品源码入口为 `Cheating_machine_execution_tool/run_dutpilot_qt.py`，飞书 SDK 修复后的源码重启也使用此入口。旧 Tk 入口及窗口条款按各自验收日期保留，当前使用边界见 §2.19。
 - 依赖以 `requirements.txt` 为准；除主程序原有 `pyserial / tftpy / requests / openpyxl / xlrd` 外，第7项旧业务无 GUI 运行还需 `requests-toolbelt / paramiko / ping3 / pywifi / configobj / psutil`（许可证清单见 `THIRD_PARTY_NOTICES.md`）
 - 打包：`powershell -NoProfile -ExecutionPolicy Bypass -File .\build_line_check_assistant.ps1` → 单文件`dist\DUTPilot.exe`、完整目录`dist\DUTPilot_portable\`和可搬运的`dist\DUTPilot_portable.zip`
 - 标准精简构建统一执行`build_line_check_assistant.ps1`：自动准备仓库外CPython3.9.10 x64环境，按`requirements-build.txt`锁定依赖与PyInstaller5.10.1，检查隔离/精确版本/额外依赖和NumPy/lxml/PyQt5缺失，再执行完整基线后使用可迁移spec打包；固定排除NumPy/OpenBLAS、lxml、PyQt5并禁用UPX。环境或门禁失败不得回退全局环境或其它配置。`-CheckOnly`只准备/检查/跑基线，不构建EXE；路径均从脚本位置推导，输出/中间目录只允许在项目dist/build内。跨电脑步骤见根README；每个新包仍需实际EXE/PYZ关键模块、原生依赖、Tcl/Tk四份布局及便携ZIP/哈希检查。
@@ -692,9 +692,23 @@ python scripts\verify_baseline.py
 - **配置与任务**：草稿、保存版本、任务快照和历史分离；保存失败保留旧版本与当前草稿。切换不重建配置或停止任务，运行中保存不改变已准入任务的配置。预备测试保留原明确确认、当前页面快照语义。
 - **保护边界**：GUI/AI共用业务service及主机资源保护；不同项目不因同进程重入绕过串口、电源、网卡GUID/别名、OLT和传输端点保护。未知结果不重放，核实须保留真实负责人依据；主机保护不可用时设备任务不放行。保留原源IP、并行上限、设备命令、Boot/TFTP/刷写/停止和PASS/FAIL规则。
 - **AI与远程**：模型凭据统一在当前用户加密保存，项目选择、会话、权限和Job独立；平台单连接明确路由到本地允许的项目，审批/回复与原项目关联。原多实例身份/签名协议/远程ASK范围保留；项目接入授权不由AI生成。历史导入不恢复临时操作或重新执行旧任务。
-- **兼容与交付**：旧配置/旧AI原库保留，`--legacy-single-project`维持原入口；继续便携ZIP，不自动构建或运行EXE。相关自动化结果见本轮DEVELOPMENT_LOG；旧设备验收仅覆盖旧范围，不替代新工作区复验。
+- **兼容与交付**：旧配置/旧AI原库保留，原单项目目录通过 Qt 项目菜单导入；继续便携ZIP，不自动构建或运行EXE。相关自动化结果见本轮DEVELOPMENT_LOG；旧设备验收仅覆盖旧范围，不替代新工作区复验。
 
 ### 2.19 Qt工作台迁移检查点（2026-11-18）
+
+**2026-11-24 Tk 退役阶段，源码已实现，平台复验待确认。** 本机 Qt 支持保存钉钉/飞书应用配置、群绑定、直连启停、飞书试发及自动挂测通知、源码 SDK 修复和受控扩展审阅。保存及绑定完成后接入继续停用。启用、试发及模板登记均继续使用本机明确确认和原服务授权。[退役核对](docs/TK_RETIREMENT_AUDIT.md)
+
+**2026-11-24 启动与交付边界**。Qt 为唯一产品工作台。`run_dutpilot_qt.py` 沿用项目文件、网关槽位校验及单实例保护，旧启动脚本已移除。Tk 保留源码及回归。以下历史阶段的默认入口以当时记录为准。
+
+**型号模板、资源声明及历史总览（源码已实现，待现场验收）**。型号模板共享已保存项目中的型号、测试类型、选做准备和测试计划。逐 DUT 的 ADB 声明进入该项目运行快照，异常退出继续保护资源。已结束的开关机批次从原通道回执恢复总览。[隔离复验](Cheating_machine_execution_tool/validation/gui_resources_presets_20261122/REPORT.md)
+
+**逐 DUT 老化状态（源码已实现，待现场验收）**。在线与离线使用本批次订阅的设备观测。停报后保留最后一次在线心跳，当前状态回到未知。以同一台 DUT 前后启动标识不一致记录已观察到的启动变化，保留采集端给出的运行时长及时间戳。[来源和用例](Cheating_machine_execution_tool/validation/gui_dut_presence_20261122/REPORT.md)
+
+**V1.3.x GUI 升级现场验收（已确认验收，2026-11-23）**。项目负责人确认本轮 Qt V1.3.0 候选通过，验收范围包括目标 Windows 与旧项目、系统 DPI 与多屏、开关机逐 DUT 500 轮、语音及 LAN 48 小时专项、常温全业务老化 7 天和 24/72 小时无人值守。[本批现场确认与候选身份](Cheating_machine_execution_tool/validation/gui_guidelines_20261123/REPORT.md#现场验收)
+
+**核心验收行为**。两类项目共用逐 DUT 准备核验，分别使用开关机及持续老化 Job。开关机记录批次启动、通道上下电和回执、已完成轮次及终态。持续老化记录启动、自动和人工观测的来源及时间、每日核验与期末证据。绑定网卡的 Ping 由实际采样计数。连续业务时长依据实际业务观测区间，手动日检单列为检查记录。工作区按项目、DUT 和运行关联记录。现场复验按所选 DUT、OLT、电源、串口及网卡核对单/多/16 通道的实际阶段、故障、停止和最后所有者释放，长期运行留存 24/72 小时日志及采样。[阶段验证](Cheating_machine_execution_tool/validation/gui_upgrade_execution_20261122/REPORT.md) · [现场记录方法](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/long_run_acceptance/README.md)
+
+现场采集文件只为该 Job 中显式订阅的 DUT/业务提供证据。延迟、重复与断流按源事件及时间核对，历史保留接收时间；设备实际健康和连续通话等由对应采集端及现场签认。[现场采集接入口复验](Cheating_machine_execution_tool/validation/gui_aging_feed_20261122/REPORT.md)
 
 - 已实现未现场验收。Qt 当前本机单通道会话仅可被动读取该项目已打开的目标串口。沿用原监控所有者，读取上限 64 KiB，执行时再次核对当前目标及批次。历史报告与远程来源保持原边界。[模拟控制面验证](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/local_serial_chat/REPORT.md)
 
@@ -799,11 +813,12 @@ python scripts\verify_baseline.py
 - **Qt 留存报告分析**。本机报告会话复用原发送、回复、证据检索、导入和停止。报告会话只分析留存材料，不读当前批次证据或开放设备和本机执行。模型通过原工具能力验证后提供会话内证据检索与人工追问。真实模型待验收。[Qt 留存报告分析](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/AI_REPORT_ANALYSIS_QT_REPORT.md)
 - **Qt 共用案例库**。按本机用户共享，人工确认后保存五项字段及来源报告，修订、启停和删除沿用原共用库的版本保护与修订记录。来源报告保留，旧版本写入被拒绝后保留表单输入。[Qt 共用案例迁移记录](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/AI_CASES_QT_REPORT.md)
 - **Qt 最近项目（自动化回归通过，待现场验收）**。沿用原工作区最近记录、路径和顺序，打开或切换项目走原文件入口。移除条目后项目保持打开，原文件保留。损坏列表启动时提示并保留原文件。[最近项目报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/RECENT_PROJECTS_QT_REPORT.md)
+- **Qt 工作区会话恢复（源码隔离验证通过，待现场验收）**。正常退出保存仍打开的项目及当前选择。下次启动按原顺序恢复，每项须通过项目身份与写入占用检查。恢复项目视图时设备任务须继续由操作员确认启动。
 - **Qt 导入接入配置选择（自动化回归通过，待现场验收）**。钉钉和飞书候选经本机选择后，使用原存储保存到当前工作区。候选变化、占用和启用状态异常均保留已有配置。原平台候选凭据和远程授权范围分别保留。[导入接入配置报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/IMPORTED_CONNECTIONS_QT_REPORT.md)
 - **Qt V1.3.0 Windows 目录验证包（静态验包通过，异机待验收）**。锁定 Qt 环境完整基线执行 3,185 项，命中 239 项指定用例。实际 EXE/PYZ、PE 资源、Qt 核心动态库及 Windows 平台插件、目录与 ZIP 一致性及 SHA256 已核验。打包电脑未运行新 EXE。[Windows Qt 目录包报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/QT_DIRECTORY_BUILD_REPORT.md)
 - **Qt 检查更新（§2.15）**。全局设置手动触发原正式版服务，显示版本、日期、说明和大小。接续保存选择、默认取消覆盖及原 ZIP/SHA256 校验，再打开所在目录。独立更新线程与项目收尾共同决定退出。真实发布和目标机复验待完成。[Qt 检查更新](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/APP_UPDATE_QT_REPORT.md)
 - **Qt 配置草稿恢复（自动化回归通过，待现场验收）**。六标签未提交的原始输入按项目身份、配置版本及当前 Windows 账号加密。恢复只回填窗口，正式配置经原校验后保存。版本变化时保留草稿并提示。既有 Tk 页面草稿保持原格式和恢复入口。[配置草稿恢复报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/EDITOR_RECOVERY_QT_REPORT.md)
-- **Qt 单次自动上/下电（模拟回归通过，待现场验收）**。本机确认冻结项目配置版本、方向、通道和本次电源口。复用原单次电源服务、Job 和资源保护。模拟验证仅发送所列通道的原指令，间隔 1 秒。空电源口只记录人工重启确认，部分写入失败保留结果未知与资源保护。[单次电源控制报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/SINGLE_POWER_QT_REPORT.md)
+- **Qt 单次自动上/下电（模拟回归通过，待现场验收）**。本机确认冻结项目配置版本、方向、通道和本次电源口。复用原单次电源服务、Job 和资源保护。模拟验证仅发送所列通道的原指令，间隔 1 秒。空电源口只记录人工重启确认。首次尝试写入前失败时记录为「失败」，任务收尾后释放资源。开始尝试写入后失败时保留「结果未知」与资源保护。[单次电源控制报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/SINGLE_POWER_QT_REPORT.md)
 - **当前待迁移与验收边界**。AI 诊断与远程管理、其余工具和可靠性验证详见[迁移进度表](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/MIGRATION_PROGRESS.md)。持续开机全业务老化待接入。原业务范围的人工、真实设备、长期挂测和目标电脑交付验收仍待完成。
 
 - **2026-11-19 Qt 批量写参检查点（自动化验证，未现场验收）**：原参数表、预检、本机目标确认、独立写参与停止接入。表格内容、配置版本和通道变更阻止旧确认继续执行。复用原写入、读回及工厂模式清理。[阶段报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/PARAMETER_WRITER_REPORT.md)
@@ -819,6 +834,16 @@ python scripts\verify_baseline.py
 - **Qt 组合候选与旧项目（2026-11-21，本机模拟、原生及静态验包通过）。** 两份旧项目副本的配置、日志与未知记录通过复验。归档目录清空后，两个翻页按钮均停用。基线 3,267 项，指定 266 项全部命中，原生三档各 100 项通过。真机、平台及长挂保留待现场验收。[本批证据](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/session2_integration/REPORT.md)
 
 ## 3. 待确认 / 疑似过时内容
+
+本轮 Qt GUI 升级的现场结论见 §2.19。下列条目继续记录各独立专项和历史候选各自的复验范围。
+
+- **Qt 机器人应用、飞书 SDK 和受控扩展（§2.19）**。在目标 Windows 源码版核对加密凭据、实际群身份、绑定取消和超时、群和单聊的本机授权及撤权。确认飞书试发后分别核对平台受理与群收到，再核对自动通知停用及挂测继续。缺包时在隔离环境核对取消、安装失败和安全重启。受控扩展通过原审阅哈希登记，核对取消、停用和恢复。
+
+- 在真实串口长期采集时记录接收量、Windows 临时盘可用空间、内存和线程数。核对升级标记跨读取块的原行为、文件尾行、旧游标读取、关闭后临时文件清理以及存储失败提示。短时 8 MiB 模拟测量及门禁见[串口长挂验证](Cheating_machine_execution_tool/validation/gui_v13x_candidate_20261122/REPORT.md)。
+
+- 目标机用两个独立项目验证型号模板、逐 DUT 绑定与资源明细。使用真实 OLT、PON 和 ADB 标识复核争用及人工释放，重开已结束批次对照原逐台轮次和起止时间。
+
+- 在同一全业务老化批次对选中的 DUT 实测在线、断电、重新启动与采集端断流，核对现场原始时间、启动标识、运行秒数、最后在线时间和导出记录；并用另一台 DUT 核对事件归属。
 
 - Qt 组合交付的干净 Windows 解压启动、旧项目、真实 DUT/OLT/平台、每台 500 次、24/72 小时及持续开机 7 天按[现场验收表](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/session2_integration/ACCEPTANCE.md)由负责人分别记录。
 
@@ -851,8 +876,6 @@ python scripts\verify_baseline.py
 
 - 当前 Qt 候选待在目标 Windows 机验证便携包及旧项目，使用专用 DUT 验证原上下电时序、结果和停止释放，并在指定网关与模型环境核对人工审批及撤销。持续开机全业务老化还缺独立执行源。24/72 小时、每台 500 次上下电及 7 天老化的现场结论分别登记。[候选报告](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/current_candidate_review/REPORT.md)
 
-- **Qt 迁移现场交接（§2.19，负责人回复待现场）**。在清洁目标 Windows 机验证迁移目录包、旧工程副本、实体多屏和系统 DPI。实验室按已分配的 DUT、OLT、电源、串口及网卡核对单/多/16 通道的实际阶段、已完成轮次、故障、停止及最后所有者释放，留存 24/72 小时过程日志及采样。业务验收口径已明确为开关机每台 500 次、全业务老化满 7 天并核对各业务证据。[现场记录方法](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/long_run_acceptance/README.md)
-
 - **Qt 串口与 DUT 窗口状态（§2.3 / §2.19）**。目标机核对旧项目导入后的窗口大小和位置、重开、关闭项目及退出时保存，再复验系统 DPI 动态变化、任务栏与实体多屏切换。串口终端需从任务栏点击恢复，并切换其他应用核对置顶及取消置顶的显示层级。
 - **Qt DUT 各页状态区（§2.19）**。目标机用旧项目核对各页高度、拖动、缩窗和重开，验证不同系统缩放下底部操作可达。
 - **Qt DUT 与写参共用登录输入（§2.19）**。实际项目核对两窗回显、显式保存、写参前确认与真实设备登录。现场结果由负责人提供。
@@ -868,6 +891,7 @@ python scripts\verify_baseline.py
 - **Qt ONU（§2.19）**。待复验涉及两种 OLT 型号的源地址、连接、PON 范围、逐台 ID、注册、已注册删除、独立保存、回读和停止，以及 C300 单台离线清理重试。输入桌面可校验后须重新运行三档原生套件。真实设备验收由负责人确认。
 - **Qt Windows 目录包（§2.19）**。目标电脑需完整解压后在无开发环境的 Windows 10/11 验证启动、DPI、原数据目录、旧项目导入与安全退出，再按原验收范围核对实际设备和长期挂测。
 - **Qt 总览系统状态（§2.19）**。在已确认范围的长挂验收中核对 GUI 回调间隔、工作区响应、日志追加及归档可回查、资源租约释放、积压与实际任务结果。系统 DPI 与实体多屏仍需人工复验。
+- **Qt 工作区会话恢复（§2.19）**。待目标机核对正常退出、多项目重开顺序、选中位置和不可用项目的跳过提示。
 - **Qt 通道结果与本次 WiFi 日志（§2.19）**。目标机核对 Windows 文件关联和实际试验、续跑生成的两类日志，验证项目切换及文件缺失的反馈。
 - **Qt 历史批次结果文件（§2.19）**。目标机重启后核对历史任务、原快照、通道及关联程序，核对原批次的续跑文件。缺少任务或运行记录的旧文件从原目录核对。
 - **Qt 核实未知任务（§2.19）**。现场验收时分别核对普通 GUI 保护和持久化业务任务的独立入口、异常退出后的原保护、人工证据、选定保护解除及新任务独立确认。缺少保护或处于准备、排队状态的旧 GUI 历史，以及异常收尾路径待复验。
@@ -894,7 +918,7 @@ python scripts\verify_baseline.py
 - **Qt 单次预备测试（§2.14 / §2.19）**。现场核对未保存草稿、已选通道、`>` 设备的登录后命令、每条一次、原成功/失败颜色及主日志、未校验、断连和安全停止。现有 Tk 单次预备测试现场结论适用于原入口。
 
 - **Qt自动开关机控制（§2.19）**：负责人按原设备范围对比Tk/Qt相同配置的单/多通道、正常完成/失败/停止、DUT/串口/电源异常、真实上下电时序、任务运行与停止中切页、退出等待和24/72小时；原生三档显式Qt缩放截图不能替代系统DPI或现场验收。正常设备测试继续Tk，Qt其它模块未迁移状态保持。
-- **Qt 单次自动上/下电（§2.19）**。现场核对本次选口、通道与方向、取消零下发、人工重启确认、单通道与多通道 1 秒间隔、串口占用、断连后的未知状态及实际资源收尾。
+- **Qt 单次自动上/下电（§2.19）**。现场核对本次选口、通道与方向、取消零下发、人工重启确认、单通道与多通道 1 秒间隔、串口打开被拒绝时的失败与释放、尝试写入后断连时的未知状态及实际资源收尾。
 
 - **Qt原型与真实项目管理（§2.19）**：负责人用独立Qt源码入口核对总览/详情/多项目、卡片/列表、搜索/筛选/排序、菜单/右键、项目保存/重开/dirty确认、日志与安全关闭；正常设备测试仍用Tk。系统DPI100/125/150%、实体多屏、真实设备/平台/模型及24/72小时、完整业务覆盖和Qt部署继续待验收。下述Phase 0初始自动化失败已修复，历史证据保留，不再作为当前基线未通过结论。
 

@@ -5,8 +5,8 @@ import tempfile
 import threading
 import time
 import unittest
-from unittest.mock import patch
-from src.models.workbench_presentation import LogView
+from unittest.mock import Mock, patch
+from src.models.workbench_presentation import LogView, matches_project_filter
 from src.services.qt_host_inventory import HostInventoryReading
 from src.services.qt_workspace_adapter import QtWorkspaceAdapter
 
@@ -54,6 +54,389 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         if not self.adapter.closed.is_set():
             self.adapter.begin_close({p.project_id: 'discard' for p in self.projects})
             self.assertTrue(self.adapter.wait_closed(5))
+
+    def restart_workspace(self, selected=''):
+        self.adapter.begin_close(selected_project=selected)
+        self.assertTrue(self.adapter.wait_closed(5))
+        self.results.clear()
+        self.adapter = QtWorkspaceAdapter(SOURCE, directory=self.root / 'workspace')
+        self.wait_for(lambda: (0, 'ready') in self.results)
+        return self.results[0, 'ready'].project_id
+
+    def test_feishu_repair_holds_admission_until_finished_and_released(self):
+        from src.services.feishu_dependency_repair import FeishuDependencyRepair
+
+        started, release = threading.Event(), threading.Event()
+        lease = Mock()
+
+        def install(root, emit):
+            emit('[飞书依赖] 模拟校验')
+            started.set()
+            if not release.wait(5):
+                raise RuntimeError('测试超时')
+
+        def repair(root, gate):
+            return FeishuDependencyRepair(root, gate, installer=install, lease_factory=lambda _: lease)
+
+        with patch('src.services.qt_feishu_repair.find_spec', return_value=None), \
+                patch('src.services.qt_feishu_repair.FeishuDependencyRepair', side_effect=repair), \
+                patch('src.services.feishu_dependency_repair.source_environment', return_value=SOURCE):
+            self.command('feishu_repair_start')
+            try:
+                self.assertTrue(started.wait(2))
+                self.assertIn('等待重启', self.command('create', self.root / 'project', 'project', expected_error=True).error)
+                self.command('feishu_repair_release', expected_error=True)
+            finally:
+                release.set()
+            self.wait_for(lambda: self.adapter.feishu_repair_status()[1] is True)
+            self.assertTrue(self.adapter._service.maintenance.active)
+            lease.close.assert_not_called()
+            self.command('feishu_repair_release')
+        self.assertFalse(self.adapter._service.maintenance.active)
+        lease.close.assert_called_once()
+        self.assertTrue(self.command('create', self.root / 'project', 'project').project_id)
+
+    def test_feishu_repair_refuses_busy_workspace_before_install(self):
+        with patch('src.services.qt_feishu_repair.find_spec', return_value=None), \
+                patch.object(self.adapter, '_feishu_repair_busy', return_value=True), \
+                patch('src.services.feishu_dependency_repair.source_environment') as source_environment:
+            rejected = self.command('feishu_repair_start', expected_error=True)
+        self.assertIn('结束当前任务', rejected.error)
+        source_environment.assert_not_called()
+        self.assertFalse(self.adapter._service.maintenance.active)
+
+    def test_platform_configuration_saves_with_original_stores_without_starting_transport(self):
+        from src.services.message_push_config_service import MessagePushConfigService
+
+        project = self.command('create', self.root / 'project', '接入测试项目').project_id
+        context = self.adapter._service.projects.opened[project]
+        push = MessagePushConfigService(context.config_dir / 'config.ini')
+        fixture_secret = 'only-use-inside-the-test'
+        webhook = 'https://oapi.dingtalk.com/robot/send?access_token=fixture'
+        values = {
+            'dingtalk': dict(client_id='fixture', client_secret=fixture_secret, robot_code='robot',
+                            webhook=webhook, secret='signature', ai_card_template_id='template'),
+            'feishu': dict(app_id='cli_fixture', app_secret=fixture_secret),
+        }
+        for kind, draft in values.items():
+            with self.subTest(kind=kind):
+                previous = self.command('platform_configuration_open', project, kind).payload
+                pool = self.adapter._service.platforms[kind]
+                with patch.object(pool, 'add') as connect:
+                    reply = self.command('platform_configuration_save', project, kind,
+                                         previous['revision'], draft).payload
+                connect.assert_not_called()
+                stored = self.adapter._service.platform_config(kind).load()
+                secret_key = 'client_secret' if kind == 'dingtalk' else 'app_secret'
+                self.assertEqual(stored[secret_key], fixture_secret)
+                self.assertEqual(reply['values'][secret_key], '')
+                self.assertFalse(stored['enabled'])
+                self.assertNotIn(fixture_secret, str(reply))
+                self.assertIn('已变化', self.command('platform_configuration_save', project, kind,
+                    previous['revision'], draft, expected_error=True).error)
+        self.assertEqual(push.load()['webhook'], webhook)
+        self.assertTrue(next(row for row in self.projects if row.project_id == project).dirty)
+        self.assertNotIn(fixture_secret, '\n'.join(entry.message for entry in self.logs))
+
+    def test_platform_configuration_refuses_save_while_gateway_mode_is_selected(self):
+        project = self.command('create', self.root / 'project', '接入测试项目').project_id
+        self.adapter._service.gateway_slot = 3
+        opened = self.command('platform_configuration_open', project, 'feishu').payload
+        self.assertIn('统一接入', opened['blocked'])
+        result = self.command('platform_configuration_save', project, 'feishu', opened['revision'],
+                              dict(app_id='cli_fixture', app_secret='fixture'), expected_error=True)
+        self.assertIn('统一接入', result.error)
+        self.assertFalse(self.adapter._service.platform_config('feishu').path.exists())
+
+    def test_platform_binding_checks_the_candidate_and_leaves_direct_access_disabled(self):
+        from test_dingtalk_remote import incoming as dingtalk_event
+        from test_feishu_remote import incoming as feishu_event
+        from src.services.workspace_platforms import PooledLease
+
+        class Transport:
+            def __init__(self, *args, **kwargs):
+                self.idle = False
+
+            def start(self):
+                pass
+
+            def begin_close(self):
+                self.idle = True
+
+        project = self.command('create', self.root / 'project', '绑定测试项目').project_id
+        other = self.command('create', self.root / 'second', '另一项目').project_id
+        values = {
+            'dingtalk': dict(client_id='dt-fixture', client_secret='fixture-secret', robot_code='robot1',
+                webhook='https://oapi.dingtalk.com/robot/send?access_token=fixture', secret='', ai_card_template_id=''),
+            'feishu': dict(app_id='cli_app1', app_secret='fixture-secret'),
+        }
+        for kind, draft in values.items():
+            with self.subTest(kind=kind):
+                pool = self.adapter._service.platforms[kind]
+                pool.transport_factory, pool.lease_factory = Transport, PooledLease
+                loaded = self.command('platform_configuration_open', project, kind).payload
+                saved = self.command('platform_configuration_save', project, kind, loaded['revision'], draft).payload
+                binding = self.command('platform_binding_start', project, kind, saved['revision']).payload
+                self.assertTrue(binding['code'])
+                if kind == 'dingtalk':
+                    pool.receive(dingtalk_event('绑定 ' + binding['code']))
+                else:
+                    pool.receive(feishu_event('绑定 ' + binding['code']), 'bot1')
+                candidate = self.command('platform_binding_state', project, kind).payload['candidate']
+                self.assertIsNotNone(candidate)
+                self.command('platform_binding_confirm', other, kind, candidate, expected_error=True)
+                self.command('platform_binding_confirm', project, kind, dict(candidate, group='other'), expected_error=True)
+                store = self.adapter._service.platform_config(kind)
+                self.assertEqual(store.load()['group'], '')
+                self.command('platform_binding_confirm', project, kind, candidate)
+                self.assertEqual(store.load()['group'], candidate['group'])
+                self.assertFalse(store.load()['enabled'])
+                self.assertTrue(pool.idle)
+                self.command('platform_binding_confirm', project, kind, candidate, expected_error=True)
+
+    def test_feishu_test_send_binds_saved_project_and_group_and_returns_the_worker_result(self):
+        from src.services.feishu_notifications import FeishuNotificationService
+
+        project = self.command('create', self.root / 'project', '通知项目').project_id
+        context = self.adapter._service.projects.opened[project]
+        (context.config_dir / 'test_project_config.ini').write_text('[project_info]\nproject_name=确认项目\n', encoding='utf-8')
+        self.command('save', project)
+        store = self.adapter._service.platform_config('feishu')
+        store.save(dict(store.defaults(), app_id='cli_fixture', app_secret='fixture-secret',
+                        group='confirmed-group', corp='tenant', group_name='群'))
+        opened = self.command('platform_configuration_open', project, 'feishu').payload
+        self.assertEqual(opened['trial'], dict(project='确认项目', group='confirmed-group'))
+        api = Mock()
+
+        def notifications(*args, **kwargs):
+            return FeishuNotificationService(*args, **kwargs, api_factory=lambda *credentials: api)
+
+        with patch('src.services.feishu_notifications.FeishuNotificationService', side_effect=notifications):
+            self.command('platform_trial_start', project, 'feishu', opened['revision'],
+                         dict(opened['trial'], group='other'), expected_error=True)
+            api.send_text.assert_not_called()
+            started = self.command('platform_trial_start', project, 'feishu', opened['revision'], opened['trial']).payload
+            self.assertTrue(started['busy'])
+            deadline = time.monotonic() + 5
+            while True:
+                status = self.command('platform_trial_state', project, 'feishu').payload
+                if not status['busy'] or time.monotonic() >= deadline:
+                    break
+                time.sleep(.05)
+            self.assertFalse(status['busy'])
+        self.assertIn('飞书已接受', status['message'])
+        api.send_text.assert_called_once()
+        self.assertEqual(api.send_text.call_args.args[0], 'confirmed-group')
+        self.assertIn('确认项目', api.send_text.call_args.args[1])
+
+    def test_feishu_automatic_notifications_use_original_worker_and_stop_without_stopping_test(self):
+        from src.services.feishu_notifications import FeishuNotificationService
+
+        project = self.command('create', self.root / 'project', '通知项目').project_id
+        context = self.adapter._service.projects.opened[project]
+        (context.config_dir / 'test_project_config.ini').write_text(
+            '[project_info]\nproject_name=确认项目\n', encoding='utf-8')
+        self.command('save', project)
+        store = self.adapter._service.platform_config('feishu')
+        store.save(dict(store.defaults(), app_id='cli_fixture', app_secret='fixture-secret',
+                        group='confirmed-group', corp='tenant', group_name='群'))
+        execution = self.adapter._execution(context)
+        event = dict(type='test_notification', id='automatic-event', channel=4, normal=True)
+        api = Mock()
+        peer = threading.Event()
+        api.send_text.side_effect = lambda *arguments: peer.set()
+
+        def notifications(*args, **kwargs):
+            return FeishuNotificationService(*args, **kwargs, api_factory=lambda *credentials: api)
+
+        with patch('src.services.qt_feishu_notifications.FeishuNotificationService', side_effect=notifications) as make:
+            execution.observe_ai_event(event)
+            make.assert_not_called()
+            current = self.command('platform_configuration_open', project, 'feishu').payload
+            current = self.command('platform_notifications_set', project, 'feishu', current['revision'], True).payload
+            execution.observe_ai_event(event)
+            self.assertTrue(peer.wait(3))
+            current = self.command('platform_notifications_set', project, 'feishu', current['revision'], False).payload
+            execution.observe_ai_event(dict(event, id='after-disable'))
+            self.assertFalse(current['notifications_enabled'])
+            self.assertFalse(execution.closing)
+        api.send_text.assert_called_once()
+        self.assertEqual(api.send_text.call_args.args[0], 'confirmed-group')
+        self.assertIn('通道4', api.send_text.call_args.args[1])
+
+    def test_controlled_extension_review_binds_project_hash_and_local_decision(self):
+        first = self.command('create', self.root / 'first', '原项目').project_id
+        second = self.command('create', self.root / 'second', '其它项目').project_id
+        path = self.root / 'extension.json'
+        manifest = dict(id='fixture_extension', name='查询通道', version='1', description='模拟审阅',
+                        target_capability='channels.list', input_schema=dict(type='object', additionalProperties=False),
+                        arguments={}, bindings={}, allowed_channels=[1])
+        path.write_text(json.dumps(manifest, ensure_ascii=False), encoding='utf-8')
+        preview = self.command('extension_review', first, path).payload
+        self.assertEqual(preview['review']['manifest'], manifest)
+        self.assertFalse(self.command('extension_list', first).payload['rows'])
+        self.command('extension_approve', second, preview['token'], expected_error=True)
+        self.command('extension_cancel', first, preview['token'])
+        self.command('extension_approve', first, preview['token'], expected_error=True)
+        preview = self.command('extension_review', first, path).payload
+        listed = self.command('extension_approve', first, preview['token']).payload
+        row, = listed['rows']
+        self.assertEqual(row['reviewed_sha256'], preview['review']['reviewed_sha256'])
+        self.assertTrue(row['enabled'])
+        self.command('extension_set_enabled', first, row['id'], 'wrong-version', False, expected_error=True)
+        closed = self.command('extension_set_enabled', first, row['id'], row['reviewed_sha256'], False).payload
+        self.assertFalse(closed['rows'][0]['enabled'])
+        self.assertFalse(self.command('extension_list', second).payload['rows'])
+
+    def test_direct_platform_enable_requires_current_local_scope_and_exact_sender_identity(self):
+        from src.services.workspace_platforms import PooledLease
+        from test_feishu_remote import incoming
+
+        class Transport:
+            def __init__(self, *args, **kwargs):
+                self.idle = False
+
+            def start(self):
+                pass
+
+            def begin_close(self):
+                self.idle = True
+
+        project = self.command('create', self.root / 'project', '远程访问项目').project_id
+        other = self.command('create', self.root / 'other', '原授权外的项目').project_id
+        store = self.adapter._service.platform_config('feishu')
+        store.save(dict(store.defaults(), app_id='cli_fixture', app_secret='fixture-secret',
+                        group='confirmed-group', corp='tenant', group_name='目标群'))
+        pool = self.adapter._service.platforms['feishu']
+        pool.transport_factory, pool.lease_factory = Transport, PooledLease
+        opened = self.command('platform_configuration_open', project, 'feishu').payload
+        rejected = self.command('platform_direct_set', project, 'feishu', opened['revision'],
+                                'group', True, expected_error=True)
+        self.assertIn('远程访问范围', rejected.error)
+        self.assertIsNone(pool.transport)
+        self.adapter._service.remote_projects.add(project)
+        applied = self.command('platform_direct_set', project, 'feishu', opened['revision'],
+                               'group', True).payload
+        self.assertTrue(applied['direct']['group'])
+        remote = self.adapter._direct_platforms
+        source = dict(kind='feishu', robot='cli_fixture', corp='tenant',
+                      chat_type='group', group='confirmed-group', sender='member')
+        self.assertTrue(remote.authorized(project, source))
+        self.assertFalse(remote.authorized(other, source))
+        self.assertFalse(remote.authorized(project, dict(source, group='other')))
+        self.assertFalse(remote.authorized(project, dict(source, sender='')))
+        scope = remote.active[project, 'feishu'][1]
+        route = threading.Event()
+
+        def capture(*args, **kwargs):
+            route.set()
+            raise ValueError('模拟路由，不执行')
+
+        with patch.object(scope, 'reply'), patch.object(scope.conversation.router, 'send', side_effect=capture) as dispatch:
+            pool.receive(incoming('项目 ' + project + ' 查看状态', user='member', chat='confirmed-group',
+                                  tenant='tenant', app='cli_fixture'), 'bot1')
+            self.assertTrue(route.wait(3))
+            dispatched = dispatch.call_args.kwargs['source']
+            self.assertEqual(dispatched['group'], 'confirmed-group')
+            self.assertEqual(dispatched['sender'], 'member')
+            pool.receive(incoming('项目 ' + project + ' 查看状态', identifier='other-message',
+                                  chat='not-bound', tenant='tenant', app='cli_fixture'), 'bot1')
+            self.assertEqual(dispatch.call_count, 1)
+        updated = self.command('platform_direct_set', project, 'feishu', applied['revision'],
+                               'p2p', True).payload
+        self.assertTrue(updated['direct']['group'])
+        self.assertTrue(updated['direct']['p2p'])
+        self.command('platform_direct_set', project, 'feishu', updated['revision'], 'p2p', False)
+        self.assertTrue(remote.authorized(project, source))
+        self.adapter._service.remote_projects.remove(project)
+        self.assertFalse(remote.authorized(project, source))
+        self.wait_for(lambda: scope.stop_event.is_set() and pool.idle)
+
+        dingtalk = self.adapter._service.platform_config('dingtalk')
+        dingtalk.save(dict(dingtalk.load(), client_id='client', client_secret='fixture-secret',
+                           robot_code='robot', group='target', corp='corp', group_name='目标群',
+                           webhook='https://oapi.dingtalk.com/robot/send?access_token=fixture'))
+        dt_pool = self.adapter._service.platforms['dingtalk']
+        dt_pool.transport_factory, dt_pool.lease_factory = Transport, PooledLease
+        self.adapter._service.remote_projects.add(project)
+        opened = self.command('platform_configuration_open', project, 'dingtalk').payload
+        started = self.command('platform_direct_set', project, 'dingtalk', opened['revision'],
+                               'group', True).payload
+        principal = dict(kind='dingtalk', robot='robot', corp='corp', group='target', sender='member')
+        self.assertTrue(remote.authorized(project, principal))
+        self.assertFalse(remote.authorized(project, dict(principal, robot='unbound')))
+        self.command('platform_direct_set', project, 'dingtalk', started['revision'], 'group', False)
+        self.assertFalse(remote.authorized(project, principal))
+        self.assertTrue(dt_pool.idle)
+
+    def test_model_template_only_shares_versioned_defaults_with_independent_new_projects(self):
+        profile = {'model': 'AX1', 'test_type': 'power_cycle', 'optional_steps': ['wan'],
+                   'type_config': {'target_cycles': 500}, 'requirements': 'private notes',
+                   'software_version': 'field-build', 'duts': [{'label': 'bench 3', 'hardware_id': 'unit-1'}]}
+        project = self.command('create_typed', self.root / 'source', 'source', profile).project_id
+        view = self.command('wizard_profile_get', project).payload
+        revision = view['saved_revision']
+        saved = self.command('wizard_preset_save', project, revision, 0).payload['presets']
+        defaults = {key: profile[key] for key in ('model', 'test_type', 'optional_steps', 'type_config')}
+        self.assertEqual(saved, [dict(defaults, version=1)])
+        self.assertEqual(self.command('wizard_draft_get').payload['presets'], saved)
+        self.command('wizard_preset_save', project, revision, 0, expected_error=True)
+        independent = self.command('create_typed', self.root / 'new', 'new', defaults).project_id
+        self.command('wizard_profile_save', project, dict(view['profile'], model='ax1',
+                     type_config={'target_cycles': 300}), view['token'])
+        self.command('wizard_preset_save', project, revision, 1, expected_error=True)
+        self.command('save', project)
+        self.command('wizard_preset_save', project, revision, 1, expected_error=True)
+        current = self.command('wizard_profile_get', project).payload
+        updated = self.command('wizard_preset_save', project, current['saved_revision'], 1).payload['presets']
+        self.assertEqual([(r['model'], r['version'], r['type_config']) for r in updated],
+                         [('ax1', 2, {'target_cycles': 300})])
+        copy = self.command('wizard_profile_get', independent).payload['profile']
+        self.assertEqual((copy['type_config'], copy['duts'], copy['software_version'], copy['requirements']),
+                         ({'target_cycles': 500}, [], '', ''))
+        catalog = self.root / 'workspace/project_model_presets.json'
+        catalog.write_text('invalid', encoding='utf-8')
+        damaged = self.command('wizard_profile_get', independent).payload
+        self.assertEqual(damaged['profile'], copy)
+        self.assertTrue(damaged['preset_error'])
+        self.command('wizard_preset_save', project, current['saved_revision'], 2, expected_error=True)
+        self.assertEqual(catalog.read_text(encoding='utf-8'), 'invalid')
+
+    def test_corrupt_typed_history_is_scoped_to_one_project(self):
+        broken = self.command('create_typed', self.root / 'broken', '业务老化', {
+            'test_type': 'service_aging', 'duts': [], 'type_config': {'collectors': ['voice']},
+        }).project_id
+        other = self.command('create', self.root / 'other', '另一个项目').project_id
+        context = self.adapter._service.projects.opened[broken]
+        (context.history / 'service_aging.sqlite3').write_bytes(b'invalid sqlite file')
+        self.command('refresh')
+        projects = {project.project_id: project for project in self.projects}
+        self.assertFalse(projects[broken].can_start)
+        self.assertIn('读取失败', projects[broken].state_text)
+        self.assertTrue(projects[other].can_start)
+
+    def test_dut_offline_and_business_alarm_count_the_affected_device_once(self):
+        from src.services.aging_observation_source import Observation
+        from src.services.service_aging import ServiceAging
+        profile = {'test_type': 'service_aging', 'duts': [{'label': 'A'}, {'label': 'B'}],
+                   'type_config': {'collectors': ['dut_presence', 'iptv'], 'feed_collectors': ['dut_presence', 'iptv']}}
+        identifier = self.command('create_typed', self.root / 'rack', '老化测试架', profile).project_id
+        service = ServiceAging(self.adapter._service.projects.opened[identifier])
+        plan = service.prepare()
+        job = 'rack-run-01'
+        service.history.begin(job, plan, 60)
+        first, second = [dut['dut_id'] for dut in plan['duts']]
+        def observe(dut, collector):
+            event = Observation(identifier, job, dut, collector, collector, time.time(), 'abnormal', '隔离测试')
+            service.history.observe(job, dut, collector, event.outcome, event.evidence, '',
+                                    kind='sample', feed_event=event)
+        observe(first, 'iptv')
+        observe(first, 'dut_presence')
+        self.command('refresh')
+        self.assertEqual(self.projects[0].attention_count, 1)
+        observe(second, 'dut_presence')
+        self.command('refresh')
+        self.assertEqual(self.projects[0].attention_count, 2)
 
     def test_peer_mode_delivers_version_through_project_chat_and_local_approval(self):
         from contextlib import ExitStack
@@ -473,8 +856,10 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         self.adapter._emit('普通工作区记录')
         self.assertIsNone(self.adapter.health_snapshot().task_log_at)
         task_log = LogView('09:10:11', 'INFO', 'p1', '工程', '测试任务记录', 'job-1')
+        self.assertTrue(self.adapter._log_writer.flush())
         with patch.object(Path, 'open', side_effect=PermissionError('synthetic write denial')):
             self.adapter._record(task_log)
+            self.assertTrue(self.adapter._log_writer.flush())
         failed = self.adapter.health_snapshot()
         self.assertIsNotNone(failed.task_log_at)
         self.assertFalse(failed.log_write[1])
@@ -482,6 +867,7 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         self.drain()
         self.assertTrue(any(log.level == 'ERROR' and 'PermissionError' in log.message for log in self.logs))
         self.adapter._emit('写入恢复')
+        self.assertTrue(self.adapter._log_writer.flush())
         recovered = self.adapter.health_snapshot()
         self.assertTrue(recovered.log_write[1])
         self.assertEqual(recovered.log_write_failures, 1)
@@ -489,6 +875,28 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         path = self.root / 'workspace' / 'workspace.log'
         self.assertIn('写入恢复', path.read_text(encoding='utf-8'))
         self.assertNotIn('测试任务记录', path.read_text(encoding='utf-8'))
+
+    def test_update_worker_can_log_after_business_close_and_window_waits_for_disk(self):
+        from src.services.workspace_event_log import read_workspace_events
+        self.adapter.begin_close(update_logs_pending=True)
+        self.assertTrue(self.adapter.wait_closed())
+        entered, release = threading.Event(), threading.Event()
+        write = self.adapter._log_writer._write_text
+        def slow(batch):
+            entered.set()
+            release.wait(5)
+            write(batch)
+        with patch.object(self.adapter._log_writer, '_write_text', side_effect=slow):
+            try:
+                self.adapter.record_update_log('更新取消末条原文')
+                self.assertTrue(entered.wait(2))
+                self.assertFalse(self.adapter.finish_log_close())
+                self.assertEqual(self.adapter.health_snapshot().log_write_failures, 0)
+            finally:
+                release.set()
+                self.adapter._log_writer.close()
+        self.assertTrue(self.adapter.finish_log_close())
+        self.assertEqual(read_workspace_events(self.root / 'workspace')[0]['message'], '更新取消末条原文')
 
     def test_display_backlog_limits_preserve_the_workspace_file(self):
         self.drain()
@@ -503,6 +911,7 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         self.adapter._emit('大' * (128 * 1024 + 1))
         self.assertEqual(self.adapter.take_updates()[1], ())
         self.assertEqual(self.adapter.health_snapshot().logs_omitted - before, 11)
+        self.assertTrue(self.adapter._log_writer.flush())
         contents = (self.root / 'workspace' / 'workspace.log').read_text(encoding='utf-8')
         self.assertEqual(contents.count('合成积压记录 #'), 510)
         self.assertIn('大' * (128 * 1024 + 1), contents)
@@ -538,6 +947,7 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         status = self.adapter.health_snapshot()
         self.assertEqual(status.logs_omitted, omitted)
         self.assertIsNotNone(status.task_log_at)
+        self.assertTrue(self.adapter._log_writer.flush())
         contents = (self.root / 'workspace/workspace.log').read_text(encoding='utf-8')
         for message in (*raw, unknown, broken, ordinary):
             self.assertIn(message, contents)
@@ -549,6 +959,7 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         self.drain()
         before = self.adapter.health_snapshot()
         path = self.root / 'workspace' / 'workspace.log'
+        self.assertTrue(self.adapter._log_writer.flush())
         previous_length = len(path.read_text(encoding='utf-8')) if path.exists() else 0
         producers, count = 4, 1500
 
@@ -561,6 +972,7 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
             results = [pool.submit(write, producer) for producer in range(producers)]
             for result in results:
                 result.result(timeout=25)
+        self.assertTrue(self.adapter._log_writer.flush())
         _, rows, _ = self.adapter.take_updates()
         health = self.adapter.health_snapshot()
         self.assertEqual(len(rows), 500)
@@ -1829,6 +2241,8 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         self.assertTrue(identifier)
         self.assertEqual(settings.read_bytes(), original)
         self.assertEqual(self.projects[0].active_task_count, 0)
+        self.assertFalse(matches_project_filter(self.projects[0], 'completed'))
+        self.assertEqual(self.projects[0].saved_revision, self.adapter._service.projects.opened[identifier].identity.revision)
         self.assertEqual(self.projects[0].name, 'Imported project')
         self.assertEqual(json.loads((path / 'import_state.json').read_text(encoding='utf-8'))['state'], 'complete')
         backup, = (path / 'backups' / 'imports').iterdir()
@@ -1866,7 +2280,7 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         self.adapter = QtWorkspaceAdapter(SOURCE, directory=self.root / 'workspace')
         self.wait_for(lambda: (0, 'ready') in self.results)
         self.assertEqual(self.results[0, 'ready'].payload, (expected, ''))
-        self.assertFalse(self.projects)
+        self.assertEqual([p.project_id for p in self.projects], [first, second])
         self.assertEqual(self.command('open', second_path).project_id, second)
         self.assertEqual(self.command('open', first_path).project_id, first)
         self.assertEqual(self.command('forget_recent', first).payload, expected[1:])
@@ -1874,6 +2288,69 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         self.assertEqual(manifest.read_bytes(), original_manifest)
         recents = json.loads((self.root / 'workspace/recent_projects.json').read_text(encoding='utf-8'))
         self.assertEqual([item['project_id'] for item in recents], [second])
+
+    def test_session_restores_only_open_projects_in_order_and_remembers_empty_dashboard(self):
+        first, closed, last = [self.command('create', self.root / name, name).project_id for name in 'ABC']
+        self.command('close', closed)
+        self.command('forget_recent', first)
+        with patch.object(QtWorkspaceAdapter, '_execution', side_effect=AssertionError('unexpected device execution')):
+            self.assertEqual(self.restart_workspace(first), first)
+            self.assertEqual([p.project_id for p in self.projects], [first, last])
+            self.assertEqual(self.restart_workspace(), '')
+            self.assertEqual([p.project_id for p in self.projects], [first, last])
+        self.command('close', first)
+        self.command('close', last)
+        self.assertEqual(self.restart_workspace(), '')
+        self.assertFalse(self.projects)
+        self.assertTrue(self.results[0, 'ready'].payload[0])
+
+    def test_session_skips_missing_locked_and_replaced_projects_and_restores_the_next(self):
+        from src.core.host_resource_lock import HostResourceLock
+        paths = [self.root / name for name in ('missing', 'locked', 'replaced', 'valid')]
+        missing, locked, replaced, valid = [self.command('create', path, path.name).project_id for path in paths]
+        self.adapter.begin_close(selected_project=missing)
+        self.assertTrue(self.adapter.wait_closed(5))
+        paths[0].rename(self.root / 'moved')
+        manifest = paths[2] / 'project.linecheck.json'
+        value = json.loads(manifest.read_text(encoding='utf-8'))
+        value['project_id'] = missing
+        manifest.write_text(json.dumps(value), encoding='utf-8')
+        with HostResourceLock(['project:' + locked], reentrant=False):
+            self.results.clear()
+            self.adapter = QtWorkspaceAdapter(SOURCE, directory=self.root / 'workspace')
+            self.wait_for(lambda: (0, 'ready') in self.results)
+        self.assertEqual([p.project_id for p in self.projects], [valid])
+        self.assertEqual(self.results[0, 'ready'].project_id, '')
+        for path in paths[:3]:
+            self.assertTrue(any(str(path) in row.message and row.level == 'WARN' for row in self.logs))
+        self.assertEqual(set(self.adapter._service.projects.leases), {valid})
+
+    def test_unreadable_session_keeps_workspace_available_for_manual_open(self):
+        path = self.root / 'manual'
+        project = self.command('create', path, '手动').project_id
+        self.close_adapter()
+        session = self.root / 'workspace/workspace_session.json'
+        session.write_bytes(b'{invalid')
+        self.results.clear()
+        self.adapter = QtWorkspaceAdapter(SOURCE, directory=self.root / 'workspace')
+        self.wait_for(lambda: (0, 'ready') in self.results)
+        self.assertFalse(self.projects)
+        self.assertEqual(session.read_bytes(), b'{invalid')
+        self.assertTrue(any('会话无法读取' in row.message for row in self.logs))
+        self.assertEqual(self.command('open', path).project_id, project)
+
+    def test_session_write_failure_keeps_last_clean_exit_and_releases_projects(self):
+        first = self.command('create', self.root / 'first', '上次项目').project_id
+        self.assertEqual(self.restart_workspace(first), first)
+        path = self.root / 'workspace/workspace_session.json'
+        previous = path.read_bytes()
+        self.command('create', self.root / 'next', '本次项目')
+        with patch('src.services.workspace_service.atomic_json', side_effect=PermissionError):
+            self.close_adapter()
+        self.drain()
+        self.assertFalse(self.adapter._service.projects.leases)
+        self.assertEqual(path.read_bytes(), previous)
+        self.assertTrue(any(row.level == 'WARN' and '会话保存失败' in row.message for row in self.logs))
 
     def test_corrupt_recents_warn_without_rewriting_at_startup(self):
         self.close_adapter()
@@ -2382,6 +2859,8 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
             project = self.projects[0]
             self.assertEqual(project.state, 'unknown')
             self.assertEqual(project.active_task_count, 0)
+            self.assertTrue(matches_project_filter(project, 'unknown'))
+            self.assertFalse(matches_project_filter(project, 'queued'))
             self.assertEqual(project.test_type, '开关机挂测')
             self.assertIsNone(project.progress)
         self.assertEqual(json.loads((path / 'runs/run0/run.json').read_text())['state'], 'unknown')
@@ -2406,7 +2885,80 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
             project = next(p for p in self.projects if p.project_id == project_id)
             self.assertEqual((project.run_id, project.started_text), (run.parent.name, expected))
             self.assertEqual(project.active_task_count, 0)
+            self.assertTrue(matches_project_filter(project, 'completed'))
             self.assertEqual(json.loads(run.read_text(encoding='utf-8')), record)
+
+    def test_overview_reopens_unchecked_pretest_only_with_matching_project_job_evidence(self):
+        import sqlite3
+        path = self.root / 'overview-history'
+        project_id = self.command('create', path, path.name).project_id
+        self.command('close', project_id)
+        for owner, state, created, updated in (('older', 'succeeded', 1, 5), ('latest', 'skipped', 2, 3)):
+            run = path / 'runs' / owner / 'run.json'
+            run.parent.mkdir(parents=True)
+            run.write_text(json.dumps(dict(project_id=project_id, run_id=owner, owner=owner, state=state,
+                operation='pretest.start' if state == 'skipped' else 'aging.start',
+                started_at=created, created_at=created, updated_at=updated)), encoding='utf-8')
+        database = path / 'history/ai/business/capability_jobs.sqlite3'
+        database.parent.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(database)
+        self.addCleanup(connection.close)
+        with connection:
+            connection.execute('CREATE TABLE jobs(id TEXT PRIMARY KEY, capability TEXT, state TEXT, result TEXT)')
+            connection.execute("INSERT INTO jobs VALUES('unrelated','pretest.start','skipped',?)",
+                               (json.dumps(dict(outcome='unchecked')),))
+        self.command('open', path)
+        view, = self.projects
+        self.assertFalse(matches_project_filter(view, 'completed'))
+        self.assertFalse(matches_project_filter(view, 'unchecked'))
+        self.assertEqual(view.overview_state, 'skipped')
+        self.assertEqual(view.run_id, 'latest')
+        self.assertNotEqual(view.test_type, '开关机挂测')
+        from datetime import datetime
+        self.assertEqual(view.started_text, datetime.fromtimestamp(2).strftime('开始于 %Y-%m-%d %H:%M:%S'))
+        self.command('close', project_id)
+        with connection:
+            connection.execute("UPDATE jobs SET id='latest'")
+        self.command('open', path)
+        view, = self.projects
+        self.assertTrue(matches_project_filter(view, 'unchecked'))
+        self.assertFalse(matches_project_filter(view, 'completed'))
+        self.assertTrue(matches_project_filter(view, 'attention'))
+        # Earlier service variants returned a successful job plus the original
+        # command counters. A positive unchecked count still prevents completion.
+        self.command('close', project_id)
+        record_path = path / 'runs/latest/run.json'
+        record = json.loads(record_path.read_text(encoding='utf-8'))
+        record_path.write_text(json.dumps(dict(record, state='succeeded')), encoding='utf-8')
+        with connection:
+            connection.execute("UPDATE jobs SET state='succeeded', result=? WHERE id='latest'",
+                               (json.dumps(dict(result={'unchecked': 1})),))
+        self.command('open', path)
+        self.assertTrue(matches_project_filter(self.projects[0], 'unchecked'))
+        self.command('close', project_id)
+        with connection:
+            connection.execute("UPDATE jobs SET result=? WHERE id='latest'",
+                               (json.dumps(dict(result={'unchecked': 0, 'passed': 1})),))
+        self.command('open', path)
+        self.assertTrue(matches_project_filter(self.projects[0], 'completed'))
+
+    def test_overview_uses_actual_resume_job_state_and_waits_for_cleanup(self):
+        from types import SimpleNamespace
+        project_id = self.command('create', self.root / 'overview-resume', '续跑').project_id
+        project, = self.projects
+        self.assertEqual(project.project_id, project_id)
+        latest = dict(owner='resume', state='stopped', created_at=2)
+        job = dict(status=dict(state='queued'))
+        execution = SimpleNamespace(latest='original', jobs={'resume': job}, jobs_idle=False,
+                                    resume=SimpleNamespace(recovery_job='resume', has_waiting=False))
+        for raw, expected in (('queued', 'queued'), ('running', 'running'), ('stop_requested', 'stopping'),
+                              ('stopped', 'stopping')):
+            job['status']['state'] = raw
+            self.assertEqual(self.adapter._overview_state(project, latest, (), execution), expected)
+        execution.jobs_idle = True
+        self.assertEqual(self.adapter._overview_state(project, latest, (), execution), 'stopped')
+        execution.resume.has_waiting = True
+        self.assertEqual(self.adapter._overview_state(project, latest, (), execution), 'queued')
 
     def test_local_review_reuses_original_receipt_and_persists_unknown_result(self):
         from src.models.capabilities import CapabilityError
@@ -2429,6 +2981,8 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         service = self.adapter._service
         entries = dict(self.command('gui_unknown_list').payload)
         self.assertEqual(set(entries), {owner, unrelated})
+        self.assertEqual([p.project_id for p in self.projects], [identifier])
+        self.command('close', identifier)
         result = self.command('gui_unknown_resolve', owner, entries[owner], '已核对', expected_error=True)
         self.assertIn('打开该任务所属项目', result.error)
         self.command('open', path)
@@ -2463,8 +3017,47 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         self.command('close', identifier)
         self.command('open', path)
         self.assertTrue(self.projects[0].can_start)
+        self.assertEqual(self.projects[0].overview_state, 'reviewed_unknown')
+        self.assertFalse(matches_project_filter(self.projects[0], 'unknown'))
         self.assertEqual(json.loads(receipt.read_text(encoding='utf-8'))['evidence'], '已核对试验记录')
         self.assertFalse(any('已核对试验记录' in entry.message for entry in self.logs))
+
+    def test_history_stops_only_the_selected_live_job_in_its_project(self):
+        from test_qt_log_history import QtLogHistoryTests
+
+        one = self.command('create', self.root / 'one', '有活动任务的项目').project_id
+        other = self.command('create', self.root / 'other', '其他项目').project_id
+        execution = self.adapter._execution(self.adapter._service.projects.opened[one])
+        execution.instance_registry()
+        jobs = execution.capabilities.jobs
+        selected, unrelated, ended = 'active-one', 'active-other', 'already-ended'
+        for index, identifier in enumerate((selected, unrelated, ended)):
+            QtLogHistoryTests.insert_job(jobs, identifier, index)
+        with jobs.lock, jobs.db:
+            payload = json.dumps(dict(arguments=dict(channel_ids=[1]), resources=[]))
+            jobs.db.execute('UPDATE jobs SET state=?,payload=? WHERE id IN (?,?)',
+                            ('running', payload, selected, unrelated))
+        def finish_fixture():
+            with jobs.lock, jobs.db:
+                jobs.threads.pop(selected, None)
+                jobs.threads.pop(unrelated, None)
+                jobs.db.execute('UPDATE jobs SET state=? WHERE id IN (?,?)',
+                                ('stopped', selected, unrelated))
+
+        self.addCleanup(finish_fixture)
+        selected_control, other_control = Mock(), Mock()
+        workers = {identifier: Mock(is_alive=Mock(return_value=True)) for identifier in (selected, unrelated)}
+        with patch.dict(jobs.threads, workers), patch.dict(jobs.controls, {
+                selected: selected_control, unrelated: other_control}):
+            self.command('job_stop_active', other, selected, expected_error=True)
+            self.command('job_stop_active', one, ended, expected_error=True)
+            selected_control.request_stop.assert_not_called()
+            stopped = self.command('job_stop_active', one, selected)
+            self.assertEqual(stopped.payload['state'], 'stop_requested')
+            self.command('job_stop_active', one, selected)
+            selected_control.request_stop.assert_called_once()
+            other_control.request_stop.assert_not_called()
+        self.assertEqual(jobs._row(unrelated)['state'], 'running')
 
     def test_persisted_job_review_binds_original_job_and_releases_only_its_protection(self):
         from types import SimpleNamespace
@@ -2544,8 +3137,12 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         config.write_bytes(original + b'\n# unsaved test draft\n')
         self.command('refresh')
         self.assertTrue(self.projects[0].dirty)
+        session = self.root / 'workspace/workspace_session.json'
+        previous = b'{"projects":[],"selected_project":""}'
+        session.write_bytes(previous)
         self.adapter.begin_close()
         self.wait_for(lambda: (0, 'close_rejected') in self.results)
+        self.assertEqual(session.read_bytes(), previous)
         self.assertFalse(self.adapter.closed.is_set())
         self.assertIn(b'unsaved test draft', config.read_bytes())
         self.adapter.begin_close({identifier: 'discard'})

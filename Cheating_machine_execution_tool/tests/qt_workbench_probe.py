@@ -21,7 +21,7 @@ from src.ui.qt.demo_data import logs, projects
 from src.ui.qt.main_window import MainWindow
 from src.ui.qt.theme import GAP, apply_theme
 from src.ui.qt.workspace_controller import WorkspaceController
-from tk_test_windows import run_gui_child
+from scripts.gui_test_process import run_gui_child
 
 
 class QtNativeGuardTests(unittest.TestCase):
@@ -38,7 +38,9 @@ class QtNativeGuardTests(unittest.TestCase):
             self.assertEqual(runtime_root(), portable)
 
     def test_native_adapter_rejects_missing_scope_wrong_thread_and_dialog(self):
-        for mode, reason in (('missing', 'missing QtTestScope'), ('thread', 'GUI main thread'), ('dialog', 'Unadapted native Qt dialog')):
+        for mode, reason in (('missing', 'missing QtTestScope'), ('thread', 'GUI main thread'),
+                             ('dialog', 'Unadapted native Qt dialog'), ('tkinter', 'imported tkinter'),
+                             ('_tkinter', 'imported _tkinter')):
             with self.subTest(mode=mode):
                 with self.assertRaisesRegex(AssertionError, reason):
                     run_gui_child([sys.executable, 'tests/fixtures/qt_guard_probe.py', mode],
@@ -51,6 +53,146 @@ class QtNativeGuardTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.offscreen_report['qt']['platform'], 'windows')
         self.assertEqual(result.offscreen_report['qt']['managed_windows'], 1)
+
+    def test_qt_repairs_restart_only_after_worker_and_single_instance_are_closed(self):
+        from src.ui.qt.application import run_workspace, runtime_root
+
+        order = []
+        arguments = ['run_dutpilot_qt.py', '--gateway-slot', '3']
+        with patch.object(sys, 'argv', arguments), \
+                patch('src.core.workspace_instance.WorkspaceInstance') as instance, \
+                patch('src.ui.qt.application._create_application') as create_app, \
+                patch('src.ui.qt.application.MainWindow'), \
+                patch('src.ui.qt.workspace_controller.WorkspaceController') as workspace, \
+                patch('src.core.source_restart.launch_restart_helper') as restart:
+            create_app.return_value.exec.side_effect = lambda: order.append('gui') or 0
+            workspace.return_value.feishu_repair.restart_requested = True
+            workspace.return_value.adapter.wait_closed.side_effect = lambda _: order.append('worker') or True
+            instance.return_value.close.side_effect = lambda: order.append('instance')
+            restart.side_effect = lambda *args, **kwargs: order.append('restart')
+            self.assertEqual(run_workspace(), 0)
+        self.assertEqual(order, ['gui', 'worker', 'instance', 'restart'])
+        restart.assert_called_once_with(runtime_root(), tuple(arguments[1:]), cwd=os.getcwd())
+
+
+class ComponentShowcaseTests(unittest.TestCase):
+    def test_progress_animation_reuses_transitions_and_stops_when_hidden(self):
+        from PySide6.QtCore import QAbstractAnimation, QPropertyAnimation
+        from src.ui.qt.component_showcase import ComponentShowcase
+
+        scope = install_qt_test_scope(self)
+        page = ComponentShowcase()
+        page.show()
+        scope.app.processEvents()
+        for widget in (page.progress_bar, page.circular_progress):
+            widget.set_progress(0, animate=False)
+            animation, = widget.findChildren(QPropertyAnimation)
+            starts = []
+            animation.stateChanged.connect(
+                lambda new, old, events=starts: events.append(new) if new == QAbstractAnimation.State.Running else None)
+            widget.set_progress(80)
+            animation.setCurrentTime(animation.duration() // 2)
+            intermediate = widget.paintedProgress
+            self.assertGreater(intermediate, 0.)
+            self.assertLess(intermediate, 80.)
+            for _ in range(200):
+                widget.set_progress(80)
+            self.assertEqual(len(starts), 1)
+            widget.set_progress(25, 'warning')
+            self.assertAlmostEqual(widget.paintedProgress, intermediate)
+            self.assertEqual(len(starts), 2)
+            widget.hide()
+            self.assertFalse(widget.is_animating)
+            self.assertEqual(widget.paintedProgress, 25.)
+            widget.set_progress(19)
+            self.assertFalse(widget.is_animating)
+            self.assertEqual(widget.paintedProgress, 19.)
+            widget.show()
+            widget.set_progress(95)
+            widget.set_progress(None, 'unavailable')
+            self.assertFalse(widget.is_animating)
+            self.assertEqual(widget.paintedProgress, 0.)
+            self.assertEqual(widget.display_text, '未接入')
+        page.close()
+
+    def test_component_showcase_progress_states_controls_and_native_layout(self):
+        from PySide6.QtCore import QSize
+        from PySide6.QtGui import QIcon
+        from src.ui.qt.component_showcase import ComponentShowcase
+        from src.ui.qt.theme import V13_PALETTE
+
+        scope = install_qt_test_scope(self)
+        app = scope.app
+        apply_theme(app)
+        page = ComponentShowcase()
+        page.resize(1100, 800)
+        page.show()
+        QTest.qWait(50)
+        self.assertTrue(page.project_cards.model().rowCount())
+        self.assertGreaterEqual(len(page.badges), 8)
+        self.assertTrue(page.refresh_action.accessibleName())
+        icon = page.refresh_action.icon()
+        for mode, state, expected in (
+            (QIcon.Mode.Normal, QIcon.State.Off, V13_PALETTE.brand),
+            (QIcon.Mode.Active, QIcon.State.Off, V13_PALETTE.hover),
+            (QIcon.Mode.Selected, QIcon.State.Off, V13_PALETTE.selected),
+            (QIcon.Mode.Normal, QIcon.State.On, V13_PALETTE.selected),
+            (QIcon.Mode.Disabled, QIcon.State.On, V13_PALETTE.disabled),
+            (QIcon.Mode.Disabled, QIcon.State.Off, V13_PALETTE.disabled),
+        ):
+            sample = icon.pixmap(QSize(32, 32), mode, state).toImage()
+            colors = (sample.pixelColor(x, y) for y in range(sample.height()) for x in range(sample.width()))
+            self.assertIn(expected.lower(), {color.name() for color in colors if color.alpha() == 255}, (mode, state))
+        for state, value, expected in (('normal', 0, '0%'), ('warning', 47, '47%'),
+                                       ('error', 100, '100%'), ('unknown', None, '未知'),
+                                       ('unavailable', None, '未接入')):
+            page.progress_state.setCurrentIndex(page.progress_state.findData(state))
+            if value is not None:
+                page.progress_slider.setValue(value)
+            self.assertEqual(page.primary_action.isEnabled(), value is not None)
+            for widget in (page.progress_bar, page.circular_progress):
+                self.assertEqual(widget.value, value)
+                self.assertEqual(widget.state, state)
+                self.assertEqual(widget.display_text, expected)
+                if value is None:
+                    self.assertFalse(widget.is_animating)
+        page.progress_state.setCurrentIndex(page.progress_state.findData('normal'))
+        page.progress_slider.setValue(63)
+        page.progress_slider.setFocus()
+        QTest.keyClick(page.progress_slider, Qt.Key_Right)
+        QTest.qWait(400)
+        for widget in (page.progress_bar, page.circular_progress):
+            self.assertEqual(widget.display_text, '64%')
+            self.assertEqual(widget.paintedProgress, 64.)
+            self.assertFalse(widget.is_animating)
+        page.primary_action.click()
+        self.assertTrue(page.confirm_dialog.isVisible())
+        page.confirm_dialog.reject()
+        rejected = page.action_feedback.text()
+        page.primary_action.click()
+        page.confirm_dialog.accept()
+        self.assertNotEqual(rejected, page.action_feedback.text())
+        page.view_state.setCurrentIndex(page.view_state.findData('empty'))
+        empty = page.state_stack.currentWidget()
+        page.view_state.setCurrentIndex(page.view_state.findData('loading'))
+        self.assertIsNot(empty, page.state_stack.currentWidget())
+        page.channel_matrix.tiles[-1].click()
+        self.assertIn('CH07', page.channel_feedback.text())
+        page.log_panel.search.setText('校验超时')
+        displayed = page.log_panel.text.toPlainText().splitlines()
+        self.assertEqual(len(displayed), 1)
+        self.assertIn('校验超时', displayed[0])
+        output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
+        for width, height in ((1100, 800), (740, 580)):
+            page.resize(width, height)
+            page.scroll_area.verticalScrollBar().setValue(0)
+            app.processEvents()
+            self.assertEqual(page.width(), width)
+            self.assertEqual(page.scroll_area.horizontalScrollBar().maximum(), 0)
+            self.assertTrue(page.scroll_area.verticalScrollBar().maximum())
+            if output:
+                self.assertTrue(page.grab().save(str(Path(output) / f'component-showcase-{width}.png')))
+        page.close()
 
 
 class QtWorkbenchTests(unittest.TestCase):
@@ -313,8 +455,93 @@ class QtWorkbenchTests(unittest.TestCase):
         self.assertFalse(panel.export_button.isEnabled())
         self.assertEqual(panel.text.toPlainText(), '')
 
+    def test_global_log_filter_pins_project_identity_across_navigation_and_close(self):
+        from dataclasses import replace
+
+        first, second = (replace(project, name='同名') for project in self.window.projects[:2])
+        self.window.set_projects((first, second))
+        panel = self.window.logs
+        panel.clear_display()
+        panel.set_export_enabled(True)
+        rows = (
+            LogView('10:00', 'INFO', '', '工作区', '全局记录'),
+            LogView('10:01', 'ERROR', first.project_id, '同名', '超时 A'),
+            LogView('10:02', 'ERROR', second.project_id, '同名', '超时 B'),
+            LogView('10:03', 'INFO', first.project_id, '同名', '已恢复 A'),
+            LogView('10:04', 'WARN', 'closed-id', '旧项目', '旧缓冲'),
+        )
+        panel.append_batch(rows)
+        combo = panel.project_filter
+        combo.showPopup()
+        self.app.processEvents()
+        combo.hidePopup()
+        self.assertGreater(combo.findData('closed-id'), 0)
+        self.assertIn(first.project_id, combo.itemText(combo.findData(first.project_id)))
+        combo.setCurrentIndex(combo.findData(''))
+        self.assertEqual(tuple(panel._selected), (rows[0],))
+        combo.setCurrentIndex(combo.findData(first.project_id))
+        panel.level.setCurrentText('ERROR')
+        panel.search.setText('超时')
+        self.assertEqual(tuple(panel._selected), (rows[1],))
+        exports = []
+        panel.export_requested.connect(lambda entries, description: exports.append((entries, description)))
+        panel.request_export()
+        self.window.select_project(second.project_id)
+        self.assertFalse(combo.isVisible())
+        self.assertEqual(tuple(panel._selected), (rows[2],))
+        self.window.show_dashboard()
+        self.assertTrue(combo.isVisible())
+        self.window.set_projects((second,))
+        self.assertEqual(tuple(panel._selected), (rows[1],))
+        panel.clear_display()
+        self.assertEqual(combo.currentData(), first.project_id)
+        with patch.object(panel.text, 'setPlainText', wraps=panel.text.setPlainText) as rebuild:
+            panel.append_batch((rows[2], rows[1]))
+            rebuild.assert_not_called()
+        self.assertEqual(tuple(panel._selected), (rows[1],))
+        self.assertEqual(exports[0][0], (rows[1],))
+        self.assertIn(first.project_id, exports[0][1])
+
+    def test_overview_metrics_and_filter_follow_project_identity_and_latest_evidence(self):
+        from dataclasses import replace
+
+        base = self.window.projects[0]
+        busy = replace(base, project_id='a', active_task_count=3, attention_count=2,
+                       success_count=7, failure_count=2)
+        waiting = replace(base, project_id='b', state='queued', state_text='等待资源',
+                          active_task_count=0, observed_active_task_count=2)
+        done = replace(base, project_id='c', state='idle', state_text='空闲',
+                       overview_state='completed', active_task_count=0)
+        uncertain = replace(base, project_id='d', state='unknown', state_text='待核实',
+                            unresolved_tasks=True, active_task_count=0,
+                            success_count=None, failure_count=None)
+        self.window.set_projects((replace(busy, state='completed'), waiting, done, uncertain, busy))
+        board = self.window.dashboard
+        self.assertEqual(self.window.navigation_model.item(0).rowCount(), 2)
+        self.assertEqual([label.text() for label in board.metric_numbers], ['4', '1', '1', '1', '2', '1'])
+        for key, expected in (('running', {'a'}), ('queued', {'b'}), ('completed', {'c'}),
+                              ('attention', {'a', 'd'}), ('unknown', {'d'}), ('active', {'a', 'b'})):
+            board.state_filter.setCurrentIndex(board.state_filter.findData(key))
+            for view in (board.table, board.cards):
+                model = view.model()
+                self.assertEqual({model.index(row, 0).data(Qt.UserRole).project_id
+                                  for row in range(model.rowCount())}, expected)
+        for row, expected in ((0, ('7', '2')), (3, ('—', '—'))):
+            self.assertEqual(tuple(board.model.index(row, col).data() for col in (6, 7)), expected)
+        board.clear_project_filter()
+        for width in (1480, 850):
+            self.window.resize(width, 750)
+            self.app.processEvents()
+            for card in board.metric_cards:
+                self.assertTrue(card.isVisible())
+                self.assertTrue(board.rect().contains(card.geometry()))
+                self.assertGreaterEqual(card.width(), card.minimumSizeHint().width())
+            for idx, card in enumerate(board.metric_cards):
+                self.assertTrue(all(not card.geometry().intersects(other.geometry())
+                                    for other in board.metric_cards[idx + 1:]))
+
     def test_demo_metrics_keep_task_and_health_distinct(self):
-        self.assertEqual([w.text() for w in self.window.dashboard.metric_numbers], ['5', '3', '1', '0'])
+        self.assertEqual([w.text() for w in self.window.dashboard.metric_numbers], ['5', '3', '1', '0', '1', '0'])
         aging = self.window.projects[-1]
         self.assertEqual(aging.state, 'pending')
         self.assertIsNone(aging.progress)
@@ -323,15 +550,97 @@ class QtWorkbenchTests(unittest.TestCase):
         self.assertFalse(self.window.detail.start_button.isEnabled())
         self.assertFalse(self.window.detail.stop_button.isEnabled())
 
+    def test_project_status_is_consistent_across_navigation_cards_table_and_detail(self):
+        from dataclasses import replace
+        from PySide6.QtCore import QSize
+        from PySide6.QtGui import QColor, QIcon
+        from src.services.power_worker_lifetime import UNVERIFIED
+        from src.ui.qt.showcase_components import project_status_style
+        from src.ui.qt.theme import V13_PALETTE
+
+        dashboard = self.window.dashboard
+        base = replace(projects()[0], name='样机验证项目', channels=(), channel_text='已选 1 通道',
+                       progress=None, progress_text='等待原业务进度事件', success_count=None, failure_count=None)
+        output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
+        cases = (
+            ('failed', '部分失败', V13_PALETTE.error),
+            ('unchecked', '完成（含未校验）', V13_PALETTE.warning),
+            ('unknown', '历史任务待核实', V13_PALETTE.neutral),
+            ('recovery_required', '需要恢复确认', V13_PALETTE.warning),
+            ('completed', '已确认手动重启', V13_PALETTE.success),
+            ('running', '运行中 !', V13_PALETTE.success),
+            ('queued', '等待执行', None),
+            ('stopping', '停止中', None),
+            ('stopped', '未执行', None),
+            ('idle', '空闲', None),
+            ('pending', '待接入', None),
+            ('future-state', '来自旧项目的状态', V13_PALETTE.neutral),
+        )
+        for state, caption, palette in cases:
+            with self.subTest(state=state):
+                row = replace(base, state=state, state_text=caption, active_task_count=int(state == 'running'),
+                              test_type={'failed': '全流程测试', 'unchecked': '挂测前预测试'}.get(state, base.test_type),
+                              progress_text=caption, attention_count=int(state in ('failed', 'unknown')))
+                self.window.set_projects((row,))
+                self.window.show_dashboard()
+                self.app.processEvents()
+                group = self.window.navigation_model.item(0 if row.active_task_count else 1)
+                item = group.child(0)
+                self.assertEqual(item.data(Qt.ItemDataRole.UserRole), row.project_id)
+                self.assertIn(caption, item.toolTip())
+                idx = dashboard.proxy.index(0, 2)
+                self.assertEqual(idx.data(), caption)
+                table_icon = idx.data(Qt.ItemDataRole.DecorationRole)
+                self.assertFalse(table_icon.isNull())
+                self.assertEqual(item.icon().cacheKey(), table_icon.cacheKey())
+                style = project_status_style(state)
+                if palette is not None:
+                    self.assertEqual(style.color, palette.symbol)
+                if state == 'failed':
+                    for mode in (QIcon.Mode.Normal, QIcon.Mode.Selected):
+                        symbol = table_icon.pixmap(QSize(48, 48), mode, QIcon.State.On).toImage()
+                        colors = {symbol.pixel(x, y) for y in range(symbol.height()) for x in range(symbol.width())}
+                        self.assertIn(QColor(style.ink).rgb(), colors)
+                        self.assertIn(QColor(style.background).rgb(), colors)
+                card_rect = dashboard.cards.visualRect(dashboard.proxy.index(0, 0))
+                self.assertTrue(card_rect.isValid())
+                card_rect.setHeight(52)
+                header = dashboard.cards.viewport().grab(card_rect).toImage()
+                sampled = {header.pixel(x, y) for x in range(0, header.width(), 2)
+                           for y in range(0, header.height(), 2)}
+                self.assertIn(QColor(style.background).rgb(), sampled)
+                if output and state == 'failed':
+                    self.assertTrue(self.window.grab().save(str(Path(output) / 'project-status-overview.png')))
+                self.window.select_project(row.project_id)
+                self.assertEqual(self.window.detail.state.text(), caption)
+                self.assertEqual(self.window.detail.state.accessibleName(), caption)
+                if output and state == 'unchecked':
+                    self.app.processEvents()
+                    self.assertTrue(self.window.grab().save(str(Path(output) / 'project-status-unchecked.png')))
+        self.window.resize(900, 720)
+        self.window.set_projects((replace(base, state='unknown', state_text=UNVERIFIED),))
+        self.app.processEvents()
+        badge = self.window.detail.state
+        self.assertEqual(badge.text(), UNVERIFIED)
+        self.assertEqual(badge.toolTip(), UNVERIFIED)
+        self.assertEqual(badge.accessibleName(), UNVERIFIED)
+        self.assertTrue(self.window.detail.rect().contains(badge.mapTo(self.window.detail, badge.rect().bottomRight())))
+
     def test_channel_matrix_and_list_share_the_same_snapshots(self):
+        from dataclasses import replace
+        from PySide6.QtWidgets import QStyle, QStyleOptionButton
+        from src.ui.qt.showcase_components import STATUS_STYLES
+        from src.ui.qt.theme import V13_PALETTE
+
         self.window.select_project('demo-a')
         detail = self.window.detail
         before = self.window.projects
         QTest.mouseClick(detail.table_button, Qt.MouseButton.LeftButton)
         self.app.processEvents()
         self.assertEqual(detail.channel_model.channels, detail.channels.channels)
-        self.assertEqual(detail.channel_model.rowCount(), len(self.window.projects[0].channels))
-        self.assertEqual(detail.channel_model.index(0, 0).data(Qt.ItemDataRole.UserRole), 1)
+        self.assertEqual(detail.channel_model.rowCount(), 3)
+        self.assertEqual([detail.channel_model.index(i, 0).data(Qt.ItemDataRole.UserRole)
+                          for i in range(3)], [1, 2, 7])
         self.assertEqual(self.window.projects, before)
         self.assertFalse(detail.channel_edit_button.isEnabled())
         output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
@@ -344,6 +653,100 @@ class QtWorkbenchTests(unittest.TestCase):
                 self.assertTrue(self.window.grab().save(str(Path(output) / f'channel-list-{width}.png')))
         QTest.mouseClick(detail.matrix_button, Qt.MouseButton.LeftButton)
         self.assertEqual(detail.channel_modes.currentIndex(), 0)
+
+        project = before[0]
+        long_vlan = 'VLAN-设备环境-' + '设备通道' * 12
+        idle_channels = tuple(replace(channel, state='unknown', cycle=None, selected=True)
+                              for channel in project.channels[:8])
+        idle = replace(project, channels=(idle_channels[0],
+            replace(idle_channels[1], port=''), replace(idle_channels[2], vlan=''),
+            replace(idle_channels[3], vlan='', port=''), replace(idle_channels[4], vlan=long_vlan),
+            *idle_channels[5:], *project.channels[8:]))
+        self.window.resize(1480, 900)
+        self.window.set_projects((idle, *before[1:]))
+        QTest.qWait(30)
+        self.assertTrue(detail.channels.isVisible())
+
+        def tile_colors(tile):
+            pixmap = tile.grab()
+            image = pixmap.toImage()
+            left = round(pixmap.devicePixelRatio())
+            center = image.height() // 2
+            return (image.pixelColor(image.width() - 7, center).name(),
+                    image.pixelColor(left, center).name())
+
+        self.assertEqual(detail.channels.channels, idle.channels[:8])
+        self.assertEqual(detail.channel_model.channels, idle.channels[:8])
+        self.assertEqual(len(detail.channels.tiles), 8)
+        for index, tile in enumerate(detail.channels.tiles):
+            channel = idle.channels[index]
+            self.assertTrue(tile.isVisible())
+            self.assertEqual(tile.text().splitlines()[:2], [f'CH{channel.number:02d}  未知', '已选'])
+            self.assertEqual(tile_colors(tile), (V13_PALETTE.selected_background.lower(), V13_PALETTE.brand.lower()))
+            self.assertEqual(detail.channel_model.index(index, 3).data(), channel.vlan or '未配置')
+            self.assertEqual(detail.channel_model.index(index, 4).data(), channel.port or '未配置')
+            binding_lines = tile.text().splitlines()[2:]
+            if channel.vlan == long_vlan:
+                self.assertEqual(len(binding_lines), 1)
+                self.assertTrue(binding_lines[0].startswith('VLAN-'))
+                self.assertTrue(binding_lines[0].endswith('… / COM20'))
+                self.assertIn(long_vlan + ' / COM20', tile.toolTip())
+            else:
+                binding = ' / '.join(filter(None, (channel.vlan, channel.port)))
+                self.assertEqual(binding_lines, [binding] if binding else [])
+
+        for width, height in ((1366, 768), (800, 440), (1480, 900)):
+            self.window.resize(width, height)
+            QTest.qWait(30)
+            self.assertEqual(detail.execution_scroll.horizontalScrollBar().maximum(), 0)
+            for tile in detail.channels.tiles:
+                self.assertTrue(detail.channels.rect().contains(tile.geometry()), (detail.channels.rect(), tile.geometry()))
+                option = QStyleOptionButton()
+                tile.initStyleOption(option)
+                content = tile.style().subElementRect(QStyle.SubElement.SE_PushButtonContents, option, tile)
+                lines = tile.text().splitlines()
+                metrics = tile.fontMetrics()
+                text_width = max(metrics.horizontalAdvance(line) for line in lines)
+                text_height = metrics.height() + (len(lines) - 1) * metrics.lineSpacing()
+                self.assertGreaterEqual(content.width(), text_width + tile.iconSize().width() + 4,
+                                        (tile.text(), tile.size(), content, text_width))
+                self.assertGreaterEqual(content.height(), text_height)
+
+        first, second = detail.channels.tiles[:2]
+        first.setFocus(Qt.FocusReason.TabFocusReason)
+        QTest.keyClick(first, Qt.Key.Key_Tab)
+        self.assertTrue(second.hasFocus())
+        focused = second.grab().toImage()
+        self.assertEqual(focused.pixelColor(focused.width() // 2, 0).name(), V13_PALETTE.info.lower())
+        self.assertEqual(tile_colors(second)[1], V13_PALETTE.brand.lower())
+        QTest.mouseClick(first, Qt.MouseButton.LeftButton)
+        dialog = detail.dialogs[-1]
+        self.assertTrue(dialog.isVisible())
+        self.assertEqual(dialog.windowTitle(), 'CH01 · 通道快照')
+        dialog.close()
+
+        for state, style, caption in (('running', 'running', '运行中'), ('success', 'healthy', '正常'),
+                                     ('failed', 'error', '异常'), ('retry', 'warning', '重试中')):
+            updated = replace(idle, channels=(replace(idle.channels[0], state=state, cycle=4, stage='检测线路'),
+                                             *idle.channels[1:]))
+            self.window.set_projects((updated, *before[1:]))
+            self.app.processEvents()
+            tile = detail.channels.tiles[0]
+            self.assertTrue(tile.isVisible())
+            self.assertEqual(tile.text().splitlines(),
+                             [f'CH01  {caption}', '已选', '已完成 4 轮 · 检测线路', 'VLAN116 / COM16'])
+            self.assertEqual(tile_colors(tile), (STATUS_STYLES[style].background.lower(), V13_PALETTE.brand.lower()))
+
+        empty = replace(idle, channels=tuple(replace(channel, selected=False) for channel in idle.channels))
+        self.window.set_projects((empty, *before[1:]))
+        self.assertEqual(detail.channels.tiles, [])
+        self.assertEqual(detail.channel_model.rowCount(), 0)
+        self.assertTrue(detail.no_channels.isVisible())
+        self.assertFalse(detail.channel_modes.isVisible())
+        self.window.set_projects(before)
+        self.assertEqual(len(detail.channels.tiles), 3)
+        self.assertTrue(detail.channel_modes.isVisible())
+        self.assertFalse(detail.no_channels.isVisible())
 
     def test_live_refresh_preserves_navigation_selection_and_config_controls(self):
         from dataclasses import replace
@@ -430,7 +833,7 @@ class QtWorkbenchTests(unittest.TestCase):
         text = self.window.logs.text.toPlainText()
         self.assertIn('第68轮', text)
         self.assertNotIn('校验超时', text)
-        self.assertEqual(len(self.window.detail.channels.tiles), 16)
+        self.assertEqual([channel.number for channel in self.window.detail.channels.channels], [1, 2, 7])
         self.window.detail.open_channel(1)
         self.app.processEvents()
         self.assertTrue(self.window.detail.dialogs[-1].isVisible())
@@ -534,6 +937,137 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.window.show()
         self.wait_for(lambda: self.controller.ready)
 
+    def test_feishu_sdk_repair_is_opt_in_and_requests_safe_close(self):
+        from PySide6.QtWidgets import QMessageBox
+        from unittest.mock import Mock
+        from src.services.feishu_dependency_repair import FeishuDependencyRepair
+
+        lease, installer = Mock(), Mock()
+
+        def repair(root, gate):
+            return FeishuDependencyRepair(root, gate, installer=installer, lease_factory=lambda _: lease)
+
+        controller = self.controller.feishu_repair
+        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.No) as confirm:
+            controller.open()
+        self.assertEqual(confirm.call_args.args[-1], QMessageBox.StandardButton.No)
+        self.assertIsNone(controller.dialog)
+        installer.assert_not_called()
+        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes), \
+                patch('src.services.qt_feishu_repair.find_spec', return_value=None), \
+                patch('src.services.qt_feishu_repair.FeishuDependencyRepair', side_effect=repair), \
+                patch('src.services.feishu_dependency_repair.source_environment', return_value=self.root):
+            controller.open()
+            self.assertTrue(controller.dialog.isVisible())
+            self.assertFalse(controller.dialog.close())
+            self.wait_for(lambda: self.controller.adapter.closed.is_set())
+        self.assertTrue(self.controller.closing)
+        self.assertTrue(controller.restart_requested)
+        installer.assert_called_once()
+        lease.close.assert_called_once()
+
+    def test_platform_credential_dialog_masks_secret_and_saves_only_after_confirmation(self):
+        from PySide6.QtWidgets import QLineEdit, QMessageBox
+
+        self.controller.submit('create', self.root / 'platform-project', '接入验证项目')
+        self.wait_for(lambda: self.controller._current() is not None)
+        self.controller.open_platform_configuration('feishu')
+        dialog = self.controller.platform_configuration_dialog
+        self.wait_for(lambda: dialog.view is not None)
+        self.assertEqual(dialog.fields['app_secret'].echoMode(), QLineEdit.EchoMode.Password)
+        dialog.fields['app_id'].setText('cli_fixture')
+        dialog.fields['app_secret'].setText('fixture-secret')
+        store = self.controller.adapter._service.platform_config('feishu')
+        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.No):
+            dialog.save_button.click()
+        self.assertFalse(store.path.exists())
+        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes) as confirm:
+            dialog.save_button.click()
+        self.assertEqual(confirm.call_args.args[-1], QMessageBox.StandardButton.No)
+        self.wait_for(lambda: dialog.feedback.text().startswith('已保存。'))
+        self.assertEqual(dialog.fields['app_secret'].text(), '')
+        self.assertFalse(store.load()['enabled'])
+        self.assertTrue(dialog.close())
+
+    def test_qt_controlled_extension_preview_starts_unchecked_and_approves_only_reviewed_hash(self):
+        from PySide6.QtWidgets import QFileDialog
+
+        self.controller.submit('create', self.root / 'extension-project', '审阅项目')
+        self.wait_for(lambda: self.controller._current() is not None)
+        self.controller.open_extensions()
+        dialog = self.controller.extensions_dialog
+        self.wait_for(dialog.import_button.isEnabled)
+        path = self.root / 'review.json'
+        fixture = dict(id='local_fixture', name='查询通道', version='1', description='模拟审阅',
+                       target_capability='channels.list', input_schema=dict(type='object', additionalProperties=False),
+                       arguments={}, bindings={}, allowed_channels=[1])
+        path.write_text(json.dumps(fixture, ensure_ascii=False), encoding='utf-8')
+        with patch.object(QFileDialog, 'getOpenFileName', return_value=(str(path), 'JSON')):
+            dialog.import_button.click()
+        self.wait_for(lambda: dialog.review is not None)
+        self.assertFalse(dialog.review.accepted_review.isChecked())
+        self.assertFalse(dialog.review.approve.isEnabled())
+        dialog.review.accepted_review.setChecked(True)
+        dialog.review.approve.click()
+        self.wait_for(lambda: dialog.rows.count() == 1)
+        self.assertIn('local_fixture', dialog.rows.item(0).text())
+        self.assertTrue(dialog.close())
+
+    def test_qt_feishu_automatic_notifications_require_local_confirmation(self):
+        from PySide6.QtWidgets import QMessageBox
+
+        self.controller.submit('create', self.root / 'notification-project', '通知项目')
+        self.wait_for(lambda: self.controller._current() is not None)
+        project = self.controller._current()
+        service = self.controller.adapter._service
+        context = service.projects.opened[project.project_id]
+        (context.config_dir / 'test_project_config.ini').write_text(
+            '[project_info]\nproject_name=通知项目\n', encoding='utf-8')
+        original_revision = context.saved_root
+        self.controller.submit('save', project.project_id)
+        self.wait_for(lambda: context.saved_root != original_revision)
+        store = service.platform_config('feishu')
+        store.save(dict(store.defaults(), app_id='cli_fixture', app_secret='fixture-secret',
+                        group='confirmed-group', corp='tenant', group_name='群'))
+        self.controller.open_platform_configuration('feishu')
+        dialog = self.controller.platform_configuration_dialog
+        self.wait_for(dialog.notify_action.isEnabled)
+        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.No):
+            dialog.notify_action.trigger()
+        self.assertFalse(store.load()['push_enabled'])
+        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes) as confirm:
+            dialog.notify_action.trigger()
+        self.assertIn('confirmed-group', confirm.call_args.args[2])
+        self.wait_for(lambda: dialog.view['notifications_enabled'])
+        self.assertTrue(store.load()['push_enabled'])
+        self.assertFalse(store.load()['enabled'])
+        self.assertTrue(dialog.close())
+
+    def test_qt_history_requests_safe_stop_only_after_local_confirmation(self):
+        from PySide6.QtWidgets import QMessageBox
+        from src.models.qt_log_history import HistoryJob, HistoryPage
+        from src.ui.qt.log_history_dialog import LogHistoryDialog
+
+        self.controller.submit('create', self.root / 'job-project', '任务项目')
+        self.wait_for(lambda: self.controller._current() is not None)
+        dialog = LogHistoryDialog(self.controller._current(), self.window)
+        dialog.show()
+        dialog.show_jobs(HistoryPage((HistoryJob('active-fixture', 'aging.start', 'running', 'now'),), None))
+        receipts = []
+        dialog.stop_requested.connect(receipts.append)
+        self.assertTrue(dialog.stop_action.isEnabled())
+        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.No) as confirm:
+            dialog.stop_action.trigger()
+        self.assertEqual(confirm.call_args.args[-1], QMessageBox.StandardButton.No)
+        self.assertFalse(receipts)
+        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes):
+            dialog.stop_action.trigger()
+        self.assertEqual(receipts, ['active-fixture'])
+        dialog.show_review_state('active-fixture', 'stop_requested')
+        dialog.set_busy(False)
+        self.assertFalse(dialog.stop_action.isEnabled())
+        self.assertTrue(dialog.close())
+
     def wait_for(self, predicate):
         deadline = time.monotonic() + 6
         while time.monotonic() < deadline:
@@ -560,6 +1094,82 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             self.controller.adapter.begin_close({p.project_id: 'discard' for p in self.window.projects})
         self.assertTrue(self.controller.adapter.wait_closed(5))
         self.window.close()
+
+    def test_qt_navigation_opens_saved_template_sources_and_cached_devices(self):
+        from dataclasses import replace
+        from src.services.qt_host_inventory import HostInventoryReading
+
+        window, controller = self.window, self.controller
+        self.assertEqual(window.navigation_model.item(0).text(), '活动项目（0）')
+        self.assertIn('0 个项目', window.project_status.text())
+        window.templates_button.click()
+        self.assertTrue(window.templates_page.empty.isVisible())
+        names = ('source-a', 'source-b')
+        for count, folder in enumerate(names, 1):
+            controller.submit('create', self.root / folder, '同名配置来源')
+            self.wait_for(lambda: len(window.projects) == count and bool(window.selected_project))
+        before = {folder: (self.root / folder / 'project.linecheck.json').read_bytes() for folder in names}
+        self.assertIn(controller.duplicate_action, window.project_management_button.menu().actions())
+        self.assertIs(window.sidebar_settings_button.menu(), window.settings_button.menu())
+        self.assertIn(controller.history_action, window.history_button.menu().actions())
+        self.assertIn(controller.archived_logs_action, window.history_button.menu().actions())
+
+        window.sidebar_search.setText('未匹配的名字')
+        window.templates_button.click()
+        page = window.templates_page
+        self.assertIs(window.pages.currentWidget(), page)
+        self.assertEqual(window.selected_project, '')
+        self.assertEqual(page.model.rowCount(), 2)
+        self.assertEqual(page.model.index(0, 0).data(), page.model.index(1, 0).data())
+        first, second = (page.model.index(i, 0).data(Qt.ItemDataRole.UserRole) for i in range(2))
+        self.assertNotEqual(first, second)
+        expected = next(project for project in window.projects if project.project_id == first)
+        self.assertTrue(expected.saved_revision)
+        self.assertEqual(page.model.index(0, 1).data(Qt.ItemDataRole.ToolTipRole), expected.saved_revision)
+        directory = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
+        if directory:
+            self.assertTrue(window.grab().save(str(Path(directory) / 'saved-project-template-index.png')))
+        original = window.projects
+        last = replace(expected, dirty=True)
+        window.set_projects((*original, last))
+        self.assertEqual(len(window.projects), 2)
+        self.assertEqual(page.model.rowCount(), 2)
+        self.assertEqual(page.model.index(0, 2).data(), '有未保存更改')
+        self.assertEqual(window.navigation_model.item(1).rowCount(), 2)
+        window.set_projects(original)
+        page.table.setCurrentIndex(page.model.index(0, 1))
+        QTest.keyClick(page.table, Qt.Key.Key_Return)
+        self.assertEqual(window.selected_project, first)
+        self.assertIs(window.pages.currentWidget(), window.detail)
+        self.assertEqual({folder: (self.root / folder / 'project.linecheck.json').read_bytes() for folder in names},
+                         before)
+        window.sidebar_search.clear()
+        group = window.navigation_model.index(0, 0)
+        QTest.mouseClick(window.navigation.viewport(), Qt.MouseButton.LeftButton,
+                         pos=window.navigation.visualRect(group).center())
+        self.assertIs(window.pages.currentWidget(), window.dashboard)
+        self.assertEqual(window.dashboard.proxy.rowCount(), 0)
+        window.overview_button.click()
+        self.assertEqual(window.dashboard.proxy.rowCount(), 2)
+        window.toggle_sidebar()
+        self.assertFalse(window.sidebar.isVisible())
+        window.toggle_sidebar()
+        self.assertTrue(window.sidebar_devices_button.isVisible())
+
+        reading = HostInventoryReading(('COM171',), ())
+        with patch('src.services.qt_workspace_adapter.read_host_inventory', return_value=reading) as read:
+            window.sidebar_devices_button.click()
+            dialog = controller.device_inventory_dialog
+            self.assertIsNotNone(dialog)
+            self.assertIsNone(controller._inventory_request)
+            read.assert_not_called()
+            dialog.refresh_button.click()
+            self.wait_for(lambda: dialog.ports.rowCount() == 1 and dialog.refresh_button.isEnabled())
+            dialog.close()
+            window.sidebar_devices_button.click()
+            self.assertEqual(controller.device_inventory_dialog.ports.item(0, 0).text(), 'COM171')
+            self.assertEqual(read.call_count, 1)
+            controller.device_inventory_dialog.close()
 
     def test_qt_device_management_shows_readonly_inventory_and_active_workspace_leases(self):
         from line_check_assistant.config_store import ChannelConfig, ChannelConfigStore
@@ -617,6 +1227,71 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             self.assertEqual(self.controller.device_inventory_dialog.adapters.rowCount(), 2)
             self.assertEqual(read.call_count, 2)
             self.controller.device_inventory_dialog.close()
+
+    def test_qt_device_resource_details_follow_real_leases_and_unresolved_protection(self):
+        from PySide6.QtWidgets import QAbstractItemView
+
+        controller = self.controller
+        manager = controller.adapter._service.resources
+        for suffix in ('a', 'b'):
+            controller.submit('create', self.root / ('lease-project-' + suffix), '同名项目')
+        self.wait_for(lambda: len(self.window.projects) == 2)
+        a, b = self.window.projects
+        with patch('src.services.qt_workspace_adapter.read_host_inventory') as read:
+            self.window.sidebar_devices_button.click()
+            dialog = controller.device_inventory_dialog
+            self.assertEqual([dialog.tabs.tabText(i) for i in range(dialog.tabs.count())],
+                             ['网卡', '串口', '项目通道', '资源保护'])
+            dialog.tabs.setCurrentIndex(3)
+            self.wait_for(lambda: '没有活动租约' in dialog.resource_status.text())
+            table = dialog.resource_table
+            self.assertEqual(table.rowCount(), 0)
+            self.assertEqual(table.editTriggers(), QAbstractItemView.EditTrigger.NoEditTriggers)
+
+            def records():
+                return {tuple(table.item(row, col).text() for col in range(table.columnCount()))
+                        for row in range(table.rowCount())}
+
+            owner_a, owner_b = 'native-power-owner', 'native-dut-owner'
+            manager.acquire(owner_a, a.project_id, a.name, ('power:COM153',))
+            try:
+                manager.acquire(owner_b, b.project_id, b.name, ('dut:hardware:fixture-b', 'adb:4142'))
+                try:
+                    row_a = ('已持有', '串口 / 电源口', 'serial:com153', a.name, a.project_id, owner_a)
+                    row_b = ('已持有', 'DUT', 'dut:hardware:fixture-b', b.name, b.project_id, owner_b)
+                    row_adb = ('已持有', 'ADB', 'AB · adb:4142', b.name, b.project_id, owner_b)
+                    self.wait_for(lambda: records() == {row_a, row_b, row_adb})
+                    self.assertEqual(dialog.resource_status.text(), '已持有 3 条 · 待核实 0 条')
+                    self.window.select_project(a.project_id)
+                    table.selectRow(0)
+                    self.window.select_project(b.project_id)
+                    self.assertEqual(records(), {row_a, row_b, row_adb})
+                    manager.release(owner_a, uncertain=True)
+                    unknown = ('待核实', *row_a[1:])
+                    self.wait_for(lambda: records() == {unknown, row_b, row_adb})
+                    self.assertEqual(dialog.resource_status.text(), '已持有 2 条 · 待核实 1 条')
+                    dialog.close()
+                    self.window.sidebar_devices_button.click()
+                    dialog = controller.device_inventory_dialog
+                    table = dialog.resource_table
+                    dialog.tabs.setCurrentIndex(3)
+                    self.wait_for(lambda: records() == {unknown, row_b, row_adb})
+                    self.assertIn(owner_a, manager.unknown_for(a.project_id))
+                    self.assertIn(owner_b, manager.owners)
+                finally:
+                    manager.release(owner_b)
+            finally:
+                if owner_a in manager.owners:
+                    manager.release(owner_a)
+                if owner_a in manager.unknown_for(a.project_id):
+                    manager.resolve(owner_a)
+            self.wait_for(lambda: not records() and '没有活动租约' in dialog.resource_status.text())
+            with patch.object(manager, 'hardware_error', '模拟保护不可用'):
+                self.wait_for(lambda: '资源保护不可用' in dialog.resource_status.text())
+                self.assertNotIn('没有活动租约', dialog.resource_status.text())
+            self.wait_for(lambda: '没有活动租约' in dialog.resource_status.text())
+            read.assert_not_called()
+            dialog.close()
 
     def test_qt_manual_update_uses_verified_download_and_waits_for_cancel_cleanup(self):
         from unittest.mock import Mock
@@ -733,14 +1408,15 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.assertIn('SHA256 校验失败', log)
 
     def test_native_new_project_dialog_calls_original_store_and_switches_without_tasks(self):
-        with patch('PySide6.QtWidgets.QInputDialog.getText', return_value=('真实临时项目A', True)), \
-             patch('PySide6.QtWidgets.QFileDialog.getExistingDirectory', return_value=str(self.root / 'project-a')):
-            self.controller.new_project()
+        from qt_project_wizard_probe import complete_new_dialog
+        self.controller.new_project()
+        complete_new_dialog(self, self.root / 'project-a', '真实临时项目A')
         self.wait_for(lambda: len(self.window.projects) == 1)
         first = self.window.projects[0]
         self.assertEqual(self.window.selected_project, first.project_id)
         self.assertTrue((self.root / 'project-a/project.linecheck.json').is_file())
         self.assertTrue(self.window.detail.start_button.isEnabled())
+        self.assertEqual(first.active_task_count, 0)
         self.assertIn('create', self.window.logs.text.toPlainText())
         self.controller.submit('create', self.root / 'project-b', '真实临时项目B')
         self.wait_for(lambda: len(self.window.projects) == 2)
@@ -748,14 +1424,15 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.controller.save_project()
         self.wait_for(lambda: 'save' in self.window.logs.text.toPlainText())
         self.window.show_dashboard()
-        self.assertEqual([w.text() for w in self.window.dashboard.metric_numbers], ['2', '0', '0', '0'])
+        self.assertEqual([w.text() for w in self.window.dashboard.metric_numbers], ['2', '0', '0', '0', '0', '0'])
         output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
         if output:
             Path(output).mkdir(parents=True, exist_ok=True)
             self.assertTrue(self.window.grab().save(str(Path(output) / 'real-project-overview.png')))
 
     def test_qt_project_menu_shortcuts_and_directory_follow_selected_project(self):
-        from PySide6.QtWidgets import QDialog, QFileDialog, QInputDialog
+        from PySide6.QtWidgets import QDialog, QFileDialog
+        from qt_project_wizard_probe import complete_new_dialog
 
         menu = self.controller.menu
         menu.popup(self.window.mapToGlobal(QPoint(80, 80)))
@@ -769,10 +1446,8 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.assertFalse(self.controller.directory_action.isEnabled())
         ctrl = Qt.KeyboardModifier.ControlModifier
         first = self.root / '项目 A'
-        with patch.object(QInputDialog, 'getText', return_value=('项目 A', True)), \
-             patch.object(QFileDialog, 'getExistingDirectory', return_value=str(first)):
-            QTest.keyClick(self.window, Qt.Key.Key_N, ctrl)
-            self.wait_for(lambda: len(self.window.projects) == 1)
+        QTest.keyClick(self.window, Qt.Key.Key_N, ctrl)
+        complete_new_dialog(self, first, '项目 A')
         first_id = self.window.selected_project
         self.controller.submit('create', self.root / '项目 B', '项目 B')
         self.wait_for(lambda: len(self.window.projects) == 2)
@@ -1901,25 +2576,53 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.wait_for(lambda: '串口 / 电源 0' in panel.values[4].text())
 
         adapter = self.controller.adapter
-        with patch.object(Path, 'open', side_effect=PermissionError('synthetic write denial')):
-            adapter._record(LogView('09:10:11', 'INFO', project.project_id, project.name, '模拟任务进度', 'synthetic-job'))
-        self.wait_for(lambda: '最近写入失败' in panel.values[2].text())
+        writer = adapter._log_writer
+        self.assertTrue(writer.flush())
+        baseline_failures = adapter.health_snapshot().log_write_failures
+        target = LogView('09:10:11', 'INFO', project.project_id, project.name, '模拟任务进度', 'synthetic-job')
+        failed_batches = []
+        allow_recovery = threading.Event()
+        write_text = writer._write_text
+
+        def fail_target_batch(batch):
+            if any(entry is target for _, entry in batch):
+                failed_batches.append(len(batch))
+                raise PermissionError('synthetic write denial')
+            if failed_batches:
+                # Keep the failure visible until the real native panel observes it.
+                allow_recovery.wait(10)
+            write_text(batch)
+
+        with patch.object(writer, '_write_text', side_effect=fail_target_batch):
+            try:
+                adapter._record(target)
+                self.wait_for(lambda: '最近写入失败' in panel.values[2].text())
+            finally:
+                allow_recovery.set()
+        self.assertTrue(writer.flush())
+        self.assertEqual(len(failed_batches), 1)
+        expected_failures = baseline_failures + failed_batches[0]
+        self.assertEqual(adapter.health_snapshot().log_write_failures, expected_failures)
         self.assertIn('需关注 0', panel.values[3].text())
         self.assertIn('最近收到任务日志', panel.values[3].text())
         self.window.resource_refresh_action.trigger()
-        self.wait_for(lambda: '最近枚举完成' in panel.values[5].text())
-        self.assertIn('失败累计 1', panel.values[2].text())
+        self.wait_for(lambda: '最近枚举完成' in panel.values[5].text() and '最近写入成功' in panel.values[2].text())
+        self.assertTrue(panel.values[2].text().splitlines()[0].endswith(f'失败累计 {expected_failures}'),
+                        panel.values[2].text())
 
         output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
+        self.assertTrue(panel.scroll.isHidden())
+        self.assertIn('串口 / 电源 0', panel.resource_summary.text())
         for size, filename, columns in (((1366, 768), 'system-health-overview.png', 3),
                                         ((830, 580), 'system-health-compact.png', 2)):
             self.window.resize(*size)
+            if columns == 2 and self.window.sidebar.isHidden():
+                self.window.toggle_sidebar()
             self.wait_for(lambda: panel.columns == columns)
-            if columns == 2:
-                self.assertTrue(panel.scroll.isHidden())
-                if output:
-                    self.assertTrue(self.window.grab().save(str(Path(output) / 'system-health-compact-folded.png')))
-                QTest.mouseClick(panel.toggle, Qt.MouseButton.LeftButton)
+            self.assertTrue(panel.scroll.isHidden())
+            if columns == 2 and output:
+                self.assertTrue(self.window.grab().save(str(Path(output) / 'system-health-compact-folded.png')))
+            QTest.mouseClick(panel.toggle, Qt.MouseButton.LeftButton)
             self.wait_for(lambda: panel.scroll.isVisible() and all(
                 value.heightForWidth(value.width()) <= value.height() for value in panel.values))
             if columns == 3:
@@ -1938,6 +2641,8 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             panel.scroll.ensureWidgetVisible(last_item, 0, 0)
             viewport = panel.scroll.viewport()
             self.assertTrue(viewport.rect().contains(last_item.mapTo(viewport, last_item.rect().bottomRight())))
+            if columns == 3:
+                QTest.mouseClick(panel.toggle, Qt.MouseButton.LeftButton)
 
         expanded_height = panel.height()
         QTest.mouseClick(panel.toggle, Qt.MouseButton.LeftButton)
@@ -2976,6 +3681,13 @@ class QtProjectWorkspaceTests(unittest.TestCase):
                       and '已停止' in dialog.feedback.text())
         dialog.close()
         self.wait_for(lambda: identifier not in windows)
+        self.controller.onu_query.open()
+        self.wait_for(lambda: identifier in windows)
+        reopened = windows[identifier]
+        self.assertIsNot(reopened, dialog)
+        self.assertEqual(reopened.family.currentText(), 'C600')
+        self.assertEqual(reopened.scope['pon'].value(), 6)
+        self.assertEqual(reopened.provision.fields['services'].toPlainText(), '1,171,170')
         self.assertEqual([call[0:2] for call in harness.calls],
                          [('unregistered', 'C300'), ('templates', 'C600'), ('connection', 'C600')])
 
@@ -4085,7 +4797,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             wifi.write_text('原尝试 WiFi 记录', encoding='utf-8')
             session.observe(dict(type='wifi_log_created', run_id=session.run_id, channel=7, attempt=0, path=str(wifi)))
 
-            tile = detail.channels.tiles[6]
+            tile = detail.channels.tiles[1]
             tile.customContextMenuRequested.emit(tile.rect().center())
             self.wait_for(detail.recovery_menu.isVisible)
             self.assertEqual(detail.recovery_action.data(), (identifier, 7))
@@ -4099,7 +4811,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
 
             detail.set_channel_mode(1)
             table = detail.channel_table
-            index = detail.channel_model.index(6, 0)
+            index = detail.channel_model.index(1, 0)
             table.scrollTo(index)
             self.app.processEvents()
             table.customContextMenuRequested.emit(table.visualRect(index).center())
@@ -4150,7 +4862,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
                 self.wait_for(harness.started.is_set)
             self.wait_for(lambda: detail.project.power_history_job and detail.project.channels[6].detail == '模拟状态')
             parent = detail.project.power_history_job
-            tile = detail.channels.tiles[6]
+            tile = detail.channels.tiles[1]
             tile.customContextMenuRequested.emit(tile.rect().center())
             self.wait_for(detail.recovery_menu.isVisible)
             self.assertEqual(detail.channel_history_action.data(), (identifier, parent, 7))
@@ -4226,7 +4938,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
                 self.wait_for(harness.started.is_set)
             self.wait_for(ready)
             self.assertFalse(detail.project.channels[0].can_resume)
-            tile = detail.channels.tiles[6]
+            tile = detail.channels.tiles[1]
             tile.customContextMenuRequested.emit(tile.rect().center())
             self.wait_for(detail.recovery_menu.isVisible)
             self.assertTrue(detail.recovery_action.isEnabled())
@@ -4244,7 +4956,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             self.wait_for(lambda: self.window.projects[0].state == 'failed' and ready())
             detail.set_channel_mode(1)
             table = detail.channel_table
-            index = detail.channel_model.index(6, 0)
+            index = detail.channel_model.index(1, 0)
             table.scrollTo(index)
             self.app.processEvents()
             table.customContextMenuRequested.emit(table.visualRect(index).center())
@@ -4272,8 +4984,9 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             self.assertTrue(self.window.grab().save(str(Path(output) / 'resume-channel-finished.png')))
 
     def test_qt_pipeline_choices_prestart_original_serial_terminal_before_environment(self):
-        from PySide6.QtWidgets import QMessageBox
+        from PySide6.QtWidgets import QCheckBox, QMessageBox
         from qt_serial_fakes import SerialHarness
+        from src.models.capabilities import CapabilityError
         from src.services.pipeline_orchestrator import PipelineOrchestrator
         _, identifier = self._configured_execution()
         serial = SerialHarness().start()
@@ -4284,6 +4997,10 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         dialog = self.controller.pipeline_windows[identifier]
         execution = self.controller.adapter._executions[identifier]
         execution.capabilities.devices.pipeline_factory = PipelineOrchestrator
+        self.assertEqual(tuple(dialog.checks), ('env_check', 'serial_terminal', 'legacy_power_test'))
+        self.assertEqual([check.text() for check in dialog.findChildren(QCheckBox)], [
+            '1. 环境线路检查', '2. 串口日志', '3. 执行开关机测试',
+        ])
         self.assertEqual(dialog.selection(), ())
         self.assertFalse(dialog.start_button.isEnabled())
         for code in ('env_check', 'serial_terminal'):
@@ -4297,7 +5014,23 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             dialog.start_button.click()
             self.wait_for(lambda: refuse.called and execution.pending is None)
         self.assertFalse(serial.sessions)
-        self.assertIn('串口日志 → 环境线路检查', str(refuse.call_args))
+        summary = refuse.call_args.args[2]
+        self.assertIn('串口日志 → 环境线路检查', summary)
+        self.assertIn('子任务', summary)
+        self.assertNotIn('管道', summary)
+
+        # Verification can fail after the operator has already confirmed.
+        with patch.object(QMessageBox, 'question', return_value=yes), \
+                patch.object(QMessageBox, 'warning') as warn, \
+                patch.object(execution, '_verify_nics', side_effect=CapabilityError(
+                    'configuration_changed', '确认后网卡配置已变化，未执行')):
+            self.wait_for(dialog.start_button.isEnabled)
+            dialog.start_button.click()
+            self.wait_for(lambda: warn.called and execution.pending is None)
+        self.assertIn('确认后网卡配置已变化', warn.call_args.args[2])
+        self.assertTrue(dialog.isVisible())
+        self.assertFalse(serial.sessions)
+        self.assertFalse(execution.jobs)
         entered = []
 
         def environment(_):
@@ -4309,14 +5042,14 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             self.wait_for(dialog.start_button.isEnabled)
             dialog.start_button.click()
             self.wait_for(lambda: entered and identifier in self.controller.serial_windows
-                          and '环境线路检查完成' in dialog.feedback.text())
+                          and '环境线路检查完成' in dialog.feedback.text() and not dialog.isVisible())
         # The job publishes its terminal result before releasing resources and exiting.
         self.wait_for(lambda: execution.idle)
         self.assertTrue(execution.terminal.tabs['vlan107']['path'])
         self.assertFalse(dialog.isVisible())
+        self.controller.open_pipeline()
+        self.wait_for(lambda: dialog.isVisible() and dialog.start_button.isEnabled())
         if directory:
-            self.controller.open_pipeline()
-            self.app.processEvents()
             self.assertTrue(dialog.grab().save(str(Path(directory) / 'pipeline-completed.png')))
 
     def test_qt_disjoint_project_power_starts_and_stop_is_project_scoped(self):
@@ -4701,7 +5434,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
     def test_qt_push_trial_uses_confirmed_draft_and_reports_platform_acceptance(self):
         from PySide6.QtWidgets import QLineEdit, QMessageBox
         from qt_execution_fakes import save_push_project_name
-        from test_webhook_push import FEISHU
+        from webhook_fakes import FEISHU
         _, identifier = self._configured_execution()
         workspace = self.controller.adapter._service
         context = workspace.projects.opened[identifier]
@@ -4942,17 +5675,25 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         from src.models.network_adapter import AdapterIdentity
         identifier, dialog = self._open_channel_editor()
         self.wait_for(lambda: not dialog.resources_refreshing)
+        detail = self.window.detail
+        matrix = detail.channels
+
+        def visible_numbers():
+            return tuple(channel.number for channel in matrix.channels)
+
+        original_selection = visible_numbers()
+        original_cards = tuple(tile.text() for tile in matrix.tiles)
         self.assertEqual(len(dialog.rows), 16)
         dialog.select_all(False)
         dialog.device_ip.setText('192.168.1.1')
         dialog.power_port.setCurrentText('COM102')
-        for index, vlan, port in ((0, 'VLAN116', 'COM16'), (6, 'VLAN122', 'COM22')):
+        for index, vlan, port in ((0, 'VLAN116', 'COM16'), (1, 'VLAN115', 'COM15'), (6, 'VLAN122', 'COM22')):
             row = dialog.rows[index]
             row.enabled.setChecked(True)
             row.vlan.setCurrentText(vlan)
             row.port.setCurrentText(port)
-        dialog.rows[1].vlan.setCurrentText('VLAN140')
-        dialog.rows[1].port.setCurrentText('COM40')
+        dialog.rows[2].vlan.setCurrentText('VLAN140')
+        dialog.rows[2].port.setCurrentText('COM40')
         context = self.controller.adapter._service.projects.opened[identifier]
         path = context.config_dir / 'network_card_ip.ini'
         before = path.read_bytes()
@@ -4960,19 +5701,25 @@ class QtProjectWorkspaceTests(unittest.TestCase):
              patch('src.core.serial_inventory.list_serial_port_names', return_value=['COM16', 'COM102']):
             dialog.request_resources()
             self.wait_for(lambda: not dialog.resources_refreshing)
-        self.assertEqual(dialog.rows[1].port.currentText(), 'COM40')
+        self.assertEqual(dialog.rows[2].port.currentText(), 'COM40')
         self.assertEqual(dialog.power_port.currentText(), 'COM102')
         with patch('PySide6.QtWidgets.QMessageBox.question', return_value=QMessageBox.StandardButton.No):
             QTest.mouseClick(dialog.save_button, Qt.MouseButton.LeftButton)
             self.wait_for(lambda: not dialog.busy)
         self.assertEqual(path.read_bytes(), before)
         self.assertTrue(dialog.dirty)
+        self.assertEqual(visible_numbers(), original_selection)
+        self.assertEqual(tuple(tile.text() for tile in matrix.tiles), original_cards)
         revision = context.identity.revision
         with patch('PySide6.QtWidgets.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes):
             dialog.request_save()
             self.wait_for(lambda: not dialog.busy and not dialog.dirty and context.identity.revision != revision)
-        self.assertEqual([c.section for c in ChannelConfigStore(path).load()], ['channel_1', 'channel_7'])
-        self.assertEqual(dialog.rows[1].port.currentText(), 'COM40')
+        self.assertEqual([c.section for c in ChannelConfigStore(path).load()], ['channel_1', 'channel_2', 'channel_7'])
+        self.wait_for(lambda: visible_numbers() == (1, 2, 7))
+        self.assertEqual([tile.text().splitlines()[-1] for tile in matrix.tiles],
+                         ['VLAN116 / COM16', 'VLAN115 / COM15', 'VLAN122 / COM22'])
+        self.assertEqual(detail.channel_model.channels, matrix.channels)
+        self.assertEqual(dialog.rows[2].port.currentText(), 'COM40')
         output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
         for width, height in ((1100, 740), (620, 500)):
             dialog.resize(width, height)
@@ -4984,7 +5731,15 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         dialog.select_all(True)
         self.assertTrue(all(r.enabled.isChecked() for r in dialog.rows))
         dialog.select_all(False)
-        self.assertEqual(dialog.rows[1].port.currentText(), 'COM40')
+        self.assertEqual(dialog.rows[2].port.currentText(), 'COM40')
+        self.assertEqual(len(ChannelConfigStore(path).load()), 3)
+        dialog.rows[0].enabled.setChecked(True)
+        dialog.rows[6].enabled.setChecked(True)
+        with patch('PySide6.QtWidgets.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes):
+            dialog.request_save()
+            self.wait_for(lambda: not dialog.busy and not dialog.dirty and visible_numbers() == (1, 7))
+        self.assertEqual([tile.text().splitlines()[-1] for tile in matrix.tiles], ['VLAN116 / COM16', 'VLAN122 / COM22'])
+        self.assertEqual(detail.channel_model.channels, matrix.channels)
         self.assertEqual(len(ChannelConfigStore(path).load()), 2)
 
     def test_qt_reviews_one_persisted_interrupted_job_in_bound_history(self):
@@ -5085,6 +5840,11 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         database = jobs.directory / 'capability_jobs.sqlite3'
         original = database.read_bytes()
 
+        other_root = self.root / '另一个打开的项目'
+        self.controller.submit('create', other_root, '另一个打开的项目')
+        self.wait_for(lambda: len(self.window.projects) == 2 and self.window.selected_project != project)
+        other = self.window.selected_project
+        self.window.select_project(project)
         old_adapter = self.controller.adapter
         self.window.close()
         self.wait_for(lambda: old_adapter.closed.is_set() and not self.window.isVisible())
@@ -5094,9 +5854,14 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.window.resize(1366, 768)
         self.window.show()
         self.wait_for(lambda: self.controller.ready)
-        self.controller.submit('open', root)
-        self.wait_for(lambda: self.window.selected_project == project)
+        self.assertEqual(self.window.selected_project, project)
+        self.assertEqual([p.project_id for p in self.window.projects], [project, other])
         self.assertNotIn(project, self.controller.adapter._executions)
+        # The explicit launch-path handler invokes open_project after the ready receipt.
+        self.controller.open_project(str(other_root / 'project.linecheck.json'))
+        self.wait_for(lambda: self.window.selected_project == other)
+        self.assertEqual([p.project_id for p in self.window.projects], [project, other])
+        self.window.select_project(project)
         self.controller.history_action.trigger()
         history = self.controller.log_history
         self.wait_for(lambda: project in history.windows and history.windows[project].result_files_action.isEnabled())
@@ -5422,7 +6187,8 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         old_tiles = tuple(detail.channels.tiles)
         old_summary = [detail.config_layout.itemAt(index).widget() for index in range(detail.config_layout.count())]
         self.window.select_project(running)
-        self.assertTrue(old_tiles and any(old_summary))
+        self.assertTrue(any(old_summary))
+        self.assertEqual([channel.number for channel in detail.channels.channels], [1, 7])
         self.assertTrue(all(not widget.isVisible() for widget in (*old_tiles, *filter(None, old_summary))))
         action = self.window.resource_refresh_action
         header = self.window.findChild(QToolBar, 'GlobalHeader')
@@ -5583,6 +6349,13 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.assertEqual(self.window.selected_project, other)
         self.assertTrue(dialog.close())
         self.wait_for(lambda: not self.controller.adapter._executions[identifier].editor_open)
+        matrix = self.window.detail.channels
+        other_labels = [tile.text() for tile in matrix.tiles]
+        self.window.select_project(identifier)
+        self.assertEqual([c.number for c in matrix.channels if c.selected], [1])
+        self.assertIn('已选', matrix.tiles[0].text())
+        self.window.select_project(other)
+        self.assertEqual([tile.text() for tile in matrix.tiles], other_labels)
 
     def test_qt_dut_status_height_restores_adjusts_and_saves_each_tab(self):
         from PySide6.QtCore import QRect
@@ -5917,6 +6690,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
 
     def test_qt_saved_channel_selection_drives_original_job_targets(self):
         from PySide6.QtWidgets import QMessageBox
+        from line_check_assistant.config_store import ChannelConfigStore
         engine, identifier = self._configured_execution()
         self.controller.open_channels()
         self.wait_for(lambda: identifier in self.controller.configuration_editors)
@@ -5933,7 +6707,34 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             self.assertEqual([c.section for c in engine.calls[0][0].enabled_channels], ['channel_1'])
             self.wait_for(lambda: self.window.projects[0].progress == 68)
             self.window.detail.set_channel_mode(1)
-            self.assertEqual(self.window.detail.channel_model.rowCount(), 16)
+            model = self.window.detail.channel_model
+            matrix = self.window.detail.channels
+            self.assertEqual(model.rowCount(), 1)
+            self.assertEqual(matrix.tiles[0].text().splitlines()[-1], 'VLAN101 / COM1')
+            self.assertEqual((model.index(0, 3).data(), model.index(0, 4).data()), ('VLAN101', 'COM1'))
             self.assertFalse(self.window.detail.channel_edit_button.isEnabled())
             engine.finish.set()
-            self.wait_for(lambda: self.window.projects[0].active_task_count == 0)
+            self.wait_for(lambda: self.window.detail.channel_edit_button.isEnabled())
+            self.window.detail.set_channel_mode(0)
+            self.assertEqual(matrix.channels[0].state, 'success')
+            self.assertTrue(matrix.channels[0].selected)
+            self.controller.open_channels()
+            self.wait_for(lambda: identifier in self.controller.configuration_editors)
+            dialog = self.controller.configuration_editors[identifier]
+            dialog.rows[0].enabled.setChecked(False)
+            dialog.rows[6].enabled.setChecked(True)
+            dialog.rows[6].vlan.setCurrentText('VLAN107')
+            dialog.rows[6].port.setCurrentText('COM7')
+            dialog.request_save()
+            self.wait_for(lambda: not dialog.busy and not dialog.dirty
+                          and [channel.number for channel in matrix.channels] == [7])
+            context = self.controller.adapter._service.projects.opened[identifier]
+            saved = ChannelConfigStore(context.config_dir / 'network_card_ip.ini').load()
+            self.assertEqual([(c.section, c.vlan_name, c.serial_port) for c in saved], [('channel_7', 'VLAN107', 'COM7')])
+            finished_channel = self.window.projects[0].channels[0]
+            self.assertEqual((finished_channel.state, finished_channel.cycle), ('success', 68))
+            self.assertEqual((finished_channel.vlan, finished_channel.port), ('VLAN101', 'COM1'))
+            self.assertEqual(matrix.tiles[0].text().splitlines(), ['CH07  未知', '已选'])
+            self.assertEqual(model.channels, matrix.channels)
+            self.assertEqual((model.index(0, 3).data(), model.index(0, 4).data()), ('未配置', '未配置'))
+            self.assertEqual(self.window.projects[0].channel_snapshot_label, '本次任务配置快照')

@@ -1,0 +1,17 @@
+{
+  "python": "3.9.10",
+  "qt": "6.8.3",
+  "sha256": {
+    "src/ui/qt/showcase_components.py": "fedf188a5591420dde56d0fccf08699946efafed2b410c3a1389b7060499f4b2",
+    "src/ui/qt/main_window.py": "5bcc7633e20d3dd9dc0b6c12017d3390978a6caa538d4f3974227f3565e85d72",
+    "src/ui/qt/dashboard.py": "36086c2ea44cc21623afef82dcb2c8521e9f854a5f4aaaab20b9818c8e500fbd",
+    "src/ui/qt/project_detail.py": "a2079a81bf572b19ef95dc173fd998c1ed80cd1829c99e7eaa576175da8483cc",
+    "src/ui/qt/progress_widgets.py": "ad0629bd53c8b41ead0b6b46800e3fca791a3f141509dba39b20dde199fc3026",
+    "src/ui/qt/theme.py": "a897dcb84ac665eb476373d35982a4264423a8b3a7fd6de1b728e85dd6f2ebf8",
+    "src/services/qt_execution_adapter.py": "e732daa92841facfd99f44f75ec7992ebb55b19bb9637c7d3a08a6733b4e2c3e",
+    "src/services/qt_workspace_adapter.py": "4e77c089059f517f86869982e9655cd4eac01060d197bd60d8fc55420ef41df4",
+    "tests/qt_workbench_probe.py": "a969dc159d4c536aebf93be87c9bd7b0eddb6a14d1a284c55b1b6906018ddde2",
+    "scripts/verify_qt_migration.py": "aae2e92700d11739f32b67390bdefe9e97e6aa6faafa642fa3317600895c1ab3",
+    "scripts/capability_gui_actions.json": "9b44ca995d17348c9f734eea1a3493f4273bdd730dc4e8c240844aa42ccd6ed7"
+  }
+}

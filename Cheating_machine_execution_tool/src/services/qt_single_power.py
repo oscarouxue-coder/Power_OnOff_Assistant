@@ -111,11 +111,21 @@ class QtSinglePower:
                 message = '操作员已确认手动重启，未向串口发送指令'
                 context.event('power_manual', message)
                 return dict(ok=True, state='succeeded', message=message, manual=True)
-            context.event('power', f'调用原单次{POWER_ACTIONS[target.action]}服务：{target.port}，通道 {numbers}', dispatched=True)
+            def mark_write_attempt():
+                if not context.dispatched:
+                    context.event('power', '开始写入程控电源指令', dispatched=True)
+
+            context.event('power', f'调用原单次{POWER_ACTIONS[target.action]}服务：{target.port}，通道 {numbers}')
             engine = turn_on_selected_channels if target.action == 'up' else turn_off_selected_channels
-            result = engine(target.port, numbers, on_output=lambda line: context.event('power', line))
-            context.event('power', result.message)
-            return dict(ok=result.ok, state='succeeded' if result.ok else 'unknown', message=result.message)
+            result = engine(target.port, numbers, on_output=lambda line: context.event('power', line),
+                            on_write_attempt=mark_write_attempt)
+            state, message = 'succeeded', result.message
+            if not result.ok:
+                state = 'unknown' if context.dispatched else 'failed'
+                if not context.dispatched:
+                    message += '；程控电源指令未下发'
+            context.event('power', message)
+            return dict(ok=result.ok, state=state, message=message, dispatched=context.dispatched)
 
         result = execution.capabilities.jobs.start(CAPABILITY, dict(channel_ids=list(numbers), port=target.port,
             action=target.action, target_binding=target.binding), authority, resources, run, recheck=recheck)

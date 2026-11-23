@@ -4,24 +4,22 @@ param(
     [string]$WorkDirectory = "",
     [string]$BasePython = "",
     [switch]$CheckOnly,
-    [ValidateSet("Tk", "Qt")][string]$Gui = "Tk"
+    [ValidateSet("Tk", "Qt")][string]$Gui = "Qt"
 )
 
 $ErrorActionPreference = "Stop"
 
-$projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$specPath = Join-Path $projectRoot "line_check_assistant\packaging_specs\LineCheckAssistant.spec"
-$buildDir = Join-Path $projectRoot "build"
-$distDir = Join-Path $projectRoot "dist"
-if (-not $PythonExecutable) {
-    $environment = if ($Gui -eq "Qt") { "qt-build-py39" } else { "build-env-py39" }
-    $PythonExecutable = Join-Path $env:LOCALAPPDATA "LineCheckAssistant\$environment\Scripts\python.exe"
+if ($Gui -eq "Tk") {
+    throw "The Tk build has been retired. Run this script without -Gui to build the Qt workspace."
 }
-if ($Gui -eq "Qt") {
-    $specPath = Join-Path $projectRoot "line_check_assistant\packaging_specs\DUTPilotQt.spec"
-    $buildId = (Get-Date -Format "yyyyMMdd-HHmmss") + "-" + [guid]::NewGuid().ToString("N").Substring(0, 8)
-    $buildDir = Join-Path $buildDir "qt-$buildId"
-    $distDir = Join-Path $distDir "qt-$buildId"
+
+$projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$specPath = Join-Path $projectRoot "line_check_assistant\packaging_specs\DUTPilotQt.spec"
+$buildId = (Get-Date -Format "yyyyMMdd-HHmmss") + "-" + [guid]::NewGuid().ToString("N").Substring(0, 8)
+$buildDir = Join-Path $projectRoot "build\qt-$buildId"
+$distDir = Join-Path $projectRoot "dist\qt-$buildId"
+if (-not $PythonExecutable) {
+    $PythonExecutable = Join-Path $env:LOCALAPPDATA "LineCheckAssistant\qt-build-py39\Scripts\python.exe"
 }
 if ($WorkDirectory) { $buildDir = if ([System.IO.Path]::IsPathRooted($WorkDirectory)) { $WorkDirectory } else { Join-Path $projectRoot $WorkDirectory } }
 if ($OutputDirectory) { $distDir = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) { $OutputDirectory } else { Join-Path $projectRoot $OutputDirectory } }
@@ -35,12 +33,12 @@ if ($buildDir -ne $allowedBuildRoot -and -not $buildDir.StartsWith($allowedBuild
 if ($distDir -ne $allowedDistRoot -and -not $distDir.StartsWith($allowedDistRoot + "\", [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "OutputDirectory must stay within the project's dist directory: $distDir"
 }
-if ($Gui -eq "Qt" -and -not $CheckOnly) {
+if (-not $CheckOnly) {
     if ($buildDir -eq $allowedBuildRoot -or $distDir -eq $allowedDistRoot) {
-        throw "Use separate build and dist subdirectories for the Qt validation package"
+        throw "Use separate build and dist subdirectories for the Qt package"
     }
     foreach ($directory in @($buildDir, $distDir)) {
-        if (Test-Path -LiteralPath $directory) { throw "The Qt validation build requires fresh output directories: $directory" }
+        if (Test-Path -LiteralPath $directory) { throw "The Qt build requires fresh output directories: $directory" }
         $parent = Split-Path -Parent $directory
         while ($parent -and $parent.StartsWith($projectRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
             $item = Get-Item -LiteralPath $parent -Force -ErrorAction SilentlyContinue
@@ -53,25 +51,17 @@ if ($Gui -eq "Qt" -and -not $CheckOnly) {
 }
 $thirdPartyNotice = Join-Path $projectRoot "THIRD_PARTY_NOTICES.md"
 $portableConfigScript = Join-Path $projectRoot "scripts\create_portable_config.py"
-$portableReadme = Join-Path $projectRoot "line_check_assistant\packaging_assets\PORTABLE_README.txt"
-$versionInfo = Join-Path $projectRoot "line_check_assistant\packaging_assets\VERSION_INFO.txt"
+$versionInfo = Join-Path $projectRoot "line_check_assistant\packaging_assets\QT_VERSION_INFO.txt"
 $applicationIcon = Join-Path $projectRoot "assets\icons\line_check_assistant_network_topology_v1.ico"
 $runtimeConfigDir = Join-Path $projectRoot "Auto_power_on_off_tool\config"
-$exePath = Join-Path $distDir "DUTPilot.exe"
 $portableDir = Join-Path $distDir "DUTPilot_portable"
+$exePath = Join-Path $portableDir "DUTPilot.exe"
 $portableConfigDir = Join-Path $portableDir "Auto_power_on_off_tool\config"
 $portableZip = Join-Path $distDir "DUTPilot_portable.zip"
 $portableZipChecksum = Join-Path $distDir "DUTPilot_portable.zip.sha256.txt"
 $packageVerifier = Join-Path $projectRoot "scripts\verify_slim_package.py"
-$buildInfo = Join-Path $buildDir "LineCheckAssistant\BUILD_INFO.txt"
+$buildInfo = Join-Path $buildDir "DUTPilotQt\BUILD_INFO.txt"
 $caseSnapshot = Join-Path $buildDir "CONFIRMED_CASES.json"
-if ($Gui -eq "Qt") {
-    $exePath = Join-Path $portableDir "DUTPilot.exe"
-    $buildInfo = Join-Path $buildDir "DUTPilotQt\BUILD_INFO.txt"
-    $versionInfo = Join-Path $projectRoot "line_check_assistant\packaging_assets\QT_VERSION_INFO.txt"
-    $portableReadme = $versionInfo
-}
-
 $savedPythonPath = $env:PYTHONPATH
 $savedPythonHome = $env:PYTHONHOME
 $savedPythonUtf8 = $env:PYTHONUTF8
@@ -117,22 +107,6 @@ try {
         throw "PyInstaller did not create the expected file: $exePath"
     }
 
-    if ($Gui -eq "Tk") {
-        # Check the one-file archive for both layouts before constructing the ZIP.
-        $archiveListing = & $PythonExecutable -I -X utf8 -m PyInstaller.utils.cliutils.archive_viewer -l $exePath 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            throw "Unable to inspect the PyInstaller archive, exit code $LASTEXITCODE"
-        }
-        # archive_viewer renders path separators escaped in repr form (\\).
-        $hasTclData = [bool]($archiveListing | Select-String -SimpleMatch "'tcl\\init.tcl'")
-        $hasTkData = [bool]($archiveListing | Select-String -SimpleMatch "'tk\\tk.tcl'")
-        $hasModernTclData = [bool]($archiveListing | Select-String -SimpleMatch "'_tcl_data\\init.tcl'")
-        $hasModernTkData = [bool]($archiveListing | Select-String -SimpleMatch "'_tk_data\\tk.tcl'")
-        if (-not ($hasTclData -and $hasTkData -and $hasModernTclData -and $hasModernTkData)) {
-            throw "Frozen Tkinter data is incomplete: expected tcl/tk and _tcl_data/_tk_data roots"
-        }
-    }
-
     if (Test-Path -LiteralPath $thirdPartyNotice) {
         Copy-Item -LiteralPath $thirdPartyNotice -Destination (Join-Path $distDir "THIRD_PARTY_NOTICES.md") -Force
     }
@@ -147,18 +121,7 @@ try {
         throw "Refusing to clean a portable archive outside dist: $resolvedPortableZip"
     }
 
-    if ($Gui -eq "Tk") {
-        if (Test-Path -LiteralPath $portableDir) {
-            Remove-Item -LiteralPath $portableDir -Recurse -Force
-        }
-        if (Test-Path -LiteralPath $portableZip) {
-            Remove-Item -LiteralPath $portableZip -Force
-        }
-
-        New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
-        Copy-Item -LiteralPath $exePath -Destination (Join-Path $portableDir "DUTPilot.exe") -Force
-    }
-    Copy-Item -LiteralPath $portableReadme -Destination (Join-Path $portableDir "PORTABLE_README.txt") -Force
+    Copy-Item -LiteralPath $versionInfo -Destination (Join-Path $portableDir "PORTABLE_README.txt") -Force
     if (-not (Test-Path -LiteralPath $versionInfo -PathType Leaf)) {
         throw "Portable version information is missing: $versionInfo"
     }
@@ -184,17 +147,13 @@ try {
     Copy-Item -LiteralPath $versionInfo -Destination (Join-Path $distDir "VERSION_INFO.txt") -Force
     Copy-Item -LiteralPath $buildInfo -Destination $distDir -Force
 
-    if ($Gui -eq "Qt") {
-        $pendingZip = "$portableZip.pending"
-        try {
-            & $PythonExecutable -I -X utf8 -m zipfile -c $pendingZip $portableDir
-            if ($LASTEXITCODE -ne 0) { throw "Unable to archive the Qt portable directory" }
-            Move-Item -LiteralPath $pendingZip -Destination $portableZip
-        } finally {
-            if (Test-Path -LiteralPath $pendingZip) { Remove-Item -LiteralPath $pendingZip -Force }
-        }
-    } else {
-        Compress-Archive -LiteralPath $portableDir -DestinationPath $portableZip -CompressionLevel Optimal
+    $pendingZip = "$portableZip.pending"
+    try {
+        & $PythonExecutable -I -X utf8 -m zipfile -c $pendingZip $portableDir
+        if ($LASTEXITCODE -ne 0) { throw "Unable to archive the Qt portable directory" }
+        Move-Item -LiteralPath $pendingZip -Destination $portableZip
+    } finally {
+        if (Test-Path -LiteralPath $pendingZip) { Remove-Item -LiteralPath $pendingZip -Force }
     }
     if (-not (Test-Path -LiteralPath $portableZip -PathType Leaf)) {
         throw "Portable archive was not created: $portableZip"
@@ -209,23 +168,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Package archive verification failed" }
 
     Write-Host "Local build artifacts (retained for verification): $distDir"
-    if ($Gui -eq "Qt") {
-        Write-Host "  Qt validation EXE: $exePath"
-        Write-Host "  Portable ZIP: $portableZip"
-        Write-Host "  Portable ZIP SHA256: $portableZipChecksum"
-        return
-    }
-    Write-Host "  Single-file EXE: $exePath"
-    Write-Host "  Portable directory: $portableDir"
+    Write-Host "  Qt EXE: $exePath"
     Write-Host "GitHub Release attachments (upload only these two files from this build):"
     Write-Host "  Portable ZIP: $portableZip"
     Write-Host "  Portable ZIP SHA256: $portableZipChecksum"
-    Write-Host "Version information, third-party notices and the EXE checksum are included in the portable ZIP; do not upload them or the EXE separately."
-
-    $resolvedBuildDir = [System.IO.Path]::GetFullPath($buildDir).TrimEnd('\')
-    if (($resolvedBuildDir -eq $allowedBuildRoot -or $resolvedBuildDir.StartsWith($allowedBuildRoot + "\", [System.StringComparison]::OrdinalIgnoreCase)) -and (Test-Path -LiteralPath $resolvedBuildDir)) {
-        Remove-Item -LiteralPath $resolvedBuildDir -Recurse -Force
-    }
 }
 finally {
     $env:PYTHONPATH = $savedPythonPath

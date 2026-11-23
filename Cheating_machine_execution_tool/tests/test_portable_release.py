@@ -231,6 +231,7 @@ class PortableReleaseBuildScriptTests(unittest.TestCase):
                     checker.check_environment()
 
     def test_standard_spec_uses_relocated_paths_and_accepted_slim_profile(self):
+        # Exercise the historical Tk spec as a static packaging fixture.
         from scripts import check_build_environment as checker
         captured = {}
         def analysis(*args, **kwargs):
@@ -390,16 +391,19 @@ class PortableReleaseBuildScriptTests(unittest.TestCase):
         self.assertLess(script.index('"scripts\\verify_baseline.py"'), script.index("-m PyInstaller"))
         self.assertIn("DUTPilot_portable", script)
         self.assertIn("create_portable_config.py", script)
-        self.assertIn("Compress-Archive", script)
+        self.assertIn("-m zipfile -c $pendingZip $portableDir", script)
         self.assertIn("DUTPilot.exe.sha256.txt", script)
         self.assertIn("DUTPilot_portable.zip.sha256.txt", script)
         self.assertIn("Get-FileHash -LiteralPath $portableZip -Algorithm SHA256", script)
         self.assertIn('-Value "$zipHash *DUTPilot_portable.zip"', script)
         self.assertIn("PORTABLE_README.txt", script)
-        self.assertIn("'tcl\\\\init.tcl'", script)
-        self.assertIn("'tk\\\\tk.tcl'", script)
-        self.assertIn("'_tcl_data\\\\init.tcl'", script)
-        self.assertIn("'_tk_data\\\\tk.tcl'", script)
+        self.assertIn('DUTPilotQt.spec', script)
+        qt_spec = (PROJECT_ROOT / 'line_check_assistant/packaging_specs/DUTPilotQt.spec').read_text(encoding='utf-8')
+        self.assertIn("[str(project_root / 'run_dutpilot_qt.py')]", qt_spec)
+        self.assertTrue((PROJECT_ROOT / 'run_dutpilot_qt.py').is_file())
+        self.assertIn(r'qt-build-py39\Scripts\python.exe', script)
+        self.assertIn('verify_slim_package.py', script)
+        self.assertIn('$packageVerifier --gui $Gui', script)
         self.assertNotIn("Start-Process", script)
 
 

@@ -2,7 +2,7 @@
 from dataclasses import replace
 from PySide6.QtCore import QEvent, QSignalBlocker, Qt, Signal
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QHBoxLayout, QHeaderView, QListWidget,
-                               QListWidgetItem, QMenu, QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem,
+                               QListWidgetItem, QMenu, QMessageBox, QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem,
                                QVBoxLayout, QWidget)
 
 from src.models.qt_log_history import HistoryEventFilter
@@ -66,6 +66,7 @@ class LogHistoryDialog(QDialog):
     legacy_requested = Signal(object)
     events_requested = Signal(str, object, object)
     review_requested = Signal(str)
+    stop_requested = Signal(str)
     result_files_requested = Signal(str)
 
     def __init__(self, project, parent=None):
@@ -107,6 +108,7 @@ class LogHistoryDialog(QDialog):
         self.jobs.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.jobs.customContextMenuRequested.connect(self._job_menu)
         self.job_menu = QMenu(self.jobs)
+        self.stop_action = self.job_menu.addAction('请求安全停止…', self._request_stop)
         self.review_action = self.job_menu.addAction('现场核实结果…', self._request_review)
         self.result_files_action = self.job_menu.addAction('查看批次结果文件…', self._request_result_files)
         jobs_bar.addWidget(self.jobs, 1)
@@ -199,8 +201,18 @@ class LogHistoryDialog(QDialog):
         self.feedback.setText(f'本页 {len(page.entries)} 条' if page.entries else '该项目没有旧工作台运行记录')
 
     def _job_menu(self, point):
-        if self.review_action.isEnabled() or self.result_files_action.isEnabled():
+        if self.stop_action.isEnabled() or self.review_action.isEnabled() or self.result_files_action.isEnabled():
             self.job_menu.popup(self.jobs.mapToGlobal(point))
+
+    def _request_stop(self):
+        if not self.stop_action.isEnabled():
+            return
+        identifier = self.jobs.currentData()
+        answer = QMessageBox.question(self, '请求安全停止',
+            f'是否请求所选任务 {identifier[:8]} 安全停止？已执行步骤仍按原流程收尾。',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
+            self.stop_requested.emit(identifier)
 
     def _request_review(self):
         if self.review_action.isEnabled():
@@ -230,11 +242,13 @@ class LogHistoryDialog(QDialog):
         self.older_logs.setEnabled(not busy and self.events_cursor is not None)
         row = self.jobs.currentData(Qt.ItemDataRole.UserRole + 1)
         job_menu_ready = not busy and self.source.currentData() == 'jobs' and self.source.isEnabled() and row is not None
+        can_stop = job_menu_ready and row.state in ('queued', 'running')
         can_review = job_menu_ready and row.state in JOB_REVIEW_STATES
         can_view_files = job_menu_ready and row.capability in POWER_HISTORY_CAPABILITIES
+        self.stop_action.setEnabled(can_stop)
         self.review_action.setEnabled(can_review)
         self.result_files_action.setEnabled(can_view_files)
-        tip = ('\n右键查看任务操作' if can_review or can_view_files else '')
+        tip = ('\n右键查看任务操作' if can_stop or can_review or can_view_files else '')
         self.jobs.setToolTip(row.job_id + tip if row else '')
         if busy:
             self.feedback.setText('正在读取历史…')
@@ -326,6 +340,7 @@ class LogHistoryController:
         dialog.legacy_requested.connect(lambda before: self._submit(dialog, 'history_legacy_runs', before))
         dialog.events_requested.connect(lambda job, before, filters: self._submit(dialog, 'history_events', before, job, filters))
         dialog.review_requested.connect(lambda job: self._submit(dialog, 'job_review_prepare', job))
+        dialog.stop_requested.connect(lambda job: self._submit(dialog, 'job_stop_active', job))
         dialog.result_files_requested.connect(lambda job: self._submit(dialog, 'history_result_files', job))
         dialog.logs.export_requested.connect(lambda entries, description: self.workspace.export_logs(entries, description, dialog))
         dialog.finished.connect(lambda _: self.windows.pop(project.project_id, None))
@@ -372,6 +387,10 @@ class LogHistoryController:
             dialog.show_legacy(result.payload)
         elif result.operation == 'history_result_files':
             self._show_result_files(dialog, result.payload)
+        elif result.operation == 'job_stop_active':
+            dialog.show_review_state(result.payload['job_id'], result.payload['state'])
+            dialog.set_busy(False)
+            dialog.feedback.setText(result.payload['notice'])
         elif result.operation == 'job_review_prepare':
             self._show_review(dialog, result.payload)
         elif result.operation == 'job_review_commit':

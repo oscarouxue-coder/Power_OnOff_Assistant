@@ -1,5 +1,128 @@
 # 开发记录
 
+## 2026-11-24 - 清理测试过程 PNG
+
+- 在主源码的 `validation/` 内核对实际路径、Git 状态、报告引用和验证记录，将 2,064 张过程 PNG 移入回收站。11 月 22 日串口长挂候选 447 张、Qt 整合候选 891 张，历史 PySide6 迁移专项 726 张。
+- Qt 整合候选初次失败对应的日志计数用例已在三档最终批次复验通过。旧任务历史和表单滚轮失败用例也在 [历史候选隔离复验](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/current_candidate_review/REPORT.md) 的三档记录中通过。原始结果、测试文本和隔离记录继续保留。
+- 复核 169 张报告直接引用的截图及 20 张旧 Tk 对照图仍可访问。另保留 153 张旧候选、交接和专项截图供后续核对，已纳入 Git 的图片保持原样。
+
+## 2026-11-24 - 显示通道绑定并隐藏未启用通道
+
+- 类型为修改。Qt「运行概览」的矩阵和列表以项目的通道启用状态筛选。全未启用时显示「暂无已启用通道」，可从「环境配置」重新启用。通道卡片展示 VLAN 和 COM，可悬停查看被截短的完整值。项目配置保存后沿用现有刷新流程，任务绑定沿用本次任务配置快照。
+- 修改主源码目录下的 `src/ui/qt/project_detail.py`、`src/ui/qt/visual_preview_data.py`、`tests/qt_workbench_probe.py`、`line_check_assistant_README.md` 和 `scripts/capability_gui_actions.json`，并追加本日志。GUI 能力清单仅更新源码指纹，动作和回调保持一致。
+- 使用 Qt 环境执行局部 `py_compile`、`python scripts/verify_capability_coverage.py --update` 和 `git diff --check`。通过 `run_gui_child(framework='qt', native_render=True)` 调用 `scripts/run_tests.py`。100% 缩放通过 12 项，125% 和 150% 各通过 4 项，窗口隔离违规为零。验证了保存和取消、停用后隐藏、任务快照、最小窗口、通道点击、右键日志及续跑定位。
+- 本轮为源码及模拟验证，未运行完整基线、打包或操作真实设备。阶段截图生成 0 张，清理 0 张。
+
+## 2026-11-24 - 重命名运行概览的配置按钮
+
+- 类型为修改。通道矩阵上方的按钮改为「环境配置」，右侧配置摘要的按钮改为「测试配置」。分别沿用通道配置与六标签配置窗口。
+- 修改文件
+  - `Cheating_machine_execution_tool/src/ui/qt/project_detail.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `Cheating_machine_execution_tool/scripts/capability_gui_actions.json`
+  - `CAPABILITY_COVERAGE.md`
+  - `DEVELOPMENT_LOG.md`
+- 核对两处文案和原信号绑定。Qt 环境下 `python -m py_compile src/ui/qt/project_detail.py` 通过。通过 `run_gui_child(framework='qt', native_render=True)` 启动 `scripts/run_tests.py`，通道配置与六标签配置入口专项各通过 1 项，窗口隔离违规为零。
+- `python scripts/verify_capability_coverage.py --update` 和 `git diff --check` 通过。能力快照同时补入该页已有的矩阵布局回调。未触发完整基线或构建，未生成阶段截图。
+
+## 2026-11-24 - 将阶段截图清理纳入开发规则
+
+- 第 25 条将阶段验证通过并完成报告后的过程 PNG 清理列为开发收尾步骤，按现有截图清理条款保留报告引用、人工比对和现场验收证据，并记录清理数量与保留项。
+- 本次为文档更新，核对了规则一致性、段落链接和差异格式。
+
+## 2026-11-24 - 高亮运行概览的已选通道
+
+- 类型为优化。Qt 矩阵用「已选」和青色左边线标出勾选通道，状态未知时用浅青底。运行结果继续使用原状态色。任务结束后保存新的通道勾选时，刷新标记并保留上次结果。矩阵换行后同步更新容器高度。
+- 修改 `Cheating_machine_execution_tool` 下的 `src/models/workbench_presentation.py`、`src/services/qt_workspace_adapter.py`、`src/ui/qt/project_detail.py`、`src/ui/qt/demo_data.py`、`tests/qt_workbench_probe.py` 和 `line_check_assistant_README.md`，并追加本日志。
+- 使用 Qt 环境执行局部 `py_compile`、`git diff --check` 和 `python scripts/verify_gui_test_coverage.py`。通过 `scripts.gui_test_process.run_gui_child(framework='qt', native_render=True)` 运行 `scripts/run_tests.py` 中的矩阵/列表、配置保存、切换项目和模拟执行目标 4 项回归。100%、125%、150% 各 4 项通过，隔离违规为零。未生成阶段截图。
+- 本轮未运行完整基线、构建或操作真实设备。
+
+## 2026-11-24 - 核对全流程回归并补齐 Qt 启动回执
+
+- 在 `src/ui/qt/workspace_controller.py` 将全流程窗口收起绑定到后台成功受理回执。配置复核拒绝时保留窗口和选择，并显示原因。同步更新操作者说明、`scripts/capability_gui_actions.json` 和退役核对。
+- 在 `tests/qt_workbench_probe.py` 检查三项默认未选、确认文案、后台拒绝时窗口及选择保留、成功后收起、真实结束后可重新打开，以及 ONU 关闭重开加载保存的 C600 参数。将原全流程窗口的 7 项指定回归逐项对应到 Qt 和共享服务。旧回归仍随完整基线执行。
+- 工作区集成版的 `python scripts/verify_baseline.py` 通过 3,379 项测试、285 项指定回归、424 项编译、414 项源码覆盖及其余门禁。随后针对全流程回执这一局部改动，在 Windows 私有桌面 100%、125%、150% 各运行 15 项 Qt 回归，全部通过，隔离违规为零。27 项全流程与 ONU 服务回归、局部编译、GUI 能力与隔离清单及差异检查通过。
+
+## 2026-11-24 - 补齐任务历史安全停止
+
+- 类型为修改。Qt「任务历史」增加选中任务的右键安全停止。本机确认绑定当前项目与任务编号，只接受本进程仍负责的活跃任务。原取消服务记录请求并等待实际终态，已请求停止的任务不重复提交。
+- 修改 `src/services/qt_job_review.py`、`qt_workspace_adapter.py` 和 `src/ui/qt/log_history_dialog.py`，同步操作员说明、能力清单及原生和服务回归。独立副本的专项验证覆盖取消确认、跨项目拒绝、结束任务拒绝和同项目其他任务继续运行。
+- 合并后在 Windows 私有桌面复验 Qt 守卫、接入配置、SDK 修复、飞书通知、受控扩展及任务停止，100%、125%、150% 各通过 10 项，隔离违规为零。
+
+## 2026-11-24 - 迁移 Qt 直连接入和受控扩展
+
+- 类型为修改。把旧 Tk 的直连接入、飞书自动挂测通知及受控扩展管理接入 Qt。本机仍需确认项目授权和启停，直连复核群或单聊身份，自动通知使用已绑定群和已保存项目名。受控扩展复用原声明式模板审阅及授权，确认只对选定项目和审阅哈希生效。
+- 修改 `src/services/qt_direct_platforms.py`、`qt_feishu_notifications.py`、`qt_controlled_extensions.py`、`qt_ai_chat.py`、`qt_execution_adapter.py`、`qt_workspace_adapter.py` 及相应 Qt 对话框。通知和直连工作在关闭前收尾，保留原挂测结果与独立任务生命周期。[退役核对](docs/TK_RETIREMENT_AUDIT.md)
+- 将 WiFi 原默认值、WAN 规则和消息试发测试与旧窗口解耦。旧导出别名断言集中到 Tk 历史测试。同步 GUI 业务和指定回归清单。
+- 独立副本通过 18 项平台和受控扩展专项、3 项 Qt 原生专项、4 项 WiFi/WAN 与旧别名检查，并用模拟平台事件核实两平台身份及撤权。合并后完整 Qt 原生验证在 100%、125%、150% 各通过 122 项，隔离违规为零。
+- 回收本阶段的 447 张过程 PNG，保留三档原生测试输出和布局数据。
+
+## 2026-11-24 - 补齐 Qt 群绑定和飞书 SDK 修复
+
+- 类型为修改。开始 DUTPilot 主程序 Tk 源码退役，逐项对照仍有业务用途的旧界面入口。[退役核对](docs/TK_RETIREMENT_AUDIT.md)
+- 在 Qt 工作台接入钉钉和飞书应用配置、群绑定及飞书试发。保存沿用原加密存储，绑定确认复核项目、群身份与配置版本。试发由原队列给出结果。源码 SDK 修复复用原环境锁和安全退出，重启失败使用 Windows 原生提示。
+- 修改集中于 `src/services/qt_platform_configuration.py`、`qt_feishu_repair.py`、`qt_workspace_adapter.py`、`src/ui/qt/` 的工作台和相关窗口、`src/core/source_restart.py` 及 `scripts/restart_source_after_exit.py`。同步当前状态、操作员说明、原生用例、必跑测试和能力清单。
+- `scripts/run_gui_child.py` 与 `qt_test_guard.py` 的 Qt 路径已与 Tk 守卫分离。首次原生检查发现 Qt 试发用例通过共享定值导入旧 Tk 测试模块。将模拟地址和响应移入共享测试夹具后，三档完整 Qt 原生检查各通过 120 项，隔离违规为零。完整基线通过 3,374 项，280 项指定回归全部执行。
+- 复验通过后回收两次原生运行生成的 615 张过程 PNG，保留测试输出和布局数据。
+
+## 2026-11-24 - 移除 DUTPilot 旧启动命令
+
+- 类型：修改。
+- 背景：源码和标准构建已使用 Qt 工作台，旧命令只转调 Qt，飞书 SDK 修复链路仍引用旧脚本。
+- 完成内容：将源码环境检查与安全重启切到 `run_dutpilot_qt.py`，删除 `run_line_check_assistant.py` 及其编译登记。重启沿用原解释器、工作目录、业务参数和旧进程退出门禁。旧 Tk 规格和回归保留为历史材料，复现旧构建使用对应历史提交。
+- 修改文件：
+  - `Cheating_machine_execution_tool/run_line_check_assistant.py`（删除）
+  - `Cheating_machine_execution_tool/src/core/feishu_dependency_install.py`
+  - `Cheating_machine_execution_tool/src/core/source_restart.py`
+  - `Cheating_machine_execution_tool/scripts/verify_baseline.py`
+  - `Cheating_machine_execution_tool/tests/test_feishu_dependency_repair.py`
+  - `Cheating_machine_execution_tool/tests/test_portable_release.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `Cheating_machine_execution_tool/validation/multi_project_completion_20261117/ACCEPTANCE_CHECKLIST.md`
+  - `AGENTS.md`、`README.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：在锁定 Qt 开发环境执行 `python scripts/run_tests.py test_feishu_dependency_repair test_qt_migration_contract test_portable_release test_verify_baseline -v`，并执行 6 个 Python 文件的 `py_compile`、编译清单路径检查、`python run_dutpilot_qt.py --help`、旧入口引用扫描及 `git diff --check`。
+- 验证结果：85 项专项通过，GUI 隔离检查通过。覆盖入口缺失、维护锁、项目路径和槽位参数、模拟进程退出后仅重启一次及等待超时。局部编译、清单路径、命令帮助、旧引用扫描和差异检查通过。本轮未运行完整基线，未构建 EXE，飞书修复仍按现有现场范围复验。
+- 后续待办：使用旧命令的仓库外快捷方式、批处理和计划任务需更新为 `run_dutpilot_qt.py`。
+
+## 2026-11-23 - 接入工作台美化首批并预览五个业务窗口
+
+- 正式 Qt 工作台启用新版总览卡、自动开关机轮次和通道布局、全业务老化摘要与观测分区。实时资源摘要复用原采样。窄窗折叠保留用户手动选择。预览继续与真实项目隔离。
+- `--visual-preview` 新增「业务窗口预览…」，提供串口日志、样机升级、DUT 配置、测试项配置和通道配置的集中评审稿。正式业务窗口待评审。
+- 变更集中于 Qt 主题和首批页面、独立预览及窗口隔离用例，已同步编译及能力清单、操作员说明和项目状态。局部编译、6 项启动契约及能力覆盖通过。本轮未运行仓库完整基线。
+- 私有桌面三档运行首批相关回归及第二批预览专项。首批初次验证发现轮次标题缺少类型，修复后重新验证。保留 3 张首批正式布局和 15 张第二批评审截图。[首批接入](Cheating_machine_execution_tool/validation/gui_visual_workbench_20261123/REPORT.md) · [第二批对照](Cheating_machine_execution_tool/validation/gui_visual_module_windows_20261123/REPORT.md)
+
+## 2026-11-23 - 提供 Qt 工作台美化预览
+
+- 类型为界面预览。新增 `run_dutpilot_qt.py --visual-preview`，复用现有 Qt 工作台，以同一组模拟快照比较总览、自动开关机详情和全业务老化详情。起停确认在预览窗口反馈。
+- 预览布局和样例位于 `src/ui/qt/visual_preview.py`、`src/ui/qt/visual_preview_data.py`，由 `src/ui/qt/application.py` 启动。同步编译登记、GUI 动作快照、能力覆盖矩阵、启动回归及 `tests/qt_visual_preview_probe.py`。
+- 验证包括局部编译、6 项入口及迁移契约回归、能力覆盖检查，以及 Windows 私有桌面 100%、125%、150% 各 4 项专项。完整基线沿用前批记录，本批未运行。保留 10 张前后及窄屏评审截图。
+- 下一阶段按视觉确认结果接入正式三页，后续依次推进常用业务窗口和其它 Qt 对话框。[前后对照及验证报告](Cheating_machine_execution_tool/validation/gui_visual_refresh_20261123/REPORT.md)
+
+## 2026-11-23 - 登记 Qt GUI 升级现场验收
+
+- 类型为真实样机验收。项目负责人回复「现场验收通过」，按已交接的 Qt V1.3.0 候选范围登记真实样机验收通过。
+- 确认范围为目标 Windows 启动、旧项目、系统 DPI 与多屏、开关机每台 DUT 500 轮、语音与 LAN 各 48 小时、常温全业务老化 7 天及 24/72 小时无人值守。依据为负责人本次现场确认，逐批次明细以现场记录为准。
+- 同步 `GUI_DESIGN_GUIDELINES.md`、`docs/GUI_UPGRADE_EXECUTION_PLAN.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、现场采样说明和候选报告。按候选包 SHA256 关联此前完整基线、三档原生验证和静态验包。
+- 本轮检查验收文档、链接、结果与成品哈希。完整基线使用候选的已有记录，本轮未运行完整基线。Phase 0–7 已收尾。[正式验收结论](Cheating_machine_execution_tool/validation/gui_guidelines_20261123/REPORT.md#现场验收)
+
+## 2026-11-23 - 绑定现场采样与候选版本
+
+- 类型为修改。继续收尾 GUI 设计规范的 Phase 6–7，解决目标机进程采样与候选版本、运行批次依赖手工对照的问题。
+- `Cheating_machine_execution_tool/validation/pyside6_migration_20261118/long_run_acceptance/` 下更新 `watch_process.ps1`、`check_sampler.py` 和 `README.md`，新增 `FIELD_RECORD.md`。候选模式在采样前核对 ZIP 哈希、当前进程映像与可选启动时间，采样头记录候选、项目及运行身份。源码版沿用原采样入口。
+- 将验收记录表、采样脚本和原候选校验文件打包为独立现场材料，同步 GUI 执行计划、项目状态和当前候选报告。便携产品包已再次按原 SHA256 复核。
+- 锁定 Qt 开发解释器执行 `python check_sampler.py -v`，临时进程专项 6 项通过。在独立解压目录验证归档完整性及内容，并复跑同一组 6 项通过。完整基线沿用前次候选记录，本轮验证现场工具。
+- 目标 Windows、真机和 24／72 小时记录待现场。[现场材料及候选身份](Cheating_machine_execution_tool/validation/gui_guidelines_20261123/REPORT.md#现场验收)
+
+## 2026-11-23 - 减少长挂计时引起的表格刷新
+
+- 类型为优化。按 GUI 设计规范继续收尾 Phase 6–7，核对长挂监测、整合候选与现场证据。
+- 逐 DUT 工作台在观测记录未变化时保留表格和当前选择，监测时长照常更新。新观测继续更新表格及业务状态。同步项目进度、Qt 验收入口及现场采样说明。
+- 源码和回归改动位于 `Cheating_machine_execution_tool/src/ui/qt/test_type_panel.py` 和 `Cheating_machine_execution_tool/tests/qt_typed_status_probe.py`。能力清单同步至 `Cheating_machine_execution_tool/scripts/capability_gui_actions.json` 和 `CAPABILITY_COVERAGE.md`。说明及证据同步至 `GUI_DESIGN_GUIDELINES.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`docs/GUI_UPGRADE_EXECUTION_PLAN.md`、现场采样说明及本轮报告。
+- 修复前标准 `-CheckOnly` 通过 3,366 项完整基线和 273 项指定回归。新增原生断言在旧实现复现差异，修复后两项原生专项通过。随后锁定 Qt 解释器运行 `scripts/verify_qt_migration.py`，三档各通过 117 项，每档 1,956 个受管窗口，隔离违规为零。局部编译、能力覆盖、现场采样脚本三项和差异格式检查通过。
+- 同一源码快照使用标准 `build_line_check_assistant.ps1` 在独立目录完整构建，最终基线 3,366 项、273 项指定回归及标准验包通过。静态复核实际 EXE/PYZ 的 364 个项目模块、入口、操作员说明及 ZIP CRC 和两份 SHA256。新 EXE 留待目标 Windows 机启动。候选路径和哈希见本轮报告。
+- 核对报告引用和 Git 跟踪后，将 11 月 22 日 Qt 入口批次和本轮各 447 张过程 PNG 移入回收站。两批分别保留结果 JSON、三个布局数据文件和三档测试输出。
+- 目标机、真实 DUT 及长挂验收待现场。[验证与交接](Cheating_machine_execution_tool/validation/gui_guidelines_20261123/REPORT.md)
+
 ## 2026-11-22 - 支持串口日志最小化与置顶
 
 - 功能。项目串口终端可用 Windows 标题栏最小化并恢复原窗口。在窗口内的标题文字或日志区右键勾选「窗口置顶」，默认关闭，当前窗口恢复后仍保留勾选。窗口状态切换记录在项目执行日志中。
@@ -8,6 +131,142 @@
 - 以锁定 Qt 解释器通过 `run_gui_child(..., framework='qt', native_render=True)` 运行 `scripts/run_tests.py`。新增 `test_qt_serial_window_minimize_and_pin_preserve_live_session` 在 `QT_SCALE_FACTOR=1`、`1.25`、`1.5` 各通过一次，另有 8 项串口及窗口回归通过。原生隔离违规为零，未生成截图。局部 `py_compile`、能力覆盖和 `git diff --check` 通过。
 - `python scripts/run_tests.py test_serial_terminal test_qt_workspace_adapter -q` 通过 113 项，离屏窗口隔离违规为零。
 - 桌面控制的 Windows 管道不可用，任务栏实点恢复及切换其他应用时的层级效果待源码版人工核对。本轮未运行完整基线，未构建 EXE。
+
+## 2026-11-22 - Qt 单次电源预写入失败正确收尾
+
+- `src/core/power_supply.py` 和 `src/services/power_on_service.py` 提供串口写入尝试回调。`src/services/qt_single_power.py` 在首次调用串口写入前才标记尝试下发。串口打开被拒绝等预写入失败记录为「失败」，日志保留原因并注明指令未下发。尝试写入后出现异常仍记录「结果未知」并保留相关保护。
+- `tests/test_qt_execution_adapter.py` 增加上电和下电打开被拒绝、第一次写入异常的回归，并复核部分下发保护。锁定 Qt 环境通过 `scripts/run_tests.py test_power_supply test_qt_execution_adapter test_capability_devices -q` 共 78 项，Windows 原生私有桌面单次电源入口回归通过 1 项，7 个受管窗口且隔离违规为零。局部编译及差异格式检查通过。
+- 只读复查本轮涉及的 COM102 历史任务，原串口拒绝事件仍在，任务已有「现场确认失败」结论及依据，原保护记录已结清。
+- 同步操作员说明和验收基线。本轮未运行完整基线，未构建 EXE。
+
+## 2026-11-22 - Qt 启动时恢复上次打开的项目
+
+- 工作台在正常退出前取得已打开项目及当前选择的快照，完成收尾后原子写入本机工作区的 `workspace_session.json`。下次启动按顺序校验项目路径、身份和占用，跳过不可用项并记录原因。显式打开的项目优先选中，已打开的项目沿用本次会话。同一工作区的最近项目列表独立保存。
+- 源码改动位于 `src/services/project_store.py`、`src/services/workspace_service.py`、`src/services/qt_workspace_adapter.py` 和 `src/ui/qt/workspace_controller.py`。专项回归在 `tests/test_qt_workspace_adapter.py` 和 `tests/qt_workbench_probe.py`。同步操作员说明、项目状态、验收基线、GUI 动作清单和能力矩阵。
+- 临时项目验证覆盖顺序与选中项、关闭全部项目、总览、取消退出、目录移走、占用、身份变化和会话文件读写失败。Windows 原生私有桌面验证了退出、重启及通过显式路径切换已恢复项目，保留 10 个受管窗口的隔离证据，违规为零。本轮没有生成截图。
+- 首轮沙箱回归有两项因 Windows 旧进程存活状态无法核实而失败。放行进程查询后，最终源码在锁定 Qt 环境执行 `scripts/run_tests.py test_qt_workspace_adapter test_project_workspace test_workspace_instance test_qt_migration_contract -q` 共 95 项通过，另有上述 1 项 Windows 原生专项通过。局部编译、能力覆盖和差异格式检查通过。本轮未运行完整基线，未构建 EXE。
+
+## 2026-11-22 - 统一 Qt 源码与标准打包入口
+
+- 旧命令与源码重启转入 Qt 工作台，保留项目路径、单实例转交、1 至 64 的网关槽位和环境维护保护。旧单项目参数退出并提示导入。旧解释器缺少 Qt 时转用独立开发环境。VS Code 只提供 Qt 主程序和独立串口升级工具。
+- 标准构建使用原 Qt 锁定环境、目录包和验包门禁。显式请求 Tk 在准备环境前退出。旧 Tk 界面源码与历史回归保留。
+- 入口和构建文件为 `run_dutpilot_qt.py`、`run_line_check_assistant.py`、`.vscode/{launch,settings}.json`、`scripts/setup_qt_environment.ps1`、`build_line_check_assistant.ps1`、`line_check_assistant/packaging_specs/DUTPilotQt.spec` 和 `line_check_assistant/packaging_assets/QT_VERSION_INFO.txt`。旧草稿的提示在 `src/ui/qt/configuration_dialog.py`。
+- 回归调整涉及 `tests/test_qt_migration_contract.py`、`tests/test_feishu_dependency_repair.py` 和 `tests/test_portable_release.py`。文档同步根 README、AGENTS、项目状态、验收基线、GUI 升级计划和操作员说明。
+- 隔离专项 `python scripts/run_tests.py test_qt_migration_contract test_feishu_dependency_repair test_portable_release -q` 通过 58 项。独立进程使用真实新旧解释器和模拟工作台入口，验证各转交一次、保留含空格的项目路径与槽位、缺环境提示及 Tk 构建拒绝。
+- 路径统一按启动方工作目录转为绝对路径。最终锁定解释器下增加能力覆盖复验，共 61 项专项通过。首轮完整门禁因运行中源码与两项路径断言版本不同、GUI 动作清单中途更新失败。复核后的 `verify_capability_coverage.py --update` 通过，清单及能力矩阵哈希一致。
+- `python scripts/verify_qt_migration.py --output validation/qt_only_entry_20261122` 通过。Windows 原生 100%、125%、150% 三档各 116 项、各 1,950 个受管窗口，指定用例全数命中且隔离违规为零。[逐档结果与窗口隔离证据](Cheating_machine_execution_tool/validation/qt_only_entry_20261122/results.json)。本阶段只需留存 JSON 和三份原生测试日志，过程截图无需人工比对。
+
+## 2026-11-22 - 长挂串口接收内存与工作台候选整合
+
+- 每个串口会话的原始接收历史常驻上限为 256 KiB。旧历史可从临时磁盘按原游标回读。超长待写半行保留原有换行、时间戳及关闭尾行。监测与开发报告分别记录常驻量、磁盘溢写量和进程内存。
+- 串口相关 165 项专项通过。单通道 1/2/4/8 MiB 四档原始历史哈希吻合。8/16 通道短时模拟均通过文本顺序、日志及线程收尾检查。[涉及文件、探针与验收范围](Cheating_machine_execution_tool/validation/gui_v13x_candidate_20261122/REPORT.md)
+
+## 2026-11-22 - 项目型号模板、硬件资源明细及开关机历史总览
+
+- 项目向导可从保存版本提取型号方案，并在新项目中应用。设备管理显示活动与待核实的保护记录，PON 归并到对应 OLT。可为每台 DUT 声明 ADB 标识，跨项目、跨进程争用受原任务租约约束。开关机项目重开后从所选批次的冻结目标和逐台回执恢复总览，具备起止时间时显示实际批次时长。
+- 合并后的 44 项专项通过，覆盖旧项目、模板冲突、未知占用、子进程退出、历史回执不全和停止收尾。涉及模块及其它原生专项见[资源与型号报告](Cheating_machine_execution_tool/validation/gui_resources_presets_20261122/REPORT.md)。
+
+## 2026-11-22 - 全业务老化逐 DUT 心跳、离线与启动变化
+
+- 在项目向导提供可选的设备状态采集。工作台按批次和 DUT 展示设备实测运行时长、真实在线心跳、明确上报的离线及可追溯的启动变化。业务错误与设备离线同时发生时，受影响 DUT 数去重。
+- 37 项专项回归和两项原生窗口专项通过。涉及文件、验证结果及现场待验见[设备状态报告](Cheating_machine_execution_tool/validation/gui_dut_presence_20261122/REPORT.md)。
+- 随后在本批相同源码完成三档 Windows 原生回归，各 114 项、1,937 个受管窗口，零违规。
+- 报告完成后核对路径、引用及 Git 跟踪，447 张本批过程 PNG 已移入回收站，三档逐项结果和前批人工对照图保留。
+
+## 2026-11-22 - 全业务老化工作台按批次接收现场观测
+
+- 向导可为已选业务启用现场采集。运行时发布本批计划与 DUT 映射，按源时间核验追加的 UTF-8 JSONL。重复上报、过期、错批次、文件中断与恢复分别处理。记录来源、源时间、接收时间和事件 ID 进入项目历史及 CSV。
+- 正式工作区 30 项专项通过，涵盖向导档案、清单与数据输入、原始 Job 确认和停止、两 DUT 的独立结果以及旧数据库回读。[修改文件、验证命令及现场待验](Cheating_machine_execution_tool/validation/gui_aging_feed_20261122/REPORT.md)
+- 同一最终输入在标准锁定环境通过 3,334 项完整基线、270 项指定回归，以及 Windows 100%、125%、150% 各 113 项。静态核验 362 个成品项目模块、启动入口、操作说明与 ZIP 哈希，通过。[最新便携包](Cheating_machine_execution_tool/dist/qt-v13x-feed-20261122/DUTPilot_portable.zip) · [成品核对记录](Cheating_machine_execution_tool/validation/gui_aging_feed_20261122/package-proof.json)
+- 完成报告后核对 Git 跟踪和报告引用，将本次全套原生回归生成的 447 张过程 PNG 移入回收站。保留三档结果、逐项输出及前一批用于人工对照的三张逐 DUT 准备页截图。
+
+## 2026-11-22 - V1.3.x 测试项目向导和两类工作台集成
+
+- 项目档案覆盖创建草稿、保存版本和运行快照。公共准备服务逐 DUT 关联原任务回执、现场观察与独立核验。开关机详情使用原项目的运行记录；持续供电老化使用独立 Job、逐项观测、每日及期末检查、批次分页和导出。
+- 增加逐日结构化工作区日志及 DUT 跨进程资源键。编译和原生测试清单纳入新增模块与交互。操作说明及验收待办同步见[分阶段进度](docs/GUI_UPGRADE_EXECUTION_PLAN.md)。
+- 初次项目存储、准备与 Qt 执行/工作区适配器组合 117 项通过，见[原始输出](Cheating_machine_execution_tool/validation/gui_upgrade_execution_20261122/integration-initial.txt)。另以模拟语音记录验证正式确认、资源变化拦截、安全停止及历史回读。目标机与长挂验收继续待办。
+- 逐 DUT 开关机回放、供电资源绑定和续跑的最终组合 82 项通过；日志背压、关闭、故障及任务隔离组合 237 项通过。归档窗口按项目、DUT、通道及等级分页。全套 Qt 初跑发现健康面板的写入失败测试提前结束了故障注入，已将注入保持到工作线程确认写入并保留原断言。[阶段报告及修改文件](Cheating_machine_execution_tool/validation/gui_upgrade_execution_20261122/REPORT.md)
+- 该批标准 Qt 候选构建的完整基线 3,320 项通过。Windows 三档各 112 项、1,930 个受管窗口，零违规。报告完成后核对 Git 跟踪和引用，888 张过程 PNG 已移入回收站，保留三档逐 DUT 准备页共 3 张用于现场目视复核。[候选包核验](Cheating_machine_execution_tool/dist/qt-v13x-gui-20261122/PACKAGING_REPORT.json)
+
+## 2026-11-22 - 从本地提交 cb9aa1b0 重建 DUTPilot V1.3.0 Qt 便携包
+
+- `feature/pyside6-migration` 本地提交 `cb9aa1b0` 收录 Qt 通道诊断、批量排障与工作台集成。依负责人确认，从独立工作树构建，后续组件展示和工作台样式继续保存在主工作区。
+- 提交钩子和标准脚本 `build_line_check_assistant.ps1 -Gui Qt` 各运行一次完整基线，均通过 3,280 项测试，270 项指定回归全部命中。构建环境为独立 CPython 3.9.10 x64 和 PyInstaller 5.10.1。
+- [V1.3.0 便携 ZIP](Cheating_machine_execution_tool/dist/qt-V1.3.0-cb9aa1b0/DUTPilot_portable.zip) 共 55,402,010 字节，SHA256 为 `215165f4736af687b85fc561a0bdda48abbb06a16961eba53b18e7ddcc6f05b7`。[静态验包报告](Cheating_machine_execution_tool/dist/qt-V1.3.0-cb9aa1b0/PACKAGING_REPORT.json)
+- 核对 Windows 文件版本 `1.3.0.0`、产品版本 `1.3.0` 及 EXE 内的诊断、监控与批量服务模块。确认展示页和新样式模块未打入。交付目录全部 252 个文件逐一比对 SHA256 通过。
+- PyInstaller 扫描可选 Qt 插件时提示缺少部分依赖，标准包静态校验通过。按项目约定未在构建机运行新 EXE，目标机启动与现场设备仍待验证。本次仅做本地提交和构建。
+
+## 2026-11-22 · Qt 工作台按项目统计、导航及实时日志筛选
+
+- 负责人确认继续推进 Phase 2 只读工作台。总览按完整项目 ID 去重，分别展示打开、运行、等待、最近任务完成、需关注、待核实。卡片和列表各自保留命令成功数、失败数及异常数的来源。旧项目重开后按最近准入记录匹配任务，预测试保留未校验语义。
+- 侧栏复用项目、历史、设置及设备入口，显示已保存配置的只读模板索引。全局日志按项目 ID 及工作区归属筛选，同名项目、关闭后仍在缓冲内的记录、详情切换和导出快照纳入回归。设备侧栏先读取缓存，操作员可显式刷新。
+- 源码改动包括 `src/models/workbench_presentation.py`，`src/services/` 下的 `qt_workspace_adapter.py`、`qt_execution_adapter.py`、`qt_pretest.py`、`qt_log_history.py`，以及 `src/ui/qt/` 下的 `main_window.py`、`workspace_controller.py`、`dashboard.py`、`showcase_components.py`、`project_templates_page.py`、`project_detail.py`、`system_health_panel.py`、`log_panel.py`。
+- 验证与文档包括 `tests/qt_workbench_probe.py`、`tests/test_qt_workspace_adapter.py`、`tests/test_qt_execution_adapter.py`、`tests/test_qt_migration_contract.py`，`scripts/verify_baseline.py`、`scripts/verify_qt_migration.py`、`scripts/verify_capability_coverage.py`、动作清单及矩阵、操作员手册、项目状态与升级执行计划。
+- 相关工作区、执行器、原日志历史和展示模型专项 124 项通过，编译 391 个文件、源码登记 381 份，能力覆盖及 GUI 隔离覆盖通过。本轮按局部显示调整验证，未运行完整基线，未打包。目标机、真实设备与长期挂测待现场。[阶段验证报告](Cheating_machine_execution_tool/validation/gui_design_v13_20261122/workbench-overview/REPORT.md)
+- 首轮在 125% 和 150% 发现单卡底边裁切，缩小总览统计卡纵向内边距后，原布局用例三档均通过。定稿完整原生回归在三档各通过 108 项，合计 324 次，每档 1,908 个受管窗口且隔离违规为零。[定稿三档结果](Cheating_machine_execution_tool/validation/gui_design_v13_20261122/workbench-overview/native-verified/results.json)
+- 阶段报告完成后核对 Git 状态、截图目录及引用。本批生成 1,030 张 PNG，1,027 张过程图已移入回收站，保留总览、模板来源和 125% 系统状态三张报告截图。
+
+## 2026-11-22 - 核对总览项目统计来源
+
+- 逐项对照当前 Qt 总览、执行器与项目台账，将活动任务数、失败通道数和受影响项目数的口径，以及成功任务重开后回落为空闲的情形写入[实施计划](docs/GUI_UPGRADE_EXECUTION_PLAN.md)。这些样例供后续总览统计验收使用。
+- 本次修改 `docs/GUI_UPGRADE_EXECUTION_PLAN.md` 和 `DEVELOPMENT_LOG.md`。核对新增源码引用与差异格式；纯文档修改未运行代码测试或完整基线。
+
+## 2026-11-22 - 将统一状态接入 Qt 工作台
+
+- 类型：界面优化、测试。
+- 背景：负责人确认把独立展示页的状态设计接入正式工作台。此前相同的失败快照在项目树、总览卡片和详情页使用不同颜色。
+- 完成内容：项目树、卡片、表格状态列和详情共用状态图标与颜色，具体文案来自原项目快照。深色侧栏和选中行保留语义图案。卡片与详情在窄窗口按可用宽度显示，完整状态可通过悬停或无障碍接口读取。项目导航、配置、资源保护及设备动作仍走原有入口。
+- 修改文件（除注明的根目录文档，其余相对主源码目录）：
+  - `src/ui/qt/showcase_components.py`
+  - `src/ui/qt/main_window.py`
+  - `src/ui/qt/dashboard.py`
+  - `src/ui/qt/project_detail.py`
+  - `tests/qt_workbench_probe.py`
+  - `scripts/verify_qt_migration.py`
+  - `scripts/capability_gui_actions.json`
+  - `line_check_assistant_README.md`
+  - `validation/gui_design_v13_20261122/workbench-status/`（源码指纹、专项与原生回归记录、阶段截图）
+  - 根目录 `docs/GUI_UPGRADE_EXECUTION_PLAN.md`、`PROJECT_STATUS.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：项目独立 Qt 环境执行 `python scripts/run_tests.py test_workbench_status test_qt_migration_contract -v`，复核动作快照、编译清单与源码登记。使用 `python scripts/verify_qt_migration.py --output validation/gui_design_v13_20261122/workbench-status/native` 验证三档 Windows 原生界面。
+- 专项结果：状态投影、入口契约及模拟执行器回执 14 项通过，涵盖人工重启确认、未校验结果、失败停止后续步骤及未知结果保护。能力覆盖通过，390 份文件编译通过、380 份源码已登记。定稿原生专项验证同一项目状态在树、卡片、列表和详情的显示，以及停止、等待、未知和未校验的区分；独立展示另验证 200 次重复进度、过渡中改值、隐藏和转为未接入时停止动画。[业务专项记录](Cheating_machine_execution_tool/validation/gui_design_v13_20261122/workbench-status/status-contracts.txt) · [定向原生记录](Cheating_machine_execution_tool/validation/gui_design_v13_20261122/workbench-status/focused-final/tests.txt)
+- 原生回归：100%、125%、150% 三档各通过全部 105 项（共 315 次）。每档 1,896 个受管窗口，缺失用例和隔离违规为零，结束后复核 11 个相关输入文件哈希全部一致。[三档结果](Cheating_machine_execution_tool/validation/gui_design_v13_20261122/workbench-status/native/results.json) · [输入指纹](Cheating_machine_execution_tool/validation/gui_design_v13_20261122/workbench-status/inputs.json)
+- 验收边界：本轮只修改本机 Qt 展示，未触发完整基线或打包。目标机及真实设备长期挂测按现场清单验收。
+- 截图清理：工作台状态批次生成 449 张 PNG，报告完成后将 447 张过程图移入回收站，保留报告引用的总览与详情截图。独立展示页上一批保留的三张截图仍可访问。
+
+## 2026-11-22 - 核对工作台状态展示的接入边界
+
+- 对照 Qt 主窗口、项目卡、详情和执行器，核实同一失败快照的颜色差异。把部分失败、完成含未校验和人工重启三种文案纳入接入后的回归要求。[接入清单](docs/GUI_UPGRADE_EXECUTION_PLAN.md)
+- 本次修改 `docs/GUI_UPGRADE_EXECUTION_PLAN.md` 和 `DEVELOPMENT_LOG.md`。逐一核对四个源码引用，复核定稿的 12 项文件哈希与三档原生收据。纯文档补充未重跑代码测试或完整基线。
+
+## 2026-11-22 - 实现独立 Qt 组件展示页
+
+- 类型：功能、测试与设计审计。
+- 背景：按 V1.3.x 统一 GUI 规范复核两份指导书与当前源码。负责人确认在 V1.3.0 现场移交前先实现独立组件展示页。
+- 完成内容：增加 `--showcase` 源码入口，提供集中配色、状态图标、主次操作、指标卡、资源与准备步骤卡和同步进度。展示页复用原项目卡、通道矩阵与日志面板。审计更新了两个项目并行开关机、当前诊断源码与已有候选包的证据边界，列出持续业务老化需要的独立状态和采集来源。
+- 修改文件（除注明的根目录文档，其余相对主源码目录）：
+  - `run_dutpilot_qt.py`
+  - `src/ui/qt/application.py`
+  - `src/ui/qt/theme.py`
+  - `src/ui/qt/progress_widgets.py`
+  - `src/ui/qt/showcase_components.py`
+  - `src/ui/qt/component_showcase.py`
+  - `tests/qt_workbench_probe.py`
+  - `tests/test_qt_migration_contract.py`
+  - `scripts/verify_baseline.py`
+  - `scripts/verify_qt_migration.py`
+  - `scripts/verify_capability_coverage.py`
+  - `scripts/capability_gui_actions.json`
+  - `line_check_assistant_README.md`
+  - `validation/gui_design_v13_20261122/`（源码指纹、启动与窗口收据、复核截图）
+  - 根目录 `docs/GUI_UPGRADE_EXECUTION_PLAN.md`
+  - 根目录 `CAPABILITY_COVERAGE.md`
+  - 根目录 `PROJECT_STATUS.md`
+  - 根目录 `DEVELOPMENT_LOG.md`
+- 验证方法：项目独立 Qt 环境执行 `python scripts/run_tests.py test_qt_migration_contract -v`，审阅新增预览动作后执行 `python scripts/verify_capability_coverage.py --update` 并再次检查。通过 `scripts/verify_qt_migration.py --output validation/gui_design_v13_20261122/native-final` 运行 Windows 原生回归。
+- 专项结果：5 项入口及迁移契约通过；390 份文件编译通过、380 份源码已登记；能力覆盖通过。通过 Qt 隔离作用域提供应用实例，实测 `main(['--showcase'])` 进入事件循环、显示一个组件页、正常退出；工作区构造次数为零。[启动收据](Cheating_machine_execution_tool/validation/gui_design_v13_20261122/entry.json) 独立展示页原生专项在三档缩放均通过，已复核 100% 宽窗与 150% 窄窗。[专项收据](Cheating_machine_execution_tool/validation/gui_design_v13_20261122/showcase-final/results.json) · [功能、审计与截图](docs/GUI_UPGRADE_EXECUTION_PLAN.md)
+- 原生回归：首次 100% 读到了并行修改中的配色声明，展示页导入失败。[首次批次](Cheating_machine_execution_tool/validation/gui_design_v13_20261122/native/results.json) 定稿后完整重跑，三档各通过 103 项，共 309 次，每档 1,890 个受管窗口，缺失及隔离违规为零。[最终三档报告](Cheating_machine_execution_tool/validation/gui_design_v13_20261122/native-final/results.json) 回归后核对 12 份相关源码、测试和门禁文件，与本批记录哈希一致。
+- 验收范围：本轮修改限于独立展示入口、展示组件及相关验证。未触发完整基线、构建或真实设备执行。工作台整合、目标机和现场长期运行沿用分阶段计划。
+- 截图清理：本批 881 张原生过程图中，878 张已移入回收站。保留审计文档引用的 3 张宽窗、窄窗和下部组件截图。差异格式检查通过，本轮文档的 34 处本地引用均可定位。
 
 ## 2026-11-21 - 接入 Qt 实时诊断与批量排障
 

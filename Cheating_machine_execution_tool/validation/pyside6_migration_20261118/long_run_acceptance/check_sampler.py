@@ -1,4 +1,5 @@
 """Exercise the Windows process sampler against a disposable local sleeper."""
+from hashlib import sha256
 import json
 from pathlib import Path
 import subprocess
@@ -6,6 +7,7 @@ import sys
 import tempfile
 import time
 import unittest
+import zipfile
 
 
 SCRIPT = Path(__file__).with_name("watch_process.ps1")
@@ -17,7 +19,8 @@ class SamplerTests(unittest.TestCase):
         folder = tempfile.TemporaryDirectory(prefix="dutpilot-sampler-")
         self.addCleanup(folder.cleanup)
         self.path = Path(folder.name) / "samples.jsonl"
-        self.target = self.start([sys.executable, "-c", "import time; time.sleep(40)"])
+        self.executable = Path(sys._base_executable)
+        self.target = self.start([str(self.executable), "-c", "import time; time.sleep(40)"])
 
     def start(self, command):
         process = subprocess.Popen(command, creationflags=subprocess.CREATE_NO_WINDOW,
@@ -30,10 +33,21 @@ class SamplerTests(unittest.TestCase):
         self.addCleanup(cleanup)
         return process
 
-    def sample(self, seconds):
+    def sample(self, seconds, *arguments):
         return self.start(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SCRIPT),
                            "-TargetProcessId", str(self.target.pid), "-OutputPath", str(self.path),
-                           "-DurationSeconds", str(seconds), "-IntervalSeconds", "1"])
+                           "-DurationSeconds", str(seconds), "-IntervalSeconds", "1", *arguments])
+
+    def candidate(self, executable):
+        archive = self.path.with_name("DUTPilot_portable.zip")
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+            bundle.writestr("DUTPilot_portable/DUTPilot.exe", executable)
+        digest = sha256(archive.read_bytes()).hexdigest()
+        Path(str(archive) + ".sha256.txt").write_text(f"{digest} *{archive.name}\n", encoding="ascii")
+        return archive, digest
+
+    def sample_candidate(self, archive):
+        return self.sample(1, "-CandidateZip", str(archive), "-ProjectId", "field-project", "-RunId", "field-run")
 
     def records(self):
         return [json.loads(line) for line in self.path.read_text(encoding="utf-8").splitlines()]
@@ -86,6 +100,31 @@ class SamplerTests(unittest.TestCase):
         self.target.wait(timeout=5)
         self.assertNotEqual(watcher.wait(timeout=5), 0)
         self.assertEqual(self.records()[-1]["reason"], "target_exited")
+
+    def test_candidate_records_verified_archive_and_process_image(self):
+        image = self.executable.read_bytes()
+        archive, digest = self.candidate(image)
+        self.assertEqual(self.sample_candidate(archive).wait(timeout=10), 0)
+        header = self.records()[0]
+        self.assertEqual(header["candidate_zip_sha256"], digest)
+        self.assertEqual(header["process_exe_sha256"], sha256(image).hexdigest())
+        self.assertEqual((header["project_id"], header["run_id"]), ("field-project", "field-run"))
+        self.path = self.path.with_name("pinned.jsonl")
+        self.assertEqual(self.sample(1, "-ExpectedStartUtc", header["start_utc"]).wait(timeout=10), 0)
+
+    def test_rejects_unmatched_zip_or_executable_without_creating_trace(self):
+        archive, _ = self.candidate(b"different executable")
+        self.assertNotEqual(self.sample_candidate(archive).wait(timeout=10), 0)
+        self.assertFalse(self.path.exists())
+        archive, _ = self.candidate(self.executable.read_bytes())
+        Path(str(archive) + ".sha256.txt").write_text("0" * 64, encoding="ascii")
+        self.assertNotEqual(self.sample_candidate(archive).wait(timeout=10), 0)
+        self.assertFalse(self.path.exists())
+
+    def test_rejects_stale_process_selection_without_creating_trace(self):
+        watcher = self.sample(1, "-ExpectedStartUtc", "2000-01-01T00:00:00.0000000Z")
+        self.assertNotEqual(watcher.wait(timeout=10), 0)
+        self.assertFalse(self.path.exists())
 
 
 if __name__ == "__main__":

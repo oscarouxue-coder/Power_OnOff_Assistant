@@ -1,4 +1,7 @@
 """Shared Qt design tokens and small shell/component stylesheets."""
+from dataclasses import dataclass
+from typing import NamedTuple
+
 from PySide6.QtCore import QThread, Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QFrame, QLabel, QPushButton
@@ -17,6 +20,43 @@ DANGER = '#DC2626'
 BORDER = '#E5E7EB'
 GAP = 12
 CARD_PADDING = 16
+
+
+class StatusColors(NamedTuple):
+    symbol: str
+    background: str
+    text: str
+
+
+@dataclass(frozen=True)
+class DesignPalette:
+    """Tokens for opt-in V1.3.x components."""
+    brand: str = '#087E78'
+    info: str = '#2563EB'
+    muted: str = '#64748B'
+    text: str = '#172B3A'
+    border: str = '#DCE3EB'
+    background: str = '#F3F6FA'
+    surface: str = SURFACE
+    disabled: str = '#A1ACB9'
+    hover: str = '#076B66'
+    selected: str = '#055C57'
+    hover_background: str = '#EAF7F5'
+    selected_background: str = '#D9EFEB'
+    success: StatusColors = StatusColors(SUCCESS, '#E9F9EF', '#166534')
+    warning: StatusColors = StatusColors(WARNING, '#FFF4DB', '#854D0E')
+    error: StatusColors = StatusColors(DANGER, '#FDECEC', '#991B1B')
+
+    @property
+    def neutral(self):
+        return StatusColors(self.muted, '#EDF1F5', '#475569')
+
+    @property
+    def information(self):
+        return StatusColors(self.info, '#EAF1FE', '#1E40AF')
+
+
+V13_PALETTE = DesignPalette()
 
 SHELL_QSS = f'''
 QMainWindow, QWidget#WorkbenchRoot {{ background: {BACKGROUND}; color: {TEXT}; }}
@@ -73,6 +113,43 @@ QHeaderView::section {{ background: #EEF2F5; border: none; border-bottom: 1px so
 QPlainTextEdit {{ background: #FAFCFE; border: 1px solid {BORDER}; border-radius: 4px; padding: 4px; }}
 QScrollArea {{ background: transparent; border: none; }}
 QCheckBox {{ spacing: 6px; }}
+'''
+
+
+WORKBENCH_QSS = f'''
+QWidget#WorkbenchRoot {{ background: {V13_PALETTE.background}; color: {V13_PALETTE.text}; }}
+QToolBar#GlobalHeader {{ background: {HEADER}; min-height: 48px; spacing: 4px; padding: 0 10px; border: none; }}
+QToolBar#GlobalHeader QToolButton {{ border-radius: 5px; }}
+QToolBar#GlobalHeader QToolButton:hover {{ background: #166569; }}
+QWidget#Sidebar {{ background: {NAVIGATION}; }}
+QWidget#Sidebar QLineEdit {{ background: #124955; color: white; border: 1px solid #37606A; }}
+QWidget#Sidebar QPushButton {{ padding: 5px 8px; border-radius: 6px; }}
+QWidget#Sidebar QPushButton:checked {{ background: #156761; }}
+QWidget#Sidebar QPushButton:disabled {{ color: #91ACB4; }}
+QTreeView#ProjectNavigation::item {{ padding: 8px 3px; border-radius: 5px; }}
+QTreeView#ProjectNavigation::item:hover {{ background: #144E58; }}
+QTreeView#ProjectNavigation::item:selected {{ background: #156761; color: white; }}
+QFrame[card="true"] {{ border: 1px solid {V13_PALETTE.border}; border-radius: 9px; }}
+QLabel[role="title"] {{ font-size: 22px; font-weight: 700; color: {V13_PALETTE.text}; }}
+QLabel[role="section"] {{ font-size: 14px; color: {V13_PALETTE.text}; }}
+QLabel[role="muted"] {{ color: {V13_PALETTE.muted}; }}
+QLabel[role="metric"] {{ font-size: 25px; font-weight: 700; color: {V13_PALETTE.text}; }}
+QPushButton, QLineEdit, QComboBox {{ border-radius: 6px; }}
+QPushButton:focus, QTabBar:focus {{ border: 1px solid {V13_PALETTE.info}; }}
+QWidget#Sidebar QPushButton:focus, QToolBar#GlobalHeader QToolButton:focus {{ border: 1px solid #8FCFE6; }}
+QPushButton[kind="primary"]:enabled {{ background: {V13_PALETTE.brand}; }}
+QPushButton[kind="primary"]:hover {{ background: {V13_PALETTE.hover}; }}
+QPushButton[kind="danger"]:enabled {{ background: #FDECEC; color: #991B1B; border: 1px solid #EAB2B2; }}
+QPushButton[kind="danger"]:hover {{ background: #F7D9D9; }}
+QPushButton[viewMode="true"]:checked {{ color: {V13_PALETTE.selected}; background: {V13_PALETTE.selected_background};
+                                          border: 1px solid #B8DCD6; }}
+QTabBar::tab {{ padding: 8px 12px; }}
+QTabBar::tab:selected {{ color: {V13_PALETTE.brand}; border-bottom: 2px solid {V13_PALETTE.brand}; }}
+QHeaderView::section {{ background: #EEF4F6; color: #41576A; font-weight: 600; padding: 5px 7px; }}
+QTableView {{ border: 1px solid {V13_PALETTE.border}; border-radius: 6px; alternate-background-color: #F8FAFC; }}
+QPlainTextEdit {{ background: #F7F9FC; border-color: {V13_PALETTE.border}; border-radius: 6px; }}
+QFrame[sectionBand="true"] {{ background: white; border: 1px solid {V13_PALETTE.border}; border-radius: 9px; }}
+QWidget[executionPage="true"] {{ background: {V13_PALETTE.background}; }}
 '''
 
 

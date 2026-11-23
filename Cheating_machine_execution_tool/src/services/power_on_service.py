@@ -85,6 +85,7 @@ def turn_on_selected_channels(
     wait_seconds: float = 0,
     on_output: Callable[[str], None] | None = None,
     on_channel_powered: Callable[[int], None] | None = None,
+    on_write_attempt: Callable[[], None] | None = None,
     serial_factory: SerialFactory | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> CommandResult:
@@ -96,6 +97,7 @@ def turn_on_selected_channels(
         wait_seconds=wait_seconds,
         on_output=on_output,
         on_channel_powered=on_channel_powered,
+        on_write_attempt=on_write_attempt,
         serial_factory=serial_factory,
         sleep_fn=sleep_fn,
     )
@@ -106,6 +108,7 @@ def turn_off_selected_channels(
     channels: Iterable[int],
     *,
     on_output: Callable[[str], None] | None = None,
+    on_write_attempt: Callable[[], None] | None = None,
     serial_factory: SerialFactory | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> CommandResult:
@@ -115,6 +118,7 @@ def turn_off_selected_channels(
         channels,
         powered_on=False,
         on_output=on_output,
+        on_write_attempt=on_write_attempt,
         serial_factory=serial_factory,
         sleep_fn=sleep_fn,
     )
@@ -128,6 +132,7 @@ def _set_selected_channels_power(
     wait_seconds: float = 0,
     on_output: Callable[[str], None] | None = None,
     on_channel_powered: Callable[[int], None] | None = None,
+    on_write_attempt: Callable[[], None] | None = None,
     serial_factory: SerialFactory | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> CommandResult:
@@ -150,6 +155,8 @@ def _set_selected_channels_power(
             "sleep_fn": sleep_fn,
             "on_output": emit,
         }
+        if on_write_attempt is not None:
+            options["on_write_attempt"] = on_write_attempt
         if serial_factory is not None:
             options["serial_factory"] = serial_factory
         with ProgrammablePowerSupply(serial_port, **options) as supply:

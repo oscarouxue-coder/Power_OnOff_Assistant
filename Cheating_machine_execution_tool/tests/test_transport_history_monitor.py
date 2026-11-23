@@ -39,7 +39,8 @@ class HistoryMonitorTests(unittest.TestCase):
         self.assertEqual(row["history_bytes"], 6)
         self.assertEqual(row["received_bytes"], 6)
         self.assertEqual(row["pending_rx_chars"], 7)
-        self.assertIsNone(row["history_limit_bytes"])
+        self.assertEqual(row["history_limit_bytes"], session.HISTORY_LIMIT)
+        self.assertEqual(row["history_spilled_bytes"], 0)
         self.assertIsNone(row["last_flush_confirmed"])
         self.assertEqual(bytes(session._history), before)
 
@@ -113,6 +114,20 @@ class HistoryMonitorTests(unittest.TestCase):
         self.registry.retire(session)
         self.assertEqual(monitor.sample()["closed_received_bytes"]["serial:SIM_ONLY"], 8)
         self.assertEqual(monitor.sample()["closed_received_bytes"]["serial:SIM_ONLY"], 8)
+
+    def test_spilled_history_does_not_report_an_idle_file_as_stalled(self):
+        monitor = TransportHistoryMonitor(self.directory, Mock(), registry=self.registry)
+        session = self.session()
+        session.log_path = self.directory / 'idle.log'
+        session.log_path.touch()
+        session._log_handle = io.StringIO()
+        with session._condition:
+            session._append_history(b'x' * (session.HISTORY_LIMIT + 1))
+        monitor.sample()
+        self.assertEqual(monitor.sample()['sessions'][0]['write_status'], 'open_unverified')
+        with session._condition:
+            session._append_history(b'y')
+        self.assertEqual(monitor.sample()['sessions'][0]['write_status'], 'possible_write_stall')
 
     def test_background_monitor_stops_with_final_sample(self):
         monitor = TransportHistoryMonitor(self.directory, Mock(), interval=.02, registry=self.registry)

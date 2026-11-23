@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 import shutil
 import sqlite3
+import tempfile
 import threading
 import uuid
 
@@ -50,13 +51,17 @@ class ProjectStore:
         self.leases = {}
         self.import_backups = {}
 
-    def create(self, directory, name, *, import_directory=None, _configuration_copy=False):
+    def create(self, directory, name, *, import_directory=None, _configuration_copy=False, profile=None):
         root = Path(directory).resolve()
         name = str(name).strip()
         if not name or len(name) > 160 or any(c in name for c in "\r\n\0"):
             raise ValueError("项目名称须为1至160个字符")
         if root.exists() and any(root.iterdir()):
             raise ValueError("新项目必须选择空文件夹，以免覆盖已有文件")
+        if profile is not None:
+            if import_directory is not None:
+                raise ValueError("导入项目时不能覆盖其原有档案")
+            return self._create_typed(root, name, profile)
         root.mkdir(parents=True, exist_ok=True)
         context = ProjectContext(root, ProjectIdentity(str(uuid.uuid4()), name, ""), self.source_root)
         context.config_dir.mkdir(parents=True)
@@ -88,6 +93,59 @@ class ProjectStore:
             raise
         self.emit("[项目管理] 已创建项目：" + name)
         return self.open(root)
+
+    def _create_typed(self, root, name, profile):
+        from scripts.create_portable_config import create_portable_config
+        from src.models.project_profile import normalize_project_profile
+        from src.services.project_profile_store import write_project_profile
+
+        profile = normalize_project_profile(profile)
+        identity = ProjectIdentity(str(uuid.uuid4()), name, "")
+        root.parent.mkdir(parents=True, exist_ok=True)
+        self.emit("[项目管理] 正在创建项目：" + name)
+        try:
+            with self.lock, HostResourceLock(["project-create:" + str(root)], reentrant=False), \
+                    tempfile.TemporaryDirectory(prefix=".dutpilot-project-", dir=root.parent) as temporary:
+                stage = Path(temporary) / 'project'
+                context = ProjectContext(stage, identity, self.source_root)
+                context.config_dir.mkdir(parents=True)
+                create_portable_config(self.source_root / "Auto_power_on_off_tool/config", context.config_dir)
+                self._set_name(context.config_dir, name)
+                write_project_profile(context.config_dir, profile)
+                self._commit(context, initial=True)
+                context.history.mkdir()
+                lease = HostResourceLock(["project:" + identity.project_id], reentrant=False).acquire()
+                try:
+                    self._publish_new_project(stage, root)
+                except BaseException:
+                    lease.close()
+                    raise
+                context.root = root
+                self.opened[identity.project_id], self.leases[identity.project_id] = context, lease
+        except BaseException:
+            self.emit("[项目管理] 项目创建失败：" + name)
+            raise
+        self.emit("[项目管理] 已创建并打开项目：" + name)
+        return context
+
+    @staticmethod
+    def _publish_new_project(stage, root):
+        if not root.exists():
+            stage.rename(root)
+            return
+        if any(root.iterdir()):
+            raise ValueError("新项目必须选择空文件夹，以免覆盖已有文件")
+        # Keep the operator's existing empty directory and its ACLs. Publish the
+        # identity last, so open() can see only a complete configuration.
+        moved = []
+        try:
+            for name in ('draft', 'revisions', 'history', PROJECT_FILE):
+                (stage / name).rename(root / name)
+                moved.append(name)
+        except BaseException:
+            for name in reversed(moved):
+                (root / name).rename(stage / name)
+            raise
 
     @staticmethod
     def _copy_config(source, target):
@@ -153,7 +211,7 @@ class ProjectStore:
             if expected.resolve() != expected:
                 raise ValueError('项目数据目录不能通过链接重定向：' + str(expected.relative_to(context.root)))
 
-    def open(self, directory):
+    def open(self, directory, *, expected_project_id=None):
         root = Path(directory).resolve()
         if root.is_file():
             root = root.parent
@@ -165,6 +223,8 @@ class ProjectStore:
             raise ValueError("项目格式版本不受支持，请使用匹配版本的程序")
         identity = ProjectIdentity(**{key: value[key] for key in ("project_id", "name", "revision", "format_version")})
         uuid.UUID(identity.project_id)
+        if expected_project_id is not None and identity.project_id != expected_project_id:
+            raise ValueError("该目录的项目身份已变化")
         if not re.fullmatch(r'[0-9a-f]{32}', identity.revision):
             raise ValueError("项目配置版本无效")
         with self.lock:

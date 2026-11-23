@@ -135,10 +135,13 @@ class QtPretest:
         if not identifier or identifier != self.execution.latest:
             return '', '', False, ''
         status = self.execution.jobs[identifier]['status'] or {}
-        result = status.get('result') or {}
+        result = status.get('result')
+        if not isinstance(result, dict):
+            result = {}
         state = status.get('state', 'queued')
         counts = result.get('result')
-        if counts:
+        keys = ('total', 'executed', 'passed', 'failed', 'unchecked', 'device_errors')
+        if isinstance(counts, dict) and all(type(counts.get(key)) is int and counts[key] >= 0 for key in keys):
             message = (f"共 {counts['total']} 条，已下发 {counts['executed']}，成功 {counts['passed']}，"
                        f"失败 {counts['failed']}，未校验 {counts['unchecked']}，"
                        f"未执行 {counts['total'] - counts['executed']}，设备异常 {counts['device_errors']}。")

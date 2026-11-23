@@ -17,7 +17,17 @@ class DeviceInventoryView:
 
 
 @dataclass(frozen=True)
+class ResourceLeaseEntry:
+    resource_key: str
+    project_id: str
+    project_name: str
+    owner_id: str
+    state: str
+
+
+@dataclass(frozen=True)
 class DeviceLeaseView:
     owners: Tuple[Tuple[str, Tuple[str, ...]], ...] = ()
     sampled_at: Optional[datetime] = None
     protection_unavailable: bool = False
+    entries: Tuple[ResourceLeaseEntry, ...] = ()

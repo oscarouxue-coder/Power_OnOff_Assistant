@@ -1,0 +1,20 @@
+{
+  "candidate": "qt-v13x-feed-20261122",
+  "zip_sha256": "4e68afe5e1a620902e7d8178f40e8c427e26f5db1e43a1306bd71e1c86ccdf9a",
+  "zip_bytes": 55573869,
+  "matched_modules": 362,
+  "required": [
+    "src.services.aging_observation_source",
+    "src.services.service_aging_feed",
+    "src.services.service_aging_history",
+    "src.ui.qt.project_wizard",
+    "src.ui.qt.test_type_panel",
+    "src.services.project_preparation",
+    "src.services.power_run_overview",
+    "src.services.workspace_event_log"
+  ],
+  "entry_matches": true,
+  "manual_matches": true,
+  "zip_crc_verified": true,
+  "frozen_inputs": 646
+}

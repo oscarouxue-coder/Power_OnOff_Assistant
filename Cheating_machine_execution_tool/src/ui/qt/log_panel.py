@@ -1,7 +1,7 @@
 """Bounded, project/run-associated display buffer; no business log persistence."""
-from collections import deque
+from collections import Counter, deque
 import re
-from PySide6.QtCore import QSignalBlocker, Signal
+from PySide6.QtCore import QSignalBlocker, Qt, Signal
 from PySide6.QtWidgets import QCheckBox, QComboBox, QFrame, QHBoxLayout, QLineEdit, QPlainTextEdit, QSizePolicy, QVBoxLayout
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QTextCursor
 from src.ui.qt.theme import DANGER, SUCCESS, WARNING, assert_gui_thread, button, label
@@ -22,13 +22,21 @@ class OutcomeHighlight(QSyntaxHighlighter):
             self.setFormat(0, len(text), self.formats[match[1]])
 
 
+class ProjectLogFilter(QComboBox):
+    opening = Signal()
+
+    def showPopup(self):
+        self.opening.emit()
+        super().showPopup()
+
+
 class LogPanel(QFrame):
     expanded_changed = Signal(bool)
     export_requested = Signal(object, str)
     MAX_LINES = 5000
     MAX_CHARS = 1024 * 1024
 
-    def __init__(self, parent=None, *, history=False, raw=False):
+    def __init__(self, parent=None, *, history=False, raw=False, global_project_filter=False):
         super().__init__(parent)
         self.setProperty('card', True)
         self.entries = deque()
@@ -50,6 +58,18 @@ class LogPanel(QFrame):
         self.title = label('历史日志' if history else '实时日志（全局）', 'section')
         self.title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         header.addWidget(self.title, 1)
+        self.project_filter = None
+        self._open_project_names = {}
+        if global_project_filter:
+            self.project_filter = ProjectLogFilter()
+            self.project_filter.setAccessibleName('按项目筛选实时日志')
+            self.project_filter.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            self.project_filter.setMinimumContentsLength(6)
+            self.project_filter.setMaximumWidth(150)
+            self.project_filter.opening.connect(self._refresh_project_choices)
+            self._refresh_project_choices()
+            self.project_filter.currentIndexChanged.connect(self.render)
+            header.addWidget(self.project_filter)
         self.scope = QComboBox()
         self.scope.setToolTip('已关联任务时按当前任务筛选通道，否则按项目筛选通道')
         if history:
@@ -136,6 +156,34 @@ class LogPanel(QFrame):
         self.export_button.setEnabled(self._export_enabled and bool(self._selected))
         scrollbar.setValue(scrollbar.maximum() if self.auto_scroll.isChecked() else min(position, scrollbar.maximum()))
 
+    def set_global_projects(self, projects):
+        assert_gui_thread()
+        names = {project.project_id: project.name for project in projects}
+        if self.project_filter is not None and names != self._open_project_names:
+            self._open_project_names = names
+            self._refresh_project_choices()
+
+    def _refresh_project_choices(self):
+        combo = self.project_filter
+        selected = combo.currentData()
+        name_role = Qt.ItemDataRole.UserRole + 1
+        names = {entry.project_id: entry.project_name for entry in self.entries if entry.project_id}
+        names.update(self._open_project_names)
+        if selected:
+            names.setdefault(selected, combo.currentData(name_role))
+        counts = Counter(names.values())
+        with QSignalBlocker(combo):
+            combo.clear()
+            combo.addItem('全部项目', None)
+            combo.addItem('仅工作区', '')
+            for project_id, name in sorted(names.items(), key=lambda pair: (pair[1], pair[0])):
+                caption = f'{name}（{project_id}）' if counts[name] > 1 else name
+                combo.addItem(caption, project_id)
+                index = combo.count() - 1
+                combo.setItemData(index, name, name_role)
+                combo.setItemData(index, f'{name}（{project_id}）', Qt.ItemDataRole.ToolTipRole)
+            combo.setCurrentIndex(0 if selected is None else combo.findData(selected))
+
     def set_scope(self, project_id='', name='', run_id='', channels=()):
         assert_gui_thread()
         if (project_id, run_id, channels, name) == (self.scope_id, self.run_id, self.channels, self.scope_name):
@@ -157,14 +205,19 @@ class LogPanel(QFrame):
                 self.scope.addItem(f'CH{number:02d}', number)
             self.scope.setCurrentIndex(max(0, self.scope.findData(previous)))
         self.scope.setVisible(bool(project_id and (run_id or channels)))
+        if self.project_filter is not None:
+            self.project_filter.setVisible(not bool(project_id))
         self.render()
 
     def _filtered(self, entries):
         keyword, level = self.search.text().casefold(), self.level.currentText()
         scope = self.scope.currentData()
         run = self.run_id if scope == 'run' or type(scope) is int else ''
+        project_id = self.scope_id or None
+        if project_id is None and self.project_filter is not None:
+            project_id = self.project_filter.currentData()
         return (entry for entry in entries if
-                    (not self.scope_id or entry.project_id == self.scope_id) and
+                    (project_id is None or entry.project_id == project_id) and
                     (not run or entry.run_id == run) and
                     (type(scope) is not int or entry.channel == scope) and
                     (level == '全部级别' or entry.level == level) and
@@ -192,6 +245,9 @@ class LogPanel(QFrame):
             description = self.title.text() if self.history else self.title.text() + ' · 当前显示缓冲'
             if self.scope_name:
                 description += ' · ' + self.scope_name
+            elif self.project_filter is not None and self.project_filter.currentData() is not None:
+                description += ' · ' + (self.project_filter.currentData(Qt.ItemDataRole.ToolTipRole)
+                                         or self.project_filter.currentText())
             if self.history or scope == 'run' or type(scope) is int:
                 if self.run_id:
                     description += ' · 任务 ' + self.run_id
@@ -206,6 +262,8 @@ class LogPanel(QFrame):
         self.entries.clear()
         self._chars = 0
         self._blocks = 0
+        if self.project_filter is not None:
+            self._refresh_project_choices()
         self.render()
 
     def toggle_expanded(self):
