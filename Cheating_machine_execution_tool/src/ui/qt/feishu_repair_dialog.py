@@ -2,6 +2,8 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QMessageBox, QVBoxLayout
 
+from src.models.project_review import ReviewTarget
+from src.ui.qt.blocker_review import show_warning
 from src.ui.qt.theme import label
 
 
@@ -80,7 +82,8 @@ class FeishuRepairController:
             return
         self._dismiss()
         if not success:
-            QMessageBox.warning(self.workspace.window, '飞书 SDK 安装未完成', message)
+            show_warning(self.workspace.window, '飞书 SDK 安装未完成', message,
+                         lambda: self.workspace.blocker_review.open('', ReviewTarget('log', reference='[飞书依赖]')))
             return
         self.restart_requested = True
         self.workspace.request_close()

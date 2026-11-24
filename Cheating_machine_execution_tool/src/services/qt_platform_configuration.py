@@ -1,5 +1,6 @@
 """Local operator edits for the existing workspace platform configuration."""
 from src.models.capabilities import fingerprint
+from src.models.project_review import ReviewRequired
 from src.services.message_push_config_service import MessagePushConfigService, load_push_project_name
 from src.services.qt_imported_connections import PLATFORM_NAMES
 
@@ -72,7 +73,8 @@ class QtPlatformConfiguration:
     def save(self, context, kind, expected_revision, draft):
         store, current, path, _, revision = self._read(context, kind)
         if revision != expected_revision:
-            raise ValueError('接入配置或本项目的通知配置已变化，请重新打开后再保存。')
+            raise ReviewRequired('configuration_changed', '接入配置或本项目的通知配置已变化，请重新打开后再保存。',
+                                 'platform', 'close_button', reference=kind)
         if not isinstance(draft, dict) or set(draft) != set(FIELDS[kind]) or any(
                 not isinstance(value, str) for value in draft.values()):
             raise ValueError('应用配置输入无效。')
@@ -148,7 +150,8 @@ class QtPlatformConfiguration:
     def confirm_binding(self, context, kind, candidate):
         state = self.binding_state(context, kind)
         if not state['code'] or not candidate or state['candidate'] != candidate:
-            raise ValueError('群绑定已过期或群身份已变化，请重新核对。')
+            raise ReviewRequired('target_changed', '群绑定已过期或群身份已变化，请重新核对。',
+                                 'platform', 'bind_button', reference=kind)
         _, runtime, _ = self.bindings[kind]
         runtime.confirm_binding(candidate)
         self._release_binding(kind)

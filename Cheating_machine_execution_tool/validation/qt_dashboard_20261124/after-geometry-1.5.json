@@ -1,0 +1,146 @@
+{
+  "wide-cards": {
+    "png": "after-wide-cards-1.5.png",
+    "surface": "MainWindow.dashboard",
+    "mode": "cards",
+    "qt_scale": 1.5,
+    "window_dip": [
+      1280,
+      707
+    ],
+    "pixels": [
+      1920,
+      1061
+    ],
+    "overview_dip": [
+      0,
+      0,
+      1023,
+      477
+    ],
+    "inner_viewport_dip": [
+      1006,
+      261
+    ],
+    "sidebar": true,
+    "logs_expanded": true,
+    "displayed_ids": [
+      "preview-power",
+      "preview-aging",
+      "preview-unresolved",
+      "preview-queued",
+      "preview-ready",
+      "preview-done",
+      "preview-offline"
+    ],
+    "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275"
+  },
+  "wide-list": {
+    "png": "after-wide-list-1.5.png",
+    "surface": "MainWindow.dashboard",
+    "mode": "list",
+    "qt_scale": 1.5,
+    "window_dip": [
+      1280,
+      707
+    ],
+    "pixels": [
+      1920,
+      1061
+    ],
+    "overview_dip": [
+      0,
+      0,
+      1023,
+      477
+    ],
+    "inner_viewport_dip": [
+      1004,
+      224
+    ],
+    "sidebar": true,
+    "logs_expanded": true,
+    "displayed_ids": [
+      "preview-power",
+      "preview-aging",
+      "preview-unresolved",
+      "preview-queued",
+      "preview-ready",
+      "preview-done",
+      "preview-offline"
+    ],
+    "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275"
+  },
+  "narrow-cards": {
+    "png": "after-narrow-cards-1.5.png",
+    "surface": "MainWindow.dashboard",
+    "mode": "cards",
+    "qt_scale": 1.5,
+    "window_dip": [
+      900,
+      550
+    ],
+    "pixels": [
+      1350,
+      825
+    ],
+    "overview_dip": [
+      0,
+      0,
+      868,
+      408
+    ],
+    "inner_viewport_dip": [
+      851,
+      216
+    ],
+    "sidebar": false,
+    "logs_expanded": false,
+    "displayed_ids": [
+      "preview-power",
+      "preview-aging",
+      "preview-unresolved",
+      "preview-queued",
+      "preview-ready",
+      "preview-done",
+      "preview-offline"
+    ],
+    "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275"
+  },
+  "narrow-list": {
+    "png": "after-narrow-list-1.5.png",
+    "surface": "MainWindow.dashboard",
+    "mode": "list",
+    "qt_scale": 1.5,
+    "window_dip": [
+      900,
+      550
+    ],
+    "pixels": [
+      1350,
+      825
+    ],
+    "overview_dip": [
+      0,
+      0,
+      868,
+      408
+    ],
+    "inner_viewport_dip": [
+      849,
+      179
+    ],
+    "sidebar": false,
+    "logs_expanded": false,
+    "displayed_ids": [
+      "preview-power",
+      "preview-aging",
+      "preview-unresolved",
+      "preview-queued",
+      "preview-ready",
+      "preview-done",
+      "preview-offline"
+    ],
+    "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275"
+  }
+}

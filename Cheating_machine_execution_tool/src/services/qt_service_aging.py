@@ -2,7 +2,6 @@
 import getpass
 import uuid
 from src.models.capabilities import CapabilityAuthority, CapabilityError, CapabilitySpec, object_schema
-from src.services.project_preparation import preparation_for
 
 
 START = 'service_aging.start'
@@ -39,8 +38,7 @@ class QtServiceAging:
 
     def plan(self):
         self.execution._prepare_guard()
-        preparation_for(self.execution.context).require_ready()
-        return self.service.prepare()
+        return self.service.prepare(require_legacy_identity=True)
 
     def dispatch(self, confirmation, authority):
         self.approval = (confirmation, authority)

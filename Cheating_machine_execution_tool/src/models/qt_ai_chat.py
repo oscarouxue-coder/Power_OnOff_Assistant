@@ -11,6 +11,14 @@ CHAT_OPERATIONS = frozenset(('ai_chat_open', 'ai_chat_poll', 'ai_chat_select', '
     'ai_chat_monitor_review', 'ai_chat_monitor_decide', *CHAT_MANAGEMENT))
 
 
+def is_model_identity_question(text):
+    question = text.strip().casefold()
+    if question.endswith(('?', '？')):
+        question = question[:-1].rstrip()
+    return question in ('你现在是什么模型', '你是什么模型', '当前用的是什么模型',
+                        'what model are you', 'which model are you')
+
+
 @dataclass(frozen=True)
 class ChatSessionView:
     identifier: str

@@ -2,7 +2,9 @@
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QCheckBox, QDialog, QGridLayout, QHBoxLayout, QVBoxLayout
 
+from src.models.project_review import ReviewTarget
 from src.services.qt_execution_adapter import PIPELINE_TASKS
+from src.ui.qt.blocker_review import ReviewFeedback, focus_widget
 from src.ui.qt.theme import button, label, status_style
 
 
@@ -10,13 +12,14 @@ class PipelineDialog(QDialog):
     start_requested = Signal(tuple)
     configuration_requested = Signal(str)
     refresh_requested = Signal()
+    review_requested = Signal(object)
 
     def __init__(self, project, parent):
         super().__init__(parent)
         self.setWindowTitle('全流程执行 · ' + project)
         self.resize(570, 355)
         self.checks, self.statuses = {}, {}
-        self.ready = {}
+        self.ready, self.reviews = {}, {}
         self.available = False
         layout = QVBoxLayout(self)
         grid = QGridLayout()
@@ -33,7 +36,7 @@ class PipelineDialog(QDialog):
             grid.addWidget(status, 2 * index - 1, 0, 1, 2)
         layout.addLayout(grid)
         layout.addStretch()
-        self.feedback = label('', 'muted')
+        self.feedback = ReviewFeedback(role='muted')
         self.feedback.setWordWrap(True)
         layout.addWidget(self.feedback)
         row = QHBoxLayout()
@@ -59,6 +62,7 @@ class PipelineDialog(QDialog):
     def show_status(self, statuses):
         for code, status in statuses.items():
             self.ready[code] = status['ready']
+            self.reviews[code] = ReviewTarget(**status['review']) if status.get('review') else None
             detail = status['summary'] if status['ready'] else '缺：' + '、'.join(status['missing'])
             self.statuses[code].setText(('就绪 · ' if status['ready'] else '') + detail)
             self.statuses[code].setStyleSheet(status_style('completed' if status['ready'] else 'failed'))
@@ -67,3 +71,13 @@ class PipelineDialog(QDialog):
     def _update(self):
         tasks = self.selection()
         self.start_button.setEnabled(self.available and bool(tasks) and all(self.ready.get(code) for code in tasks))
+        first = next((code for code in tasks if self.ready.get(code) is False), None)
+        target = self.reviews.get(first)
+        if first is None:
+            self.feedback.clear()
+        else:
+            callback = (lambda: self.review_requested.emit(target)) if target else None
+            self.feedback.show_review(PIPELINE_TASKS[first] + '未就绪', callback)
+
+    def focus_review(self, target):
+        return focus_widget(self.checks.get(target.field) or next(iter(self.checks.values())))

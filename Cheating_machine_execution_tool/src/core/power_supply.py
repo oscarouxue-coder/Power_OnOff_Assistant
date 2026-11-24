@@ -102,6 +102,11 @@ class ProgrammablePowerSupply:
             return
         try:
             self._serial.close()
+        except Exception:
+            if self._host_resource_lock:
+                self._host_resource_lock.mark_cleanup_failed()
+            raise
+        else:
             if self._host_resource_lock:
                 self._host_resource_lock.close()
                 self._host_resource_lock = None

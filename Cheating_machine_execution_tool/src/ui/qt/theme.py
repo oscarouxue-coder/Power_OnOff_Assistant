@@ -1,5 +1,7 @@
 """Shared Qt design tokens and small shell/component stylesheets."""
 from dataclasses import dataclass
+from pathlib import Path
+import sys
 from typing import NamedTuple
 
 from PySide6.QtCore import QThread, Qt
@@ -60,7 +62,14 @@ V13_PALETTE = DesignPalette()
 
 SHELL_QSS = f'''
 QMainWindow, QWidget#WorkbenchRoot {{ background: {BACKGROUND}; color: {TEXT}; }}
-QWidget#GlobalHeader {{ background: {HEADER}; color: white; }}
+QWidget#GlobalHeader, QWidget#WorkbenchHeader {{ background: {HEADER}; color: white; }}
+QWidget#WorkbenchHeader > QLabel, QWidget#WorkbenchHeader > QToolButton,
+QWidget#WorkbenchHeader > QMenuBar {{ color: white; background: transparent; border: none; }}
+QWidget#WorkbenchHeader > QToolButton, QWidget#WorkbenchHeader > QMenuBar::item {{
+    padding: 5px; border: 1px solid transparent; border-radius: 5px; background: transparent;
+}}
+QWidget#WorkbenchHeader > QToolButton:hover, QWidget#WorkbenchHeader > QMenuBar::item:selected {{ background: #166569; }}
+QWidget#WorkbenchHeader > QToolButton:focus, QWidget#WorkbenchHeader > QMenuBar::item:selected {{ border-color: #8FCFE6; }}
 QWidget#GlobalHeader QLabel {{ color: white; background: transparent; }}
 QWidget#GlobalHeader QPushButton {{ color: white; border: none; background: transparent; }}
 QWidget#GlobalHeader QPushButton:hover {{ background: {BRAND}; }}
@@ -116,27 +125,64 @@ QCheckBox {{ spacing: 6px; }}
 '''
 
 
+_WORKBENCH_ICONS = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[3])) / 'assets/icons'
+_MENU_CHEVRON = (_WORKBENCH_ICONS / 'menu-chevron.svg').as_posix()
+_MENU_CHEVRON_DISABLED = (_WORKBENCH_ICONS / 'menu-chevron-disabled.svg').as_posix()
+
+
 WORKBENCH_QSS = f'''
 QWidget#WorkbenchRoot {{ background: {V13_PALETTE.background}; color: {V13_PALETTE.text}; }}
 QToolBar#GlobalHeader {{ background: {HEADER}; min-height: 48px; spacing: 4px; padding: 0 10px; border: none; }}
-QToolBar#GlobalHeader QToolButton {{ border-radius: 5px; }}
-QToolBar#GlobalHeader QToolButton:hover {{ background: #166569; }}
+QToolBar#GlobalHeader QToolButton, QToolBar#GlobalHeader QPushButton {{
+    color: white; background: transparent; border: 1px solid transparent; border-radius: 5px; padding: 5px;
+}}
+QToolBar#GlobalHeader QToolButton:hover:enabled, QToolBar#GlobalHeader QPushButton:hover:enabled {{ background: #166569; }}
+QToolBar#GlobalHeader QToolButton:disabled, QToolBar#GlobalHeader QPushButton:disabled {{ color: #9FB4BC; }}
+QToolBar#GlobalHeader QToolButton#qt_toolbar_ext_button {{ padding: 0; }}
+QToolBar#GlobalHeader QPushButton:has-menu {{ padding-right: 15px; }}
+QToolBar#GlobalHeader QPushButton::menu-indicator {{
+    subcontrol-origin: padding; subcontrol-position: right center; right: 3px; width: 8px; height: 8px;
+}}
+/* MenuButtonPopup (1) and InstantPopup (2) reserve room for the chevron. */
+QToolBar#GlobalHeader QToolButton[popupMode="1"],
+QToolBar#GlobalHeader QToolButton[popupMode="2"] {{ padding-right: 19px; }}
+QToolBar#GlobalHeader QToolButton::menu-button {{ width: 17px; border: none; background: transparent; }}
+QToolBar#GlobalHeader QToolButton::menu-indicator,
+QWidget#Sidebar QPushButton::menu-indicator {{
+    subcontrol-origin: padding; subcontrol-position: right center; position: absolute; right: 5px;
+}}
+QToolBar#GlobalHeader QToolButton::menu-indicator,
+QToolBar#GlobalHeader QToolButton::menu-arrow,
+QWidget#Sidebar QPushButton::menu-indicator {{
+    image: url("{_MENU_CHEVRON}"); width: 12px; height: 12px;
+}}
+QToolBar#GlobalHeader QToolButton::menu-indicator:disabled,
+QToolBar#GlobalHeader QToolButton::menu-arrow:disabled,
+QWidget#Sidebar QPushButton::menu-indicator:disabled {{
+    image: url("{_MENU_CHEVRON_DISABLED}");
+}}
 QWidget#Sidebar {{ background: {NAVIGATION}; }}
 QWidget#Sidebar QLineEdit {{ background: #124955; color: white; border: 1px solid #37606A; }}
 QWidget#Sidebar QPushButton {{ padding: 5px 8px; border-radius: 6px; }}
+QWidget#Sidebar QPushButton:has-menu {{ padding-right: 20px; }}
 QWidget#Sidebar QPushButton:checked {{ background: #156761; }}
 QWidget#Sidebar QPushButton:disabled {{ color: #91ACB4; }}
 QTreeView#ProjectNavigation::item {{ padding: 8px 3px; border-radius: 5px; }}
 QTreeView#ProjectNavigation::item:hover {{ background: #144E58; }}
 QTreeView#ProjectNavigation::item:selected {{ background: #156761; color: white; }}
 QFrame[card="true"] {{ border: 1px solid {V13_PALETTE.border}; border-radius: 9px; }}
+QPushButton[overviewMetric="true"] {{ background: {V13_PALETTE.surface};
+    border: 1px solid {V13_PALETTE.border}; border-radius: 9px; padding: 0; }}
+QPushButton[overviewMetric="true"]:hover {{ background: {V13_PALETTE.hover_background}; border-color: {V13_PALETTE.brand}; }}
+QPushButton[overviewMetric="true"]:focus {{ border-color: {V13_PALETTE.info}; }}
 QLabel[role="title"] {{ font-size: 22px; font-weight: 700; color: {V13_PALETTE.text}; }}
 QLabel[role="section"] {{ font-size: 14px; color: {V13_PALETTE.text}; }}
 QLabel[role="muted"] {{ color: {V13_PALETTE.muted}; }}
 QLabel[role="metric"] {{ font-size: 25px; font-weight: 700; color: {V13_PALETTE.text}; }}
 QPushButton, QLineEdit, QComboBox {{ border-radius: 6px; }}
 QPushButton:focus, QTabBar:focus {{ border: 1px solid {V13_PALETTE.info}; }}
-QWidget#Sidebar QPushButton:focus, QToolBar#GlobalHeader QToolButton:focus {{ border: 1px solid #8FCFE6; }}
+QWidget#Sidebar QPushButton:focus, QToolBar#GlobalHeader QToolButton:focus,
+QToolBar#GlobalHeader QPushButton:focus {{ border: 1px solid #8FCFE6; }}
 QPushButton[kind="primary"]:enabled {{ background: {V13_PALETTE.brand}; }}
 QPushButton[kind="primary"]:hover {{ background: {V13_PALETTE.hover}; }}
 QPushButton[kind="danger"]:enabled {{ background: #FDECEC; color: #991B1B; border: 1px solid #EAB2B2; }}
@@ -145,6 +191,22 @@ QPushButton[viewMode="true"]:checked {{ color: {V13_PALETTE.selected}; backgroun
                                           border: 1px solid #B8DCD6; }}
 QTabBar::tab {{ padding: 8px 12px; }}
 QTabBar::tab:selected {{ color: {V13_PALETTE.brand}; border-bottom: 2px solid {V13_PALETTE.brand}; }}
+QTabBar#ProjectModuleTabs {{
+    background: {V13_PALETTE.surface}; border: 1px solid {V13_PALETTE.border}; border-radius: 6px;
+    font-size: 13px; font-weight: 600;
+}}
+QTabBar#ProjectModuleTabs:focus {{ border-color: {V13_PALETTE.info}; }}
+QTabBar#ProjectModuleTabs::tab {{
+    color: {V13_PALETTE.text}; padding: 9px 12px; border-bottom: 3px solid transparent;
+}}
+QTabBar#ProjectModuleTabs::tab:enabled:hover:!selected {{
+    background: {V13_PALETTE.hover_background}; background-clip: padding;
+}}
+QTabBar#ProjectModuleTabs::tab:enabled:selected {{
+    color: {V13_PALETTE.selected}; background: {V13_PALETTE.selected_background};
+    border-bottom-color: {V13_PALETTE.brand};
+}}
+QTabBar#ProjectModuleTabs::tab:disabled {{ color: {V13_PALETTE.disabled}; }}
 QHeaderView::section {{ background: #EEF4F6; color: #41576A; font-weight: 600; padding: 5px 7px; }}
 QTableView {{ border: 1px solid {V13_PALETTE.border}; border-radius: 6px; alternate-background-color: #F8FAFC; }}
 QPlainTextEdit {{ background: #F7F9FC; border-color: {V13_PALETTE.border}; border-radius: 6px; }}

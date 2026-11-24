@@ -52,7 +52,7 @@ if (-not $CheckOnly) {
 $thirdPartyNotice = Join-Path $projectRoot "THIRD_PARTY_NOTICES.md"
 $portableConfigScript = Join-Path $projectRoot "scripts\create_portable_config.py"
 $versionInfo = Join-Path $projectRoot "line_check_assistant\packaging_assets\QT_VERSION_INFO.txt"
-$applicationIcon = Join-Path $projectRoot "assets\icons\line_check_assistant_network_topology_v1.ico"
+$applicationIcon = Join-Path $projectRoot "assets\icons\DUTPilot-01.ico"
 $runtimeConfigDir = Join-Path $projectRoot "Auto_power_on_off_tool\config"
 $portableDir = Join-Path $distDir "DUTPilot_portable"
 $exePath = Join-Path $portableDir "DUTPilot.exe"

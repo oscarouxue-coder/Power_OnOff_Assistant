@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QApplication, QDialog, QFormLayout, QHBoxLayout, 
     QListWidgetItem, QMenu, QMessageBox, QPushButton, QVBoxLayout)
 import json
 
+from src.ui.qt.blocker_review import focus_widget
 from src.ui.qt.theme import button, label
 
 
@@ -168,7 +169,8 @@ class InstanceStatusDialog(QDialog):
             if self.config_editor is not None:
                 if result.error:
                     self.config_editor.setEnabled(True)
-                    self.config_editor.feedback.setText(result.error)
+                    target = getattr(result, 'review', None)
+                    self.config_editor.feedback.show_review(result.error, (lambda: focus_widget(self.refresh_button)) if target else None)
                 else:
                     self.config_editor.accept()
             self.feedback.setText(result.error or '网关配置已保存，重新启动网关后生效')

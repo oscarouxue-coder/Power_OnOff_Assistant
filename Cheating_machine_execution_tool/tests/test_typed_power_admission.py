@@ -49,9 +49,6 @@ class TypedPowerAdmissionTests(unittest.TestCase):
             ctx.app.power_test_resume_session = self.session
             return SimpleNamespace(run=lambda tasks: [SubTaskResult('legacy_power_test', False)])
         self.service.devices.pipeline_factory = Mock(side_effect=engine)
-        ready = patch('src.services.project_preparation.ProjectPreparation.require_ready', return_value={'ready': True})
-        ready.start()
-        self.addCleanup(ready.stop)
 
     def close_service(self):
         self.service.jobs.begin_close()

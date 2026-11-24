@@ -2,9 +2,46 @@
 from PySide6.QtCore import QEvent, QPoint, Qt, Signal
 from PySide6.QtGui import QAction, QTextCursor
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
-    QWidget, QPlainTextEdit, QLineEdit, QFileDialog, QMessageBox, QMenu)
+    QWidget, QPlainTextEdit, QLineEdit, QFileDialog, QMessageBox, QMenu, QScrollBar,
+    QStyle, QStyleOptionSlider)
 
+from src.ui.qt.blocker_review import focus_widget
 from src.ui.qt.theme import BACKGROUND, assert_gui_thread, button, label
+
+
+class _SerialLogScrollBar(QScrollBar):
+    def contextMenuEvent(self, event):
+        if not self.style().styleHint(QStyle.StyleHint.SH_ScrollBar_ContextMenu, None, self):
+            super().contextMenuEvent(event)
+            return
+
+        menu = QMenu(self)
+        click_y = event.pos().y()
+        menu.addAction('滚动到此处', lambda: self._scroll_to_click(click_y))
+        action = QScrollBar.SliderAction
+        for group in (
+            (('滚动到顶部', action.SliderToMinimum), ('滚动到底部', action.SliderToMaximum)),
+            (('向上翻页', action.SliderPageStepSub), ('向下翻页', action.SliderPageStepAdd)),
+            (('向上滚动一行', action.SliderSingleStepSub), ('向下滚动一行', action.SliderSingleStepAdd)),
+        ):
+            menu.addSeparator()
+            for title, scroll_action in group:
+                menu.addAction(title, lambda step=scroll_action: self.triggerAction(step))
+        menu.aboutToHide.connect(menu.deleteLater)
+        event.accept()
+        menu.popup(event.globalPos())
+
+    def _scroll_to_click(self, click_y):
+        option = QStyleOptionSlider()
+        self.initStyleOption(option)
+        style = self.style()
+        control = QStyle.ComplexControl.CC_ScrollBar
+        groove = style.subControlRect(control, option, QStyle.SubControl.SC_ScrollBarGroove, self)
+        thumb = style.subControlRect(control, option, QStyle.SubControl.SC_ScrollBarSlider, self)
+        # Qt maps the click to the thumb's top edge across its available travel.
+        self.setValue(QStyle.sliderValueFromPosition(
+            self.minimum(), self.maximum(), click_y - groove.top(),
+            groove.height() - thumb.height(), option.upsideDown))
 
 
 class SerialTerminalDialog(QDialog):
@@ -24,6 +61,7 @@ class SerialTerminalDialog(QDialog):
         self.views = {}
         self.diagnostic_window = None
         self.busy = False
+        self._send_pending = False
         self.detaching = False
         self._allow_close = False
         self.pin_action = QAction('窗口置顶', self)
@@ -52,6 +90,7 @@ class SerialTerminalDialog(QDialog):
         self.path.customContextMenuRequested.connect(self.directory_menu)
         layout.addWidget(self.path)
         self.tabs = QTabWidget()
+        self.tabs.tabBar().installEventFilter(self)
         self.tabs.setTabsClosable(True)
         self.tabs.setUsesScrollButtons(True)
         self.tabs.tabCloseRequested.connect(self.close_tab)
@@ -65,19 +104,40 @@ class SerialTerminalDialog(QDialog):
     def active(self):
         return next((key for key, view in self.views.items() if view['page'] is self.tabs.currentWidget()), '')
 
+    def focus_review(self, target):
+        if target.reference:
+            view = self.views.get(target.reference)
+            return bool(view and focus_widget(view.get(target.field)))
+        return focus_widget(getattr(self, target.field, None))
+
     def request(self, suffix, values=None):
         if self.busy or self.detaching:
             return
-        self.set_busy(True)
+        self.set_busy(True, sending=suffix == 'preview_send')
         self.command_requested.emit(suffix, dict(token=self.token, **(values or {})))
 
-    def set_busy(self, value):
+    def set_busy(self, value, *, sending=False):
         self.busy = value
+        self._send_pending = sending
+        self._update_controls()
+
+    def _update_controls(self):
+        available = not self.detaching and (not self.busy or self._send_pending)
         for control in (self.open_button, self.stop_button, self.directory_button, self.tabs.tabBar()):
-            control.setEnabled(not value and not self.detaching)
+            control.setEnabled(available)
         for view in self.views.values():
-            view['input'].setEnabled(not value and not self.detaching and view.get('writable', True))
-            view['enter'].setEnabled(not value and not self.detaching and view.get('writable', True))
+            writable = available and view['writable']
+            view['input'].setEnabled(writable)
+            # Keep the submitted text and focus until the controller handles the reply.
+            view['input'].setReadOnly(self._send_pending)
+            view['enter'].setEnabled(writable)
+
+    def eventFilter(self, watched, event):
+        if self._send_pending and watched is self.tabs.tabBar() and event.type() in (
+                QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonDblClick,
+                QEvent.Type.KeyPress, QEvent.Type.Wheel):
+            return True
+        return super().eventFilter(watched, event)
 
     def _add(self, item):
         key = item['target']
@@ -87,6 +147,7 @@ class SerialTerminalDialog(QDialog):
         status.setWordWrap(True)
         layout.addWidget(status)
         output = QPlainTextEdit()
+        output.setVerticalScrollBar(_SerialLogScrollBar(Qt.Orientation.Vertical, output))
         output.setReadOnly(True)
         output.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
         output.document().setMaximumBlockCount(5000)
@@ -205,6 +266,8 @@ class SerialTerminalDialog(QDialog):
         menu.deleteLater()
 
     def choose_directory(self):
+        if self.busy or self.detaching:
+            return
         path = QFileDialog.getExistingDirectory(self, '选择串口日志保存目录', self.path.text())
         if path:
             self.request('directory', dict(path=path))
@@ -261,7 +324,7 @@ class SerialTerminalDialog(QDialog):
                 (' · 显示已合并 ' + str(item['dropped']) + ' 字符' if item['dropped'] else ''))
             self.append_output(view['output'], item['text'])
         self.detaching = snapshot['closing']
-        self.set_busy(self.busy)
+        self._update_controls()
         if snapshot.get('failures'):
             self.feedback.setText('部分串口打开失败：' + '、'.join(snapshot['failures']))
         elif snapshot['dropped_events']:

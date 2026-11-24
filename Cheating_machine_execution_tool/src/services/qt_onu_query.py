@@ -6,6 +6,7 @@ import uuid
 
 from line_check_assistant.onu_registration_store import OnuRegistrationStore
 from src.models.capabilities import CapabilityError, CapabilitySpec, fingerprint, object_schema
+from src.models.project_review import ReviewRequired
 from src.models.onu_registration_models import C300CleanupCandidate, DiscoveredOnu, OLT_FAMILIES, OnuDiscoveryScope, OnuProvisionRequest
 from src.services.qt_configuration_service import QtConfigurationService
 from src.services.qt_onu_management import QtOnuManagement
@@ -108,7 +109,7 @@ class QtOnuQuery:
 
     def _check_binding(self, binding):
         if self.execution._binding() != binding:
-            raise CapabilityError('configuration_changed', '项目配置已变化，请重新打开 ONU 窗口核对')
+            raise ReviewRequired('configuration_changed', '项目配置已变化，请重新打开 ONU 窗口核对', 'onu', 'close_button')
 
     def save_profile(self, arguments, authority):
         self._check(arguments)
@@ -175,7 +176,7 @@ class QtOnuQuery:
         self.service.validate(identifier, data, authority, check_scope=False)
         _, _, discovery, _ = self.service.onu.connection(data)
         if operation == 'registered' and discovery.is_all_olt:
-            raise CapabilityError('explicit_pon_required', '查询已注册 ONU 需要明确单个 PON')
+            raise ReviewRequired('explicit_pon_required', '查询已注册 ONU 需要明确单个 PON', 'onu', 'pon')
         scope = self.service.onu.scope(data, operation)
         self._check_binding(self.binding)
         token = uuid.uuid4().hex
@@ -191,7 +192,7 @@ class QtOnuQuery:
     @staticmethod
     def _check_cleanup_selection(arguments):
         if arguments['family'] != 'C300' or len(arguments['selection']) != 1:
-            raise CapabilityError('invalid_cleanup_selection', '离线清理仅支持 C300 单台注册')
+            raise ReviewRequired('invalid_cleanup_selection', '离线清理仅支持 C300 单台注册', 'onu', 'unregistered')
 
     def prepare_cleanup(self, arguments, authority):
         self._check(arguments)
@@ -219,7 +220,7 @@ class QtOnuQuery:
         def recheck():
             self._check_binding(pending.binding)
             if self.service.onu.scope(pending.arguments, pending.operation) != scope:
-                raise CapabilityError('olt_configuration_changed', 'OLT 或 PON 已变化，未查询离线候选')
+                raise ReviewRequired('olt_configuration_changed', 'OLT 或 PON 已变化，未查询离线候选', 'onu', 'pon')
             self.service.scopes.require(authority, scope)
 
         def runner(context):
@@ -247,7 +248,7 @@ class QtOnuQuery:
         query = self.cleanup_query
         if (not query or reference['query_job'] != query[0] or query[1].binding != self.binding
                 or query[1].cleanup_selection != fingerprint(self.registration.selection_data(arguments))):
-            raise CapabilityError('cleanup_query_expired', '注册目标或配置已变化，请重新查询离线候选')
+            raise ReviewRequired('cleanup_query_expired', '注册目标或配置已变化，请重新查询离线候选', 'onu', 'unregistered')
         status = self.execution.jobs[query[0]]['status'] or {}
         if status.get('state') == 'succeeded':
             matches = [row for row in (status.get('result') or {}).get('cleanup_candidates', ())
@@ -260,7 +261,7 @@ class QtOnuQuery:
         self._check(arguments)
         pending, self.pending = self.pending, None
         if not pending or pending.token != arguments['confirmation'] or time.monotonic() - pending.created > 120:
-            raise CapabilityError('confirmation_expired', 'ONU 查询确认已失效，请重新核对')
+            raise ReviewRequired('confirmation_expired', 'ONU 查询确认已失效，请重新核对', 'onu', 'pon')
         self.execution._prepare_guard()
         self._check_binding(pending.binding)
         job_authority = replace(authority, principal=authority.principal + ':onu:' + pending.token,
@@ -269,7 +270,7 @@ class QtOnuQuery:
         try:
             scope = self.service.onu.scope(pending.arguments, pending.operation)
             if scope != pending.scope or scope['access'] != 'read':
-                raise CapabilityError('olt_configuration_changed', 'OLT 或 PON 已变化，未连接设备')
+                raise ReviewRequired('olt_configuration_changed', 'OLT 或 PON 已变化，未连接设备', 'onu', 'pon')
             self.service.scopes.grant(job_authority.principal, scope, authority.principal)
             try:
                 if pending.cleanup_plan is not None:
@@ -324,7 +325,7 @@ class QtOnuQuery:
     def discovery_rows(self, identifier, family):
         job, current_family, rows = self._discovery()
         if job != identifier or current_family != family:
-            raise CapabilityError('discovery_expired', '请在当前配置下重新发现未注册 ONU')
+            raise ReviewRequired('discovery_expired', '请在当前配置下重新发现未注册 ONU', 'onu', 'unregistered')
         return tuple(DiscoveredOnu(**row) for row in rows)
 
     def poll(self, arguments, authority):

@@ -81,6 +81,29 @@ class ProjectPreparationTests(unittest.TestCase):
         self.assertEqual(events[-1][2], dict(job_id='', dut_id=self.b, step='environment', channel=2, level='INFO'))
         self.assertEqual(self.messages, [])
 
+    def test_environment_channel_starts_without_sn_but_still_requires_evidence(self):
+        from line_check_assistant.config_store import ChannelConfig, ChannelConfigStore
+        from src.services.project_power_plan import check_project_power_plan
+        from src.services.project_profile_store import configured_power_cycles
+
+        path = self.ctx.config_dir
+        profile = read_project_profile(path)
+        duts = [dict(dut, hardware_id='') for dut in profile['duts']]
+        write_project_profile(path, dict(profile, duts=duts, optional_steps=[], environment_channels=True,
+                                         type_config={'target_cycles': 1}))
+        channels = [ChannelConfig('channel_1', vlan_name='VLAN101', serial_port='COM1')]
+        ChannelConfigStore(path / 'network_card_ip.ini').save(channels)
+        self.store.save(self.ctx)
+        self.assertEqual([dut['channel'] for dut in self.service.snapshot()['duts']], [1])
+        with self.assertRaisesRegex(ValueError, '核对 DUT 身份、接线和资源'):
+            self.service.require_ready(channels=(1,))
+        for step in preparation_plan(dict(profile, optional_steps=[])):
+            self.complete(step['id'])
+        self.service.require_ready(channels=(1,))
+        check_project_power_plan(self.ctx, channels, cycles=configured_power_cycles(path), enabled_only=True)
+        with self.assertRaisesRegex(ValueError, 'CH02'):
+            self.service.require_ready(channels=(2,))
+
     def test_type_dependencies_manual_skip_and_gate(self):
         steps = self.steps()
         self.assertIn('management_ip', steps)

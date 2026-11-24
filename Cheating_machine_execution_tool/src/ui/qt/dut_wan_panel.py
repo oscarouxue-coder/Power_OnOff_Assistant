@@ -16,6 +16,7 @@ class AdaptiveWanForm:
         self.rows = []
         self.columns = 1
         self._signature = None
+        self._building = True
 
     def addRow(self, title, field=None):
         self.insertRow(len(self.rows), title, field)
@@ -23,7 +24,7 @@ class AdaptiveWanForm:
     def insertRow(self, index, title, field=None):
         span = field is None
         if span: field, title = title, ''
-        group = QWidget()
+        group = QWidget(self.parent)
         form = QFormLayout(group)
         form.setContentsMargins(0, 0, 0, 0)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
@@ -38,7 +39,13 @@ class AdaptiveWanForm:
         row['visible'] = visible
         self.reflow()
 
+    def finish_initial_layout(self):
+        self._building = False
+        self.reflow()
+
     def reflow(self):
+        if self._building:
+            return
         columns = 2 if self.parent.width() >= 800 else 1
         signature = (columns, self.parent.width(), tuple((id(r['field']), r['visible']) for r in self.rows))
         if signature == self._signature: return
@@ -52,8 +59,9 @@ class AdaptiveWanForm:
         for row in self.rows: self.grid.removeWidget(row['group'])
         position = 0
         for row in self.rows:
-            row['group'].setVisible(row['visible'])
-            if not row['visible']: continue
+            if not row['visible']:
+                row['group'].hide()
+                continue
             if row['label'] is not None: row['label'].setMinimumWidth(label_width)
             row['field'].ensurePolished()
             form = row['group'].layout()
@@ -66,6 +74,7 @@ class AdaptiveWanForm:
             else:
                 self.grid.addWidget(row['group'], position // columns, position % columns)
                 position += 1
+            row['group'].show()
         self.grid.setColumnStretch(0, 1)
         self.grid.setColumnStretch(1, int(columns == 2))
 
@@ -133,6 +142,7 @@ class DutWanPanel(QFrame):
             self.inputs[key].currentTextChanged.connect(lambda _, name=key: self.update_rules(name))
         self.inputs['connection_index'].currentTextChanged.connect(self.apply_connection)
         self.update_rules('initial')
+        self.form.finish_initial_layout()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

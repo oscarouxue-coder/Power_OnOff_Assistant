@@ -7,6 +7,7 @@ from src.core.ai_client import DiagnosticModelClient
 from src.core.ai_source_ip import list_source_ips, require_source_ip
 from src.models.ai_diagnostics import PROVIDERS, ProviderProfile
 from src.models.qt_model_settings import ModelSettingsView
+from src.models.project_review import ReviewRequired
 from src.services.ai_context_budget import ContextCapacity, context_capacity, refresh_model_context
 from src.services.ai_store import profile_fingerprint
 from src.services.project_store import ProjectStore
@@ -30,7 +31,7 @@ class QtModelSettings:
             self.stores[identifier] = self.workspace.ai_store(context)
         return self.stores[identifier]
 
-    def _view(self, store, profile=None, *, draft=False, notice='', model_ids=()):
+    def _view(self, store, profile=None, *, draft=False, notice='', model_ids=(), review_field=''):
         profiles = tuple(store.profiles())
         if profile is None:
             selected = store.setting('selected_profile', '')
@@ -41,7 +42,7 @@ class QtModelSettings:
             capacity = context_capacity(store, profile)
         except ValueError:
             capacity = ContextCapacity()
-        return ModelSettingsView(profiles, profile, capacity.tokens, capacity.source, draft, notice, model_ids)
+        return ModelSettingsView(profiles, profile, capacity.tokens, capacity.source, draft, notice, model_ids, review_field)
 
     @staticmethod
     def _check_profile(store, base, draft=False):
@@ -58,16 +59,16 @@ class QtModelSettings:
         values = {name: values[name].strip() for name in ('name', 'provider', 'base_url', 'protocol', 'model',
                   'timeout', 'max_output', 'context_tokens', 'source_ip')}
         if values['provider'] not in PROVIDERS:
-            raise ValueError('请选择模型厂商')
+            raise ReviewRequired('invalid_parameters', '请选择模型厂商', 'model', 'provider')
         raw = values['context_tokens']
-        try:
-            values['context_tokens'] = int(raw) if raw else 0
-            values['timeout'] = int(values['timeout'])
-            values['max_output'] = int(values['max_output'])
-        except ValueError:
-            raise ValueError('超时、输出上限和手填上下文上限须为整数') from None
+        for field in ('context_tokens', 'timeout', 'max_output'):
+            try:
+                values[field] = int(values[field] or '0') if field == 'context_tokens' else int(values[field])
+            except ValueError:
+                raise ReviewRequired('invalid_parameters', '超时、输出上限和手填上下文上限须为整数',
+                                     'model', field) from None
         if raw and values['context_tokens'] <= 0:
-            raise ValueError('上下文上限须为正整数，留空表示自动识别')
+            raise ReviewRequired('invalid_parameters', '上下文上限须为正整数，留空表示自动识别', 'model', 'context_tokens')
         with self.workspace.models.lock:
             self._check_profile(store, base, draft)
             profile = store.save_profile(replace(base, **values), key.strip() or None)
@@ -118,12 +119,13 @@ class QtModelSettings:
         models = self.workspace.models
         try:
             if operation == 'ai_model_test' and not profile.model:
-                raise ValueError('请先选择或填写模型 ID')
+                raise ReviewRequired('configuration_incomplete', '请先选择或填写模型 ID', 'model', 'model')
             key = store.key(profile)
         except (ValueError, RuntimeError) as error:
             notice = DiagnosticRedactor((args[-1].strip(),)).text(error)
             self.emit('[AI配置] 请求跳过：' + notice)
-            return self._view(store, profile, notice='已保存。' + notice)
+            return self._view(store, profile, notice='已保存。' + notice,
+                              review_field=error.review.field if isinstance(error, ReviewRequired) else '')
         stop, replies = threading.Event(), queue.SimpleQueue()
         redactor = DiagnosticRedactor((key,))
 

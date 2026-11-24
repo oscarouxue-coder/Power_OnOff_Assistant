@@ -5,6 +5,8 @@ from pathlib import Path
 import time
 import uuid
 
+from src.models.project_review import ReviewRequired
+
 
 EXTENSION_OPERATIONS = frozenset(('extension_list', 'extension_review', 'extension_approve',
                                   'extension_cancel', 'extension_set_enabled'))
@@ -33,11 +35,11 @@ class QtControlledExtensions:
             with Path(arguments[0]).open('rb') as stream:
                 raw = stream.read(MAX_TEMPLATE_BYTES + 1)
             if len(raw) > MAX_TEMPLATE_BYTES:
-                raise ValueError('模板超过 1 MiB。')
+                raise ReviewRequired('invalid_template', '模板超过 1 MiB。', 'extensions', 'import_button')
             try:
                 manifest = json.loads(raw.decode('utf-8-sig'))
             except (UnicodeError, json.JSONDecodeError):
-                raise ValueError('模板必须是有效的 UTF-8 JSON。') from None
+                raise ReviewRequired('invalid_template', '模板必须是有效的 UTF-8 JSON。', 'extensions', 'import_button') from None
             reviewed = extensions.review(manifest)
             token = uuid.uuid4().hex
             self.reviews[project_id] = (token, manifest, reviewed['reviewed_sha256'], time.monotonic())
@@ -46,11 +48,12 @@ class QtControlledExtensions:
         if operation in ('extension_approve', 'extension_cancel'):
             proof = self.reviews.get(project_id)
             if not proof or proof[0] != arguments[0]:
-                raise ValueError('模板审阅已变化，请重新打开原文件审阅。')
+                raise ReviewRequired('confirmation_expired', '模板审阅已变化，请重新打开原文件审阅。',
+                                     'extensions', 'import_button')
             self.discard(project_id)
             if operation == 'extension_approve':
                 if time.monotonic() - proof[3] > 300:
-                    raise ValueError('模板审阅已过期，请重新核对。')
+                    raise ReviewRequired('confirmation_expired', '模板审阅已过期，请重新核对。', 'extensions', 'import_button')
                 extensions.approve(proof[1], proof[2], getpass.getuser())
             else:
                 execution._log('[受控扩展] 本机已取消模板审阅')
@@ -58,7 +61,7 @@ class QtControlledExtensions:
             identifier, expected_digest, wanted = arguments
             row = next((row for row in extensions.list() if row['id'] == identifier), None)
             if row is None or row['reviewed_sha256'] != expected_digest:
-                raise ValueError('所选模板已变化，请刷新后重新核对。')
+                raise ReviewRequired('target_changed', '所选模板已变化，请刷新后重新核对。', 'extensions', 'refresh_button')
             extensions.set_enabled(identifier, wanted, getpass.getuser())
             execution._log('[受控扩展] ' + identifier + (' 已恢复' if wanted else ' 已停用'))
         return dict(enabled=enabled, rows=extensions.list())

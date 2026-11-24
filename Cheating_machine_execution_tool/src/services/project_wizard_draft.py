@@ -26,9 +26,13 @@ class ProjectWizardDraft:
 
     def write(self, draft, expected_token):
         if draft is not None:
-            if (not isinstance(draft, dict) or set(draft) != {'name', 'directory', 'page', 'profile'}
-                    or not all(isinstance(draft[key], str) for key in ('name', 'directory'))
+            fields = draft.keys() if isinstance(draft, dict) else ()
+            if (fields not in ({'name', 'directory', 'page', 'profile'}, {'name', 'parent_directory', 'page', 'profile'},
+                               {'name', 'parent_directory', 'page', 'profile', 'environment'})
+                    or not isinstance(draft['name'], str)
+                    or not isinstance(draft.get('parent_directory', draft.get('directory')), str)
                     or type(draft['page']) is not int or not isinstance(draft['profile'], dict)
+                    or ('environment' in draft and not isinstance(draft['environment'], dict))
                     or len(json.dumps(draft, ensure_ascii=False)) > 128 * 1024):
                 raise ValueError('向导草稿字段无效')
         with HostResourceLock(['configuration:' + str(self.path)], reentrant=False):

@@ -16,6 +16,7 @@ import queue
 import sqlite3
 import threading
 import time
+from typing import Optional
 
 from src.models.workbench_presentation import (ChannelView, LogView, ProjectView,
     WorkspaceHealthView, WorkspaceResourceView, power_cycle_percentage)
@@ -23,19 +24,20 @@ from src.models.qt_ai_chat import CHAT_OPERATIONS
 from src.models.qt_ai_cases import CASE_OPERATIONS
 from src.models.qt_ai_reports import REPORT_HANDOFF_OPERATIONS, REPORT_OPERATIONS
 from src.models.qt_device_inventory import DeviceInventoryView, DeviceLeaseView
+from src.models.project_review import ReviewRequired, ReviewTarget
 from src.services.qt_host_inventory import read_host_inventory
 from src.services.qt_controlled_extensions import EXTENSION_OPERATIONS, QtControlledExtensions
-from src.services.qt_project_wizard_service import QtProjectWizardService, WIZARD_COMMANDS
+from src.services.qt_project_wizard_service import QtProjectWizardService, WIZARD_COMMANDS, WIZARD_CREATION_COMMANDS
+from src.services.project_store import WizardCreateError
 from src.services.qt_window_state import (MODULE_WINDOW_NAMES, read_dut_window_state, read_module_window_sizes,
     read_window_placement, save_window_placement)
 
 
-RECENT_CHANGES = frozenset(('create', 'create_typed', 'open', 'import_legacy', 'save', 'rename', 'duplicate', 'forget_recent'))
+RECENT_CHANGES = WIZARD_CREATION_COMMANDS | frozenset(('create', 'open', 'import_legacy', 'save', 'rename', 'duplicate', 'forget_recent'))
 ARCHIVE_READS = frozenset(('archive_workspace_log', 'archive_workspace_events', 'archive_serial_files', 'archive_serial_log',
                            'archive_project_files', 'archive_project_log', 'history_result_files',
                            'channel_history', 'history_legacy_runs'))
 AGING_HISTORY = frozenset(('aging_history_runs', 'aging_history_page', 'aging_history_export'))
-GUI_UNKNOWN_OPERATIONS = frozenset(('gui_unknown_list', 'gui_unknown_resolve'))
 PAIRING_OPERATIONS = frozenset(('gateway_pairing_code', 'gateway_pairing_slot', 'gateway_pair_instance'))
 STARTUP_OPERATIONS = frozenset(('gateway_startup_read', 'gateway_startup_save'))
 GATEWAY_OPERATIONS = PAIRING_OPERATIONS | STARTUP_OPERATIONS | frozenset(('gateway_instances', 'gateway_start', 'gateway_stop',
@@ -53,7 +55,6 @@ PLATFORM_CONFIG_OPERATIONS = {
     'platform_direct_set': 'set_direct',
     'platform_trial_state': 'trial_state',
 }
-JOB_REVIEW_OPERATIONS = frozenset(('job_review_prepare', 'job_review_cancel', 'job_review_commit', 'job_stop_active'))
 MODEL_PROBES = frozenset(('ai_model_refresh', 'ai_model_test'))
 MODEL_OPERATIONS = MODEL_PROBES | {'ai_model_open', 'ai_model_save', 'ai_model_select', 'ai_model_provider',
     'ai_model_delete', 'ai_model_sources', 'ai_model_source_check'}
@@ -87,6 +88,7 @@ class ProjectCommandResult:
     project_id: str = ''
     error: str = ''
     payload: object = None
+    review: Optional[ReviewTarget] = None
 
 
 class QtWorkspaceAdapter:
@@ -166,14 +168,13 @@ class QtWorkspaceAdapter:
                              'history_jobs', 'history_events', 'open_power_log', 'open_history_result', 'open_project_directory',
                              'single_power_options', 'forget_recent', 'instance_status', 'remote_scope_read', 'remote_scope_save',
                              'imported_connection_choices', 'imported_connection_select',
-                             *GUI_UNKNOWN_OPERATIONS,
                              *WIZARD_COMMANDS,
-                             'service_aging_record',
+                             'service_aging_record', 'channel_evidence',
                              *GATEWAY_OPERATIONS,
                              *FEISHU_REPAIR_OPERATIONS,
                              *PLATFORM_CONFIG_OPERATIONS,
                              *EXTENSION_OPERATIONS,
-                             *JOB_REVIEW_OPERATIONS,
+                             'job_stop_active',
                              *MODEL_OPERATIONS,
                              *AI_WORKSPACE_OPERATIONS,
                              *ARCHIVE_READS,
@@ -354,6 +355,12 @@ class QtWorkspaceAdapter:
     def record_update_log(self, message):
         self._record(LogView(datetime.now().strftime('%H:%M:%S'), 'INFO', '', '软件更新', message))
 
+    def record_review(self, identifier, message, level):
+        with self.lock:
+            name = next((project.name for project in self._snapshot if project.project_id == identifier), '')
+        self._record(LogView(datetime.now().strftime('%H:%M:%S'), level, identifier, name or '工作区',
+                             '[前往确认] ' + message))
+
     def record_serial_window_state(self, project_id, project_name, state):
         self._record(LogView(datetime.now().strftime('%H:%M:%S'), 'INFO', project_id, project_name,
                              '[串口日志] ' + state))
@@ -418,10 +425,6 @@ class QtWorkspaceAdapter:
             if dropped:
                 self._append_display_log(entry)
 
-    def _preparation_log(self, context, message, *, level='INFO', **fields):
-        self._record(LogView(datetime.now().strftime('%H:%M:%S'), level, context.identity.project_id,
-                             context.identity.name, message, **fields))
-
     def _append_display_log(self, entry):
         # Call with self.lock held. The counters measure only this UI handoff buffer.
         if len(self._logs) == self._logs.maxlen:
@@ -443,6 +446,10 @@ class QtWorkspaceAdapter:
     def _load_project_state(self, context):
         self._service.status.attach(context)
         identifier = context.identity.project_id
+        try:
+            self._service.resources.recover_stale(identifier)
+        except (OSError, sqlite3.Error):
+            self._emit('[资源保护] 暂时无法读取或释放旧占用，设备操作时重新检查', 'WARN')
         with self.lock:
             missing_sizes = identifier not in self._module_window_sizes
         if missing_sizes:
@@ -579,8 +586,6 @@ class QtWorkspaceAdapter:
         if self._model_settings is not None:
             self._model_settings.close_project(context)
         self._service.projects.close(context)
-        if self._wizard is not None:
-            self._wizard.preparations.pop(project_id, None)
         self._historical_pretests.pop(project_id, None)
         self._power_overviews.pop(project_id, None)
         with self.lock:
@@ -606,14 +611,30 @@ class QtWorkspaceAdapter:
             return True
         if not all(item.has_only_power_tasks(include_continuous=True) for item in others):
             return False
-        # A manual observation can have no interface or serial mapping. Only the
-        # reviewed physical DUT identities provide a shared lock in that case.
-        from src.services.project_profile_store import read_project_profile
+        # Parallel mixed tests need a common physical lock for every active DUT.
+        from line_check_assistant.config_store import ChannelConfigStore
+        from line_check_assistant.network_ops import adapter_alias_from_display
+        from src.services.project_profile_store import active_project_duts, read_project_profile
+        by_channel = []
+        by_identity = []
         for project in (context, *(item.context for item in others)):
-            profile = read_project_profile(project.saved_root / 'Auto_power_on_off_tool/config')
-            if not profile or not profile['duts'] or not all(dut['hardware_id'] for dut in profile['duts']):
+            directory = project.saved_root / 'Auto_power_on_off_tool/config'
+            profile = read_project_profile(directory)
+            if not profile:
                 return False
-        return True
+            active = active_project_duts(profile, directory)
+            if not active:
+                return False
+            by_identity.append(all(dut['hardware_id'] for dut in active))
+            if profile.get('environment_channels'):
+                adapters = {int(row.section.rsplit('_', 1)[1]) for row in
+                            ChannelConfigStore(directory / 'network_card_ip.ini').load()
+                            if row.enabled and row.section.rsplit('_', 1)[1].isdecimal()
+                            and adapter_alias_from_display(row.adapter_alias or row.vlan_name)}
+                by_channel.append(all(dut['channel'] in adapters for dut in active))
+            else:
+                by_channel.append(False)
+        return all(by_channel) or all(by_identity)
 
     def _execution(self, context):
         from src.services.qt_execution_adapter import QtExecutionAdapter
@@ -738,6 +759,13 @@ class QtWorkspaceAdapter:
             raise ValueError('项目或工作区正在关闭，已取消任务历史读取')
         context = replace(self._context(project_id))
         cancel = threading.Event()
+        if operation == 'channel_evidence':
+            from src.services.qt_channel_evidence import read_channel_evidence
+            target, cancel = options
+            record = self._history_result_record(target.job_id)
+            future = self._history_reader.submit(read_channel_evidence, context, record, target, cancel)
+            self._history_reads[identifier] = (operation, context.identity, cancel, future)
+            return
         self._emit('[任务历史] 开始读取：' + context.identity.name)
         if operation in AGING_HISTORY:
             from src.services.service_aging import ServiceAging
@@ -778,10 +806,24 @@ class QtWorkspaceAdapter:
             else:
                 try:
                     page = future.result()
+                    if operation == 'history_jobs':
+                        execution = self._executions.get(project.project_id)
+                        jobs = execution.capabilities.jobs if execution and execution.capabilities else None
+                        if jobs is not None:
+                            with jobs.lock:
+                                active = set(jobs.controls)
+                        else:
+                            active = set()
+                        page = replace(page, entries=tuple(
+                            replace(row, state='unknown') if row.state in ('running', 'queued', 'stop_requested')
+                            and row.job_id not in active else row for row in page.entries))
                 except ValueError as problem:
                     error = str(problem)
                 except Exception:
                     error = '项目历史暂时无法读取，请核对数据库后重试'
+            if operation == 'channel_evidence':
+                self.results.put_nowait(ProjectCommandResult(identifier, operation, project.project_id, error, page))
+                continue
             if error:
                 self._emit(f'[任务历史] {project.name}：{error}', 'WARN')
             elif operation in AGING_HISTORY:
@@ -923,13 +965,13 @@ class QtWorkspaceAdapter:
                 with management.lock:
                     current = management.slot(number)
                     if current['instance_id'] != expected_id or current['paired']:
-                        raise ValueError('槽位状态已变化，请重新读取')
+                        raise ReviewRequired('configuration_changed', '槽位状态已变化，请重新读取', 'pairing', 'reload')
                     return management.pair(number, url, name, vpn, code)
             elif operation == 'gateway_save_config':
                 original, changes, scopes = args
                 with management.lock:
                     if management.gateway_config() != original:
-                        raise ValueError('保存期间配置已变化，请重新读取')
+                        raise ReviewRequired('configuration_changed', '保存期间配置已变化，请重新读取', 'gateway', 'manage')
                     management.save_gateway(dict(original, **changes), scopes)
             else:
                 return management.host.instances()
@@ -944,6 +986,7 @@ class QtWorkspaceAdapter:
         if not future.done():
             return
         self._gateway_request = None
+        project_id = self._gateway_project
         self._gateway_project = ''
         try:
             payload = future.result()
@@ -956,7 +999,9 @@ class QtWorkspaceAdapter:
             if isinstance(error, ValueError) and str(error).startswith(('保存期间配置已变化', '网关端口', 'WSS证书', '网关由外部进程', '请先完成', '请先在远程管理')):
                 message = str(error)
             self._emit('[网关管理] ' + operation + ' 失败：' + type(error).__name__, 'ERROR')
-            self.results.put_nowait(ProjectCommandResult(identifier, operation, error=message))
+            review = error.review if isinstance(error, ReviewRequired) else None
+            self.results.put_nowait(ProjectCommandResult(identifier, operation, project_id=project_id,
+                                                        error=message, review=review))
         else:
             self._emit('[网关管理] 已完成 ' + operation)
             self.results.put_nowait(ProjectCommandResult(identifier, operation, payload=payload))
@@ -987,11 +1032,13 @@ class QtWorkspaceAdapter:
             if self._closing.is_set():
                 raise ValueError('工作区正在关闭')
             if self._wizard is None:
-                self._wizard = QtProjectWizardService(self._service, self._emit, self._preparation_log)
+                self._wizard = QtProjectWizardService(self._service, self._emit)
             if operation == 'create_typed':
                 return self._remember(self._wizard.create(*args))
+            if operation == 'wizard_create':
+                return self._remember(self._wizard.create_in_parent(*args))
             if operation == 'wizard_draft_get':
-                return self._wizard.with_presets(self._wizard.drafts.read())
+                return self._wizard.draft()
             if operation == 'wizard_draft_save':
                 return self._wizard.drafts.write(*args)
             context = self._context(args[0])
@@ -1001,14 +1048,15 @@ class QtWorkspaceAdapter:
                 return self._wizard.profile(context)
             if operation == 'wizard_preset_save':
                 return self._wizard.save_preset(context, *args[1:])
-            if operation == 'preparation_view':
-                return self._wizard.preparation(context).snapshot()
             execution = self._executions.get(args[0])
             if operation == 'wizard_profile_save':
                 if execution is not None and (not execution.idle or execution.editor_open):
                     raise ValueError('请等待项目任务结束并关闭配置编辑器后再修改档案')
-                return self._wizard.save_profile(context, *args[1:])
-            return self._wizard.record(context, args[1])
+                result = self._wizard.save_profile(context, *args[1:])
+                if len(args) > 4 and args[4]:
+                    self._remember(context)
+                    result['recent_projects'] = self._recent_projects()
+                return result
         if operation == 'instance_status':
             self._emit('[多实例状态] 开始读取本机实例和网关状态')
             status = self._service.management().status()
@@ -1059,26 +1107,6 @@ class QtWorkspaceAdapter:
                 raise ValueError('工作区正在退出，接入配置未更换')
             connections = QtImportedConnections(self._service)
             return connections.choices() if operation == 'imported_connection_choices' else connections.select(args[0])
-        if operation in GUI_UNKNOWN_OPERATIONS:
-            if self._closing.is_set():
-                raise ValueError('工作区正在退出，已取消核实未知任务')
-            entries = tuple(self._service.resources.unknown_gui())
-            if operation == 'gui_unknown_list':
-                return entries
-            owner, label, evidence = args
-            if (owner, label) not in entries:
-                raise ValueError('所选记录已变化，请重新打开核实窗口')
-            # The legacy ticket embeds its project ID. Load its ledger via an
-            # existing project open before asking the original service to reconcile it.
-            project_id = owner.split(':', 2)[1]
-            if project_id not in ('qt-configuration', 'qt-channel') and project_id not in store.opened:
-                raise ValueError('请先打开该任务所属项目，再核实并解除保护')
-            with self._service.status.lock:
-                record = self._service.status.records.get(owner)
-                if record and record['state'] in ('prepared', 'queued', 'running', 'stopping'):
-                    raise ValueError('项目记录仍处于未完成状态，保护已保留')
-            self._service.resolve_gui_unknown(owner, evidence.strip())
-            return None
         if operation == 'import_legacy':
             from src.services.project_import_service import legacy_root
             source, destination, name = args
@@ -1124,15 +1152,8 @@ class QtWorkspaceAdapter:
             self._record(LogView(datetime.now().strftime('%H:%M:%S'), 'INFO', context.identity.project_id,
                                  context.identity.name, f'[批次结果] {detail}：{path.name}', job, channel))
             return detail
-        if operation in JOB_REVIEW_OPERATIONS:
-            review = self._execution(context).job_review
-            if operation == 'job_review_prepare':
-                return review.prepare(args[1])
-            if operation == 'job_review_cancel':
-                return review.cancel(args[1])
-            if operation == 'job_stop_active':
-                return review.stop_active(args[1])
-            return review.commit(*args[1:])
+        if operation == 'job_stop_active':
+            return self._execution(context).job_control.stop_active(args[1])
         if operation == 'forget_recent':
             self._service.forget(context.root)
             return context.identity.project_id
@@ -1193,7 +1214,8 @@ class QtWorkspaceAdapter:
                 from src.models.capabilities import CapabilityError
                 kind = args[1] if operation == 'prepare_execution' else self._execution(context).pending_operation(args[1])
                 if not self._parallel_test_allowed(context, kind, others):
-                    raise CapabilityError('qt_parallel_pending', '其它项目有设备任务正在执行，请等待收尾后再启动此操作')
+                    raise ReviewRequired('qt_parallel_pending', '其它项目有设备任务正在执行，请等待收尾后再启动此操作',
+                                         'project', 'task', project_id=others[0].context.identity.project_id)
         if operation == 'pipeline_status':
             return self._execution(context).pipeline_status()
         if operation == 'single_power_options':
@@ -1214,7 +1236,7 @@ class QtWorkspaceAdapter:
         if operation == 'stop_and_close':
             choice = args[1] if len(args) > 1 else ''
             if store.dirty(context) and choice not in ('save', 'discard'):
-                raise ValueError('关闭前须明确保存或放弃草稿')
+                raise ReviewRequired('unsaved_configuration', '关闭前须明确保存或放弃草稿', 'project', 'save')
             execution = self._executions.get(context.identity.project_id)
             if execution is not None:
                 execution.begin_close()
@@ -1223,13 +1245,12 @@ class QtWorkspaceAdapter:
             return context.identity.project_id
         execution = self._executions.get(context.identity.project_id)
         if execution is not None and execution.editor_open and operation in ('save', 'rename', 'duplicate', 'close'):
-            raise ValueError('请先保存或关闭本项目配置编辑器')
+            raise ReviewRequired('editor_open', '请先保存或关闭本项目配置编辑器', 'editor', 'close')
         if execution is not None and not execution.idle and operation in ('save', 'rename', 'duplicate', 'close'):
-            raise ValueError('项目任务仍在执行或收尾，请先停止并等待；配置和项目保留')
+            raise ReviewRequired('resource_busy', '项目任务仍在执行或收尾，请先停止并等待；配置和项目保留',
+                                 'project', 'task')
         if operation == 'save':
             store.save(context)
-            if self._wizard is not None and context.identity.project_id in self._wizard.preparations:
-                self._wizard.preparation(context).snapshot()
             return self._remember(context)
         if operation == 'rename':
             store.rename(context, args[1])
@@ -1237,7 +1258,7 @@ class QtWorkspaceAdapter:
         if operation == 'duplicate':
             if store.dirty(context):
                 if len(args) < 3 or args[2] != 'save':
-                    raise ValueError('复制前请明确保存当前项目')
+                    raise ReviewRequired('unsaved_configuration', '复制前请明确保存当前项目', 'project', 'save')
                 store.save(context)
             return self._remember(store.duplicate(context, args[1]))
         if operation == 'close':
@@ -1295,8 +1316,9 @@ class QtWorkspaceAdapter:
 
     def _typed_project(self, project, context, records, latest):
         from src.models.project_profile import TEST_TYPES
-        from src.services.project_profile_store import read_project_profile
-        profile = read_project_profile(context.saved_root / 'Auto_power_on_off_tool/config')
+        from src.services.project_profile_store import active_project_duts, read_project_profile
+        directory = context.saved_root / 'Auto_power_on_off_tool/config'
+        profile = read_project_profile(directory)
         if profile is not None:
             kind = profile['test_type']
             if kind == 'power_cycle':
@@ -1328,6 +1350,15 @@ class QtWorkspaceAdapter:
             else:
                 from src.services.service_aging import ServiceAging
                 details = ServiceAging(context).snapshot()
+                admitted = next((r for r in records if r.get('project_id') == context.identity.project_id
+                                 and r.get('owner') == details.get('job_id') and r.get('run_id')
+                                 and r.get('operation') == 'service_aging.start'
+                                 and r.get('revision') == details.get('revision')
+                                 and project.run_id in (r.get('owner'), r.get('run_id'))), None)
+                if admitted:
+                    from src.services.qt_channel_evidence import display_channels
+                    details['evidence_run_id'] = admitted['run_id']
+                    details['evidence_channels'] = display_channels(context, admitted)
                 if not latest or latest.get('operation') == 'service_aging.start':
                     abnormal = {row['dut_id'] for row in details.get('rows', ()) if row['state'] == 'abnormal'}
                     abnormal.update(row['dut_id'] for row in details.get('dut_presence', ()) if row['state'] == 'offline')
@@ -1337,7 +1368,7 @@ class QtWorkspaceAdapter:
                         progress += ' · 达到计划时长，待验收'
                     project = replace(project, progress=None, progress_text=progress,
                                       attention_count=max(project.attention_count, len(abnormal)),
-                                      channel_text=f"{len(profile['duts'])} 台 DUT · 持续供电监测")
+                                      channel_text=f"{len(active_project_duts(profile, directory))} 台 DUT · 持续供电监测")
             project = replace(project, project_type=kind, test_type=TEST_TYPES[kind],
                               dut=profile['model'] or '—', test_overview=details)
         return project
@@ -1368,7 +1399,8 @@ class QtWorkspaceAdapter:
             unowned_active = historical_active and any(r['state'] in ('prepared', 'queued', 'running', 'stopping')
                                                        and r['owner'] not in attached_jobs for r in records)
             state = 'unknown' if historical_active else status.state
-            state_text = '历史任务待核实' if historical_active else status.label
+            state_text = '历史任务结果未知' if unowned_active else status.label
+            notice = ''
             if state == 'unknown' and (execution is None or execution.idle):
                 from src.services.power_worker_lifetime import POWER_JOB_IDS, power_worker_notice
                 identifier = context.identity.project_id
@@ -1413,10 +1445,10 @@ class QtWorkspaceAdapter:
             )
             project = ProjectView(context.identity.project_id, context.identity.name,
                 TASK_NAMES.get(latest.get('operation'), '尚无已知测试类型'), '—', state, state_text,
-                '待核实' if state == 'unknown' else '—', '尚无实时轮次数据', None,
+                '结果未知' if state == 'unknown' else '—', '尚无实时轮次数据', None,
                 f'已选 {len(selected)} 通道 · 尚无执行快照', int(status.last_result == 'failed'),
                 run_id=latest.get('run_id', ''), channels=display, configuration=config,
-                active_task_count=0, dirty=self._service.projects.dirty(context), can_start=state != 'unknown',
+                active_task_count=0, dirty=self._service.projects.dirty(context), can_start=not notice and not status.active_task_count and state != 'stopping',
                 unresolved_tasks=bool(status.unknown_task_count or unowned_active), saved_revision=context.identity.revision)
             if execution is not None:
                 project = execution.present(project)
@@ -1529,6 +1561,7 @@ class QtWorkspaceAdapter:
             # Buffer constructor events until the service exposes its path.
             initial = []
             self._service = factory(self.source_root, directory=self.directory, emit=initial.append)
+            self._service.enable_automatic_resource_recovery()
             self._log_writer.start(self._service.directory)
             self._service.emit = self._emit
             self._service.projects.emit = self._emit
@@ -1611,9 +1644,20 @@ class QtWorkspaceAdapter:
                 project_id = ''
                 error_text = ''
                 payload = None
+                review = None
                 deferred = False
                 previous_ids = set(self._service.projects.opened)
                 try:
+                    if operation == 'channel_evidence':
+                        project_id = args[0]
+                        try:
+                            self._request_history(identifier, operation, args)
+                            deferred = True
+                        except ValueError as error:
+                            error_text = str(error)
+                        except Exception:
+                            error_text = '本地只读查询未能受理，请核对项目状态后重试'
+                        continue
                     self._flush_window_placements()
                     if operation in FEISHU_REPAIR_OPERATIONS:
                         self._change_feishu_repair(operation)
@@ -1672,7 +1716,7 @@ class QtWorkspaceAdapter:
                         self._request_history(identifier, operation, args)
                         deferred = True
                         continue
-                    if operation in ('gui_unknown_list', 'open_power_log', 'open_history_result',
+                    if operation in ('open_power_log', 'open_history_result',
                                      'open_project_directory', 'instance_status', 'remote_scope_read', 'remote_scope_save'):
                         project_id = args[0] if args and operation != 'remote_scope_save' else ''
                         payload = self._execute(operation, args)
@@ -1687,14 +1731,14 @@ class QtWorkspaceAdapter:
                         self._close_receipts.setdefault(value, []).append(identifier)
                         deferred = True
                         continue
-                    if operation in WIZARD_COMMANDS and operation != 'create_typed':
+                    if operation in WIZARD_COMMANDS and operation not in WIZARD_CREATION_COMMANDS:
                         project_id = '' if operation.startswith('wizard_draft_') else args[0]
                         payload = value
-                    elif operation in ('export_logs', 'imported_connection_choices', 'imported_connection_select', 'gui_unknown_resolve'):
+                    elif operation in ('export_logs', 'imported_connection_choices', 'imported_connection_select'):
                         payload = value
                     elif operation == 'prepare_execution':
                         payload, project_id = value, value.project_id
-                    elif operation in JOB_REVIEW_OPERATIONS:
+                    elif operation == 'job_stop_active':
                         payload, project_id = value, args[0]
                     elif operation in ('pipeline_status', 'single_power_options') or operation.startswith(('configuration_', 'channels_editor_', 'serial_', 'dut_', 'upgrade_', 'parameter_', 'onu_')):
                         payload, project_id = value, args[0]
@@ -1710,23 +1754,45 @@ class QtWorkspaceAdapter:
                             context.identity.name if context is not None else '项目管理',
                             '项目操作已完成：' + operation))
                 except Exception as error:
+                    if not project_id and args and isinstance(args[0], str) and args[0] in previous_ids:
+                        project_id = args[0]
+                    if isinstance(error, (ReviewRequired, WizardCreateError)):
+                        review = error.review
                     # Match the original window admission: an opened project
                     # whose view data cannot load must not retain a hidden
                     # write lease. Leave its files intact for inspection.
-                    for identifier_to_close in set(self._service.projects.opened) - previous_ids:
+                    newly_opened = set(self._service.projects.opened) - previous_ids
+                    for identifier_to_close in newly_opened:
                         self._service.projects.close(self._service.projects.opened[identifier_to_close])
                     from src.models.capabilities import CapabilityError
                     from src.models.dependency_repair import MissingFeishuSdkError
-                    error_text = (str(error) if isinstance(error, (CapabilityError, MissingFeishuSdkError)) or
-                        isinstance(error, ValueError) and not operation.startswith(('configuration_', 'channels_editor_', 'dut_', 'upgrade_', 'parameter_', 'onu_')) else
-                        type(error).__name__ + '：项目操作未完成，原文件和当前草稿保留，请核对输入与目录')
-                    self._emit('[项目管理] ' + operation + '失败：' + type(error).__name__, level='ERROR')
+                    detail = type(error).__name__
+                    if operation == 'wizard_create':
+                        if newly_opened:
+                            detail = '项目目录已创建，工作区载入失败，请从项目菜单打开最终路径'
+                        elif isinstance(error, WizardCreateError):
+                            detail = str(error)
+                        elif isinstance(error, PermissionError):
+                            detail = '无法访问保存位置，请检查父目录的访问权限'
+                        else:
+                            detail = '创建未完成，请核对执行日志中的最后一步和最终路径'
+                        error_text = detail
+                    else:
+                        error_text = (str(error) if isinstance(error, (CapabilityError, MissingFeishuSdkError)) or
+                            isinstance(error, ValueError) and not operation.startswith(('configuration_', 'channels_editor_', 'dut_', 'upgrade_', 'parameter_', 'onu_')) else
+                            type(error).__name__ + '：项目操作未完成，原文件和当前草稿保留，请核对输入与目录')
+                    context = self._service.projects.opened.get(project_id)
+                    if context is None:
+                        self._emit('[项目管理] ' + operation + '失败：' + detail, level='ERROR')
+                    else:
+                        self._record(LogView(datetime.now().strftime('%H:%M:%S'), 'ERROR', project_id,
+                                             context.identity.name, '[项目管理] ' + operation + '失败：' + detail))
                 finally:
                     if operation == 'refresh':
                         with self.lock:
                             self._refresh_pending = False
                     if not deferred:
-                        self.results.put_nowait(ProjectCommandResult(identifier, operation, project_id, error_text, payload))
+                        self.results.put_nowait(ProjectCommandResult(identifier, operation, project_id, error_text, payload, review))
         except Exception as error:
             self.results.put_nowait(ProjectCommandResult(0, 'initialization_failed', error=type(error).__name__ + '：项目服务不可用'))
             if self._platform_configuration is not None:

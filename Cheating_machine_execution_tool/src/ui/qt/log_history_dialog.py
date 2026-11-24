@@ -9,13 +9,11 @@ from src.models.qt_log_history import HistoryEventFilter
 from src.services.qt_power_logs import POWER_HISTORY_CAPABILITIES
 from src.services.workbench_status_service import TASK_NAMES
 from src.ui.qt.log_panel import LogPanel
-from src.ui.qt.job_review_dialog import JobReviewDialog
 from src.ui.qt.theme import button, label
 
 
 JOB_STATES = {'queued': '记录为等待', 'running': '记录为运行中', 'stop_requested': '记录为停止中', 'succeeded': '已完成',
               'failed': '失败', 'stopped': '已停止', 'skipped': '未执行', 'unknown': '结果未知'}
-JOB_REVIEW_STATES = frozenset(('unknown', 'queued', 'running', 'stop_requested'))
 
 
 class HistoryResultFilesDialog(QDialog):
@@ -65,7 +63,6 @@ class LogHistoryDialog(QDialog):
     jobs_requested = Signal(object)
     legacy_requested = Signal(object)
     events_requested = Signal(str, object, object)
-    review_requested = Signal(str)
     stop_requested = Signal(str)
     result_files_requested = Signal(str)
 
@@ -78,7 +75,6 @@ class LogHistoryDialog(QDialog):
         self.source_generation = 0
         self.page_filter = HistoryEventFilter()
         self.busy = False
-        self.review_dialog = None
         self.result_files_dialog = None
         self.setMinimumSize(650, 390)
         available = self.screen().availableGeometry()
@@ -109,7 +105,6 @@ class LogHistoryDialog(QDialog):
         self.jobs.customContextMenuRequested.connect(self._job_menu)
         self.job_menu = QMenu(self.jobs)
         self.stop_action = self.job_menu.addAction('请求安全停止…', self._request_stop)
-        self.review_action = self.job_menu.addAction('现场核实结果…', self._request_review)
         self.result_files_action = self.job_menu.addAction('查看批次结果文件…', self._request_result_files)
         jobs_bar.addWidget(self.jobs, 1)
         self.newest_jobs = button('最新任务', lambda: self.jobs_requested.emit(None))
@@ -201,7 +196,7 @@ class LogHistoryDialog(QDialog):
         self.feedback.setText(f'本页 {len(page.entries)} 条' if page.entries else '该项目没有旧工作台运行记录')
 
     def _job_menu(self, point):
-        if self.stop_action.isEnabled() or self.review_action.isEnabled() or self.result_files_action.isEnabled():
+        if self.stop_action.isEnabled() or self.result_files_action.isEnabled():
             self.job_menu.popup(self.jobs.mapToGlobal(point))
 
     def _request_stop(self):
@@ -214,10 +209,6 @@ class LogHistoryDialog(QDialog):
         if answer == QMessageBox.StandardButton.Yes:
             self.stop_requested.emit(identifier)
 
-    def _request_review(self):
-        if self.review_action.isEnabled():
-            self.review_requested.emit(self.jobs.currentData())
-
     def _request_result_files(self):
         if self.result_files_action.isEnabled():
             self.result_files_requested.emit(self.jobs.currentData())
@@ -229,7 +220,7 @@ class LogHistoryDialog(QDialog):
 
     def set_busy(self, busy, *, reading=False):
         self.busy = busy
-        self.source.setEnabled((not busy or reading) and self.review_dialog is None and self.result_files_dialog is None)
+        self.source.setEnabled((not busy or reading) and self.result_files_dialog is None)
         self.latest_legacy.setEnabled(not busy)
         self.older_legacy.setEnabled(not busy and self.legacy_cursor is not None)
         has_job = bool(self.jobs.currentData())
@@ -243,12 +234,10 @@ class LogHistoryDialog(QDialog):
         row = self.jobs.currentData(Qt.ItemDataRole.UserRole + 1)
         job_menu_ready = not busy and self.source.currentData() == 'jobs' and self.source.isEnabled() and row is not None
         can_stop = job_menu_ready and row.state in ('queued', 'running')
-        can_review = job_menu_ready and row.state in JOB_REVIEW_STATES
         can_view_files = job_menu_ready and row.capability in POWER_HISTORY_CAPABILITIES
         self.stop_action.setEnabled(can_stop)
-        self.review_action.setEnabled(can_review)
         self.result_files_action.setEnabled(can_view_files)
-        tip = ('\n右键查看任务操作' if can_stop or can_review or can_view_files else '')
+        tip = ('\n右键查看任务操作' if can_stop or can_view_files else '')
         self.jobs.setToolTip(row.job_id + tip if row else '')
         if busy:
             self.feedback.setText('正在读取历史…')
@@ -305,19 +294,12 @@ class LogHistoryDialog(QDialog):
         self.page_filter = filters
         self._update_filter_feedback()
 
-    def show_review_state(self, identifier, state):
+    def show_job_state(self, identifier, state):
         index = self.jobs.findData(identifier)
         if index >= 0:
             job = self.jobs.itemData(index, Qt.ItemDataRole.UserRole + 1)
             self.jobs.setItemText(index, self._job_title(job, state))
             self.jobs.setItemData(index, replace(job, state=state), Qt.ItemDataRole.UserRole + 1)
-
-    def closeEvent(self, event):
-        if self.review_dialog is not None and not self.review_dialog.close():
-            event.ignore()
-        else:
-            super().closeEvent(event)
-
 
 class LogHistoryController:
     def __init__(self, workspace):
@@ -339,7 +321,6 @@ class LogHistoryController:
         dialog.jobs_requested.connect(lambda before: self._submit(dialog, 'history_jobs', before))
         dialog.legacy_requested.connect(lambda before: self._submit(dialog, 'history_legacy_runs', before))
         dialog.events_requested.connect(lambda job, before, filters: self._submit(dialog, 'history_events', before, job, filters))
-        dialog.review_requested.connect(lambda job: self._submit(dialog, 'job_review_prepare', job))
         dialog.stop_requested.connect(lambda job: self._submit(dialog, 'job_stop_active', job))
         dialog.result_files_requested.connect(lambda job: self._submit(dialog, 'history_result_files', job))
         dialog.logs.export_requested.connect(lambda entries, description: self.workspace.export_logs(entries, description, dialog))
@@ -379,8 +360,6 @@ class LogHistoryController:
         elif result.error:
             dialog.set_busy(False)
             dialog.feedback.setText(result.error)
-            if result.operation == 'job_review_commit' and dialog.review_dialog is not None:
-                dialog.review_dialog.show_error(result.error)
         elif result.operation == 'history_jobs':
             dialog.show_jobs(result.payload)
         elif result.operation == 'history_legacy_runs':
@@ -388,17 +367,9 @@ class LogHistoryController:
         elif result.operation == 'history_result_files':
             self._show_result_files(dialog, result.payload)
         elif result.operation == 'job_stop_active':
-            dialog.show_review_state(result.payload['job_id'], result.payload['state'])
+            dialog.show_job_state(result.payload['job_id'], result.payload['state'])
             dialog.set_busy(False)
             dialog.feedback.setText(result.payload['notice'])
-        elif result.operation == 'job_review_prepare':
-            self._show_review(dialog, result.payload)
-        elif result.operation == 'job_review_commit':
-            review = dialog.review_dialog
-            dialog.show_review_state(review.review.job_id, result.payload)
-            review.accept()
-            dialog.set_busy(False)
-            dialog._request_events(None)
         else:
             dialog.show_logs(result.payload, filters)
         return True
@@ -425,25 +396,6 @@ class LogHistoryController:
         files.open_requested.connect(open_file)
         files.finished.connect(finished)
         files.show()
-
-    def _show_review(self, dialog, data):
-        review = JobReviewDialog(data, dialog.project_name, dialog)
-        dialog.review_dialog = review
-        dialog.set_busy(False)
-        review.confirmed.connect(lambda outcome, evidence: self._confirm_review(dialog, review, outcome, evidence))
-        review.finished.connect(lambda code: self._close_review(dialog, review, code))
-        review.show()
-
-    def _confirm_review(self, dialog, review, outcome, evidence):
-        self._submit(dialog, 'job_review_commit', review.review.token, outcome, evidence)
-        if dialog.busy:
-            review.set_submitted()
-
-    def _close_review(self, dialog, review, code):
-        dialog.review_dialog = None
-        dialog.set_busy(False)
-        if code == QDialog.DialogCode.Rejected and not self.workspace.closing:
-            self.workspace.submit('job_review_cancel', dialog.project_id, review.review.token)
 
     def set_export_enabled(self, enabled):
         for dialog in self.windows.values():

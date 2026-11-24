@@ -8607,8 +8607,22 @@ def main(project_path=None) -> None:
         finally:
             instance.close()
         return
-    app = LineCheckAssistant()
-    app.mainloop()
+    from src.services.project_store import ProjectStore
+    from src.services.standalone_power_project import OPEN_GUIDANCE, StandalonePowerProject
+    binding = None
+    if project_path is not None:
+        try:
+            binding = StandalonePowerProject.open(ProjectStore(APP_DIR), project_path)
+        except Exception as error:
+            messagebox.showerror('独立挂测项目无法打开', f'{error}\n{OPEN_GUIDANCE}')
+            return
+    try:
+        app = LineCheckAssistant(project_context=binding.context) if binding else LineCheckAssistant()
+        app.standalone_power_project = binding
+        app.mainloop()
+    finally:
+        if binding is not None:
+            binding.store.close(binding.context)
     repair = vars(app).get('_feishu_dependency_controller')
     if repair is not None and repair.restart_requested:
         from src.core.source_restart import launch_restart_helper
@@ -8619,4 +8633,7 @@ def main(project_path=None) -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if os.environ.get('LINECHECK_LEGACY_SINGLE_PROJECT') == '1' and len(sys.argv) == 2:
+        main(sys.argv[1])
+    else:
+        main()

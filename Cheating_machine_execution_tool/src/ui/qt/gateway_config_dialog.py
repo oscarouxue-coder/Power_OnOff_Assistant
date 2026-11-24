@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QCheckBox, QDialog, QFormLayout, QHBoxLayout, QHe
     QLineEdit, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout)
 
 from src.services.remote_gateway_store import validate_pairing_scopes
+from src.ui.qt.blocker_review import ReviewFeedback, focus_widget
 from src.ui.qt.theme import button, label
 
 
@@ -52,7 +53,7 @@ class GatewayConfigDialog(QDialog):
         controls.addWidget(button('取消', self.reject))
         controls.addWidget(button('保存', self.save))
         layout.addLayout(controls)
-        self.feedback = label('', 'muted')
+        self.feedback = ReviewFeedback(role='muted')
         self.feedback.setWordWrap(True)
         layout.addWidget(self.feedback)
         screen = self.screen().availableGeometry()
@@ -76,12 +77,12 @@ class GatewayConfigDialog(QDialog):
             scope = {key: self.scopes.item(row, col).text().strip() for col, key in enumerate(self.COLUMNS)}
             scope['members'] = [s.strip() for s in scope['members'].replace('，', ',').split(',') if s.strip()]
             scopes.append(scope)
-        try:
-            if scopes:
-                validate_pairing_scopes(scopes)
-        except ValueError as error:
-            self.feedback.setText(str(error))
-            return
+        for row, scope in enumerate(scopes):
+            try:
+                validate_pairing_scopes([scope])
+            except ValueError as error:
+                self.feedback.show_review(str(error), lambda: self.focus_scope(row))
+                return
         broad = [scope['chat'] for scope in scopes if scope['members'] == ['*']]
         if broad and not self.parent().confirm('确认全群范围', '允许以下聊天的全部成员配对调用？\n' + '\n'.join(broad)):
             return
@@ -90,3 +91,8 @@ class GatewayConfigDialog(QDialog):
                        platforms=[key for key, field in self.platforms.items() if field.isChecked()])
         self.parent().submit('gateway_save_config', self.original, changes, scopes)
         self.setEnabled(self.parent().request is None)
+
+    def focus_scope(self, row):
+        if row < self.scopes.rowCount():
+            self.scopes.setCurrentCell(row, self.COLUMNS.index('members'))
+            focus_widget(self.scopes)

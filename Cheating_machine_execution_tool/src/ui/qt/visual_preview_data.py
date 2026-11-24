@@ -27,7 +27,8 @@ def preview_snapshots():
                      for n, state, completed, stage, _, _ in rounds)
     power_rows = [
         dict(dut_id=f'DUT-{n:02}', label=f'DUT-{n:02}', channel=n, stage=stage, cycle=completed + (state in ('running', 'retry')),
-             completed=completed, success=completed - failures, failure=failures, retries=retries, duration=62.4 + n)
+             completed=completed, success=completed - failures, failure=failures, retries=retries, duration=62.4 + n,
+             last_failure=completed + 1 if failures else None, failure_reason=stage if failures else None)
         for n, state, completed, stage, failures, retries in rounds
     ]
     power = ProjectView(
@@ -38,7 +39,7 @@ def preview_snapshots():
         can_stop=True, task_stage='CH03 PON 注册超时，CH04 正在重试', count_unit='轮',
         configuration=(('运行参数', (('每台目标', '500 轮'), ('已选通道', 'CH01–CH08'))),
                        ('设备资源', (('程控电源', 'COM102'), ('通道网卡', 'VLAN116–VLAN123')))),
-        test_overview=dict(target=500, rows=power_rows),
+        test_overview=dict(job_id='DEMO-PWR-07', target=500, rows=power_rows),
     )
     aging = ProjectView(
         AGING, '双频网关 · 业务老化', '全业务老化', 'GW-2400', 'running', '监测中',

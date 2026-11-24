@@ -38,9 +38,10 @@ REQUIRED_MODULES = (
     "comtypes", "comtypes.GUID", "comtypes.client", "configobj", "psutil",
     "serial", "serial.serialwin32", "tftpy", "openpyxl", "xlrd", "tkinter",
 )
+TK_ICON_RELATIVE_PATH = "assets/icons/DUTPilot-01-tk.ico"
 REQUIRED_FILES = (
     "CONFIRMED_CASES.json",
-    "assets/icons/line_check_assistant_network_topology_v1.ico",
+    TK_ICON_RELATIVE_PATH,
     "tcl/init.tcl", "tk/tk.tcl", "_tcl_data/init.tcl", "_tk_data/tk.tcl",
     "VERSION_INFO.txt", "BUILD_INFO.txt", "python39.dll", "_socket.pyd",
     "_ssl.pyd", "_ctypes.pyd", "tcl86t.dll", "tk86t.dll", "certifi/cacert.pem",
@@ -55,6 +56,7 @@ REQUIRED_QT_MODULES = (
     'test_case.wifi_connect_case', 'common.wifi_connect',
     'serial', 'serial.serialwin32', 'paramiko', 'tftpy', 'openpyxl', 'xlrd',
 )
+QT_ICON_RELATIVE_PATH = 'assets/icons/DUTPilot-01.ico'
 REQUIRED_QT_FILES = (
     'PySide6/plugins/platforms/qwindows.dll', 'PySide6/QtCore.pyd',
     'PySide6/QtGui.pyd', 'PySide6/QtWidgets.pyd',
@@ -63,7 +65,7 @@ REQUIRED_QT_FILES = (
     'qt_licenses/GPL-3.0-only.txt', 'qt_licenses/LGPL-3.0-only.txt', 'qt_licenses/QT-SOURCES.md',
     'qt_licenses/PySide6-Essentials/LicenseRef-Qt-Commercial.txt',
     'qt_licenses/shiboken6/LicenseRef-Qt-Commercial.txt',
-    'assets/icons/line_check_assistant_network_topology_v1.ico',
+    QT_ICON_RELATIVE_PATH,
 )
 
 
@@ -84,7 +86,7 @@ def inspect_archive(exe: Path, excluded: list[str]) -> dict:
     expected_version = (source_root / "line_check_assistant/packaging_assets/VERSION_INFO.txt").read_bytes()
     if archive.extract("VERSION_INFO.txt") != expected_version:
         raise ValueError("Embedded VERSION_INFO.txt differs from the source version")
-    icon_name = "assets/icons/line_check_assistant_network_topology_v1.ico"
+    icon_name = TK_ICON_RELATIVE_PATH
     # Use the archive's original key (Windows may use backslashes).
     icon_key = next(name for name in archive.toc if name.replace("\\", "/") == icon_name)
     if archive.extract(icon_key) != (source_root / icon_name).read_bytes():
@@ -205,7 +207,7 @@ def inspect_qt_directory(exe: Path, portable_zip: Path, excluded: list[str]) -> 
     if (directory / 'VERSION_INFO.txt').read_bytes() != (
             source / 'line_check_assistant/packaging_assets/QT_VERSION_INFO.txt').read_bytes():
         raise ValueError('Qt validation version information differs from the source')
-    icon = 'assets/icons/line_check_assistant_network_topology_v1.ico'
+    icon = QT_ICON_RELATIVE_PATH
     if files[icon].read_bytes() != (source / icon).read_bytes():
         raise ValueError('Qt application icon differs from the source')
     with zipfile.ZipFile(portable_zip) as bundle:

@@ -338,7 +338,7 @@ class QtOnuQueryTests(unittest.TestCase):
         result = self.command('poll')
         self.assertEqual(result['state'], 'unknown')
         self.assertEqual([row['status'] for row in result['deleted']], ['failed', 'not_executed'])
-        self.assertTrue(self.workspace.resources.unknown_for(self.context.identity.project_id))
+        self.assertFalse(self.workspace.resources.unknown_for(self.context.identity.project_id))
 
     def registration_fixture(self, *, family='C600', cross_pon=False, harness=RegistrationHarness):
         self.store = configure_registration(self.workspace, self.context, whole_olt=cross_pon)
@@ -402,7 +402,7 @@ class QtOnuQueryTests(unittest.TestCase):
         self.harness.finished.set()
         self.wait(lambda: self.execution.idle)
         self.assertEqual(self.command('poll')['state'], 'unknown')
-        self.assertTrue(self.workspace.resources.unknown_for(self.context.identity.project_id))
+        self.assertFalse(self.workspace.resources.unknown_for(self.context.identity.project_id))
 
     def test_business_save_preserves_connection_and_invalidates_preview(self):
         data = self.registration_fixture()
@@ -516,7 +516,7 @@ class QtOnuQueryTests(unittest.TestCase):
         result = self.command('poll')
         self.assertEqual(result['state'], 'unknown')
         self.assertIn('超时', result['message'])
-        self.assertTrue(self.workspace.resources.unknown_for(self.context.identity.project_id))
+        self.assertFalse(self.workspace.resources.unknown_for(self.context.identity.project_id))
         self.assertEqual(len(self.harness.save_calls), 1)
 
     def test_c600_save_admission_error_is_visible_and_does_not_retry(self):
@@ -548,7 +548,7 @@ class QtOnuQueryTests(unittest.TestCase):
         result = self.command('poll')
         self.assertEqual((result['action'], result['state']), ('save', 'unknown'))
         self.assertEqual(self.execution.jobs[registration]['status']['state'], 'succeeded')
-        self.assertTrue(self.workspace.resources.unknown_for(self.context.identity.project_id))
+        self.assertFalse(self.workspace.resources.unknown_for(self.context.identity.project_id))
         self.assertEqual(self.harness.save_calls, [('192.0.2.153', '192.0.2.30', 'write', 120)])
 
     def cleanup_fixture(self):

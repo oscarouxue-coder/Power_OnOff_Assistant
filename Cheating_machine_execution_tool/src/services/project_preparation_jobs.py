@@ -5,7 +5,7 @@ import sqlite3
 import time
 
 from src.services.qt_log_history import job_database_path
-from src.services.project_profile_store import read_project_profile
+from src.services.project_profile_store import active_project_duts, read_project_profile
 
 
 def _original_target(context, dut, job_id, capability):
@@ -29,7 +29,9 @@ def _original_target(context, dut, job_id, capability):
             raise ValueError('任务快照路径已重定向')
         profile = read_project_profile(directory)
         matches = [d for d in (profile or {}).get('duts', ()) if d.get('dut_id') == dut['dut_id']]
-        if (len(matches) != 1 or not dut.get('hardware_id') or matches[0] != dut):
+        managed = profile and profile.get('environment_channels')
+        if (len(matches) != 1 or matches[0] != dut
+                or (type(dut.get('channel')) is not int if managed else not dut.get('hardware_id'))):
             raise ValueError('任务快照中的 DUT 身份或映射不一致')
         match = path.parent.name
     if match is None:
@@ -41,7 +43,7 @@ def _select_target(step, capability, arguments, result, dut):
     if step == 'onu':
         sns = arguments.get('serial_numbers')
         if (capability != 'onu.register' or not isinstance(sns, list) or len(sns) != 1
-                or str(sns[0]).casefold() != dut['hardware_id'].casefold()):
+                or not dut.get('hardware_id') or str(sns[0]).casefold() != dut['hardware_id'].casefold()):
             raise ValueError('注册回执缺少唯一匹配的 ONU SN，可人工记录现场现状')
         return step
     channel = dut.get('channel')
@@ -106,5 +108,18 @@ def preparation_job_receipt(context, dut, step, job_id, started):
     if not isinstance(arguments, dict) or not isinstance(result, dict) or result.get('ok') is not True:
         raise ValueError('任务回执缺少操作参数或确认结果')
     run = _original_target(context, dut, job_id, capability)
+    if step in ('firmware', 'parameters', 'onu'):
+        from line_check_assistant.config_store import ChannelConfigStore
+        directory = context.root / 'runs' / run / 'Auto_power_on_off_tool/config'
+        profile = read_project_profile(directory)
+        if step == 'onu':
+            sn = dut['hardware_id'].casefold()
+            candidates = [row for row in active_project_duts(profile, directory) if row['hardware_id'].casefold() == sn]
+            if not sn or len(candidates) != 1:
+                raise ValueError('注册回执无法关联唯一的 DUT，请使用现场人工记录')
+        elif profile.get('environment_channels'):
+            channel = next((row for row in ChannelConfigStore(directory / 'network_card_ip.ini').load()
+                            if row.enabled and row.section == f"channel_{dut['channel']}"), None)
+            dut = dict(dut, vlan=(channel.vlan_name or channel.adapter_alias) if channel else '')
     part = _select_target(step, capability, arguments, result, dut)
     return part, f'{capability} · Job {job_id} · 批次 {run}'

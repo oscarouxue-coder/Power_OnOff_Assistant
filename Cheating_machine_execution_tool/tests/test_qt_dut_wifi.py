@@ -181,7 +181,9 @@ class QtDutWifiTests(unittest.TestCase):
         self.execute(self.preview(increment=True))
         status=self.finish();self.assertEqual(status['state'],'unknown')
         self.assertFalse(any(r.get('ok') for r in status['rows']))
-        with self.assertRaises(CapabilityError):self.preview()
+        calls = len(self.wifi.calls)
+        self.assertTrue(self.preview()['confirmation'])
+        self.assertEqual(len(self.wifi.calls), calls)
 
     def test_expiry_cancel_config_and_query_changes_prevent_dispatch(self):
         query=self.query()['wifi_queries']['wifi_2g']

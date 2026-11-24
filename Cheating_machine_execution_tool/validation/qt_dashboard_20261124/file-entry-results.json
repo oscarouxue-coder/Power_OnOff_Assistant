@@ -1,0 +1,86 @@
+{
+  "1": {
+    "test_output": [
+      "test_overview_buttons_open_existing_project_and_new_wizard (overview_file_entry.OverviewFileEntry) ... ok",
+      "",
+      "----------------------------------------------------------------------",
+      "Ran 1 test in 1.152s",
+      "",
+      "OK"
+    ],
+    "isolation": {
+      "passed": true,
+      "managed_windows": 4,
+      "violations": [],
+      "isolation": "private_desktop",
+      "desktop": "DUTPilot_render_ab10f46279894907aaba70fda404c3ea",
+      "framework": "qt",
+      "platform": "windows",
+      "qt": {
+        "passed": true,
+        "managed_windows": 4,
+        "violations": [],
+        "isolation": "private_desktop",
+        "desktop": "DUTPilot_render_ab10f46279894907aaba70fda404c3ea",
+        "framework": "qt",
+        "platform": "windows"
+      }
+    }
+  },
+  "1.25": {
+    "test_output": [
+      "test_overview_buttons_open_existing_project_and_new_wizard (overview_file_entry.OverviewFileEntry) ... ok",
+      "",
+      "----------------------------------------------------------------------",
+      "Ran 1 test in 1.276s",
+      "",
+      "OK"
+    ],
+    "isolation": {
+      "passed": true,
+      "managed_windows": 4,
+      "violations": [],
+      "isolation": "private_desktop",
+      "desktop": "DUTPilot_render_bea6f2c8e2674a2e9925415eee1912d0",
+      "framework": "qt",
+      "platform": "windows",
+      "qt": {
+        "passed": true,
+        "managed_windows": 4,
+        "violations": [],
+        "isolation": "private_desktop",
+        "desktop": "DUTPilot_render_bea6f2c8e2674a2e9925415eee1912d0",
+        "framework": "qt",
+        "platform": "windows"
+      }
+    }
+  },
+  "1.5": {
+    "test_output": [
+      "test_overview_buttons_open_existing_project_and_new_wizard (overview_file_entry.OverviewFileEntry) ... ok",
+      "",
+      "----------------------------------------------------------------------",
+      "Ran 1 test in 1.274s",
+      "",
+      "OK"
+    ],
+    "isolation": {
+      "passed": true,
+      "managed_windows": 4,
+      "violations": [],
+      "isolation": "private_desktop",
+      "desktop": "DUTPilot_render_3d2c3a3f22e54a83bc3b7461677b1350",
+      "framework": "qt",
+      "platform": "windows",
+      "qt": {
+        "passed": true,
+        "managed_windows": 4,
+        "violations": [],
+        "isolation": "private_desktop",
+        "desktop": "DUTPilot_render_3d2c3a3f22e54a83bc3b7461677b1350",
+        "framework": "qt",
+        "platform": "windows"
+      }
+    }
+  }
+}

@@ -113,22 +113,23 @@
 | projects.imported_connection | 选择导入的接入配置 | imported_connection | WorkspaceService / ProjectStore | local_confirmation | manual_control：涉及本地目录所有权、配置版本、运行生命周期或远程授权，限本机操作员；AI不可模拟GUI或自行确认 | project/configuration/manual | test_project_management.py, test_project_workspace.py, test_workspace_platforms.py, test_project_completion.py, test_multi_project_business_validation.py；Windows/真实模型及设备待验收 |
 | remote.platform_direct | 本机启停钉钉和飞书直连排障 | change_direct | QtDirectPlatforms / WorkspacePlatformPool / 原平台服务 | local_confirmation | manual_control：启用要求本机授权项目，进入已绑定群或飞书企业单聊，实时核对原平台身份和权限。 | project/configuration/manual | test_qt_workspace_adapter.py；Windows/真实模型及设备待验收 |
 | remote.feishu_automatic_notifications | 启停飞书挂测通知 | change_notifications | QtFeishuNotifications / FeishuNotificationService | local_confirmation | manual_control：使用已绑定群和保存的项目名称，停用会阻止后续自动通知。 | project/configuration/manual | test_qt_workspace_adapter.py, qt_workbench_probe.py；Windows/真实模型及设备待验收 |
-| jobs.local_safe_stop | 本机请求选中任务安全停止 | _request_stop | QtJobReview / CapabilityJobs | local_confirmation | manual_control：仅接受本进程当前项目内的活跃任务，选定任务独立收尾。 | project/run/manual | test_qt_workspace_adapter.py；Windows/真实模型及设备待验收 |
+| jobs.local_safe_stop | 本机请求选中任务安全停止 | _request_stop | QtJobControl / CapabilityJobs | local_confirmation | manual_control：仅接受本进程当前项目内的活跃任务，选定任务独立收尾。 | project/run/manual | test_qt_workspace_adapter.py；Windows/真实模型及设备待验收 |
 | extensions.review | 本机审阅登记或启停受控扩展 | import_template | QtControlledExtensions / CapabilityExtensions | local_confirmation | manual_control：绑定项目与审阅哈希，继承目标操作原授权与资源范围。 | project/run/manual | test_qt_workspace_adapter.py, qt_workbench_probe.py；Windows/真实模型及设备待验收 |
 | remote.platform_credentials | 本机编辑钉钉或飞书应用配置 | save | QtPlatformConfiguration / RemoteConfigStore / FeishuConfigStore | local_confirmation | manual_control：只保存平台应用配置，凭据交由原加密存储，保存后保持停用。 | project/configuration/manual | test_qt_workspace_adapter.py, qt_workbench_probe.py；Windows/真实模型及设备待验收 |
 | remote.platform_binding | 本机开始、确认或取消机器人群绑定 | change_binding | QtPlatformConfiguration / WorkspacePlatformPool / 原平台服务 | local_confirmation | manual_control：只启用临时群绑定连接，确认当前项目及群身份，结束后回收连接。 | project/configuration/manual | test_qt_workspace_adapter.py, qt_workbench_probe.py；Windows/真实模型及设备待验收 |
 | remote.feishu_trial | 向绑定群发送一条飞书测试消息 | start_trial | QtPlatformConfiguration / FeishuNotificationService | local_confirmation | manual_control：先确认已保存项目和群 ID，再调用原固定消息队列。平台受理和群收到分别核对。 | project/configuration/manual | test_qt_workspace_adapter.py；Windows/真实模型及设备待验收 |
 | projects.model_presets | 保存和应用产品型号模板 | _save_preset | QtProjectWizardService / ProjectModelPresets | local_confirmation | manual_control：操作员选择已保存版本并确认跨项目共享的型号方案 | project/run/manual | test_qt_workspace_adapter.py, qt_project_wizard_probe.py；Windows/真实模型及设备待验收 |
-| projects.test_profile | 创建或恢复测试项目档案 | _save | ProjectStore / QtProjectWizardService | local_confirmation | manual_control：仅本机选择目录、测试类型和设备映射 | project/run/manual | test_project_profile_store.py, qt_project_wizard_probe.py；Windows/真实模型及设备待验收 |
-| projects.preparation | 关联执行回执或核验准备步骤 | _submit | ProjectPreparation | local_confirmation | manual_control：现场证据由操作者核验，自动步骤关联原业务 Job | project/run/manual | test_project_preparation.py, qt_project_wizard_probe.py；Windows/真实模型及设备待验收 |
-| service_aging.start | 开始持续供电业务老化 | _start | QtServiceAging / ServiceAging | service_aging.start | manual_control：仅 GUI，可追溯到本次确认的项目、DUT 和资源 | project/run/manual | test_qt_execution_adapter.py, test_service_aging.py；Windows/真实模型及设备待验收 |
+| projects.test_profile | 创建或恢复测试项目档案 | _save | ProjectStore / QtProjectWizardService | local_confirmation | manual_control：仅本机选择目录、测试类型和测试计划 | project/run/manual | test_project_profile_store.py, qt_project_wizard_probe.py；Windows/真实模型及设备待验收 |
+| service_aging.start | 开始持续供电业务老化 | start_test | QtServiceAging / ServiceAging | service_aging.start | manual_control：仅 GUI，可追溯到本次确认的项目、DUT 和资源 | project/run/manual | test_qt_execution_adapter.py, test_service_aging.py；Windows/真实模型及设备待验收 |
 | service_aging.record | 记录现场观察、日检或期末检查 | _record | QtServiceAging / ServiceAging | service_aging.record | manual_control：仅 GUI，本机操作人提供实际观测和结果 | project/run/manual | test_service_aging.py；Windows/真实模型及设备待验收 |
 | service_aging.history | 查看及导出指定批次业务证据 | _export | ServiceAgingHistory | local_confirmation | manual_control：仅本机选择项目、批次和导出文件 | project/run/manual | test_service_aging.py, qt_project_wizard_probe.py；Windows/真实模型及设备待验收 |
+| service_aging.channel_evidence | 查看所选 DUT 的掉线证据 | open_evidence | read_channel_evidence / ServiceAgingHistory | service_aging.channel_evidence | manual_control：仅本机 GUI 在冻结的项目、批次和通道内读取已有观测 | project/run/manual | test_qt_channel_evidence.py, qt_channel_evidence_probe.py；Windows/真实模型及设备待验收 |
 
 ## GUI动作审查
 
-当前审查快照包含 815 个按钮/菜单/绑定/变量回调。新增或改变入口会使门禁失败。
+当前审查快照包含 827 个按钮/菜单/绑定/变量回调。新增或改变入口会使门禁失败。
 界面辅助动作（窗口显隐/滚动/复制/显密/清屏等）不计业务覆盖；动态控件须结合运行测试复核。
+Qt 拦截提示的「前往确认」是本机定位动作，使用原请求项目与结构化目标打开配置、对象或任务视图。保存、执行和人工批准继续使用原业务入口及权限检查。
 
 ## 当前阶段
 
@@ -146,8 +147,8 @@ Qt自动开关机、环境检查与三项全流程复用aging.start、network.li
 Qt单次自动上/下电通过仅本机界面可用的power.qt_single和一次确认令牌绑定项目、通道、所选电源口及方向，沿用原Jobs资源准入和单次电源服务。空电源口仅记录人工重启确认。通用power.on/off仍使用项目配置电源口。
 Qt最近项目沿用 projects.open 与 projects.forget 的本机人工控制面。菜单使用原工作区最近记录，移除仅改记录文件，项目仍保持打开。新建、打开、保存快捷键复用原菜单动作。打开项目目录仅由本机操作员触发，按所选已打开项目定位目录。
 Qt选择导入的接入配置沿用 projects.imported_connection 本机人工控制面。只展示来源标签，保存前复核候选、当前配置和停用状态，沿用原加密存储和连接占用保护。
-Qt核实未知任务复用 projects.resolve_unknown 本机人工控制面。操作员提供依据并再次确认后，由原WorkspaceService留存依据、解除所选旧GUI保护并标记原运行记录。保留原结果，不接入正式Job结果更改，也不新增AI或远程入口。
-Qt任务历史的现场核实使用原CapabilityJobs.resolve_unknown本机人工审阅流程。一项确认绑定选定项目、完整Job标识和原记录版本。复用原可信身份、结果存储及资源保护，不新增模型或远程权限。
+Qt任务历史保留原结果、事件和原有核实依据，可对本进程运行中的原任务请求安全停止。Tk 兼容入口保留 projects.resolve_unknown 和 jobs.resolve_unknown。
+Qt工作台、本机 AI 和项目群内明确发起的业务复用同一资源准入。程序确认旧进程已退出及相关锁已释放后自动清理旧占用。新请求继续走原权限、审批和业务确认，同一请求仍关联原任务。
 Qt任务历史可以分页查看旧工作台运行记录。只读取已打开项目的原 GUI 运行记录，历史页没有设备控制操作，业务任务和事件继续使用原项目 Job 库。
 Qt AI 模型连接复用 ai.profiles、ai.source_ip、ai.models_test 对应的原共享模型存储、项目选择、出口枚举与模型客户端。本机配置编辑及加密密钥写入只出现在人工控制面。连接测试仅调用原无项目资料样例，Qt 未扩大模型、DUT 或远程权限。
 Qt Ai助手复用原 AiConversationService、项目会话持久化和证据服务。普通问答无工具，报告会话可分析留存材料。本机电脑连续诊断复用原只读工具、PcConversationExecutor 与原停止机制，沿用模型工具资格及项目会话约束。创建和切换会话是本机人工操作。Qt 本机通道诊断由 diagnostics.qt.configure 核对操作员、目标与策略，监控和多通道排查复用 AiMonitorService 和 AiBatchService。
@@ -167,12 +168,14 @@ Qt失败轮次续跑以原PowerTestResumeSession判定通道资格。aging.qt_re
 Qt六标签配置编辑复用TestItemConfigStore、LegacyUiDefaultsStore、MessagePushConfigService和原项目版本保存；configuration.editor.*仅gui来源，私有字段不返回AI/远程。保存复核版本与任务占用。预备测试使用本机pretest.editor.*确认的当前测试项和Telnet草稿，经原Job和单次服务执行，关闭先停并等待收尾。version.editor.*绑定单一通道和当前Telnet草稿，经原Job及样机版本服务查询，只读显示。notifications.editor.*仅供本机确认当前Webhook、广播选项和已保存项目名后，经原服务单次试发；不授予AI或远程草稿发送权限。
 Qt六标签页面恢复草稿由本机configuration.editor.checkpoint保存，按项目和版本加密。恢复或清除需本机选择。恢复只回填窗口，沿用现有保存校验和准入。
 Qt通道编辑通过channels.editor.*仅gui来源预览/确认，数据投影复用原ChannelCapabilities.prepare/commit及ChannelConfigStore，仍只写已选通道；补齐16槽位不代表设备正在运行。主工具栏和通道编辑器共用本机只读串口/网卡枚举，串行读取独立于项目控制队列，保留选择和失败来源的上次清单。工作区空闲时核对身份登记，活动租约由原任务和准入服务维护。常规保存只提交授权范围内的配置；矩阵/列表共用实际快照。
+主界面环境配置中的旧 DUT 绑定、移出本批和通道 DUT 信息编辑仅供本机操作员使用。它们随 channels.editor.preview/save 核对并同版提交，保留原历史和资源范围。
 Qt串口窗口通过serial.terminal.*仅gui来源共享原SerialSessionManager/PySerialSession：显示不打开COM，监控/手动发送/停止由后台执行，危险命令本机确认；关闭只释放自己的所有权，升级控制锁及实际收尾保护保留。显示缓冲有界，原日志独立落盘。诊断快照通过serial.terminal.diagnostics读取原会话的近期接收数据及程序内占用状态。升级和写参串口路径已接入本机自动只读观察，模型会话实时串口联动待接入。
 Qt 串口和 DUT 的窗口状态由当前项目的本机界面保存，复用原 UI 状态文件。包含尺寸、位置和 DUT 各页状态区高度。保存偏好不调用设备执行、AI 或远程控制能力。
 Qt 的全流程、测试项配置、样机升级、写样机参数、ONU 注册和通道重试历史沿用当前项目原 module_windows.json 的宽高记录。窗口偏好通过已有后台工作线程合并保存。
 Qt日志范围根据实际项目、完整Job ID和原结构化通道字段筛选。实时批次仅追加匹配行及移除超出显示上限的记录。导出由本机文件选择发起，使用触发时的筛选快照，只写入用户选定的新TXT，原日志、任务和AI访问范围保持。
 Qt 通道右键菜单打开开关机结果日志或本次 WiFi 日志。定位沿用 latest_power_test_result_log / current_wifi_log，只将已校验的项目日志路径交给 Windows 文件关联。本机打开动作不授予 AI 或远程桌面操作能力，日志读取仍由原受控入口处理。
 Qt 通道详情和右键菜单允许本机分页查看当前开关机批次的原重试/失败事件及续跑记录。按项目、任务和授权通道绑定，只读任务库，沿用原业务状态和原因。
+Qt 运行概览的成功、失败和当前异常卡片是本机只读展示入口，使用当前项目与任务的已发布快照。点击打开详情并记录查阅结果，属于界面操作。
 Qt 任务历史的批次结果文件仅供本机操作员。使用原任务库、项目运行快照和原通道范围定位，浏览不读取正文，打开交给 Windows 文件关联。历史 WiFi 文件保持所选批次归属，不登记为当前尝试或扩大 AI / 远程权限。
 Qt任务历史通过本机只读窗口预筛当前页，并可按通道、级别、关键词查询选定项目的完整任务事件。按匹配记录分页，导出只写用户选定的新TXT。
 Qt 项目和设置菜单的多实例接入状态复用 remote.instances.status 的 RemoteInstanceManagement.status 只读服务。打开或刷新只读取当前状态。

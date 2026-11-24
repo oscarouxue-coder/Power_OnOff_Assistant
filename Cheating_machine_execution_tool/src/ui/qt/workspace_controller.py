@@ -5,16 +5,19 @@ from pathlib import Path
 import time
 from PySide6.QtCore import QObject, QTimer, Qt
 from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import QFileDialog, QInputDialog, QMenu, QMessageBox, QToolBar
+from PySide6.QtWidgets import QFileDialog, QInputDialog, QMenu, QMessageBox, QToolBar, QToolButton
 from src.models.workbench_presentation import LogView
+from src.models.project_review import ReviewTarget
 from src.services.qt_single_power import CAPABILITY as SINGLE_POWER
 from src.services.qt_controlled_extensions import EXTENSION_OPERATIONS
-from src.services.qt_workspace_adapter import (GATEWAY_OPERATIONS, GUI_UNKNOWN_OPERATIONS,
+from src.services.qt_workspace_adapter import (GATEWAY_OPERATIONS,
     PLATFORM_CONFIG_OPERATIONS, RECENT_CHANGES, QtWorkspaceAdapter)
 # Load the updater's Requests dependency before the workspace worker can import it.
 from src.ui.qt.app_update_dialog import AppUpdateController
+from src.ui.qt.blocker_review import BlockerReview, show_warning
 from src.ui.qt.log_presentation import project_live_log
-from src.ui.qt.theme import assert_gui_thread, button
+from src.ui.qt.showcase_components import semantic_icon
+from src.ui.qt.theme import assert_gui_thread
 from src.ui.qt.window_placement import current_placement, restore_placement
 
 
@@ -24,6 +27,7 @@ class WorkspaceController(QObject):
         self.window = window
         self.adapter = adapter or QtWorkspaceAdapter(source_root, directory=directory, display_log=project_live_log,
             start_configured_gateway=start_configured_gateway)
+        self.blocker_review = BlockerReview(self)
         self.ready = False
         self.closing = False
         self._allow_close = False
@@ -33,6 +37,7 @@ class WorkspaceController(QObject):
         self._gui_gap_peak = None
         self._log_batch_peak = 0
         self._preparing = set()
+        self._prepare_requests = {}
         from src.ui.qt.project_wizard_controller import ProjectWizardController
         self.project_wizard = ProjectWizardController(self)
         self.pipeline_windows = {}
@@ -50,8 +55,6 @@ class WorkspaceController(QObject):
         self.remote_scope_dialog = None
         self.platform_configuration_dialog = None
         self.extensions_dialog = None
-        self._unknown_task_request = None
-        self.unknown_task_dialog = None
         self._log_export_pending = False
         self._single_power_request = None
         self._single_power_dialog = None
@@ -75,7 +78,7 @@ class WorkspaceController(QObject):
         window.devices_action.triggered.connect(self.open_device_inventory)
         window.sidebar_devices_button.clicked.connect(lambda: self.open_device_inventory(refresh_initial=False))
         window.logs.export_requested.connect(self.export_logs)
-        self.window.mode_label.setText('正在加载项目服务…')
+        self.window.set_mode_message('正在加载项目服务…')
         self.window.dashboard.new_requested.connect(self.new_project)
         self.window.dashboard.open_requested.connect(self.open_project)
         self.window.dashboard.system_health.show()
@@ -116,7 +119,7 @@ class WorkspaceController(QObject):
         self.app_update = AppUpdateController(self, source_root)
         from src.ui.qt.feishu_repair_dialog import FeishuRepairController
         self.feishu_repair = FeishuRepairController(self)
-        settings = QMenu(window.settings_button)
+        settings = window.settings_action.menu()
         self.update_action = settings.addAction('检查更新…', self.app_update.open)
         self.extensions_action = settings.addAction('受控扩展…', self.open_extensions)
         self.feishu_repair_action = settings.addAction('安装飞书 SDK…', self.feishu_repair.open)
@@ -124,12 +127,11 @@ class WorkspaceController(QObject):
         self.platform_settings_menu = settings.addMenu('机器人应用配置')
         self.platform_settings_menu.addAction('钉钉应用配置…', lambda: self.open_platform_configuration('dingtalk'))
         self.platform_settings_menu.addAction('飞书应用配置…', lambda: self.open_platform_configuration('feishu'))
-        window.settings_button.setMenu(settings)
         window.sidebar_settings_button.setMenu(settings)
         menu = QMenu(window)
         self.new_action = menu.addAction('新建项目…', self.new_project)
         self.open_action = menu.addAction('打开项目…', self.open_project)
-        self.setup_action = menu.addAction('项目向导与公共准备…', self.open_project_setup)
+        self.setup_action = menu.addAction('项目向导…', self.open_project_setup)
         self.recent_menu = menu.addMenu('最近项目')
         self.recent_menu.setToolTipsVisible(True)
         self.recent_menu.aboutToShow.connect(self._populate_recent_menu)
@@ -156,14 +158,21 @@ class WorkspaceController(QObject):
         history_menu.addAction(self.archived_logs_action)
         history_menu.aboutToShow.connect(self._sync_actions)
         window.history_button.setMenu(history_menu)
-        self.unknown_task_action = menu.addAction('核实未知任务…', self.open_unknown_tasks)
         self.close_action = menu.addAction('关闭当前项目', self.close_project)
         self.forget_recent_action = menu.addAction('从最近列表移除', self.forget_recent_project)
-        menu_button = button('项目 ▾')
-        menu_button.setMenu(menu)
+        menu.setTitle('项目' if window._refreshed else '项目 ▾')
+        toolbar = window.findChild(QToolBar, 'GlobalHeader')
+        toolbar.addAction(menu.menuAction())
+        menu_button = toolbar.widgetForAction(menu.menuAction())
+        self.project_menu_button = menu_button
+        menu_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu_button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        if window._refreshed:
+            menu.setIcon(semantic_icon('projects', '#DDECEF', on_dark=True))
+            menu_button.setIconSize(window.settings_button.iconSize())
+            menu_button.setAccessibleName('项目')
         window.project_management_button.setMenu(menu)
         menu.aboutToShow.connect(self._sync_actions)
-        window.findChild(QToolBar, 'GlobalHeader').addWidget(menu_button)
         window.navigation.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         window.navigation.customContextMenuRequested.connect(self.project_menu)
         self.menu = menu
@@ -234,11 +243,10 @@ class WorkspaceController(QObject):
         self.imported_connection_action.setEnabled(allowed and self._imported_connection_request is None)
         self.instance_status_action.setEnabled(allowed)
         self.remote_scope_action.setEnabled(allowed)
-        self.unknown_task_action.setEnabled(allowed and self._unknown_task_request is None)
         self.window.resource_refresh_action.setEnabled(allowed and self._inventory_request is None)
         self.window.devices_action.setEnabled(allowed)
         self.window.sidebar_devices_button.setEnabled(allowed)
-        self.window.settings_button.setEnabled(allowed)
+        self.window.settings_action.setEnabled(allowed)
         self.window.sidebar_settings_button.setEnabled(allowed)
         self.window.project_management_button.setEnabled(allowed)
         self.window.history_button.setEnabled(allowed)
@@ -339,7 +347,9 @@ class WorkspaceController(QObject):
                     dialog.detaching = False
                     dialog.set_busy(False)
                     dialog.feedback.setText(result.error)
-                QMessageBox.warning(dialog or self.window, '升级操作未完成', result.error)
+                if suffix == 'show':
+                    self.blocker_review.finish(identifier, 'upgrade', None)
+                self.blocker_review.warning(result, '升级操作未完成', dialog, identifier)
             return
         if suffix == 'show' and dialog is None and not self.closing:
             from src.ui.qt.firmware_upgrade_dialog import FirmwareUpgradeDialog
@@ -353,6 +363,7 @@ class WorkspaceController(QObject):
                 dialog.deleteLater()
             dialog.finished.connect(finished)
             dialog.show()
+            self.blocker_review.finish(identifier, 'upgrade', dialog)
         if dialog is None or self.closing:
             return
         if suffix == 'preview':
@@ -480,7 +491,9 @@ class WorkspaceController(QObject):
                 dialog.detaching = False
                 dialog.feedback.setText(result.error)
             if suffix != 'poll':
-                QMessageBox.warning(dialog or self.window, 'DUT操作未完成', result.error)
+                if suffix == 'show':
+                    self.blocker_review.finish(identifier, 'dut', None)
+                self.blocker_review.warning(result, 'DUT操作未完成', dialog, identifier)
             return
         if suffix == 'show' and dialog is None and not self.closing:
             from src.ui.qt.dut_configuration_dialog import DutConfigurationDialog
@@ -500,6 +513,7 @@ class WorkspaceController(QObject):
             dialog.finished.connect(finished)
             restore_placement(dialog, result.payload['placement'])
             dialog.show()
+            self.blocker_review.finish(identifier, 'dut', dialog)
         if dialog is None:
             return
         if suffix == 'preview':
@@ -562,7 +576,9 @@ class WorkspaceController(QObject):
                     dialog.set_busy(False)
                 dialog.feedback.setText(result.error)
             if suffix != 'poll':
-                QMessageBox.warning(dialog or self.window, '串口操作未完成', result.error)
+                if suffix == 'show':
+                    self.blocker_review.finish(identifier, 'serial', None)
+                self.blocker_review.warning(result, '串口操作未完成', dialog, identifier)
             return
         if suffix == 'show' and dialog is None and not self.closing:
             from src.ui.qt.serial_terminal_dialog import SerialTerminalDialog
@@ -574,6 +590,7 @@ class WorkspaceController(QObject):
             dialog.finished.connect(lambda _, key=identifier, view=dialog: self._serial_finished(key, view))
             restore_placement(dialog, result.payload['placement'], reference_window=self.window)
             dialog.show()
+            self.blocker_review.finish(identifier, 'serial', dialog)
         if dialog is None:
             return
         if suffix == 'preview_send':
@@ -624,6 +641,7 @@ class WorkspaceController(QObject):
                 dialog.set_busy(False)
                 dialog.feedback.setText('配置操作暂未提交，请稍后重试')
         self._sync_actions()
+        return request
 
     def open_device_inventory(self, *, refresh_initial=True):
         if not self.ready or self.closing:
@@ -708,7 +726,9 @@ class WorkspaceController(QObject):
         dialog = self.configuration_editors.get(project.project_id)
         if dialog is not None:
             if getattr(dialog, 'editor_kind', 'configuration') != kind:
-                self.window.statusBar().showMessage('请先保存或关闭当前项目的另一个配置窗口')
+                field = 'enabled' if kind == 'channels' else 'runtime'
+                self.blocker_review.status('请先保存或关闭当前项目的另一个配置窗口', project.project_id,
+                                           ReviewTarget(kind, field))
                 return
             dialog.showNormal()
             dialog.raise_()
@@ -718,6 +738,12 @@ class WorkspaceController(QObject):
 
     def _configuration_result(self, result, identifier, operation):
         dialog = self.configuration_editors.get(identifier)
+        if operation in ('configuration_close', 'channels_editor_close'):
+            self.blocker_review.editor_closed(identifier, not result.error)
+            if not result.error:
+                return
+        opening = operation in ('configuration_open', 'channels_editor_open')
+        kind = 'channels' if operation.startswith('channels_editor_') else 'configuration'
         if operation == 'configuration_checkpoint':
             if dialog is not None and dialog.dirty and not dialog.busy:
                 if result.error:
@@ -725,14 +751,17 @@ class WorkspaceController(QObject):
                 elif dialog.feedback.text() == '有未保存的修改':
                     dialog.feedback.setText('恢复草稿已保存，正式配置待提交')
             return
-        self._configuration_pending.discard(identifier)
+        if opening:
+            self._configuration_pending.discard(identifier)
         if result.error:
             if dialog is not None:
                 dialog.set_busy(False)
                 dialog.feedback.setText(result.error)
-            QMessageBox.warning(dialog or self.window, '配置操作未完成', result.error)
+            if opening or operation == 'configuration_reload':
+                self.blocker_review.finish(identifier, kind, dialog if not opening else None)
+            self.blocker_review.warning(result, '配置操作未完成', dialog, identifier)
             return
-        if operation in ('configuration_open', 'channels_editor_open'):
+        if opening:
             if self.closing:
                 return
             draft = result.payload
@@ -773,13 +802,18 @@ class WorkspaceController(QObject):
                     dialog.set_draft(draft, restore=True)
                 elif choice == no:
                     dialog.reload_discarding_recovery()
+                    if dialog.busy:
+                        return
                 else:
                     dialog.close()
+                    self.blocker_review.finish(identifier, kind, None)
+                    return
             if kind == 'channels':
                 if self._inventory_request is not None:
                     dialog.set_resources_refreshing(True)
                 else:
                     dialog.request_resources()
+            self.blocker_review.finish(identifier, kind, dialog)
         elif dialog is not None:
             if operation.startswith('configuration_pretest_'):
                 self._pretest_result(identifier, dialog, operation.removeprefix('configuration_pretest_'), result.payload)
@@ -811,6 +845,8 @@ class WorkspaceController(QObject):
                 dialog.feedback.setText('已取消保存，界面输入保留，未写入文件')
             else:
                 dialog.set_draft(result.payload)
+                if operation == 'configuration_reload':
+                    self.blocker_review.finish(identifier, kind, dialog)
                 dialog.feedback.setText('保存成功，项目版本已更新' if operation in ('configuration_save', 'channels_editor_save') else '已重新加载磁盘配置')
 
     def _adapter_rename_result(self, identifier, dialog, operation, payload):
@@ -833,7 +869,8 @@ class WorkspaceController(QObject):
             dialog.adapters = [adapter.alias for adapter in inventory.adapters]
             dialog.apply_rename(payload)
         else:
-            QMessageBox.warning(dialog, '网卡改名未完成', payload['message'])
+            show_warning(dialog, '网卡改名未完成', payload['message'],
+                         lambda: self.blocker_review.open(identifier, ReviewTarget('channels', 'resources')))
         extra = '\n有未保存的通道修改' if dialog.dirty else ''
         dialog.feedback.setText(payload['message'] + extra)
 
@@ -899,7 +936,12 @@ class WorkspaceController(QObject):
         arguments = dict(token=token)
         if discard_revision:
             arguments['discard_revision'] = discard_revision
-        self.submit('configuration_close' if kind == 'configuration' else 'channels_editor_close', identifier, arguments)
+        operation = 'configuration_close' if kind == 'configuration' else 'channels_editor_close'
+        if self.blocker_review.waiting_for_editor and self.blocker_review.pending[0] == identifier:
+            if self._configuration_submit(operation, identifier, arguments) is None:
+                self.blocker_review.editor_closed(identifier, False)
+        else:
+            self.submit(operation, identifier, arguments)
 
     def _close_editor(self, identifier):
         if identifier in self._configuration_pending:
@@ -917,6 +959,7 @@ class WorkspaceController(QObject):
         request = self.submit('prepare_execution', project.project_id, operation, tasks)
         if request is not None:
             self._preparing.add(project.project_id)
+            self._prepare_requests[request] = project.project_id
         self._sync_actions()
         return request
 
@@ -950,10 +993,12 @@ class WorkspaceController(QObject):
         dialog.inventory_requested.connect(self.refresh_resources)
         dialog.finished.connect(lambda _: setattr(self, '_single_power_dialog', None))
         dialog.show()
+        self.blocker_review.finish(project.project_id, 'single_power', dialog)
 
     def _review_single_power(self, identifier, target):
         if identifier != self.window.selected_project:
-            self.window.statusBar().showMessage('项目已切换，请在目标项目重新打开单次上/下电')
+            self.blocker_review.status('项目已切换，请在目标项目重新核对单次上/下电', identifier,
+                                       ReviewTarget('single_power', 'port'))
             return
         self._prepare_test(SINGLE_POWER, target)
 
@@ -962,8 +1007,10 @@ class WorkspaceController(QObject):
         if (not self.ready or self.closing or project is None or project.project_id != identifier
                 or identifier in self._preparing or not any(c.number == number and c.can_resume for c in project.channels)):
             return
-        if self.submit('prepare_execution', identifier, 'aging.resume', (number,)) is not None:
+        request = self.submit('prepare_execution', identifier, 'aging.resume', (number,))
+        if request is not None:
             self._preparing.add(identifier)
+            self._prepare_requests[request] = identifier
         self._sync_actions()
 
     def open_power_log(self, identifier, number, kind):
@@ -986,6 +1033,7 @@ class WorkspaceController(QObject):
             self.pipeline_windows[identifier] = dialog
             dialog.start_requested.connect(lambda tasks: self._start_pipeline(identifier, tasks))
             dialog.configuration_requested.connect(lambda code: self._pipeline_configure(identifier, code))
+            dialog.review_requested.connect(lambda target: self.blocker_review.open(identifier, target))
             dialog.refresh_requested.connect(lambda: self._refresh_pipeline(identifier))
             dialog.finished.connect(lambda _: self._forget_pipeline(identifier, dialog))
         dialog.showNormal()
@@ -1135,50 +1183,6 @@ class WorkspaceController(QObject):
         if project is not None:
             self.submit('save', project.project_id)
 
-    def open_unknown_tasks(self):
-        if not self.ready or self.closing or self._unknown_task_request is not None:
-            return
-        if self.unknown_task_dialog is not None:
-            self.unknown_task_dialog.showNormal()
-            self.unknown_task_dialog.raise_()
-            return
-        self._unknown_task_request = self.submit('gui_unknown_list')
-        self._sync_actions()
-
-    def _confirm_unknown_task(self, owner, name, evidence):
-        dialog = self.unknown_task_dialog
-        if dialog is None or self.closing or self._unknown_task_request is not None:
-            return
-        self._unknown_task_request = self.submit('gui_unknown_resolve', owner, name, evidence)
-        if self._unknown_task_request is not None:
-            dialog.set_busy(True)
-            self._sync_actions()
-
-    def _unknown_task_result(self, result):
-        if self._unknown_task_request != result.identifier:
-            return
-        self._unknown_task_request = None
-        if self.closing:
-            return
-        if result.operation == 'gui_unknown_list':
-            if result.error:
-                self.window.statusBar().showMessage(result.error, 10000)
-                return
-            from src.ui.qt.unknown_task_dialog import UnknownTaskDialog
-            dialog = UnknownTaskDialog(result.payload, self.window)
-            self.unknown_task_dialog = dialog
-            dialog.review_confirmed.connect(self._confirm_unknown_task)
-            dialog.finished.connect(lambda _: setattr(self, 'unknown_task_dialog', None))
-            dialog.show()
-        elif self.unknown_task_dialog is not None:
-            dialog = self.unknown_task_dialog
-            dialog.set_busy(False)
-            if result.error:
-                dialog.feedback.setText(result.error)
-            else:
-                self.window.statusBar().showMessage('已记录现场核实依据并解除所选保护', 10000)
-                dialog.accept()
-
     def rename_project(self):
         project = self._current()
         if project is None:
@@ -1285,9 +1289,6 @@ class WorkspaceController(QObject):
                 continue
             if self.model_settings.handle_result(result):
                 continue
-            if result.operation in GUI_UNKNOWN_OPERATIONS:
-                self._unknown_task_result(result)
-                continue
             if result.operation in ('imported_connection_choices', 'imported_connection_select'):
                 self._imported_connection_result(result)
                 continue
@@ -1310,6 +1311,7 @@ class WorkspaceController(QObject):
                 if not result.error:
                     self._show_single_power(result)
                     continue
+                self.blocker_review.finish(result.project_id, 'single_power', None)
             if self.parameter_writer.handle_result(result) or self.onu_query.handle_result(result):
                 continue
             observation = self._job_serial_requests.pop(result.identifier, None)
@@ -1336,10 +1338,7 @@ class WorkspaceController(QObject):
                 self._configuration_result(result, *configuration)
                 continue
             if result.operation == 'prepare_execution':
-                self._preparing.discard(result.project_id)
-                # Failed preparation may have no project ID in the result.
-                if result.error:
-                    self._preparing.clear()
+                self._preparing.discard(self._prepare_requests.pop(result.identifier, result.project_id))
             if result.operation == 'pipeline_status':
                 identifier = self._pipeline_pending.pop(result.identifier, '')
                 dialog = self.pipeline_windows.get(identifier)
@@ -1368,10 +1367,10 @@ class WorkspaceController(QObject):
                         dialog.set_busy(False)
                 self.window.statusBar().showMessage(result.error)
                 if result.operation == 'initialization_failed':
-                    self.window.mode_label.setText('项目服务加载失败')
+                    self.window.set_mode_message('项目服务加载失败')
                     self.window.logs.append_batch((LogView(datetime.now().strftime('%H:%M:%S'), 'ERROR', '', '工作区', result.error),))
                 if result.operation != 'initialization_failed':
-                    QMessageBox.warning(self.window, '项目操作未完成', result.error)
+                    self.blocker_review.warning(result, '项目操作未完成')
                 continue
             if result.operation == 'ready':
                 self.ready = True
@@ -1380,7 +1379,7 @@ class WorkspaceController(QObject):
                 self._recent_projects, recent_error = result.payload
                 if recent_error:
                     self.window.statusBar().showMessage(recent_error, 10000)
-                self.window.mode_label.setText('本机项目工作区')
+                self.window.set_mode_message('')
                 self.window.dashboard.new_button.setToolTip('通过原项目服务创建独立项目')
                 self.window.dashboard.open_button.setToolTip('打开原项目格式，不自动恢复设备任务')
                 self.window.logs.append_batch((LogView(datetime.now().strftime('%H:%M:%S'), 'INFO', '',
@@ -1388,10 +1387,10 @@ class WorkspaceController(QObject):
             elif result.operation == 'prepare_execution':
                 confirmation = result.payload
                 if self.closing or confirmation.project_id != self.window.selected_project:
-                    self.window.statusBar().showMessage('项目已切换，本次测试确认未执行，请在目标项目重新操作')
                     if not self.closing:
-                        request = self.submit('cancel_confirmation', confirmation.project_id, confirmation.token)
-                        self.project_wizard.track_confirmation(request, confirmation.project_id, result.identifier)
+                        self.blocker_review.status('项目已切换，本次测试确认未执行，请在目标项目重新操作',
+                                                   confirmation.project_id, ReviewTarget('project', 'start'))
+                        self.submit('cancel_confirmation', confirmation.project_id, confirmation.token)
                     continue
                 title = {'aging.resume': '确认通道续跑', SINGLE_POWER: '确认单次自动上/下电'}.get(
                     confirmation.operation, '确认测试目标与配置')
@@ -1399,12 +1398,10 @@ class WorkspaceController(QObject):
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
                 if answer == QMessageBox.StandardButton.Yes and not self.closing and confirmation.project_id == self.window.selected_project:
                     request = self.submit('confirm_execution', confirmation.project_id, confirmation.token)
-                    self.project_wizard.track_confirmation(request, confirmation.project_id, result.identifier)
                     if request is not None and confirmation.operation == 'pipeline.start':
                         self._pipeline_pending[request] = confirmation.project_id
                 else:
-                    request = self.submit('cancel_confirmation', confirmation.project_id, confirmation.token)
-                    self.project_wizard.track_confirmation(request, confirmation.project_id, result.identifier)
+                    self.submit('cancel_confirmation', confirmation.project_id, confirmation.token)
             elif result.operation in RECENT_CHANGES:
                 self._recent_projects = result.payload
                 if result.operation == 'forget_recent':
@@ -1502,12 +1499,6 @@ class WorkspaceController(QObject):
             return
         if self._imported_connection_dialog is not None and not self._imported_connection_dialog.close():
             return
-        if self.unknown_task_dialog is not None and not self.unknown_task_dialog.close():
-            return
-        if any(dialog.review_dialog is not None and dialog.review_dialog.busy
-               for dialog in self.log_history.windows.values()):
-            self.window.statusBar().showMessage('请等待任务核实确认或记录完成', 5000)
-            return
         if any(not self._close_editor(project.project_id) for project in self.window.projects):
             return
         active = [project for project in self.window.projects if project.active_task_count]
@@ -1537,7 +1528,7 @@ class WorkspaceController(QObject):
             dialog.set_busy(True)
         for dialog in self.upgrade_windows.values():
             dialog.set_busy(True)
-        self.window.mode_label.setText('正在等待测试、串口、项目和更新操作收尾…')
+        self.window.set_mode_message('正在等待测试、串口、项目和更新操作收尾…')
         self._sync_actions()
         self.adapter.begin_close(choices, update_logs_pending=self.app_update.worker.pending_work,
                                  selected_project=self.window.selected_project)

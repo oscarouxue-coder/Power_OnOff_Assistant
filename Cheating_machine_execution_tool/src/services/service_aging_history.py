@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import sqlite3
 import tempfile
+import time
 import uuid
 
 from src.services.service_aging_presence import PRESENCE, SCHEMA as PRESENCE_SCHEMA, presence_view, record_presence
@@ -238,7 +239,7 @@ class ServiceAgingHistory:
                     daily_checks=inspections['daily'], final_checks=inspections['final'])
 
     @staticmethod
-    def _observation_query(db):
+    def _observation_query(db, *, excerpt=False):
         # Older databases are readable without a migration or a write on first inspection.
         feed = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='feed_receipts'").fetchone()
         extras = 'f.event_id,coalesce(f.received_at,o.at) AS received_at' if feed else 'NULL AS event_id,o.at AS received_at'
@@ -248,7 +249,8 @@ class ServiceAgingHistory:
             join += ' LEFT JOIN dut_presence_samples p ON p.observation_id=o.id'
         else:
             extras += ',NULL AS boot_id,NULL AS uptime_seconds,NULL AS boot_changed'
-        return f"""SELECT o.id,o.dut AS dut_id,s.label,o.collector,o.kind,o.outcome,o.at,o.day,o.evidence,o.operator,
+        evidence = 'substr(o.evidence,1,512) AS evidence' if excerpt else 'o.evidence'
+        return f"""SELECT o.id,o.dut AS dut_id,s.label,o.collector,o.kind,o.outcome,o.at,o.day,{evidence},o.operator,
             CASE WHEN o.kind='sample' THEN s.source ELSE 'manual' END AS source,{extras}
             FROM observations o JOIN streams s USING(job,dut,collector){join} WHERE o.job=?"""
 
@@ -270,6 +272,45 @@ class ServiceAgingHistory:
             args.append(before_id)
         rows = [dict(r) for r in db.execute(sql + ' ORDER BY o.id DESC LIMIT ?', (*args, limit + 1))]
         return dict(rows=rows[:limit], next_before=rows[limit-1]['id'] if len(rows)>limit else None)
+
+    def channel_observations(self, job, revision, dut, stop):
+        """Bound rows, excerpt length, SQLite work and lock waits for a single local question."""
+        if self.path.resolve() != self.path or not self.path.is_file():
+            raise ValueError('本项目缺少可读取的老化历史')
+        # The aging writer uses SQLite's rollback journal. A read-only open of
+        # a WAL database can create sidecars, even with mode=ro.
+        with self.path.open('rb') as header:
+            header.seek(18)
+            if header.read(2) == b'\x02\x02':
+                raise ValueError('此历史库采用 WAL 格式，本地只读查询未打开数据库')
+        deadline = time.monotonic() + 1.5
+        budget = 500
+
+        def interrupt():
+            nonlocal budget
+            budget -= 1
+            return stop.is_set() or budget <= 0 or time.monotonic() >= deadline
+
+        try:
+            with closing(sqlite3.connect(self.path.as_uri() + '?mode=ro', uri=True, timeout=.2)) as db:
+                db.row_factory = sqlite3.Row
+                db.set_progress_handler(interrupt, 1000)
+                db.execute('PRAGMA query_only=ON')
+                db.execute('BEGIN')
+                run = self._run(db, job)
+                if run['revision'] != revision:
+                    raise ValueError('观测记录与冻结批次版本不一致')
+                if stop.is_set():
+                    raise InterruptedError()
+                query = self._observation_query(db, excerpt=True)
+                sql = ('SELECT id,collector,kind,outcome,at,evidence,source,event_id IS NOT NULL AS has_event '
+                       'FROM (' + query + ' AND o.dut=?) ORDER BY id DESC LIMIT 48')
+                rows = db.execute(sql, (job, dut)).fetchall()
+                return rows, run
+        except sqlite3.Error as error:
+            if stop.is_set():
+                raise InterruptedError() from error
+            raise ValueError('证据读取未完成，数据库忙、格式异常或达到查询上限') from error
 
     def history_page(self, job, *, before_id=None, kind=None, limit=100):
         if not self.path.exists():

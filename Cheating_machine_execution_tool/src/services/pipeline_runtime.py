@@ -266,6 +266,7 @@ class PipelineLogSink:
 def run_pipeline(context, selected, channel, run, emit):
     """Thread entry point: no bound window target, UI closure, or UI traceback."""
     from src.services.pipeline_orchestrator import PipelineOrchestrator
+    from src.services.physical_resource_guards import PowerAdmissionError
     try:
         orchestrator = PipelineOrchestrator(context, emit)
         run.diagnostic_run_id = orchestrator.diagnostic_run_id
@@ -275,7 +276,7 @@ def run_pipeline(context, selected, channel, run, emit):
         run.outcome = (results, '')
     except Exception as exc:
         from src.services.project_runtime import report_project_result
-        report_project_result(state='unknown')
+        report_project_result(state='failed' if isinstance(exc, PowerAdmissionError) else 'unknown')
         run.outcome = ([], type(exc).__name__ + ': ' + str(exc))
     finally:
         run.finished.set()

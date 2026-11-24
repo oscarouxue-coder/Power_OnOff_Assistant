@@ -16,13 +16,14 @@ from line_check_assistant.config_store import ChannelConfig, ChannelConfigStore
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings, SampleUpgradeSettingsStore
 from line_check_assistant.onu_registration_store import OnuRegistrationConfig, OnuRegistrationStore
 from src.models.capabilities import CapabilityAuthority, CapabilityError
+from src.models.project_review import ReviewRequired
 from src.models.qt_log_history import job_event_view
 from src.models.workbench_presentation import LogView
 from src.services.ai_evidence_context import AiEvidenceContext
 from src.services.capability_jobs import TERMINAL
 from src.services.pipeline_orchestrator import SUBTASK_LABELS
 from src.services.qt_pipeline_serial import PipelineSerialPrestart
-from src.services.qt_job_review import QtJobReview
+from src.services.qt_job_control import QtJobControl
 from src.services.qt_power_resume import QtPowerResume
 from src.services.qt_single_power import CAPABILITY as SINGLE_POWER, POWER_ACTIONS, QtSinglePower, SinglePowerTarget
 from src.services.qt_service_aging import START as SERVICE_AGING_START, QtServiceAging
@@ -57,6 +58,7 @@ class QtExecutionAdapter:
     def __init__(self, workspace, context, record, other_jobs_active=lambda: False, *,
                  workspace_close_requested=lambda: False, adapter_rename=None, other_power_blocked=None):
         self.workspace, self.context, self.record = workspace, context, record
+        self.workspace.enable_automatic_resource_recovery()
         self.ai_evidence = AiEvidenceContext()
         self.ai_event_listener = None
         from src.services.qt_feishu_notifications import QtFeishuNotifications
@@ -90,7 +92,7 @@ class QtExecutionAdapter:
         self.pipeline_serial = PipelineSerialPrestart()
         self.resume = QtPowerResume(self)
         self.single_power = QtSinglePower(self)
-        self.job_review = QtJobReview(self)
+        self.job_control = QtJobControl(self)
 
     def _log(self, message, level='INFO', job_id='', channel=None, *, dut_id='', step=''):
         if message.startswith('[能力执行] configuration.editor.checkpoint；'):
@@ -175,6 +177,12 @@ class QtExecutionAdapter:
             configuration_editor_open=self.editor_open,
             upgrade_editor_open=False, onu_editor_open=False)
 
+    def _admissible_job(self, owner, keys):
+        if self.closing or self.workspace.maintenance.active:
+            return False
+        self.workspace.guard_project_workers(self.context)
+        return True
+
     def _ensure_runtime(self):
         if self.capabilities is not None:
             return
@@ -188,11 +196,11 @@ class QtExecutionAdapter:
                 configured is None or 'extensions' in {item.strip() for item in configured.split(',')}):
             modules.add('extensions')
         self.capabilities = CapabilityService(self.context.history / 'ai/business', self.manager,
-            self._snapshot, admissible=lambda owner, keys: not self.closing and not self.workspace.maintenance.active,
+            self._snapshot, admissible=self._admissible_job,
             emit=self._log, tool_root=self.context.working_root, enabled_modules=modules,
             onu_configuration=self._onu_configuration,
             resource_coordinator=self.workspace.resources, project_context=self.context,
-            status_service=self.workspace.status)
+            status_service=self.workspace.status, require_job_review=False)
         self.capabilities.jobs.event_output = self._log_job_event
         self.capabilities.jobs.structured_event_output = self._log_job_event
         self.single_power.register()
@@ -407,9 +415,16 @@ class QtExecutionAdapter:
             monitor = self.aging_monitor()
             plan = monitor.plan()
             parameters = (('目标时长', f"{plan['target_hours']} 小时"), ('DUT 数量', str(len(plan['duts']))))
-            labels = '、'.join(dut['label'] for dut in plan['duts'])
+            labels = []
+            for dut in plan['duts']:
+                label = dut['label']
+                if type(dut['channel']) is int:
+                    channel = f"CH{dut['channel']:02d}"
+                    if label != channel:
+                        label = f'{channel} · {label}'
+                labels.append(label)
             confirmation = ExecutionConfirmation(uuid.uuid4().hex, self.context.identity.project_id, operation,
-                tuple(plan['channel_ids']), f"项目：{self.context.identity.name}\n持续供电业务老化 · 目标 {plan['target_hours']} 小时\nDUT：{labels}", aging_binding=plan['binding'])
+                tuple(plan['channel_ids']), f"项目：{self.context.identity.name}\n持续供电业务老化 · 目标 {plan['target_hours']} 小时\nDUT：{'、'.join(labels)}", aging_binding=plan['binding'])
             self.pending = (confirmation, self._binding(), time.monotonic(), parameters)
             self._log('[业务老化] 计划已读取，等待本机确认')
             return confirmation
@@ -417,7 +432,7 @@ class QtExecutionAdapter:
             self.pending = None
             self.resume.pending = None
             if not isinstance(tasks, SinglePowerTarget):
-                raise CapabilityError('invalid_target', '请先选择单次上/下电动作和电源口')
+                raise ReviewRequired('invalid_target', '请先选择单次上/下电动作和电源口', 'single_power', 'port')
             selection, summary = self.single_power.preview(tasks, detected_ports)
             confirmation = ExecutionConfirmation(uuid.uuid4().hex, self.context.identity.project_id, operation,
                 selection.numbers, summary, power_target=tasks)
@@ -435,39 +450,33 @@ class QtExecutionAdapter:
             raise CapabilityError('unavailable', '当前操作不可用')
         self._prepare_guard()
         self.resume.pending = None
+        preview_binding = self._binding() if operation == 'aging.start' else None
         data = self._snapshot()
         channels = [c for c in data['channels'] if c['enabled']]
         if not channels:
-            raise CapabilityError('invalid_target', '未选择测试通道，请先配置并保存项目')
+            raise ReviewRequired('invalid_target', '未选择测试通道，请先配置并保存项目', 'channels', 'enabled')
         tasks = tuple(tasks)
         if operation == 'pipeline.start':
             if not tasks or any(not isinstance(task, str) or task not in PIPELINE_TASKS for task in tasks) or len(set(tasks)) != len(tasks):
-                raise CapabilityError('invalid_parameters', '请选择明确定义的全流程子任务')
+                raise ReviewRequired('invalid_parameters', '请选择明确定义的全流程子任务', 'pipeline')
             if 'serial_terminal' in tasks:
                 self._ensure_runtime()
                 data['serial_log_dir'] = str(self.terminal.log_directory())
-        return self._prepare_pipeline(operation, data, channels, tasks)
+        return self._prepare_pipeline(operation, data, channels, tasks, preview_binding)
 
     def _prepare_guard(self, *, own_configuration=None, resume_handoff=False):
         if self.closing or self.closed:
             raise CapabilityError('unavailable', '当前操作不可用')
         if not self.jobs_idle or (self.resume.has_waiting and not resume_handoff):
-            raise CapabilityError('resource_busy', '本项目任务仍在执行或收尾，请等待')
+            raise ReviewRequired('resource_busy', '本项目任务仍在执行或收尾，请等待', 'project', 'task')
         owns_editor = bool(own_configuration and self.configuration and self.configuration.token == own_configuration
                            and not (self.channel_editor and self.channel_editor.opened))
         if self.editor_open and not owns_editor:
-            raise CapabilityError('editor_open', '请先保存或关闭本项目配置编辑器，再启动测试')
+            raise ReviewRequired('editor_open', '请先保存或关闭本项目配置编辑器，再启动测试', 'editor', 'close')
         if self.workspace.projects.dirty(self.context):
-            raise CapabilityError('unsaved_configuration', '请先保存项目配置，再确认测试目标')
-        if self.workspace.resources.unknown_for(self.context.identity.project_id):
-            raise CapabilityError('previous_result_unknown', '本项目有结果未知的操作，请先由本机操作员核实')
-        with self.workspace.status.lock:
-            unowned = [r for owner, r in self.workspace.status.records.items()
-                if r['project_id'] == self.context.identity.project_id and owner not in self.jobs
-                and (r['state'] in ('prepared', 'queued', 'running', 'stopping')
-                     or r['state'] == 'unknown' and not r.get('reconciled'))]
-        if unowned:
-            raise CapabilityError('previous_result_unknown', '项目有历史未核实任务，请先核实，不自动接管或恢复')
+            raise ReviewRequired('unsaved_configuration', '请先保存项目配置，再确认测试目标', 'project', 'save')
+        self.workspace.guard_project_workers(self.context)
+        self.workspace.resources.recover_stale(self.context.identity.project_id, strict=True)
 
     def _pipeline_context(self, data, channels):
         from src.services.pipeline_orchestrator import PipelineContext
@@ -484,7 +493,7 @@ class QtExecutionAdapter:
         config = self._pipeline_context(data, [row for row in data['channels'] if row['enabled']])
         return {code: asdict(value) for code, value in compute_all_subtask_statuses(config, tuple(PIPELINE_TASKS)).items()}
 
-    def _prepare_pipeline(self, operation, data, channels, tasks):
+    def _prepare_pipeline(self, operation, data, channels, tasks, preview_binding):
         from src.services.pipeline_orchestrator import compute_all_subtask_statuses, execution_order_for
         code, title = self.OPERATIONS[operation]
         config = self._pipeline_context(data, channels)
@@ -493,7 +502,11 @@ class QtExecutionAdapter:
         missing = [status for status in statuses.values() if not status.ready]
         if missing:
             detail = ['；'.join(status.missing) for status in missing]
-            raise CapabilityError('configuration_incomplete', '配置未就绪：' + '；'.join(detail))
+            message = '配置未就绪：' + '；'.join(detail)
+            target = missing[0].review
+            if target is None:
+                raise CapabilityError('configuration_incomplete', message)
+            raise ReviewRequired('configuration_incomplete', message, **asdict(target))
         parameters = ()
         version_note = ''
         if 'legacy_power_test' in codes:
@@ -501,7 +514,8 @@ class QtExecutionAdapter:
             request = prepare_legacy_power_test_request(config.legacy_tool_root,
                 [LegacyPowerChannel(int(c['section'].rsplit('_', 1)[1]), c['network_card_ip']) for c in channels])
             from src.services.project_power_plan import check_project_power_plan
-            check_project_power_plan(self.context, [ChannelConfig(**row) for row in channels], cycles=request.number_of_tests)
+            check_project_power_plan(self.context, [ChannelConfig(**row) for row in channels],
+                                     cycles=request.number_of_tests, enabled_only=operation == 'aging.start')
             parameters = (('通信方式', request.communication_method), ('测试轮次', str(request.number_of_tests)),
                 ('启动等待', str(request.startup_time) + ' 秒'), ('间隔等待', str(request.interval_time) + ' 秒'),
                 ('命令等待', str(request.wait_command_done) + ' 秒'))
@@ -515,7 +529,7 @@ class QtExecutionAdapter:
                     else:
                         version_note = '三项版本基准均为空，跳过开始前版本校验。'
                 except (ValueError, OSError) as error:
-                    raise CapabilityError('configuration_incomplete', str(error)) from None
+                    raise ReviewRequired('configuration_incomplete', str(error), 'configuration', 'version_baseline') from None
         ids = tuple(int(c['section'].rsplit('_', 1)[1]) for c in channels)
         target_lines = ['CH%02d · %s · %s → %s · %s' % (n, c['vlan_name'],
             c['network_card_ip'], c['device_manage_ip'], c['serial_port'] or '按原VLAN映射')
@@ -538,7 +552,11 @@ class QtExecutionAdapter:
         serial_directory = data['serial_log_dir'] if 'serial_terminal' in codes else ''
         confirmation = ExecutionConfirmation(uuid.uuid4().hex, self.context.identity.project_id, operation,
             ids, '\n'.join(filter(None, lines)), tasks, serial_directory)
-        self.pending = (confirmation, self._binding(), time.monotonic(), parameters)
+        binding = self._binding()
+        if preview_binding is not None and binding != preview_binding:
+            raise ReviewRequired('configuration_changed', '准备期间配置或测试目标已变化，请重新确认',
+                                 'project', 'start')
+        self.pending = (confirmation, binding, time.monotonic(), parameters)
         self._log('[Qt测试] 已准备确认：' + title + '；通道=' + ','.join(map(str, ids)))
         return confirmation
 
@@ -550,14 +568,19 @@ class QtExecutionAdapter:
             return self.capabilities.execute('aging.qt_resume.confirm', {'token': token}, authority)
         pending, self.pending = self.pending, None
         if not pending or pending[0].token != token or time.monotonic() - pending[2] > 120:
-            raise CapabilityError('confirmation_expired', '确认已失效，请重新核对目标')
+            raise ReviewRequired('confirmation_expired', '确认已失效，请重新核对目标', 'project', 'start')
         confirmation, binding, _, parameters = pending
-        if self.closing or self.editor_open or not self.idle or self.workspace.projects.dirty(self.context) or self._binding() != binding:
+        if self.closing:
             raise CapabilityError('configuration_changed', '确认后配置或任务状态已变化，未执行，请重新确认')
+        if self.editor_open or not self.idle or self.workspace.projects.dirty(self.context) or self._binding() != binding:
+            page, field = ('editor', 'close') if self.editor_open else ('project', 'task' if not self.idle else
+                'save' if self.workspace.projects.dirty(self.context) else 'start')
+            raise ReviewRequired('configuration_changed', '确认后配置或任务状态已变化，未执行，请重新确认', page, field)
         adapters = {} if confirmation.power_target is not None or confirmation.aging_binding else self._verify_nics(confirmation.channel_ids, binding)
         self._ensure_runtime()
         if confirmation.serial_directory and str(self.terminal.log_directory()) != confirmation.serial_directory:
-            raise CapabilityError('configuration_changed', '确认后串口日志目录已变化，请重新核对')
+            raise ReviewRequired('configuration_changed', '确认后串口日志目录已变化，请重新核对',
+                                 'serial', 'directory_button')
         authority = CapabilityAuthority('local-operator:' + self.context.identity.project_id,
             self.session, confirmation.token, confirmation.channel_ids, source='gui', approved=True)
         self._log('[Qt测试] 本机已确认，提交原受控入口：' + confirmation.operation)
@@ -600,8 +623,10 @@ class QtExecutionAdapter:
         from line_check_assistant.network_ops import adapter_alias_from_display
         selected = [c for c in self._snapshot()['channels'] if int(c['section'].rsplit('_', 1)[1]) in channel_ids]
         targets = tuple(adapter_alias_from_display(c['adapter_alias'] or c['vlan_name']).casefold() for c in selected)
-        if any(alias not in aliases for alias in targets):
-            raise CapabilityError('inventory_pending', '目标网卡身份无法核实，未发送设备命令，请核对VLAN/网卡名称')
+        missing = [int(c['section'].rsplit('_', 1)[1]) for c, alias in zip(selected, targets) if alias not in aliases]
+        if missing:
+            raise ReviewRequired('inventory_pending', '目标网卡身份无法核实，未发送设备命令，请核对VLAN/网卡名称',
+                                 'channels', 'vlan', channels=missing)
         if expected is not None and any(expected.get(alias) != aliases[alias] for alias in targets):
             raise CapabilityError('configuration_changed', '目标网卡身份与原批次不同，未提交续跑')
         for identity in identities:
@@ -671,7 +696,7 @@ class QtExecutionAdapter:
             project = replace(project, power_history_job=self.power_log_job,
                 power_history_events=tuple((number, events.get(number, 0)) for number in power['authority'].channels))
         if not self.latest:
-            return replace(project, can_start=project.state != 'unknown' and not self.closing)
+            return replace(project, can_start=project.can_start and self.idle and not self.closing)
         item = self.jobs[self.latest]
         status = item['status']
         if status is None:
@@ -702,7 +727,7 @@ class QtExecutionAdapter:
         failures = sum(c.state == 'failed' for c in channels)
         stages = {'preparing': '准备执行', 'pipeline': '原业务流程执行中', 'aging': '开关机测试',
                   'history': '记录通道事件', 'succeeded': '执行完成', 'failed': '执行失败',
-                  'stopped': '安全停止完成', 'unknown': '结果待核实', 'skipped': '未执行', 'power': '单次电源控制'}
+                  'stopped': '安全停止完成', 'unknown': '结果未知', 'skipped': '未执行', 'power': '单次电源控制'}
         serial_observation = ('', '')
         for kind, editor in (('upgrade', self.upgrade), ('parameter', self.parameter_writer)):
             if editor is not None and editor.latest == self.latest:
@@ -751,7 +776,7 @@ class QtExecutionAdapter:
             success_count=passed, failure_count=failed, count_unit=count_unit,
             channel_text=f'已选 {len(item["authority"].channels)} 通道', active_task_count=int(active),
             channel_snapshot_label='本次任务配置快照',
-            run_id=self.latest, can_start=self.idle and state != 'unknown' and not self.closing,
+            run_id=self.latest, can_start=project.can_start and self.idle and not self.closing,
             can_stop=active and item.get('stop_available', True),
             configuration=configuration,
             serial_observation=serial_observation,
@@ -765,7 +790,6 @@ class QtExecutionAdapter:
     def begin_close(self):
         self.closing = True
         self.feishu_notifications.begin_close()
-        self.job_review.pending = None
         self.pending = None
         self.resume.begin_close()
         if self.pretest is not None:

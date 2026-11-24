@@ -25,6 +25,7 @@ from typing import Callable, Iterable, Sequence
 
 from line_check_assistant.legacy_ui_defaults_store import LegacyUiDefaultsStore
 from src.core.power_supply import channel_power_frame
+from src.models.project_review import ReviewRequired
 from src.services.power_test_wifi_service import PowerTestWifiScheduler
 from src.services.power_test_wifi_history_service import PowerTestWifiHistory
 from src.services.power_test_wifi_log_service import WifiResultLogQueue, WifiResultLogWriter
@@ -318,13 +319,14 @@ def prepare_legacy_power_test_request(
 
     selected_channels = tuple(channels)
     if not selected_channels:
-        raise ValueError("执行开关机测试至少需要一个已勾选通道")
+        raise ReviewRequired('invalid_target', "执行开关机测试至少需要一个已勾选通道", 'channels', 'enabled')
     invalid_channels = [str(item.number) for item in selected_channels if not 1 <= item.number <= 16]
     if invalid_channels:
         raise ValueError(f"旧工具仅支持电源通道 1～16：{', '.join(invalid_channels)}")
     missing_ips = [str(item.number) for item in selected_channels if not item.network_card_ip.strip()]
     if missing_ips:
-        raise ValueError(f"以下通道缺少 PC 静态 IP：{', '.join(missing_ips)}")
+        raise ReviewRequired('configuration_incomplete', f"以下通道缺少 PC 静态 IP：{', '.join(missing_ips)}",
+                             'channels', 'vlan', channels=map(int, missing_ips))
     parser = configparser.RawConfigParser()
     parser.optionxform = str
     parser.read(config_path, encoding="utf-8")
@@ -349,12 +351,13 @@ def prepare_legacy_power_test_request(
     power_parser.read(config_dir / "network_card_ip.ini", encoding="utf-8")
     serial_port = power_parser.get("power_supply", "serial_port", fallback="").strip().upper()
     if not serial_port:
-        raise ValueError("执行开关机测试需要配置程控电源 COM 口")
+        raise ReviewRequired('configuration_incomplete', "执行开关机测试需要配置程控电源 COM 口", 'channels', 'power')
     telnet_default_on = profile_parser.get(
         "telnet", "telnet_default_on", fallback="1"
     ).strip()
     if telnet_default_on not in {"0", "1"}:
-        raise ValueError("[telnet] telnet_default_on 只能是 0 或 1")
+        raise ReviewRequired('configuration_incomplete', "[telnet] telnet_default_on 只能是 0 或 1",
+                             'configuration', 'telnet_default_on')
     connect_wifi_enable = profile_parser.getboolean(
         "connect_wifi", "enable", fallback=False
     )
@@ -380,7 +383,8 @@ def prepare_legacy_power_test_request(
         "connect_wifi", "wireless_card_name", fallback=""
     ).strip()
     if connect_wifi_enable and wifi_choose_wireless_card and not wifi_wireless_card_name:
-        raise ValueError("WiFi 连接测试已勾选指定无线网卡，但无线网卡名称为空")
+        raise ReviewRequired('configuration_incomplete', "WiFi 连接测试已勾选指定无线网卡，但无线网卡名称为空",
+                             'configuration', 'wireless_card_name')
     from src.models.wifi_test_models import WifiTestOptions
     from src.services.wifi_connection_service import validate_wifi_options
     wifi_options = WifiTestOptions(

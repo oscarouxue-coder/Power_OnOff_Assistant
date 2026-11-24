@@ -97,6 +97,7 @@ class AiCapabilityAdapter:
             from src.services.capability_catalog import business_catalog
             module, query = params.get("module", ""), params.get("query", "")
             pending = [r for r in business_catalog() if r["status"] in ("pending", "partial", "manual_control")
+                       and (getattr(self.service, "require_job_review", True) or r["feature_id"] != "projects.resolve_unknown")
                        and (not module or r["feature_id"].split(".")[0] == module)
                        and (not query or query.casefold() in (r["feature_id"] + r["name"]).casefold())]
             return dict(capabilities=self.service.registry.list(module, query), pending_or_manual=pending,

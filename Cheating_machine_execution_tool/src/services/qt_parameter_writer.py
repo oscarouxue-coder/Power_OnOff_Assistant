@@ -11,6 +11,7 @@ from line_check_assistant.network_ops import adapter_alias_from_display, factory
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettingsStore
 from src.core.sample_parameter_table import generate_parameter_records, load_parameter_records, save_parameter_records_xlsx
 from src.models.capabilities import CapabilityError, CapabilitySpec, object_schema
+from src.models.project_review import ReviewRequired
 from src.models.sample_parameter_models import ParameterGenerationTemplate
 from src.services.capability_device_services import CHANNEL_PROPERTIES
 from src.services.qt_configuration_service import QtConfigurationService
@@ -91,7 +92,7 @@ class QtParameterWriter:
 
     def _check_binding(self):
         if self.execution._binding() != self.binding:
-            raise CapabilityError('configuration_changed', '项目配置已变化，请关闭窗口后重新打开核对')
+            raise ReviewRequired('configuration_changed', '项目配置已变化，请关闭窗口后重新打开核对', 'parameter', 'close_button')
 
     def _load(self, table_path):
         # Parse the exact bytes whose digest the operator will approve. A later
@@ -108,12 +109,12 @@ class QtParameterWriter:
                         target.write(chunk)
                 expected = digest.hexdigest()
                 if expected != info['sha256']:
-                    raise CapabilityError('parameter_table_changed', '读取期间参数表发生变化，请重新预检')
+                    raise ReviewRequired('parameter_table_changed', '读取期间参数表发生变化，请重新预检', 'parameter', 'path')
                 records = tuple(load_parameter_records(copy))
         except CapabilityError:
             raise
         except (OSError, ValueError, RuntimeError) as error:
-            raise CapabilityError('parameter_table_unreadable', '参数表读取失败：' + str(error)) from None
+            raise ReviewRequired('parameter_table_unreadable', '参数表读取失败：' + str(error), 'parameter', 'path') from None
         return str(path), expected, records
 
     def _checked_table(self, arguments, authority):
@@ -150,17 +151,20 @@ class QtParameterWriter:
             return result
         settings = snapshot['upgrade_settings']
         if not settings['parameter_initial_username'].strip() or not settings['parameter_initial_password']:
-            raise CapabilityError('configuration_incomplete', '请填写并保存首次登录账号和密码')
+            raise ReviewRequired('configuration_incomplete', '请填写并保存首次登录账号和密码', 'parameter', 'username')
         for target in result['targets']:
             vlan = target['vlan'].lower()
             channel = indexed[vlan]
             source = channel.network_card_ip.strip()
             host = channel.device_manage_ip.strip() or snapshot.get('device_ip', '').strip()
+            number = int(channel.section.rsplit('_', 1)[1])
             if source and host and source == host:
-                raise CapabilityError('invalid_target', f'{vlan} 的 PC 静态 IP 与样机管理 IP 相同')
+                raise ReviewRequired('invalid_target', f'{vlan} 的 PC 静态 IP 与样机管理 IP 相同', 'channels',
+                                     'device_ip', channels=(number,))
             if source and host and not ((channel.factory_bind_ip or factory_bind_ip_for(source))
                                         and (channel.factory_device_host or factory_device_host_for(host))):
-                raise CapabilityError('invalid_target', f'{vlan} 缺少工厂模式网络配置')
+                raise ReviewRequired('invalid_target', f'{vlan} 缺少工厂模式网络配置', 'channels',
+                                     'binding', channels=(number,))
         selection_ids = selection['channel_ids']
         self.execution._verify_nics(selection_ids, self.binding)
         confirmation = uuid.uuid4().hex
@@ -183,7 +187,7 @@ class QtParameterWriter:
         self._check(arguments)
         pending, self.pending = self.pending, None
         if not pending or arguments['confirmation'] != pending.token or time.monotonic() - pending.created > 120:
-            raise CapabilityError('confirmation_expired', '写参确认已失效，请重新预检')
+            raise ReviewRequired('confirmation_expired', '写参确认已失效，请重新预检', 'parameter', 'preflight_button')
         self.execution._prepare_guard()
         ids = tuple(pending.arguments['channel_ids'])
         self.execution._verify_nics(ids, pending.binding)

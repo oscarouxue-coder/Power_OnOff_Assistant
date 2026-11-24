@@ -22,6 +22,7 @@ from src.models.dut_config_models import (DutTelnetEnableRequest, DutAdvancedCon
     DutVoiceSettings, DutTr069Settings, DutWifiSettings, DutWifiRadioSettings)
 from src.models.serial_models import SerialSettings
 from src.services.pipeline_orchestrator import PipelineContext, PipelineOrchestrator, PipelineError
+from src.services.physical_resource_guards import PowerAdmissionError
 from src.services.power_on_service import turn_on_selected_channels, turn_off_selected_channels
 from src.services.device_project_info_service import DeviceProjectInfoQueryRequest, query_device_project_info
 from src.services.test_item_pretest_service import prepare_pretest_request, run_pretest
@@ -175,14 +176,24 @@ class DeviceCapabilities:
                    if project is not None and (power_test or resume) else None)
         parent = (self.latest_aging[2] if resume and self.latest_aging and
                   self.latest_aging[:2] == (arguments['parent_job_id'], authority.principal) else None)
+        local_confirmation = authority.source == 'gui' and authority.approved
+        enabled_only = bool(profile and identifier == 'aging.start' and local_confirmation)
+        approved_digest = configuration_digest(project.saved_root / 'Auto_power_on_off_tool/config') if enabled_only else None
+
         def check_plan(current_snapshot, current, root=None):
             if power_test:
-                check_project_power_plan(project, current, config_root=root, expected_profile=profile)
+                check_project_power_plan(project, current, config_root=root, expected_profile=profile,
+                                         enabled_only=enabled_only)
+                if enabled_only:
+                    directory = (root or project.saved_root) / 'Auto_power_on_off_tool/config'
+                    if configuration_digest(directory) != approved_digest:
+                        raise CapabilityError('configuration_changed', '开关机配置与已确认的快照不一致，请重新确认')
             elif resume:
                 if profile and (not self.latest_aging or self.latest_aging[2] is not parent):
                     raise CapabilityError('resume_unavailable', '可续跑的原批次已变化，请重新确认')
                 check_project_power_resume(project, parent, profile, current,
-                                           current_snapshot.get('power_serial_port', ''), config_root=root)
+                                           current_snapshot.get('power_serial_port', ''), config_root=root,
+                                           local_confirmation=local_confirmation)
         def identity(current_snapshot, current_channels):
             return fingerprint(dict(channels=[asdict(c) for c in current_channels],
                 power=current_snapshot.get('power_serial_port', ''),
@@ -224,6 +235,7 @@ class DeviceCapabilities:
             root = getattr(context, 'configuration_root', None)
             check_plan(snapshot, channels, root)
             if power_test and profile:
+                context.power_enabled_only = enabled_only
                 context.power_profile_digest = project_profile_digest(profile)
                 context.power_serial_port = snapshot.get('power_serial_port', '')
                 context.power_config_digest = configuration_digest(root / 'Auto_power_on_off_tool/config')
@@ -268,6 +280,10 @@ class DeviceCapabilities:
                 projection._observe_ai_power_event = self.gui_diagnostic_observer
             config = PipelineContext(projection, channels, SampleUpgradeSettings(**snapshot["upgrade_settings"]),
                 OnuRegistrationConfig(), legacy_tool_root=getattr(context, 'configuration_root', self.root) / "Auto_power_on_off_tool", stop_event=context.stop.event)
+            if 'legacy_power_test' in tasks:
+                leases = self.service.resources
+                if leases.coordinator is not None or leases.fence is not None:
+                    config.power_resource_owner = (leases.coordinator or leases.fence, context.job_id)
             try:
                 context.event("pipeline", "复用原编排器，保留版本预检/WiFi/停止/测试判据", dispatched=True)
                 hold = self.gui_pipeline_power_scope if authority.source == "gui" and "legacy_power_test" in tasks else None
@@ -279,7 +295,7 @@ class DeviceCapabilities:
                 return dict(ok=all(r.ok for r in results) and not stopped,
                             state="stopped" if stopped else "succeeded" if all(r.ok for r in results) else "failed",
                             items=[asdict(r) for r in results])
-            except PipelineError as exc:
+            except (PowerAdmissionError, PipelineError) as exc:
                 if projection.power_test_resume_session is not None:
                     self.latest_aging = (context.job_id, authority.principal, projection)
                 error = str(exc)

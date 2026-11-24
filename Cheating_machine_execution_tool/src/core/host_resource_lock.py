@@ -34,6 +34,7 @@ class HostResourceLock:
     """
     _guard = threading.RLock()
     _held = {}
+    _failed_cleanup = set()
 
     def __init__(self, keys, namespace="physical-v1", *, reentrant=True):
         self.keys = tuple(sorted({physical_key(k) for k in keys}))
@@ -48,6 +49,8 @@ class HostResourceLock:
                 for key in self.keys:
                     identity = (os.getpid(), self.namespace, key)
                     if identity in self._held:
+                        if identity in self._failed_cleanup:
+                            raise HostResourceBusy("原资源关闭失败，等待原进程退出：" + key)
                         if not self.reentrant:
                             raise HostResourceBusy("资源已被本进程持有：" + key)
                         handle, count = self._held[identity]
@@ -103,9 +106,14 @@ class HostResourceLock:
                 if count == 1:
                     self._close(handle)
                     del self._held[identity]
+                    self._failed_cleanup.discard(identity)
                 else:
                     self._held[identity] = (handle, count - 1)
             self.acquired.clear()
+
+    def mark_cleanup_failed(self):
+        with self._guard:
+            self._failed_cleanup.update(self.acquired)
 
     def __enter__(self):
         return self.acquire()

@@ -14,3 +14,4 @@ class ModelSettingsView:
     draft: bool = False
     notice: str = ''
     model_ids: Tuple[str, ...] = ()
+    review_field: str = ''

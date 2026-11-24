@@ -4,9 +4,9 @@ import os
 import sqlite3
 from pathlib import Path
 
-from src.models.project import PROJECT_FILE
+from src.models.project import PROJECT_FILE, ProjectContext, ProjectIdentity
 from src.services.project_store import ProjectStore, atomic_json
-from src.services.workspace_resources import WorkspaceResources
+from src.services.workspace_resources import WorkspaceResources, host_resource_directory
 
 
 def workspace_data_dir():
@@ -21,11 +21,11 @@ class WorkspaceService:
         self.emit = emit
         from src.services.project_status_service import ProjectStatusService
         self.status = ProjectStatusService(emit)
+        self.checked_interrupted_workers = set()
         from src.models.dependency_repair import MaintenanceGate
         self.maintenance = MaintenanceGate()
         self.projects = ProjectStore(self.source_root, emit)
-        resource_dir = self.directory / 'resources' if directory is not None else (
-            Path(os.environ.get('PROGRAMDATA', str(Path.home()))) / 'LineCheckAssistant' / 'host-resource-fence')
+        resource_dir = self.directory / 'resources' if directory is not None else host_resource_directory()
         try:
             self.resources = WorkspaceResources(resource_dir)
         except (OSError, sqlite3.Error):
@@ -98,6 +98,55 @@ class WorkspaceService:
     def session_snapshot(self, selected_project):
         projects = [dict(project_id=key, path=str(context.root)) for key, context in self.projects.opened.items()]
         return dict(projects=projects, selected_project=selected_project if selected_project in self.projects.opened else '')
+
+    def enable_automatic_resource_recovery(self):
+        self.resources.recovery_context = self._resource_project
+        self.resources.emit = lambda message: self.emit(message)
+        self.status.archive_interrupted = True
+
+    def project_worker_notice(self, context):
+        from src.services.power_worker_lifetime import POWER_JOB_IDS, power_worker_notice
+
+        self.status.attach(context)
+        with self.status.lock:
+            interrupted = {owner for owner, record in self.status.records.items()
+                           if record['project_id'] == context.identity.project_id
+                           and record['state'] == 'unknown' and not record.get('reconciled')
+                           and record.get('operation') in POWER_JOB_IDS | {'_on_start'}
+                           and owner not in self.checked_interrupted_workers}
+        if not interrupted:
+            return ''
+        notice = power_worker_notice(context)
+        if not notice:
+            with self.status.lock:
+                self.checked_interrupted_workers.update(interrupted)
+        return notice
+
+    def guard_project_workers(self, context):
+        from src.models.capabilities import CapabilityError
+
+        notice = self.project_worker_notice(context)
+        if notice:
+            self.emit('[资源保护] ' + context.identity.name + '：' + notice)
+            raise CapabilityError('power_worker_unverified', notice)
+
+    def _resource_project(self, identifier):
+        context = self.projects.opened.get(identifier)
+        if context is not None and identifier in self.projects.leases:
+            return context, True
+        for item in self.recent:
+            if item.get('project_id') != identifier:
+                continue
+            try:
+                root = Path(item['path']).resolve(strict=True)
+                descriptor = json.loads((root / PROJECT_FILE).read_text(encoding='utf-8'))
+                if descriptor['project_id'] == identifier:
+                    identity = ProjectIdentity(**{key: descriptor[key] for key in
+                        ('project_id', 'name', 'revision', 'format_version')})
+                    return ProjectContext(root, identity, self.source_root), False
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+        return None, False
 
     def write_session(self, session):
         atomic_json(self.directory / 'workspace_session.json', session)

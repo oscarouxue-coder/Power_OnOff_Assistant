@@ -11,6 +11,7 @@ from line_check_assistant.config_store import ChannelConfig, ChannelConfigStore,
 from line_check_assistant.network_ops import adapter_alias_from_display, static_ip_for_vlan
 from line_check_assistant.paths import resolve_config_dir
 from src.models.capabilities import CapabilitySpec, CapabilityError, fingerprint, object_schema
+from src.models.project_review import ReviewRequired
 from src.services.capability_device_services import CHANNEL_PROPERTIES
 from src.services.adapter_rename_service import validate_adapter_name, AdapterRenameService, synchronize_channel_adapter_names
 
@@ -127,10 +128,10 @@ class ChannelCapabilities:
             run, recheck=recheck)
 
     @staticmethod
-    def _port(value):
+    def _port(value, field, channels=()):
         value = value.strip().upper()
         if value and not re.fullmatch(r'COM[1-9]\d*', value):
-            raise CapabilityError('invalid_parameters', '串口必须为空或明确的COM编号')
+            raise ReviewRequired('invalid_parameters', '串口必须为空或明确的COM编号', 'channels', field, channels=channels)
         return value
 
     def prepare(self, arguments, selecting=False):
@@ -147,15 +148,21 @@ class ChannelCapabilities:
         else:
             values = dict(arguments['values'])
             if 'serial_port' in values:
-                values['serial_port'] = self._port(values['serial_port'])
+                values['serial_port'] = self._port(values['serial_port'], 'port', requested)
             if 'vlan_name' in values:
-                alias = validate_adapter_name(adapter_alias_from_display(values['vlan_name'])) if values['vlan_name'].strip() else ''
+                try:
+                    alias = validate_adapter_name(adapter_alias_from_display(values['vlan_name'])) if values['vlan_name'].strip() else ''
+                except ValueError as error:
+                    raise ReviewRequired('invalid_parameters', str(error), 'channels', 'vlan', channels=requested) from error
                 values.update(vlan_name=alias, adapter_alias=alias)
             channels = [replace(c, **values) if int(c.section.rsplit('_', 1)[1]) in requested else c for c in channels]
         device_ip = arguments.get('device_ip', before['device_ip']).strip()
         if device_ip:
-            ipaddress.IPv4Address(device_ip)
-        power = self._port(arguments.get('power_serial_port', before['power_serial_port']))
+            try:
+                ipaddress.IPv4Address(device_ip)
+            except ipaddress.AddressValueError as error:
+                raise ReviewRequired('invalid_parameters', str(error), 'channels', 'device_ip') from error
+        power = self._port(arguments.get('power_serial_port', before['power_serial_port']), 'power')
         # The existing GUI has one management IP and derives each VLAN source IP.
         for channel in channels:
             channel.device_manage_ip = device_ip
@@ -165,7 +172,8 @@ class ChannelCapabilities:
             except ValueError:
                 channel.network_card_ip = ''
             if channel.enabled and power and channel.serial_port.upper() == power:
-                raise CapabilityError('port_conflict', '样机串口与程控电源COM冲突，未保存')
+                raise ReviewRequired('port_conflict', '样机串口与程控电源COM冲突，未保存', 'channels', 'port',
+                                     channels=(int(channel.section.rsplit('_', 1)[1]),))
         after = dict(channels=[asdict(c) for c in channels], power_serial_port=power, device_ip=device_ip)
         unchanged = all(after[k] == before[k] for k in after)
         disable_only = not selecting and arguments['values'] == {'enabled': False} and not any(

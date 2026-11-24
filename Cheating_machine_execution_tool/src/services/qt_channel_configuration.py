@@ -13,11 +13,18 @@ import uuid
 
 from line_check_assistant.config_store import ChannelConfig, ChannelConfigStore
 from src.models.capabilities import CapabilityError, CapabilitySpec, fingerprint, object_schema
+from src.models.project_review import ReviewRequired
 from src.models.qt_configuration import ConfigurationDraft
+from src.models.project_profile import normalize_project_profile
+from src.services.project_profile_store import PROFILE_FILE, read_project_profile, write_project_profile
 from src.services.capability_channel_service import ChannelCapabilities
 from src.services.capability_registry import CapabilityRegistry
 from src.services.project_store import configuration_digest
 from src.services.qt_configuration_service import QtConfigurationService
+
+
+DUT_CHANNEL_DETAILS = (('label', '样机名称'), ('target_firmware', '目标固件'),
+                       ('adb_serial', 'ADB 设备标识'), ('other_devices', '其他设备'))
 
 
 def channel_slots(channels):
@@ -26,6 +33,92 @@ def channel_slots(channels):
     for number in range(1, 17):
         by_id.setdefault('channel_' + str(number), ChannelConfig('channel_' + str(number), enabled=False))
     return sorted(by_id.values(), key=lambda c: int(c.section.rsplit('_', 1)[1]))
+
+
+def channel_environment(directory=None):
+    if directory is None:
+        return dict(channels=[asdict(c) for c in channel_slots([])], power_serial_port='', device_ip='')
+    store = ChannelConfigStore(directory / 'network_card_ip.ini')
+    slots = channel_slots(store.load())
+    return dict(channels=[asdict(c) for c in slots], power_serial_port=store.load_power_serial_port(),
+                device_ip=next((c.device_manage_ip for c in slots if c.device_manage_ip), ''))
+
+
+def prepare_channel_environment(before, arguments, working_root, *, preserve=False):
+    rows = arguments['rows']
+    numbers = [r['number'] for r in rows]
+    if (len(numbers) != 16 or any(type(n) is not int for n in numbers)
+            or set(numbers) != set(range(1, 17)) or any(type(r['enabled']) is not bool for r in rows)):
+        raise CapabilityError('invalid_target', '须提交完整且不重复的16个通道槽位')
+    indexed = {int(c['section'].rsplit('_', 1)[1]): c for c in before['channels']}
+    if set(indexed) != set(range(1, 17)):
+        raise CapabilityError('invalid_target', '原通道编号不在1至16完整范围内，请先核对原项目')
+    proposed = deepcopy(before)
+    projection = SimpleNamespace(snapshot=lambda: deepcopy(proposed), registry=CapabilityRegistry())
+    validator = ChannelCapabilities(projection, working_root)
+    try:
+        for row in rows:
+            prepared = validator.prepare(dict(channel_ids=[row['number']], revision=fingerprint(validator.state()),
+                values={k: row[k] for k in ('enabled', 'vlan_name', 'serial_port')},
+                device_ip=arguments['device_ip'], power_serial_port=arguments['power_serial_port']))
+            proposed.update(prepared['after'])
+    except (AttributeError, KeyError, TypeError, ValueError) as error:
+        message = '通道校验失败，请检查管理IPv4、COM编号、VLAN名称及样机/电源串口冲突；未保存'
+        if isinstance(error, ReviewRequired):
+            raise ReviewRequired('invalid_parameters', message, **asdict(error.review)) from None
+        raise CapabilityError('invalid_parameters', message) from None
+    if preserve:
+        same_management_ip = proposed['device_ip'] == before['device_ip']
+        for channel in proposed['channels']:
+            old = indexed[int(channel['section'].rsplit('_', 1)[1])]
+            if channel['vlan_name'] == old['vlan_name']:
+                channel['adapter_alias'] = old['adapter_alias']
+                if old['enabled'] and same_management_ip:
+                    for key in ('device_manage_ip', 'network_card_ip', 'subnet_mask'):
+                        channel[key] = old[key]
+    return {key: proposed[key] for key in ('channels', 'power_serial_port', 'device_ip')}
+
+
+def profile_with_environment(profile, environment, assignments=None, *, before=None):
+    assignments = assignments or {}
+    duts = [dict(dut) for dut in profile.get('duts', ())]
+    enabled = {int(row['section'].rsplit('_', 1)[1]) for row in environment['channels'] if row['enabled']}
+    by_channel = {dut['channel']: dut for dut in duts if dut.get('channel') is not None}
+    for dut in duts:
+        if dut.get('channel') is not None or dut.get('dut_id') not in assignments:
+            continue
+        number = assignments[dut['dut_id']]
+        if number == 0:
+            continue
+        if type(number) is not int or number not in enabled:
+            raise ReviewRequired('invalid_target', '请为旧 DUT 选择已启用的通道，或移出本批',
+                                 'channels', 'assignments', reference=dut['dut_id'])
+        previous = by_channel.get(number)
+        if previous is not None:
+            raise ReviewRequired('invalid_target', f'CH{number:02d} 已绑定其他 DUT，请选择另一通道',
+                                 'channels', 'assignments', reference=dut['dut_id'], channels=(number,))
+        dut['channel'] = number
+        by_channel[number] = dut
+    if (profile.get('test_type') == 'service_aging' and not profile.get('environment_channels')
+            and any(dut.get('channel') is None and dut.get('dut_id') not in assignments for dut in duts)):
+        raise ValueError('请在环境配置中处理未绑定通道的旧 DUT')
+    for number in sorted(enabled - by_channel.keys()):
+        duts.append(dict(channel=number, label=f'CH{number:02d}'))
+    if before is not None:
+        keys = ('enabled', 'vlan_name', 'adapter_alias', 'serial_port', 'network_card_ip',
+                'device_manage_ip', 'subnet_mask', 'factory_bind_ip', 'factory_device_host')
+        original = {row['section']: row for row in before['channels']}
+        proposed = {row['section']: row for row in environment['channels']}
+        changed_power = (profile['test_type'] == 'power_cycle'
+                         and before['power_serial_port'] != environment['power_serial_port'])
+        for dut in duts:
+            section = f"channel_{dut.get('channel')}"
+            if section not in original:
+                continue
+            old, new = original[section], proposed[section]
+            if (old['enabled'] or new['enabled']) and (changed_power or any(old[k] != new[k] for k in keys)):
+                dut['mapping_generation'] = uuid.uuid4().hex
+    return normalize_project_profile(dict(profile, duts=duts, environment_channels=True))
 
 
 class QtChannelConfiguration:
@@ -45,9 +138,15 @@ class QtChannelConfiguration:
         row = object_schema({'number': dict(type='integer', minimum=1, maximum=16),
             'enabled': dict(type='boolean'), 'vlan_name': dict(type='string', maxLength=200),
             'serial_port': dict(type='string', maxLength=32)}, ('number', 'enabled', 'vlan_name', 'serial_port'))
+        assignment = object_schema({'dut_id': dict(type='string', minLength=36, maxLength=36),
+            'number': dict(type='integer', minimum=0, maximum=16)}, ('dut_id', 'number'))
+        details = object_schema(dict(number=dict(type='integer', minimum=1, maximum=16),
+            **{key: dict(type='string') for key, _ in DUT_CHANNEL_DETAILS}), ('number',))
         preview = object_schema({'token': token, 'revision': dict(type='string', minLength=64, maxLength=64),
             'rows': dict(type='array', minItems=16, maxItems=16, items=row),
-            'device_ip': dict(type='string', maxLength=64), 'power_serial_port': dict(type='string', maxLength=32)},
+            'device_ip': dict(type='string', maxLength=64), 'power_serial_port': dict(type='string', maxLength=32),
+            'assignments': dict(type='array', items=assignment),
+            'dut_details': dict(type='array', maxItems=16, items=details)},
             ('token', 'revision', 'rows', 'device_ip', 'power_serial_port'))
         for suffix, handler, schema, risk in (
             ('open', self.open, object_schema(), 'read'),
@@ -102,7 +201,7 @@ class QtChannelConfiguration:
         if token is not None and (not self.token or token != self.token):
             raise CapabilityError('editor_expired', '通道编辑上下文已失效，请重新打开')
         if self.other_editor_open():
-            raise CapabilityError('editor_open', '请先保存或关闭本项目测试配置窗口')
+            raise ReviewRequired('editor_open', '请先保存或关闭本项目测试配置窗口', 'editor', 'close')
         if not self.capabilities.jobs.idle or self.capabilities.jobs.closing:
             raise CapabilityError('resource_busy', '任务正在执行或收尾，通道配置未放行')
         self.workspace.projects._validate_paths(self.context)
@@ -110,6 +209,14 @@ class QtChannelConfiguration:
     def _load(self):
         before = self._revision()
         values = self.snapshot()
+        profile = read_project_profile(self.context.config_dir)
+        if profile:
+            values['service_aging'] = profile['test_type'] == 'service_aging'
+            values['dut_details'] = {dut['channel']: {key: dut.get(key, '') for key, _ in DUT_CHANNEL_DETAILS}
+                                     for dut in profile['duts'] if dut['channel'] is not None}
+            if values['service_aging'] and not profile.get('environment_channels'):
+                values['unbound_duts'] = [{'dut_id': dut['dut_id'], 'label': dut['label']}
+                                         for dut in profile['duts'] if dut['channel'] is None]
         if self._revision() != before:
             raise CapabilityError('configuration_changed', '读取期间配置变化，请重新加载')
         return ConfigurationDraft(self.context.identity.project_id, self.context.identity.name, self.token, before, values)
@@ -149,43 +256,55 @@ class QtChannelConfiguration:
         self.pending = None
         self.rename_review = None
         if self._revision() != arguments['revision']:
-            raise CapabilityError('configuration_changed', '项目或磁盘配置已变化，请重新加载后核对')
-        rows = arguments['rows']
-        if {r['number'] for r in rows} != set(range(1, 17)):
-            raise CapabilityError('invalid_target', '须提交完整且不重复的16个通道槽位')
+            raise ReviewRequired('configuration_changed', '项目或磁盘配置已变化，请重新加载后核对', 'channels', 'reload')
         before = self.channels.state()
-        indexed = {int(c['section'].rsplit('_', 1)[1]): c for c in before['channels']}
-        if set(indexed) != set(range(1, 17)):
-            raise CapabilityError('invalid_target', '原通道编号不在1至16完整范围内，请先核对原项目')
-        proposed = deepcopy(before)
-        for row in rows:
-            value = proposed['channels'][next(i for i, c in enumerate(proposed['channels'])
-                if c['section'] == 'channel_' + str(row['number']))]
-            value.update(enabled=row['enabled'], vlan_name=row['vlan_name'], serial_port=row['serial_port'])
-        # A local, data-only projection feeds the unchanged original prepare.
-        # Every row is normalized by the same implementation; nothing is
-        # reflected to the actual runtime until an approved atomic commit.
-        projection = SimpleNamespace(snapshot=lambda: deepcopy(proposed), registry=CapabilityRegistry())
-        validator = ChannelCapabilities(projection, self.context.working_root)
-        try:
-            for row in rows:
-                prepared = validator.prepare(dict(channel_ids=[row['number']], revision=fingerprint(validator.state()),
-                    values={k: row[k] for k in ('enabled', 'vlan_name', 'serial_port')},
-                    device_ip=arguments['device_ip'], power_serial_port=arguments['power_serial_port']))
-                proposed.update(prepared['after'])
-        except Exception:
-            raise CapabilityError('invalid_parameters', '通道校验失败，请检查管理IPv4、COM编号、VLAN名称及样机/电源串口冲突；未保存') from None
-        after = {key: proposed[key] for key in ('channels', 'power_serial_port', 'device_ip')}
+        profile = read_project_profile(self.context.config_dir)
+        aging = bool(profile and profile['test_type'] == 'service_aging')
+        edits = dict(arguments, power_serial_port='') if aging else arguments
+        after = prepare_channel_environment(before, edits, self.context.working_root, preserve=bool(profile))
+        if aging:
+            after['power_serial_port'] = before['power_serial_port']
+        assignment_rows = arguments.get('assignments', ())
+        assignments = {row['dut_id']: row['number'] for row in assignment_rows}
+        unbound = set()
+        if aging and not profile.get('environment_channels'):
+            unbound = {dut['dut_id'] for dut in profile['duts'] if dut['channel'] is None}
+        if len(assignments) != len(assignment_rows) or set(assignments) != unbound:
+            raise ReviewRequired('invalid_target', '请逐台处理未绑定通道的旧 DUT，选择已启用的通道或移出本批', 'channels', 'assignments')
+        updated_profile = profile_with_environment(profile, after, assignments, before=before) if profile else None
+        details = arguments.get('dut_details', ())
+        if details:
+            enabled = {int(row['section'].rsplit('_', 1)[1]) for row in after['channels'] if row['enabled']}
+            by_channel = {row['number']: row for row in details}
+            if not updated_profile or len(by_channel) != len(details) or not by_channel.keys() <= enabled:
+                raise CapabilityError('invalid_target', '只能修改本项目已启用通道的 DUT 信息')
+            for dut in updated_profile['duts']:
+                number = dut['channel']
+                if number in by_channel:
+                    changes = by_channel[number]
+                    dut.update({key: changes[key].strip() for key, _ in DUT_CHANNEL_DETAILS if key in changes})
+                    dut['label'] = dut['label'] or f'CH{number:02d}'
+            updated_profile = normalize_project_profile(updated_profile)
         confirmation = uuid.uuid4().hex
         self.pending = dict(confirmation=confirmation, revision=arguments['revision'], created=time.monotonic(),
-            prepared=dict(before=before, after=after, revision=fingerprint(before)))
+            profile=updated_profile, prepared=dict(before=before, after=after, revision=fingerprint(before)))
         selected = [c for c in after['channels'] if c['enabled']]
         summary = (self.context.identity.name + '\n管理IP：' + (after['device_ip'] or '未配置') +
             '\n电源COM：' + (after['power_serial_port'] or '不使用程控电源') + '\n已选通道：' +
             ('、'.join(c['section'].replace('channel_', 'CH') for c in selected) or '无（清除选择）') + '\n' +
             '\n'.join(c['section'].replace('channel_', 'CH') + ' · ' + (c['vlan_name'] or '未配置VLAN') + ' / ' +
-                (c['serial_port'] or '按原VLAN映射') + ' / ' + (c['network_card_ip'] or '源IP待配置') for c in selected) +
-            '\n保存本项目当前草稿并提交版本；只写已选通道，不改网络或上下电。是否继续？')
+                (c['serial_port'] or '按原VLAN映射') + ' / ' + (c['network_card_ip'] or '源IP待配置') for c in selected))
+        if assignments:
+            summary += '\n旧 DUT 处理：\n' + '\n'.join(
+                dut['label'] + ' → ' + (f"CH{assignments[dut['dut_id']]:02d}" if assignments[dut['dut_id']]
+                                         else '移出本批（保留历史）')
+                for dut in profile['duts'] if dut['dut_id'] in assignments)
+        if details:
+            summary += '\nDUT 信息修改：\n' + '\n'.join(
+                f"CH{row['number']:02d} · " + ' / '.join(
+                    title + ' ' + (row[key] or '（清空）') for key, title in DUT_CHANNEL_DETAILS if key in row)
+                for row in details)
+        summary += '\n保存本项目当前草稿并提交版本；只写已选通道，不改网络或上下电。是否继续？'
         self.capabilities.emit('[Qt通道] 原校验已生成保存预览，等待本机确认')
         return dict(confirmation=confirmation, summary=summary)
 
@@ -219,9 +338,8 @@ class QtChannelConfiguration:
         if not pending or pending['confirmation'] != arguments['confirmation'] or time.monotonic() - pending['created'] > 120:
             raise CapabilityError('confirmation_expired', '通道保存确认已失效，请重新预览')
         if self._revision() != pending['revision']:
-            raise CapabilityError('configuration_changed', '确认后配置变化，未覆盖，请重新加载')
-        if self.workspace.resources.unknown_for(self.context.identity.project_id):
-            raise CapabilityError('configuration_unknown', '项目存在未核实操作，请先核实')
+            raise ReviewRequired('configuration_changed', '确认后配置变化，未覆盖，请重新加载', 'channels', 'reload')
+        self.workspace.guard_project_workers(self.context)
         owner = 'gui:qt-channel:' + uuid.uuid4().hex
         uncertain = False
         self.capabilities.resources.acquire(owner, ('device-business', 'configuration'))
@@ -230,6 +348,9 @@ class QtChannelConfiguration:
                 if self._revision() != pending['revision']:
                     raise CapabilityError('configuration_changed', '实际提交前配置变化，未覆盖')
                 previous = self.path.read_bytes() if self.path.exists() else None
+                profile_path = self.context.config_dir / PROFILE_FILE
+                previous_profile = profile_path.read_bytes() if pending['profile'] else None
+                profile_published = False
                 old_cache, old_hash = deepcopy(self.cache), self.cache_hash
                 old_revision = self.context.identity.revision
                 published = False
@@ -238,10 +359,14 @@ class QtChannelConfiguration:
                     self.channels.commit(pending['prepared'], self.capabilities.snapshot(), self._reflect)
                     published = True
                     written_hash = self.cache_hash = self._file_hash()
+                    if pending['profile']:
+                        write_project_profile(self.context.config_dir, pending['profile'])
+                        profile_published = True
                     self.workspace.projects.save(self.context)
                 except Exception as error:
-                    uncertain = getattr(error, 'code', '') == 'channel_view_rollback_failed'
-                    if published:
+                    revision_changed = self.context.identity.revision != old_revision
+                    uncertain = revision_changed or getattr(error, 'code', '') == 'channel_view_rollback_failed'
+                    if published and not revision_changed:
                         try:
                             if self._file_hash() != written_hash:
                                 raise RuntimeError('another writer changed configuration')
@@ -251,14 +376,24 @@ class QtChannelConfiguration:
                                 QtConfigurationService._replace(self.path, previous)
                         except Exception:
                             uncertain = True
-                        uncertain |= self.context.identity.revision != old_revision
+                    if profile_published and not revision_changed:
+                        try:
+                            if read_project_profile(self.context.config_dir) != pending['profile']:
+                                raise RuntimeError('another writer changed project profile')
+                            QtConfigurationService._replace(profile_path, previous_profile)
+                        except Exception:
+                            uncertain = True
                     self.cache, self.cache_hash = old_cache, old_hash
                     # Never undo another writer if original commit rejected a
                     # concurrent change before it published our own file.
-                    if self._file_hash() != old_hash:
+                    try:
+                        if self._file_hash() != old_hash:
+                            self.cache = None
+                    except OSError:
                         self.cache = None
+                        uncertain = True
                     raise CapabilityError('channel_save_unknown' if uncertain else 'channel_save_failed',
-                        '通道恢复未完成，保留未知保护，请核实文件' if uncertain else
+                        f'通道恢复未完成，请检查 {self.path.name}、{profile_path.name} 和项目版本 {old_revision[:12]}' if uncertain else
                         '通道提交失败，未覆盖其它写入或已恢复原草稿；请重新加载并核对') from None
         finally:
             self.capabilities.resources.release(owner, uncertain=uncertain)

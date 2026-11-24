@@ -7,6 +7,13 @@ from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QT
 from src.ui.qt.theme import DANGER, SUCCESS, WARNING, assert_gui_thread, button, label
 
 
+def _matches_task(entry, identifier):
+    # Live views use the job owner, reopened views use its saved batch ID.
+    if identifier:
+        return identifier in (entry.job_id, entry.run_id, entry.batch_id)
+    return not (entry.run_id or entry.batch_id or entry.job_id)
+
+
 class OutcomeHighlight(QSyntaxHighlighter):
     def __init__(self, document):
         super().__init__(document)
@@ -212,13 +219,13 @@ class LogPanel(QFrame):
     def _filtered(self, entries):
         keyword, level = self.search.text().casefold(), self.level.currentText()
         scope = self.scope.currentData()
-        run = self.run_id if scope == 'run' or type(scope) is int else ''
+        task_scope = scope == 'run' or type(scope) is int
         project_id = self.scope_id or None
         if project_id is None and self.project_filter is not None:
             project_id = self.project_filter.currentData()
         return (entry for entry in entries if
                     (project_id is None or entry.project_id == project_id) and
-                    (not run or entry.run_id == run) and
+                    (not task_scope or _matches_task(entry, self.run_id)) and
                     (type(scope) is not int or entry.channel == scope) and
                     (level == '全部级别' or entry.level == level) and
                     (not keyword or keyword in (entry.message + entry.project_name).casefold()))

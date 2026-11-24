@@ -24,6 +24,15 @@ class HostResourceFence:
                     raise CapabilityError("host_result_unknown", "物理资源存在未核实操作，禁止自动重试：" + key)
             self.db.executemany("INSERT OR REPLACE INTO fence VALUES(?,?,'active')", [(k, owner) for k in keys])
 
+    def extend_active(self, owner, keys):
+        """Only an existing, active capability job may extend its original fence."""
+        with self.lock, self.db:
+            self.db.execute("BEGIN IMMEDIATE")
+            states = set(self.db.execute("SELECT DISTINCT state FROM fence WHERE owner=?", (owner,)))
+            if states != {('active',)}:
+                raise CapabilityError('owner_changed', '原任务没有可核实的活动资源占用')
+            self.acquire(owner, keys)
+
     def release(self, owner, uncertain=False):
         with self.lock, self.db:
             if uncertain:

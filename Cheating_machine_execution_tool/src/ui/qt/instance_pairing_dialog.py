@@ -6,6 +6,7 @@ from PySide6.QtCore import QSignalBlocker, QTimer, Qt
 from PySide6.QtWidgets import (QApplication, QCheckBox, QDialog, QFormLayout, QHBoxLayout,
     QLineEdit, QSpinBox, QVBoxLayout)
 
+from src.ui.qt.blocker_review import ReviewFeedback, focus_widget
 from src.ui.qt.theme import button, label
 
 
@@ -56,7 +57,7 @@ class InstancePairingDialog(QDialog):
             form.addRow(title, field)
         self.vpn = QCheckBox('已使用受保护的 VPN 网络')
         form.addRow(self.vpn)
-        self.feedback = label('', 'muted')
+        self.feedback = ReviewFeedback(role='muted')
         self.feedback.setWordWrap(True)
         layout.addWidget(self.feedback)
         actions = QHBoxLayout()
@@ -138,7 +139,8 @@ class InstancePairingDialog(QDialog):
         if result.error:
             if result.operation == 'gateway_pair_instance':
                 self.loaded = None
-            self.feedback.setText(result.error)
+            target = getattr(result, 'review', None)
+            self.feedback.show_review(result.error, (lambda: focus_widget(self.reload)) if target else None)
         elif result.operation == 'gateway_pairing_code':
             value, self.expires = result.payload
             self.generated.setText(value)

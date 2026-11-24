@@ -12,8 +12,20 @@ import tempfile
 import threading
 import uuid
 
-from src.core.host_resource_lock import HostResourceLock
-from src.models.project import FORMAT_VERSION, PROJECT_FILE, ProjectContext, ProjectIdentity
+from src.core.host_resource_lock import HostResourceBusy, HostResourceLock
+from src.models.project import FORMAT_VERSION, PROJECT_FILE, ProjectContext, ProjectIdentity, wizard_project_destination
+from src.models.project_review import ReviewTarget
+
+
+_WIZARD_DESTINATION_EXISTS = '最终路径已有同名目录或文件，请更换项目名称或选择其他父目录'
+
+
+class WizardCreateError(ValueError):
+    """Operator-facing creation failure. Messages must not contain input or file contents."""
+
+    def __init__(self, message, review_field=''):
+        super().__init__(message)
+        self.review = ReviewTarget('wizard', review_field) if review_field else None
 
 
 def atomic_json(path, value):
@@ -94,39 +106,105 @@ class ProjectStore:
         self.emit("[项目管理] 已创建项目：" + name)
         return self.open(root)
 
-    def _create_typed(self, root, name, profile):
+    def create_in_parent(self, parent, name, profile, *, environment=None):
+        """Create a named child for the Qt wizard and keep every existing target intact."""
+        if not isinstance(profile, dict):
+            raise WizardCreateError('项目档案字段不受支持，请重新核对向导草稿')
+        try:
+            destination = wizard_project_destination(parent, name, profile.get('test_type'))
+        except ValueError as error:
+            raise WizardCreateError(str(error)) from error
+        if not destination.parent.is_dir():
+            raise WizardCreateError('保存位置必须是已存在的文件夹，请重新选择父目录', 'directory')
+        root = destination.parent.resolve(strict=True) / destination.name
+        self.emit('[项目管理] 核对新项目目标目录：' + str(root))
+        if os.path.lexists(root):
+            raise WizardCreateError(_WIZARD_DESTINATION_EXISTS, 'name')
+        try:
+            return self._create_typed(root, name.strip(), profile, new_destination=True, environment=environment)
+        except HostResourceBusy as error:
+            raise WizardCreateError('目标目录正在使用或无法取得创建保护，请稍后重试') from error
+
+    def _create_typed(self, root, name, profile, *, new_destination=False, environment=None):
         from scripts.create_portable_config import create_portable_config
         from src.models.project_profile import normalize_project_profile
         from src.services.project_profile_store import write_project_profile
 
-        profile = normalize_project_profile(profile)
+        try:
+            if environment is not None:
+                from src.services.qt_channel_configuration import profile_with_environment
+                profile = profile_with_environment(profile, environment, environment['assignments'])
+            profile = normalize_project_profile(profile)
+        except ValueError as error:
+            if new_destination:
+                # The profile validator describes fields and rules without echoing their values.
+                raise WizardCreateError(f'项目档案校验失败：{error}。请返回上一步修改后再创建') from error
+            raise
         identity = ProjectIdentity(str(uuid.uuid4()), name, "")
-        root.parent.mkdir(parents=True, exist_ok=True)
+        if not new_destination:
+            root.parent.mkdir(parents=True, exist_ok=True)
         self.emit("[项目管理] 正在创建项目：" + name)
+        failure_hint = '准备项目临时目录失败，请检查保存位置和可用空间'
         try:
             with self.lock, HostResourceLock(["project-create:" + str(root)], reentrant=False), \
                     tempfile.TemporaryDirectory(prefix=".dutpilot-project-", dir=root.parent) as temporary:
                 stage = Path(temporary) / 'project'
                 context = ProjectContext(stage, identity, self.source_root)
                 context.config_dir.mkdir(parents=True)
+                failure_hint = '初始化项目配置失败，请核对程序配置模板是否完整、格式是否正确'
                 create_portable_config(self.source_root / "Auto_power_on_off_tool/config", context.config_dir)
+                failure_hint = '保存项目初始版本失败，请检查保存位置和可用空间'
                 self._set_name(context.config_dir, name)
+                if environment is not None:
+                    from line_check_assistant.config_store import ChannelConfig, ChannelConfigStore
+                    ChannelConfigStore(context.config_dir / 'network_card_ip.ini').save(
+                        [ChannelConfig(**row) for row in environment['channels'] if row['enabled']],
+                        environment['power_serial_port'])
                 write_project_profile(context.config_dir, profile)
                 self._commit(context, initial=True)
                 context.history.mkdir()
                 lease = HostResourceLock(["project:" + identity.project_id], reentrant=False).acquire()
+                failure_hint = '发布项目目录失败，请检查最终路径、目录占用和可用空间'
                 try:
-                    self._publish_new_project(stage, root)
+                    if new_destination:
+                        self._publish_exclusive_project(stage, root)
+                    else:
+                        self._publish_new_project(stage, root)
                 except BaseException:
                     lease.close()
                     raise
                 context.root = root
                 self.opened[identity.project_id], self.leases[identity.project_id] = context, lease
-        except BaseException:
+        except BaseException as error:
             self.emit("[项目管理] 项目创建失败：" + name)
+            if new_destination and not isinstance(error, (WizardCreateError, HostResourceBusy)):
+                if isinstance(error, PermissionError):
+                    raise WizardCreateError(f'{failure_hint}。访问被拒绝，请核对读写权限') from error
+                if isinstance(error, (OSError, ValueError, configparser.Error, RuntimeError)):
+                    raise WizardCreateError(failure_hint) from error
             raise
         self.emit("[项目管理] 已创建并打开项目：" + name)
         return context
+
+    @staticmethod
+    def _publish_exclusive_project(stage, root):
+        # Windows rename fails atomically if another creator has taken the destination.
+        try:
+            if os.name == 'nt':
+                stage.rename(root)
+            else:
+                # POSIX rename can replace an empty directory. Claim it exclusively first.
+                root.mkdir()
+                try:
+                    ProjectStore._publish_new_project(stage, root)
+                except BaseException:
+                    try:
+                        root.rmdir()
+                    except OSError:
+                        pass
+                    raise
+        except FileExistsError as error:
+            raise WizardCreateError(_WIZARD_DESTINATION_EXISTS, 'name') from error
 
     @staticmethod
     def _publish_new_project(stage, root):
@@ -222,6 +300,8 @@ class ProjectStore:
         if type(value.get('format_version')) is not int or value.get("format_version") != FORMAT_VERSION:
             raise ValueError("项目格式版本不受支持，请使用匹配版本的程序")
         identity = ProjectIdentity(**{key: value[key] for key in ("project_id", "name", "revision", "format_version")})
+        if not isinstance(identity.name, str) or not identity.name.strip():
+            raise ValueError("项目清单名称须为非空文本")
         uuid.UUID(identity.project_id)
         if expected_project_id is not None and identity.project_id != expected_project_id:
             raise ValueError("该目录的项目身份已变化")
@@ -242,11 +322,11 @@ class ProjectStore:
                 if not context.config_dir.is_dir():
                     self._copy_config(context.saved_root / "Auto_power_on_off_tool/config", context.config_dir)
                 context.history.mkdir(exist_ok=True)
+                self.emit("[项目管理] 已打开：" + identity.name)
             except BaseException:
                 lease.close()
                 raise
             self.opened[identity.project_id], self.leases[identity.project_id] = context, lease
-        self.emit("[项目管理] 已打开：" + identity.name)
         return context
 
     def dirty(self, context):

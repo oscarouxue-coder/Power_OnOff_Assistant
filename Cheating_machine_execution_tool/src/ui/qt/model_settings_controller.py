@@ -1,6 +1,7 @@
 """Routes model settings from one Qt project editor to the workspace worker."""
 from PySide6.QtWidgets import QInputDialog
 
+from src.ui.qt.blocker_review import focus_widget
 from src.ui.qt.model_settings_dialog import ModelSettingsDialog
 
 
@@ -46,7 +47,9 @@ class ModelSettingsController:
             return True
         dialog.set_busy(False)
         if result.error:
-            dialog.feedback.setText(result.error)
+            self.workspace.blocker_review.inline(dialog, result, dialog.project_id)
+            if result.operation == 'ai_model_open':
+                self.workspace.blocker_review.finish(dialog.project_id, 'model', None)
         elif result.operation == 'ai_model_sources':
             self._choose_source(dialog, result.payload)
         elif result.operation == 'ai_model_source_check':
@@ -54,6 +57,8 @@ class ModelSettingsController:
             dialog.feedback.setText('出口 IP 草稿已更新，保存并选择后生效')
         else:
             dialog.show_view(result.payload)
+            if result.operation == 'ai_model_open':
+                self.workspace.blocker_review.finish(dialog.project_id, 'model', dialog)
         return True
 
     def _choose_source(self, dialog, inventory):
@@ -74,7 +79,7 @@ class ModelSettingsController:
             if available:
                 self.submit(dialog, 'ai_model_source_check', (ip,))
             else:
-                dialog.feedback.setText('所选地址当前不可用，保留原出口 IP')
+                dialog.feedback.show_review('所选地址当前不可用，保留原出口 IP', lambda: focus_widget(dialog.source))
 
     def prune(self, opened):
         for identifier, dialog in tuple(self.windows.items()):

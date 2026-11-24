@@ -3,6 +3,7 @@ from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout,
     QLineEdit, QListWidget, QListWidgetItem, QPlainTextEdit, QSpinBox, QVBoxLayout)
 
+from src.ui.qt.blocker_review import ReviewFeedback, focus_widget
 from src.ui.qt.theme import button, label
 
 
@@ -46,7 +47,7 @@ class InstanceStartupDialog(QDialog):
             widget.setAccessibleName(title)
             column.addWidget(widget)
             lists.addLayout(column, stretch)
-        self.feedback = label('', 'muted')
+        self.feedback = ReviewFeedback(role='muted')
         self.feedback.setWordWrap(True)
         layout.addWidget(self.feedback)
         footer = QHBoxLayout()
@@ -129,7 +130,8 @@ class InstanceStartupDialog(QDialog):
             return
         self.request = None
         if result.error:
-            self.feedback.setText(result.error)
+            target = getattr(result, 'review', None)
+            self.feedback.show_review(result.error, (lambda: focus_widget(self.reload)) if target else None)
         elif result.operation == 'gateway_startup_save':
             self.parent().feedback.setText('下次启动配置已保存')
             self.accept()
@@ -143,7 +145,7 @@ class InstanceStartupDialog(QDialog):
                 self.mode.setCurrentIndex(self.mode.findData(self.review['startup']['mode']))
                 self.loaded_once = True
             if row is None:
-                self.feedback.setText(self.review['slot_error'])
+                self.feedback.show_review(self.review['slot_error'], lambda: focus_widget(self.slot))
                 self.sync()
                 return
             self.url.setText(row['url'])
@@ -159,5 +161,8 @@ class InstanceStartupDialog(QDialog):
                 status += '。要选择业务能力，请从已打开的项目进入启动配置'
             if self.review['invalid_digest']:
                 status += '。原启动配置损坏，请核对模式后保存'
-            self.feedback.setText(status)
+            if self.review['invalid_digest']:
+                self.feedback.show_review(status, lambda: focus_widget(self.mode))
+            else:
+                self.feedback.setText(status)
         self.sync()

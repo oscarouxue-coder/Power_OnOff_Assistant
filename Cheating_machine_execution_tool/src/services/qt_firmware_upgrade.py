@@ -5,6 +5,7 @@ import uuid
 
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettingsStore
 from src.models.capabilities import CapabilityError, CapabilitySpec, object_schema
+from src.models.project_review import ReviewRequired
 from src.services.firmware_upgrade_service import (
     UPGRADE_SCHEMA, build_upgrade_requests, normalized_upgrade_arguments,
 )
@@ -92,7 +93,7 @@ class QtFirmwareUpgrade:
         self._discard()
         self.execution._prepare_guard()
         if self.execution._binding() != self.settings_binding:
-            raise CapabilityError('configuration_changed', '项目设置已变化，请关闭后重新打开核对')
+            raise ReviewRequired('configuration_changed', '项目设置已变化，请关闭后重新打开核对', 'upgrade', 'close_button')
         owner = 'qt-firmware-settings:' + uuid.uuid4().hex
         self.capabilities.resources.acquire(owner, ('device-business', 'configuration'))
         uncertain = False
@@ -151,17 +152,17 @@ class QtFirmwareUpgrade:
             args['parallel_count'] = 8
         binding = self.execution._binding()
         if binding != self.settings_binding:
-            raise CapabilityError('configuration_changed', '项目设置已变化，请关闭后重新打开核对')
+            raise ReviewRequired('configuration_changed', '项目设置已变化，请关闭后重新打开核对', 'upgrade', 'close_button')
         targets = self.execution._snapshot()
         settings = targets['upgrade_settings']
         if not settings['username'].strip() or not settings['password'].strip():
-            raise CapabilityError('configuration_incomplete', '请填写并保存超级用户名和密码')
+            raise ReviewRequired('configuration_incomplete', '请填写并保存超级用户名和密码', 'upgrade', 'username')
         requests = build_upgrade_requests(args, targets)
         manual_restart = args['upgrade_type'] == '全包升级' and not targets['power_serial_port']
         vlans = {request.vlan.casefold() for request in requests}
         ports = [request.serial_port.casefold() for request in requests if getattr(request, 'serial_port', '')]
         if len(vlans) != len(requests) or len(set(ports)) != len(ports):
-            raise CapabilityError('duplicate_target', '升级目标存在重复网卡或样机串口，请核对已选通道')
+            raise ReviewRequired('duplicate_target', '升级目标存在重复网卡或样机串口，请核对已选通道', 'channels', 'binding', channels=args['channel_ids'])
         token = uuid.uuid4().hex
         job_authority = replace(authority, principal=f'{authority.principal}:{token}',
                                 operation_id=token, channels=tuple(args['channel_ids']), approved=False)
@@ -169,6 +170,11 @@ class QtFirmwareUpgrade:
         try:
             self.capabilities.upgrades.validate(args, job_authority, local_manual_restart=manual_restart)
         except CapabilityError as error:
+            if error.code in ('firmware_not_found', 'firmware_changed', 'invalid_firmware'):
+                raise ReviewRequired(error.code, str(error), 'upgrade', 'firmware') from None
+            if error.code == 'network_conflict':
+                raise ReviewRequired(error.code, str(error), 'channels', 'vlan',
+                                     channels=args['channel_ids'], **error.details) from None
             if error.code != 'compatibility_confirmation_required':
                 raise
             firmware = error.details['firmware']
@@ -178,7 +184,7 @@ class QtFirmwareUpgrade:
         self.pending = UpgradeConfirmation(token, binding, args, job_authority, challenge, time.monotonic(), manual_restart)
         if self.execution._binding() != binding:
             self._discard()
-            raise CapabilityError('configuration_changed', '预检期间配置变化，请重新预检')
+            raise ReviewRequired('configuration_changed', '预检期间配置变化，请重新预检', 'upgrade', 'preview_button')
         summary = [self.execution.context.identity.name, args['upgrade_type'],
                    f"固件：{firmware['path']}", f"SHA256：{firmware['sha256']}",
                    f"最多并行 {min(args['parallel_count'], len(requests))} 台"]
@@ -208,10 +214,10 @@ class QtFirmwareUpgrade:
         if not pending or pending.token != arguments['confirmation'] or (
                 not pending.manual_restart and time.monotonic() - pending.created > 120):
             self._discard()
-            raise CapabilityError('confirmation_expired', '升级确认已失效，请重新预检')
+            raise ReviewRequired('confirmation_expired', '升级确认已失效，请重新预检', 'upgrade', 'preview_button')
         if arguments.get('manual_restart_confirmed', False) != pending.manual_restart:
             self._discard()
-            raise CapabilityError('manual_restart_confirmation_required', '请按本次预检的电源方式重新确认')
+            raise ReviewRequired('manual_restart_confirmation_required', '请按本次预检的电源方式重新确认', 'upgrade', 'preview_button')
         try:
             self.execution._prepare_guard()
             self.execution._verify_nics(pending.authority.channels, pending.binding)

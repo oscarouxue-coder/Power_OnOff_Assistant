@@ -19,7 +19,7 @@ class CapabilityService:
     def __init__(self, directory, manager, snapshot, admissible=lambda owner, keys: True,
                  network_check=lambda requests: [], emit=lambda line: None, upgrade_dispatch=dispatch_upgrade,
                  released=lambda owner: None, tool_root=None, onu_configuration=None, enabled_modules=None, channel_commit=None, settings_commit=None,
-                 resource_coordinator=None, project_context=None, status_service=None):
+                 resource_coordinator=None, project_context=None, status_service=None, require_job_review=True):
         available = frozenset(('devices', 'parameters', 'onu', 'configuration', 'channels', 'notifications', 'observations', 'updates', 'ai_data', 'extensions'))
         if enabled_modules is None:
             configured = os.environ.get('LINECHECK_CAPABILITY_MODULES')
@@ -34,9 +34,10 @@ class CapabilityService:
             project_id=project_context.identity.project_id if project_context else "",
             project_name=project_context.identity.name if project_context else "")
         self.project_context = project_context
+        self.require_job_review = require_job_review
         self.metrics = CapabilityMetrics(directory, emit=emit)
         self.jobs = CapabilityJobs(directory, self.resources, emit, self.metrics, project_context=project_context,
-                                   status_service=status_service)
+                                   status_service=status_service, require_job_review=require_job_review)
         from src.services.capability_scope_service import CapabilityScopes
         self.scopes = CapabilityScopes(self.jobs)
         self.files = ControlledFiles(Path(directory) / "workspace")
@@ -84,13 +85,14 @@ class CapabilityService:
             UPGRADE_SCHEMA, self._upgrade, risk="dangerous", execution_mode="job",
             resource_requirements=("device-business", "channel", "serial", "adapter", "power"), cancellation="safe_boundary"))
         add(CapabilitySpec("channels.list", "查询通道", "读取当前已授权通道的实时配置。", object_schema(), self._channels))
-        add(CapabilitySpec("jobs.resolve_unknown", "核实未知任务结果", "提交现场核实依据，由本地负责人审阅后解除未知状态；不执行设备操作或自动重试。",
-            object_schema({"job_id": dict(type="string", minLength=1),
-                "outcome": dict(type="string", enum=["succeeded", "failed", "not_executed"]),
-                "evidence": dict(type="string", minLength=1, maxLength=4000)}, ("job_id", "outcome", "evidence")),
-            lambda a, auth: self.jobs.resolve_unknown(a["job_id"], auth, a["outcome"], a["evidence"]), risk="modify",
-            resource_scope=lambda a: dict(id="job-reconciliation:" + a["job_id"] + ":" + fingerprint(a),
-                                         job_id=a["job_id"], outcome=a["outcome"], evidence=a["evidence"])))
+        if self.require_job_review:
+            add(CapabilitySpec("jobs.resolve_unknown", "核实未知任务结果", "提交现场核实依据，由本地负责人审阅后解除未知状态；不执行设备操作或自动重试。",
+                object_schema({"job_id": dict(type="string", minLength=1),
+                    "outcome": dict(type="string", enum=["succeeded", "failed", "not_executed"]),
+                    "evidence": dict(type="string", minLength=1, maxLength=4000)}, ("job_id", "outcome", "evidence")),
+                lambda a, auth: self.jobs.resolve_unknown(a["job_id"], auth, a["outcome"], a["evidence"]), risk="modify",
+                resource_scope=lambda a: dict(id="job-reconciliation:" + a["job_id"] + ":" + fingerprint(a),
+                                             job_id=a["job_id"], outcome=a["outcome"], evidence=a["evidence"])))
         add(CapabilitySpec("files.information", "文件信息与哈希", "查询文件大小与SHA256，不执行文件。",
             object_schema({"path": dict(type="string", minLength=1)}, ("path",)),
             lambda a, auth: self.files.information(a["path"])))

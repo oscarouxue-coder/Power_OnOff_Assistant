@@ -44,7 +44,8 @@ class TypedStatusTests(unittest.TestCase):
         self.assertEqual(history.table.item(0, 4).text(), '在线')
         self.assertIn('启动标识：boot-A', history.evidence.toPlainText())
         self.assertIn('上报开机时长：0 秒', history.evidence.toPlainText())
-        panel.set_project(SimpleNamespace(project_id='project-B', project_type='power_cycle', test_overview={}))
+        panel.set_project(SimpleNamespace(project_id='project-B', project_type='power_cycle', test_overview={},
+                                          progress=None, run_id=''))
         self.assertTrue(panel.presence.isHidden())
         self.assertEqual(panel.presence.rowCount(), 0)
 
@@ -97,7 +98,7 @@ class TypedStatusTests(unittest.TestCase):
         self.assertTrue(panel.record_button.isEnabled())
         power_row = dict(dut_id='a', label='样机 A', channel=1, stage='完成', cycle=5, completed=5,
                          success=5, failure=0, retries=1, duration=64.5)
-        power = SimpleNamespace(project_id='power-B', project_type='power_cycle',
+        power = SimpleNamespace(project_id='power-B', project_type='power_cycle', progress=30, run_id='job-B',
                                 test_overview=dict(target=10, rows=[power_row, dict(power_row, dut_id='b', completed=3)]))
         panel.set_project(power)
         self.assertEqual(panel.ring.value, 30)

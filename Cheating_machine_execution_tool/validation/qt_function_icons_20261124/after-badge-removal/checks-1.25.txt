@@ -1,0 +1,9 @@
+test_toolbar_brand_and_sidebar (qt_function_icons_probe.FunctionIconTests) ... ok
+test_native_window_inherits_01_application_icon (qt_function_icons_probe.FunctionIconTests) ... ok
+test_assembled_toolbar_menus_and_overflow (qt_function_icons_probe.FunctionIconTests) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 3.400s
+
+OK
+gc:0: ResourceWarning: gc: 1 uncollectable objects at shutdown; use gc.set_debug(gc.DEBUG_UNCOLLECTABLE) to list them

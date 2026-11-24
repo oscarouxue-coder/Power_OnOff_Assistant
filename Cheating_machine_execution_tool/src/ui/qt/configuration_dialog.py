@@ -4,6 +4,7 @@ from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout, QFrame, QHBoxLayout,
     QLineEdit, QMenu, QMessageBox, QScrollArea, QSizePolicy, QTabWidget, QVBoxLayout, QWidget)
 from line_check_assistant.test_item_config_store import WIFI_AUTH_MODE_OPTIONS, WIFI_CIPHER_OPTIONS
+from src.ui.qt.blocker_review import ReviewFeedback, focus_widget
 from src.ui.qt.theme import BACKGROUND, DANGER, assert_gui_thread, button, card, label
 
 
@@ -51,7 +52,7 @@ class ConfigurationDialog(QDialog):
         self.tabs = QTabWidget()
         self.tabs.setUsesScrollButtons(True)
         outer.addWidget(self.tabs, 1)
-        self.feedback = label('', 'muted')
+        self.feedback = ReviewFeedback(role='muted')
         self.feedback.setWordWrap(True)
         outer.addWidget(self.feedback)
         actions = QHBoxLayout()
@@ -416,6 +417,18 @@ class ConfigurationDialog(QDialog):
             return int(value)
         except ValueError:
             raise ValueError(title + '必须是整数') from None
+
+    def focus_review(self, target):
+        if target.field == 'reload':
+            return focus_widget(self.reload_button)
+        if target.field == 'order':
+            return focus_widget(self.interval)
+        if target.field == 'version_baseline':
+            return focus_widget(self.version_fields[0])
+        domain = self.fields.get(target.field)
+        if domain:
+            return focus_widget(next(iter(domain.values())))
+        return focus_widget(next((fields[target.field] for fields in self.fields.values() if target.field in fields), None))
 
     def _capture_fields(self, values, *, raw=False):
         for domain in values:

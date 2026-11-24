@@ -369,6 +369,17 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         self.assertFalse(remote.authorized(project, principal))
         self.assertTrue(dt_pool.idle)
 
+    def test_legacy_unbound_dut_from_creation_can_be_mapped_in_main_channel_editor(self):
+        profile = {'test_type': 'service_aging', 'type_config': {'collectors': ['voice']},
+                   'duts': [{'label': '旧样机', 'hardware_id': 'LAB-1'}]}
+        created = self.command('wizard_create', self.root, '旧草稿恢复', profile).project_id
+        view = self.command('wizard_profile_get', created).payload['profile']
+        self.assertFalse(view.get('environment_channels'))
+        editor = self.command('channels_editor_open', created).payload
+        self.assertEqual(editor.values['unbound_duts'], [
+            {'dut_id': view['duts'][0]['dut_id'], 'label': '旧样机'}])
+        self.command('channels_editor_close', created, {'token': editor.token})
+
     def test_model_template_only_shares_versioned_defaults_with_independent_new_projects(self):
         profile = {'model': 'AX1', 'test_type': 'power_cycle', 'optional_steps': ['wan'],
                    'type_config': {'target_cycles': 500}, 'requirements': 'private notes',
@@ -377,7 +388,8 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         view = self.command('wizard_profile_get', project).payload
         revision = view['saved_revision']
         saved = self.command('wizard_preset_save', project, revision, 0).payload['presets']
-        defaults = {key: profile[key] for key in ('model', 'test_type', 'optional_steps', 'type_config')}
+        self.assertEqual(view['profile']['optional_steps'], ['wan'])
+        defaults = dict(model='AX1', test_type='power_cycle', optional_steps=[], type_config={'target_cycles': 500})
         self.assertEqual(saved, [dict(defaults, version=1)])
         self.assertEqual(self.command('wizard_draft_get').payload['presets'], saved)
         self.command('wizard_preset_save', project, revision, 0, expected_error=True)
@@ -2960,67 +2972,76 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         execution.resume.has_waiting = True
         self.assertEqual(self.adapter._overview_state(project, latest, (), execution), 'queued')
 
-    def test_local_review_reuses_original_receipt_and_persists_unknown_result(self):
-        from src.models.capabilities import CapabilityError
 
-        path = self.root / 'interrupted'
-        identifier = self.command('create', path, '旧任务项目').project_id
-        service = self.adapter._service
-        context = service.projects.opened[identifier]
-        owner = f'gui:{identifier}:old-run'
-        unrelated = 'gui:qt-channel:other-fixture'
-        snapshot = service.projects.snapshot(context)
-        service.status.begin(context, owner, snapshot, '_on_start')
-        service.status.update(owner, 'running')
-        service.resources.acquire(owner, identifier, context.identity.name, ('serial:qt-fixture-old-unknown',))
-        service.resources.acquire(unrelated, 'other-project', '其它项目', ('serial:qt-fixture-other-unknown',))
-        self.close_adapter()  # Original close retains previously acquired tickets as unknown.
-        self.results.clear()
-        self.adapter = QtWorkspaceAdapter(SOURCE, directory=self.root / 'workspace')
-        self.wait_for(lambda: (0, 'ready') in self.results)
-        service = self.adapter._service
-        entries = dict(self.command('gui_unknown_list').payload)
-        self.assertEqual(set(entries), {owner, unrelated})
-        self.assertEqual([p.project_id for p in self.projects], [identifier])
-        self.command('close', identifier)
-        result = self.command('gui_unknown_resolve', owner, entries[owner], '已核对', expected_error=True)
-        self.assertIn('打开该任务所属项目', result.error)
-        self.command('open', path)
-        self.assertEqual(self.projects[0].state, 'unknown')
-        self.assertFalse(self.projects[0].can_start)
-        context = service.projects.opened[identifier]
-        execution = self.adapter._execution(context)
-        with self.assertRaisesRegex(CapabilityError, '未知'):
+    def test_reopen_releases_stale_serial_sessions_and_keeps_upgrade_verdicts(self):
+        from types import SimpleNamespace
+        import uuid
+        from src.services.capability_jobs import CapabilityJobs
+        from test_qt_log_history import QtLogHistoryTests
+
+        identifier = self.command('create', self.root / 'interrupted', 'NP7287XGS').project_id
+        context = self.adapter._service.projects.opened[identifier]
+        jobs = CapabilityJobs(context.history / 'ai/business', SimpleNamespace())
+        try:
+            with jobs.db:
+                for index, job in enumerate(('f0eb0967-fixture', '95a6b995-fixture')):
+                    QtLogHistoryTests.insert_job(jobs, job, index)
+                    jobs.db.execute("UPDATE jobs SET capability='firmware.upgrade', state='failed', "
+                                    "stage='reconciled' WHERE id=?", (job,))
+        finally:
+            jobs.close()
+        resources = self.adapter._service.resources
+        group = uuid.uuid4().hex + ':' + identifier
+        ports = ('COM14', 'COM15', 'COM16')
+        with resources.lock, resources.fence.db:
+            for port in ports:
+                key = 'serial:qt-fixture-' + port.lower()
+                resources.fence.db.execute('INSERT INTO fence VALUES(?,?,?)', (key, group, 'active'))
+                resources.fence.db.execute('INSERT INTO workspace_owners VALUES(?,?,?,?,?)',
+                    (f'serial-session:{identifier}:{port}', group, 'active', 'NP7287XGS', json.dumps([key])))
+        with patch('src.services.power_worker_lifetime.power_worker_notice', return_value=''), \
+                patch('serial.Serial', side_effect=AssertionError('recovery must never open serial')):
+            self.restart_workspace(identifier)
+            self.assertTrue(self.projects[0].can_start)
+            resources = self.adapter._service.resources
+            self.assertFalse(resources.unknown_for(identifier))
+            self.assertEqual(resources.lease_entries(), ())
+            execution = self.adapter._execution(self.adapter._service.projects.opened[identifier])
             execution._prepare_guard()
-        self.assertIn('已变化', self.command('gui_unknown_resolve', owner, '错误标签', '依据', expected_error=True).error)
-        self.assertIn('填写现场核实依据', self.command('gui_unknown_resolve', owner, entries[owner], '  ', expected_error=True).error)
-
-        receipt_dir = service.directory / 'reconciliations'
-        with patch('src.services.workspace_service.atomic_json', side_effect=PermissionError('synthetic access denial')):
-            self.command('gui_unknown_resolve', owner, entries[owner], '已核对', expected_error=True)
-        self.assertFalse(receipt_dir.exists())
-        self.assertIn(owner, service.resources.unknown_for(identifier))
-        with patch('serial.Serial', side_effect=AssertionError('review must not open physical serial')):
-            self.command('gui_unknown_resolve', owner, entries[owner], '  已核对试验记录  ')
-        receipt, = receipt_dir.glob('*.json')
-        self.assertEqual(json.loads(receipt.read_text(encoding='utf-8')),
-                         dict(owner=owner, evidence='已核对试验记录', reviewed_by='local_operator', replayed=False))
-        ledger = json.loads((snapshot / 'run.json').read_text(encoding='utf-8'))
-        self.assertEqual(ledger['state'], 'unknown')
-        self.assertTrue(ledger['reconciled'])
-        self.assertFalse(service.resources.unknown_for(identifier))
-        self.assertEqual(dict(self.command('gui_unknown_list').payload), {unrelated: '其它项目'})
-        self.assertTrue(self.projects[0].can_start)
-        execution._prepare_guard()
+            history = self.command('history_jobs', identifier, None).payload.entries
+        self.assertEqual([(job.job_id, job.state) for job in history],
+                         [('95a6b995-fixture', 'failed'), ('f0eb0967-fixture', 'failed')])
+        self.assertTrue(any('已释放失效占用' in entry.message for entry in self.logs))
         self.assertIsNone(execution.capabilities)
-        self.command('gui_unknown_resolve', owner, entries[owner], '重复记录', expected_error=True)
-        self.command('close', identifier)
-        self.command('open', path)
-        self.assertTrue(self.projects[0].can_start)
-        self.assertEqual(self.projects[0].overview_state, 'reviewed_unknown')
-        self.assertFalse(matches_project_filter(self.projects[0], 'unknown'))
-        self.assertEqual(json.loads(receipt.read_text(encoding='utf-8'))['evidence'], '已核对试验记录')
-        self.assertFalse(any('已核对试验记录' in entry.message for entry in self.logs))
+
+    def test_recovery_releases_only_unlocked_owners_and_retries_interrupted_transaction(self):
+        import sqlite3
+        import uuid
+        from src.core.host_resource_lock import HostResourceLock
+
+        identifier = self.command('create', self.root / 'release', '模拟资源').project_id
+        resources = self.adapter._service.resources
+        group = uuid.uuid4().hex + ':' + identifier
+        free, held = 'serial:qt-fixture-release-free', 'serial:qt-fixture-release-held'
+        with resources.lock, resources.fence.db:
+            for owner, key in (('free-owner', free), ('held-owner', held)):
+                resources.fence.db.execute('INSERT INTO fence VALUES(?,?,?)', (key, group, 'active'))
+                resources.fence.db.execute('INSERT INTO workspace_owners VALUES(?,?,?,?,?)',
+                    (owner, group, 'active', '模拟资源', json.dumps([key])))
+        with patch('src.services.power_worker_lifetime.power_worker_notice', return_value=''):
+            with HostResourceLock([held], reentrant=False):
+                resources.recover_stale(identifier)
+                self.assertEqual(resources.unknown_for(identifier), ('held-owner',))
+                self.assertEqual([row.resource_key for row in resources.lease_entries()], [held])
+            with patch.object(resources, '_refresh_fence', side_effect=sqlite3.OperationalError('fixture interrupted')):
+                with self.assertRaises(sqlite3.OperationalError):
+                    resources.recover_stale(identifier)
+            self.assertEqual(resources.unknown_for(identifier), ('held-owner',))
+            self.assertEqual([row.resource_key for row in resources.lease_entries()], [held])
+            resources.acquire('fresh-owner', identifier, '模拟资源', (held,))
+        self.assertFalse(resources.unknown_for(identifier))
+        self.assertEqual([row.owner_id for row in resources.lease_entries()], ['fresh-owner'])
+        resources.release('fresh-owner')
 
     def test_history_stops_only_the_selected_live_job_in_its_project(self):
         from test_qt_log_history import QtLogHistoryTests
@@ -3059,75 +3080,46 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
             other_control.request_stop.assert_not_called()
         self.assertEqual(jobs._row(unrelated)['state'], 'running')
 
-    def test_persisted_job_review_binds_original_job_and_releases_only_its_protection(self):
-        from types import SimpleNamespace
-        from src.services.capability_jobs import CapabilityJobs
-        from test_qt_log_history import QtLogHistoryTests
 
-        first = self.command('create', self.root / 'job-review', '待核实项目').project_id
+    def test_interrupted_power_worker_protects_original_resources_until_exit(self):
+        from src.models.capabilities import CapabilityError
+        from src.services.power_worker_lifetime import ACTIVE, UNVERIFIED
+
+        first = self.command('create', self.root / 'interrupted-power', '原开关机项目').project_id
         second = self.command('create', self.root / 'other-job', '其它项目').project_id
         service = self.adapter._service
         context = service.projects.opened[first]
-        identifier, other_job = 'interrupted-fixture', 'separate-job-fixture'
-        original = CapabilityJobs(context.history / 'ai/business', SimpleNamespace())
-        try:
-            QtLogHistoryTests.insert_job(original, identifier, 1)
-            with original.db:
-                original.db.execute('UPDATE jobs SET state=?,payload=?,result=? WHERE id=?',
-                    ('running', json.dumps(dict(arguments=dict(channel_ids=[7]), resources=['channel:7'])),
-                     json.dumps(dict(prior_marker='retained')), identifier))
-        finally:
-            original.close()
+        identifier, other = 'interrupted-power-fixture', 'separate-job-fixture'
         snapshot = service.projects.snapshot(context)
         service.status.begin(context, identifier, snapshot, 'aging.start')
-        service.status.complete(identifier, state='unknown')
-        for owner, project in ((identifier, first), (other_job, second)):
-            service.resources.acquire(owner, project, project, ('serial:qt-fixture-' + owner,))
-            service.resources.release(owner, uncertain=True)
+        service.status.update(identifier, 'running')
+        old_key = 'serial:qt-fixture-interrupted-power'
+        service.resources.acquire(identifier, first, context.identity.name, (old_key,))
+        with patch('src.services.power_worker_lifetime.power_worker_notice', return_value=ACTIVE):
+            self.restart_workspace(first)
 
-        self.command('job_review_prepare', second, identifier, expected_error=True)
-        self.assertFalse((service.projects.opened[second].history / 'ai/business/capability_jobs.sqlite3').exists())
-        review = self.command('job_review_prepare', first, identifier).payload
-        self.assertEqual((review.job_id, review.capability, review.channels), (identifier, 'aging.start', (7,)))
-        self.assertNotIn('private-principal', repr(review))
-        self.command('job_review_commit', second, review.token, 'succeeded', '其它项目', expected_error=True)
-        self.command('job_review_cancel', first, review.token)
-        self.command('job_review_commit', first, review.token, 'succeeded', '过期', expected_error=True)
-        jobs = self.adapter._executions[first].capabilities.jobs
-        with patch.dict(jobs.threads, {identifier: SimpleNamespace(is_alive=lambda: True)}):
-            error = self.command('job_review_prepare', first, identifier, expected_error=True).error
-            self.assertIn('完成收尾', error)
-            self.assertIn(identifier, service.resources.unknown_for(first))
-        review = self.command('job_review_prepare', first, identifier).payload
-        from src.services.power_worker_lifetime import UNVERIFIED
-        with patch('src.services.power_worker_lifetime.power_worker_notice', return_value=UNVERIFIED):
-            error = self.command('job_review_commit', first, review.token, 'succeeded', '存活状态未核实', expected_error=True).error
-            self.assertIn(UNVERIFIED, error)
-            self.assertEqual(jobs._row(identifier)['state'], 'unknown')
-            self.assertIn(identifier, service.resources.unknown_for(first))
-        review = self.command('job_review_prepare', first, identifier).payload
-        jobs.event(identifier, 'manual-note', 'new evidence reference')
-        error = self.command('job_review_commit', first, review.token, 'succeeded', '旧确认', expected_error=True).error
-        self.assertIn('审阅期间改变', error)
-        self.assertIn(identifier, service.resources.unknown_for(first))
+        service = self.adapter._service
+        context = service.projects.opened[first]
+        resources = service.resources
+        execution = self.adapter._execution(context)
+        resources.acquire(other, second, '其它项目', ('serial:qt-fixture-separate-job',))
+        self.addCleanup(lambda: resources.release(other) if not self.adapter.closed.is_set() else None)
+        for notice in (ACTIVE, UNVERIFIED):
+            with patch('src.services.power_worker_lifetime.power_worker_notice', return_value=notice):
+                with self.assertRaisesRegex(CapabilityError, notice):
+                    execution._prepare_guard()
+                with self.assertRaisesRegex(CapabilityError, notice):
+                    resources.acquire('other-request', second, '其它项目', (old_key,))
+                self.assertIn(identifier, resources.unknown_for(first))
 
-        review = self.command('job_review_prepare', first, identifier).payload
-        with patch('serial.Serial', side_effect=AssertionError('a review never opens serial')), \
-                patch.object(jobs, 'start', side_effect=AssertionError('a review never starts a Job')):
-            result = self.command('job_review_commit', first, review.token, 'not_executed', ' 已核对模拟证据 ')
-        self.assertEqual(result.payload, 'failed')  # Original mapping for not_executed.
-        with jobs.lock:
-            committed = jobs._row(identifier)
-            self.assertEqual(committed['result']['prior_marker'], 'retained')
-            self.assertEqual(committed['result']['reconciliation']['outcome'], 'not_executed')
-            self.assertEqual(committed['result']['reconciliation']['evidence'], '已核对模拟证据')
-            self.assertEqual(committed['stage'], 'reconciled')
-        self.assertFalse(service.resources.unknown_for(first))
-        self.assertIn(other_job, service.resources.unknown_for(second))
-        self.assertEqual(json.loads((snapshot / 'run.json').read_text(encoding='utf-8'))['state'], 'failed')
-        self.assertFalse(any('已核对模拟证据' in entry.message for entry in self.logs))
-        self.command('job_review_commit', first, review.token, 'succeeded', '重复', expected_error=True)
-        self.command('job_review_prepare', first, identifier, expected_error=True)
+        with patch('src.services.power_worker_lifetime.power_worker_notice', return_value=''):
+            execution._prepare_guard()
+        self.assertFalse(resources.unknown_for(first))
+        self.assertIn(other, resources.owners)
+        ledger = json.loads((snapshot / 'run.json').read_text(encoding='utf-8'))
+        self.assertEqual(ledger['state'], 'unknown')
+        self.assertFalse(ledger.get('reconciled'))
+        resources.release(other)
 
     def test_unconfirmed_dirty_close_keeps_worker_and_data_until_explicit_choice(self):
         path = self.root / 'dirty'

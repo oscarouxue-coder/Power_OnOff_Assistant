@@ -29,6 +29,7 @@ NONNEGATIVE_INTEGER_OPTIONS = (
 
 
 from src.models.project_task import ScopedConfigPath
+from src.models.project_review import ReviewRequired
 
 
 class LegacyUiDefaultsStore:
@@ -98,6 +99,9 @@ class LegacyUiDefaultsStore:
         }
         missing = [key for key in REQUIRED_OPTIONS if key not in normalized]
         if missing:
+            if missing[0] in NONNEGATIVE_INTEGER_OPTIONS + ('number_of_tests',):
+                raise ReviewRequired('configuration_incomplete', f"[ui_defaults] 缺少配置项：{', '.join(missing)}",
+                                     'configuration', missing[0])
             raise ValueError(f"[ui_defaults] 缺少配置项：{', '.join(missing)}")
 
         communication_method = normalized["communication_method"].lower()
@@ -115,9 +119,10 @@ class LegacyUiDefaultsStore:
             raise ValueError("[ui_defaults] baud_rate 必须是正整数")
         for option in NONNEGATIVE_INTEGER_OPTIONS:
             if _parse_integer(normalized, option) < 0:
-                raise ValueError(f"[ui_defaults] {option} 不能小于 0")
+                raise ReviewRequired('invalid_parameters', f"[ui_defaults] {option} 不能小于 0", 'configuration', option)
         if _parse_integer(normalized, "number_of_tests") < 1:
-            raise ValueError("[ui_defaults] number_of_tests 不能小于 1")
+            raise ReviewRequired('invalid_parameters', "[ui_defaults] number_of_tests 不能小于 1",
+                                 'configuration', 'number_of_tests')
         return normalized
 
     def _update_section(
@@ -177,6 +182,9 @@ def _parse_integer(values: Mapping[str, str], option: str) -> int:
     try:
         return int(raw_value)
     except ValueError as exc:
+        if option in NONNEGATIVE_INTEGER_OPTIONS + ('number_of_tests',):
+            raise ReviewRequired('invalid_parameters', f"[ui_defaults] {option} 必须是整数：{raw_value!r}",
+                                 'configuration', option) from exc
         raise ValueError(f"[ui_defaults] {option} 必须是整数：{raw_value!r}") from exc
 
 

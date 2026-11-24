@@ -6,6 +6,7 @@ import uuid
 
 from src.core.zte_c600_onu import parse_service_mappings
 from src.models.capabilities import CapabilityError, fingerprint, object_schema
+from src.models.project_review import ReviewRequired
 from src.models.onu_registration_models import C300CleanupCandidate, OnuProvisionRequest
 from src.services.onu_batch_registration_service import build_batch_requests
 from src.services.onu_command_edit_service import OnuCommandEditService
@@ -65,7 +66,7 @@ class QtOnuRegistration:
         family = arguments['family']
         business = arguments['business']
         if set(business) != set(BUSINESS_FIELDS[family]):
-            raise CapabilityError('invalid_parameters', '业务参数与当前 OLT 型号不匹配')
+            raise ReviewRequired('invalid_parameters', '业务参数与当前 OLT 型号不匹配', 'onu', 'family')
         return business
 
     def save(self, arguments, authority):
@@ -95,7 +96,7 @@ class QtOnuRegistration:
         pon = request.onu.pon_interface.casefold()
         parts = re.fullmatch(re.escape(prefix) + r'(\d+)/(\d+)/(\d+)', pon)
         if parts is None:
-            raise CapabilityError('invalid_pon', '发现结果缺少有效的 PON 接口')
+            raise ReviewRequired('invalid_pon', '发现结果缺少有效的 PON 接口', 'onu', 'pon')
         shelf, slot, port = map(int, parts.groups())
         return dict(family=family, shelf=shelf, slot=slot, pon=port)
 
@@ -114,7 +115,7 @@ class QtOnuRegistration:
         for item in arguments['selection']:
             matches = [row for row in rows if row.pon_interface == item['pon'] and row.serial_number == item['sn']]
             if len(matches) != 1:
-                raise CapabilityError('onu_identity_changed', '目标已变化，请重新发现 ONU')
+                raise ReviewRequired('onu_identity_changed', '目标已变化，请重新发现 ONU', 'onu', 'unregistered')
             target = matches[0]
             targets.append(target)
             if 'id' in item:
@@ -174,12 +175,12 @@ class QtOnuRegistration:
         pending, self.preview = self.preview, None
         if (not pending or arguments['confirmation'] != pending.token
                 or fingerprint(self._data(arguments)) != pending.selection):
-            raise CapabilityError('confirmation_expired', '目标或配置已变化，请重新生成命令预览')
+            raise ReviewRequired('confirmation_expired', '目标或配置已变化，请重新生成命令预览', 'onu', 'unregistered')
         self.execution._prepare_guard()
         self.query._check_binding(pending.binding)
         self.query.discovery_rows(pending.discovery, pending.family)
         if pending.cleanup_candidate is not None and self.query.selected_cleanup(arguments) != pending.cleanup_candidate:
-            raise CapabilityError('confirmation_expired', '离线清理候选已变化，请重新查询')
+            raise ReviewRequired('confirmation_expired', '离线清理候选已变化，请重新查询', 'onu', 'unregistered')
         authority.check((), 'dangerous')
         operator = replace(authority, principal=authority.principal + ':onu:' + pending.token,
                            operation_id=pending.token)
@@ -190,7 +191,7 @@ class QtOnuRegistration:
         def recheck():
             self.query._check_binding(pending.binding)
             if self._scopes(pending.plans) != scopes:
-                raise CapabilityError('olt_configuration_changed', 'OLT 或 PON 发生变化，未执行注册')
+                raise ReviewRequired('olt_configuration_changed', 'OLT 或 PON 发生变化，未执行注册', 'onu', 'pon')
             for scope in scopes:
                 self.service.scopes.require(operator, scope)
 

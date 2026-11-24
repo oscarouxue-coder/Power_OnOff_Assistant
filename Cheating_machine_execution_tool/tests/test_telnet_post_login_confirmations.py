@@ -198,6 +198,8 @@ class PipelineConfirmationTests(unittest.TestCase):
     def confirm_without_starting(self, ctx, selected):
         window = object.__new__(PipelineWindow)
         window.app = ctx.app
+        window.project_view = ctx.app
+        ctx.app.workspace = Mock()
         window.window = Mock()
         window._running_thread = None
         window._check_vars = {code: Mock(get=Mock(return_value=True)) for code in selected}

@@ -1,0 +1,12 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}
+LIVE_IO_ATTEMPTS=0
+
+test_model_template_only_shares_versioned_defaults_with_independent_new_projects (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_corrupt_typed_history_is_scoped_to_one_project (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_dut_offline_and_business_alarm_count_the_affected_device_once (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 2.721s
+
+OK

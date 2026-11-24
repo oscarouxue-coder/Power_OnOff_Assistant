@@ -13,6 +13,7 @@ import re
 
 from line_check_assistant.network_ops import adapter_alias_from_display
 from src.models.capabilities import CapabilityError, CapabilitySpec, object_schema
+from src.models.project_review import ReviewRequired
 from src.models.dut_config_models import DutTelnetEnableRequest, DutWanSettings, DutAdvancedConfigRequest, DutWifiSettings
 from src.services.dut_config_service import validate_dut_telnet_request, run_dut_telnet_enable_batch
 from src.services.dut_status_query_service import run_dut_status_query_batch
@@ -124,11 +125,11 @@ class QtDutConfiguration:
         requests, vlans = [], set()
         for number in arguments['channel_ids']:
             if number not in targets:
-                raise CapabilityError('invalid_target', '目标已取消选择或不存在，请刷新DUT目标')
+                raise ReviewRequired('invalid_target', '目标已取消选择或不存在，请刷新DUT目标', 'channels', 'enabled', channels=(number,))
             c = targets[number]
             vlan = adapter_alias_from_display(c['vlan_name'] or c['adapter_alias']).strip().lower()
             if vlan in vlans:
-                raise CapabilityError('invalid_target', '所选目标重复使用VLAN，请先修正通道配置')
+                raise ReviewRequired('invalid_target', '所选目标重复使用VLAN，请先修正通道配置', 'channels', 'vlan', channels=(number,))
             vlans.add(vlan)
             request = DutTelnetEnableRequest(c['section'].replace('channel_', '通道 '), vlan,
                 adapter_alias_from_display(c['adapter_alias'] or c['vlan_name']).strip(),
@@ -136,13 +137,17 @@ class QtDutConfiguration:
                 c['subnet_mask'].strip() or '255.255.255.0', arguments['username'].strip(), arguments['password'])
             errors = validate_dut_telnet_request(request)
             if errors:
-                raise CapabilityError('configuration_incomplete', '；'.join(errors))
+                if not request.username or not request.password:
+                    raise ReviewRequired('configuration_incomplete', '；'.join(errors), 'dut',
+                                         'username' if not request.username else 'password')
+                raise ReviewRequired('configuration_incomplete', '；'.join(errors),
+                                     'channels', 'binding', channels=(number,))
             requests.append(request)
         confirmation = uuid.uuid4().hex
         settings = None
         if arguments['action'] == 'wan_configure':
             if 'settings' not in arguments:
-                raise CapabilityError('invalid_parameters', '必须明确WAN参数')
+                raise ReviewRequired('invalid_parameters', '必须明确WAN参数', 'dut', 'wan')
             try:
                 settings = DutWanSettings(**arguments['settings'])
             except TypeError:
@@ -153,8 +158,12 @@ class QtDutConfiguration:
                 raise CapabilityError('invalid_parameters', '；'.join(errors))
             if settings.operation in ('modify', 'delete'):
                 self._check_wan_query(arguments, requests)
-        wifi_options = self.wifi.prepare(arguments, requests) if arguments['action'] in self.wifi.ACTIONS else {}
-        voice_tr069_options = self.voice_tr069.prepare(arguments, requests) if arguments['action'] in ACTION_LABELS else {}
+        try:
+            wifi_options = self.wifi.prepare(arguments, requests) if arguments['action'] in self.wifi.ACTIONS else {}
+            voice_tr069_options = self.voice_tr069.prepare(arguments, requests) if arguments['action'] in ACTION_LABELS else {}
+        except CapabilityError as error:
+            feature = arguments['action'].rsplit('_', 1)[0]
+            raise ReviewRequired(error.code, str(error), 'dut', feature, **error.details) from None
         feature_options = wifi_options or voice_tr069_options
         if feature_options:
             settings = feature_options['settings']
@@ -186,7 +195,7 @@ class QtDutConfiguration:
         self._check(arguments)
         pending, self.pending = self.pending, None
         if not pending or pending[0] != arguments['confirmation'] or time.monotonic() - pending[2] > 120:
-            raise CapabilityError('confirmation_expired', 'DUT确认已失效，请重新核对目标')
+            raise ReviewRequired('confirmation_expired', 'DUT确认已失效，请重新核对目标', 'dut', 'query_button')
         _, binding, _, ids, requests, action, parallel, options = pending
         self.execution._prepare_guard()
         if self.execution._binding() != binding:
@@ -348,7 +357,7 @@ class QtDutConfiguration:
                 tuple(arguments['channel_ids']) != cache['ids'] or self.execution._binding() != cache['binding'] or
                 (requests[0].username, requests[0].password) != cache['credentials'] or
                 arguments['settings'].get('connection_index') not in cache['names']):
-            raise CapabilityError('query_expired', 'WAN查询目标或参数已变化，请重新查询共同连接后选择')
+            raise ReviewRequired('query_expired', 'WAN查询目标或参数已变化，请重新查询共同连接后选择', 'dut', 'wan')
 
     def cancel(self, arguments, authority):
         self._check(arguments)

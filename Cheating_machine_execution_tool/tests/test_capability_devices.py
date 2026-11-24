@@ -20,6 +20,8 @@ MODULE = "src.services.capability_device_services."
 
 class DeviceCapabilityTests(unittest.TestCase):
     def setUp(self):
+        from qt_execution_fakes import install_native_fixture_locks
+        install_native_fixture_locks(self)
         self.temp = TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.snapshot = dict(channels=[dict(section="channel_1", vlan_name="vlan116", adapter_alias="vlan116",

@@ -32,11 +32,15 @@ import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from src.services.standalone_power_project import StandalonePowerRun
 
 from line_check_assistant.config_store import ChannelConfig
 from line_check_assistant.onu_registration_store import OnuRegistrationConfig
 from src.models.upgrade_stop import UpgradeStopped
+from src.models.project_review import ReviewTarget, ReviewRequired
 from line_check_assistant.sample_upgrade_settings_store import SampleUpgradeSettings
 from line_check_assistant.test_item_config_store import TestItemConfigStore
 from src.services.power_test_resume_service import PowerTestResumeSession
@@ -116,6 +120,7 @@ class SubTaskStatus:
     ready: bool
     summary: str                # 单行摘要(中文,用于弹窗展示)
     missing: Tuple[str, ...]    # 缺项字段名(中文,用于红字标注)
+    review: Optional[ReviewTarget] = None
 
 
 @dataclass
@@ -134,6 +139,8 @@ class PipelineContext:
     stop_event: threading.Event = field(default_factory=threading.Event)
     # 仅本次全流程有效：总确认后允许升级/写参跳过各自确认框，不写入本机配置。
     unattended_execution: bool = False
+    power_resource_owner: Optional[tuple] = None
+    standalone_power_run: Optional['StandalonePowerRun'] = None
 
     @property
     def enabled_channels(self) -> List[ChannelConfig]:
@@ -171,20 +178,24 @@ def _summarize_env_check(ctx: PipelineContext) -> SubTaskStatus:
             ready=False,
             summary="0 通道已勾选",
             missing=("已勾选通道",),
+            review=ReviewTarget('channels', 'enabled'),
         )
     bad_channels: List[str] = []
+    numbers = []
+    field = ''
     for channel in channels:
-        bad: List[str] = []
-        if not (channel.vlan_name or "").strip():
-            bad.append("VLAN")
-        if not (channel.adapter_alias or "").strip():
-            bad.append("网卡")
-        if not (channel.network_card_ip or "").strip():
-            bad.append("PC 静态 IP")
-        if not (channel.device_manage_ip or "").strip():
-            bad.append("样机管理 IP")
+        required = ((channel.vlan_name, 'VLAN', 'vlan'),
+                    (channel.adapter_alias, '网卡', 'vlan'),
+                    (channel.network_card_ip, 'PC 静态 IP', 'vlan'),
+                    (channel.device_manage_ip, '样机管理 IP', 'device_ip'))
+        bad = [(label, target) for value, label, target in required if not (value or '').strip()]
         if bad:
-            bad_channels.append(f"{channel.section}({'/'.join(bad)})")
+            bad_channels.append(f"{channel.section}({'/'.join(label for label, _ in bad)})")
+            number = _power_channel_number(channel.section)
+            if number:
+                numbers.append(number)
+            if not field:
+                field = bad[0][1]
     summary = f"{len(channels)} 通道已勾选"
     if bad_channels:
         summary += f" / 缺配置:{', '.join(bad_channels)}"
@@ -193,6 +204,7 @@ def _summarize_env_check(ctx: PipelineContext) -> SubTaskStatus:
         ready=not bad_channels,
         summary=summary,
         missing=tuple(f"通道 {bc} 缺配置" for bc in bad_channels),
+        review=ReviewTarget('channels', field, tuple(numbers)) if bad_channels else None,
     )
 
 
@@ -322,6 +334,7 @@ def _summarize_serial_terminal(ctx: PipelineContext) -> SubTaskStatus:
         ready=not missing_list,
         summary=summary,
         missing=tuple(missing_list),
+        review=ReviewTarget('channels', 'enabled') if missing_list else None,
     )
 
 
@@ -364,6 +377,7 @@ def _summarize_legacy_power_test(ctx: PipelineContext) -> SubTaskStatus:
             ready=False,
             summary="旧 Start All 配置未就绪",
             missing=(str(exc),),
+            review=exc.review if isinstance(exc, ReviewRequired) else None,
         )
     return SubTaskStatus(
         code="legacy_power_test",
@@ -433,6 +447,7 @@ class PipelineOrchestrator:
         self.ctx = ctx
         self.emit = emit
         self._results: List[SubTaskResult] = []
+        self._verify_power_resources = None
 
     def request_stop(self) -> None:
         """操作员主动停止:管道下个子任务不再执行;当前子任务是否能中断取决于其实现。"""
@@ -782,6 +797,8 @@ class PipelineOrchestrator:
             for index, channel in enumerate(channels, start=1):
                 if self.ctx.stop_event.is_set():
                     raise RuntimeError("开关机版本预检已停止，未启动开关机测试")
+                if self._verify_power_resources is not None:
+                    self._verify_power_resources()
                 channel_label = channel.vlan_name or channel.section
                 self.emit(
                     f"[开关机版本预检] ({index}/{len(channels)}) {channel.section}"
@@ -824,6 +841,8 @@ class PipelineOrchestrator:
             )
         if self.ctx.stop_event.is_set():
             raise RuntimeError("开关机测试已停止，未启动开关机测试")
+        if self._verify_power_resources is not None:
+            self._verify_power_resources()
         reset_channel_statuses = _get_attr(
             self.ctx.app, "_reset_power_test_channel_states", None
         )

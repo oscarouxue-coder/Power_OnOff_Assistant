@@ -44,7 +44,7 @@ a = Analysis(
     [str(project_root / 'run_line_check_assistant.py')],
     pathex=[str(project_root), str(project_root / 'Auto_power_on_off_tool')],
     binaries=[],
-    datas=[(str(project_root / 'line_check_assistant/packaging_assets/VERSION_INFO.txt'), '.'), (str(build_info), '.'), (str(case_snapshot), '.'), (str(project_root / 'line_check_assistant_README.md'), '.'), (str(project_root / 'assets/icons/line_check_assistant_network_topology_v1.ico'), 'assets/icons')],
+    datas=[(str(project_root / 'line_check_assistant/packaging_assets/VERSION_INFO.txt'), '.'), (str(build_info), '.'), (str(case_snapshot), '.'), (str(project_root / 'line_check_assistant_README.md'), '.'), (str(project_root / 'assets/icons/DUTPilot-01-tk.ico'), 'assets/icons')],
     hiddenimports=hiddenimports,
     hookspath=[str(project_root / 'line_check_assistant/packaging_hooks')],
     hooksconfig={},
@@ -77,5 +77,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=[str(project_root / 'assets/icons/line_check_assistant_network_topology_v1.ico')],
+    icon=[str(project_root / 'assets/icons/DUTPilot-01-tk.ico')],
 )

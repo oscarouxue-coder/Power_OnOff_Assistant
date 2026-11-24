@@ -4,12 +4,17 @@ import threading
 from dataclasses import dataclass
 import json
 import queue
+import re
+from collections import deque
+from weakref import WeakKeyDictionary
 
+from src.models.ai_conversation import timestamp
 from src.models.ai_diagnostics import DiagnosticTarget, ProviderProfile, diagnostic_progress_text
 from src.models.ai_permissions import PERMISSION_LABELS
 from src.models.dependency_repair import maintenance_operation
+from src.models.project_review import ReviewRequired
 from src.models.ai_session_scope import session_scope, source_identity
-from src.models.qt_ai_chat import ChatMessageView, ChatSessionView, ChatWorkspaceView
+from src.models.qt_ai_chat import ChatMessageView, ChatSessionView, ChatWorkspaceView, is_model_identity_question
 from src.models.qt_ai_cases import CASE_OPERATIONS
 from src.models.qt_ai_reports import REPORT_HANDOFF_OPERATIONS, REPORT_OPERATIONS
 from src.services.ai_conversation_service import AiConversationService
@@ -62,15 +67,70 @@ def _local_chat_mode(session, current_run):
     return ''
 
 
+def _display_model(model, redactor):
+    if (not isinstance(model, str) or not re.fullmatch(r'[\w-]+(?:[./:-][\w-]+)*', model)
+            or len(model) > 200 or redactor.text(model) != model or model.lower().startswith(('sk-', 'bearer-'))
+            or re.search(r':\d+(?:/|$)|^[\w.-]+\.[a-zA-Z]{2,}(?:/|$)', model)
+            or re.search(r'(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)', model)):
+        return '型号不可展示'
+    return model
+
+
 class QtLocalConversation(AiConversationService):
     def __init__(self, diagnostic, execution):
         self.execution = execution
         self.direct_authority = None
+        self.reply_display = {}
+        self.route_display = WeakKeyDictionary()
         super().__init__(diagnostic, context=execution.ai_evidence)
 
     @maintenance_operation
     def resolve_intent(self, text, session, targets, profile, stop):
-        return self.router._resolve(text, session, targets, profile, stop, False)
+        def observe(usage):
+            keys = ('input_tokens', 'output_tokens') if profile.protocol == 'responses' else ('prompt_tokens', 'completion_tokens')
+            counts = tuple(usage.get(key) for key in keys) if isinstance(usage, dict) else ()
+            detail = '用量不可用'
+            if len(counts) == 2 and all(type(n) is int and n >= 0 for n in counts):
+                detail = f'接口返回：输入 {counts[0]:,}，输出 {counts[1]:,}，合计 {sum(counts):,} Token'
+            with self.lock:
+                self.route_display[stop] = ('目标识别请求模型：' + _display_model(profile.model, self.redactor)
+                                            + ' · 服务端实际型号：未确认 · ' + detail)
+            self.notify(session['id'])
+        return self.router._resolve(text, session, targets, profile, stop, False, observe_request=observe)
+
+    def observe_reply_usage(self, identifier, stop, reply_id, model, snapshot):
+        with self.lock:
+            draft = self.drafts.get(identifier)
+            if self.running.get(identifier) is not stop or stop.is_set() or not draft or draft['reply_id'] != reply_id:
+                return
+            model = _display_model(model, self.redactor)
+            capacity = snapshot['identity']['capacity']
+            total = snapshot['total_tokens']
+            source = '接口返回' if snapshot['source'] == 'api' else 'UTF-8 字节估算'
+            approx = '' if snapshot['source'] == 'api' else '约 '
+            output = snapshot['output_tokens']
+            if output is None:
+                numbers = f'输入约 {total:,} Token，输出用量暂不可用'
+            else:
+                numbers = f"输入 {snapshot['input_tokens']:,}，输出 {output:,}，合计 {approx}{total:,} Token"
+            # Integer tenths avoid overflow for unusual provider counters.
+            if capacity:
+                tenths = (total * 1000 + capacity // 2) // capacity
+                limit = f'上限 {capacity:,} Token，占比 {approx}{tenths // 10}.{tenths % 10}%'
+            else:
+                limit = '上限未知'
+            self.reply_display[identifier] = (stop, f'本轮最近一次答复请求模型：{model} · 服务端实际型号：未确认\n{source}：{numbers} · {limit}')
+
+    def local_display(self, identifier, text):
+        with self.lock:
+            if identifier not in self.running:
+                self.reply_display[identifier] = (None, text)
+
+    def message(self, identifier, role, text, kind='text', **metadata):
+        if role == 'user' and not metadata.get('supplement'):
+            with self.lock:
+                self.reply_display.pop(identifier, None)
+        super().message(identifier, role, text, kind, **metadata)
 
     def local_mode(self, session):
         return _local_chat_mode(session, self.context.run_id)
@@ -183,6 +243,7 @@ class QtAiChat:
         self._intent_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix='qt-local-intent')
         self._intent = None
         self._route_errors = {}
+        self._identity_messages = deque(maxlen=64)
 
     def _profile(self):
         profiles = self.store.profiles()
@@ -261,7 +322,27 @@ class QtAiChat:
             self.store.update_chat(identifier, qt_pc_analysis=True)
         self._select(identifier, from_route=True)
 
+    def _local_identity(self, identifier, text):
+        profile = self._profile()
+        model = _display_model(profile.model, self.diagnostic.redactor) if profile and profile.model.strip() else '未配置'
+        answer = f'请求模型：{model}；服务端实际型号：未确认。\n本条由 DUTPilot 本地读取配置，未调用模型。'
+        with self.store.lock:
+            anchor = self.store.db.execute('SELECT max(id) FROM chat_messages WHERE session_id=?',
+                                           (identifier,)).fetchone()[0] or 0
+        stamp = timestamp()
+        self._identity_messages.append((identifier, anchor, (ChatMessageView('user', text.strip(), stamp, 'text'),
+                                        ChatMessageView('assistant', answer, stamp, 'text'))))
+        self._route_errors.pop(identifier, None)
+        self.conversation.local_display(identifier, '本条为本地配置查询，未调用模型')
+        self.cursor = None
+        self.diagnostic.emit('[Ai助手] 已在本地完成模型身份查询')
+
     def _send(self, identifier, text):
+        if (identifier == self.selected and is_model_identity_question(text) and self._intent is None
+                and not self._is_running() and (not identifier or
+                    self.conversation.local_mode(self._selected_session(identifier)) == 'general')):
+            self._local_identity(identifier, text)
+            return
         session = self._selected_session(identifier)
         mode = self.conversation.local_mode(session)
         if not mode:
@@ -274,15 +355,18 @@ class QtAiChat:
             if not 1 <= len(text) <= 32768:
                 raise ValueError('请输入1至32768字符；较长日志请导入文本材料')
             if not profile or not profile.model.strip():
-                raise ValueError('请先保存并选择模型配置')
+                raise ReviewRequired('configuration_incomplete', '请先保存并选择模型配置', 'model', 'model')
             targets = self.handoff.configured_targets()
             self.diagnostic.configure(profile, targets)
             self._route_errors.pop(identifier, None)
+            self.conversation.local_display(identifier, '本条尚无可核对的模型请求')
             router = self.conversation.router
             batch_reply = mode == 'batch' and self.conversation.batch.fast_route(text, session, targets, False)
             if not batch_reply and explicit_channel_route(text, session):
-                router.send(text, profile, selected=identifier, diagnosis_only=False,
-                            explicit_device_only=True, on_selected=self._select_channel_route)
+                result = router.send(text, profile, selected=identifier, diagnosis_only=False,
+                                     explicit_device_only=True, on_selected=self._select_channel_route)
+                if isinstance(result, dict) and result.get('submitted') is False:
+                    self.conversation.local_display(self.selected, '本条为本地目标切换，未调用模型')
             else:
                 stop = threading.Event()
                 run_id = self.conversation.context.run_id
@@ -311,14 +395,21 @@ class QtAiChat:
                 valid = {t.channel for t in pending.targets if self.access.active(t)}
                 if not channels or any(c not in valid for c in channels):
                     raise ValueError('请先在“实时诊断与监控”确认本次批量目标')
-            self.conversation.router.send(pending.text, pending.profile, selected=pending.origin,
+            result = self.conversation.router.send(pending.text, pending.profile, selected=pending.origin,
                 local_intent=decision, diagnosis_only=self.store.chat(pending.origin).get('diagnosis_only') is True,
                 on_selected=self._select_channel_route)
+            if isinstance(result, dict) and result.get('submitted') is False:
+                with self.conversation.lock:
+                    info = self.conversation.route_display.get(pending.stop)
+                self.conversation.local_display(self.selected, info or '本条为本地目标处理，未调用模型')
             self.cursor = None
         except Exception as exc:
             if not self.closing and self.selected == pending.origin:
                 reason = self.diagnostic.redactor.text(str(exc))
                 self._route_errors[pending.origin] = (pending.text, reason)
+                with self.conversation.lock:
+                    info = self.conversation.route_display.get(pending.stop)
+                self.conversation.local_display(pending.origin, info or '本次识别没有可核对的模型用量')
                 self.diagnostic.emit('本机会话目标识别失败：' + reason)
         finally:
             self._intent = None
@@ -335,6 +426,8 @@ class QtAiChat:
         count = self.conversation.delete_sessions(identifiers)
         for identifier in identifiers:
             self._route_errors.pop(identifier, None)
+            with self.conversation.lock:
+                self.conversation.reply_display.pop(identifier, None)
         remaining = [row for row in self.store.chats() if not row.get('batch_parent')]
         if self.selected and not any(row['id'] == self.selected for row in remaining):
             if remaining:
@@ -476,20 +569,25 @@ class QtAiChat:
             return self.selected in self.conversation.running or self.selected in self.conversation.executors
 
     def _context_text(self):
-        usage = self.conversation.context_status(self.selected)
-        capacity = usage['capacity']
-        title = f'上限 {capacity:,} Token' if capacity else '上下文容量未知'
-        snapshot = usage.get('snapshot') or {}
-        if usage.get('stale'):
-            return title + ' · 旧用量待更新'
-        if 'total_tokens' not in snapshot:
-            return title
-        prefix = '约 ' if snapshot.get('source') != 'api' else ''
-        return f"{title} · 最近用量 {prefix}{snapshot['total_tokens']:,} Token"
+        if self.cursor is not None:
+            return ''
+        with self.conversation.lock:
+            if self._intent is not None and self._intent.origin == self.selected:
+                return self.conversation.route_display.get(self._intent.stop, '正在识别目标，本条尚无模型请求记录')
+            receipt = self.conversation.reply_display.get(self.selected)
+            active = self.conversation.running.get(self.selected)
+            if receipt and (active is None or active is receipt[0]):
+                return receipt[1]
+        return '本轮暂无可核对的模型请求与用量'
 
     @staticmethod
     def _message_view(message, mode):
         text = message['text']
+        if message['role'] == 'user' and message.get('diagnostic_supplement') is True:
+            text = '诊断补充（已接收）\n' + text
+        if (message['role'] == 'system' and message.get('kind') == 'progress'
+                and text == '已采用你的补充，调整后续诊断方向。'):
+            text = '本次检查点已留存补充记录。'
         if (mode in ('report', 'archived', 'channel') and message['role'] == 'system' and text.startswith('会话已创建；')
                 and text.endswith('发送问题后按需采集。')):
             text = '会话已创建。'
@@ -505,12 +603,18 @@ class QtAiChat:
         if self._intent is not None:
             busy.add(self._intent.origin)
         busy.update(row['batch_parent'] for row in records if row.get('batch_parent') and row['id'] in busy)
-        view_rows = tuple(ChatSessionView(row['id'], row['title'], row['target_label'], row['model'],
+        view_rows = tuple(ChatSessionView(row['id'], row['title'], row['target_label'],
+                          _display_model(row['model'], self.diagnostic.redactor) if row['model'] else '未配置',
                           row['status'], row.get('origin', ''), row['created'], row['id'] in busy) for row in rows)
         if selected is None:
-            self._last_view = ChatWorkspaceView(view_rows, '', (), deleted=deleted, monitor_status=self.diagnostic.monitor_status())
+            local = tuple(m for sid, _, pair in self._identity_messages if not sid for m in pair)
+            self._last_view = ChatWorkspaceView(view_rows, '', local, deleted=deleted, monitor_status=self.diagnostic.monitor_status())
             return self._last_view
-        with self.store.lock:
+        # Read the draft and persisted messages on the same side of reply finalization.
+        with self.conversation.lock, self.store.lock:
+            draft = self.conversation.draft_message(self.selected) if self.cursor is None else None
+            stop = self.conversation.running.get(self.selected)
+            stopping = stop is not None and stop.is_set()
             messages = self.store.db.execute('SELECT id,payload FROM chat_messages WHERE session_id=? AND id<? '
                 'ORDER BY id DESC LIMIT ?', (self.selected, self.cursor or 2**63-1, CHAT_PAGE + 1)).fetchall()
             status = self.store.db.execute(
@@ -521,7 +625,15 @@ class QtAiChat:
                    ORDER BY id DESC LIMIT 1""", (self.selected,)).fetchone()
         mode = self.conversation.local_mode(selected)
         passive = mode == 'channel' and self.conversation.collection_status(self.selected).get('passive_serial', False)
-        page = tuple(self._message_view(json.loads(payload), mode) for _, payload in reversed(messages[:CHAT_PAGE]))
+        local = {}
+        for sid, anchor, pair in self._identity_messages:
+            if sid == self.selected:
+                local.setdefault(anchor, []).extend(pair)
+        items = list(local.get(0, ())) if len(messages) <= CHAT_PAGE else []
+        for row_id, payload in reversed(messages[:CHAT_PAGE]):
+            items.append(self._message_view(json.loads(payload), mode))
+            items.extend(local.get(row_id, ()))
+        page = tuple(items)
         latest_status = self._message_view(json.loads(status[0]), mode) if status else None
         if self.cursor is None and self.selected in self._route_errors:
             text, reason = self._route_errors[self.selected]
@@ -529,7 +641,12 @@ class QtAiChat:
             page += (ChatMessageView('user', self.diagnostic.redactor.text(text), '', 'text'), latest_status)
         if self._intent is not None and self._intent.origin == self.selected and self.cursor is None:
             page += (ChatMessageView('user', self.diagnostic.redactor.text(self._intent.text), '', 'text'),)
-        draft = self.conversation.draft_message(self.selected) if self.cursor is None else None
+        if mode == 'general' and self.cursor is None:
+            if stopping:
+                latest_status = ChatMessageView('system', '已请求停止，等待本轮收尾', '', 'progress')
+            elif draft:
+                progress = '已收到本轮模型正文' if draft['text'] else '已进入模型调用，等待回复正文'
+                latest_status = ChatMessageView('system', progress, '', 'progress')
         next_page = messages[CHAT_PAGE - 1][0] if len(messages) > CHAT_PAGE else None
         self._last_view = ChatWorkspaceView(view_rows, self.selected, page, draft['text'] if draft else '',
             self._context_text(), self._is_running(), bool(mode), next_page, history_analysis=mode in ('report', 'archived') or (mode == 'channel' and not passive and not self.conversation.collection_status(self.selected)['enabled']),

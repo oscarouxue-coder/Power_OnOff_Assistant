@@ -4,12 +4,33 @@ import json
 from pathlib import Path
 from threading import RLock
 
+from line_check_assistant.config_store import ChannelConfigStore
+from line_check_assistant.legacy_ui_defaults_store import LegacyUiDefaultsStore
 from src.models.project_profile import normalize_project_profile
 from src.services.project_store import atomic_json
 
 
 PROFILE_FILE = 'project_profile.json'
 _write_lock = RLock()
+
+
+def active_project_duts(profile, directory):
+    if not profile.get('environment_channels'):
+        return profile['duts']
+    path = Path(directory) / 'network_card_ip.ini'
+    if path.is_symlink():
+        raise ValueError('通道配置不能通过链接重定向')
+    channels = ChannelConfigStore(path).load()
+    enabled = {int(row.section.rsplit('_', 1)[1]) for row in channels
+               if row.enabled and row.section.rsplit('_', 1)[1].isdecimal()}
+    return [dut for dut in profile['duts'] if dut['channel'] in enabled]
+
+
+def configured_power_cycles(directory):
+    cycles = int(LegacyUiDefaultsStore(Path(directory) / 'config.ini').load()['number_of_tests'])
+    if cycles < 1:
+        raise ValueError('测试循环次数必须大于零')
+    return cycles
 
 
 def read_project_profile(config_dir):

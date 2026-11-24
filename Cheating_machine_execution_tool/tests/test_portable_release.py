@@ -265,7 +265,7 @@ class PortableReleaseBuildScriptTests(unittest.TestCase):
             self.assertIn((str(work / "BUILD_INFO.txt"), "."), settings["datas"])
             self.assertIn((str(snapshot), "."), settings["datas"])
             self.assertIn((str(relocated / "line_check_assistant/packaging_assets/VERSION_INFO.txt"), "."), settings["datas"])
-            self.assertEqual(captured["exe"]["icon"], [str(relocated / "assets/icons/line_check_assistant_network_topology_v1.ico")])
+            self.assertEqual(captured["exe"]["icon"], [str(relocated / "assets/icons/DUTPilot-01-tk.ico")])
             self.assertIn((captured["exe"]["icon"][0], "assets/icons"), settings["datas"])
             self.assertFalse(captured["exe"]["console"])
             self.assertFalse(captured["exe"]["upx"])
@@ -380,12 +380,12 @@ class PortableReleaseBuildScriptTests(unittest.TestCase):
             PROJECT_ROOT
             / "assets"
             / "icons"
-            / "line_check_assistant_network_topology_v1.ico"
+            / "DUTPilot-01.ico"
         )
 
         self.assertTrue(icon_path.is_file())
         self.assertEqual(icon_path.read_bytes()[:4], b"\x00\x00\x01\x00")
-        self.assertIn("line_check_assistant_network_topology_v1.ico", script)
+        self.assertIn("DUTPilot-01.ico", script)
         self.assertIn("$specPath", script)
         self.assertIn("prepare_build_environment.ps1", script)
         self.assertLess(script.index('"scripts\\verify_baseline.py"'), script.index("-m PyInstaller"))

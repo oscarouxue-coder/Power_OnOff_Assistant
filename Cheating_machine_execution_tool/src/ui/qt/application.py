@@ -30,7 +30,7 @@ def _create_application():
     app.setApplicationName('DUTPilot')
     app.setApplicationVersion('1.3.0')
     assets = Path(getattr(sys, '_MEIPASS', runtime_root()))
-    app.setWindowIcon(QIcon(str(assets / 'assets/icons/line_check_assistant_network_topology_v1.ico')))
+    app.setWindowIcon(QIcon(str(assets / 'assets/icons/DUTPilot-01.ico')))
     apply_theme(app)
     return app
 

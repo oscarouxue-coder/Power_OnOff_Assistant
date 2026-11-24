@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from line_check_assistant.network_ops import adapter_alias_from_display
 from src.core.serial_inventory import normalize_com_port
 from src.models.capabilities import CapabilityError, CapabilitySpec, object_schema
+from src.models.project_review import ReviewRequired
 from src.models.channel_resource_options import POWER_SERIAL_OPTIONS
 from src.services.power_on_service import turn_off_selected_channels, turn_on_selected_channels
 
@@ -45,19 +46,19 @@ class QtSinglePower:
         binding = execution._binding()
         data = execution._snapshot()
         if execution._binding() != binding:
-            raise CapabilityError('configuration_changed', '读取时配置已变化，请重新核对电源和通道')
+            raise ReviewRequired('configuration_changed', '读取时配置已变化，请重新核对电源和通道', 'channels', 'power')
         numbers = tuple(int(channel['section'].rsplit('_', 1)[1]) for channel in data['channels'] if channel['enabled'])
         if not numbers or len(set(numbers)) != len(numbers) or any(not 1 <= number <= 16 for number in numbers):
-            raise CapabilityError('invalid_target', '请先勾选并保存有效通道，再执行单次上/下电')
+            raise ReviewRequired('invalid_target', '请先勾选并保存有效通道，再执行单次上/下电', 'channels', 'enabled')
         configured = normalize_com_port(data['power_serial_port'])
         return SinglePowerSelection(binding, configured, numbers, tuple(detected_ports))
 
     def preview(self, target, detected_ports):
         selected = self.selection(detected_ports)
         if selected.binding != target.binding:
-            raise CapabilityError('configuration_changed', '项目或通道配置已变化，请重新打开单次上/下电')
+            raise ReviewRequired('configuration_changed', '项目或通道配置已变化，请重新打开单次上/下电', 'single_power', 'port')
         if target.action not in POWER_ACTIONS or target.port not in (*POWER_SERIAL_OPTIONS, selected.configured_port, *selected.detected_ports):
-            raise CapabilityError('invalid_target', '电源动作或串口候选已变化，请重新选择')
+            raise ReviewRequired('invalid_target', '电源动作或串口候选已变化，请重新选择', 'single_power', 'port')
         action = POWER_ACTIONS[target.action]
         targets = '、'.join(f'CH{number:02d}' for number in selected.numbers)
         summary = f'项目：{self.execution.context.identity.name}\n通道：{targets}\n操作：{action}\n'

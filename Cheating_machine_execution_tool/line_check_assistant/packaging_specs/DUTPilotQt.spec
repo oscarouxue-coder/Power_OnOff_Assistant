@@ -18,7 +18,7 @@ check_environment(project_root, gui='Qt')
 case_snapshot = Path(os.environ['LINECHECK_CASE_SNAPSHOT'])
 validate_snapshot(json.loads(case_snapshot.read_text(encoding='utf-8')))
 assets = project_root / 'line_check_assistant/packaging_assets'
-icon = project_root / 'assets/icons/line_check_assistant_network_topology_v1.ico'
+icon = project_root / 'assets/icons/DUTPilot-01.ico'
 build_info = Path(workpath) / 'BUILD_INFO.txt'
 build_info.parent.mkdir(parents=True, exist_ok=True)
 build_info.write_text(
@@ -47,7 +47,9 @@ a = Analysis(
     binaries=[],
     datas=[(str(build_info), '.'), (str(case_snapshot), '.'),
            (str(project_root / 'line_check_assistant_README.md'), '.'),
-           (str(icon), 'assets/icons')] + license_data,
+           (str(icon), 'assets/icons'),
+           (str(icon.with_name('menu-chevron.svg')), 'assets/icons'),
+           (str(icon.with_name('menu-chevron-disabled.svg')), 'assets/icons')] + license_data,
     hiddenimports=hidden,
     hookspath=[str(project_root / 'line_check_assistant/packaging_hooks')],
     hooksconfig={},

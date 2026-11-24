@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QDialog, QFormLayout, QHBoxLayout, QLineEdit, QMen
 
 from src.services.qt_imported_connections import PLATFORM_NAMES
 from src.services.qt_platform_configuration import FIELDS
+from src.ui.qt.blocker_review import ReviewFeedback
 from src.ui.qt.theme import button, label
 
 
@@ -39,7 +40,7 @@ class PlatformConfigurationDialog(QDialog):
             self.fields[key] = field
             form.addRow(FIELD_LABELS[key], field)
         layout.addLayout(form)
-        self.feedback = label('', 'muted')
+        self.feedback = ReviewFeedback(role='muted')
         self.feedback.setWordWrap(True)
         layout.addWidget(self.feedback)
         actions = QHBoxLayout()
@@ -62,7 +63,8 @@ class PlatformConfigurationDialog(QDialog):
                 self.direct_actions[channel] = (action, title)
         self.more.setMenu(menu)
         actions.addWidget(self.more)
-        actions.addWidget(button('关闭', self.close))
+        self.close_button = button('关闭', self.close)
+        actions.addWidget(self.close_button)
         layout.addLayout(actions)
         self.resize(560, self.sizeHint().height())
         for field in self.fields.values():
@@ -192,7 +194,7 @@ class PlatformConfigurationDialog(QDialog):
                 self.trial_busy = False
                 self.timer.stop()
             self.close_after_cancel = False
-            self.feedback.setText(result.error)
+            self.workspace.blocker_review.inline(self, result, self.project_id)
             self._sync()
             return
         if result.operation in ('platform_trial_start', 'platform_trial_state'):

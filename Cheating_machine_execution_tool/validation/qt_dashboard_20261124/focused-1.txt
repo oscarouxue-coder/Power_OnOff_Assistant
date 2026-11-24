@@ -1,0 +1,24 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 60, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_32858401666f4277b0e24642e39c6dfa', 'framework': 'qt', 'platform': 'windows'}
+
+test_formal_window_refreshes_live_snapshots_and_keeps_manual_controls (qt_visual_preview_probe.VisualPreviewTests) ... ok
+test_layout_and_evidence_match_in_both_versions (qt_visual_preview_probe.VisualPreviewTests) ... ok
+test_switch_filters_and_cancel_simulated_stop (qt_visual_preview_probe.VisualPreviewTests) ... ok
+test_recent_events_follow_project_and_run_without_filtering_raw_log (qt_visual_preview_probe.ProjectOverviewTests) ... ok
+test_running_overview_distinguishes_power_and_continuous_aging (qt_visual_preview_probe.ProjectOverviewTests) ... ok
+test_dashboard_default_priority_keeps_identity_filters_manual_sort_and_opening (qt_visual_preview_probe.DashboardPriorityTests) ... ok
+test_dashboard_shows_reported_run_fields_and_fits_compact_first_row (qt_visual_preview_probe.DashboardPriorityTests) ... ok
+test_overview_metrics_and_filter_follow_project_identity_and_latest_evidence (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_demo_metrics_keep_task_and_health_distinct (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_project_status_is_consistent_across_navigation_cards_table_and_detail (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_cards_table_search_and_navigation_share_identity (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_single_card_uses_available_width_and_logs_are_draggable (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_project_switch_keeps_snapshots_and_filters_logs (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_live_refresh_preserves_navigation_selection_and_config_controls (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_responsive_layout_and_native_captures (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_global_log_filter_pins_project_identity_across_navigation_and_close (qt_workbench_probe.QtWorkbenchTests) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 10.774s
+
+OK

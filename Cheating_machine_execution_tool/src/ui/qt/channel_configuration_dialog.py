@@ -1,13 +1,15 @@
 """Responsive local channel form. Validation and publication stay in services."""
 from PySide6.QtCore import QSignalBlocker, Qt, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout, QGridLayout,
-    QHBoxLayout, QInputDialog, QLineEdit, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
+    QHBoxLayout, QInputDialog, QLineEdit, QMenu, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 from line_check_assistant.network_ops import adapter_alias_from_display, static_ip_for_vlan
 from src.models.channel_resource_options import (
     POWER_SERIAL_OPTIONS, serial_options_for_power_serial_port, vlan_options_for_power_serial_port,
 )
 from src.services.adapter_rename_service import ADAPTER_NAME_HINT, adapter_has_numeric_suffix
-from src.ui.qt.theme import BACKGROUND, assert_gui_thread, button, card, label
+from src.services.qt_channel_configuration import DUT_CHANNEL_DETAILS
+from src.ui.qt.blocker_review import ReviewFeedback, focus_widget
+from src.ui.qt.theme import BACKGROUND, DANGER, assert_gui_thread, button, card, label
 
 
 class ChannelRow(QWidget):
@@ -90,19 +92,28 @@ class ChannelConfigurationDialog(QDialog):
     resources_requested = Signal()
     rename_requested = Signal(object)
 
-    def __init__(self, draft, parent=None):
-        super().__init__(parent)
-        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+    def __init__(self, draft, parent=None, *, embedded=False):
+        super().__init__(parent, Qt.WindowType.Widget if embedded else Qt.WindowType.Dialog)
+        self.embedded = embedded
+        self.service_aging = False
+        if embedded:
+            self.setWindowFlags(Qt.WindowType.Widget)
+        else:
+            self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle(draft.project_name + ' · 通道配置')
-        self.setMinimumSize(520, 360)
+        if not embedded:
+            self.setMinimumSize(520, 360)
         self.setStyleSheet(f'QDialog {{ background: {BACKGROUND}; }}')
         self.busy, self.dirty, self._loading = False, False, False
         self.resources_refreshing = False
         self.adapters, self.ports = [], []
         self.rows = []
+        self.dut_edits = {}
+        self.assignments = {}
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(16, 14, 16, 14)
-        outer.addWidget(label(draft.project_name + ' · 通道配置', 'title'))
+        outer.setContentsMargins(*((0, 0, 0, 0) if embedded else (16, 14, 16, 14)))
+        if not embedded:
+            outer.addWidget(label(draft.project_name + ' · 通道配置', 'title'))
         globals_card = card()
         form = QFormLayout(globals_card)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
@@ -122,7 +133,8 @@ class ChannelConfigurationDialog(QDialog):
         power_row.addWidget(self.power_port, 1)
         power_row.addWidget(self.show_all_resources)
         form.addRow(label('样机管理 IP'), self.device_ip)
-        form.addRow(label('程控电源 COM'), power_row)
+        self.power_label = label('程控电源 COM')
+        form.addRow(self.power_label, power_row)
         outer.addWidget(globals_card)
         tools = QHBoxLayout()
         self.all_button = button('全选', lambda: self.select_all(True))
@@ -144,8 +156,10 @@ class ChannelConfigurationDialog(QDialog):
         self.rows_layout.setContentsMargins(0, 0, 4, 0)
         self.rows_layout.setSpacing(4)
         self.scroll.setWidget(self.content)
+        self.assignment_form = QFormLayout()
+        self.rows_layout.addLayout(self.assignment_form)
         outer.addWidget(self.scroll, 1)
-        self.feedback = label('', 'muted')
+        self.feedback = ReviewFeedback(role='muted')
         self.feedback.setWordWrap(True)
         outer.addWidget(self.feedback)
         footer = QHBoxLayout()
@@ -157,13 +171,17 @@ class ChannelConfigurationDialog(QDialog):
         footer.addWidget(self.close_button)
         footer.addWidget(self.save_button)
         outer.addLayout(footer)
+        if embedded:
+            for control in (self.reload_button, self.close_button, self.save_button):
+                control.hide()
         self.device_ip.textChanged.connect(self._changed)
         self.power_port.currentTextChanged.connect(self._changed)
         self.power_port.currentTextChanged.connect(self._power_port_changed)
         self.show_all_resources.toggled.connect(self._resource_mode_changed)
         self.set_draft(draft)
-        available = self.screen().availableGeometry()
-        self.resize(min(1100, int(available.width() * .9)), min(780, int(available.height() * .9)))
+        if not embedded:
+            available = self.screen().availableGeometry()
+            self.resize(min(1100, int(available.width() * .9)), min(780, int(available.height() * .9)))
 
     def _changed(self, *_args):
         if not self._loading:
@@ -189,20 +207,89 @@ class ChannelConfigurationDialog(QDialog):
             self.rows_layout.removeWidget(row)
             row.deleteLater()
         self.rows.clear()
+        self.dut_edits.clear()
+        self.assignments.clear()
+        while self.assignment_form.rowCount():
+            self.assignment_form.removeRow(0)
+        for dut in draft.values.get('unbound_duts', ()):
+            choice = QComboBox()
+            choice.addItem('选择通道或移出本批', None)
+            choice.addItem('移出本批', 0)
+            for number in range(1, 17):
+                choice.addItem(f'CH{number:02d}', number)
+            self.assignment_form.addRow(dut['label'], choice)
+            choice.currentIndexChanged.connect(self._changed)
+            self.assignments[dut['dut_id']] = choice
         for channel in draft.values['channels']:
-            row = ChannelRow(channel)
+            row = ChannelRow(channel, self.content)
             row.changed.connect(self._changed)
-            row.vlan.textActivated.connect(lambda name, current=row: self._adapter_selected(current, name))
+            if not self.embedded:
+                row.vlan.textActivated.connect(lambda name, current=row: self._adapter_selected(current, name))
+            if 'dut_details' in draft.values:
+                row.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+                row.customContextMenuRequested.connect(lambda point, current=row: self._dut_menu(current, point))
             self.rows_layout.addWidget(row)
             self.rows.append(row)
-        self._update_options()
+        self.set_service_aging(draft.values.get('service_aging', False))
         self._loading = False
         self.dirty = False
         self.feedback.setText('')
 
+    def focus_review(self, target):
+        marked = [row for row in self.rows if row.number in target.channels]
+        if target.channels and not marked:
+            return False
+        for row in self.rows:
+            row.enabled.setStyleSheet(f'color: {DANGER}; font-weight: bold;' if row in marked else '')
+            row.enabled.setAccessibleDescription('需要核对的通道' if row in marked else '')
+        if target.field == 'device_ip':
+            return focus_widget(self.device_ip)
+        if target.field == 'power':
+            return focus_widget(self.power_port)
+        if target.field == 'assignments' or target.field == 'dut' and not marked and self.assignments:
+            return focus_widget(self.assignments.get(target.reference) if target.reference else next(iter(self.assignments.values()), None))
+        if target.field == 'reload':
+            return focus_widget(self.reload_button)
+        if target.field == 'save':
+            return focus_widget(self.save_button)
+        if target.field == 'resources':
+            return focus_widget(self.resources_button)
+        row = marked[0] if marked else next(iter(self.rows), None)
+        if row is None:
+            return False
+        return focus_widget({'vlan': row.vlan, 'binding': row.vlan, 'port': row.port}.get(target.field, row.enabled))
+
+    def _dut_menu(self, row, point):
+        if self.busy or not row.enabled.isChecked():
+            return
+        menu = QMenu(row)
+        for key, title in DUT_CHANNEL_DETAILS:
+            action = menu.addAction(title + '…')
+            action.triggered.connect(lambda _checked, field=key, caption=title:
+                                     self._edit_dut(row.number, field, caption))
+        menu.aboutToHide.connect(menu.deleteLater)
+        menu.popup(row.mapToGlobal(point))
+
+    def _edit_dut(self, number, key, title):
+        if self.busy or not self.rows[number - 1].enabled.isChecked():
+            return
+        saved = self.draft.values['dut_details'].get(number, {})
+        edits = self.dut_edits.get(number, {})
+        value, accepted = QInputDialog.getText(self, f'CH{number:02d} · {title}', title,
+                                               text=edits.get(key, saved.get(key, '')))
+        if accepted:
+            self.dut_edits.setdefault(number, {})[key] = value.strip()
+            self._changed()
+
     def select_all(self, selected):
         for row in self.rows:
             row.enabled.setChecked(selected)
+
+    def set_service_aging(self, value):
+        self.service_aging = value
+        self.power_label.setVisible(not value)
+        self.power_port.setVisible(not value)
+        self._update_options()
 
     def set_busy(self, value):
         self.busy = value
@@ -218,10 +305,17 @@ class ChannelConfigurationDialog(QDialog):
         self.save_requested.emit(dict(token=self.draft.token, revision=self.draft.revision, **self._input()))
 
     def _input(self):
-        return dict(
+        values = dict(
             device_ip=self.device_ip.text().strip(), power_serial_port=self.power_port.currentText().strip(),
             rows=[dict(number=r.number, enabled=r.enabled.isChecked(), vlan_name=r.vlan.currentText().strip(),
                 serial_port=r.port.currentText().strip()) for r in self.rows])
+        if self.assignments:
+            values['assignments'] = [dict(dut_id=dut_id, number=choice.currentData())
+                                     for dut_id, choice in self.assignments.items() if choice.currentData() is not None]
+        if self.dut_edits:
+            values['dut_details'] = [dict(number=number, **edits) for number, edits in self.dut_edits.items()
+                                     if self.rows[number - 1].enabled.isChecked()]
+        return values
 
     def _draft_input(self):
         values = self.draft.values
@@ -307,12 +401,12 @@ class ChannelConfigurationDialog(QDialog):
             self.request_resources()
 
     def _update_options(self):
-        show_all = self.show_all_resources.isChecked()
+        show_all = self.service_aging or self.show_all_resources.isChecked()
         self._options(self.power_port, ('', *self.ports) if show_all else POWER_SERIAL_OPTIONS)
         self._update_channel_options()
 
     def _update_channel_options(self):
-        show_all = self.show_all_resources.isChecked()
+        show_all = self.service_aging or self.show_all_resources.isChecked()
         power = self.power_port.currentText()
         adapters = vlan_options_for_power_serial_port(self.adapters, '' if show_all else power)
         ports = self.ports if show_all else serial_options_for_power_serial_port(power)
@@ -340,8 +434,14 @@ class ChannelConfigurationDialog(QDialog):
             self.set_busy(True)
             self.reload_requested.emit(dict(token=self.draft.token))
 
+    def reject(self):
+        if not self.embedded:
+            super().reject()
+
     def closeEvent(self, event):
-        if self.busy:
+        if self.embedded:
+            event.accept()
+        elif self.busy:
             self.feedback.setText('通道操作尚未完成，请等待结果后关闭')
             event.ignore()
         elif not self._discard('关闭通道配置'):

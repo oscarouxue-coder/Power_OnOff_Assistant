@@ -1,4 +1,9 @@
 """Responsive cards and a sortable table share one immutable project model."""
+from collections import Counter
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
+
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QRectF, QSize, Qt, QSortFilterProxyModel, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QBoxLayout, QComboBox, QGridLayout, QHBoxLayout,
@@ -6,7 +11,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QBoxLayout, QCom
     QStyledItemDelegate, QTableView, QVBoxLayout, QWidget)
 
 from src.models.workbench_presentation import matches_project_filter
-from src.ui.qt.showcase_components import MetricCard, project_status_icon, project_status_style
+from src.ui.qt.showcase_components import MetricCard, project_status_icon, project_status_style, semantic_icon, test_type_symbol
 from src.ui.qt.theme import (BORDER, BRAND, CARD_PADDING, DANGER, GAP, MUTED, SUCCESS, TEXT,
     V13_PALETTE, assert_gui_thread, button, label)
 from src.ui.qt.system_health_panel import SystemHealthPanel
@@ -20,6 +25,12 @@ PROJECT_METRICS = (
     ('attention', '需关注项目', '需关注'),
     ('unknown', '状态待核实项目', '状态待核实'),
 )
+METRIC_CAPTIONS = ('已打开项目', '运行中', '等待中', '最近任务已完成', '需关注', '状态待核实')
+METRIC_SYMBOLS = {'': 'projects', 'running': 'play', 'queued': 'clock', 'completed': 'check',
+                 'attention': 'warning', 'unknown': 'question'}
+WORKBENCH_CARD_HEIGHT = 148
+_RUN_ROLE = Qt.ItemDataRole.UserRole + 2
+_PRIORITY_ROLE = Qt.ItemDataRole.UserRole + 3
 
 
 def elapsed_seconds(value):
@@ -27,12 +38,70 @@ def elapsed_seconds(value):
     return sum(int(n) * factor for n, factor in zip(parts, (3600, 60, 1))) if len(parts) == 3 and all(n.isdigit() for n in parts) else -1
 
 
+@dataclass(frozen=True)
+class RunDisplay:
+    elapsed: str
+    seconds: int
+    headline: str
+    detail: str
+    latest: str
+    progress: Optional[int]
+    aging: bool
+
+    @property
+    def table_detail(self):
+        if self.aging:
+            return '\n'.join(filter(None, (self.detail, self.latest)))
+        percent = f'{self.progress}%' if self.progress is not None else ''
+        headline = ' · '.join(filter(None, (percent, self.headline)))
+        return '\n'.join(filter(None, (headline, self.detail)))
+
+
+def _run_display(project):
+    if project.project_type != 'service_aging' and project.test_type != '全业务老化':
+        progress = None if matches_project_filter(project, 'idle') else project.progress
+        return RunDisplay(project.elapsed, elapsed_seconds(project.elapsed), project.progress_text,
+                          project.task_stage, '', progress, False)
+
+    observations = project.test_overview or {}
+    samples = [row for row in observations.get('rows', ()) if row.get('source') in ('manual', 'icmp', 'jsonl')]
+    counts = Counter(row.get('state') for row in samples)
+    detail = '暂无业务观测'
+    if samples:
+        healthy, abnormal = counts['healthy'], counts['abnormal']
+        detail = f'健康 {healthy} · 异常 {abnormal} · 未知 {len(samples) - healthy - abnormal}'
+    latest = ''
+    observed = (row.get('last_observation') for row in samples)
+    stamp = max((value for value in observed if type(value) in (int, float) and 0 <= value < 1e12), default=None)
+    if stamp is not None:
+        try:
+            latest = '最近检测 ' + datetime.fromtimestamp(stamp).strftime('%m-%d %H:%M:%S')
+        except (ValueError, OSError, OverflowError):
+            pass
+    duration = observations.get('elapsed_seconds')
+    if type(duration) not in (int, float) or not 0 <= duration < 1e12:
+        return RunDisplay('—', -1, '监测时长未知', detail, latest, None, True)
+    seconds = int(duration)
+    days, tail = divmod(seconds, 86400)
+    hours, tail = divmod(tail, 3600)
+    minutes, tail = divmod(tail, 60)
+    elapsed = (f'{days} 天 ' if days else '') + f'{hours:02d}:{minutes:02d}:{tail:02d}'
+    return RunDisplay(elapsed, seconds, '监测时长 ' + elapsed, detail, latest, None, True)
+
+
+def _project_priority(project):
+    return next((rank for rank, key in enumerate(('running', 'attention', 'active'))
+                 if matches_project_filter(project, key)), 3)
+
+
 class ProjectTableModel(QAbstractTableModel):
     HEADERS = ('项目名称', '测试类型', '任务状态', '运行时间', '进度 / 数据来源', '异常', '成功', '失败')
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, refreshed=False):
         super().__init__(parent)
+        self.refreshed = refreshed
         self.projects = ()
+        self.runs = ()
 
     def replace(self, projects):
         assert_gui_thread()
@@ -40,13 +109,16 @@ class ProjectTableModel(QAbstractTableModel):
         projects = tuple({p.project_id: p for p in projects}.values())
         if projects == self.projects:
             return
+        runs = tuple(map(_run_display, projects)) if self.refreshed else ()
         if tuple(p.project_id for p in projects) == tuple(p.project_id for p in self.projects):
             self.projects = projects
+            self.runs = runs
             if projects:
                 self.dataChanged.emit(self.index(0, 0), self.index(len(projects) - 1, len(self.HEADERS) - 1), [])
             return
         self.beginResetModel()
         self.projects = projects
+        self.runs = runs
         self.endResetModel()
 
     def rowCount(self, parent=QModelIndex()):
@@ -59,41 +131,62 @@ class ProjectTableModel(QAbstractTableModel):
         if not index.isValid() or not 0 <= index.row() < len(self.projects):
             return None
         project = self.projects[index.row()]
-        values = (project.name, project.test_type, project.state_text, project.elapsed,
-                  project.progress_text, project.attention_text, project.success_text, project.failure_text)
+        if role == Qt.ItemDataRole.UserRole:
+            return project
+        if role == _PRIORITY_ROLE:
+            return _project_priority(project) * len(self.projects) + index.row()
+        run = self.runs[index.row()] if self.refreshed else None
+        if role == _RUN_ROLE:
+            return run
+        values = (project.name, project.test_type, project.state_text, run.elapsed if run else project.elapsed,
+                   run.table_detail if run else project.progress_text, project.attention_text,
+                   project.success_text, project.failure_text)
         if role == Qt.ItemDataRole.DecorationRole and index.column() == 2:
             return project_status_icon(project.state)
         if role == Qt.ItemDataRole.ToolTipRole and index.column() == 0:
-            return (f'{project.name}\n{project.state_text}\n{project.channel_text}\n'
-                    f'成功 {project.success_text} · 失败 {project.failure_text} · 异常 {project.attention_text}')
+            parts = [project.name, project.state_text, project.channel_text,
+                     f'成功 {project.success_text} · 失败 {project.failure_text} · 异常 {project.attention_text}']
+            if run:
+                parts.extend((run.headline, run.detail, run.latest))
+            return '\n'.join(filter(None, parts))
         if role == Qt.ItemDataRole.AccessibleDescriptionRole and index.column() == 0:
-            return project.state_text
+            return '\n'.join(filter(None, (project.state_text, run.table_detail))) if run else project.state_text
         if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.ToolTipRole):
             return values[index.column()]
-        if role == Qt.ItemDataRole.UserRole:
-            return project
         if role == Qt.ItemDataRole.UserRole + 1:
             if index.column() == 5:
                 return project.attention_count
             if index.column() in (6, 7):
                 count = project.success_count if index.column() == 6 else project.failure_count
                 return -1 if count is None else count
-            return elapsed_seconds(project.elapsed) if index.column() == 3 else values[index.column()]
+            if index.column() == 3:
+                return run.seconds if run else elapsed_seconds(project.elapsed)
+            if index.column() == 4:
+                return project.progress_text
+            return values[index.column()]
         if role == Qt.ItemDataRole.ForegroundRole and index.column() == 5 and project.attention_count:
             return QColor(DANGER)
         return None
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
         if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
+            if self.refreshed and section == 4:
+                return '进展 / 业务观测'
             return self.HEADERS[section]
         return None
 
 
 class ProjectFilter(QSortFilterProxyModel):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, prioritize=False):
         super().__init__(parent)
         self.keyword, self.state = '', ''
+        self.prioritize = prioritize
         self.setSortRole(Qt.ItemDataRole.UserRole + 1)
+
+    def sort(self, column, order=Qt.SortOrder.AscendingOrder):
+        natural = self.prioritize and column == -1
+        self.setSortRole(_PRIORITY_ROLE if natural else Qt.ItemDataRole.UserRole + 1)
+        super().sort(0 if natural else column, Qt.SortOrder.AscendingOrder if natural else order)
 
     def filterAcceptsRow(self, row, parent):
         project = self.sourceModel().projects[row]
@@ -178,18 +271,28 @@ class ProjectCardDelegate(QStyledItemDelegate):
 
 
 class WorkbenchCardDelegate(ProjectCardDelegate):
-    """Same model, with the type, state and run summary grouped into separate rows."""
+    """Show project identity, then the reported run data for its test type."""
+
+    def sizeHint(self, option, index):
+        return QSize(max(1, self.parent().gridSize().width()), WORKBENCH_CARD_HEIGHT)
 
     def paint(self, painter, option, index):
         project = index.data(Qt.ItemDataRole.UserRole)
         if project is None:
             return
+        run = index.data(_RUN_ROLE)
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         frame = QRectF(option.rect).adjusted(1, 1, -9, -9)
         focus = option.state & (QStyle.StateFlag.State_HasFocus | QStyle.StateFlag.State_Selected)
         hover = bool(option.state & QStyle.StateFlag.State_MouseOver)
-        outline = V13_PALETTE.brand if focus else '#A7CCC8' if hover else V13_PALETTE.border
+        outline = V13_PALETTE.border
+        if project.attention_count:
+            outline = '#EAB2B2'
+        elif matches_project_filter(project, 'running'):
+            outline = '#A7CCC8'
+        if focus or hover:
+            outline = V13_PALETTE.brand if focus else '#A7CCC8'
         painter.setPen(QPen(QColor(outline), 2 if focus else 1))
         painter.setBrush(QColor(V13_PALETTE.surface))
         painter.drawRoundedRect(frame, 9, 9)
@@ -214,37 +317,60 @@ class WorkbenchCardDelegate(ProjectCardDelegate):
 
         style = project_status_style(project.state)
         painter.setFont(normal)
-        badge_width = min(width * .48, painter.fontMetrics().horizontalAdvance(project.state_text) + 29)
+        badge_width = min(width * .52, painter.fontMetrics().horizontalAdvance(project.state_text) + 29)
         badge_x = x + width - badge_width
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(style.background))
-        painter.drawRoundedRect(QRectF(badge_x, y, badge_width, 22), 6, 6)
-        project_status_icon(project.state).paint(painter, QRectF(badge_x + 5, y + 4, 14, 14).toRect())
-        line(project.state_text, badge_x + 22, y + 1, badge_width - 26, style.ink)
-        line(project.test_type, x, y + 1, width - badge_width - 8, V13_PALETTE.brand, bold)
-        line(project.name, x, y + 29, width, font=title)
-        line(f'{project.dut}  ·  {project.channel_text}', x, y + 53, width, V13_PALETTE.muted)
+        painter.drawRoundedRect(QRectF(badge_x, y + 22, badge_width, 21), 6, 6)
+        project_status_icon(project.state).paint(painter, QRectF(badge_x + 5, y + 25, 14, 14).toRect())
+        line(project.state_text, badge_x + 22, y + 23, badge_width - 26, style.ink)
+        line(project.name, x, y, width, font=title)
+        metadata = ' · '.join(filter(None, (project.test_type, project.dut if project.dut != '—' else '')))
+        meta_width = width - badge_width - 8
+        symbol = test_type_symbol(project.project_type, project.test_type)
+        inset = 0
+        if symbol and meta_width >= 36:
+            semantic_icon(symbol, V13_PALETTE.muted).paint(painter, QRectF(x, y + 25, 16, 16).toRect())
+            inset = 20
+        line(metadata, x + inset, y + 23, meta_width - inset, V13_PALETTE.muted)
 
-        percentage = '—' if project.progress is None else f'{project.progress}%'
-        line(percentage, x, y + 80, 58, V13_PALETTE.text, bold)
-        line(project.progress_text, x + 59, y + 80, width - 59, V13_PALETTE.muted, right=True)
-        track = QRectF(x, y + 104, width, 6)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor('#E2ECEE'))
-        painter.drawRoundedRect(track, 3, 3)
-        if project.progress is not None and project.progress > 0:
-            painter.setBrush(QColor(V13_PALETTE.brand))
-            painter.drawRoundedRect(QRectF(x, track.y(), width * min(project.progress, 100) / 100, 6), 3, 3)
-        outcome = f'成功 {project.success_text}  ·  失败 {project.failure_text}  ·  异常 {project.attention_text}'
-        line(outcome, x, y + 115, width, V13_PALETTE.error.text if project.attention_count else V13_PALETTE.muted)
-        line(project.elapsed, x, y + 145, width - 77, V13_PALETTE.muted)
-        line('查看详情 ›', x + width - 77, y + 145, 77, V13_PALETTE.brand, bold, right=True)
+        alert_ink = V13_PALETTE.error.text if project.attention_count else V13_PALETTE.muted
+        if run.aging:
+            line(run.headline, x, y + 46, width, font=bold)
+            line(run.detail, x, y + 70, width, alert_ink)
+            footer = run.latest or project.channel_text
+        else:
+            percent_width = 43 if run.progress is not None else 0
+            line(run.headline or project.channel_text, x, y + 46, width - percent_width, font=bold)
+            if run.progress is not None:
+                line(f'{run.progress}%', x + width - percent_width, y + 46, percent_width,
+                     V13_PALETTE.brand, bold, right=True)
+                track = QRectF(x, y + 68, width, 4)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor('#E2ECEE'))
+                painter.drawRoundedRect(track, 2, 2)
+                if run.progress > 0:
+                    painter.setBrush(QColor(V13_PALETTE.brand))
+                    painter.drawRoundedRect(QRectF(x, track.y(), width * min(run.progress, 100) / 100, 4), 2, 2)
+            secondary = run.detail or project.channel_text
+            if run.elapsed not in ('', '—') and not run.detail:
+                secondary = ' · '.join(filter(None, (secondary, run.elapsed)))
+            line(secondary, x, y + (76 if run.progress is not None else 69), width, alert_ink)
+            footer = ' · '.join(f'{label} {value}' for label, value in (
+                ('成功', project.success_text), ('失败', project.failure_text), ('异常', project.attention_text))
+                if value != '—')
+            if not footer and run.detail and run.elapsed != '—':
+                footer = run.elapsed
+        link_width = 77
+        line(footer, x, y + 101, width - link_width, alert_ink)
+        line('查看详情 ›', x + width - link_width, y + 101, link_width, V13_PALETTE.brand, bold, right=True)
         painter.restore()
 
 
 class CardList(QListView):
     def __init__(self, parent=None, *, refreshed=False):
         super().__init__(parent)
+        self.refreshed = refreshed
         self.setViewMode(QListView.ViewMode.IconMode)
         self.setResizeMode(QListView.ResizeMode.Adjust)
         self.setMovement(QListView.Movement.Static)
@@ -263,8 +389,9 @@ class CardList(QListView):
             # IconMode reserves room for a potential vertical scrollbar during
             # its wrapping pass, even when the final rows do not need one.
             width = max(1, width - self.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent) - 2)
-        columns = max(1, min(count or 1, 4, width // 310))
-        size = QSize(max(1, width // columns - 1), 194)
+        minimum = 270 if self.refreshed else 310
+        columns = max(1, min(count or 1, 4, width // minimum))
+        size = QSize(max(1, width // columns - 1), WORKBENCH_CARD_HEIGHT if self.refreshed else 194)
         if size != self.gridSize():
             self.setGridSize(size)
             if count:
@@ -291,6 +418,12 @@ class Dashboard(QWidget):
         heading.addStretch()
         self.cards_button = button('▦  卡片视图', lambda: self.set_mode(0))
         self.list_button = button('☷  列表视图', lambda: self.set_mode(1))
+        if refreshed:
+            for control, text, symbol in ((self.cards_button, '卡片视图', 'grid'),
+                                          (self.list_button, '列表视图', 'queue')):
+                control.setText(text)
+                control.setAccessibleName(text)
+                control.setIcon(semantic_icon(symbol))
         for control in (self.cards_button, self.list_button):
             control.setCheckable(True)
             control.setProperty('viewMode', refreshed)
@@ -305,8 +438,10 @@ class Dashboard(QWidget):
             self.metrics.setSpacing(8)
         self.metric_cards, self.metric_numbers = [], []
         self._metric_columns = 0
-        for key, title, _ in PROJECT_METRICS:
-            frame = MetricCard(title, 0, self)
+        for (key, title, _), caption in zip(PROJECT_METRICS, METRIC_CAPTIONS):
+            frame = MetricCard(caption if refreshed else title, 0, self,
+                               symbol=METRIC_SYMBOLS[key] if refreshed else None)
+            frame.setToolTip(title)
             # These summary tiles share the vertical splitter with live logs
             # and the expanded health panel. Reserve room for the project row.
             frame.layout().setContentsMargins(CARD_PADDING, CARD_PADDING // 2,
@@ -338,8 +473,8 @@ class Dashboard(QWidget):
             self.state_filter.addItem(title, key)
         filters.addWidget(self.state_filter)
         layout.addLayout(filters)
-        self.model = ProjectTableModel(self)
-        self.proxy = ProjectFilter(self)
+        self.model = ProjectTableModel(self, refreshed=refreshed)
+        self.proxy = ProjectFilter(self, prioritize=refreshed)
         self.proxy.setSourceModel(self.model)
         self.views = QStackedWidget()
         self.cards = CardList(refreshed=refreshed)
@@ -360,7 +495,9 @@ class Dashboard(QWidget):
             self.cards.activated.connect(self._activate_from_keyboard)
             self.table.activated.connect(self._activate_from_keyboard)
             self.table.setAlternatingRowColors(True)
-            self.table.verticalHeader().setDefaultSectionSize(26)
+            for column in (1, 2, 3):
+                self.table.horizontalHeader().setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+            self.table.verticalHeader().setDefaultSectionSize(38)
         self.views.addWidget(self.cards)
         self.views.addWidget(self.table)
         layout.addWidget(self.views, 1)
@@ -380,7 +517,7 @@ class Dashboard(QWidget):
 
     def set_compact_metrics(self, compact):
         direction = QBoxLayout.Direction.LeftToRight if compact else QBoxLayout.Direction.TopToBottom
-        margins = (10, 4, 10, 4) if compact else (16, 8, 16, 8)
+        margins = (10, 3, 10, 3) if compact else (12, 5, 12, 5)
         for metric in self.metric_cards:
             layout = metric.layout()
             layout.setDirection(direction)

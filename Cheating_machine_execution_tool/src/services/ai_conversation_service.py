@@ -1,5 +1,6 @@
 """持续排障会话：授权、主动询问、完整协议组持久化及有界采集。"""
 from dataclasses import asdict
+from functools import partial
 import json
 from pathlib import Path
 import queue
@@ -169,10 +170,12 @@ class AiConversationService:
         with self.subscriber_lock:
             self.subscribers.discard(subscriber)
 
-    def message(self, identifier, role, text, kind="text", *, reply_id="", stream_state=""):
+    def message(self, identifier, role, text, kind="text", *, reply_id="", stream_state="", supplement=False):
         payload = asdict(ConversationMessage(role, text, kind))
         if reply_id:
             payload.update(reply_id=reply_id, stream_state=stream_state)
+        if supplement:
+            payload["diagnostic_supplement"] = True
         self.store.append_chat(identifier, self.redactor.object(payload))
         self.notify(identifier)
         if hasattr(self, "batch"):
@@ -420,7 +423,7 @@ class AiConversationService:
                 if task is not None and not self.running[identifier].is_set() and diagnosis_only is not False:
                     self._profile(self.store.chat(identifier))
                     task.supplement(text)
-                    self.message(identifier, "user", text)
+                    self.message(identifier, "user", text, supplement=True)
                     self.store.update_chat(identifier, diagnostic_task=self.redactor.object(task.snapshot()))
                     self.emit(f"会话{identifier[:8]}收到诊断补充；下一安全检查点采用，不授予新操作权限")
                     return
@@ -596,12 +599,19 @@ class AiConversationService:
             value = getattr(self, "drafts", {}).get(identifier)
             return dict(value) if value else None
 
-    def _draft(self, identifier, text):
+    def _draft(self, identifier, text, *, reply_id=None, stop=None):
         with self.lock:
-            if identifier not in self.drafts:
+            if reply_id is not None:
+                current = self.drafts.get(identifier)
+                if not current or current['reply_id'] != reply_id or stop.is_set():
+                    return
+            elif identifier not in self.drafts:
                 self._begin_draft(identifier)
             self.drafts[identifier]["text"] = text
         self.notify(identifier)
+
+    def observe_reply_usage(self, identifier, stop, reply_id, model, snapshot):
+        """Optional presentation hook for the request entering or returning from the model client."""
 
     def _begin_draft(self, identifier):
         import uuid
@@ -831,8 +841,11 @@ class AiConversationService:
                         if task:
                             task.rounds += 1
                         reply_id = self._begin_draft(identifier)
+                        self.observe_reply_usage(identifier, stop, reply_id, profile.model, snapshot)
+                        self.notify(identifier)
                         if streaming:
-                            reply = client.complete_stream(history, tools, stop, on_text=lambda value: self._draft(identifier, value))
+                            on_text = partial(self._draft, identifier, reply_id=reply_id, stop=stop)
+                            reply = client.complete_stream(history, tools, stop, on_text=on_text)
                         else:
                             reply = client.complete(history, tools, stop)
                         draft = self.draft_message(identifier)
@@ -840,6 +853,7 @@ class AiConversationService:
                             raise ValueError("模型流最终响应缺少已生成的正文；本轮未执行工具")
                         snapshot = reply_usage(snapshot, reply.usage, profile.protocol,
                                                reply.history[len(history):], self.redactor.dumps)
+                        self.observe_reply_usage(identifier, stop, reply_id, profile.model, snapshot)
                         self._save_usage(identifier, snapshot)
                         self.emit(f"会话{identifier[:8]}最近请求用量：输入{snapshot['input_tokens']}，"
                                   f"输出{snapshot['output_tokens']}，合计{snapshot['total_tokens']} Token；"

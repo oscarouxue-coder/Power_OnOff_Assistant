@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogBut
 from src.ui.qt.progress_widgets import CircularProgress
 from src.ui.qt.showcase_components import StatusCard, STATUS_STYLES, semantic_icon
 from src.models.project_profile import COLLECTOR_LABELS
-from src.models.workbench_presentation import power_cycle_percentage
 from src.ui.qt.theme import button, label
 
 
@@ -19,8 +18,18 @@ RECORD = {'observation': '现场观察', 'daily': '每日检查', 'final': '期�
 DUT_STATUS = {'online': ('在线', 'healthy'), 'offline': ('离线', 'error'), 'unknown': ('未知', 'unknown')}
 
 
+def history_datetime(value):
+    if type(value) not in (int, float):
+        return None
+    try:
+        return datetime.fromtimestamp(value)
+    except (OSError, ValueError, OverflowError):
+        return None
+
+
 def _clock(value):
-    return datetime.fromtimestamp(value).strftime('%m-%d %H:%M:%S') if value is not None else '—'
+    stamp = history_datetime(value)
+    return stamp.strftime('%m-%d %H:%M:%S') if stamp is not None else '—'
 
 
 class TestTypePanel(QWidget):
@@ -31,6 +40,7 @@ class TestTypePanel(QWidget):
         super().__init__(parent)
         self._refreshed = refreshed
         self._key = None
+        self._progress_scope = None
         self._project = ''
         self._data = {}
         self._dialogs = []
@@ -49,12 +59,12 @@ class TestTypePanel(QWidget):
         self.history_button = button('检查记录…', self._history)
         heading.addWidget(self.history_button)
         if refreshed:
-            band = QFrame()
-            band.setProperty('sectionBand', True)
-            band.setLayout(heading)
+            self.heading_band = QFrame()
+            self.heading_band.setProperty('sectionBand', True)
+            self.heading_band.setLayout(heading)
             heading.setContentsMargins(10, 5, 10, 5)
             layout.setSpacing(8)
-            layout.addWidget(band)
+            layout.addWidget(self.heading_band)
         else:
             layout.addLayout(heading)
         self.feed_location = QWidget()
@@ -117,7 +127,7 @@ class TestTypePanel(QWidget):
     def _show_presence(self, rows):
         if self._presence_rows == rows:
             return
-        self._presence_rows = rows
+        self._presence_rows = None
         self.presence.setVisible(bool(rows))
         self.presence_title.setVisible(self._refreshed and bool(rows))
         self.presence.setRowCount(len(rows))
@@ -148,6 +158,7 @@ class TestTypePanel(QWidget):
             height = self.presence.horizontalHeader().sizeHint().height()
             height += self.presence.verticalHeader().defaultSectionSize() * min(len(rows), 5)
             self.presence.setFixedHeight(height + self.presence.horizontalScrollBar().sizeHint().height() + 6)
+        self._presence_rows = rows
 
     def _show_health_cards(self, rows):
         counts = {}
@@ -189,6 +200,13 @@ class TestTypePanel(QWidget):
 
     def set_project(self, project):
         kind, data = project.project_type, project.test_overview or {}
+        power = kind == 'power_cycle'
+        value = project.progress if power else None
+        progress_scope = (project.project_id, project.run_id) if power else None
+        self.ring.set_progress(value, 'normal' if value is not None else 'unknown',
+                               animate=progress_scope == self._progress_scope)
+        self._progress_scope = progress_scope
+        self.ring.setVisible(power)
         key = (project.project_id, kind, data)
         if key == self._key:
             return
@@ -196,14 +214,16 @@ class TestTypePanel(QWidget):
         same_view = self._key is not None and key[:2] == self._key[:2]
         rows_changed = not same_view or rows != self._data.get('rows', ())
         selected = self._selected() if same_view and rows_changed else None
-        self._key, self._project, self._data = key, project.project_id, data
+        self._key = None
+        self._project, self._data = project.project_id, data
         self.setVisible(bool(kind))
         self._show_presence(data.get('dut_presence', ()) if kind == 'service_aging' else ())
         if not kind:
+            self._key = key
             return
-        power = kind == 'power_cycle'
+        if self._refreshed:
+            self.heading_band.setVisible(not power)
         self.observation_title.setVisible(self._refreshed and not power)
-        self.ring.setVisible(power)
         self.record_button.setVisible(not power)
         self.history_button.setVisible(not power)
         path = data.get('feed_path') if not power else None
@@ -212,11 +232,14 @@ class TestTypePanel(QWidget):
             self.feed_path.setText(path or '')
             self.feed_path.setCursorPosition(0)
         if power:
-            target = data.get('target')
-            value = power_cycle_percentage(rows, target)
-            self.ring.set_progress(value, 'normal' if value is not None else 'unknown')
-            self.title.setText('自动开关机 · 逐台 DUT 轮次记录' if self._refreshed
-                               else '自动开关机 · 每台目标 ' + (str(target) if target else '—') + ' 轮')
+            if self._refreshed:
+                self.title.clear()
+            else:
+                target = data.get('target')
+                heading = f"自动开关机 · 每台目标 {target or '—'} 轮"
+                if data.get('job_id'):
+                    heading += ' · 记录所属任务 ' + data['job_id']
+                self.title.setText(heading)
             headers = ('DUT','通道','阶段','当前轮','完成轮','正常回执','失败轮','重试记录','本轮耗时')
         else:
             run_state = {'running':'监测中','stopped':'已停止','target_reached':'已到计划时长',
@@ -238,6 +261,7 @@ class TestTypePanel(QWidget):
         if inspections:
             last = max(inspections, key=lambda entry: entry['at'])
             self.inspections.setText(f"{RECORD.get(last['kind'], '')} · {_clock(last['at'])} · {last['operator']} · {last['evidence']}")
+        self._key = key
 
     def _show_rows(self, rows, headers, power, selected):
         self.table.setRowCount(0)

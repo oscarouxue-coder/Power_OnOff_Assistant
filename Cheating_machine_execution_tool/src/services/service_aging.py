@@ -8,11 +8,13 @@ from pathlib import Path
 from line_check_assistant.config_store import ChannelConfigStore
 from line_check_assistant.network_ops import adapter_alias_from_display
 from src.core.aging_lan_ping import bound_echo
+from src.core.serial_transport import vlan_to_serial_port
 from src.core.wireless_ip import adapters_ipv4, validate_remote_ipv4
 from src.models.project_profile import dut_resource_keys
+from src.models.project_review import ReviewRequired
 from src.models.upgrade_stop import UpgradeStopped
 from src.models.wifi_test_models import WifiEnvironmentError
-from src.services.project_profile_store import read_project_profile
+from src.services.project_profile_store import active_project_duts, read_project_profile
 from src.services.project_store import configuration_digest
 from src.services.service_aging_history import ServiceAgingHistory
 
@@ -54,34 +56,64 @@ class ServiceAging:
         self.wait = wait or (lambda stop, delay: stop.event.wait(delay))
         self.history = ServiceAgingHistory(context, clock)
 
-    def _plan(self, directory):
+    def _plan(self, directory, *, require_legacy_identity=False):
         profile = read_project_profile(directory)
         if not profile or profile['test_type'] != 'service_aging':
-            raise ValueError('持续监测需要已保存的全业务老化项目')
+            raise ReviewRequired('wrong_test_type', '持续监测需要已保存的全业务老化项目', 'wizard', 'test_type')
         settings = profile['type_config']
         collectors = settings['collectors']
-        if not profile['duts'] or not collectors:
-            raise ValueError('请先保存本项目的 DUT 和需要检查的业务')
+        managed = profile.get('environment_channels', False)
+        active = active_project_duts(profile, directory)
+        if managed and not active:
+            raise ReviewRequired('invalid_target', '请先在环境配置启用并保存测试通道', 'channels', 'enabled')
+        if not active or not collectors:
+            raise ReviewRequired('configuration_incomplete', '请先保存本项目的 DUT 和需要检查的业务',
+                                 'wizard' if not collectors else 'channels', 'collectors' if not collectors else 'dut')
+        if require_legacy_identity and not managed:
+            for dut in active:
+                if not dut['hardware_id']:
+                    raise ReviewRequired('invalid_target', f"{dut['label']} 缺少 DUT 实物标识，请核对配置",
+                                         'channels', 'dut', channels=(dut['channel'],) if dut['channel'] else ())
         channels, interfaces, inventory_error = {}, (), ''
-        if 'lan_ping' in collectors:
+        if managed or 'lan_ping' in collectors:
             for c in ChannelConfigStore(Path(directory) / 'network_card_ip.ini').load():
                 suffix = c.section.rsplit('_', 1)[-1]
                 if suffix.isdigit():
                     channels[int(suffix)] = c
+        if managed:
+            missing = {n for n, channel in channels.items() if channel.enabled} - {dut['channel'] for dut in active}
+            if missing:
+                names = '、'.join(f'CH{number:02d}' for number in sorted(missing))
+                raise ReviewRequired('invalid_target', f'{names} 缺少保存的 DUT 映射，请重新确认并保存环境配置',
+                                     'channels', 'dut', channels=sorted(missing))
+        if 'lan_ping' in collectors:
             try:
                 interfaces = self.inventory()
             except (OSError, RuntimeError, ValueError, WifiEnvironmentError) as error:
                 inventory_error = '网卡身份无法核实：' + str(error)
         feed_collectors = settings.get('feed_collectors', [])
         if any(c not in collectors or c in ('lan_ping', 'cpu_memory') for c in feed_collectors):
-            raise ValueError('现场文件只可订阅本批次已选的业务采集项')
+            raise ReviewRequired('invalid_parameters', '现场文件只可订阅本批次已选的业务采集项', 'wizard', 'collectors')
         duts = []
-        resources = {'device-business', *dut_resource_keys(profile['duts'])}
-        for row in profile['duts']:
+        resources = {'device-business', *dut_resource_keys(active)}
+        for row in active:
             binding, reason = None, inventory_error
+            channel = channels.get(row['channel'])
+            if managed:
+                resources.add(f"channel:{row['channel']}")
+                alias = adapter_alias_from_display(channel.adapter_alias or channel.vlan_name)
+                if alias:
+                    resources.add('adapter:' + alias)
+                try:
+                    port = channel.serial_port or vlan_to_serial_port(alias.lower())
+                except ValueError:
+                    port = ''
+                if port:
+                    resources.add('serial:' + port)
             if 'lan_ping' in collectors and not reason:
                 try:
-                    binding = _interface_binding(row, channels.get(row['channel']), interfaces)
+                    expected = dict(row, network_adapter='', vlan='') if managed else row
+                    binding = _interface_binding(expected, channel, interfaces)
                 except (ValueError, RuntimeError, WifiEnvironmentError) as error:
                     reason = str(error)
             if binding:
@@ -98,8 +130,9 @@ class ServiceAging:
         data['binding'] = hashlib.sha256((configuration_digest(directory) + json.dumps(data, sort_keys=True)).encode()).hexdigest()
         return data
 
-    def prepare(self):
-        return self._plan(self.context.saved_root / 'Auto_power_on_off_tool/config')
+    def prepare(self, *, require_legacy_identity=False):
+        return self._plan(self.context.saved_root / 'Auto_power_on_off_tool/config',
+                          require_legacy_identity=require_legacy_identity)
 
     def _sample(self, dut, job):
         binding = dut['binding']

@@ -1,5 +1,6 @@
 """Application identity, non-fatal startup, resource paths and native inheritance."""
 import ctypes
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -90,7 +91,7 @@ class ApplicationIconTests(unittest.TestCase):
                 self.assertTrue(payload.startswith(b"\x89PNG\r\n\x1a\n"))
 
     @unittest.skipUnless(sys.platform == "win32", "Windows System.Drawing export")
-    def test_asset_export_reproduces_the_checked_in_icon_without_application_dependencies(self):
+    def test_asset_export_preserves_historical_artwork_without_application_dependencies(self):
         with tempfile.TemporaryDirectory(prefix="图标 导出 ") as directory:
             output = Path(directory) / "export.ico"
             result = subprocess.run([
@@ -98,40 +99,42 @@ class ApplicationIconTests(unittest.TestCase):
                 str(ROOT / "scripts/create_application_icon.ps1"), "-OutputIco", str(output)],
                 cwd=directory, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            expected = icons.application_icon_path().read_bytes()
-            actual = output.read_bytes()
-            self.assertEqual(actual[:6], expected[:6])
-            count = struct.unpack_from("<H", expected, 4)[0]
-            for index in range(count):
-                entries = [struct.unpack_from("<BBBBHHII", data, 6 + 16 * index)
-                           for data in (actual, expected)]
-                self.assertEqual(entries[0][:6], entries[1][:6])
-                frames = [data[entry[7]:entry[7] + entry[6]]
-                          for data, entry in zip((actual, expected), entries)]
-                if entries[0][0] != 0:
-                    self.assertEqual(frames[0], frames[1])
+
+            data = output.read_bytes()
+            self.assertEqual(struct.unpack_from("<HHH", data), (0, 1, 10))
+            # Preserve the old export's DIB pixels and PNG content after removing
+            # its checked-in ICO. Windows PNG encoders may vary IDAT compression.
+            digest = hashlib.sha256(data[:6])
+            next_offset = 6 + 16 * 10
+            for index in range(10):
+                entry = 6 + 16 * index
+                width, _, _, _, _, _, length, offset = struct.unpack_from("<BBBBHHII", data, entry)
+                self.assertEqual(offset, next_offset)
+                next_offset = offset + length
+                frame = data[offset:next_offset]
+                self.assertEqual(len(frame), length)
+                digest.update(data[entry:entry + 8])
+                if width:
+                    digest.update(frame)
                     continue
-                # Windows PNG encoders may produce different zlib streams for
-                # identical scanlines. Keep metadata, CRCs and image data strict.
-                decoded = []
-                for frame in frames:
-                    self.assertEqual(frame[:8], b"\x89PNG\r\n\x1a\n")
-                    offset, metadata, compressed = 8, [], []
-                    while offset < len(frame):
-                        length = struct.unpack_from(">I", frame, offset)[0]
-                        chunk = frame[offset + 4:offset + 8 + length]
-                        crc = struct.unpack_from(">I", frame, offset + 8 + length)[0]
-                        self.assertEqual(zlib.crc32(chunk) & 0xffffffff, crc)
-                        if chunk[:4] == b"IDAT":
-                            compressed.append(chunk[4:])
-                        else:
-                            metadata.append(chunk)
-                        offset += length + 12
-                    self.assertEqual(offset, len(frame))
-                    decoded.append((metadata, zlib.decompress(b"".join(compressed))))
-                self.assertEqual(decoded[0], decoded[1])
-            for data, entry in zip((actual, expected), entries):
-                self.assertEqual(entry[7] + entry[6], len(data))
+                self.assertEqual(frame[:8], b"\x89PNG\r\n\x1a\n")
+                digest.update(frame[:8])
+                pos, compressed = 8, []
+                while pos < len(frame):
+                    size, = struct.unpack_from(">I", frame, pos)
+                    end = pos + 12 + size
+                    chunk = frame[pos + 4:end - 4]
+                    crc, = struct.unpack_from(">I", frame, end - 4)
+                    self.assertEqual(zlib.crc32(chunk) & 0xffffffff, crc)
+                    if chunk[:4] == b"IDAT":
+                        compressed.append(chunk[4:])
+                    else:
+                        digest.update(frame[pos:end])
+                    pos = end
+                self.assertEqual(pos, len(frame))
+                digest.update(zlib.decompress(b"".join(compressed)))
+            self.assertEqual(next_offset, len(data))
+            self.assertEqual(digest.hexdigest(), "6200daf071b6c14a88db9dfb9590d475fe1395e853e566049e0ca3f762027eac")
 
     def test_both_window_icons_are_set_without_binding_events_or_scheduling_callbacks(self):
         window = Mock()

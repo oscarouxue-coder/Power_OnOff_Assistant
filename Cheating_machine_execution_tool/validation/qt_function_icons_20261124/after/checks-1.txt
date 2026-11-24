@@ -1,0 +1,15 @@
+test_offline_pages (qt_function_icons_probe.FunctionIconTests) ... ok
+test_actions_states_and_type_metadata (qt_function_icons_probe.FunctionIconTests) ... F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\qt_function_icons_probe.py:103: DeprecationWarning: Function: 'QApplication.setActiveWindow(QWidget *act)' is marked as deprecated, please check the documentation for more information.
+  self.scope.app.setActiveWindow(window)
+ok
+test_assembled_toolbar_menus_and_overflow (qt_function_icons_probe.FunctionIconTests) ... ok
+test_dashboard_default_priority_keeps_identity_filters_manual_sort_and_opening (qt_visual_preview_probe.DashboardPriorityTests) ... ok
+test_dashboard_shows_reported_run_fields_and_fits_compact_first_row (qt_visual_preview_probe.DashboardPriorityTests) ... ok
+test_cards_table_search_and_navigation_share_identity (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_overview_metrics_and_filter_follow_project_identity_and_latest_evidence (qt_workbench_probe.QtWorkbenchTests) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 4.720s
+
+OK
+gc:0: ResourceWarning: gc: 1 uncollectable objects at shutdown; use gc.set_debug(gc.DEBUG_UNCOLLECTABLE) to list them

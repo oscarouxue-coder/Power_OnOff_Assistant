@@ -228,6 +228,9 @@ class PipelineWindow:
     def _refresh_statuses(self) -> None:
         """按当前 store / main UI 状态刷新每行就绪 / 缺项。"""
         try:
+            binding = vars(self.app).get('standalone_power_project')
+            if binding is not None:
+                binding.validate_view(self.app)
             ctx = self._build_context()
         except Exception as exc:  # noqa: BLE001 - 状态计算失败也要继续展示
             for code in WINDOW_SUBTASK_CODES:
@@ -282,6 +285,19 @@ class PipelineWindow:
 
     @project_operation
     def _on_start(self) -> None:
+        from src.services.standalone_power_project import OPEN_GUIDANCE, StandalonePowerProject
+        standalone = None
+        if vars(self.app).get('workspace') is None:
+            standalone = vars(self.app).get('standalone_power_project')
+            try:
+                if not isinstance(standalone, StandalonePowerProject):
+                    raise ValueError('独立挂测窗口尚未绑定项目')
+                self._validate_rendered_channels()
+                standalone.validate_view(self.app)
+            except Exception as error:
+                self._emit_to_main_log(f'[挂测准入] 未开始：{error}。{OPEN_GUIDANCE}')
+                messagebox.showwarning('挂测未开始', f'{error}\n{OPEN_GUIDANCE}', parent=self.window)
+                return
         ui = self.app.__dict__.get('_pipeline_ui')
         if ui is not None and not ui.idle():
             messagebox.showwarning('全流程正在收尾', '请等待上一次后台任务安全退出后再开始。', parent=self.window)
@@ -349,6 +365,7 @@ class PipelineWindow:
             + "\n".join(confirm_lines)
             + subtask_interval_note
             + legacy_power_note
+            + (f"\n项目目录：{standalone.root}\n已保存版本：{standalone.identity.revision}" if standalone else "")
             + "\n\n是否继续?",
             parent=self.window,
         )
@@ -358,6 +375,16 @@ class PipelineWindow:
         from src.ui.capability_ui_bridge import gui_business_available
         if not gui_business_available(self.app):
             return
+        if standalone is not None:
+            try:
+                if vars(self.app).get('standalone_power_project') is not standalone:
+                    raise ValueError('确认期间窗口项目发生变化')
+                self._validate_rendered_channels()
+                standalone.prepare_run(self.app, ctx)
+            except Exception as error:
+                self._emit_to_main_log(f'[挂测准入] 未开始：{error}。{OPEN_GUIDANCE}')
+                messagebox.showwarning('挂测未开始', f'{error}\n{OPEN_GUIDANCE}', parent=self.window)
+                return
         previous_session = getattr(self.app, 'power_test_resume_session', None)
         if previous_session is not None:
             previous_session.stop()
@@ -399,6 +426,19 @@ class PipelineWindow:
         self._emit_to_main_log(
             "[全流程] 已开始后台执行，全流程配置窗口已自动隐藏；请在主界面查看状态或停止。"
         )
+
+    def _validate_rendered_channels(self):
+        app = self.app
+        selected = {row.section: row for row in app.channels if row.enabled}
+        rendered = {key: values for key, values in app.channel_row_vars.items() if values['enabled'].get()}
+        if selected.keys() != rendered.keys():
+            raise ValueError('窗口勾选通道与已加载项目不一致')
+        for key, channel in selected.items():
+            values = rendered[key]
+            if (values['vlan'].get() != (channel.vlan_name or channel.adapter_alias) or
+                    values['serial_port'].get() != app._serial_port_for_channel(channel) or
+                    app.device_ip_var.get().strip() != channel.device_manage_ip):
+                raise ValueError(f'{key} 当前显示的目标或资源与已加载项目不一致')
 
     def is_running(self) -> bool:
         """返回后台全流程线程的真实存活状态。"""

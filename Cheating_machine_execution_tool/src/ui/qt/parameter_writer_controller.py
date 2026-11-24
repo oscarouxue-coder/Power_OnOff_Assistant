@@ -109,9 +109,10 @@ class ParameterWriterController:
                     if action == 'select_table':
                         dialog.path.setText(dialog.saved['table_path'])
                     dialog.set_busy(False)
-                    dialog.feedback.setText(result.error)
+                    self.workspace.blocker_review.inline(dialog, result, identifier)
                 else:
-                    QMessageBox.warning(self.workspace.window, '写参窗口未打开', result.error)
+                    self.workspace.blocker_review.finish(identifier, 'parameter', None)
+                    self.workspace.blocker_review.warning(result, '写参窗口未打开', identifier=identifier)
             return True
         payload = result.payload
         if action == 'show':
@@ -169,6 +170,7 @@ class ParameterWriterController:
 
         dialog.finished.connect(finished)
         dialog.show()
+        self.workspace.blocker_review.finish(identifier, 'parameter', dialog)
         if not snapshot['job']:
             dialog.restored_table()
 

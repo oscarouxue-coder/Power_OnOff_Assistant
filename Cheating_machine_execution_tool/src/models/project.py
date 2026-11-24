@@ -5,6 +5,31 @@ from pathlib import Path
 
 PROJECT_FILE = "project.linecheck.json"
 FORMAT_VERSION = 1
+WIZARD_DIRECTORY_SUFFIXES = {'power_cycle': '开关机挂测', 'service_aging': '全业务老化'}
+_WINDOWS_DEVICE_NAMES = {'CON', 'PRN', 'AUX', 'NUL', 'CONIN$', 'CONOUT$'} | {
+    prefix + number for prefix in ('COM', 'LPT') for number in '123456789¹²³'
+}
+
+
+def wizard_project_destination(parent, name, test_type):
+    """Build one safe directory name under the chosen parent, without touching disk."""
+    name = name.strip()
+    if not name or len(name) > 160:
+        raise ValueError('项目名称须为1至160个字符')
+    if name.endswith('.') or any(char in '<>:"/\\|?*' or ord(char) < 32 for char in name):
+        raise ValueError('项目名称不能包含路径分隔符或 Windows 禁用字符，也不能以点结尾')
+    if name.split('.', 1)[0].rstrip().upper() in _WINDOWS_DEVICE_NAMES:
+        raise ValueError('项目名称不能使用 Windows 保留名，请更换项目名称')
+    suffix = WIZARD_DIRECTORY_SUFFIXES.get(test_type) if isinstance(test_type, str) else None
+    if suffix is None:
+        raise ValueError('请选择自动开关机或全业务老化')
+    location = Path(parent)
+    if not location.is_absolute() or '..' in location.parts or '\0' in str(location):
+        raise ValueError('请选择有效的绝对保存位置')
+    leaf = f'{name}_{suffix}'
+    if len(leaf.encode('utf-16-le', errors='surrogatepass')) > 510:
+        raise ValueError('生成的项目文件夹名称过长，请缩短项目名称')
+    return location / leaf
 
 
 @dataclass(frozen=True)

@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QFormLayout, QHBoxLayout, QLi
     QMenu, QMessageBox, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
 from src.models.ai_diagnostics import PROVIDERS, ProviderProfile
+from src.ui.qt.blocker_review import ReviewFeedback, focus_widget
 from src.ui.qt.theme import button, label
 
 
@@ -85,7 +86,7 @@ class ModelSettingsDialog(QDialog):
         scroll.setWidget(self.panel)
         layout.addWidget(scroll, 1)
 
-        self.feedback = label('', 'muted')
+        self.feedback = ReviewFeedback(role='muted')
         self.feedback.setWordWrap(True)
         layout.addWidget(self.feedback)
         buttons = QHBoxLayout()
@@ -176,7 +177,12 @@ class ModelSettingsDialog(QDialog):
         self.set_source(view.profile.source_ip)
         self._update_capacity()
         self.set_busy(False)
-        self.feedback.setText(view.notice or view.profile.capability)
+        self.feedback.show_review(view.notice or view.profile.capability,
+                                  (lambda: focus_widget(self.fields[view.review_field])) if view.review_field else None)
+
+    def focus_review(self, target):
+        widget = self.fields.get(target.field)
+        return focus_widget(widget if widget is not None else getattr(self, target.field, None))
 
     def set_source(self, source):
         self.source_ip = source

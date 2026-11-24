@@ -9,7 +9,10 @@ import time
 import unittest
 from unittest.mock import patch
 
-from qt_execution_fakes import ControlledPipeline, ControlledResumePipeline, configure_project, save_push_project_name
+from qt_execution_fakes import (
+    ControlledPipeline, ControlledResumePipeline, configure_project, install_native_fixture_locks,
+    mock_power_interfaces, save_push_project_name,
+)
 from test_power_supply import FakeSerial
 from src.core.power_supply import channel_power_frame
 from src.models.capabilities import CapabilityAuthority, CapabilityError
@@ -25,6 +28,7 @@ SOURCE = Path(__file__).resolve().parents[1]
 
 class QtExecutionAdapterTests(unittest.TestCase):
     def setUp(self):
+        install_native_fixture_locks(self)
         self.temporary = tempfile.TemporaryDirectory(prefix='qt-execution-')
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
@@ -69,6 +73,194 @@ class QtExecutionAdapterTests(unittest.TestCase):
         identifier = self.adapter.confirm(confirmation.token)
         self.assertTrue(self.engine.started.wait(3))
         return identifier
+
+    def save_enabled_channels(self, numbers):
+        from line_check_assistant.config_store import ChannelConfigStore
+        store = ChannelConfigStore(self.context.config_dir / 'network_card_ip.ini')
+        rows = [replace(c, enabled=int(c.section.split('_')[1]) in numbers) for c in store.load()]
+        store.save(rows, store.load_power_serial_port())
+        self.workspace.projects.save(self.context)
+
+    def save_target_profile(self, kind='power_cycle'):
+        from src.services.project_profile_store import write_project_profile
+        plan = {'target_cycles': 100} if kind == 'power_cycle' else {'collectors': ['voice'], 'target_hours': 1}
+        self.profile = write_project_profile(self.context.config_dir, dict(test_type=kind, type_config=plan,
+            duts=[dict(label=f'DUT {n}', hardware_id=f'LAB-{n}', channel=n) for n in (1, 7)]))
+        self.workspace.projects.save(self.context)
+
+    def record_target_steps(self, channel, *, stop_before_verify=''):
+        from src.services.project_preparation import preparation_for
+        service = self.preparation = preparation_for(self.context)
+        def target_steps():
+            return next(d for d in service.snapshot()['duts'] if d['channel'] == channel)['steps']
+        dut = next(d['dut_id'] for d in self.profile['duts'] if d['channel'] == channel)
+        def read_step(key):
+            return next(step for step in target_steps() if step['id'] == key)
+        for step in target_steps():
+            current = read_step(step['id'])
+            if current['state'] == 'verified':
+                continue
+            if current['state'] != 'executed':
+                service.record_manual(dut, step['id'], current['token'], '模拟执行依据', 'fixture')
+            if step['id'] == stop_before_verify:
+                return
+            current = read_step(step['id'])
+            service.verify(dut, step['id'], current['token'], current['attempt'], True, '模拟独立回读', 'fixture')
+
+    def test_enabled_power_targets_match_confirmation_archive_and_engine(self):
+        from line_check_assistant.config_store import ChannelConfigStore
+        self.save_target_profile()
+        self.save_enabled_channels({1})
+        self.assertFalse((self.context.history / 'preparation.sqlite3').exists())
+        preview = self.adapter.prepare('aging.start')
+        self.assertEqual(preview.channel_ids, (1,))
+        self.assertIn('CH01', preview.summary)
+        self.assertNotIn('CH07', preview.summary)
+        identifier = self.adapter.confirm(preview.token)
+        self.assertTrue(self.engine.started.wait(3))
+        context, _ = self.engine.calls[0]
+        self.assertEqual([c.section for c in context.enabled_channels], ['channel_1'])
+        store = ChannelConfigStore(context.legacy_tool_root / 'config/network_card_ip.ini')
+        self.assertEqual([c.section for c in store.load() if c.enabled], ['channel_1'])
+        status = self.adapter.capabilities.jobs.status(identifier, self.adapter.jobs[identifier]['authority'])
+        self.assertEqual(status['request']['arguments']['channel_ids'], [1])
+        self.assertIn('dut:hardware:lab-1', status['request']['resources'])
+        self.assertNotIn('dut:hardware:lab-7', status['request']['resources'])
+
+        self.engine.finish.set()
+        self.wait_for(lambda: self.adapter.idle)
+        self.save_enabled_channels({1, 7})
+        self.record_target_steps(7)
+        preview = self.adapter.prepare('aging.start')
+        self.assertEqual(preview.channel_ids, (1, 7))
+        identifier = self.adapter.confirm(preview.token)
+        self.wait_for(lambda: self.adapter.idle)
+        second, _ = self.engine.calls[1]
+        self.assertEqual([c.section for c in second.enabled_channels], ['channel_1', 'channel_7'])
+        status = self.adapter.capabilities.jobs.status(identifier, self.adapter.jobs[identifier]['authority'])
+        self.assertEqual(status['request']['arguments']['channel_ids'], [1, 7])
+        self.assertIn('dut:hardware:lab-7', status['request']['resources'])
+
+    def test_enabled_power_targets_ignore_old_steps_and_reject_changed_confirmation(self):
+        self.save_target_profile()
+        self.save_enabled_channels(set())
+        with self.assertRaisesRegex(CapabilityError, '未选择测试通道'):
+            self.adapter.prepare('aging.start')
+        self.save_enabled_channels({1})
+        self.record_target_steps(1, stop_before_verify='firmware')
+        preview = self.adapter.prepare('aging.start')
+        self.save_enabled_channels({1, 7})
+        with self.assertRaisesRegex(CapabilityError, '重新确认'):
+            self.adapter.confirm(preview.token)
+        self.assertEqual(self.adapter.prepare('aging.start').channel_ids, (1, 7))
+        self.record_target_steps(1)
+        self.preparation.invalidate(self.profile['duts'][0]['dut_id'], 'telnet', '模拟变更', 'fixture')
+        self.assertEqual(self.adapter.prepare('aging.start').channel_ids, (1, 7))
+        self.assertFalse(self.engine.calls)
+
+    def test_typed_selection_rejects_missing_duplicate_identity_draft_and_wrong_cycle(self):
+        from src.services.project_profile_store import write_project_profile
+        self.save_target_profile()
+        self.save_enabled_channels({1})
+        original = self.profile['duts']
+        wrong = dict(self.profile, duts=original[1:])
+        write_project_profile(self.context.config_dir, wrong)
+        with self.assertRaisesRegex(CapabilityError, '先保存项目配置'):
+            self.adapter.prepare('aging.start')
+        self.workspace.projects.save(self.context)
+        with self.assertRaisesRegex(CapabilityError, 'CH01.*未映射'):
+            self.adapter.prepare('aging.start')
+        with self.assertRaisesRegex(ValueError, '重复'):
+            write_project_profile(self.context.config_dir, dict(self.profile, duts=[original[0], dict(original[1], channel=1)]))
+        duplicate = dict(self.profile, duts=[original[0], dict(original[1], hardware_id=original[0]['hardware_id'].lower())])
+        write_project_profile(self.context.config_dir, duplicate)
+        self.workspace.projects.save(self.context)
+        with self.assertRaisesRegex(CapabilityError, 'CH01.*实物标识.*重复'):
+            self.adapter.prepare('aging.start')
+        wrong = dict(self.profile, duts=[dict(original[0], hardware_id=''), original[1]])
+        write_project_profile(self.context.config_dir, wrong)
+        self.workspace.projects.save(self.context)
+        with self.assertRaisesRegex(CapabilityError, 'CH01.*实物标识'):
+            self.adapter.prepare('aging.start')
+        write_project_profile(self.context.config_dir, dict(self.profile, type_config={'target_cycles': 4}))
+        self.workspace.projects.save(self.context)
+        self.record_target_steps(1)
+        with self.assertRaisesRegex(CapabilityError, '计划 4 轮与执行配置 100 轮'):
+            self.adapter.prepare('aging.start')
+        self.assertFalse(self.engine.calls)
+
+    def test_saved_remap_invalidates_confirmation_and_keeps_physical_mapping_guards(self):
+        from src.services.project_profile_store import write_project_profile
+        self.save_target_profile()
+        self.save_enabled_channels({1})
+        self.record_target_steps(1)
+        preview = self.adapter.prepare('aging.start')
+        first, second = self.profile['duts']
+        for changes, expected in (({'serial_port': 'COM99'}, '资源映射'),
+                                  ({'network_adapter': 'fixture-other'}, '资源映射'),
+                                  ({'vlan': 'VLAN111'}, '资源映射'),
+                                  ({'power_channel': 'CH07'}, '供电')):
+            with self.subTest(changes=changes):
+                write_project_profile(self.context.config_dir,
+                    dict(self.profile, duts=[dict(first, **changes), second]))
+                self.workspace.projects.save(self.context)
+                self.record_target_steps(1)
+                with self.assertRaisesRegex(CapabilityError, 'CH01.*' + expected):
+                    self.adapter.prepare('aging.start')
+        with self.assertRaisesRegex(CapabilityError, '重新确认'):
+            self.adapter.confirm(preview.token)
+        self.assertFalse(self.engine.calls)
+
+    def test_subset_permission_is_local_and_confirmed_run_rechecks_its_archive(self):
+        from line_check_assistant.config_store import ChannelConfigStore
+        from src.services.project_store import ProjectStore
+        self.save_target_profile()
+        self.save_enabled_channels({1})
+        self.record_target_steps(1)
+        self.adapter._ensure_runtime()
+        with self.assertRaisesRegex(CapabilityError, '目标通道'):
+            self.adapter.capabilities.execute('aging.start', {'channel_ids': [1]},
+                CapabilityAuthority('fixture', 'fixture', 'model-op', (1,), mode='full_access', grant_id='fixture'))
+        with self.assertRaisesRegex(CapabilityError, '目标通道'):
+            self.adapter.prepare('pipeline.start', ['legacy_power_test'])
+        preview = self.adapter.prepare('aging.start')
+        original = ProjectStore.snapshot
+        def change_archive(store, project):
+            root = original(store, project)
+            saved = ChannelConfigStore(root / 'Auto_power_on_off_tool/config/network_card_ip.ini')
+            saved.save([replace(c, enabled=True) for c in saved.load()], saved.load_power_serial_port())
+            return root
+        with patch.object(ProjectStore, 'snapshot', change_archive):
+            identifier = self.adapter.confirm(preview.token)
+            self.wait_for(lambda: self.adapter.jobs_idle)
+        result = self.adapter.capabilities.jobs.status(identifier, self.adapter.jobs[identifier]['authority'])
+        self.assertEqual(result['state'], 'failed')
+        self.assertFalse(result['result']['dispatched'])
+        self.assertIn('启用通道', result['result']['error'])
+        self.assertFalse(self.engine.calls)
+
+    def test_typed_subset_retry_reuses_only_the_original_failed_target(self):
+        self.save_target_profile()
+        self.save_enabled_channels({7})
+        self.record_target_steps(7)
+        harness, _ = self.resume_pipeline()
+        harness.finish.set()
+        self.wait_for(lambda: self.adapter.idle)
+        with self.assertRaises(CapabilityError):
+            self.adapter.prepare('aging.resume', (1,))
+        self.adapter.confirm(self.adapter.prepare('aging.resume', (7,)).token)
+        self.assertTrue(harness.recovering.wait(3))
+        self.assertEqual([c.number for c in harness.recovery_calls[0][0].channels], [7])
+
+    def test_aging_uses_all_legacy_profile_duts_without_preparation(self):
+        self.save_target_profile('service_aging')
+        self.save_enabled_channels({1})
+        self.record_target_steps(1)
+        self.record_target_steps(7, stop_before_verify='wifi')
+        preview = self.adapter.prepare('service_aging.start')
+        self.assertEqual(preview.channel_ids, (1, 7))
+        self.assertIn('DUT 7', preview.summary)
+        self.assertFalse(self.engine.calls)
 
     def test_confirmation_is_one_use_and_original_jobs_own_execution(self):
         confirmation = self.adapter.prepare('aging.start')
@@ -167,21 +359,19 @@ class QtExecutionAdapterTests(unittest.TestCase):
             'duts': [{'label': '语音样机', 'hardware_id': 'LAB-A', 'channel': 1}],
         })
         self.workspace.projects.save(self.context)
-        with self.assertRaisesRegex(ValueError, '准备步骤'):
-            self.adapter.prepare('service_aging.start')
+        self.assertFalse((self.context.history / 'preparation.sqlite3').exists())
         with self.assertRaisesRegex(CapabilityError, '持续供电'):
             self.adapter.prepare('aging.start')
         monitor = self.adapter.aging_monitor()
-        with patch('src.services.project_preparation.ProjectPreparation.require_ready', return_value={'ready': True}):
-            preview = self.adapter.prepare('service_aging.start')
-            self.assertIn('语音样机', preview.summary)
-            changed = dict(monitor.service.prepare(), binding='changed')
-            with patch.object(monitor.service, 'prepare', return_value=changed):
-                with self.assertRaisesRegex(CapabilityError, '重新确认'):
-                    self.adapter.confirm(preview.token)
-            self.assertFalse(self.workspace.resources.owners)
-            preview = self.adapter.prepare('service_aging.start')
-            identifier = self.adapter.confirm(preview.token)
+        preview = self.adapter.prepare('service_aging.start')
+        self.assertIn('语音样机', preview.summary)
+        changed = dict(monitor.service.prepare(), binding='changed')
+        with patch.object(monitor.service, 'prepare', return_value=changed):
+            with self.assertRaisesRegex(CapabilityError, '重新确认'):
+                self.adapter.confirm(preview.token)
+        self.assertFalse(self.workspace.resources.owners)
+        preview = self.adapter.prepare('service_aging.start')
+        identifier = self.adapter.confirm(preview.token)
         self.addCleanup(lambda: self.adapter.stop(identifier) if not self.adapter.jobs_idle else None)
         self.wait_for(lambda: monitor.service.snapshot().get('state') == 'running')
         view = monitor.service.snapshot()
@@ -214,9 +404,8 @@ class QtExecutionAdapterTests(unittest.TestCase):
         self.workspace.projects.save(self.context)
         monitor = self.adapter.aging_monitor()
         monitor.service.interval = .25
-        with patch('src.services.project_preparation.ProjectPreparation.require_ready', return_value={'ready': True}):
-            confirmation = self.adapter.prepare('service_aging.start')
-            job = self.adapter.confirm(confirmation.token)
+        confirmation = self.adapter.prepare('service_aging.start')
+        job = self.adapter.confirm(confirmation.token)
         self.addCleanup(lambda: self.adapter.stop(job) if not self.adapter.jobs_idle else None)
         plan_path = self.context.history / 'aging-input' / (job + '.plan.json')
         self.wait_for(plan_path.is_file)
@@ -342,9 +531,9 @@ class QtExecutionAdapterTests(unittest.TestCase):
         self.assertTrue(status['result']['dispatched'])
         self.assertEqual(fake.writes, [channel_power_frame(1, True)])
         self.assertTrue(fake.closed)
-        self.assertIn(identifier, self.workspace.resources.unknown_for(self.context.identity.project_id))
+        self.assertFalse(self.workspace.resources.unknown_for(self.context.identity.project_id))
 
-    def test_single_power_partial_write_keeps_result_unknown_and_protects_port(self):
+    def test_single_power_partial_write_keeps_result_unknown_and_releases_closed_port(self):
         from src.services.power_on_service import turn_on_selected_channels
 
         class FailingSerial(FakeSerial):
@@ -364,11 +553,11 @@ class QtExecutionAdapterTests(unittest.TestCase):
         status = self.adapter.jobs[identifier]['status']
         self.assertEqual(status['state'], 'unknown')
         self.assertTrue(status['result']['dispatched'])
-        self.assertTrue(self.workspace.resources.unknown_for(self.context.identity.project_id))
+        self.assertFalse(self.workspace.resources.unknown_for(self.context.identity.project_id))
         self.assertEqual(fake.writes, [channel_power_frame(1, True)])
         self.assertTrue(fake.closed)
-        with self.assertRaisesRegex(CapabilityError, '未知'):
-            self.adapter.single_power.selection(())
+        self.assertIsNotNone(self.adapter.single_power.selection(()))
+        self.assertEqual(len(fake.writes), 1)
 
     def test_single_power_rejects_unapproved_stale_and_busy_targets(self):
         context = self.context
@@ -417,17 +606,56 @@ class QtExecutionAdapterTests(unittest.TestCase):
         self.assertEqual(self.adapter.jobs[identifier]['status']['state'], 'stopped')
         self.assertFalse(self.workspace.resources.owners)
 
-    def test_unknown_result_remains_fenced_and_no_automatic_retry(self):
+
+    def test_unknown_result_allows_fresh_confirmation_without_retrying_old_job(self):
         self.engine.exception = OSError('fixture transport lost')
-        identifier = self.start()
-        self.engine.finish.set()
-        self.wait_for(lambda: self.adapter.idle)
-        self.adapter.poll()
+        with patch('src.services.power_worker_lifetime.power_worker_notice', return_value=''):
+            identifier = self.start()
+            self.engine.finish.set()
+            self.wait_for(lambda: self.adapter.idle)
+            self.adapter.poll()
+            self.assertEqual(self.adapter.jobs[identifier]['status']['state'], 'unknown')
+            self.assertFalse(self.workspace.resources.unknown_for(self.context.identity.project_id))
+            confirmation = self.adapter.prepare('aging.start')
+            self.assertEqual(len(self.engine.calls), 1)
+            self.engine.exception = None
+            fresh = self.adapter.confirm(confirmation.token)
+            self.wait_for(lambda: self.adapter.idle)
+            self.adapter.poll()
+        self.assertNotEqual(identifier, fresh)
+        self.assertEqual(len(self.engine.calls), 2)
+        self.assertEqual(self.adapter.jobs[fresh]['status']['state'], 'succeeded')
         self.assertEqual(self.adapter.jobs[identifier]['status']['state'], 'unknown')
-        self.assertTrue(self.workspace.resources.unknown_for(self.context.identity.project_id))
-        with self.assertRaises(CapabilityError):
-            self.adapter.prepare('aging.start')
-        self.assertEqual(len(self.engine.calls), 1)
+        self.assertEqual(self.workspace.status.snapshot(self.context).unknown_task_count, 0)
+
+    def test_unknown_remote_job_reuses_same_request_and_requires_fresh_approval(self):
+        self.adapter._ensure_runtime()
+        service = self.adapter.capabilities
+        self.assertNotIn('jobs.resolve_unknown', {row['capability_id'] for row in service.registry.list()})
+        jobs = service.jobs
+        requests = []
+        args = dict(channel_ids=[1])
+        keys = ('serial:qt-fixture-fresh-remote-request', 'channel:1')
+        approved = CapabilityAuthority('fixture-member', 'fixture-chat', 'first-turn', (1,),
+                                       source='feishu', approved=True)
+
+        def run(context):
+            requests.append(context.job_id)
+            return dict(state='unknown', ok=False)
+
+        first = jobs.start('fixture.write', args, approved, keys, run)
+        self.wait_for(lambda: jobs.idle)
+        repeated = jobs.start('fixture.write', args, approved, keys, run)
+        self.assertEqual(repeated, dict(job_id=first['job_id'], state='unknown', reused=True))
+        fresh = replace(approved, operation_id='new-turn', approved=False)
+        with self.assertRaises(CapabilityError) as rejected:
+            jobs.start('fixture.write', args, fresh, keys, run)
+        self.assertEqual(rejected.exception.code, 'approval_required')
+        second = jobs.start('fixture.write', args, replace(fresh, approved=True), keys, run)
+        self.wait_for(lambda: jobs.idle)
+        self.assertNotEqual(first['job_id'], second['job_id'])
+        self.assertEqual(requests, [first['job_id'], second['job_id']])
+        self.assertEqual(jobs.status(first['job_id'], approved)['state'], 'unknown')
 
     def test_other_project_cannot_acquire_same_physical_resources(self):
         self.start()
@@ -495,12 +723,10 @@ class QtExecutionAdapterTests(unittest.TestCase):
 
     def test_disjoint_project_power_jobs_keep_separate_snapshots_stops_and_leases(self):
         from line_check_assistant.config_store import ChannelConfigStore
-        from src.models.network_adapter import AdapterIdentity
         from src.services.legacy_power_test_service import LegacyPowerTestResult
 
         other_context = self.workspace.projects.create(self.root / 'other', '独立模拟项目')
         configure_project(self.workspace, other_context, (3,))
-        nics = []
         for context, power, host in ((self.context, 'COM9400', '192.0.2.200'),
                                      (other_context, 'COM9500', '192.0.2.201')):
             store = ChannelConfigStore(context.config_dir / 'network_card_ip.ini')
@@ -510,7 +736,6 @@ class QtExecutionAdapterTests(unittest.TestCase):
                 alias = f'VLAN{490 + number}'
                 channels.append(replace(channel, adapter_alias=alias, vlan_name=alias, serial_port=f'COM{9600+number}',
                                         device_manage_ip=host))
-                nics.append(AdapterIdentity(alias, 'fixture-dual-' + alias, 'Up'))
             store.save(channels, power)
             self.workspace.projects.save(context)
         self.workspace.status.attach(other_context)
@@ -534,7 +759,7 @@ class QtExecutionAdapterTests(unittest.TestCase):
 
         self.pipeline.stop()
         try:
-            with patch('src.core.network_adapter.read_adapter_identities', return_value=nics), \
+            with mock_power_interfaces(self.context, other_context), \
                     patch('src.services.legacy_power_test_service.run_legacy_power_test', side_effect=run):
                 first = self.adapter.confirm(self.adapter.prepare('aging.start').token)
                 self.assertTrue(started['COM9400'].wait(3))
@@ -573,7 +798,8 @@ class QtExecutionAdapterTests(unittest.TestCase):
                 entered.set()
                 self.assertTrue(stop.wait(3))
                 return LegacyPowerTestResult(False, detail)
-            with self.subTest(detail=detail), patch('src.services.legacy_power_test_service.run_legacy_power_test', side_effect=fail):
+            with self.subTest(detail=detail), mock_power_interfaces(self.context), \
+                    patch('src.services.legacy_power_test_service.run_legacy_power_test', side_effect=fail):
                 identifier = self.adapter.confirm(self.adapter.prepare('aging.start').token)
                 self.assertTrue(entered.wait(3))
                 self.adapter.stop(identifier)
@@ -593,7 +819,8 @@ class QtExecutionAdapterTests(unittest.TestCase):
             callbacks['on_channel_progress'](7, 68, 100, '原通道阶段')
             callbacks['on_channel_status'](7, 'failed', '原判据结果')
             return LegacyPowerTestResult(False, 'fixture original verdict')
-        with patch('src.services.legacy_power_test_service.run_legacy_power_test', side_effect=run):
+        with mock_power_interfaces(self.context), \
+                patch('src.services.legacy_power_test_service.run_legacy_power_test', side_effect=run):
             confirmation = self.adapter.prepare('aging.start')
             identifier = self.adapter.confirm(confirmation.token)
             self.wait_for(lambda: self.adapter.idle)
@@ -611,7 +838,7 @@ class QtExecutionAdapterTests(unittest.TestCase):
         from test_legacy_power_test_service import _CompletedProcess, _FakeProcessContext
 
         numbers = tuple(range(1, 17))
-        identities = configure_project(self.workspace, self.context, numbers)
+        configure_project(self.workspace, self.context, numbers)
         expected = legacy.prepare_legacy_power_test_request(self.context.saved_root / 'Auto_power_on_off_tool',
             [legacy.LegacyPowerChannel(n, f'192.0.2.{n}') for n in numbers])
         requests = []
@@ -628,7 +855,7 @@ class QtExecutionAdapterTests(unittest.TestCase):
 
         context = _FakeProcessContext()
         self.pipeline.stop()
-        with patch('src.core.network_adapter.read_adapter_identities', return_value=identities), \
+        with mock_power_interfaces(self.context), \
                 patch.object(legacy, 'multiprocessing') as multiprocessing, \
                 patch.object(context, 'Process', side_effect=SimulatedWorker) as factory:
             multiprocessing.get_context.return_value = context
@@ -710,7 +937,7 @@ class QtExecutionAdapterTests(unittest.TestCase):
             entered.append('aging')
             return LegacyPowerTestResult(True, '模拟完成')
 
-        with patch.object(self.adapter.manager, 'acquire_monitor', side_effect=monitor), \
+        with mock_power_interfaces(self.context), patch.object(self.adapter.manager, 'acquire_monitor', side_effect=monitor), \
                 patch('src.services.pipeline_orchestrator.PipelineOrchestrator._run_env_check', new=environment), \
                 patch('src.services.legacy_power_test_service.run_legacy_power_test', side_effect=aging):
             run = self.adapter.confirm(confirmation.token)
@@ -1072,8 +1299,7 @@ class QtExecutionAdapterTests(unittest.TestCase):
 
         with patch.object(self.adapter.capabilities.jobs, 'status', side_effect=unknown_status):
             view = self.resume_view((1, 7, 9, 11))
-        self.assertIn('续跑结果待核实', view.resume_detail)
-        self.assertFalse(view.can_start)
+        self.assertIn('续跑结果未知', view.resume_detail)
         self.assertFalse(self.adapter.resume.has_waiting)
         self.assertEqual(len(harness.recovery_calls), 1)
         self.assertTrue(any('取消等待中的 CH11、CH09' in entry.message for entry in self.events))

@@ -1,11 +1,13 @@
 """Project-bound local conversation, using the original persisted chat records."""
 import json
 from PySide6.QtCore import QSignalBlocker, Qt, Signal
+from src.models.qt_ai_chat import is_model_identity_question
 from PySide6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QInputDialog, QListWidget, QListWidgetItem,
     QMenu, QMessageBox, QPlainTextEdit, QSizePolicy, QSplitter, QToolButton, QVBoxLayout, QWidget)
 
 from src.ui.qt.ai_session_manager_dialog import AiSessionManagerDialog
 from src.ui.qt.ai_chat_transcript import AiChatComposer, AiChatStatusLabel, AiChatTranscript
+from src.ui.qt.blocker_review import ReviewFeedback
 from src.ui.qt.theme import button, label
 
 
@@ -79,6 +81,7 @@ class AiChatDialog(QDialog):
         content = QWidget()
         body = QVBoxLayout(content)
         self.status = label('', 'muted')
+        self.status.setTextFormat(Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         body.addWidget(self.status)
         self.latest_status = AiChatStatusLabel()
@@ -93,6 +96,7 @@ class AiChatDialog(QDialog):
         self.transcript = AiChatTranscript()
         body.addWidget(self.transcript, 1)
         self.usage = label('', 'muted')
+        self.usage.setTextFormat(Qt.TextFormat.PlainText)
         self.usage.setWordWrap(True)
         body.addWidget(self.usage)
         self.composer = AiChatComposer()
@@ -112,7 +116,7 @@ class AiChatDialog(QDialog):
         splitter.setChildrenCollapsible(False)
         splitter.setStretchFactor(1, 1)
         layout.addWidget(splitter, 1)
-        self.feedback = label('', 'muted')
+        self.feedback = ReviewFeedback(role='muted')
         self.feedback.setWordWrap(True)
         layout.addWidget(self.feedback)
         self.set_busy(True)
@@ -132,9 +136,11 @@ class AiChatDialog(QDialog):
         self.progress_action.setEnabled(bool(usable and view.selected))
         self.permission_action.setEnabled(bool(usable and view.selected))
         self.review_action.setEnabled(bool(usable and view.selected))
-        self.composer.setEnabled(writable)
-        self.send_button.setEnabled(writable and not view.routing and (view.pc_diagnosis or not view.running) and
-                                    bool(self.composer.toPlainText().strip()))
+        text = self.composer.toPlainText().strip()
+        empty_session = usable and not view.selected
+        self.composer.setEnabled(writable or empty_session)
+        self.send_button.setEnabled((empty_session and is_model_identity_question(text)) or
+                                    (writable and not view.routing and (view.pc_diagnosis or not view.running) and bool(text)))
         self.stop_button.setEnabled(writable and view.running)
         self.older.setEnabled(bool(usable and view.next_cursor))
         self.latest.setEnabled(bool(usable and view.selected))
@@ -233,7 +239,7 @@ class AiChatDialog(QDialog):
             if view.pc_diagnosis:
                 suffix = ' · 连续诊断（只读取证）'
             status = '正在识别会话目标' if view.routing and view.running else row.status
-            self.status.setText(f'{row.target} · {row.model} · {status}' + suffix)
+            self.status.setText(f'{row.target} · 会话配置：{row.model} · {status}' + suffix)
         else:
             self.status.setText('请选择会话或新建普通问答')
         self.usage.setText(view.context)

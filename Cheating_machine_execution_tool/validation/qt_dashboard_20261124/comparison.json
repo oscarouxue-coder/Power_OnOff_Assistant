@@ -1,0 +1,625 @@
+{
+  "fixture": "fixture.json",
+  "fixtureSha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+  "changedUiSource": [
+    "src/ui/qt/dashboard.py"
+  ],
+  "pairs": {
+    "1 wide-cards": {
+      "sameOuterGeometry": true,
+      "before": {
+        "png": "before-wide-cards-1.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "cards",
+        "qt_scale": 1,
+        "window_dip": [
+          1920,
+          1061
+        ],
+        "pixels": [
+          1920,
+          1061
+        ],
+        "overview_dip": [
+          0,
+          0,
+          1663,
+          832
+        ],
+        "inner_viewport_dip": [
+          1663,
+          612
+        ],
+        "sidebar": true,
+        "logs_expanded": true,
+        "displayed_ids": [
+          "preview-ready",
+          "preview-done",
+          "preview-offline",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-power",
+          "preview-aging"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "4484031068ab05ed07c2dea947d5fac45ce11cf1522d4edbda0c407b3c040c48"
+      },
+      "after": {
+        "png": "after-wide-cards-1.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "cards",
+        "qt_scale": 1,
+        "window_dip": [
+          1920,
+          1061
+        ],
+        "pixels": [
+          1920,
+          1061
+        ],
+        "overview_dip": [
+          0,
+          0,
+          1663,
+          832
+        ],
+        "inner_viewport_dip": [
+          1663,
+          618
+        ],
+        "sidebar": true,
+        "logs_expanded": true,
+        "displayed_ids": [
+          "preview-power",
+          "preview-aging",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-ready",
+          "preview-done",
+          "preview-offline"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "e0dc78ec18487dc66c659a27d6cae09c29dc6d055cbd20770b8383bf897a0007"
+      }
+    },
+    "1 wide-list": {
+      "sameOuterGeometry": true,
+      "before": {
+        "png": "before-wide-list-1.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "list",
+        "qt_scale": 1,
+        "window_dip": [
+          1920,
+          1061
+        ],
+        "pixels": [
+          1920,
+          1061
+        ],
+        "overview_dip": [
+          0,
+          0,
+          1663,
+          832
+        ],
+        "inner_viewport_dip": [
+          1661,
+          576
+        ],
+        "sidebar": true,
+        "logs_expanded": true,
+        "displayed_ids": [
+          "preview-ready",
+          "preview-done",
+          "preview-offline",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-power",
+          "preview-aging"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "6b02797bc7f95469c701e04c9d01dbb54b6048719e4cae6d6659c3a221c64409"
+      },
+      "after": {
+        "png": "after-wide-list-1.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "list",
+        "qt_scale": 1,
+        "window_dip": [
+          1920,
+          1061
+        ],
+        "pixels": [
+          1920,
+          1061
+        ],
+        "overview_dip": [
+          0,
+          0,
+          1663,
+          832
+        ],
+        "inner_viewport_dip": [
+          1661,
+          582
+        ],
+        "sidebar": true,
+        "logs_expanded": true,
+        "displayed_ids": [
+          "preview-power",
+          "preview-aging",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-ready",
+          "preview-done",
+          "preview-offline"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "383190a26f6bf700fc62183c570c9dc4399aa9d77e4b4a958946d88fa93835b0"
+      }
+    },
+    "1.25 wide-cards": {
+      "sameOuterGeometry": true,
+      "before": {
+        "png": "before-wide-cards-1.25.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "cards",
+        "qt_scale": 1.25,
+        "window_dip": [
+          1536,
+          849
+        ],
+        "pixels": [
+          1920,
+          1061
+        ],
+        "overview_dip": [
+          0,
+          0,
+          1279,
+          619
+        ],
+        "inner_viewport_dip": [
+          1279,
+          397
+        ],
+        "sidebar": true,
+        "logs_expanded": true,
+        "displayed_ids": [
+          "preview-ready",
+          "preview-done",
+          "preview-offline",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-power",
+          "preview-aging"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "3b5ef07312d8d2d6e9b453bae33816a34e4b022851bb1b440d604538380be8fb"
+      },
+      "after": {
+        "png": "after-wide-cards-1.25.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "cards",
+        "qt_scale": 1.25,
+        "window_dip": [
+          1536,
+          849
+        ],
+        "pixels": [
+          1920,
+          1061
+        ],
+        "overview_dip": [
+          0,
+          0,
+          1279,
+          619
+        ],
+        "inner_viewport_dip": [
+          1279,
+          403
+        ],
+        "sidebar": true,
+        "logs_expanded": true,
+        "displayed_ids": [
+          "preview-power",
+          "preview-aging",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-ready",
+          "preview-done",
+          "preview-offline"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "2be16d5c81a642ad856ce2986ebc9f03ef779bdd7dffaf20d5145d960d4f5117"
+      }
+    },
+    "1.25 wide-list": {
+      "sameOuterGeometry": true,
+      "before": {
+        "png": "before-wide-list-1.25.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "list",
+        "qt_scale": 1.25,
+        "window_dip": [
+          1536,
+          849
+        ],
+        "pixels": [
+          1920,
+          1061
+        ],
+        "overview_dip": [
+          0,
+          0,
+          1279,
+          619
+        ],
+        "inner_viewport_dip": [
+          1277,
+          360
+        ],
+        "sidebar": true,
+        "logs_expanded": true,
+        "displayed_ids": [
+          "preview-ready",
+          "preview-done",
+          "preview-offline",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-power",
+          "preview-aging"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "b74791f9e6af1625d2e14cb0afedb1ca3c93fd5e76d9bda3f45bde17faf01e9e"
+      },
+      "after": {
+        "png": "after-wide-list-1.25.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "list",
+        "qt_scale": 1.25,
+        "window_dip": [
+          1536,
+          849
+        ],
+        "pixels": [
+          1920,
+          1061
+        ],
+        "overview_dip": [
+          0,
+          0,
+          1279,
+          619
+        ],
+        "inner_viewport_dip": [
+          1277,
+          366
+        ],
+        "sidebar": true,
+        "logs_expanded": true,
+        "displayed_ids": [
+          "preview-power",
+          "preview-aging",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-ready",
+          "preview-done",
+          "preview-offline"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "424c7e7a868278abf20ce104d8d7853b12e66c42bafcaee7330c6df271c93164"
+      }
+    },
+    "1.5 wide-cards": {
+      "sameOuterGeometry": true,
+      "before": {
+        "png": "before-wide-cards-1.5.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "cards",
+        "qt_scale": 1.5,
+        "window_dip": [
+          1280,
+          707
+        ],
+        "pixels": [
+          1920,
+          1061
+        ],
+        "overview_dip": [
+          0,
+          0,
+          1023,
+          477
+        ],
+        "inner_viewport_dip": [
+          1006,
+          255
+        ],
+        "sidebar": true,
+        "logs_expanded": true,
+        "displayed_ids": [
+          "preview-ready",
+          "preview-done",
+          "preview-offline",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-power",
+          "preview-aging"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "d7414ad443e4f2a3420bbc0eeda4e0132b0c56c680c2af423ccea93b9a1ab31f"
+      },
+      "after": {
+        "png": "after-wide-cards-1.5.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "cards",
+        "qt_scale": 1.5,
+        "window_dip": [
+          1280,
+          707
+        ],
+        "pixels": [
+          1920,
+          1061
+        ],
+        "overview_dip": [
+          0,
+          0,
+          1023,
+          477
+        ],
+        "inner_viewport_dip": [
+          1006,
+          261
+        ],
+        "sidebar": true,
+        "logs_expanded": true,
+        "displayed_ids": [
+          "preview-power",
+          "preview-aging",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-ready",
+          "preview-done",
+          "preview-offline"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "665a07bb6fe473fb8dedc0877c65ed825490660c756a91b1ab64c60ddc283b20"
+      }
+    },
+    "1.5 wide-list": {
+      "sameOuterGeometry": true,
+      "before": {
+        "png": "before-wide-list-1.5.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "list",
+        "qt_scale": 1.5,
+        "window_dip": [
+          1280,
+          707
+        ],
+        "pixels": [
+          1920,
+          1061
+        ],
+        "overview_dip": [
+          0,
+          0,
+          1023,
+          477
+        ],
+        "inner_viewport_dip": [
+          1021,
+          218
+        ],
+        "sidebar": true,
+        "logs_expanded": true,
+        "displayed_ids": [
+          "preview-ready",
+          "preview-done",
+          "preview-offline",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-power",
+          "preview-aging"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "f741f2ef64c8e4e2b884b884553cf7e10ce986055d28175fad26c5df22b5c907"
+      },
+      "after": {
+        "png": "after-wide-list-1.5.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "list",
+        "qt_scale": 1.5,
+        "window_dip": [
+          1280,
+          707
+        ],
+        "pixels": [
+          1920,
+          1061
+        ],
+        "overview_dip": [
+          0,
+          0,
+          1023,
+          477
+        ],
+        "inner_viewport_dip": [
+          1004,
+          224
+        ],
+        "sidebar": true,
+        "logs_expanded": true,
+        "displayed_ids": [
+          "preview-power",
+          "preview-aging",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-ready",
+          "preview-done",
+          "preview-offline"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "5174eefe634e93fa8e0d463f0b6ca28b20780ecead6c2f6e8fd5454f789a7935"
+      }
+    },
+    "1.5 narrow-cards": {
+      "sameOuterGeometry": true,
+      "before": {
+        "png": "before-narrow-cards-1.5.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "cards",
+        "qt_scale": 1.5,
+        "window_dip": [
+          900,
+          550
+        ],
+        "pixels": [
+          1350,
+          825
+        ],
+        "overview_dip": [
+          0,
+          0,
+          868,
+          408
+        ],
+        "inner_viewport_dip": [
+          851,
+          164
+        ],
+        "sidebar": false,
+        "logs_expanded": false,
+        "displayed_ids": [
+          "preview-ready",
+          "preview-done",
+          "preview-offline",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-power",
+          "preview-aging"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "92829fa2313dc4c0822dc3bc7c4eac888b59ae84bb2111feaf7eb1fbba8d23e5"
+      },
+      "after": {
+        "png": "after-narrow-cards-1.5.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "cards",
+        "qt_scale": 1.5,
+        "window_dip": [
+          900,
+          550
+        ],
+        "pixels": [
+          1350,
+          825
+        ],
+        "overview_dip": [
+          0,
+          0,
+          868,
+          408
+        ],
+        "inner_viewport_dip": [
+          851,
+          216
+        ],
+        "sidebar": false,
+        "logs_expanded": false,
+        "displayed_ids": [
+          "preview-power",
+          "preview-aging",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-ready",
+          "preview-done",
+          "preview-offline"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "11008e271db5b589fe4537fa8eff88e78c2f27df1209341be7114bf93b8db4da"
+      }
+    },
+    "1.5 narrow-list": {
+      "sameOuterGeometry": true,
+      "before": {
+        "png": "before-narrow-list-1.5.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "list",
+        "qt_scale": 1.5,
+        "window_dip": [
+          900,
+          550
+        ],
+        "pixels": [
+          1350,
+          825
+        ],
+        "overview_dip": [
+          0,
+          0,
+          868,
+          408
+        ],
+        "inner_viewport_dip": [
+          849,
+          127
+        ],
+        "sidebar": false,
+        "logs_expanded": false,
+        "displayed_ids": [
+          "preview-ready",
+          "preview-done",
+          "preview-offline",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-power",
+          "preview-aging"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "861d81ab5387a20e2eb1efaede7b419c2196b2152a4394e547b4954f1cb99b19"
+      },
+      "after": {
+        "png": "after-narrow-list-1.5.png",
+        "surface": "MainWindow.dashboard",
+        "mode": "list",
+        "qt_scale": 1.5,
+        "window_dip": [
+          900,
+          550
+        ],
+        "pixels": [
+          1350,
+          825
+        ],
+        "overview_dip": [
+          0,
+          0,
+          868,
+          408
+        ],
+        "inner_viewport_dip": [
+          849,
+          179
+        ],
+        "sidebar": false,
+        "logs_expanded": false,
+        "displayed_ids": [
+          "preview-power",
+          "preview-aging",
+          "preview-unresolved",
+          "preview-queued",
+          "preview-ready",
+          "preview-done",
+          "preview-offline"
+        ],
+        "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275",
+        "sha256": "8b115be5ec6be69465478a5f1e2ea650f5f88a8361c5a8992d0dc926389b70dc"
+      }
+    }
+  }
+}

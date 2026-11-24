@@ -26,7 +26,9 @@ class JobContext:
 
 
 class CapabilityJobs:
-    def __init__(self, directory, resources, emit=lambda line: None, metrics=None, project_context=None, status_service=None):
+    def __init__(self, directory, resources, emit=lambda line: None, metrics=None, project_context=None,
+                 status_service=None, require_job_review=True):
+        self.require_job_review = require_job_review
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.instance_lease = None
@@ -136,13 +138,12 @@ class CapabilityJobs:
                 "AND state NOT IN ('succeeded','failed','stopped','skipped','unknown')", (digest, authority.principal)).fetchone()
             if active:
                 return dict(job_id=active[0], state=active[1], reused=True)
-            # Unknown results block a new operation even after a process restart.
-            for old_id, payload, principal in self.db.execute("SELECT id,payload,principal FROM jobs WHERE state='unknown'"):
-                old = json.loads(payload)
-                affected = {r for r in old.get("resources", ()) if r.startswith(
-                    ("channel:", "serial:", "adapter:", "olt:", "pon:", "dut:", "adb:"))}
-                if not observational and affected & set(resources):
-                    raise CapabilityError("previous_result_unknown", "相关资源存在结果未知的历史任务，须先核实处理")
+            if self.require_job_review and not observational:
+                for payload, in self.db.execute("SELECT payload FROM jobs WHERE state='unknown'"):
+                    affected = {r for r in json.loads(payload).get("resources", ()) if r.startswith(
+                        ("channel:", "serial:", "adapter:", "olt:", "pon:", "dut:", "adb:"))}
+                    if affected.intersection(resources):
+                        raise CapabilityError("previous_result_unknown", "相关资源存在结果未知的历史任务，须先核实处理")
             identifier = uuid.uuid4().hex
         self.resources.acquire(identifier, resources)
         try:
@@ -169,7 +170,7 @@ class CapabilityJobs:
                         (identifier, request_key, digest, authority.principal, authority.session_id, capability,
                          "queued", "preparing", now, now, json.dumps(payload, ensure_ascii=False), "null"))
                 control = self.controls[identifier] = UpgradeStopControl()
-                thread = threading.Thread(target=self._run, args=(identifier, runner, control),
+                thread = threading.Thread(target=self._run, args=(identifier, capability, runner, control),
                                           name="capability-" + identifier[:8], daemon=True)
                 self.threads[identifier] = thread
                 thread.start()
@@ -186,7 +187,7 @@ class CapabilityJobs:
             raise
         return dict(job_id=identifier, state="queued", reused=False)
 
-    def _run(self, identifier, runner, control):
+    def _run(self, identifier, capability, runner, control):
         context = JobContext(self, identifier, control)
         started = time.monotonic()
         state, result = "unknown", None
@@ -217,11 +218,18 @@ class CapabilityJobs:
                                              state=state, total_seconds=time.monotonic() - started))
             finally:
                 if getattr(self.resources, "fence", None) or getattr(self.resources, 'coordinator', None):
-                    self.resources.release(identifier, uncertain=state == "unknown")
+                    retain = (state == "unknown" if self.require_job_review else
+                              self._power_cleanup_pending(capability))
+                    self.resources.release(identifier, uncertain=retain)
                 else:
                     self.resources.release(identifier)
                 with self.lock:
                     self.controls.pop(identifier, None)
+
+    def _power_cleanup_pending(self, capability):
+        from src.services.power_worker_lifetime import power_worker_notice
+
+        return capability in POWER_JOB_IDS and bool(power_worker_notice(self.project_context))
 
     def runtime_states(self):
         """Host-local summary, without request arguments, credentials or principals."""
@@ -251,6 +259,8 @@ class CapabilityJobs:
 
     def resolve_unknown(self, identifier, authority, outcome, evidence):
         """Host calls this only after a locally reviewed, immutable reconciliation scope."""
+        if not self.require_job_review:
+            raise CapabilityError('unsupported', '任务历史保留原始结果')
         self.status(identifier, authority)
         if outcome not in ("succeeded", "failed", "not_executed") or not evidence.strip():
             raise CapabilityError("invalid_parameters", "必须记录明确现场核实结果和依据")

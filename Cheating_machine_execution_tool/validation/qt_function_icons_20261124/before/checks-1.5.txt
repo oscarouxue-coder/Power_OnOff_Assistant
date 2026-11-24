@@ -1,0 +1,6 @@
+test_offline_pages (qt_function_icons_probe.FunctionIconTests) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 1.463s
+
+OK

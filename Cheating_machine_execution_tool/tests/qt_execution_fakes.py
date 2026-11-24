@@ -1,4 +1,5 @@
 """Deterministic test configuration and an engine substitute; never physical I/O."""
+from contextlib import contextmanager
 from dataclasses import replace
 from queue import Empty, Queue
 import threading
@@ -78,6 +79,26 @@ enable = 0
     ChannelConfigStore(context.config_dir / 'network_card_ip.ini').save(channels, 'COM102')
     workspace.projects.save(context)
     return tuple(AdapterIdentity(c.adapter_alias, 'fixture-guid-' + c.section, 'Up') for c in channels)
+
+
+@contextmanager
+def mock_power_interfaces(*projects):
+    from unittest.mock import patch
+    from uuid import NAMESPACE_DNS, uuid5
+
+    interfaces, identities = [], []
+    for project in projects:
+        store = ChannelConfigStore(project.config_dir / 'network_card_ip.ini')
+        for channel in store.load():
+            if channel.enabled:
+                alias = channel.adapter_alias
+                guid = str(uuid5(NAMESPACE_DNS, alias))
+                identities.append(AdapterIdentity(alias, guid, 'Up'))
+                interfaces.append(dict(name=alias, guid=guid, up=True, index=len(interfaces) + 1,
+                                       addresses=[(channel.network_card_ip, 24)]))
+    with patch('src.core.network_adapter.read_adapter_identities', return_value=identities), \
+            patch('src.services.physical_resource_guards.adapters_ipv4', return_value=interfaces):
+        yield
 
 
 def save_push_project_name(workspace, context, name='已保存试发项目'):

@@ -1,5 +1,9 @@
 # DUTPilot GUI 升级执行记录
 
+## 当前项目向导
+
+项目向导保留「项目与测试类型」和「确认项目」。通道及旧 DUT 绑定继续从项目主界面的「环境配置」保存。两类测试从主界面确认启动，历史公共准备记录随项目保留。[当前操作说明](../Cheating_machine_execution_tool/line_check_assistant_README.md)
+
 ## V1.3.x 现场验收交接
 
 2026-11-23，负责人确认当前 Qt V1.3.0 候选现场验收通过。Phase 0–7 的本轮交付已完成。下表保留确认所对应的验收口径。[现场结论](../Cheating_machine_execution_tool/validation/gui_guidelines_20261123/REPORT.md#现场验收)

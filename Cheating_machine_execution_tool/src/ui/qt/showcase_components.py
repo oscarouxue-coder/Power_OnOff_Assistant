@@ -7,6 +7,7 @@ from PySide6.QtGui import QIcon, QPainter, QPalette, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
+from src.models.project_profile import TEST_TYPES
 from src.ui.qt.theme import CARD_PADDING, GAP, V13_PALETTE, assert_gui_thread, button, label
 
 
@@ -78,7 +79,27 @@ _SYMBOLS = {
     'queue': '<path d="M9 6h11M9 12h8M9 18h5M4 6h.1M4 12h.1M4 18h.1"/>',
     'pause': '<rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/>',
     'inspect': '<circle cx="10" cy="10" r="6"/><path d="m14.5 14.5 6 6m-13-10.5h5"/>',
+    'projects': '<path d="M3 7V5h7l2 2h9v12H3z"/>',
+    'grid': '<path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/>',
+    'model-link': '<path d="m9 15 6-6m-5-2 2-2a5 5 0 0 1 7 7l-2 2M7 10l-2 2a5 5 0 0 0 7 7l2-2"/>',
+    'chat': '<path d="M4 4h16v12H10l-6 4zM8 8h8M8 12h5"/>',
+    'devices': '<rect x="3" y="3" width="18" height="12" rx="2"/><path d="M12 15v5m-5 0h10"/>',
+    'settings': '<path d="M3 7h3m5 0h10M3 17h10m5 0h3"/>'
+                '<circle cx="8.5" cy="7" r="2.5"/><circle cx="15.5" cy="17" r="2.5"/>',
+    'navigation': '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
+    'more': '<path d="m5 6 6 6-6 6m7-12 6 6-6 6"/>',
+    'power-cycle': '<path d="M12 2v8M8 6a7 7 0 1 0 8 0M3 15a10 10 0 0 0 16 5m-4 0h4v-4"/>',
+    'heartbeat': '<path d="M2 13h5l3-9 4 16 3-7h5"/>',
 }
+
+
+_TYPE_SYMBOLS = {'power_cycle': 'power-cycle', 'service_aging': 'heartbeat'}
+_LABEL_TYPES = {title: key for key, title in TEST_TYPES.items()}
+
+
+def test_type_symbol(project_type, test_type=''):
+    """A legacy snapshot may carry only the canonical test-type label."""
+    return _TYPE_SYMBOLS.get(project_type or _LABEL_TYPES.get(test_type))
 
 
 def _symbol_renderer(name, color, background=None):
@@ -104,12 +125,13 @@ def _render_symbol(renderer, size):
 
 
 @lru_cache(maxsize=48)
-def semantic_icon(name, color=BRAND):
+def semantic_icon(name, color=BRAND, *, on_dark=False):
     """Build a Qt icon for 16–24 px controls, including scaled Windows displays."""
     assert_gui_thread()
     icon = QIcon()
-    for mode, ink in ((QIcon.Mode.Normal, color), (QIcon.Mode.Active, V13_PALETTE.hover),
-                      (QIcon.Mode.Selected, V13_PALETTE.selected), (QIcon.Mode.Disabled, V13_PALETTE.disabled)):
+    for mode, ink in ((QIcon.Mode.Normal, color), (QIcon.Mode.Active, SURFACE if on_dark else V13_PALETTE.hover),
+                      (QIcon.Mode.Selected, SURFACE if on_dark else V13_PALETTE.selected),
+                      (QIcon.Mode.Disabled, V13_PALETTE.disabled)):
         renderer = _symbol_renderer(name, ink)
         for size in (16, 20, 24, 32, 48, 64):
             pixmap = _render_symbol(renderer, size)
@@ -184,10 +206,10 @@ def icon_button(icon_name, accessible_name, callback=None, parent=None):
     return widget
 
 
-class _BadgeSymbol(QWidget):
-    def __init__(self, parent):
+class SymbolView(QWidget):
+    def __init__(self, parent, size=16):
         super().__init__(parent)
-        self.setFixedSize(16, 16)
+        self.setFixedSize(size, size)
         self.icon = QIcon()
 
     def paintEvent(self, event):
@@ -219,7 +241,7 @@ class StatusBadge(QFrame):
         row = QHBoxLayout(self)
         row.setContentsMargins(8, 3, 8, 3)
         row.setSpacing(5)
-        self._symbol = _BadgeSymbol(self)
+        self._symbol = SymbolView(self)
         self._caption = _BadgeCaption(self)
         self._caption.setTextFormat(Qt.TextFormat.PlainText)
         row.addWidget(self._symbol)
@@ -254,13 +276,23 @@ class StatusBadge(QFrame):
 
 
 class MetricCard(QFrame):
-    def __init__(self, title, value, parent=None):
+    def __init__(self, title, value, parent=None, *, symbol=None):
         super().__init__(parent)
         self.setProperty('card', True)
         column = QVBoxLayout(self)
         column.setContentsMargins(CARD_PADDING, CARD_PADDING, CARD_PADDING, CARD_PADDING)
         column.setSpacing(GAP // 2)
-        column.addWidget(label(title, 'muted', self))
+        caption = label(title, 'muted', self)
+        if symbol:
+            row = QHBoxLayout()
+            row.setSpacing(5)
+            mark = SymbolView(self)
+            mark.icon = semantic_icon(symbol, MUTED)
+            row.addWidget(mark)
+            row.addWidget(caption)
+            column.addLayout(row)
+        else:
+            column.addWidget(caption)
         self.value_label = label('', 'metric', self)
         column.addWidget(self.value_label)
         self.set_value(value)

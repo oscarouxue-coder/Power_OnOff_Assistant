@@ -189,6 +189,40 @@ class QtChannelConfigurationTests(unittest.TestCase):
         self.assertEqual(self.context.identity.revision, revision)
         self.assertFalse(self.adapter._service.resources.unknown_for(self.identifier))
 
+    def test_wizard_and_environment_save_share_one_revision_and_reject_stale_edits(self):
+        from src.services.project_profile_store import PROFILE_FILE, read_project_profile
+
+        profile = dict(test_type='power_cycle', duts=[])
+        view = self.command('wizard_profile_get', self.identifier).payload
+        rows = [dict(number=n, enabled=n in (1, 2, 7), vlan_name=f'VLAN{117-n}', serial_port=f'COM{17-n}')
+                for n in range(1, 17)]
+        request = dict(revision=view['environment_revision'], assignments={},
+                       channels=dict(rows=rows, device_ip='192.168.1.1', power_serial_port='COM102'))
+        original = self.context.identity.revision
+        self.command('wizard_profile_save', self.identifier, profile, view['token'], request, True)
+        self.assertNotEqual(self.context.identity.revision, original)
+        saved = self.context.saved_root / 'Auto_power_on_off_tool/config'
+        duts = read_project_profile(saved)['duts']
+        ids = {dut['channel']: dut['dut_id'] for dut in duts}
+        self.assertEqual(set(ids), {1, 2, 7})
+        self.assertFalse(any(dut['hardware_id'] for dut in duts))
+        self.command('wizard_profile_save', self.identifier, profile, view['token'], request, True, expected_error=True)
+        draft = self.open()
+        args = self.arguments(draft)
+        for index in (0, 6):
+            args['rows'][index]['enabled'] = True
+        preview = self.preview(draft, args)
+        paths = [self.context.config_dir / name for name in (PROFILE_FILE, 'network_card_ip.ini')]
+        original_files = [path.read_bytes() for path in paths]
+        with patch.object(self.adapter._service.projects, 'save', side_effect=OSError('fixture failure')):
+            self.commit(draft, preview, expected_error=True)
+        self.assertEqual([path.read_bytes() for path in paths], original_files)
+        self.commit(draft, self.preview(draft, args))
+        view = self.command('wizard_profile_get', self.identifier).payload
+        self.assertEqual({dut['channel']: dut['dut_id'] for dut in view['profile']['duts']}, ids)
+        self.assertEqual([row['section'] for row in view['environment']['channels'] if row['enabled']],
+                         ['channel_1', 'channel_7'])
+
     def test_resource_refresh_is_read_only_and_failure_retains_last_success(self):
         from src.models.network_adapter import AdapterIdentity
         draft = self.open()

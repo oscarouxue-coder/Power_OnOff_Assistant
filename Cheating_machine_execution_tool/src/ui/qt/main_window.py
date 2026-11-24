@@ -1,9 +1,11 @@
 """Qt workbench shell. It owns views, never devices or test execution."""
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QStandardItem, QStandardItemModel
-from PySide6.QtWidgets import (QAbstractItemView, QGridLayout, QHBoxLayout, QLineEdit, QMainWindow,
-    QSizePolicy, QSplitter, QStackedWidget, QToolBar, QTreeView, QVBoxLayout, QWidget)
-from src.models.workbench_presentation import matches_project_filter
+from datetime import datetime
+
+from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtGui import QKeySequence, QShortcut, QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import (QAbstractItemView, QGridLayout, QHBoxLayout, QLineEdit, QMainWindow, QMenu,
+    QSplitter, QStackedWidget, QToolBar, QToolButton, QTreeView, QVBoxLayout, QWidget)
+from src.models.workbench_presentation import LogView, matches_project_filter
 from src.ui.qt.dashboard import Dashboard
 from src.ui.qt.log_panel import LogPanel
 from src.ui.qt.project_detail import ProjectDetail
@@ -20,7 +22,7 @@ class MainWindow(QMainWindow):
         self._applying_compact = False
         self._user_sidebar = False
         self._user_log_visibility = False
-        self.setWindowTitle('DUTPilot · PySide6 迁移原型' + ('（演示）' if demo else ''))
+        self.setWindowTitle('DUTPilot（演示）' if demo else 'DUTPilot')
         self.setMinimumSize(800, 440)
         self.projects = ()
         self.selected_project = ''
@@ -29,26 +31,46 @@ class MainWindow(QMainWindow):
         self._user_log_split = False
         self.project_status = label('', 'muted')
         self.statusBar().addPermanentWidget(self.project_status)
-        toolbar = QToolBar('全局工具栏', self)
-        toolbar.setObjectName('GlobalHeader')
-        toolbar.setMovable(False)
-        self.addToolBar(toolbar)
-        collapse = toolbar.addAction('☰')
+        header = QWidget(self)
+        header.setObjectName('WorkbenchHeader')
+        header.setMinimumHeight(48)
+        self.setMenuWidget(header)
+        row = QHBoxLayout(header)
+        row.setContentsMargins(10, 0, 0, 0)
+        row.setSpacing(4)
+        collapse = QToolButton(header)
+        collapse.setText('☰')
         collapse.setToolTip('折叠 / 展开项目导航')
-        collapse.triggered.connect(self.toggle_sidebar)
-        mark = label('D')
-        mark.setStyleSheet('QLabel { background: #0D9488; color: white; border-radius: 5px; padding: 4px 8px; font-size: 18px; font-weight: 700; }')
-        toolbar.addWidget(mark)
+        collapse.setAccessibleName(collapse.toolTip())
+        collapse.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        collapse.clicked.connect(self.toggle_sidebar)
+        row.addWidget(collapse)
         brand = label('DUTPilot')
         brand.setStyleSheet('QLabel { font-size: 19px; font-weight: 700; padding: 0 12px; }')
-        toolbar.addWidget(brand)
-        toolbar.addWidget(label('统一测试工作台'))
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        toolbar.addWidget(spacer)
+        row.addWidget(brand)
+        row.addWidget(label('综合测试工作台'))
+        row.addStretch()
+        toolbar = QToolBar('全局工具栏', header)
+        toolbar.setObjectName('GlobalHeader')
+        toolbar.setMovable(False)
+        row.addWidget(toolbar)
+        view_menu = QMenu('视图', header)
+        toolbar_visibility = toolbar.toggleViewAction()
+        toolbar_visibility.setText('显示全局工具栏')
+        toolbar_visibility.setShortcut(QKeySequence('Ctrl+Shift+T'))
+        toolbar_visibility.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
+        self.addAction(toolbar_visibility)
+        view_menu.addAction(toolbar_visibility)
+        view_shortcut = QShortcut(QKeySequence('Alt+V'), self)
+        def open_view_menu():
+            view_menu.popup(header.mapToGlobal(header.rect().bottomLeft()))
+            view_menu.setActiveAction(toolbar_visibility)
+        view_shortcut.activated.connect(open_view_menu)
+        header.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        header.customContextMenuRequested.connect(lambda pos: view_menu.popup(header.mapToGlobal(pos)))
         self.mode_label = label('演示模式 · 未连接硬件' if demo else '正在加载工作区')
         self.mode_label.setStyleSheet('QLabel { color: #FDE68A; padding: 0 10px; font-weight: 600; }')
-        toolbar.addWidget(self.mode_label)
+        self._mode_action = toolbar.addWidget(self.mode_label)
         self.resource_refresh_action = toolbar.addAction('刷新串口/网卡')
         self.resource_refresh_action.setEnabled(False)
         self.resource_refresh_action.setToolTip('只读刷新本机串口和网卡候选')
@@ -58,14 +80,33 @@ class MainWindow(QMainWindow):
         self.ai_chat_action.setEnabled(False)
         self.devices_action = toolbar.addAction('设备管理')
         self.devices_action.setEnabled(False)
-        self.settings_button = button('全局设置 ▾')
-        self.settings_button.setEnabled(False)
-        toolbar.addWidget(self.settings_button)
+        settings = QMenu('全局设置' if refreshed else '全局设置 ▾', toolbar)
+        self.settings_action = settings.menuAction()
+        self.settings_action.setEnabled(False)
+        toolbar.addAction(self.settings_action)
+        self.settings_button = toolbar.widgetForAction(self.settings_action)
+        self.settings_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.settings_button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         if refreshed:
-            toolbar.setStyleSheet(WORKBENCH_QSS)
+            header.setStyleSheet(WORKBENCH_QSS)
             toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-            self.resource_refresh_action.setIcon(semantic_icon('refresh', '#DDECEF'))
-            self.devices_action.setIcon(semantic_icon('inspect', '#DDECEF'))
+            toolbar.setIconSize(QSize(16, 16))
+            collapse.setIcon(semantic_icon('navigation', '#DDECEF', on_dark=True))
+            for action, symbol in ((self.resource_refresh_action, 'refresh'),
+                                   (self.model_settings_action, 'model-link'), (self.ai_chat_action, 'chat'),
+                                   (self.devices_action, 'devices')):
+                action.setIcon(semantic_icon(symbol, '#DDECEF', on_dark=True))
+                control = toolbar.widgetForAction(action)
+                control.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+                control.setAccessibleName(action.text())
+            more = toolbar.findChild(QToolButton, 'qt_toolbar_ext_button')
+            if more is not None:
+                more.setIcon(semantic_icon('more', '#DDECEF', on_dark=True))
+                more.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+                more.setAccessibleName('更多工具栏操作')
+            settings.setIcon(semantic_icon('settings', '#DDECEF', on_dark=True))
+            self.settings_button.setIconSize(toolbar.iconSize())
+            self.settings_button.setAccessibleName('全局设置')
         root = QWidget()
         root.setObjectName('WorkbenchRoot')
         if refreshed:
@@ -83,6 +124,10 @@ class MainWindow(QMainWindow):
         side_layout.setContentsMargins(10, 16, 10, 12)
         side_layout.setSpacing(8)
         self.overview_button = button('▦  总览工作台', self.show_all_projects)
+        if refreshed:
+            self.overview_button.setText('总览工作台')
+            self.overview_button.setIcon(semantic_icon('grid', '#DDECEF', on_dark=True))
+            self.overview_button.setAccessibleName('总览工作台')
         self.overview_button.setCheckable(True)
         self.overview_button.setChecked(True)
         side_layout.addWidget(self.overview_button)
@@ -155,6 +200,7 @@ class MainWindow(QMainWindow):
         self.dashboard.project_requested.connect(self.select_project)
         self.templates_page.project_requested.connect(self.select_project)
         self.detail.back_requested.connect(self.show_dashboard)
+        self.detail.metric_detail_opened.connect(self._record_metric_detail_open)
         self.sidebar_search.textChanged.connect(self._filter_navigation)
         self.dashboard.new_button.setEnabled(False)
         self.dashboard.open_button.setEnabled(False)
@@ -164,11 +210,23 @@ class MainWindow(QMainWindow):
         self.logs.append_batch(logs)
         self.show_dashboard()
 
+    def set_mode_message(self, text):
+        self.mode_label.setText(text)
+        self._mode_action.setVisible(bool(text))
+
+    def _record_metric_detail_open(self, project, title, has_records):
+        result = '已显示记录' if has_records else '暂无可显示的记录'
+        entry = LogView(datetime.now().strftime('%H:%M:%S'), 'INFO', project.project_id, project.name,
+                        f'[运行概览] 打开{title}详情 · {result}', project.run_id)
+        self.logs.append_batch((entry,))
+
     def _log_dragged(self, position, index):
         self._user_log_split = True
         self._layout_timer.start(0)
 
     def _fit_log(self):
+        if self._refreshed:
+            self._fit_log_visibility()
         current_top, current_log = self.vertical.sizes()
         total = current_top + current_log
         if total <= 0:
@@ -216,7 +274,13 @@ class MainWindow(QMainWindow):
         self.dashboard.set_compact_metrics(compact)
         if not self._user_sidebar:
             self._set_sidebar_visible(not compact)
-        if not (self._user_log_visibility or self._user_log_split) and self.logs.expanded == compact:
+        self._fit_log_visibility()
+
+    def _fit_log_visibility(self):
+        if self._user_log_visibility or self._user_log_split:
+            return
+        detail_compact = self.pages.currentWidget() is self.detail and self.height() < 850
+        if self.logs.expanded == (self._compact or detail_compact):
             self._applying_compact = True
             try:
                 self.logs.toggle_expanded()
@@ -270,9 +334,7 @@ class MainWindow(QMainWindow):
             if project is None:
                 self.show_dashboard()
             else:
-                self.detail.set_project(project)
-                self.logs.set_scope(project.project_id, project.name, project.run_id,
-                                    tuple(channel.number for channel in project.channels))
+                self._show_project_context(project)
         if hasattr(self, '_layout_timer'):
             self._layout_timer.start(0)
 
@@ -303,13 +365,8 @@ class MainWindow(QMainWindow):
         project = next((project for project in self.projects if project.project_id == identifier), None)
         if project is None:
             return
-        self.selected_project = identifier
-        self.detail.set_project(project)
-        self.pages.setCurrentWidget(self.detail)
-        self.overview_button.setChecked(False)
-        self.templates_button.setChecked(False)
-        self.logs.set_scope(identifier, project.name, project.run_id,
-                            tuple(channel.number for channel in project.channels))
+        if not self._show_project_context(project):
+            return
         self._layout_timer.start(0)
         for group_row in range(self.navigation_model.rowCount()):
             group = self.navigation_model.item(group_row)
@@ -317,6 +374,23 @@ class MainWindow(QMainWindow):
                 item = group.child(row)
                 if item.data(Qt.ItemDataRole.UserRole) == identifier:
                     self.navigation.setCurrentIndex(item.index())
+
+    def _show_project_context(self, project):
+        self.selected_project = ''
+        try:
+            self.detail.set_project(project)
+            self.logs.set_scope(project.project_id, project.name, project.run_id,
+                                tuple(channel.number for channel in project.channels))
+            self.pages.setCurrentWidget(self.detail)
+        except Exception as error:
+            self.show_dashboard()
+            self.navigation.setCurrentIndex(self.navigation.rootIndex())
+            self.statusBar().showMessage(f'无法显示项目“{project.name}”（{type(error).__name__}），已返回总览')
+            return False
+        self.overview_button.setChecked(False)
+        self.templates_button.setChecked(False)
+        self.selected_project = project.project_id
+        return True
 
     def show_dashboard(self):
         assert_gui_thread()

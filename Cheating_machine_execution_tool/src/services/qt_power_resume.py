@@ -7,6 +7,7 @@ import time
 import uuid
 
 from src.models.capabilities import CapabilityError, CapabilitySpec, object_schema
+from src.models.project_review import ReviewRequired
 from src.services.capability_jobs import TERMINAL
 from src.services.power_test_resume_service import ResumeRejected
 
@@ -90,9 +91,10 @@ class QtPowerResume:
                 or execution.editor_open or execution.workspace.maintenance.active
                 or execution.other_power_blocked() or session is None or parent not in execution.jobs
                 or execution.jobs[parent]['binding'] is None or not session.can_resume(number)):
-            raise CapabilityError('resume_unavailable', '所选通道当前不满足原续跑条件，请等待或重新核对')
+            raise ReviewRequired('resume_unavailable', '所选通道当前不满足原续跑条件，请等待或重新核对',
+                                 'project', 'channel', channels=(number,))
         if any(request.channel == number for request, _ in self.waiting):
-            raise CapabilityError('resume_duplicate', '该通道已在等待续跑')
+            raise ReviewRequired('resume_duplicate', '该通道已在等待续跑', 'project', 'channel', channels=(number,))
         if self.live:
             if session.original_done or parent != execution.latest:
                 raise CapabilityError('resource_busy', '原全流程仍在收尾，请等待后重新确认')
@@ -112,10 +114,10 @@ class QtPowerResume:
             parent, session = self._candidate(number)
             binding = self.execution.jobs[parent]['binding']
             if self.execution.workspace.projects.dirty(self.execution.context) or self.execution._binding() != binding:
-                raise CapabilityError('configuration_changed', '项目配置与原批次不同，请重新发起完整测试')
+                raise ReviewRequired('configuration_changed', '项目配置与原批次不同，请重新发起完整测试', 'project', 'start')
             with session.lock:
                 if not session.can_resume(number):
-                    raise CapabilityError('resume_unavailable', '续跑资格已变化')
+                    raise ReviewRequired('resume_unavailable', '续跑资格已变化', 'project', 'channel', channels=(number,))
                 completed, total = session.completed[number], session.request.number_of_tests
                 pending = ResumeConfirmation(uuid.uuid4().hex, parent, session.run_id, number,
                     completed, total, self.live, time.monotonic())
@@ -172,7 +174,7 @@ class QtPowerResume:
             execution._prepare_guard(resume_handoff=True)
         binding = original['binding']
         if execution.workspace.projects.dirty(execution.context) or execution._binding() != binding:
-            raise CapabilityError('configuration_changed', '项目配置与原批次不同，未提交续跑')
+            raise ReviewRequired('configuration_changed', '项目配置与原批次不同，未提交续跑', 'project', 'start')
         if starting:
             execution._verify_nics((number,), binding, expected=original['adapters'])
         try:
@@ -181,7 +183,8 @@ class QtPowerResume:
             raise CapabilityError('configuration_changed', str(error)) from None
         with session.lock:
             if not session.can_resume(number) or session.completed[number] != request.completed:
-                raise CapabilityError('resume_changed', '已完成轮次或通道资格变化，请重新确认')
+                raise ReviewRequired('resume_changed', '已完成轮次或通道资格变化，请重新确认',
+                                     'project', 'channel', channels=(number,))
         return original, session
 
     def _discard_waiting(self, reason):
@@ -224,7 +227,7 @@ class QtPowerResume:
             if state not in TERMINAL:
                 return
             if state not in ('succeeded', 'failed'):
-                self._discard_waiting('前一条续跑已停止或结果待核实')
+                self._discard_waiting('前一条续跑已停止或结果未知')
                 return
             while self.waiting:
                 request, authority = self.waiting.popleft()
@@ -308,7 +311,7 @@ class QtPowerResume:
                 state = status.get('state', 'queued')
                 active = state not in TERMINAL or not execution.jobs_idle or bool(waiting)
                 label = {'queued': '等待续跑', 'running': '续跑中', 'stop_requested': '停止中',
-                    'succeeded': '续跑完成', 'failed': '续跑失败', 'stopped': '续跑已停止', 'unknown': '续跑结果待核实'}
+                    'succeeded': '续跑完成', 'failed': '续跑失败', 'stopped': '续跑已停止', 'unknown': '续跑结果未知'}
                 detail = f'CH{self.recovery_channel:02d} · {label.get(state, state)}'
                 if waiting:
                     detail += ' · 排队 ' + '、'.join(f'CH{number:02d}' for number in waiting)
@@ -316,7 +319,7 @@ class QtPowerResume:
                     resume_waiting=waiting,
                     active_task_count=max(project.active_task_count, int(active)),
                     run_id=self.recovery_job if active else project.run_id,
-                    can_stop=state in ('queued', 'running') or bool(waiting), can_start=project.can_start and state != 'unknown')
+                    can_stop=state in ('queued', 'running') or bool(waiting))
             elif self.submitted:
                 with session.lock:
                     total = session.request.number_of_tests

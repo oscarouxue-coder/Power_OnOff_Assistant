@@ -11,6 +11,7 @@ from line_check_assistant.legacy_ui_defaults_store import LegacyUiDefaultsStore
 from line_check_assistant.test_item_config_store import (TestItemConfigStore, TestProjectConfig,
     TelnetSettings, OrderConfig, OrderItem, ExpectedSegment, ConnectWifiSettings, ProjectInfoSettings)
 from src.models.capabilities import CapabilityError, CapabilitySpec, object_schema
+from src.models.project_review import ReviewRequired
 from src.models.qt_configuration import ConfigurationDraft
 from src.models.wifi_test_models import WifiTestOptions
 from src.services.capability_configuration_service import configuration_schema, load_default_order
@@ -69,7 +70,7 @@ class QtConfigurationService:
         if token is not None and (not self.token or token != self.token):
             raise CapabilityError('editor_expired', '配置编辑上下文已失效，请关闭后重新打开')
         if self.other_editor_open():
-            raise CapabilityError('editor_open', '请先保存或关闭本项目通道配置窗口')
+            raise ReviewRequired('editor_open', '请先保存或关闭本项目通道配置窗口', 'editor', 'close')
         if not self.capabilities.jobs.idle or self.capabilities.jobs.closing:
             raise CapabilityError('resource_busy', '本项目任务正在执行或收尾，配置编辑未放行')
         self.workspace.projects._validate_paths(self.context)
@@ -191,7 +192,7 @@ class QtConfigurationService:
         try:
             names = list(list_wifi_interface_names())
         except Exception:
-            raise CapabilityError('wifi_inventory_unavailable', '无线网卡读取失败，请检查网卡及驱动；未改变当前配置') from None
+            raise ReviewRequired('wifi_inventory_unavailable', '无线网卡读取失败，请检查网卡及驱动；未改变当前配置', 'inventory', reference='adapter:') from None
         self.capabilities.emit('[Qt配置] 已读取无线网卡列表；未连接、断开或修改网络')
         return names
 
@@ -206,7 +207,7 @@ class QtConfigurationService:
         wifi = ConnectWifiSettings(**values['connect_wifi'])
         info = ProjectInfoSettings(**values['project_info'])
         if order.command_fail_retry_interval_time < 0 or any(item.retry_times < 1 for item in order.items):
-            raise CapabilityError('invalid_parameters', '重试次数至少为1，全局重试间隔不能为负数')
+            raise ReviewRequired('invalid_parameters', '重试次数至少为1，全局重试间隔不能为负数', 'configuration', 'order')
         # Same validation as the existing WiFi editor; never scan or connect.
         validate_wifi_options(WifiTestOptions(wifi.connection_test_mode, wifi.security_source,
             bool(wifi.wireless_ping_enable), wifi.wireless_ping_target), bool(wifi.enable), wifi.product_solution)
@@ -231,9 +232,8 @@ class QtConfigurationService:
     def save(self, arguments, authority):
         self._guard(arguments['token'])
         if arguments['revision'] != self._revision():
-            raise CapabilityError('configuration_changed', '磁盘配置或项目版本已改变，未覆盖；请先重新加载并核对')
-        if self.workspace.resources.unknown_for(self.context.identity.project_id):
-            raise CapabilityError('configuration_unknown', '项目有未核实操作，请先由本机操作员核实')
+            raise ReviewRequired('configuration_changed', '磁盘配置或项目版本已改变，未覆盖；请先重新加载并核对', 'configuration', 'reload')
+        self.workspace.guard_project_workers(self.context)
         config_dir = self.context.config_dir
         try:
             config, runtime, push = self._capture(arguments['values'], config_dir)
@@ -254,13 +254,14 @@ class QtConfigurationService:
                 MessagePushConfigService(staging / FILES[1]).save(push)
                 written = {name: (staging / name).read_bytes() for name in FILES}
                 if self._revision() != arguments['revision']:
-                    raise CapabilityError('configuration_changed', '保存准备期间配置变化，未覆盖，请重新加载')
+                    raise ReviewRequired('configuration_changed', '保存准备期间配置变化，未覆盖，请重新加载', 'configuration', 'reload')
                 previous = {name: (config_dir / name).read_bytes() if (config_dir / name).exists() else None for name in FILES}
                 try:
                     for name in FILES:
                         self._replace(config_dir / name, written[name])
                     self.workspace.projects.save(self.context)
                 except Exception:
+                    unrestored = []
                     for name, data in previous.items():
                         try:
                             if data is None:
@@ -268,9 +269,12 @@ class QtConfigurationService:
                             else:
                                 self._replace(config_dir / name, data)
                         except Exception:
-                            uncertain = True
+                            unrestored.append(name)
+                    uncertain = bool(unrestored)
                     if uncertain:
-                        raise CapabilityError('configuration_rollback_failed', '配置恢复未完成，已保留未知保护；请本机核实文件与项目版本') from None
+                        raise CapabilityError('configuration_rollback_failed',
+                            '配置恢复未完成，请检查 ' + '、'.join(unrestored) +
+                            ' 和项目版本 ' + self.context.identity.revision[:12]) from None
                     raise CapabilityError('configuration_save_failed', '配置保存未完成，已恢复原草稿；请核对存储权限后重试') from None
             self._clear_saved_recovery(arguments['revision'])
             self.capabilities.emit('[Qt配置] 六标签配置已保存并提交项目版本；未执行设备命令或发送消息')

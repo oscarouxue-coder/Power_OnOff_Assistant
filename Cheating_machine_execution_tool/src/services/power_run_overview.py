@@ -4,8 +4,21 @@ import json
 import re
 import sqlite3
 
-from src.services.project_profile_store import read_project_profile
+from src.services.project_profile_store import active_project_duts, configured_power_cycles, read_project_profile
 from src.services.qt_log_history import job_database_path
+
+
+def matching_power_overview(project):
+    """Return receipts only for the task shown in the current project view."""
+    overview = project.test_overview or {}
+    job = overview.get('job_id')
+    if project.project_type != 'power_cycle' or not job or not project.run_id:
+        return {}
+    if project.run_id in (job, overview.get('run_id')):
+        return overview
+    if job == project.power_history_job and project.resume_detail:
+        return overview
+    return {}
 
 
 class PowerRunOverview:
@@ -17,6 +30,7 @@ class PowerRunOverview:
         self.channels = {}
         self.finished = False
         self.profile = None
+        self.directory = None
         self.selected = ()
 
     def _definition(self, context, record):
@@ -73,7 +87,7 @@ class PowerRunOverview:
         if number not in self.selected:
             return
         row = self.channels.setdefault(number, dict(completed=None, stage='', success=0, failure=0, retries=0,
-            last_success=0, last_failure=0, cycle=None, began=None, duration=None))
+            last_success=0, last_failure=0, failure_reason='', cycle=None, began=None, duration=None))
         cycle = data.get('cycle')
         if stage == 'history':
             if type(cycle) is int and cycle > 0:
@@ -86,6 +100,8 @@ class PowerRunOverview:
                 if data.get('status') == 'failed' and cycle > row['last_failure']:
                     row['last_failure'] = cycle
                     row['failure'] += 1
+                    reason = data.get('detail')
+                    row['failure_reason'] = reason if isinstance(reason, str) else ''
                     if row['cycle'] == cycle and row['began'] is not None:
                         row['duration'] = at - row['began'] if at >= row['began'] else None
             return
@@ -118,6 +134,7 @@ class PowerRunOverview:
             self.job, self.after, self.finished = job, 0, False
             self.channels.clear()
             self.profile, self.selected = None, ()
+            self.directory = None
             if job:
                 run_id = record.get('run_id', '')
                 if not isinstance(run_id, str) or not re.fullmatch(r'[0-9a-f]{32}', run_id):
@@ -127,6 +144,7 @@ class PowerRunOverview:
                 if archive.resolve() != archive or record.get('_path') != root / 'run.json':
                     return {}
                 self.profile = read_project_profile(archive)
+                self.directory = archive
         plan = self.profile if job else profile
         if not plan or plan['test_type'] != 'power_cycle':
             return {}
@@ -150,10 +168,16 @@ class PowerRunOverview:
                 except sqlite3.Error:
                     pass  # Existing observations remain valid while the event store is busy.
         rows = []
-        for dut in plan['duts']:
+        directory = self.directory if job else context.saved_root / 'Auto_power_on_off_tool/config'
+        for dut in active_project_duts(plan, directory):
             if job and dut['channel'] not in self.selected:
                 continue
             data = self.channels.get(dut['channel'], {})
             rows.append(dict(label=dut['label'], dut_id=dut['dut_id'], channel=dut['channel'],
-                             **{key: data.get(key) for key in ('completed','cycle','stage','success','failure','retries','duration')}))
-        return dict(job_id=job, target=plan['type_config']['target_cycles'], rows=rows)
+                             **{key: data.get(key) for key in ('completed', 'cycle', 'stage', 'success', 'failure',
+                                                             'retries', 'duration', 'last_failure', 'failure_reason')}))
+        try:
+            target = configured_power_cycles(directory) if plan.get('environment_channels') else plan['type_config']['target_cycles']
+        except (KeyError, ValueError):
+            target = None
+        return dict(job_id=job, run_id=record.get('run_id', ''), target=target, rows=rows)

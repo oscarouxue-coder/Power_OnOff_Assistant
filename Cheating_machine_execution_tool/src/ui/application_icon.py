@@ -9,7 +9,7 @@ from tkinter import TclError
 
 
 APPLICATION_ID = "Aouxue.LineCheckAssistant"
-ICON_RELATIVE_PATH = Path("assets/icons/line_check_assistant_network_topology_v1.ico")
+ICON_RELATIVE_PATH = Path("assets/icons/DUTPilot-01-tk.ico")
 
 
 def application_icon_path() -> Path:

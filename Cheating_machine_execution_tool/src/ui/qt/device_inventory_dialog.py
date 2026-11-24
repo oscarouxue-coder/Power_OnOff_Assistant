@@ -10,7 +10,7 @@ from src.ui.qt.theme import button, label
 
 RESOURCE_TYPES = {'serial': '串口 / 电源口', 'adapter': '网卡', 'dut': 'DUT', 'olt': 'OLT',
                   'pon': 'PON', 'wifi': 'WiFi', 'tftp': 'TFTP', 'adb': 'ADB'}
-LEASE_STATES = {'held': '已持有', 'unresolved': '待核实'}
+LEASE_STATES = {'held': '已持有', 'unresolved': '受保护'}
 
 
 def _table(columns, flexible):
@@ -71,7 +71,7 @@ class DeviceInventoryDialog(QDialog):
         self.binding_status = self._add_tab('项目通道', self.bindings)
         self.resource_table = _table(('保护状态', '资源类型', '资源标识', '项目', '项目 ID', 'Job / 持有者'),
                                      (2, 3, 4, 5))
-        self.resource_table.setAccessibleName('工作区资源租约与待核实保护明细')
+        self.resource_table.setAccessibleName('工作区资源占用与保护明细')
         self.resource_status = self._add_tab('资源保护', self.resource_table)
         outer.addWidget(self.tabs, 1)
         self.lease_status = label('', 'muted')
@@ -121,6 +121,20 @@ class DeviceInventoryDialog(QDialog):
         self.port_status.setText(_read_status(ports, inventory.ports_at, inventory.ports_failed))
         self.binding_status.setText(f'{len(projects)} 个打开的项目 · {len(bindings)} 条通道记录')
 
+    def focus_resource(self, key):
+        from src.ui.qt.blocker_review import focus_widget
+        if key == 'adapter:':
+            return focus_widget(self.adapters)
+        for row in range(self.resource_table.rowCount()):
+            item = self.resource_table.item(row, 2)
+            if key and item is not None and (item.text() == key or item.text().endswith(' · ' + key)):
+                focus_widget(self.resource_table)
+                self.resource_table.selectRow(row)
+                self.resource_table.scrollToItem(item)
+                return True
+        focus_widget(self.resource_table)
+        return not key
+
     def _show_resource_details(self, leases):
         entries = leases.entries
         if leases.protection_unavailable:
@@ -130,9 +144,9 @@ class DeviceInventoryDialog(QDialog):
         elif entries:
             held = sum(entry.state == 'held' for entry in entries)
             unresolved = sum(entry.state == 'unresolved' for entry in entries)
-            summary = f'已持有 {held} 条 · 待核实 {unresolved} 条'
+            summary = f'已持有 {held} 条 · 受保护 {unresolved} 条'
         else:
-            summary = '本次采样没有活动租约或待核实保护记录'
+            summary = '本次采样没有活动租约或保护记录'
         self.resource_status.setText(summary)
         details = []
         for entry in entries:

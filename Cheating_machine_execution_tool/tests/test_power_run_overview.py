@@ -1,4 +1,5 @@
 """Replay original power-engine events in a private project, without hardware."""
+from dataclasses import replace
 import json
 from pathlib import Path
 import sqlite3
@@ -8,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from src.models.capabilities import CapabilityError
-from src.services.power_run_overview import PowerRunOverview
+from src.services.power_run_overview import PowerRunOverview, matching_power_overview
 from src.services.project_power_plan import check_project_power_plan
 from src.services.project_profile_store import read_project_profile, write_project_profile
 from src.services.project_status_service import ProjectStatusService
@@ -24,7 +25,7 @@ class PowerRunOverviewTests(unittest.TestCase):
         self.addCleanup(lambda: [self.store.close(c) for c in list(self.store.opened.values())])
         self.context = self.store.create(Path(temp.name) / 'project', '项目', profile={
             'test_type': 'power_cycle', 'type_config': {'target_cycles': 3},
-            'duts': [dict(label=f'DUT {n}', channel=n, serial_port=f'COM{n}', vlan=f'vlan{100+n}',
+            'duts': [dict(label=f'DUT {n}', hardware_id=f'LAB-{n}', channel=n, serial_port=f'COM{n}', vlan=f'vlan{100+n}',
                           network_adapter=f'vlan{100+n}', power_channel=f'CH{n:02d}') for n in (1, 2)]})
         self.profile = read_project_profile(self.context.config_dir)
         self.ledger = ProjectStatusService(lambda line: None)
@@ -69,6 +70,13 @@ class PowerRunOverviewTests(unittest.TestCase):
         self.assertEqual(restored.progress, 33)
         self.assertIn('1 / 3', restored.progress_text)
         self.assertIsNone(show(dict(owner='another')).progress)
+        for run_id in (record['owner'], record['run_id']):
+            with self.subTest(run_id=run_id):
+                self.assertIs(matching_power_overview(replace(restored, run_id=run_id)), restored.test_overview)
+        other = replace(restored, run_id='another', power_history_job=record['owner'])
+        self.assertFalse(matching_power_overview(other))
+        resumed = replace(other, resume_detail='CH01 · 续跑中')
+        self.assertIs(matching_power_overview(resumed), restored.test_overview)
         record.pop('started_at')
         self.assertEqual(show(record).elapsed, '—')
 
@@ -114,8 +122,8 @@ class PowerRunOverviewTests(unittest.TestCase):
         self.event(11, status='retry', detail='连接失败准备重试')
         self.event(11, 'history', cycle=1, status='retry')
         self.event(12, 'history', cycle=1, status='retry')
-        self.event(15, 'history', cycle=1, status='failed')
-        self.event(16, 'history', cycle=1, status='failed')
+        self.event(15, 'history', cycle=1, status='failed', detail='PON 注册超时')
+        self.event(16, 'history', cycle=1, status='failed', detail='重复回执')
         row = current()
         self.assertEqual((row['failure'], row['success'], row['retries'], row['duration']), (1, 0, 2, 5.0))
         self.event(25, 'history', cycle=1, status='resume')
@@ -127,6 +135,7 @@ class PowerRunOverviewTests(unittest.TestCase):
         row = current()
         self.assertEqual((row['cycle'], row['completed'], row['duration']), (1, 1, 7.0))
         self.assertEqual((row['success'], row['failure'], row['retries']), (1, 1, 2))
+        self.assertEqual((row['last_failure'], row['failure_reason']), (1, 'PON 注册超时'))
         self.assertEqual(current(), row)
         self.assertEqual(PowerRunOverview().snapshot(self.context, record, self.profile)['rows'][0], row)
 
@@ -154,7 +163,7 @@ class PowerRunOverviewTests(unittest.TestCase):
         archive = self.store.snapshot(self.context)
         with patch('src.services.project_preparation.preparation_for') as preparation:
             check_project_power_plan(self.context, channels, cycles=3, config_root=archive)
-            preparation.return_value.require_ready.assert_called_once()
+            preparation.assert_not_called()
             for selection, cycles, message in ((channels[:1], 3, '目标通道'), (channels + channels[:1], 3, '重复'),
                                               (channels, 4, '计划'), (channels, True, '计划')):
                 with self.subTest(message=message), self.assertRaisesRegex(CapabilityError, message):

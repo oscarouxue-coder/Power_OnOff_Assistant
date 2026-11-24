@@ -1,13 +1,16 @@
-"""Project presentation only: status, responsive channel matrix and config summary."""
+"""Project presentation: run metrics, channels and configuration."""
+from collections import Counter
 from functools import partial
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, QSignalBlocker, Qt, Signal
 from PySide6.QtWidgets import (QBoxLayout, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGridLayout,
-    QAbstractItemView, QHeaderView, QHBoxLayout, QMenu, QProgressBar, QScrollArea, QSizePolicy,
+    QAbstractItemView, QHeaderView, QHBoxLayout, QMenu, QProgressBar, QPushButton, QScrollArea, QSizePolicy,
     QSplitter, QStackedWidget, QTabBar, QTableView, QVBoxLayout, QWidget)
 from src.ui.qt.channel_table_model import ChannelTableModel
-from src.ui.qt.test_type_panel import TestTypePanel
-from src.ui.qt.showcase_components import STATUS_STYLES, StatusBadge, semantic_icon
+from src.ui.qt.power_metric_detail import POWER_METRIC_LABELS, PowerMetricDetailDialog
+from src.ui.qt.test_type_panel import TestTypePanel, history_datetime
+from src.ui.qt.aging_inspection_preview import AgingInspectionEntry
+from src.ui.qt.showcase_components import MetricCard, STATUS_STYLES, StatusBadge, SymbolView, semantic_icon, test_type_symbol
 from src.ui.qt.theme import (BRAND, GAP, MUTED, V13_PALETTE, assert_gui_thread, button, card, label)
 
 
@@ -140,6 +143,94 @@ class ChannelViewStack(QStackedWidget):
         return widget.minimumSizeHint().expandedTo(widget.minimumSize()) if widget is not None else super().minimumSizeHint()
 
 
+class OverviewMetricButton(QPushButton):
+    def __init__(self, title, parent):
+        super().__init__(parent)
+        self.setProperty('overviewMetric', True)
+        self.setToolTip(f'查看{title}详情')
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        column = QVBoxLayout(self)
+        caption = label(title, 'muted', self)
+        self.value_label = label('—', 'section', self)
+        for widget in (caption, self.value_label):
+            widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            column.addWidget(widget)
+
+    def set_value(self, value):
+        self.value_label.setText(str(value))
+        self.setAccessibleDescription(f'{value} · 点击查看详情')
+
+    def sizeHint(self):
+        return self.layout().sizeHint()
+
+    def minimumSizeHint(self):
+        return self.layout().minimumSize()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if not event.isAutoRepeat():
+                self.click()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
+class OverviewMetrics(QWidget):
+    """Arrange the same metric cards in fewer columns when the split pane narrows."""
+
+    def __init__(self, titles, actions=None):
+        super().__init__()
+        self.grid = QGridLayout(self)
+        self.grid.setContentsMargins(0, 0, 0, 0)
+        self.grid.setSpacing(8)
+        actions = actions or {}
+        cards = []
+        for index, title in enumerate(titles):
+            action = actions.get(index)
+            if action is None:
+                frame = MetricCard(title, '—', self)
+            else:
+                frame = OverviewMetricButton(title, self)
+                frame.clicked.connect(action)
+            cards.append(frame)
+        self.cards = tuple(cards)
+        self.columns = 0
+        for frame, title in zip(self.cards, titles):
+            frame.setAccessibleName(title)
+            frame.layout().setContentsMargins(10, 6, 10, 7)
+            frame.layout().setSpacing(2)
+            frame.value_label.setProperty('role', 'section')
+            frame.value_label.setWordWrap(True)
+        self._reflow()
+
+    def set_values(self, values, accents=None):
+        accents = accents or {}
+        for index, (frame, value) in enumerate(zip(self.cards, values)):
+            frame.set_value(value)
+            color = accents.get(index, V13_PALETTE.muted if value == '—' else V13_PALETTE.text)
+            style = f'font-size: 17px; font-weight: 700; color: {color};'
+            if frame.value_label.styleSheet() != style:
+                frame.value_label.setStyleSheet(style)
+
+    def _reflow(self):
+        count = len(self.cards)
+        columns = next(size for size in (count, count // 2, 2, 1)
+                       if size == 1 or size * 128 + (size - 1) * self.grid.spacing() <= self.width())
+        if columns == self.columns:
+            return
+        self.columns = columns
+        for index, frame in enumerate(self.cards):
+            self.grid.addWidget(frame, index // columns, index % columns)
+        for index in range(count):
+            self.grid.setColumnStretch(index, int(index < columns))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._reflow()
+
+
 class ProjectDetail(QWidget):
     back_requested = Signal()
     configuration_requested = Signal()
@@ -155,6 +246,7 @@ class ProjectDetail(QWidget):
     resume_requested = Signal(str, int)
     power_log_requested = Signal(str, int, str)
     channel_history_requested = Signal(str, str, int)
+    metric_detail_opened = Signal(object, str, bool)
 
     def __init__(self, parent=None, *, refreshed=False):
         super().__init__(parent)
@@ -162,7 +254,9 @@ class ProjectDetail(QWidget):
         self.project = None
         self._configuration_snapshot = None
         self.dialogs = []
+        self._metric_dialog = None
         self._narrow = False
+        self._user_config_visibility = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
@@ -170,6 +264,8 @@ class ProjectDetail(QWidget):
         breadcrumb.addWidget(button('‹  返回总览', self.back_requested.emit, 'link'))
         breadcrumb.addWidget(label('项目详情', 'muted'))
         breadcrumb.addStretch()
+        self.inspection_entry = AgingInspectionEntry(self)
+        breadcrumb.addWidget(self.inspection_entry)
         self.config_toggle = button('收起配置', self.toggle_configuration)
         breadcrumb.addWidget(self.config_toggle)
         layout.addLayout(breadcrumb)
@@ -178,9 +274,13 @@ class ProjectDetail(QWidget):
         self.header_layout.setContentsMargins(16, 10, 16, 10)
         identity = QHBoxLayout()
         self.header_layout.addLayout(identity, 1)
-        icon = label('▱')
-        icon.setStyleSheet(f'background: {BRAND}; color: white; padding: 8px; border-radius: 5px; font-size: 22px;')
-        identity.addWidget(icon)
+        if refreshed:
+            self.type_symbol = SymbolView(self, 24)
+            identity.addWidget(self.type_symbol)
+        else:
+            icon = label('▱')
+            icon.setStyleSheet(f'background: {BRAND}; color: white; padding: 8px; border-radius: 5px; font-size: 22px;')
+            identity.addWidget(icon)
         heading = QVBoxLayout()
         self.name = label('', 'title')
         self.name.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
@@ -197,8 +297,8 @@ class ProjectDetail(QWidget):
         self.start_button = button('▷ 开始测试', kind='primary')
         self.stop_button = button('■ 停止测试', kind='danger')
         if refreshed:
-            self.start_button.setIcon(semantic_icon('play'))
-            self.stop_button.setIcon(semantic_icon('stop'))
+            self.start_button.setIcon(semantic_icon('play', V13_PALETTE.surface, on_dark=True))
+            self.stop_button.setIcon(semantic_icon('stop', V13_PALETTE.error.text))
         self.environment_button = button('环境检查')
         self.pipeline_button = button('全流程…')
         for control in (self.pipeline_button, self.environment_button, self.start_button, self.stop_button):
@@ -207,6 +307,7 @@ class ProjectDetail(QWidget):
             actions.addWidget(control)
         layout.addWidget(header)
         self.tabs = QTabBar()
+        self.tabs.setObjectName('ProjectModuleTabs')
         self.tabs.setExpanding(False)
         self.tabs.setUsesScrollButtons(True)
         for index, name in enumerate(('运行概览', '自动上/下电', '样机升级', '写样机参数', 'ONU注册', '串口日志', 'DUT配置', 'AI 模型连接', 'Ai助手')):
@@ -231,7 +332,15 @@ class ProjectDetail(QWidget):
         self.execution_layout.setSpacing(GAP)
         self.test_type_panel = TestTypePanel(refreshed=refreshed)
         self.test_type_panel.hide()
-        if not refreshed:
+        if refreshed:
+            metric_actions = {index: partial(self._open_metric_detail, metric)
+                              for index, metric in enumerate(POWER_METRIC_LABELS, start=1)}
+            self.cycle_metrics = OverviewMetrics(('运行时长', *POWER_METRIC_LABELS.values()), metric_actions)
+            self.aging_metrics = OverviewMetrics(('监测时长', '已接入业务项', '健康', '异常', '状态未知', '最近业务检测'))
+            self.execution_layout.addWidget(self.cycle_metrics)
+            self.execution_layout.addWidget(self.aging_metrics)
+            self.aging_metrics.hide()
+        else:
             self.execution_layout.addWidget(self.test_type_panel)
         self.summary = card()
         summary_layout = QVBoxLayout(self.summary)
@@ -245,11 +354,13 @@ class ProjectDetail(QWidget):
         status_row.addSpacing(16)
         self.progress_text = label('', 'section')
         status_row.addWidget(self.progress_text, 1)
-        self.elapsed = label('')
+        self.run_id = label('', 'muted')
         if refreshed:
             self.progress_text.setWordWrap(True)
-            self.elapsed.setProperty('role', 'muted')
-        status_row.addWidget(self.elapsed)
+            status_row.addWidget(self.run_id)
+        else:
+            self.elapsed = label('')
+            status_row.addWidget(self.elapsed)
         summary_layout.addLayout(status_row)
         self.progress = QProgressBar()
         if refreshed:
@@ -257,16 +368,16 @@ class ProjectDetail(QWidget):
         self.progress.setTextVisible(False)
         self.progress.setRange(0, 100)
         summary_layout.addWidget(self.progress)
-        counts = QHBoxLayout()
-        self.success = label('')
-        self.failure = label('')
-        counts.addWidget(self.success)
-        counts.addSpacing(30)
-        counts.addWidget(self.failure)
-        counts.addStretch()
-        self.run_id = label('', 'muted')
-        counts.addWidget(self.run_id)
-        summary_layout.addLayout(counts)
+        if not refreshed:
+            counts = QHBoxLayout()
+            self.success = label('')
+            self.failure = label('')
+            counts.addWidget(self.success)
+            counts.addSpacing(30)
+            counts.addWidget(self.failure)
+            counts.addStretch()
+            counts.addWidget(self.run_id)
+            summary_layout.addLayout(counts)
         self.stage = label('', 'section' if refreshed else 'muted')
         self.stage.setWordWrap(True)
         summary_layout.addWidget(self.stage)
@@ -329,6 +440,36 @@ class ProjectDetail(QWidget):
         channels_layout.addWidget(self.channel_modes)
         self.execution_layout.addWidget(self.channel_card)
         if refreshed:
+            self.aging_status = QWidget()
+            self.aging_status.hide()
+            self.aging_status_layout = QBoxLayout(QBoxLayout.Direction.LeftToRight, self.aging_status)
+            self.aging_status_layout.setContentsMargins(0, 0, 0, 0)
+            self.aging_status_layout.setSpacing(8)
+            aging_health = card()
+            health_layout = QVBoxLayout(aging_health)
+            health_layout.setContentsMargins(12, 8, 12, 9)
+            health_heading = QHBoxLayout()
+            health_heading.addWidget(label('业务健康', 'section'), 1)
+            self.aging_trend = label('暂无业务健康趋势数据', 'muted')
+            self.aging_trend.setWordWrap(True)
+            health_heading.addWidget(self.aging_trend)
+            health_layout.addLayout(health_heading)
+            health_layout.addWidget(self.test_type_panel.health_cards)
+            self.aging_empty = label('暂无业务检查数据', 'muted')
+            health_layout.addWidget(self.aging_empty)
+            health_layout.addStretch()
+            self.aging_status_layout.addWidget(aging_health, 3)
+            aging_presence = card()
+            presence_layout = QVBoxLayout(aging_presence)
+            presence_layout.setContentsMargins(12, 8, 12, 9)
+            presence_layout.addWidget(self.test_type_panel.presence_title)
+            presence_layout.addWidget(self.test_type_panel.presence)
+            self.aging_presence_empty = label('暂无 DUT 在线观测', 'muted')
+            presence_layout.addWidget(self.aging_presence_empty)
+            presence_layout.addStretch()
+            self.aging_status_layout.addWidget(aging_presence, 2)
+            self.execution_scroll.viewport().installEventFilter(self)
+            self.execution_layout.addWidget(self.aging_status)
             self.execution_layout.addWidget(self.test_type_panel)
         self.execution_layout.addStretch()
         self.execution_scroll.setWidget(self.execution)
@@ -347,38 +488,58 @@ class ProjectDetail(QWidget):
         self.splitter.setSizes((900, 290))
         layout.addWidget(self.splitter, 1)
 
+    def _set_aging_metrics(self, data):
+        rows = data.get('rows', ())
+        connected = [row for row in rows if row['source'] != 'unavailable']
+        health = Counter(row['state'] for row in connected)
+        observations = (history_datetime(row.get('last_observation')) for row in connected)
+        observed_at = max((stamp for stamp in observations if stamp is not None), default=None)
+        seconds = data.get('elapsed_seconds')
+        elapsed = '—'
+        if seconds is not None:
+            days, remaining = divmod(int(seconds), 86400)
+            hours, remaining = divmod(remaining, 3600)
+            minutes, remaining = divmod(remaining, 60)
+            elapsed = (f'{days} 天 ' if days else '') + f'{hours:02d}:{minutes:02d}:{remaining:02d}'
+        self.aging_metrics.set_values((elapsed, len(connected) if rows else '—',
+            health['healthy'] if connected else '—', health['abnormal'] if connected else '—',
+            health['unknown'] if connected else '—', observed_at.strftime('%m-%d %H:%M:%S') if observed_at else '—'),
+            {3: V13_PALETTE.error.text} if health['abnormal'] else None)
+        self.aging_metrics.cards[-1].value_label.setToolTip(observed_at.strftime('%Y-%m-%d %H:%M:%S') if observed_at else '')
+        self.aging_empty.setVisible(not rows)
+        self.aging_presence_empty.setVisible(not data.get('dut_presence'))
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Type.Resize and watched is self.execution_scroll.viewport():
+            direction = (QBoxLayout.Direction.LeftToRight if event.size().width() >= 700
+                         else QBoxLayout.Direction.TopToBottom)
+            if direction != self.aging_status_layout.direction():
+                self.aging_status_layout.setDirection(direction)
+        return super().eventFilter(watched, event)
+
     def _module_clicked(self, index):
-        if index == 1:
-            self.single_power_requested.emit()
+        requests = (self.single_power_requested, self.upgrade_requested, self.parameter_requested,
+                    self.onu_requested, self.serial_requested, self.dut_requested,
+                    self.model_settings_requested, self.ai_chat_requested)
+        if not 1 <= index <= len(requests):
+            return
+        # A request may synchronously disable its tab. Keep the overview selected
+        # so Qt cannot select a neighbouring module while its slot is running.
+        with QSignalBlocker(self.tabs):
             self.tabs.setCurrentIndex(0)
-        elif index == 2:
-            self.upgrade_requested.emit()
-            self.tabs.setCurrentIndex(0)
-        elif index == 3:
-            self.parameter_requested.emit()
-            self.tabs.setCurrentIndex(0)
-        elif index == 4:
-            self.onu_requested.emit()
-            self.tabs.setCurrentIndex(0)
-        elif index == 5:
-            self.serial_requested.emit()
-            self.tabs.setCurrentIndex(0)
-        elif index == 6:
-            self.dut_requested.emit()
-            self.tabs.setCurrentIndex(0)
-        elif index == 7:
-            self.model_settings_requested.emit()
-            self.tabs.setCurrentIndex(0)
-        elif index == 8:
-            self.ai_chat_requested.emit()
-            self.tabs.setCurrentIndex(0)
+        requests[index - 1].emit()
 
     def set_project(self, project):
         assert_gui_thread()
         if project == self.project:
             return
-        self.project = project
+        if self._metric_dialog is not None and (self.project is None or
+                (project.project_id, project.run_id, project.project_type) !=
+                (self.project.project_id, self.project.run_id, self.project.project_type)):
+            self._metric_dialog.close()
+        self.project = None
         self.test_type_panel.set_project(project)
+        self.inspection_entry.set_project(project)
         cycles_visible = project.project_type != 'service_aging'
         self.tabs.setTabVisible(1, cycles_visible)
         self.summary.setVisible(cycles_visible)
@@ -387,12 +548,28 @@ class ProjectDetail(QWidget):
         start_label = '开始测试' if cycles_visible else '开始监测'
         self.start_button.setText(start_label if self._refreshed else '▷ ' + start_label)
         if self._refreshed:
+            self.cycle_metrics.setVisible(cycles_visible)
+            self.aging_metrics.setVisible(not cycles_visible)
+            self.aging_status.setVisible(not cycles_visible)
+            if cycles_visible:
+                accents = {3: V13_PALETTE.error.text} if project.attention_count else {}
+                if project.failure_count:
+                    accents[2] = V13_PALETTE.error.text
+                self.cycle_metrics.set_values((project.elapsed, project.success_text, project.failure_text,
+                                               project.attention_text), accents)
+            else:
+                self._set_aging_metrics(project.test_overview or {})
             self.stop_button.setText('停止测试' if cycles_visible else '停止监测')
             self.percent.setVisible(project.project_type != 'power_cycle')
         self.name.setText(project.name)
         metadata = (f'类型：{project.test_type}', f'DUT：{project.dut}', project.started_text)
         self.metadata.setText('   |   '.join(filter(None, metadata)))
         if self._refreshed:
+            symbol = test_type_symbol(project.project_type, project.test_type)
+            self.type_symbol.setVisible(bool(symbol))
+            if symbol:
+                self.type_symbol.icon = semantic_icon(symbol)
+                self.type_symbol.update()
             self.name.setToolTip(project.name)
             self.metadata.setToolTip(self.metadata.text())
         self.state.set_project_state(project.state, project.state_text)
@@ -409,9 +586,10 @@ class ProjectDetail(QWidget):
         self.progress.setVisible(project.progress is not None)
         self.progress.setValue(project.progress or 0)
         self.progress_text.setText(project.progress_text)
-        self.elapsed.setText('运行时间  ' + project.elapsed)
-        self.success.setText('✓ 成功  ' + project.success_text)
-        self.failure.setText('异常  ' + project.attention_text)
+        if not self._refreshed:
+            self.elapsed.setText('运行时间  ' + project.elapsed)
+            self.success.setText('✓ 成功  ' + project.success_text)
+            self.failure.setText('异常  ' + project.attention_text)
         self.run_id.setText(project.run_id or '尚无任务编号')
         stage = '当前阶段：' + project.task_stage if project.task_stage else ''
         self.stage.setText(' · '.join(filter(None, (stage, project.resume_detail))))
@@ -428,10 +606,12 @@ class ProjectDetail(QWidget):
         self.channel_model.set_channels(enabled_channels)
         self.channel_modes.setVisible(bool(enabled_channels))
         self.no_channels.setVisible(not enabled_channels)
-        snapshot = (project.configuration, bool(project.channel_snapshot_label))
+        snapshot = (project.configuration, bool(project.channel_snapshot_label), cycles_visible, project.can_configure,
+                    project.editor_kind)
         if snapshot == self._configuration_snapshot:
+            self.project = project
             return
-        self._configuration_snapshot = snapshot
+        self._configuration_snapshot = None
         while self.config_layout.count():
             widget = self.config_layout.takeAt(0).widget()
             if widget is not None:
@@ -442,6 +622,10 @@ class ProjectDetail(QWidget):
         row.setContentsMargins(0, 0, 0, 0)
         row.addWidget(label('任务配置快照' if project.channel_snapshot_label else '测试配置', 'section'))
         row.addStretch()
+        if not cycles_visible:
+            environment = button('环境配置', self.channels_configuration_requested.emit)
+            environment.setEnabled(project.can_configure and project.editor_kind != 'configuration')
+            row.addWidget(environment)
         edit = button('测试配置', self.configuration_requested.emit)
         self.edit_button = edit
         edit.setEnabled(project.can_configure)
@@ -470,9 +654,34 @@ class ProjectDetail(QWidget):
         self.config_layout.addStretch()
         self.config_layout.activate()
         self.configuration.updateGeometry()
+        self._configuration_snapshot = snapshot
+        self.project = project
 
     def toggle_configuration(self):
-        visible = not self.config_scroll.isVisible()
+        self._user_config_visibility = True
+        self._set_configuration_visible(self.config_scroll.isHidden())
+
+    def _open_metric_detail(self, metric):
+        project = self.project
+        if project is None or project.project_type == 'service_aging':
+            return
+        if self._metric_dialog is not None:
+            self._metric_dialog.close()
+        dialog = PowerMetricDetailDialog(project, metric, self)
+        self._metric_dialog = dialog
+        dialog.finished.connect(self._metric_detail_closed)
+        dialog.show()
+        self.metric_detail_opened.emit(project, POWER_METRIC_LABELS[metric], dialog.has_records)
+
+    def _metric_detail_closed(self, _result):
+        self._metric_dialog = None
+
+    def hideEvent(self, event):
+        if self._metric_dialog is not None and not event.spontaneous():
+            self._metric_dialog.close()
+        super().hideEvent(event)
+
+    def _set_configuration_visible(self, visible):
         self.config_scroll.setVisible(visible)
         self.config_toggle.setText('收起配置' if visible else '测试配置')
 
@@ -565,5 +774,6 @@ class ProjectDetail(QWidget):
         if narrow != self._narrow:
             self._narrow = narrow
             self.header_layout.setDirection(QBoxLayout.Direction.TopToBottom if narrow else QBoxLayout.Direction.LeftToRight)
-            self.config_scroll.setVisible(not narrow)
-            self.config_toggle.setText('测试配置' if narrow else '收起配置')
+        if not self._user_config_visibility:
+            width = 1100 if self._refreshed else 850
+            self._set_configuration_visible(self.width() >= width)

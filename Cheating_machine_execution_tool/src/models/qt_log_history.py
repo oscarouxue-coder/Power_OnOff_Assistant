@@ -48,21 +48,6 @@ class ChannelHistoryEvent:
     detail: str
 
 
-JOB_REVIEW_OUTCOMES = (
-    ('succeeded', '现场确认成功'),
-    ('failed', '现场确认失败'),
-    ('not_executed', '现场确认未执行'),
-)
-
-
-@dataclass(frozen=True)
-class HistoryJobReview:
-    token: str
-    job_id: str
-    capability: str
-    channels: tuple[int, ...]
-
-
 @dataclass(frozen=True)
 class ArchivedLogFile:
     path: Path

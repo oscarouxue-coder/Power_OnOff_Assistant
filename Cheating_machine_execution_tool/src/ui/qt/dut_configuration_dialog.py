@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QCheckBox, QDialog, QFormLayout, QHBoxLayout, QLi
     QPlainTextEdit, QScrollArea, QSpinBox, QSplitter, QTabBar, QVBoxLayout, QWidget)
 from src.models.qt_window_placement import (DUT_STATUS_DEFAULT_ROWS, DUT_STATUS_FEATURES, DUT_STATUS_MAX_ROWS,
                                              DUT_STATUS_MIN_ROWS, dut_status_rows)
+from src.ui.qt.blocker_review import focus_widget
 from src.ui.qt.theme import BACKGROUND, assert_gui_thread, button, card, label
 
 
@@ -212,6 +213,12 @@ class DutConfigurationDialog(QDialog):
     def feature(self):
         index = self.tabs.currentIndex()
         return DUT_STATUS_FEATURES[index] if index >= 0 else DUT_STATUS_FEATURES[0]
+
+    def focus_review(self, target):
+        if target.field in DUT_STATUS_FEATURES:
+            self.tabs.setCurrentIndex(DUT_STATUS_FEATURES.index(target.field))
+            return focus_widget(self.query_button)
+        return focus_widget(getattr(self, target.field, None))
 
     def _switch_feature(self, index):
         self.wan.setVisible(index == 1)

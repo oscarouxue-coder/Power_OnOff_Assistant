@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 if (-not $SourcePng) { $SourcePng = Join-Path $projectRoot "assets\icons\line_check_assistant_network_topology_v1.png" }
-if (-not $OutputIco) { $OutputIco = Join-Path $projectRoot "assets\icons\line_check_assistant_network_topology_v1.ico" }
+if (-not $OutputIco) { $OutputIco = Join-Path ([System.IO.Path]::GetTempPath()) "line_check_assistant_network_topology_export.ico" }
 Add-Type -AssemblyName System.Drawing
 $source = [System.Drawing.Image]::FromFile($SourcePng)
 $sizes = @(16, 20, 24, 32, 40, 48, 64, 96, 128, 256)

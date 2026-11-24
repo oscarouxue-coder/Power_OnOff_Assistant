@@ -1,0 +1,98 @@
+{
+  "phase": "before",
+  "files": {
+    "src/ui/qt/dashboard.py": "caeccca86e744866a75ca51ee917e5ea47090f6da5c7508bd8359ddcdd39722b",
+    "src/ui/qt/main_window.py": "cc09a3cfbb033898cbf2b0ddc83a807ae4a056005ac20dfd543658d5d55ae240",
+    "src/ui/qt/theme.py": "b5484b0425660abfdf7e368fb481c0a30c80c9deae2275668fc116a1ed2846c0",
+    "src/ui/qt/system_health_panel.py": "c06cfe28b783a8618ffac76fa621e9d7764ffc6d9c7a5874753a655d70314a0b",
+    "src/models/workbench_presentation.py": "a178a70df0890e3bc6f5f62c70c81f78376f670c920e0d24e2f12e121a680aba",
+    "src/ui/qt/visual_preview_data.py": "b081cd676b1133bd41ca5522124820d54184d0baa2dd362aa3a43ed314709cf5",
+    "capture_dashboard.py": "34447b1110afdfa330590853ff233022ed540227066f14ba7fcc543e39065551"
+  },
+  "runs": {
+    "1": {
+      "isolation": {
+        "passed": true,
+        "managed_windows": 3,
+        "violations": [],
+        "isolation": "private_desktop",
+        "desktop": "DUTPilot_render_673533918a4042258c9ba2e565082074",
+        "framework": "qt",
+        "platform": "windows",
+        "qt": {
+          "passed": true,
+          "managed_windows": 3,
+          "violations": [],
+          "isolation": "private_desktop",
+          "desktop": "DUTPilot_render_673533918a4042258c9ba2e565082074",
+          "framework": "qt",
+          "platform": "windows"
+        }
+      },
+      "test_output": [
+        "test_capture_actual_overview (capture_dashboard.DashboardCapture) ... ok",
+        "",
+        "----------------------------------------------------------------------",
+        "Ran 1 test in 1.008s",
+        "",
+        "OK"
+      ]
+    },
+    "1.25": {
+      "isolation": {
+        "passed": true,
+        "managed_windows": 3,
+        "violations": [],
+        "isolation": "private_desktop",
+        "desktop": "DUTPilot_render_42ca9ac6904e486ea02b8db198ab5ade",
+        "framework": "qt",
+        "platform": "windows",
+        "qt": {
+          "passed": true,
+          "managed_windows": 3,
+          "violations": [],
+          "isolation": "private_desktop",
+          "desktop": "DUTPilot_render_42ca9ac6904e486ea02b8db198ab5ade",
+          "framework": "qt",
+          "platform": "windows"
+        }
+      },
+      "test_output": [
+        "test_capture_actual_overview (capture_dashboard.DashboardCapture) ... ok",
+        "",
+        "----------------------------------------------------------------------",
+        "Ran 1 test in 0.978s",
+        "",
+        "OK"
+      ]
+    },
+    "1.5": {
+      "isolation": {
+        "passed": true,
+        "managed_windows": 6,
+        "violations": [],
+        "isolation": "private_desktop",
+        "desktop": "DUTPilot_render_5c8f683b049e410fa778303dfeef6cee",
+        "framework": "qt",
+        "platform": "windows",
+        "qt": {
+          "passed": true,
+          "managed_windows": 6,
+          "violations": [],
+          "isolation": "private_desktop",
+          "desktop": "DUTPilot_render_5c8f683b049e410fa778303dfeef6cee",
+          "framework": "qt",
+          "platform": "windows"
+        }
+      },
+      "test_output": [
+        "test_capture_actual_overview (capture_dashboard.DashboardCapture) ... ok",
+        "",
+        "----------------------------------------------------------------------",
+        "Ran 1 test in 1.792s",
+        "",
+        "OK"
+      ]
+    }
+  }
+}

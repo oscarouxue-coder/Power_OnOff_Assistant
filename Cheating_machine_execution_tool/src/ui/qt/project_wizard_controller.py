@@ -11,9 +11,6 @@ class ProjectWizardController:
         self.pending = None
         self.token = ''
         self.final_save = False
-        self.start_request = None
-        self.start_project = ''
-        self.module_after = ''
         self.loaded_revision = ''
 
     def _send(self, operation, *args):
@@ -45,10 +42,6 @@ class ProjectWizardController:
         dialog.finished.connect(lambda _result: self._closed(dialog))
         dialog.draft_requested.connect(lambda: self._save(False))
         dialog.commit_requested.connect(lambda: self._save(True))
-        dialog.start_requested.connect(self._start)
-        dialog.preparation.record_requested.connect(self._record)
-        dialog.preparation.module_requested.connect(self._module)
-        dialog.preparation.refresh_requested.connect(self._refresh)
         if identifier:
             dialog.project_menu.aboutToShow.connect(self._update_preset_action)
             dialog.save_preset_action.triggered.connect(self._save_preset)
@@ -62,25 +55,19 @@ class ProjectWizardController:
         if self.dialog is dialog:
             self.dialog = None
             self.final_save = False
-            self.start_request = None
-            self.start_project = ''
-            self.module_after = ''
         dialog.deleteLater()
 
     def _save(self, final):
         dialog = self.dialog
         self.final_save = final
         if dialog.project_id:
-            self._send('wizard_profile_save', dialog.project_id, dialog.profile(), self.token)
+            self._send('wizard_profile_save', dialog.project_id, dialog.profile(), self.token,
+                       None, final)
         elif final:
-            self._send('create_typed', dialog.directory.text().strip(), dialog.name.text().strip(),
-                       dialog.profile(), self.token)
+            self._send('wizard_create', dialog.directory.text().strip(), dialog.name.text().strip(),
+                       dialog.profile(), self.token, dialog.legacy_environment)
         else:
             self._send('wizard_draft_save', dialog.draft(), self.token)
-
-    def _refresh(self):
-        if self.dialog and self.dialog.project_id:
-            self._send('preparation_view', self.dialog.project_id)
 
     def _preset_problem(self):
         dialog = self.dialog
@@ -116,100 +103,22 @@ class ProjectWizardController:
         buttons = QMessageBox.StandardButton
         detail = f'更新已有型号模板（当前版本 {version}）' if version else '创建型号模板'
         answer = QMessageBox.question(dialog, '保存为型号模板',
-            f'{detail}「{model} · {dialog.test_type.currentText()}」？\n将提取选做准备和专属测试计划。',
+            f'{detail}「{model} · {dialog.test_type.currentText()}」？\n将提取专属测试计划。',
             buttons.Yes | buttons.No, buttons.No)
         if answer == buttons.Yes:
             self._send('wizard_preset_save', dialog.project_id, self.loaded_revision, version)
 
-    def _record(self, params):
-        self._send('preparation_record', self.dialog.project_id, params)
-
-    def _module(self, step):
-        current = self.dialog.preparation._step()
-        if not current or current['id'] != step:
-            return
-        if current['state'] != 'running':
-            self.module_after = step
-            self._record({'action': 'begin', 'dut_id': self.dialog.preparation.dut.currentData(),
-                          'step_id': step, 'token': current['token']})
-        else:
-            self._open_module(step)
-
-    def _open_module(self, step):
-        dialog = self.dialog
-        workspace = self.workspace
-        project = next((p for p in workspace.window.projects if p.project_id == dialog.project_id), None)
-        if not project or workspace.closing:
-            return
-        workspace.window.select_project(project.project_id)
-        workspace._sync_actions()
-        detail = workspace.window.detail
-        routes = {
-            'firmware': (2, workspace.open_upgrade), 'parameters': (3, workspace.parameter_writer.open),
-            'onu': (4, workspace.onu_query.open),
-            **{key: (6, workspace.open_dut) for key in ('telnet', 'wan', 'voice', 'tr069', 'wifi')},
-        }
-        if step == 'pretest':
-            allowed = project.can_configure and project.editor_kind != 'channels'
-            handler = workspace.open_configuration
-        else:
-            route = routes.get(step)
-            if route is None:
-                return
-            index, handler = route
-            allowed = detail.tabs.isTabEnabled(index)
-        if allowed:
-            handler()
-            dialog.feedback.setText('请在业务窗口核对目标并执行，然后返回本页关联执行回执')
-        else:
-            dialog.feedback.setText('该项目当前不能打开此业务操作')
-
-    def _start(self):
-        dialog, workspace = self.dialog, self.workspace
-        snapshot = dialog.preparation.snapshot
-        if not snapshot.get('ready') or snapshot.get('dirty'):
-            return
-        workspace.window.select_project(dialog.project_id)
-        request = workspace.start_test()
-        if request is None:
-            dialog.feedback.setText('当前项目未获准启动，请核对准备、资源与任务状态')
-        else:
-            self.start_request, self.start_project = request, dialog.project_id
-            dialog.set_busy(True)
-            dialog.feedback.setText('正在核对已保存配置与目标通道')
-
-    def track_confirmation(self, request, project_id, prepared_request):
-        if self.dialog and self.start_project == project_id and prepared_request == self.start_request:
-            self.start_request = request
-            if request is None:
-                self.dialog.set_busy(False)
-                self.dialog.feedback.setText('启动请求未提交')
-                self.start_project = ''
-
-    def _show_preparation(self, result):
-        dialog = self.dialog
-        dialog.preparation.show_snapshot(result.payload)
-        dialog.pages.setCurrentIndex(4)
-        dialog._page_changed()
-
     def handle_result(self, result):
         dialog = self.dialog
-        if dialog and self.start_request == result.identifier:
-            if result.error or result.operation != 'prepare_execution':
-                dialog.set_busy(False)
-                dialog.feedback.setText(result.error or ('已取消启动' if result.operation == 'cancel_confirmation'
-                                                         else '原测试任务已提交'))
-                self.start_project = ''
-                self.start_request = None
-            return False  # The original safety confirmation and job handler run normally.
         if dialog is None or result.identifier != self.pending:
             return False
         self.pending = None
         dialog.set_busy(False)
         if result.error:
             self.final_save = False
-            self.module_after = ''
-            dialog.feedback.setText(result.error)
+            self.workspace.blocker_review.inline(dialog, result, dialog.project_id)
+            if result.operation == 'wizard_profile_get':
+                self.workspace.blocker_review.finish(dialog.project_id, 'wizard', None)
             return True
         operation = result.operation
         payload = result.payload
@@ -221,10 +130,11 @@ class ProjectWizardController:
         if operation in ('wizard_draft_get', 'wizard_draft_save'):
             self.token = payload['token']
             if operation == 'wizard_draft_get':
+                dialog.set_power_cycles(payload.get('power_cycles'))
                 if payload['draft']:
                     dialog.blank.show()
                     try:
-                        dialog.load(payload['draft'])
+                        old_destination = dialog.load(payload['draft'])
                     except (ValueError, TypeError, KeyError, AttributeError):
                         dialog.load({})
                         dialog.feedback.setText('向导草稿格式无法读取，可从空白开始')
@@ -232,50 +142,40 @@ class ProjectWizardController:
                         dialog.forward.setEnabled(False)
                         dialog.save_draft.setEnabled(False)
                     else:
-                        dialog.feedback.setText('已恢复向导草稿')
+                        dialog.feedback.setText('已恢复旧版草稿，请重新选择「保存到」的父目录'
+                                                if old_destination else '已恢复向导草稿')
+                else:
+                    dialog.remember()
             else:
                 dialog.remember()
                 dialog.feedback.setText('向导草稿已保存')
         elif operation in ('wizard_profile_get', 'wizard_profile_save'):
             self.token = payload['token']
             if operation == 'wizard_profile_get':
-                dialog.load(dict(profile=payload['profile']))
+                dialog.load_current(payload)
                 project = next((p for p in self.workspace.window.projects if p.project_id == dialog.project_id), None)
                 self.loaded_revision = payload.get('saved_revision', project.saved_revision if project else '')
                 if payload['profile']:
                     if project is not None and project.dirty:
                         dialog.feedback.setText('已载入项目草稿，请确认设置后保存为正式版本')
-                    else:
-                        self._refresh()
+                self.workspace.blocker_review.finish(dialog.project_id, 'wizard', dialog)
             else:
                 dialog.remember()
                 if self.final_save:
                     self.final_save = False
-                    self._send('save', dialog.project_id)
+                    self.workspace._recent_projects = payload.get('recent_projects', self.workspace._recent_projects)
+                    dialog.accept()
+                    self.workspace.window.statusBar().showMessage('项目设置已保存', 5000)
                 else:
                     dialog.feedback.setText('项目草稿已保存，正式版本尚未更新')
-        elif operation == 'create_typed':
+        elif operation == 'wizard_create':
             dialog.remember()
             dialog.accept()
             self.workspace._recent_projects = payload
             window = self.workspace.window
             window.select_project(result.project_id)
-            project = next((p for p in window.projects if p.project_id == result.project_id), None)
-            if project is not None:
-                self.open(project)
-        elif operation == 'save':
-            self.workspace._recent_projects = payload
-            dialog.feedback.setText('项目设置已保存为新版本')
-            self._send('wizard_profile_get', dialog.project_id)
         elif operation == 'wizard_preset_save':
             dialog.feedback.setText('已保存型号模板')
-        elif operation in ('preparation_view', 'preparation_record'):
-            self._show_preparation(result)
-            if operation == 'preparation_record':
-                dialog.feedback.setText('准备记录已保存')
-            if self.module_after:
-                step, self.module_after = self.module_after, ''
-                self._open_module(step)
         return True
 
     def prune(self, opened):

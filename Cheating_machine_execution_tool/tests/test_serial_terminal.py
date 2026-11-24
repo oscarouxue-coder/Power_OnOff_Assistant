@@ -916,6 +916,7 @@ class SerialLogDirectoryTests(unittest.TestCase):
         self.addCleanup(root.destroy)
         root.geometry("1100x850+50+50")
         root.channels = [ChannelConfig("channel_1", vlan_name="vlan101")]
+        root.workspace = Mock()
         root._restore_module_window_size = lambda *args: (1000, 820)
         root._log = Mock()
         root._serial_log_directory = lambda: LineCheckAssistant._serial_log_directory(root)

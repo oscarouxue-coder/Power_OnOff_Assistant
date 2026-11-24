@@ -1,7 +1,12 @@
 """Project-bound GUI admission; existing engines keep their own stop semantics."""
 from functools import wraps
+from contextvars import ContextVar
 from configparser import Error as ConfigError
 from src.services.project_runtime import current_run, report_project_result
+
+
+# start_project_thread copies this ticket to the original managed Tk worker.
+pipeline_resource_owner = ContextVar('pipeline_resource_owner', default=None)
 
 
 def project_operation(function):
@@ -15,7 +20,10 @@ def project_operation(function):
         if ticket is None:
             return False
         token = current_run.set((workspace.service.status, ticket))
+        resource_token = None
         try:
+            if function.__name__ == '_on_start':
+                resource_token = pipeline_resource_owner.set((workspace.service.resources, ticket))
             result = function(view, *args, **kwargs)
             if result is False:
                 report_project_result(state='skipped')
@@ -25,6 +33,8 @@ def project_operation(function):
             report_project_result(state='unknown')
             raise
         finally:
+            if resource_token is not None:
+                pipeline_resource_owner.reset(resource_token)
             current_run.reset(token)
             workspace.track_operation(target, ticket)
     return execute

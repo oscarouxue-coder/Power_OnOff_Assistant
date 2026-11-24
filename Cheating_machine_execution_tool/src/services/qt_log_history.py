@@ -15,9 +15,9 @@ EVENTS_PER_PAGE = 60
 MAX_MESSAGE_CHARS = 8192
 
 _LEGACY_STATES = {'succeeded': '成功', 'failed': '失败', 'skipped': '未执行', 'stopped': '已停止',
-                  'unchecked': '已执行，未配置结果校验', 'unknown': '结果未知，待核实',
-                  'running': '历史运行记录，待核实', 'prepared': '历史准备记录，待核实',
-                  'queued': '历史排队记录，待核实', 'stopping': '历史停止请求，待核实'}
+                  'unchecked': '已执行，未配置结果校验', 'unknown': '结果未知',
+                  'running': '历史运行记录，结果未知', 'prepared': '历史准备记录，结果未知',
+                  'queued': '历史排队记录，结果未知', 'stopping': '历史停止请求，结果未知'}
 
 
 def _valid_time(value):

@@ -56,6 +56,7 @@ class DutVoiceTr069Panel(QFrame):
         self.feedback = label('', 'muted')
         self.feedback.setWordWrap(True)
         self.form.addRow(self.feedback)
+        self.form.finish_initial_layout()
 
     def _field(self, key, title, value, choices=None):
         if choices is not None:

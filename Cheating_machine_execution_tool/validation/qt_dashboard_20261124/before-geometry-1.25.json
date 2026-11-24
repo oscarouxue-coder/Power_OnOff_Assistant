@@ -1,0 +1,74 @@
+{
+  "wide-cards": {
+    "png": "before-wide-cards-1.25.png",
+    "surface": "MainWindow.dashboard",
+    "mode": "cards",
+    "qt_scale": 1.25,
+    "window_dip": [
+      1536,
+      849
+    ],
+    "pixels": [
+      1920,
+      1061
+    ],
+    "overview_dip": [
+      0,
+      0,
+      1279,
+      619
+    ],
+    "inner_viewport_dip": [
+      1279,
+      397
+    ],
+    "sidebar": true,
+    "logs_expanded": true,
+    "displayed_ids": [
+      "preview-ready",
+      "preview-done",
+      "preview-offline",
+      "preview-unresolved",
+      "preview-queued",
+      "preview-power",
+      "preview-aging"
+    ],
+    "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275"
+  },
+  "wide-list": {
+    "png": "before-wide-list-1.25.png",
+    "surface": "MainWindow.dashboard",
+    "mode": "list",
+    "qt_scale": 1.25,
+    "window_dip": [
+      1536,
+      849
+    ],
+    "pixels": [
+      1920,
+      1061
+    ],
+    "overview_dip": [
+      0,
+      0,
+      1279,
+      619
+    ],
+    "inner_viewport_dip": [
+      1277,
+      360
+    ],
+    "sidebar": true,
+    "logs_expanded": true,
+    "displayed_ids": [
+      "preview-ready",
+      "preview-done",
+      "preview-offline",
+      "preview-unresolved",
+      "preview-queued",
+      "preview-power",
+      "preview-aging"
+    ],
+    "fixture_sha256": "36c4fa22055a07713d72583a4f9849def382bbecc70173ffe597c871deef8275"
+  }
+}

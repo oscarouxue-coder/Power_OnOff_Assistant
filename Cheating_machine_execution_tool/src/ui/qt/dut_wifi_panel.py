@@ -70,6 +70,7 @@ class DutWifiPanel(QFrame):
         self.inputs['dual_band_enabled'].toggled.connect(self._dual_changed)
         self.inputs['ssid_index'].currentTextChanged.connect(self._index_changed)
         self.update_rules()
+        self.form.finish_initial_layout()
 
     def resizeEvent(self,event):
         super().resizeEvent(event)

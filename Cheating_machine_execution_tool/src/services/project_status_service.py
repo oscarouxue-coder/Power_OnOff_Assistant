@@ -60,6 +60,7 @@ class ProjectStatusService:
         self.external = {}
         self.observed_at = {}
         self.handoffs = {}
+        self.archive_interrupted = False
 
     def attach(self, context):
         key = context.identity.project_id
@@ -75,6 +76,7 @@ class ProjectStatusService:
                 self.external.pop(key, None)
                 self.observed_at.pop(key, None)
             self.contexts[key] = context
+            interrupted = ('prepared', 'queued', 'running', 'stopping') if self.archive_interrupted else ('running', 'stopping')
             for path in (context.root / 'runs').glob('*/run.json'):
                 try:
                     value = json.loads(path.read_text(encoding='utf-8'))
@@ -88,7 +90,7 @@ class ProjectStatusService:
                     if existing is not None and existing['project_id'] != key:
                         raise ValueError('run identity belongs to another project')
                     value['_path'] = path
-                    if value.get('state') in ('running', 'stopping'):
+                    if value.get('state') in interrupted:
                         value.update(state='unknown', updated_at=time.time())
                         self._write(value)
                     self.records[value['owner']] = value
@@ -185,9 +187,12 @@ class ProjectStatusService:
             states.update({v['job_id']: v for v in jobs})
             values = tuple(states.values())
             active = sum(v['state'] in ('queued', 'running', 'stopping') for v in values)
-            unknown = {owner for owner, v in states.items() if v['state'] == 'unknown' and not v.get('reconciled')} | set(fences)
-            terminals = [v for v in values if v['state'] in TERMINAL and v['state'] != 'skipped']
-            last = max(terminals, key=lambda v: v.get('updated_at', 0), default={})
+            terminals = [(owner, v) for owner, v in states.items()
+                         if v['state'] in TERMINAL and v['state'] != 'skipped']
+            last_owner, last = max(terminals, key=lambda item: item[1].get('updated_at', 0), default=('', {}))
+            current_results = ((last_owner, last),) if self.archive_interrupted and last else states.items()
+            unknown = {owner for owner, v in current_results
+                       if v['state'] == 'unknown' and not v.get('reconciled')} | set(fences)
             result = last.get('state', '')
             busy, closing = self.activity.get(key, (False, False))
             stopping = closing or any(v['state'] == 'stopping' for v in values)

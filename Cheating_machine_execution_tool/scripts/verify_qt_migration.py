@@ -10,8 +10,26 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = (
-    'test_qt_wizard_recovers_typed_duts_prepares_and_upgrades_untyped_project',
+    'test_browse_inspections_and_switch_projects_without_dispatch_or_writes',
+    'test_hidden_toolbar_recovers_from_view_menu_and_window_shortcut',
+    'test_dut_form_construction_only_shows_the_owned_dialog',
+    'test_module_selection_remains_neutral_while_power_is_pending',
+    'test_failed_navigation_rejects_before_query_even_for_same_name',
+    'test_ui_requires_batch_and_selected_dut',
+    'test_toolbar_primary_action_keeps_normal_chat_route',
+    'test_ambiguous_frozen_map_rejects_before_submit',
+    'test_retry_while_cancelled_reader_is_still_exiting',
+    'test_same_channel_other_project_discards_inflight_answer',
+    'test_stop_retry_and_late_delivery_use_only_new_request',
+    'test_late_result_after_batch_switch_is_discarded',
+    'test_sidebar_actions_follow_only_the_rendered_project',
+    'test_new_project_previews_and_creates_only_the_confirmed_named_child',
+    'test_failed_creation_reports_the_stage_and_allows_correcting_the_same_inputs',
+    'test_new_project_rejects_conflicts_invalid_paths_and_late_directory_claim',
+    'test_old_draft_requires_reselecting_parent_and_cancel_does_not_create',
+    'test_qt_wizard_recovers_legacy_draft_and_uses_main_start_confirmation',
     'test_qt_wizard_saves_selected_field_feed_sources_and_keeps_legacy_defaults',
+    'test_main_channel_entry_reuses_saved_configuration_and_keeps_old_dut_history',
     'test_qt_model_presets_derive_saved_plans_and_apply_to_recovered_creation_drafts',
     'test_qt_device_resource_details_follow_real_leases_and_unresolved_protection',
     'test_qt_aging_history_pages_and_exports_only_the_bound_batch',
@@ -36,8 +54,8 @@ REQUIRED = (
     'test_pc_continuous_diagnosis_uses_local_scope_and_keeps_query_evidence',
     'test_qt_session_manager_confirms_exact_batch_and_keeps_other_chat_input',
     'test_qt_model_settings_use_shared_store_and_original_client',
-    'test_qt_reviews_one_persisted_interrupted_job_in_bound_history',
-    'test_qt_unknown_task_review_requires_local_confirmation_and_preserves_verdict',
+    'test_qt_history_shows_interrupted_job_without_a_review_action',
+    'test_qt_reopens_after_stale_resource_without_reviewing_verdict',
     'test_qt_system_health_shows_live_observations_and_collapses',
     'test_qt_archived_logs_pages_original_workspace_and_serial_text_with_local_export',
     'test_qt_imported_connection_uses_confirmed_local_choice_without_connecting',
@@ -103,6 +121,10 @@ REQUIRED = (
     'test_qt_postrun_resume_shows_waiting_and_cancels_remaining_channels',
     'test_qt_declined_confirmation_never_starts_a_job',
     'test_qt_configuration_changed_during_confirmation_blocks_dispatch',
+    'test_qt_blocker_review_opens_original_project_and_marks_missing_dut_channels',
+    'test_qt_blocker_review_waits_for_existing_editor_and_focuses_runtime_field',
+    'test_qt_blocker_review_locates_module_controls_without_dispatch',
+    'test_qt_blocker_review_keeps_current_project_when_original_is_gone',
     'test_live_refresh_preserves_navigation_selection_and_config_controls',
     'test_qt_six_configuration_tabs_save_and_reopen_original_values',
     'test_qt_pretest_freezes_editor_draft_and_closing_requests_safe_stop',
@@ -123,6 +145,7 @@ REQUIRED = (
     'test_qt_serial_shared_owner_close_confirmation_and_control_lock',
     'test_qt_serial_passive_snapshot_after_display_clear',
     'test_qt_serial_window_minimize_and_pin_preserve_live_session',
+    'test_qt_serial_scrollbar_menu_uses_chinese_and_scrolls',
     'test_qt_serial_scroll_project_switch_and_exit_wait_for_reader',
     'test_qt_tool_windows_restore_project_geometry_and_save_on_parent_close',
     'test_qt_module_windows_restore_legacy_sizes_and_save_through_project_lifecycle',
@@ -139,6 +162,15 @@ REQUIRED = (
 # Includes interpreter/desktop startup and native window captures for every case.
 # Individual operation and shutdown deadlines remain enforced within each test.
 NATIVE_TIMEOUT_SECONDS = 30 + 4 * len(REQUIRED)
+
+
+def missing_native_cases(output):
+    # unittest writes the case prefix before executing the test. A Python warning
+    # may sit between that prefix and the outcome on the same stream.
+    completed = set(re.findall(
+        r'^(test_\w+) \([^\n)]+\) \.\.\. (?:[^\n]*Warning:[^\n]*\n(?:[ \t][^\n]*\n)*)*ok$',
+        output, re.M))
+    return [name for name in REQUIRED if name not in completed]
 
 
 def main(argv=None):
@@ -166,13 +198,14 @@ def main(argv=None):
                    DUTPILOT_QT_CAPTURE_DIRECTORY=str(directory), PYTHONFAULTHANDLER='1')
         try:
             result = run_gui_child([str(interpreter), str(ROOT / 'scripts/run_tests.py'), 'qt_workbench_probe',
-                                    'qt_project_wizard_probe', 'qt_typed_status_probe', '-v'],
+                                    'qt_project_wizard_probe', 'qt_typed_status_probe', 'qt_channel_evidence_probe',
+                                    'qt_aging_inspection_probe', '-v'],
                 framework='qt', native_render=True, cwd=str(ROOT), timeout=NATIVE_TIMEOUT_SECONDS,
                 capture_output=True, text=True, encoding='utf-8', env=env)
             text = result.stdout + '\n' + result.stderr
             (directory / 'tests.txt').write_text(text, encoding='utf-8')
             count = re.search(r'Ran (\d+) tests', text)
-            missing = [name for name in REQUIRED if not re.search(r'^' + re.escape(name) + r' \(.*\) \.\.\. ok$', text, re.M)]
+            missing = missing_native_cases(text)
             passed = result.returncode == 0 and count and int(count[1]) == len(REQUIRED) and not missing
             results.append(dict(scale=scale, passed=bool(passed), tests=int(count[1]) if count else 0,
                                 missing=missing, evidence=result.offscreen_report))

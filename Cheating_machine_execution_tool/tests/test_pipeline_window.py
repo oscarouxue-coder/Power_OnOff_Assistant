@@ -346,7 +346,8 @@ class SimplifiedPipelineTests(unittest.TestCase):
     def make_window(self, selected):
         from line_check_assistant.pipeline_window import PipelineWindow
         window = PipelineWindow.__new__(PipelineWindow)
-        window.app = SimpleNamespace()
+        # Window-order tests exercise the managed path after its ticket has been admitted.
+        window.app = SimpleNamespace(workspace=object())
         window.window = MagicMock()
         window._running_thread = None
         window._check_vars = {code: MagicMock(get=MagicMock(return_value=True)) for code in selected}

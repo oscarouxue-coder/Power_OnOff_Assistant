@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 from src.models.onu_registration_models import OLT_FAMILIES, OnuTemplate
 from src.services.qt_onu_query import CONNECTION_FIELDS, DISCOVERY_FIELDS
 from src.ui.qt.onu_provision_page import OnuProvisionPage
+from src.ui.qt.blocker_review import ReviewFeedback, focus_widget
 from src.ui.qt.theme import button, label
 
 
@@ -111,7 +112,7 @@ class OnuQueryDialog(QDialog):
         self.tabs.addTab(confirmation, '确认执行')
         layout.addWidget(self.tabs, 1)
 
-        self.feedback = label('', 'muted')
+        self.feedback = ReviewFeedback(role='muted')
         self.feedback.setWordWrap(True)
         row = QHBoxLayout()
         row.addWidget(self.feedback, 1)
@@ -269,6 +270,10 @@ class OnuQueryDialog(QDialog):
         self.invalidate_registration()
         self.request('prepare_registration', **self._execution_data())
 
+    def focus_review(self, target):
+        widget = self.scope.get(target.field) or self.inputs.get(target.field) or self.tables.get(target.field)
+        return focus_widget(widget if widget is not None else getattr(self, target.field, None))
+
     def show_registration_preview(self, payload):
         self._registration_preview = payload
         self.plan_text.setPlainText(payload['commands'])
@@ -381,7 +386,7 @@ class OnuQueryDialog(QDialog):
         if self.busy:
             return
         if self.stoppable:
-            self.feedback.setText('请先停止查询并等待收尾')
+            self.feedback.show_review('请先停止查询并等待收尾', lambda: focus_widget(self.stop_button))
             return
         self._remember_profile()
         if self._saved != dict(family=self._shown_family, profiles=self._profiles):

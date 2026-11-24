@@ -1,5 +1,17 @@
 # 项目交接状态
 
+2026-11-25，Qt 工作台取消历史结果的强制人工核实。程序确认原进程退出和资源可用后自动释放旧占用。任务历史保留原结果和原审阅记录，新任务仍走原确认。真实设备及现场进程收尾待复验。
+
+Qt 开关机运行概览可点击「成功」「失败」「当前异常」查阅本任务的通道轮次及异常原因。[操作说明](Cheating_machine_execution_tool/line_check_assistant_README.md#windows-qt-候选版与源码工作台)
+
+Qt 项目向导保留项目档案和测试计划。主界面通过「环境配置」管理启用通道和旧 DUT 绑定，保存后可确认启动开关机挂测或全业务老化。现场复验待完成。[操作说明](Cheating_machine_execution_tool/line_check_assistant_README.md)
+
+2026-11-24 最近一次完整验证通过，3,423 项测试，285 项指定回归全部命中。Windows 原生隔离验证在 100%、125%、150% 各通过 141 项。[开发记录](DEVELOPMENT_LOG.md#2026-11-24---复用项目向导的环境配置)
+
+2026-11-24，独立兼容挂测从已保存项目运行，按实物 DUT 和网卡共同准入。Windows 临时项目及双进程专项已通过，旧窗口需在任务收尾后重开。现场与 AI 批量查询另行验证。[兼容入口说明](Cheating_machine_execution_tool/line_check_assistant_README.md#独立兼容挂测窗口)
+
+2026-11-24，Qt 源码工作台采用单行青绿色顶栏。右键顶栏可显示或隐藏全局工具栏，Ctrl+Shift+T 也可切换；窄窗可从「更多」访问溢出的命令。[操作说明](Cheating_machine_execution_tool/line_check_assistant_README.md#windows-qt-候选版与源码工作台)
+
 2026-11-24，Qt 已接入钉钉/飞书应用配置、群绑定、直连启停、飞书试发及挂测通知、源码 SDK 修复、受控扩展审阅和任务历史安全停止。全流程窗口在任务受理后收起，7 项旧流程指定回归已有对应核对。平台现场复验及其余 Tk 回归迁移仍待完成，旧窗口继续保留。[退役核对](docs/TK_RETIREMENT_AUDIT.md)
 
 源码、VS Code 调试与标准打包均以 Qt 为唯一产品界面。2026-11-24 移除旧启动脚本，源码启动及飞书 SDK 修复后重启统一使用 `run_dutpilot_qt.py`。Tk 源码及历史回归保留，后续界面开发使用 Qt。[启动与打包](README.md#从这里开始)
@@ -7,6 +19,8 @@
 2026-11-23，负责人确认 Qt V1.3.0 候选现场验收通过，GUI 升级 Phase 0–7 已收尾。该候选已通过完整基线 3,366 项、三档原生各 117 项及成品静态校验。现场范围包括目标 Windows、真实 DUT 的两类挂测和无人值守稳定性。[候选与现场验收报告](Cheating_machine_execution_tool/validation/gui_guidelines_20261123/REPORT.md)
 
 Qt 界面美化首批已接入正式源码工作台，覆盖总览、自动开关机和全业务老化。[首批集成及验证](Cheating_machine_execution_tool/validation/gui_visual_workbench_20261123/REPORT.md)
+
+Qt 总览默认优先显示运行中与需关注项目，卡片和列表按已有轮次或持续监测数据分别展示两类挂测。[改前改后对照与离线验证](Cheating_machine_execution_tool/validation/qt_dashboard_20261124/REPORT.md)
 
 第二批串口日志、样机升级、DUT 配置、测试项配置和通道配置已有独立评审稿，待集中确认；从 `run_dutpilot_qt.py --visual-preview` 的「业务窗口预览」进入。第三批项目准备及设备操作、第四批历史、AI 与设置，待进入预览。[业务窗口前后对照](Cheating_machine_execution_tool/validation/gui_visual_module_windows_20261123/REPORT.md)
 

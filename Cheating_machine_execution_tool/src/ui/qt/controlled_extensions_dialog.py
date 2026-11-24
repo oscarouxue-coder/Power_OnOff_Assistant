@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QCheckBox, QDialog, QFileDialog, QHBoxLayout, QListWidget, QListWidgetItem,
     QMenu, QMessageBox, QPlainTextEdit, QVBoxLayout)
 
+from src.ui.qt.blocker_review import ReviewFeedback
 from src.ui.qt.theme import button, label
 
 
@@ -48,7 +49,7 @@ class ControlledExtensionsDialog(QDialog):
         self.rows.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.rows.customContextMenuRequested.connect(self.open_actions)
         layout.addWidget(self.rows)
-        self.feedback = label('', 'muted')
+        self.feedback = ReviewFeedback(role='muted')
         self.feedback.setWordWrap(True)
         layout.addWidget(self.feedback)
         actions = QHBoxLayout()
@@ -107,7 +108,7 @@ class ControlledExtensionsDialog(QDialog):
             return
         self.request = None
         if result.error:
-            self.feedback.setText(result.error)
+            self.workspace.blocker_review.inline(self, result, self.project_id)
         elif result.operation == 'extension_review':
             payload = result.payload
             review = self.review = TemplateReviewDialog(self, payload['review'])

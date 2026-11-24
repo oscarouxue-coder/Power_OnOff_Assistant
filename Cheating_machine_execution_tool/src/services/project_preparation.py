@@ -8,7 +8,7 @@ import sqlite3
 import threading
 import uuid
 
-from src.services.project_profile_store import read_project_profile
+from src.services.project_profile_store import active_project_duts, configured_power_cycles, read_project_profile
 from src.services.project_store import ProjectStore, configuration_digest
 
 
@@ -100,6 +100,12 @@ def _step_inputs(directory, profile):
                     profile.get('requirements'), profile.get('type_config')),
         'initial_health': (profile.get('requirements'), profile.get('type_config')),
     }
+    if profile.get('environment_channels') and profile['test_type'] == 'power_cycle':
+        try:
+            cycles = configured_power_cycles(directory)
+        except (KeyError, ValueError):
+            cycles = None
+        common['pretest'] = common['pretest'][:-1] + (cycles,)
     return common, network
 
 
@@ -110,10 +116,13 @@ def _binding(profile, dut, spec, common, network, parents):
     channel = network.get('channel_' + str(dut.get('channel')), {})
     if key == 'environment':
         mapping = tuple(dut.get(k) for k in ('channel', 'serial_port', 'network_adapter', 'vlan', 'other_devices'))
+        if profile.get('environment_channels'):
+            mapping = (dut['channel'], dut.get('mapping_generation'), dut.get('other_devices'))
         if dut.get('adb_serial'):
             mapping += (dut['adb_serial'],)
         wiring = tuple(channel.get(k) for k in ('serial_port', 'adapter_alias', 'vlan_name', 'enabled'))
-        power = (dut.get('power_channel'), network.get('power_supply')) if profile['test_type'] == 'power_cycle' else ()
+        power = (dut.get('power_channel') if not profile.get('environment_channels') else None,
+                 network.get('power_supply')) if profile['test_type'] == 'power_cycle' else ()
         detail = (mapping, wiring, power)
     elif key == 'management_ip':
         detail = tuple(channel.get(k) for k in ('device_manage_ip', 'network_card_ip', 'subnet_mask'))
@@ -183,18 +192,21 @@ class ProjectPreparation:
         if not profile:
             return view
         view['test_type'] = profile['test_type']
+        view['environment_channels'] = bool(profile.get('environment_channels'))
+        active_duts = active_project_duts(profile, directory)
+        identifiers = [dut['hardware_id'].casefold() for dut in active_duts]
         plan = preparation_plan(profile)
         common, network = _step_inputs(directory, profile)
         rows = db.execute('''SELECT p.* FROM preparation p JOIN
             (SELECT MAX(seq) AS last FROM preparation WHERE project=? GROUP BY dut,step) latest
             ON p.seq=latest.last''', (view['project_id'],))
         latest = {(row['dut'], row['step']): row for row in rows}
-        applicable = {(d['dut_id'], step['id']) for d in profile['duts'] for step in plan}
+        applicable = {(d['dut_id'], step['id']) for d in active_duts for step in plan}
         for (dut_id, key), row in latest.items():
             if (dut_id, key) not in applicable and row['state'] != 'stale':
                 self._append(db, dut_id, key, row['binding'], row['attempt'], 'stale', row['evidence'],
                              row['verification'], '准备计划', row['source'])
-        for dut in profile['duts']:
+        for dut in active_duts:
             target = dict(dut_id=dut['dut_id'], label=dut['label'], channel=dut['channel'], ready=False, steps=[])
             views = {}
             for spec in plan:
@@ -224,9 +236,11 @@ class ProjectPreparation:
                 view['total'] += 1
                 view['verified'] += int(state == 'verified')
                 view['skipped'] += int(state == 'skipped')
-            target['ready'] = bool(dut.get('hardware_id') and all(
+            target['identity_confirmed'] = view['environment_channels'] or bool(dut.get('hardware_id'))
+            target['ready'] = bool(target['identity_confirmed'] and all(
                 step['state'] in ('verified', 'skipped') for step in target['steps']))
-            target['identity_confirmed'] = bool(dut.get('hardware_id'))
+            sn = dut['hardware_id'].casefold()
+            target['onu_receipt_available'] = bool(sn and identifiers.count(sn) == 1)
             view['duts'].append(target)
         view['ready'] = bool(view['duts']) and not dirty and all(dut['ready'] for dut in view['duts'])
         return view
@@ -236,10 +250,38 @@ class ProjectPreparation:
             db.execute('BEGIN IMMEDIATE')
             return self._snapshot(db)
 
-    def require_ready(self):
+    def require_ready(self, *, channels=None, detailed=False):
         view = self.snapshot()
-        if not view['ready']:
-            raise ValueError('请先保存配置，并完成当前 DUT 准备步骤及独立核验')
+        if channels is None and not detailed:
+            if not view['ready']:
+                raise ValueError('请先保存配置，并完成当前 DUT 准备步骤及独立核验')
+            return view
+        if view['dirty']:
+            raise ValueError('请先保存项目配置，再确认测试目标')
+        targets = view['duts']
+        if channels is not None:
+            by_channel = {dut['channel']: dut for dut in targets}
+            targets = []
+            for number in channels:
+                if number not in by_channel:
+                    raise ValueError(f'CH{number:02d} 未映射到已保存的 DUT，请核对项目档案')
+                targets.append(by_channel[number])
+        if not targets:
+            raise ValueError('请先在环境配置启用并保存测试通道' if view.get('environment_channels') else
+                             '没有本次测试的 DUT，请核对已保存的目标')
+        states = {'pending': '待执行', 'executed': '已执行，待独立核验', 'stale': '证据已过期',
+                  'running': '执行中', 'interrupted': '执行中断', 'failed': '失败', 'stopped': '已停止'}
+        for dut in targets:
+            name = dut['label'] or dut['dut_id']
+            if dut['channel'] is not None:
+                name = f"CH{dut['channel']:02d} · {name}"
+            if not dut['identity_confirmed']:
+                raise ValueError(f'{name} 缺少 DUT 实物标识，请填写并保存')
+            for step in dut['steps']:
+                state = step['state']
+                if state == 'verified' or (step['optional'] and state == 'skipped'):
+                    continue
+                raise ValueError(f"{name} 准备步骤「{step['label']}」{states.get(state, '待核实')}")
         return view
 
     def _transition(self, action, dut_id, step_id, operator, *, token=None, attempt=None, evidence=''):

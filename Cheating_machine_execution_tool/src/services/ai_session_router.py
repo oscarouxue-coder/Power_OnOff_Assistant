@@ -95,7 +95,7 @@ class AiSessionRouter:
         except ValueError:
             return None
 
-    def _resolve(self, text, current, targets, profile, stop, fresh):
+    def _resolve(self, text, current, targets, profile, stop, fresh, *, observe_request=None):
         if getattr(self.owner, 'capabilities', None) is not None:
             from src.services.ai_version_query_service import version_route, version_available
             version = version_route(text, current, targets, fresh) if version_available(self.owner) else None
@@ -143,8 +143,12 @@ class AiSessionRouter:
         route_started = time.monotonic()
         try:
             self.owner.emit("开始识别对话目标；仅发送目标标识和最近对话，不执行操作")
+            if observe_request is not None:
+                observe_request(None)
             reply = client.complete([dict(role="system", content=ROUTE_INSTRUCTIONS),
                 dict(role="user", content=self.owner.redactor.dumps(payload))], [], stop)
+            if observe_request is not None:
+                observe_request(getattr(reply, 'usage', None))
             if reply.calls:
                 raise ValueError("目标识别不允许调用工具")
             try:

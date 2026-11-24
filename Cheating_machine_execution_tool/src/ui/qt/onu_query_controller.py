@@ -76,9 +76,10 @@ class OnuQueryController:
                 if dialog is not None:
                     dialog.close_after_save = False
                     dialog.set_busy(False)
-                    dialog.feedback.setText(result.error)
+                    self.workspace.blocker_review.inline(dialog, result, identifier)
                 else:
-                    QMessageBox.warning(self.workspace.window, 'ONU 窗口未打开', result.error)
+                    self.workspace.blocker_review.finish(identifier, 'onu', None)
+                    self.workspace.blocker_review.warning(result, 'ONU 窗口未打开', identifier=identifier)
             return True
         payload = result.payload
         if action == 'show':
@@ -178,6 +179,7 @@ class OnuQueryController:
 
         dialog.finished.connect(finished)
         dialog.show()
+        self.workspace.blocker_review.finish(identifier, 'onu', dialog)
 
     def set_closing(self, closing):
         for dialog in self.windows.values():

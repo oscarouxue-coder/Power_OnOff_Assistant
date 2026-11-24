@@ -205,6 +205,130 @@ class QtWorkbenchTests(unittest.TestCase):
         self.window.show()
         QTest.qWait(30)
 
+    def test_hidden_toolbar_recovers_from_view_menu_and_window_shortcut(self):
+        from PySide6.QtGui import QContextMenuEvent
+        from PySide6.QtWidgets import QToolBar
+
+        window = self.window
+        toolbar = window.findChild(QToolBar, 'GlobalHeader')
+        toggle = toolbar.toggleViewAction()
+        header = window.menuWidget()
+        row = header.layout()
+        fixed = [row.itemAt(i).widget() for i in range(3)]
+        self.assertEqual(toggle.text(), '显示全局工具栏')
+        self.assertEqual(toggle.shortcut().toString(), 'Ctrl+Shift+T')
+        self.assertEqual(toggle.shortcutContext(), Qt.ShortcutContext.WindowShortcut)
+        self.assertAlmostEqual(window.devicePixelRatioF(), float(os.environ['QT_SCALE_FACTOR']))
+        self.app.setActiveWindow(window)
+        def header_menu(pos, checked):
+            QTest.mouseClick(window.windowHandle(), Qt.RightButton, pos=header.mapTo(window, pos))
+            self.app.processEvents()
+            popup = self.app.activePopupWidget()
+            self.assertIsNotNone(popup)
+            self.assertEqual(popup.actions(), [toggle])
+            self.assertEqual(toggle.isChecked(), checked)
+            return popup
+
+        subtitle = fixed[2]
+        menu = header_menu(subtitle.mapTo(header, subtitle.rect().center()), True)
+        QTest.mouseClick(menu, Qt.LeftButton, pos=menu.actionGeometry(toggle).center())
+        self.assertFalse(toolbar.isVisible())
+        QTest.keyClick(window, Qt.Key_T, Qt.ControlModifier | Qt.ShiftModifier)
+        self.assertTrue(toolbar.isVisible())
+        window.resize(800, 520)
+        self.app.processEvents()
+        self.assertEqual((window.width(), window.height()), (800, 520))
+        self.assertTrue(window.sidebar.isHidden())
+
+        def check_visible(expected):
+            self.assertEqual(toolbar.isVisible(), expected)
+            self.assertEqual(toggle.isChecked(), expected)
+            self.assertTrue(all(control.isVisible() for control in fixed))
+            self.assertTrue(window.sidebar.isHidden())
+
+        check_visible(True)
+        pos = toolbar.rect().center()
+        self.app.sendEvent(toolbar, QContextMenuEvent(
+            QContextMenuEvent.Reason.Mouse, pos, toolbar.mapToGlobal(pos)))
+        popup = self.app.activePopupWidget()
+        self.assertIsNotNone(popup)
+        self.assertEqual(popup.actions().count(toggle), 1)
+        QTest.mouseClick(popup, Qt.LeftButton, pos=popup.actionGeometry(toggle).center())
+        check_visible(False)
+        QTest.mouseClick(fixed[0], Qt.LeftButton)
+        self.assertTrue(window.sidebar.isVisible())
+        QTest.keyClick(fixed[0], Qt.Key_Space)
+        check_visible(False)
+        self.assertIs(header_menu(header.rect().center(), False), menu)
+        QTest.mouseClick(menu, Qt.LeftButton, pos=menu.actionGeometry(toggle).center())
+        check_visible(True)
+
+        field = window.dashboard.search
+        field.setFocus()
+        for visible in (False, True, False):
+            QTest.keyClick(field, Qt.Key_T, Qt.ControlModifier | Qt.ShiftModifier)
+            check_visible(visible)
+            self.assertTrue(field.hasFocus())
+        QTest.keyClick(field, Qt.Key_V, Qt.AltModifier)
+        self.assertTrue(menu.isVisible())
+        self.assertIs(menu.activeAction(), toggle)
+        QTest.keyClick(menu, Qt.Key_Return)
+        check_visible(True)
+
+        QTest.keyClick(window, Qt.Key_T, Qt.ControlModifier | Qt.ShiftModifier)
+        check_visible(False)
+        fresh = MainWindow(demo=False)
+        fresh.show()
+        self.assertEqual(fresh.windowTitle(), 'DUTPilot')
+        new_toolbar = fresh.findChild(QToolBar, 'GlobalHeader')
+        self.assertTrue(new_toolbar.isVisible())
+        self.assertTrue(new_toolbar.toggleViewAction().isChecked())
+
+    def test_dut_form_construction_only_shows_the_owned_dialog(self):
+        from src.ui.qt.dut_configuration_dialog import DutConfigurationDialog
+        from src.ui.qt.visual_preview_data import module_preview_snapshots
+
+        snapshot = module_preview_snapshots()[2]
+        before = self.scope.runtime.created_windows
+        dialog = DutConfigurationDialog(snapshot, self.window)
+        dialog._allow_close = True
+        self.assertEqual(self.scope.runtime.created_windows, before)
+        dialog.show()
+        self.app.processEvents()
+        self.assertIs(dialog.parentWidget(), self.window)
+        self.assertEqual(self.scope.runtime.created_windows, before + 1)
+        for panel in (dialog.wan, *dialog.wifi_panels.values(), *dialog.voice_tr069_panels.values()):
+            for row in panel.form.rows:
+                self.assertIs(row['group'].parentWidget(), panel)
+                self.assertEqual(row['group'].isHidden(), not row['visible'])
+                if row['visible']:
+                    self.assertGreaterEqual(panel.form.grid.indexOf(row['group']), 0)
+
+    def test_module_selection_remains_neutral_while_power_is_pending(self):
+        self.window.select_project(self.window.projects[0].project_id)
+        detail = self.window.detail
+        tabs = detail.tabs
+        requests = []
+
+        def power_selected():
+            requests.append('power')
+            tabs.setTabEnabled(1, False)
+
+        detail.single_power_requested.connect(power_selected)
+        detail.upgrade_requested.connect(lambda: requests.append('upgrade'))
+        tabs.setTabEnabled(1, True)
+        tabs.setTabEnabled(2, True)
+        QTest.mouseClick(tabs, Qt.LeftButton, pos=tabs.tabRect(1).center())
+        self.assertEqual(requests, ['power'])
+        self.assertEqual(tabs.currentIndex(), 0)
+        tabs.setTabEnabled(1, True)
+        tabs.setFocus()
+        QTest.keyClick(tabs, Qt.Key_Right)
+        self.assertEqual(requests, ['power', 'power'])
+        QTest.mouseClick(tabs, Qt.LeftButton, pos=tabs.tabRect(2).center())
+        self.assertEqual(requests, ['power', 'power', 'upgrade'])
+        self.assertEqual(tabs.currentIndex(), 0)
+
     def test_form_wheel_scrolls_without_editing_values(self):
         from PySide6.QtWidgets import (QComboBox, QDialog, QScrollArea, QSpinBox, QStyle,
                                        QStyleOptionSpinBox, QVBoxLayout, QWidget)
@@ -1063,7 +1187,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes):
             dialog.stop_action.trigger()
         self.assertEqual(receipts, ['active-fixture'])
-        dialog.show_review_state('active-fixture', 'stop_requested')
+        dialog.show_job_state('active-fixture', 'stop_requested')
         dialog.set_busy(False)
         self.assertFalse(dialog.stop_action.isEnabled())
         self.assertTrue(dialog.close())
@@ -1110,7 +1234,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             self.wait_for(lambda: len(window.projects) == count and bool(window.selected_project))
         before = {folder: (self.root / folder / 'project.linecheck.json').read_bytes() for folder in names}
         self.assertIn(controller.duplicate_action, window.project_management_button.menu().actions())
-        self.assertIs(window.sidebar_settings_button.menu(), window.settings_button.menu())
+        self.assertIs(window.sidebar_settings_button.menu(), window.settings_button.defaultAction().menu())
         self.assertIn(controller.history_action, window.history_button.menu().actions())
         self.assertIn(controller.archived_logs_action, window.history_button.menu().actions())
 
@@ -1261,15 +1385,15 @@ class QtProjectWorkspaceTests(unittest.TestCase):
                     row_b = ('已持有', 'DUT', 'dut:hardware:fixture-b', b.name, b.project_id, owner_b)
                     row_adb = ('已持有', 'ADB', 'AB · adb:4142', b.name, b.project_id, owner_b)
                     self.wait_for(lambda: records() == {row_a, row_b, row_adb})
-                    self.assertEqual(dialog.resource_status.text(), '已持有 3 条 · 待核实 0 条')
+                    self.assertEqual(dialog.resource_status.text(), '已持有 3 条 · 受保护 0 条')
                     self.window.select_project(a.project_id)
                     table.selectRow(0)
                     self.window.select_project(b.project_id)
                     self.assertEqual(records(), {row_a, row_b, row_adb})
                     manager.release(owner_a, uncertain=True)
-                    unknown = ('待核实', *row_a[1:])
+                    unknown = ('受保护', *row_a[1:])
                     self.wait_for(lambda: records() == {unknown, row_b, row_adb})
-                    self.assertEqual(dialog.resource_status.text(), '已持有 2 条 · 待核实 1 条')
+                    self.assertEqual(dialog.resource_status.text(), '已持有 2 条 · 受保护 1 条')
                     dialog.close()
                     self.window.sidebar_devices_button.click()
                     dialog = controller.device_inventory_dialog
@@ -1410,11 +1534,12 @@ class QtProjectWorkspaceTests(unittest.TestCase):
     def test_native_new_project_dialog_calls_original_store_and_switches_without_tasks(self):
         from qt_project_wizard_probe import complete_new_dialog
         self.controller.new_project()
-        complete_new_dialog(self, self.root / 'project-a', '真实临时项目A')
+        destination = complete_new_dialog(self, self.root, '真实临时项目A')
         self.wait_for(lambda: len(self.window.projects) == 1)
         first = self.window.projects[0]
         self.assertEqual(self.window.selected_project, first.project_id)
-        self.assertTrue((self.root / 'project-a/project.linecheck.json').is_file())
+        self.assertEqual(destination, self.root / '真实临时项目A_开关机挂测')
+        self.assertTrue((destination / 'project.linecheck.json').is_file())
         self.assertTrue(self.window.detail.start_button.isEnabled())
         self.assertEqual(first.active_task_count, 0)
         self.assertIn('create', self.window.logs.text.toPlainText())
@@ -1445,9 +1570,8 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.wait_for(self.window.isActiveWindow)
         self.assertFalse(self.controller.directory_action.isEnabled())
         ctrl = Qt.KeyboardModifier.ControlModifier
-        first = self.root / '项目 A'
         QTest.keyClick(self.window, Qt.Key.Key_N, ctrl)
-        complete_new_dialog(self, first, '项目 A')
+        first = complete_new_dialog(self, self.root, '项目 A')
         first_id = self.window.selected_project
         self.controller.submit('create', self.root / '项目 B', '项目 B')
         self.wait_for(lambda: len(self.window.projects) == 2)
@@ -2505,64 +2629,41 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             self.assertNotEqual(form.base.id, second_form.base.id)
             self.assertNotIn('synthetic-model-key', self.window.logs.text.toPlainText())
 
-    def test_qt_unknown_task_review_requires_local_confirmation_and_preserves_verdict(self):
-        from PySide6.QtWidgets import QMessageBox
 
-        self.controller.unknown_task_action.trigger()
-        self.wait_for(lambda: self.controller.unknown_task_dialog is not None)
-        dialog = self.controller.unknown_task_dialog
-        self.assertEqual(dialog.selection.count(), 1)
-        self.assertFalse(dialog.review_button.isEnabled())
-        QTest.mouseClick(dialog.cancel_button, Qt.MouseButton.LeftButton)
-        self.wait_for(lambda: self.controller.unknown_task_dialog is None)
-
-        self.controller.submit('create', self.root / 'review', '旧任务核实项目')
+    def test_qt_reopens_after_stale_resource_without_reviewing_verdict(self):
+        root = self.root / 'interrupted-project'
+        self.controller.submit('create', root, '旧任务项目')
         self.wait_for(lambda: len(self.window.projects) == 1)
         identifier = self.window.projects[0].project_id
         service = self.controller.adapter._service
         context = service.projects.opened[identifier]
-        owner = f'gui:{identifier}:simulated-review'
+        owner = f'serial-session:{identifier}:COM16'
         snapshot = service.projects.snapshot(context)
-        service.status.begin(context, owner, snapshot, '_on_start')
-        service.status.complete(owner, state='unknown')
-        service.resources.acquire(owner, identifier, context.identity.name, ('serial:qt-native-review-fixture',))
+        service.status.begin(context, 'earlier-job', snapshot, 'firmware.upgrade')
+        service.status.complete('earlier-job', state='unknown')
+        service.resources.acquire(owner, identifier, context.identity.name, ('serial:qt-native-stale-fixture',))
         service.resources.release(owner, uncertain=True)
-        self.controller.submit('refresh')
-        self.wait_for(lambda: self.window.projects[0].state == 'unknown')
-        self.assertFalse(self.window.detail.start_button.isEnabled())
-        output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
-        if output:
-            self.assertTrue(self.window.grab().save(str(Path(output) / 'unknown-task-before-review.png')))
-        self.controller.unknown_task_action.trigger()
-        self.wait_for(lambda: self.controller.unknown_task_dialog is not None)
-        dialog = self.controller.unknown_task_dialog
-        dialog.selection.setCurrentIndex(1)
-        self.assertEqual(dialog.owner.text(), owner)
-        self.assertFalse(dialog.review_button.isEnabled())
-        dialog.evidence.setPlainText('已核对模拟任务记录')
-        self.assertTrue(dialog.review_button.isEnabled())
 
-        if output:
-            self.assertTrue(dialog.grab().save(str(Path(output) / 'unknown-task-review.png')))
-        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.No) as confirm:
-            QTest.mouseClick(dialog.review_button, Qt.MouseButton.LeftButton)
-            self.assertEqual(confirm.call_args.args[-1], QMessageBox.StandardButton.No)
-            self.assertIn(owner, confirm.call_args.args[2])
-        self.assertFalse((service.directory / 'reconciliations').exists())
-        self.assertIn(owner, service.resources.unknown_for(identifier))
-        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes), \
-                patch('serial.Serial', side_effect=AssertionError('review must never start hardware')):
-            QTest.mouseClick(dialog.review_button, Qt.MouseButton.LeftButton)
-            self.wait_for(lambda: self.controller.unknown_task_dialog is None)
-        self.assertTrue(self.window.detail.start_button.isEnabled())
-        self.assertEqual(self.window.projects[0].active_task_count, 0)
+        old_adapter = self.controller.adapter
+        self.window.close()
+        self.wait_for(lambda: old_adapter.closed.is_set() and not self.window.isVisible())
+        self.window = MainWindow(demo=False)
+        with patch('src.services.power_worker_lifetime.power_worker_notice', return_value=''), \
+                patch('serial.Serial', side_effect=AssertionError('recovery must never open serial')):
+            self.controller = WorkspaceController(self.window, Path(__file__).resolve().parents[1],
+                                                  directory=self.root / 'workspace')
+            self.window.resize(1366, 768)
+            self.window.show()
+            self.wait_for(lambda: self.controller.ready and len(self.window.projects) == 1)
+            self.window.select_project(identifier)
+            self.wait_for(lambda: self.window.detail.start_button.isEnabled())
+        service = self.controller.adapter._service
+        self.assertFalse(service.resources.unknown_for(identifier))
+        self.assertFalse(hasattr(self.controller, 'unknown_task_action'))
+        self.assertEqual(self.window.projects[0].state, 'unknown')
         ledger = json.loads((snapshot / 'run.json').read_text(encoding='utf-8'))
         self.assertEqual(ledger['state'], 'unknown')
-        self.assertTrue(ledger['reconciled'])
-        self.assertFalse(service.resources.unknown_for(identifier))
-        self.assertNotIn('已核对模拟任务记录', self.window.logs.text.toPlainText())
-        if output:
-            self.assertTrue(self.window.grab().save(str(Path(output) / 'unknown-task-after-review.png')))
+        self.assertFalse(ledger.get('reconciled'))
 
     def test_qt_system_health_shows_live_observations_and_collapses(self):
         self.controller.submit('create', self.root / 'health-project', '系统状态验证项目')
@@ -4526,7 +4627,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.assertIn('vlan116', dialog.views)
         manager.acquire_control('fixture-upgrade', SerialSettings('COM216'))
         with patch('PySide6.QtWidgets.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes), \
-             patch('PySide6.QtWidgets.QMessageBox.warning') as warning:
+             patch('src.ui.qt.blocker_review.show_warning') as warning:
             dialog.close_tab(index)
             self.wait_for(lambda: warning.called and not dialog.busy)
         self.assertIn('vlan116', dialog.views)
@@ -4552,7 +4653,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             return release(owner, port, **options)
 
         with patch.object(manager, 'release', side_effect=release_monitor), \
-                patch.object(QMessageBox, 'warning') as warning:
+                patch('src.ui.qt.blocker_review.show_warning') as warning:
             dialog.close()
             self.wait_for(lambda: warning.called and not dialog.busy)
         self.wait_for(lambda: 'vlan122' not in dialog.views and not dialog.detaching and dialog.stop_button.isEnabled())
@@ -4669,6 +4770,59 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.wait_for(lambda: self.controller.adapter.closed.is_set() and not self.window.isVisible())
         self.assertFalse(self.controller.serial_windows)
         self.assertTrue(driver.closed)
+
+    def test_qt_serial_scrollbar_menu_uses_chinese_and_scrolls(self):
+        _, dialog = self._open_serial_fixture()
+        view = dialog.views['vlan116']
+        dialog.tabs.setCurrentWidget(view['page'])
+        output = view['output']
+        driver = self.serial_harness.drivers['COM216']
+        driver.input.put(('\n'.join(f'fixture line {n}' for n in range(600)) + '\n').encode())
+        self.wait_for(lambda: 'fixture line 599' in output.toPlainText())
+        bar = output.verticalScrollBar()
+        self.wait_for(bar.isVisible)
+        low, high = bar.minimum(), bar.maximum()
+        middle = (low + high) // 2
+        self.assertGreater(high - low, 2 * bar.pageStep())
+
+        def open_menu(scrollbar, position):
+            QTest.mouseClick(dialog.windowHandle(), Qt.RightButton, pos=scrollbar.mapTo(dialog, position))
+            self.app.processEvents()
+            menu = self.app.activePopupWidget()
+            self.assertIsNotNone(menu)
+            self.assertIs(menu.parentWidget(), scrollbar)
+            return menu
+
+        def click_action(menu, title):
+            action = next(action for action in menu.actions() if action.text() == title)
+            QTest.mouseClick(menu, Qt.LeftButton, pos=menu.actionGeometry(action).center())
+            self.assertIsNone(self.app.activePopupWidget())
+
+        center = bar.rect().center()
+        bar.setValue(middle)
+        menu = open_menu(bar, center)
+        self.assertEqual([None if action.isSeparator() else action.text() for action in menu.actions()], [
+            '滚动到此处', None, '滚动到顶部', '滚动到底部', None,
+            '向上翻页', '向下翻页', None, '向上滚动一行', '向下滚动一行',
+        ])
+        QTest.keyClick(menu, Qt.Key_Escape)
+        self.assertIsNone(self.app.activePopupWidget())
+        self.assertEqual(bar.value(), middle)
+
+        for title, expected in (
+            ('滚动到顶部', low), ('滚动到底部', high),
+            ('向上翻页', middle - bar.pageStep()), ('向下翻页', middle + bar.pageStep()),
+            ('向上滚动一行', middle - bar.singleStep()), ('向下滚动一行', middle + bar.singleStep()),
+        ):
+            with self.subTest(action=title):
+                bar.setValue(middle)
+                click_action(open_menu(bar, center), title)
+                self.assertEqual(bar.value(), expected)
+
+        bar.setValue(low)
+        click_action(open_menu(bar, center), '滚动到此处')
+        self.assertGreater(bar.value(), low + (high - low) // 3)
+        self.assertLess(bar.value(), high - (high - low) // 3)
 
     def test_qt_serial_scroll_project_switch_and_exit_wait_for_reader(self):
         identifier, dialog = self._open_serial_fixture()
@@ -5129,7 +5283,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             if directory:
                 self.assertTrue(snapshot.grab().save(str(Path(directory) / 'channel-reported-stage.png')))
             snapshot.close()
-            self.window.mode_label.setText('模拟设备验证 · 原任务服务（不连接硬件）')
+            self.window.set_mode_message('模拟设备验证 · 原任务服务（不连接硬件）')
             self.assertTrue(self.window.detail.stop_button.isEnabled())
             self.assertFalse(self.window.detail.start_button.isEnabled())
             self.assertEqual(self.window.projects[0].active_task_count, 1)
@@ -5172,10 +5326,12 @@ class QtProjectWorkspaceTests(unittest.TestCase):
     def test_qt_operator_stop_waits_for_original_process_receipt(self):
         from threading import Event
         from PySide6.QtWidgets import QMessageBox
+        from qt_execution_fakes import mock_power_interfaces
         from src.services import legacy_power_test_service as legacy
         from src.services.pipeline_orchestrator import PipelineOrchestrator
         from test_legacy_power_test_service import _CompletedProcess, _FakeProcessContext
         _, project = self._configured_execution(numbers=(1,))
+        saved_project = self.controller.adapter._service.projects.opened[project]
         started, stopping, allow_exit = Event(), Event(), Event()
 
         class SimulatedPowerProcess(_CompletedProcess):
@@ -5192,7 +5348,8 @@ class QtProjectWorkspaceTests(unittest.TestCase):
                 return self._alive
 
         context = _FakeProcessContext()
-        with patch('src.services.capability_device_services.PipelineOrchestrator', PipelineOrchestrator), \
+        with mock_power_interfaces(saved_project), \
+                patch('src.services.capability_device_services.PipelineOrchestrator', PipelineOrchestrator), \
                 patch.object(legacy, 'multiprocessing') as spawn, \
                 patch.object(context, 'Process', side_effect=SimulatedPowerProcess) as process, \
                 patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes):
@@ -5237,13 +5394,145 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             config.write_bytes(config.read_bytes() + b'\n# changed before local approval\n')
             return QMessageBox.StandardButton.Yes
         with patch('PySide6.QtWidgets.QMessageBox.question', side_effect=change_configuration), \
-             patch('PySide6.QtWidgets.QMessageBox.warning') as warning:
+             patch('src.ui.qt.blocker_review.show_warning') as warning:
             self.controller.start_test()
             self.wait_for(lambda: warning.called)
         self.assertFalse(engine.calls)
         self.assertIn('配置', warning.call_args.args[2])
         self.assertIsNone(self.controller.adapter._executions[identifier].capabilities)
         self.assertEqual(self.window.projects[0].active_task_count, 0)
+
+    def test_qt_blocker_review_opens_original_project_and_marks_missing_dut_channels(self):
+        from PySide6.QtWidgets import QMessageBox
+        from src.services.project_profile_store import write_project_profile
+
+        engine, identifier = self._configured_execution((1, 2, 7))
+        workspace = self.controller.adapter._service
+        context = workspace.projects.opened[identifier]
+        write_project_profile(context.config_dir, dict(test_type='power_cycle', duts=[],
+                                                      type_config=dict(target_cycles=100)))
+        workspace.projects.save(context)
+        self.controller.submit('create', self.root / 'other-review-project', '另一项目')
+        self.wait_for(lambda: len(self.window.projects) == 2 and self.window.selected_project != identifier)
+        other = self.window.selected_project
+
+        def latest_warning():
+            return next((box for box in self.window.findChildren(QMessageBox) if box.isVisible()), None)
+
+        for navigate in (False, True):
+            self.window.select_project(identifier)
+            self.controller.start_test()
+            self.window.select_project(other)
+            self.wait_for(latest_warning)
+            warning = latest_warning()
+            self.assertEqual(warning.windowTitle(), '项目操作未完成')
+            self.assertIn('CH01、CH02、CH07 未映射到已保存的 DUT', warning.text())
+            button = (next(b for b in warning.buttons() if b.text() == '前往确认') if navigate
+                      else warning.button(QMessageBox.StandardButton.Ok))
+            QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+            if not navigate:
+                self.assertEqual(self.window.selected_project, other)
+                self.assertNotIn(identifier, self.controller.configuration_editors)
+        self.wait_for(lambda: identifier in self.controller.configuration_editors)
+        dialog = self.controller.configuration_editors[identifier]
+        self.assertEqual(self.window.selected_project, identifier)
+        self.assertEqual(dialog.editor_kind, 'channels')
+        self.assertEqual([row.number for row in dialog.rows if row.enabled.accessibleDescription()], [1, 2, 7])
+        self.assertIs(dialog.focusWidget(), dialog.rows[0].enabled)
+        self.assertFalse(dialog.dirty)
+        self.assertFalse(engine.calls)
+        self.assertEqual(self.controller._current().active_task_count, 0)
+
+    def test_qt_blocker_review_waits_for_existing_editor_and_focuses_runtime_field(self):
+        from PySide6.QtWidgets import QMessageBox
+        from src.models.project_review import ReviewTarget
+        from src.services.qt_workspace_adapter import ProjectCommandResult
+
+        engine, identifier = self._configured_execution()
+        self.controller.open_channels()
+        self.wait_for(lambda: identifier in self.controller.configuration_editors)
+        channels = self.controller.configuration_editors[identifier]
+        channels.device_ip.setText('192.0.2.201')
+        self.assertTrue(channels.dirty)
+        result = ProjectCommandResult(0, 'prepare_execution', identifier, '测试循环次数无效',
+                                      review=ReviewTarget('configuration', 'number_of_tests'))
+        self.controller.blocker_review.warning(result, '项目操作未完成')
+        self.wait_for(lambda: any(box.isVisible() for box in self.window.findChildren(QMessageBox)))
+        warning = next(box for box in self.window.findChildren(QMessageBox) if box.isVisible())
+        QTest.mouseClick(next(b for b in warning.buttons() if b.text() == '前往确认'), Qt.MouseButton.LeftButton)
+        self.assertIs(self.controller.configuration_editors[identifier], channels)
+        self.assertEqual(channels.device_ip.text(), '192.0.2.201')
+        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.No):
+            self.assertFalse(channels.close())
+        self.assertTrue(channels.dirty)
+        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes):
+            self.assertTrue(channels.close())
+        self.wait_for(lambda: identifier in self.controller.configuration_editors
+                      and self.controller.configuration_editors[identifier] is not channels)
+        editor = self.controller.configuration_editors[identifier]
+        self.assertEqual(editor.tabs.tabText(editor.tabs.currentIndex()), '开关机运行参数')
+        self.assertIs(editor.focusWidget(), editor.fields['runtime']['number_of_tests'])
+        self.assertFalse(engine.calls)
+
+    def test_qt_blocker_review_locates_module_controls_without_dispatch(self):
+        from src.models.project_review import ReviewTarget
+        from src.services.qt_workspace_adapter import ProjectCommandResult
+
+        engine, identifier = self._configured_execution()
+        controller = self.controller
+        cases = (
+            (controller.open_upgrade, controller.upgrade_windows, ReviewTarget('upgrade', 'firmware'),
+             lambda dialog: dialog.firmware),
+            (controller.open_dut, controller.dut_windows, ReviewTarget('dut', 'wan'),
+             lambda dialog: dialog.query_button),
+            (controller.open_serial, controller.serial_windows, ReviewTarget('serial', 'output', reference='vlan107'),
+             lambda dialog: dialog.views['vlan107']['output']),
+            (controller.parameter_writer.open, controller.parameter_writer.windows, ReviewTarget('parameter', 'path'),
+             lambda dialog: dialog.path),
+            (controller.onu_query.open, controller.onu_query.windows, ReviewTarget('onu', 'pon'),
+             lambda dialog: dialog.scope['pon']),
+            (controller.model_settings.open, controller.model_settings.windows, ReviewTarget('model', 'model'),
+             lambda dialog: dialog.model),
+        )
+        from src.ui.qt.blocker_review import ReviewFeedback
+        for open_dialog, windows, target, control in cases:
+            with self.subTest(module=target.page):
+                open_dialog()
+                self.wait_for(lambda: identifier in windows)
+                dialog = windows[identifier]
+                self.wait_for(lambda: not dialog.busy)
+                feedback = ReviewFeedback()
+                self.window.statusBar().addWidget(feedback)
+                result = ProjectCommandResult(0, 'fixture', identifier, '请核对模块目标', review=target)
+                feedback.show_review(result.error, controller.blocker_review.action(result))
+                with patch.object(controller.adapter, 'submit', wraps=controller.adapter.submit) as dispatch:
+                    QTest.mouseClick(feedback.review_button, Qt.MouseButton.LeftButton)
+                    dispatch.assert_not_called()
+                self.assertIs(dialog.focusWidget(), control(dialog))
+                if target.page == 'dut':
+                    self.assertEqual(dialog.feature, 'wan')
+                elif target.page == 'serial':
+                    self.assertEqual(dialog.active, 'vlan107')
+                self.window.statusBar().removeWidget(feedback)
+                feedback.deleteLater()
+        self.assertFalse(engine.calls)
+        self.assertEqual(controller._current().active_task_count, 0)
+
+    def test_qt_blocker_review_keeps_current_project_when_original_is_gone(self):
+        from PySide6.QtWidgets import QMessageBox
+        from src.models.project_review import ReviewTarget
+        from src.services.qt_workspace_adapter import ProjectCommandResult
+
+        _, identifier = self._configured_execution()
+        result = ProjectCommandResult(0, 'prepare_execution', 'closed-project', '需要核对通道',
+                                      review=ReviewTarget('channels', 'dut', (7,)))
+        self.controller.blocker_review.warning(result, '项目操作未完成')
+        self.wait_for(lambda: any(box.isVisible() for box in self.window.findChildren(QMessageBox)))
+        warning = next(box for box in self.window.findChildren(QMessageBox) if box.isVisible())
+        QTest.mouseClick(next(b for b in warning.buttons() if b.text() == '前往确认'), Qt.MouseButton.LeftButton)
+        self.assertEqual(self.window.selected_project, identifier)
+        self.assertFalse(self.controller.configuration_editors)
+        self.assertIn('无法定位', self.window.statusBar().currentMessage())
 
     def _open_configuration(self):
         self.controller.submit('create', self.root / 'configuration', '六标签配置验证')
@@ -5742,68 +6031,35 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.assertEqual(detail.channel_model.channels, matrix.channels)
         self.assertEqual(len(ChannelConfigStore(path).load()), 2)
 
-    def test_qt_reviews_one_persisted_interrupted_job_in_bound_history(self):
-        from PySide6.QtWidgets import QMessageBox
+
+    def test_qt_history_shows_interrupted_job_without_a_review_action(self):
         from types import SimpleNamespace
         from src.services.capability_jobs import CapabilityJobs
         from test_qt_log_history import QtLogHistoryTests
 
-        self.controller.submit('create', self.root / 'job-review', '持久任务核实')
+        self.controller.submit('create', self.root / 'job-history', '中断任务历史')
         self.wait_for(lambda: len(self.window.projects) == 1)
         project_id = self.window.selected_project
         context = self.controller.adapter._service.projects.opened[project_id]
-        identifier = 'job-review-persisted-fixture'
+        identifier = 'interrupted-job-fixture'
         fixture = CapabilityJobs(context.history / 'ai/business', SimpleNamespace())
         try:
             QtLogHistoryTests.insert_job(fixture, identifier, 1795040380)
             with fixture.db:
-                fixture.db.execute('UPDATE jobs SET state=?,payload=? WHERE id=?',
-                    ('running', json.dumps(dict(arguments=dict(channel_ids=[1, 7]))), identifier))
+                fixture.db.execute('UPDATE jobs SET state=? WHERE id=?', ('running', identifier))
         finally:
             fixture.close()
+        database = fixture.directory / 'capability_jobs.sqlite3'
+        original = database.read_bytes()
         self.controller.history_action.trigger()
         history = self.controller.log_history
-        self.wait_for(lambda: project_id in history.windows and history.windows[project_id].review_action.isEnabled())
+        self.wait_for(lambda: project_id in history.windows and '结果未知' in history.windows[project_id].jobs.currentText())
         dialog = history.windows[project_id]
-        self.assertNotIn(project_id, self.controller.adapter._executions)
-        dialog._job_menu(QPoint(4, 4))
-        self.wait_for(dialog.job_menu.isVisible)
-        from src.services.power_worker_lifetime import ACTIVE
-        with patch('src.services.power_worker_lifetime.power_worker_notice', return_value=ACTIVE):
-            dialog.review_action.trigger()
-            dialog.job_menu.hide()
-            self.wait_for(lambda: ACTIVE in dialog.feedback.text())
-            self.assertIsNone(dialog.review_dialog)
-            output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
-            if output:
-                self.assertTrue(dialog.grab().save(str(Path(output) / 'live-power-review-blocked.png')))
-        dialog.review_action.trigger()
-        self.wait_for(lambda: dialog.review_dialog is not None)
-        review = dialog.review_dialog
-        self.assertEqual(review.review.job_id, identifier)
-        self.assertEqual(review.review.channels, (1, 7))
-        self.assertFalse(review.confirm_button.isEnabled())
-        review.outcome.setCurrentIndex(review.outcome.findData('succeeded'))
-        review.evidence.setPlainText('现场核对模拟结果')
-        self.assertTrue(review.confirm_button.isEnabled())
-        output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
-        if output:
-            self.assertTrue(review.grab().save(str(Path(output) / 'persisted-job-review.png')))
-        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.No) as confirm:
-            QTest.mouseClick(review.confirm_button, Qt.MouseButton.LeftButton)
-            self.assertIn(identifier, confirm.call_args.args[2])
-            self.assertEqual(confirm.call_args.args[-1], QMessageBox.StandardButton.No)
-        jobs = self.controller.adapter._executions[project_id].capabilities.jobs
-        self.assertEqual(jobs.runtime_states()[0]['state'], 'unknown')
-        with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes), \
-                patch.object(jobs, 'start', side_effect=AssertionError('review must not dispatch')):
-            QTest.mouseClick(review.confirm_button, Qt.MouseButton.LeftButton)
-            self.wait_for(lambda: dialog.review_dialog is None and 'reconciled' in dialog.logs.text.toPlainText())
         self.assertEqual(dialog.jobs.currentData(), identifier)
-        self.assertIn('已完成', dialog.jobs.currentText())
-        self.assertFalse(dialog.review_action.isEnabled())
-        self.assertNotIn('现场核对模拟结果', dialog.logs.text.toPlainText())
-        self.assertEqual(self.window.projects[0].active_task_count, 0)
+        self.assertNotIn(project_id, self.controller.adapter._executions)
+        self.assertFalse(dialog.stop_action.isEnabled())
+        self.assertNotIn('现场核实结果…', [action.text() for action in dialog.job_menu.actions()])
+        self.assertEqual(database.read_bytes(), original)
 
     def test_qt_history_result_files_open_selected_snapshot_after_workspace_restart(self):
         from types import SimpleNamespace
@@ -5869,7 +6125,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.assertEqual(dialog.jobs.currentData(), newer)
         dialog.jobs.setCurrentIndex(dialog.jobs.findData(older))
         self.wait_for(dialog.result_files_action.isEnabled)
-        self.assertFalse(dialog.review_action.isEnabled())
+        self.assertFalse(dialog.stop_action.isEnabled())
         dialog.jobs.customContextMenuRequested.emit(dialog.jobs.rect().center())
         self.wait_for(dialog.job_menu.isVisible)
         dialog.job_menu.hide()
@@ -6058,7 +6314,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.assertNotIn('older-job-file', exported)
         self.assertEqual(source.read_bytes(), original)
         old_index = dialog.jobs.findData(first_job)
-        self.assertIn('记录为运行中', dialog.jobs.itemText(old_index))
+        self.assertIn('结果未知', dialog.jobs.itemText(old_index))
         dialog.jobs.setCurrentIndex(old_index)
         dialog.logs.scope.setCurrentIndex(dialog.logs.scope.findData('project'))
         self.wait_for(lambda: not dialog.busy and 'older-job-file' in dialog.logs.text.toPlainText())

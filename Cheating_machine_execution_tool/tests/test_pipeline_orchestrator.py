@@ -307,6 +307,15 @@ class PipelineRunOrderTests(unittest.TestCase):
         from contextlib import ExitStack
         method_mocks = {code: MagicMock() for code in SUBTASK_CODES}
         stack = ExitStack()
+        from functools import partial
+        from uuid import uuid4
+        from src.core.host_resource_lock import HostResourceLock
+        directory = stack.enter_context(tempfile.TemporaryDirectory())
+        stack.enter_context(patch('src.services.workspace_resources.HostResourceLock',
+                                  partial(HostResourceLock, namespace='fixture-' + uuid4().hex)))
+        stack.enter_context(patch('src.services.physical_resource_guards.host_resource_directory', return_value=directory))
+        stack.enter_context(patch('src.services.physical_resource_guards.adapters_ipv4', return_value=[
+            dict(name='VLAN110', guid=str(uuid4()), index=110, up=True, addresses=[('192.168.1.110', 24)])]))
         stack.enter_context(
             patch.object(PipelineOrchestrator, "SUBTASK_TO_NEXT_WAIT_SECONDS", 0)
         )

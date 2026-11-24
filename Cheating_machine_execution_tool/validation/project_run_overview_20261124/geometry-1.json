@@ -1,0 +1,44 @@
+{
+  "idle": {
+    "file": "F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool\\validation\\project_run_overview_20261124\\idle-1.png",
+    "logical_size": [
+      1920,
+      1061
+    ],
+    "pixels": [
+      1920,
+      1061
+    ],
+    "scale": 1.0,
+    "logs_expanded": true,
+    "configuration_visible": true
+  },
+  "power-running": {
+    "file": "F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool\\validation\\project_run_overview_20261124\\power-running-1.png",
+    "logical_size": [
+      1920,
+      1061
+    ],
+    "pixels": [
+      1920,
+      1061
+    ],
+    "scale": 1.0,
+    "logs_expanded": true,
+    "configuration_visible": true
+  },
+  "aging-running": {
+    "file": "F:\\Aouxue\\Power_OnOff_Assistant\\Cheating_machine_execution_tool\\validation\\project_run_overview_20261124\\aging-running-1.png",
+    "logical_size": [
+      1920,
+      1061
+    ],
+    "pixels": [
+      1920,
+      1061
+    ],
+    "scale": 1.0,
+    "logs_expanded": true,
+    "configuration_visible": true
+  }
+}

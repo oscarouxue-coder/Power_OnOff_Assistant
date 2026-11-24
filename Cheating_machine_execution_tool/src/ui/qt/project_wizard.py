@@ -1,33 +1,27 @@
-"""Project setup and preparation UI; storage and execution use workspace receipts."""
+"""Project details and test plan editor backed by workspace receipts."""
+from copy import deepcopy
 from uuid import uuid4
 
 from PySide6.QtCore import QRegularExpression, Qt, Signal
-from PySide6.QtGui import QRegularExpressionValidator
+from PySide6.QtGui import QRegularExpressionValidator, QTextOption
 from PySide6.QtWidgets import (
-    QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QGridLayout,
-    QHBoxLayout, QHeaderView, QLineEdit, QMenu, QMessageBox, QPlainTextEdit, QStackedWidget,
-    QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout, QGridLayout, QHBoxLayout,
+    QLineEdit, QMenu, QMessageBox, QPlainTextEdit, QScrollArea, QStackedWidget, QToolButton, QVBoxLayout, QWidget,
 )
 
+from src.models.project import wizard_project_destination
 from src.models.project_profile import COLLECTORS, COLLECTOR_LABELS, FEED_COLLECTORS, TEST_TYPES
-from src.services.project_preparation import OPTIONAL_STEPS, preparation_plan
-from .project_preparation_page import ProjectPreparationPage
+from .showcase_components import semantic_icon, test_type_symbol
+from src.ui.qt.blocker_review import ReviewFeedback, focus_widget
 from .theme import button, label
-
-
-DUT_FIELDS = (
-    ('label', 'DUT 名称'), ('hardware_id', '设备标识'), ('target_firmware', '目标固件'),
-    ('channel', '测试通道'), ('serial_port', '串口'), ('network_adapter', '网卡'),
-    ('vlan', 'VLAN'), ('power_channel', '电源通道'), ('other_devices', '其他设备'),
-    ('adb_serial', 'ADB 设备标识'),
-)
+from .window_placement import restore_placement
 
 
 class ProjectWizard(QDialog):
     draft_requested = Signal()
     commit_requested = Signal()
-    start_requested = Signal()
-    TITLES = ('项目与测试类型', 'DUT 与硬件资源', '准备计划与专属配置', '确认项目', '公共准备')
+    TITLES = ('项目与测试类型', '确认项目')
+    REVIEW = 1
 
     def __init__(self, parent=None, *, project_id='', name=''):
         super().__init__(parent)
@@ -36,6 +30,11 @@ class ProjectWizard(QDialog):
         self.setWindowTitle('项目向导' if project_id else '新建项目')
         self.resize(810, 560)
         self.presets = ()
+        self.duts = []
+        self.environment_managed = False
+        self.legacy_optional_steps = []
+        self.legacy_environment = None
+        self.power_cycles = None
         layout = QVBoxLayout(self)
         self.heading = label('', 'title')
         header = QHBoxLayout()
@@ -51,13 +50,20 @@ class ProjectWizard(QDialog):
             header.addWidget(options)
         layout.addLayout(header)
         self.pages = QStackedWidget()
-        layout.addWidget(self.pages, 1)
+        self.page_scroll = QScrollArea()
+        self.page_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.page_scroll.setWidgetResizable(True)
+        self.page_scroll.setWidget(self.pages)
+        layout.addWidget(self.page_scroll, 1)
         page = QWidget()
         form = QFormLayout(page)
         self.test_type = QComboBox()
         self.test_type.addItem('请选择测试类型', '')
         for key, title in TEST_TYPES.items():
             self.test_type.addItem(title, key)
+            symbol = test_type_symbol(key)
+            if symbol:
+                self.test_type.setItemIcon(self.test_type.count() - 1, semantic_icon(symbol))
         self.name = QLineEdit(name)
         self.name.setReadOnly(bool(project_id))
         self.directory = QLineEdit()
@@ -65,9 +71,19 @@ class ProjectWizard(QDialog):
         form.addRow('项目名称', self.name)
         if not project_id:
             destination = QHBoxLayout()
+            self.directory.setAccessibleName('保存到')
             destination.addWidget(self.directory)
             destination.addWidget(button('选择文件夹…', self._browse))
-            form.addRow('项目文件夹', destination)
+            form.addRow('保存到', destination)
+            self.final_path = QPlainTextEdit()
+            self.final_path.setReadOnly(True)
+            self.final_path.setTabChangesFocus(True)
+            self.final_path.setFixedHeight(60)
+            self.final_path.setWordWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+            self.final_path.setAccessibleName('最终路径')
+            form.addRow('最终路径', self.final_path)
+            self.name.textChanged.connect(self._update_destination_preview)
+            self.directory.textChanged.connect(self._update_destination_preview)
         self.model = QLineEdit()
         self.version = QLineEdit()
         self.requirements = QPlainTextEdit()
@@ -85,30 +101,13 @@ class ProjectWizard(QDialog):
             self.set_presets(())
         form.addRow('软件版本', self.version)
         form.addRow('测试要求', self.requirements)
-        self.pages.addWidget(page)
-
-        page = QWidget()
-        column = QVBoxLayout(page)
-        self.dut_table = QTableWidget(0, len(DUT_FIELDS))
-        self.dut_table.setAccessibleName('DUT 身份与资源')
-        self.dut_table.setHorizontalHeaderLabels([text for _, text in DUT_FIELDS])
-        self.dut_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        self.dut_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        column.addWidget(self.dut_table)
-        row = QHBoxLayout()
-        row.addWidget(button('添加 DUT', lambda: self.add_dut()))
-        row.addWidget(button('移除所选 DUT', self._remove_dut))
-        row.addStretch()
-        column.addLayout(row)
-        self.pages.addWidget(page)
-
-        page = QWidget()
-        column = QVBoxLayout(page)
-        self.cycles = self._number()
         self.hours = self._number()
         self.type_settings = QStackedWidget()
         power = QWidget()
-        QFormLayout(power).addRow('计划目标轮数', self.cycles)
+        self.cycles = QLineEdit()
+        self.cycles.setReadOnly(True)
+        self.cycles.setPlaceholderText('在测试项配置中设置')
+        QFormLayout(power).addRow('测试循环次数', self.cycles)
         aging = QWidget()
         aging_layout = QVBoxLayout(aging)
         duration = QFormLayout()
@@ -139,28 +138,13 @@ class ProjectWizard(QDialog):
         aging_layout.addLayout(checks)
         self.type_settings.addWidget(power)
         self.type_settings.addWidget(aging)
-        column.addWidget(self.type_settings)
-        column.addWidget(label('可选准备步骤', 'section'))
-        choices = QHBoxLayout()
-        self.optional = {}
-        for key, text in OPTIONAL_STEPS.items():
-            choice = self.optional[key] = QCheckBox(text)
-            choice.toggled.connect(self._preview_plan)
-            choices.addWidget(choice)
-        choices.addStretch()
-        column.addLayout(choices)
-        self.plan_text = label('')
-        self.plan_text.setWordWrap(True)
-        column.addWidget(self.plan_text)
-        column.addStretch()
+        form.addRow(self.type_settings)
         self.pages.addWidget(page)
         self.review = QPlainTextEdit()
         self.review.setReadOnly(True)
         self.review.setAccessibleName('创建或保存前核对')
         self.pages.addWidget(self.review)
-        self.preparation = ProjectPreparationPage()
-        self.pages.addWidget(self.preparation)
-        self.feedback = label('', 'muted')
+        self.feedback = ReviewFeedback(role='muted')
         self.feedback.setWordWrap(True)
         layout.addWidget(self.feedback)
         self.preset_error = label('', 'muted')
@@ -185,6 +169,7 @@ class ProjectWizard(QDialog):
         self._type_changed()
         self._page_changed()
         self.remember()
+        restore_placement(self, None, reference_window=parent)
 
     @staticmethod
     def _number():
@@ -205,9 +190,23 @@ class ProjectWizard(QDialog):
             return text
 
     def _browse(self):
-        value = QFileDialog.getExistingDirectory(self, '选择空项目文件夹', self.directory.text())
+        value = QFileDialog.getExistingDirectory(self, '选择保存位置', self.directory.text())
         if value:
             self.directory.setText(value)
+
+    def _destination(self):
+        return wizard_project_destination(self.directory.text().strip(), self.name.text(), self.test_type.currentData())
+
+    def _update_destination_preview(self):
+        path, placeholder = '', '—'
+        if self.directory.text().strip() and self.name.text().strip() and self.test_type.currentData():
+            try:
+                path = str(self._destination())
+            except ValueError as error:
+                placeholder = str(error)
+        self.final_path.setPlainText(path)
+        self.final_path.setToolTip(path)
+        self.final_path.setPlaceholderText(placeholder)
 
     def set_presets(self, presets):
         self.presets = tuple(presets)
@@ -229,9 +228,8 @@ class ProjectWizard(QDialog):
         current = self.profile()
         changes_identity = ((current['test_type'] and current['test_type'] != preset['test_type']) or
                             (current['model'] and current['model'] != preset['model']))
-        has_plan = bool(current['optional_steps'] or any(current['type_config'].values()))
-        changes_plan = (current['optional_steps'] != preset['optional_steps'] or
-                        current['type_config'] != preset['type_config'])
+        has_plan = current['test_type'] == 'service_aging' and any(current['type_config'].values())
+        changes_plan = preset['test_type'] == 'service_aging' and current['type_config'] != preset['type_config']
         title = self.preset_choice.currentText()
         if changes_identity or (has_plan and changes_plan):
             buttons = QMessageBox.StandardButton
@@ -244,28 +242,13 @@ class ProjectWizard(QDialog):
         self._load_plan(preset)
         self.feedback.setText('已应用「' + title + '」，可继续修改或保存草稿')
 
-    def add_dut(self, values=None):
-        values = values or {}
-        row = self.dut_table.rowCount()
-        self.dut_table.insertRow(row)
-        for col, (field, _) in enumerate(DUT_FIELDS):
-            value = values.get(field)
-            item = QTableWidgetItem('' if value is None else str(value))
-            if col == 0:
-                item.setData(Qt.ItemDataRole.UserRole, values.get('dut_id') or str(uuid4()))
-            self.dut_table.setItem(row, col, item)
-        self.dut_table.setCurrentCell(row, 0)
-
-    def _remove_dut(self):
-        row = self.dut_table.currentRow()
-        if row >= 0:
-            self.dut_table.removeRow(row)
-
     def _type_changed(self):
-        aging = self.test_type.currentData() == 'service_aging'
+        selected = self.test_type.currentData()
+        aging = selected == 'service_aging'
         self.type_settings.setCurrentIndex(int(aging))
-        self.dut_table.setColumnHidden(7, aging)
-        self._preview_plan()
+        self.type_settings.setVisible(bool(selected))
+        if not self.project_id:
+            self._update_destination_preview()
 
     @staticmethod
     def _set_source_enabled(source, enabled):
@@ -273,26 +256,8 @@ class ProjectWizard(QDialog):
         if not enabled:
             source.setCurrentIndex(0)
 
-    def _preview_plan(self):
-        selected = self.test_type.currentData()
-        if selected:
-            steps = preparation_plan({'test_type': selected,
-                                      'optional_steps': [k for k, box in self.optional.items() if box.isChecked()]})
-            self.plan_text.setText(' → '.join(step['label'] for step in steps))
-        else:
-            self.plan_text.clear()
-
     def profile(self):
         selected = self.test_type.currentData()
-        duts = []
-        for row in range(self.dut_table.rowCount()):
-            dut = {field: self.dut_table.item(row, col).text().strip() for col, (field, _) in enumerate(DUT_FIELDS)}
-            if not dut['adb_serial']:
-                del dut['adb_serial']
-            dut['dut_id'] = self.dut_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-            channel = dut['channel']
-            dut['channel'] = int(channel) if channel.isascii() and channel.isdecimal() and len(channel) <= 2 else channel or None
-            duts.append(dut)
         if selected == 'service_aging':
             collectors = [key for key, box in self.collectors.items() if box.isChecked()]
             config = dict(target_hours=self._quantity(self.hours), collectors=collectors)
@@ -301,41 +266,56 @@ class ProjectWizard(QDialog):
             if feeds:
                 config['feed_collectors'] = feeds
         else:
-            config = dict(target_cycles=self._quantity(self.cycles))
+            config = dict(target_cycles=self.power_cycles)
         return dict(schema_version=1, test_type=selected, model=self.model.text().strip(),
                     software_version=self.version.text().strip(), requirements=self.requirements.toPlainText().strip(),
-                    duts=duts, optional_steps=[key for key, box in self.optional.items() if box.isChecked()],
-                    type_config=config)
+                    duts=deepcopy(self.duts), optional_steps=list(self.legacy_optional_steps),
+                    type_config=config, **({'environment_channels': True} if self.environment_managed else {}))
 
     def draft(self):
-        return dict(name=self.name.text().strip(), directory=self.directory.text().strip(),
-                    profile=self.profile(), page=self.pages.currentIndex())
+        values = dict(name=self.name.text().strip(), parent_directory=self.directory.text().strip(),
+                      profile=self.profile(), page=self.pages.currentIndex())
+        if self.legacy_environment is not None:
+            values['environment'] = deepcopy(self.legacy_environment)
+        return values
 
     def load(self, draft):
         profile = draft.get('profile') or {}
         if not isinstance(profile, dict) or profile.get('schema_version', 1) != 1:
             raise ValueError('向导草稿档案格式或版本不受支持')
+        legacy_destination = not self.project_id and 'directory' in draft and 'parent_directory' not in draft
         if not self.project_id:
             self.name.setText(draft.get('name', ''))
-            self.directory.setText(draft.get('directory', ''))
+            self.directory.setText(draft.get('parent_directory', ''))
         self.test_type.setCurrentIndex(max(0, self.test_type.findData(profile.get('test_type'))))
         self.model.setText(profile.get('model', ''))
         self.version.setText(profile.get('software_version', ''))
         self.requirements.setPlainText(profile.get('requirements', ''))
-        self.dut_table.setRowCount(0)
-        for dut in profile.get('duts', ()):
-            self.add_dut(dut)
+        self.duts = deepcopy(profile.get('duts', []))
+        for dut in self.duts:
+            if not dut.get('dut_id'):
+                dut['dut_id'] = str(uuid4())
+        self.environment_managed = bool(profile.get('environment_channels'))
         self._load_plan(profile)
-        page = max(0, min(3, int(draft.get('page', 0))))
+        self.legacy_optional_steps = list(profile.get('optional_steps', ()))
+        self.legacy_environment = deepcopy(draft.get('environment'))
+        index = int(draft.get('page', 0))
+        page = self.REVIEW if not legacy_destination and index > 0 else 0
         self.pages.setCurrentIndex(page)
         self._page_changed()
         self.remember()
+        return legacy_destination
+
+    def load_current(self, payload):
+        self.set_power_cycles(payload.get('power_cycles'))
+        self.load(dict(profile=payload['profile']))
+
+    def set_power_cycles(self, cycles):
+        self.power_cycles = cycles
+        self.cycles.setText('' if cycles is None else str(cycles))
 
     def _load_plan(self, profile):
-        for key, box in self.optional.items():
-            box.setChecked(key in profile.get('optional_steps', ()))
         config = profile.get('type_config', {})
-        self.cycles.setText('' if config.get('target_cycles') is None else str(config['target_cycles']))
         self.hours.setText('' if config.get('target_hours') is None else str(config['target_hours']))
         for key, box in self.collectors.items():
             box.setChecked(key in config.get('collectors', ()))
@@ -348,7 +328,7 @@ class ProjectWizard(QDialog):
 
     def has_unsaved_inputs(self):
         draft = self.draft()
-        return any(draft[key] != self._saved[key] for key in ('name', 'directory', 'profile'))
+        return any(draft[key] != self._saved[key] for key in ('name', 'parent_directory', 'profile'))
 
     def _blank(self):
         buttons = QMessageBox.StandardButton
@@ -361,49 +341,61 @@ class ProjectWizard(QDialog):
             self.feedback.setText('已开始空白向导')
 
     def _back(self):
-        self.pages.setCurrentIndex(0 if self.pages.currentIndex() == 4 else self.pages.currentIndex() - 1)
+        self.pages.setCurrentIndex(0)
         self.feedback.clear()
 
     def _next(self):
         page = self.pages.currentIndex()
-        if page in (0, 3) and (not self.test_type.currentData() or not self.name.text().strip() or
-                               (not self.project_id and not self.directory.text().strip())):
-            self.pages.setCurrentIndex(0)
-            self.feedback.setText('请选择测试类型，并填写项目名称和文件夹')
-            return
-        if page == 3:
+        if page in (0, self.REVIEW):
+            if not self.test_type.currentData() or not self.name.text().strip():
+                self.pages.setCurrentIndex(0)
+                field = self.test_type if not self.test_type.currentData() else self.name
+                self.feedback.show_review('请选择测试类型，并填写项目名称', lambda: focus_widget(field))
+                return
+            if not self.project_id:
+                try:
+                    self._destination()
+                except ValueError as error:
+                    self.pages.setCurrentIndex(0)
+                    message = str(error) if self.directory.text().strip() else '请选择保存位置'
+                    self.feedback.show_review(message, lambda: focus_widget(self.directory))
+                    return
+        if page == self.REVIEW:
             self.commit_requested.emit()
-        elif page == 4:
-            self.start_requested.emit()
         else:
             self.feedback.clear()
             self.pages.setCurrentIndex(page + 1)
 
+    def focus_review(self, target):
+        self.pages.setCurrentIndex(0)
+        if target.field == 'collectors':
+            return focus_widget(next(iter(self.collectors.values()), None))
+        return focus_widget(getattr(self, target.field, None))
+
     def _page_changed(self):
         page = self.pages.currentIndex()
+        self.page_scroll.verticalScrollBar().setValue(0)
         self.heading.setText(self.TITLES[page])
-        self.save_draft.setVisible(page < 4)
         self.back.setEnabled(page != 0 and not self.busy)
-        self.back.setText('项目设置' if page == 4 else '上一步')
-        self.forward.setText(('保存项目设置' if self.project_id else '创建项目') if page == 3 else
-                             '确认并启动…' if page == 4 else '下一步')
-        self.forward.setEnabled(not self.busy and (page != 4 or (
-            self.preparation.snapshot.get('ready', False)
-            and not self.preparation.snapshot.get('dirty', False))))
-        if page == 3:
+        self.forward.setText(('保存项目设置' if self.project_id else '创建项目') if page == self.REVIEW else '下一步')
+        self.forward.setEnabled(not self.busy)
+        if page == self.REVIEW:
             p = self.profile()
-            lines = [self.name.text(), self.test_type.currentText(), self.directory.text(), p['model'], p['software_version'],
-                     p['requirements'], self.plan_text.text()]
+            lines = [self.name.text(), self.test_type.currentText()]
+            if not self.project_id:
+                lines.append('最终路径  ' + (self.final_path.toPlainText() or '请核对保存位置和项目名称'))
+            lines.extend((p['model'], p['software_version'], p['requirements']))
             if p['test_type'] == 'power_cycle':
-                lines.append('计划目标轮数：' + str(p['type_config']['target_cycles'] or '未填写'))
+                lines.append('测试循环次数  ' + (self.cycles.text().strip() or '请在测试项配置中设置'))
             else:
-                lines.append('目标时长（小时）：' + str(p['type_config']['target_hours'] or '未填写'))
+                lines.append('目标时长（小时）：' + (self.hours.text().strip() or '未填写'))
                 names = [COLLECTOR_LABELS[key] for key in p['type_config']['collectors']]
                 lines.append('监测业务：' + ('、'.join(names) if names else '未选择'))
                 feeds = p['type_config'].get('feed_collectors', ())
                 if feeds:
                     lines.append('现场采集：' + '、'.join(COLLECTOR_LABELS[key] for key in feeds))
-            lines.extend(f"{d['label']} · " + ' / '.join(str(d[k]) for k, _ in DUT_FIELDS[1:] if d.get(k)) for d in p['duts'])
+            if self.legacy_environment is not None:
+                lines.append('将沿用旧草稿中的通道设置。创建后可在项目主界面的「环境配置」核对。')
             self.review.setPlainText('\n'.join(filter(None, lines)))
 
     def set_busy(self, value):

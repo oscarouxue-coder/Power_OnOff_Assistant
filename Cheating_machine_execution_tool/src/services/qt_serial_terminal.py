@@ -9,6 +9,7 @@ import uuid
 
 from src.core.serial_transport import SerialCloseStartError, vlan_to_serial_port
 from src.models.capabilities import CapabilityError, CapabilitySpec, fingerprint, object_schema
+from src.models.project_review import ReviewRequired
 from src.models.serial_delivery import SerialDelivery
 from src.models.serial_models import SerialEvent, SerialSettings
 from src.services.ai_serial_client import read_existing_serial
@@ -123,7 +124,7 @@ class QtSerialTerminal:
     def open_pipeline(self, channels, directory):
         self._ensure_window()
         if directory != self.log_dir:
-            raise CapabilityError('configuration_changed', '确认后串口日志目录已变化')
+            raise ReviewRequired('configuration_changed', '确认后串口日志目录已变化', 'serial', 'directory_button')
         failures = []
         for channel in channels:
             vlan = channel.vlan_name.lower()
@@ -132,7 +133,7 @@ class QtSerialTerminal:
                 port = (channel.serial_port or vlan_to_serial_port(vlan)).strip().upper()
                 item = self._target_tab(vlan, port)
                 if item['port'] != port:
-                    raise CapabilityError('configuration_changed', '已打开的串口与本次通道映射不一致')
+                    raise ReviewRequired('configuration_changed', '已打开的串口与本次通道映射不一致', 'channels', 'port')
                 self._open(vlan, item)
             except Exception as error:
                 if item is not None and item['session'] is None and item['ticket'] is None and not item['error']:
@@ -146,7 +147,7 @@ class QtSerialTerminal:
         if item['session'] is not None:
             return
         if item['ticket'] is not None or item['error']:
-            raise CapabilityError('serial_closing', '串口正在收尾或关闭失败，须先核实')
+            raise CapabilityError('serial_closing', '串口正在收尾或关闭失败，等待原会话释放端口后再打开')
         try:
             self._open_monitor(vlan, item)
         except Exception as error:
@@ -269,7 +270,8 @@ class QtSerialTerminal:
             raise CapabilityError('target_changed', '串口标签已变化')
         if not self.manager.manual_writable(item['port']):
             self._log('跳过关闭 ' + vlan + ' / ' + item['port'] + '：存在控制所有者')
-            raise CapabilityError('serial_busy', '当前串口正在自动升级或受控操作，结束后可关闭')
+            raise ReviewRequired('serial_busy', '当前串口正在自动升级或受控操作，结束后可关闭',
+                                 'serial', 'output', reference=vlan)
         self._stop(vlan, item, remove=True)
         return self.poll(dict(token=self.token, active=''), authority)
 
@@ -279,7 +281,7 @@ class QtSerialTerminal:
             raise CapabilityError('serial_busy', '当前串口正在自动升级或受控操作，结束后可关闭')
         # Check all failures before releasing any owner.
         if any(t['error'] for t in self.tabs.values()):
-            raise CapabilityError('serial_close_unknown', '存在关闭失败的串口，请先核实')
+            raise CapabilityError('serial_close_unknown', '存在关闭失败的串口，等待原会话释放端口后再执行')
         try:
             self._save_state(self.log_dir)
         except OSError:
@@ -300,7 +302,8 @@ class QtSerialTerminal:
         # Original manual Send opens its monitor first, including an empty CR.
         self._open(arguments['target'], item)
         if not self.manager.manual_writable(item['port']):
-            raise CapabilityError('serial_busy', '当前串口正在受控操作，只允许查看输出')
+            raise ReviewRequired('serial_busy', '当前串口正在受控操作，只允许查看输出',
+                                 'serial', 'output', reference=arguments['target'])
         text = arguments['text']
         dangerous = any(word in text.lower() for word in ('reboot', 'reset', 'firstboot', 'tftp', 'upgrade'))
         token = uuid.uuid4().hex
@@ -319,7 +322,8 @@ class QtSerialTerminal:
         if item is not pending['item'] or item['delivery'] is not pending['delivery'] or item['session'] is None or self._binding() != pending['binding']:
             raise CapabilityError('target_changed', '串口或通道绑定已变化，未发送')
         if not self.manager.manual_writable(item['port']):
-            raise CapabilityError('serial_busy', '当前串口正在受控操作，未发送')
+            raise ReviewRequired('serial_busy', '当前串口正在受控操作，未发送',
+                                 'serial', 'output', reference=pending['target'])
         owner = 'qt-manual:' + uuid.uuid4().hex
         session = self.manager.acquire_existing_control(owner, item['session'].settings)
         try:

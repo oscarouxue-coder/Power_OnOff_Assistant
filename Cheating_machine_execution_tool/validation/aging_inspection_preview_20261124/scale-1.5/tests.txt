@@ -1,0 +1,10 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 8, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_3acc3e83086543279f6d9de5279b0131', 'framework': 'qt', 'platform': 'windows'}
+test_browse_inspections_and_switch_projects_without_dispatch_or_writes (qt_aging_inspection_probe.AgingInspectionTests) ... ok
+test_qt_dut_presence_displays_explicit_device_evidence_and_history (qt_typed_status_probe.TypedStatusTests) ... ok
+test_qt_switch_preserves_reported_progress_and_separates_health_sources (qt_typed_status_probe.TypedStatusTests) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 1.735s
+
+OK

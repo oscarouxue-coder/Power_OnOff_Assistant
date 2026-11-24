@@ -119,8 +119,7 @@ class QtAdapterRename:
             if tuple(change.binding for change in changes) != review['binding']:
                 raise CapabilityError('configuration_changed', '受影响的项目通道已变化，未改名')
             for change in changes:
-                if resources.unknown_for(change.project_id):
-                    raise CapabilityError('configuration_unknown', f'{change.name}有未核实任务，请先核实')
+                self.workspace.guard_project_workers(self.workspace.projects.opened[change.project_id])
             self.guard(editor)
             resources.acquire(owner, origin, f'{editor.context.identity.name} · 网卡改名 {old} → {new}',
                               ('adapter:' + old, 'adapter:' + new, 'adapter:' + guid))

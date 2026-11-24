@@ -182,8 +182,7 @@ class QtDutConfigurationTests(unittest.TestCase):
         self.assertEqual(status['state'], 'unknown')
         self.assertTrue(all(not row['ok'] for row in status['rows']))
         self.assertEqual(len(self.fake.calls), 2)
-        with self.assertRaises(CapabilityError):
-            self.preview()
+        self.assertTrue(self.preview()['confirmation'])
         self.assertEqual(len(self.fake.calls), 2)
 
     def test_editors_and_unsaved_project_block_dut_admission(self):

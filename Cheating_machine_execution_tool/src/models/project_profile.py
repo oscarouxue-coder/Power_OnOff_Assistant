@@ -80,7 +80,10 @@ def _selection(values, allowed, title):
 def normalize_project_profile(value, *, assign_ids=True):
     """Return an owned JSON dictionary. Generate IDs only when accepting new input."""
     _fields(value, ('schema_version', 'test_type', 'model', 'software_version', 'requirements',
-                    'optional_steps', 'type_config', 'duts'), '项目档案')
+                    'optional_steps', 'type_config', 'duts', 'environment_channels'), '项目档案')
+    managed = value.get('environment_channels', False)
+    if type(managed) is not bool:
+        raise ValueError('项目通道配置标记无效')
     version = value.get('schema_version', 1)
     if type(version) is not int or version != 1:
         raise ValueError('项目档案版本不受支持')
@@ -108,11 +111,16 @@ def normalize_project_profile(value, *, assign_ids=True):
         raise ValueError('DUT 列表格式无效')
     duts, identities, channels = [], set(), set()
     for row in rows:
-        _fields(row, (*DUT_FIELDS, 'dut_id', 'channel', 'adb_serial'), 'DUT')
+        _fields(row, (*DUT_FIELDS, 'dut_id', 'channel', 'adb_serial', 'mapping_generation'), 'DUT')
         data = {key: _text(row.get(key, ''), f'DUT {key}') for key in DUT_FIELDS}
         adb = _adb_serial(row.get('adb_serial', ''))
         if adb:
             data['adb_serial'] = adb
+        if row.get('mapping_generation'):
+            try:
+                data['mapping_generation'] = str(UUID(row['mapping_generation']))
+            except (ValueError, TypeError, AttributeError):
+                raise ValueError('DUT 通道绑定版本无效') from None
         if not data['label']:
             raise ValueError('请填写每台 DUT 的名称')
         identifier = row.get('dut_id', '')
@@ -128,8 +136,11 @@ def normalize_project_profile(value, *, assign_ids=True):
         identities.add(identifier)
         channels.add(channel)
         duts.append(dict(data, dut_id=identifier, channel=channel))
-    return dict(schema_version=1, test_type=kind, model=_text(value.get('model', ''), '型号'),
+    result = dict(schema_version=1, test_type=kind, model=_text(value.get('model', ''), '型号'),
                 software_version=_text(value.get('software_version', ''), '软件版本'),
                 requirements=_text(value.get('requirements', ''), '项目要求'),
                 optional_steps=_selection(value.get('optional_steps', []), OPTIONAL_STEPS, '选做准备步骤'),
                 type_config=settings, duts=duts)
+    if managed:
+        result['environment_channels'] = True
+    return result

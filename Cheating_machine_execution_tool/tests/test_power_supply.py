@@ -35,6 +35,27 @@ class FakeClock:
 
 
 class PowerSupplyTests(unittest.TestCase):
+    def test_failed_close_keeps_same_process_from_reusing_port(self):
+        from src.core.host_resource_lock import HostResourceBusy, HostResourceLock
+
+        class FailedClose(FakeSerial):
+            def close(self):
+                raise OSError('fixture close failed')
+
+        key = 'serial:COM99991'
+        supply = ProgrammablePowerSupply('COM99991', serial_factory=lambda **_: FailedClose())
+        with HostResourceLock([key]):
+            supply.open()
+            try:
+                with self.assertRaisesRegex(OSError, 'fixture close failed'):
+                    supply.close()
+                with self.assertRaises(HostResourceBusy):
+                    HostResourceLock([key]).acquire()
+            finally:
+                supply._host_resource_lock.close()
+        with HostResourceLock([key]):
+            pass
+
     def test_channel_frames_match_legacy_power_supply_protocol(self):
         self.assertEqual(channel_power_frame(1, True), bytes((0x55, 0x01, 0xA0, 0x00, 0x01, 0xA0)))
         self.assertEqual(channel_power_frame(2, True), bytes((0x55, 0x01, 0xA0, 0x00, 0x02, 0xA3)))

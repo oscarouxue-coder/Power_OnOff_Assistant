@@ -1,0 +1,963 @@
+{
+  "projects": [
+    {
+      "project_id": "preview-ready",
+      "name": "双频网关 · 业务老化",
+      "test_type": "自动开关机",
+      "dut": "GW-2700",
+      "state": "idle",
+      "state_text": "待启动",
+      "elapsed": "—",
+      "progress_text": "准备完成",
+      "progress": null,
+      "channel_text": "8 个通道",
+      "attention_count": 0,
+      "success_count": null,
+      "failure_count": null,
+      "run_id": "",
+      "channels": [],
+      "configuration": [
+        [
+          "运行参数",
+          [
+            [
+              "每台目标",
+              "500 轮"
+            ],
+            [
+              "已选通道",
+              "CH01–CH08"
+            ]
+          ]
+        ],
+        [
+          "设备资源",
+          [
+            [
+              "程控电源",
+              "COM102"
+            ],
+            [
+              "通道网卡",
+              "VLAN116–VLAN123"
+            ]
+          ]
+        ]
+      ],
+      "active_task_count": 0,
+      "dirty": false,
+      "can_start": true,
+      "can_stop": false,
+      "task_stage": "",
+      "can_configure": false,
+      "editor_open": false,
+      "editor_kind": "",
+      "channel_snapshot_label": "",
+      "serial_observation": [
+        "",
+        ""
+      ],
+      "pipeline_serial_run": "",
+      "pipeline_detail": "",
+      "pretest_run": [
+        "",
+        "",
+        false,
+        ""
+      ],
+      "version_query": null,
+      "push_trial": null,
+      "resume_detail": "",
+      "resume_waiting": [],
+      "power_history_job": "",
+      "power_history_events": [],
+      "started_text": "",
+      "parallel_power_available": false,
+      "overview_state": "",
+      "unresolved_tasks": false,
+      "saved_revision": "",
+      "count_unit": "轮",
+      "observed_active_task_count": 0,
+      "project_type": "power_cycle",
+      "test_overview": {}
+    },
+    {
+      "project_id": "preview-done",
+      "name": "千兆网关 · 兼容性检查",
+      "test_type": "自动开关机",
+      "dut": "GW-1800",
+      "state": "completed",
+      "state_text": "已完成",
+      "elapsed": "04:18:31",
+      "progress_text": "已完成 200 / 200 轮",
+      "progress": 100,
+      "channel_text": "4 个通道",
+      "attention_count": 0,
+      "success_count": 800,
+      "failure_count": 0,
+      "run_id": "",
+      "channels": [],
+      "configuration": [],
+      "active_task_count": 0,
+      "dirty": false,
+      "can_start": false,
+      "can_stop": false,
+      "task_stage": "",
+      "can_configure": false,
+      "editor_open": false,
+      "editor_kind": "",
+      "channel_snapshot_label": "",
+      "serial_observation": [
+        "",
+        ""
+      ],
+      "pipeline_serial_run": "",
+      "pipeline_detail": "",
+      "pretest_run": [
+        "",
+        "",
+        false,
+        ""
+      ],
+      "version_query": null,
+      "push_trial": null,
+      "resume_detail": "",
+      "resume_waiting": [],
+      "power_history_job": "",
+      "power_history_events": [],
+      "started_text": "",
+      "parallel_power_available": false,
+      "overview_state": "",
+      "unresolved_tasks": false,
+      "saved_revision": "",
+      "count_unit": "轮",
+      "observed_active_task_count": 0,
+      "project_type": "power_cycle",
+      "test_overview": null
+    },
+    {
+      "project_id": "preview-offline",
+      "name": "机顶盒 · 现场采集接入",
+      "test_type": "全业务老化",
+      "dut": "STB-460",
+      "state": "pending",
+      "state_text": "未接入",
+      "elapsed": "—",
+      "progress_text": "等待现场数据",
+      "progress": null,
+      "channel_text": "暂无设备观测",
+      "attention_count": 0,
+      "success_count": null,
+      "failure_count": null,
+      "run_id": "",
+      "channels": [],
+      "configuration": [],
+      "active_task_count": 0,
+      "dirty": false,
+      "can_start": false,
+      "can_stop": false,
+      "task_stage": "",
+      "can_configure": false,
+      "editor_open": false,
+      "editor_kind": "",
+      "channel_snapshot_label": "",
+      "serial_observation": [
+        "",
+        ""
+      ],
+      "pipeline_serial_run": "",
+      "pipeline_detail": "",
+      "pretest_run": [
+        "",
+        "",
+        false,
+        ""
+      ],
+      "version_query": null,
+      "push_trial": null,
+      "resume_detail": "",
+      "resume_waiting": [],
+      "power_history_job": "",
+      "power_history_events": [],
+      "started_text": "",
+      "parallel_power_available": false,
+      "overview_state": "",
+      "unresolved_tasks": false,
+      "saved_revision": "",
+      "count_unit": "",
+      "observed_active_task_count": 0,
+      "project_type": "service_aging",
+      "test_overview": null
+    },
+    {
+      "project_id": "preview-unresolved",
+      "name": "光网关 · 上批次待核实",
+      "test_type": "自动开关机",
+      "dut": "GW-2700",
+      "state": "unknown",
+      "state_text": "历史任务待核实",
+      "elapsed": "—",
+      "progress_text": "未收到原任务回执",
+      "progress": null,
+      "channel_text": "8 个通道",
+      "attention_count": 0,
+      "success_count": null,
+      "failure_count": null,
+      "run_id": "",
+      "channels": [],
+      "configuration": [
+        [
+          "运行参数",
+          [
+            [
+              "每台目标",
+              "500 轮"
+            ],
+            [
+              "已选通道",
+              "CH01–CH08"
+            ]
+          ]
+        ],
+        [
+          "设备资源",
+          [
+            [
+              "程控电源",
+              "COM102"
+            ],
+            [
+              "通道网卡",
+              "VLAN116–VLAN123"
+            ]
+          ]
+        ]
+      ],
+      "active_task_count": 0,
+      "dirty": false,
+      "can_start": false,
+      "can_stop": false,
+      "task_stage": "",
+      "can_configure": false,
+      "editor_open": false,
+      "editor_kind": "",
+      "channel_snapshot_label": "",
+      "serial_observation": [
+        "",
+        ""
+      ],
+      "pipeline_serial_run": "",
+      "pipeline_detail": "",
+      "pretest_run": [
+        "",
+        "",
+        false,
+        ""
+      ],
+      "version_query": null,
+      "push_trial": null,
+      "resume_detail": "",
+      "resume_waiting": [],
+      "power_history_job": "",
+      "power_history_events": [],
+      "started_text": "",
+      "parallel_power_available": false,
+      "overview_state": "",
+      "unresolved_tasks": true,
+      "saved_revision": "",
+      "count_unit": "轮",
+      "observed_active_task_count": 0,
+      "project_type": "power_cycle",
+      "test_overview": {}
+    },
+    {
+      "project_id": "preview-queued",
+      "name": "光网关 · 升级验证",
+      "test_type": "样机升级",
+      "dut": "GW-3100",
+      "state": "queued",
+      "state_text": "等待资源",
+      "elapsed": "尚未开始",
+      "progress_text": "等待串口 COM16",
+      "progress": null,
+      "channel_text": "4 台 DUT",
+      "attention_count": 0,
+      "success_count": null,
+      "failure_count": null,
+      "run_id": "",
+      "channels": [],
+      "configuration": [],
+      "active_task_count": 1,
+      "dirty": false,
+      "can_start": false,
+      "can_stop": false,
+      "task_stage": "",
+      "can_configure": false,
+      "editor_open": false,
+      "editor_kind": "",
+      "channel_snapshot_label": "",
+      "serial_observation": [
+        "",
+        ""
+      ],
+      "pipeline_serial_run": "",
+      "pipeline_detail": "",
+      "pretest_run": [
+        "",
+        "",
+        false,
+        ""
+      ],
+      "version_query": null,
+      "push_trial": null,
+      "resume_detail": "",
+      "resume_waiting": [],
+      "power_history_job": "",
+      "power_history_events": [],
+      "started_text": "",
+      "parallel_power_available": false,
+      "overview_state": "",
+      "unresolved_tasks": false,
+      "saved_revision": "",
+      "count_unit": "",
+      "observed_active_task_count": 0,
+      "project_type": "",
+      "test_overview": null
+    },
+    {
+      "project_id": "preview-power",
+      "name": "千兆网关 · 开关机挂测",
+      "test_type": "自动开关机",
+      "dut": "GW-1800",
+      "state": "running",
+      "state_text": "运行中",
+      "elapsed": "06:21:38",
+      "progress_text": "整批已完成 320 / 500 轮",
+      "progress": 64,
+      "channel_text": "8 个通道 · 1 个异常",
+      "attention_count": 1,
+      "success_count": 2583,
+      "failure_count": 1,
+      "run_id": "DEMO-PWR-07",
+      "channels": [
+        {
+          "number": 1,
+          "state": "running",
+          "cycle": 324,
+          "total": 500,
+          "vlan": "VLAN116",
+          "port": "COM16",
+          "can_resume": false,
+          "detail": "等待启动完成",
+          "stage": "等待启动完成",
+          "selected": true
+        },
+        {
+          "number": 2,
+          "state": "success",
+          "cycle": 326,
+          "total": 500,
+          "vlan": "VLAN117",
+          "port": "COM17",
+          "can_resume": false,
+          "detail": "本轮检查通过",
+          "stage": "本轮检查通过",
+          "selected": true
+        },
+        {
+          "number": 3,
+          "state": "failed",
+          "cycle": 320,
+          "total": 500,
+          "vlan": "VLAN118",
+          "port": "COM18",
+          "can_resume": true,
+          "detail": "PON 注册超时",
+          "stage": "PON 注册超时",
+          "selected": true
+        },
+        {
+          "number": 4,
+          "state": "retry",
+          "cycle": 322,
+          "total": 500,
+          "vlan": "VLAN119",
+          "port": "COM19",
+          "can_resume": false,
+          "detail": "等待重试 PON 检查",
+          "stage": "等待重试 PON 检查",
+          "selected": true
+        },
+        {
+          "number": 5,
+          "state": "running",
+          "cycle": 324,
+          "total": 500,
+          "vlan": "VLAN120",
+          "port": "COM20",
+          "can_resume": false,
+          "detail": "检查业务状态",
+          "stage": "检查业务状态",
+          "selected": true
+        },
+        {
+          "number": 6,
+          "state": "success",
+          "cycle": 325,
+          "total": 500,
+          "vlan": "VLAN121",
+          "port": "COM21",
+          "can_resume": false,
+          "detail": "本轮检查通过",
+          "stage": "本轮检查通过",
+          "selected": true
+        },
+        {
+          "number": 7,
+          "state": "running",
+          "cycle": 323,
+          "total": 500,
+          "vlan": "VLAN122",
+          "port": "COM22",
+          "can_resume": false,
+          "detail": "等待供电稳定",
+          "stage": "等待供电稳定",
+          "selected": true
+        },
+        {
+          "number": 8,
+          "state": "stopped",
+          "cycle": 320,
+          "total": 500,
+          "vlan": "VLAN123",
+          "port": "COM23",
+          "can_resume": false,
+          "detail": "本通道已停止",
+          "stage": "本通道已停止",
+          "selected": true
+        }
+      ],
+      "configuration": [
+        [
+          "运行参数",
+          [
+            [
+              "每台目标",
+              "500 轮"
+            ],
+            [
+              "已选通道",
+              "CH01–CH08"
+            ]
+          ]
+        ],
+        [
+          "设备资源",
+          [
+            [
+              "程控电源",
+              "COM102"
+            ],
+            [
+              "通道网卡",
+              "VLAN116–VLAN123"
+            ]
+          ]
+        ]
+      ],
+      "active_task_count": 1,
+      "dirty": false,
+      "can_start": false,
+      "can_stop": true,
+      "task_stage": "CH03 PON 注册超时，CH04 正在重试",
+      "can_configure": false,
+      "editor_open": false,
+      "editor_kind": "",
+      "channel_snapshot_label": "",
+      "serial_observation": [
+        "",
+        ""
+      ],
+      "pipeline_serial_run": "",
+      "pipeline_detail": "",
+      "pretest_run": [
+        "",
+        "",
+        false,
+        ""
+      ],
+      "version_query": null,
+      "push_trial": null,
+      "resume_detail": "",
+      "resume_waiting": [],
+      "power_history_job": "",
+      "power_history_events": [],
+      "started_text": "",
+      "parallel_power_available": false,
+      "overview_state": "",
+      "unresolved_tasks": false,
+      "saved_revision": "",
+      "count_unit": "轮",
+      "observed_active_task_count": 0,
+      "project_type": "power_cycle",
+      "test_overview": {
+        "target": 500,
+        "rows": [
+          {
+            "dut_id": "DUT-01",
+            "label": "DUT-01",
+            "channel": 1,
+            "stage": "等待启动完成",
+            "cycle": 325,
+            "completed": 324,
+            "success": 324,
+            "failure": 0,
+            "retries": 0,
+            "duration": 63.4
+          },
+          {
+            "dut_id": "DUT-02",
+            "label": "DUT-02",
+            "channel": 2,
+            "stage": "本轮检查通过",
+            "cycle": 326,
+            "completed": 326,
+            "success": 326,
+            "failure": 0,
+            "retries": 0,
+            "duration": 64.4
+          },
+          {
+            "dut_id": "DUT-03",
+            "label": "DUT-03",
+            "channel": 3,
+            "stage": "PON 注册超时",
+            "cycle": 320,
+            "completed": 320,
+            "success": 319,
+            "failure": 1,
+            "retries": 2,
+            "duration": 65.4
+          },
+          {
+            "dut_id": "DUT-04",
+            "label": "DUT-04",
+            "channel": 4,
+            "stage": "等待重试 PON 检查",
+            "cycle": 323,
+            "completed": 322,
+            "success": 322,
+            "failure": 0,
+            "retries": 1,
+            "duration": 66.4
+          },
+          {
+            "dut_id": "DUT-05",
+            "label": "DUT-05",
+            "channel": 5,
+            "stage": "检查业务状态",
+            "cycle": 325,
+            "completed": 324,
+            "success": 324,
+            "failure": 0,
+            "retries": 0,
+            "duration": 67.4
+          },
+          {
+            "dut_id": "DUT-06",
+            "label": "DUT-06",
+            "channel": 6,
+            "stage": "本轮检查通过",
+            "cycle": 325,
+            "completed": 325,
+            "success": 325,
+            "failure": 0,
+            "retries": 0,
+            "duration": 68.4
+          },
+          {
+            "dut_id": "DUT-07",
+            "label": "DUT-07",
+            "channel": 7,
+            "stage": "等待供电稳定",
+            "cycle": 324,
+            "completed": 323,
+            "success": 323,
+            "failure": 0,
+            "retries": 0,
+            "duration": 69.4
+          },
+          {
+            "dut_id": "DUT-08",
+            "label": "DUT-08",
+            "channel": 8,
+            "stage": "本通道已停止",
+            "cycle": 320,
+            "completed": 320,
+            "success": 320,
+            "failure": 0,
+            "retries": 0,
+            "duration": 70.4
+          }
+        ]
+      }
+    },
+    {
+      "project_id": "preview-aging",
+      "name": "双频网关 · 业务老化",
+      "test_type": "全业务老化",
+      "dut": "GW-2400",
+      "state": "running",
+      "state_text": "监测中",
+      "elapsed": "27:46:00",
+      "progress_text": "目标 168 小时",
+      "progress": null,
+      "channel_text": "4 台 DUT · 4 项业务",
+      "attention_count": 1,
+      "success_count": null,
+      "failure_count": null,
+      "run_id": "DEMO-AGE-12",
+      "channels": [],
+      "configuration": [
+        [
+          "监测计划",
+          [
+            [
+              "计划时长",
+              "168 小时"
+            ],
+            [
+              "现场终端",
+              "4 台"
+            ]
+          ]
+        ]
+      ],
+      "active_task_count": 1,
+      "dirty": false,
+      "can_start": false,
+      "can_stop": true,
+      "task_stage": "",
+      "can_configure": false,
+      "editor_open": false,
+      "editor_kind": "",
+      "channel_snapshot_label": "",
+      "serial_observation": [
+        "",
+        ""
+      ],
+      "pipeline_serial_run": "",
+      "pipeline_detail": "",
+      "pretest_run": [
+        "",
+        "",
+        false,
+        ""
+      ],
+      "version_query": null,
+      "push_trial": null,
+      "resume_detail": "",
+      "resume_waiting": [],
+      "power_history_job": "",
+      "power_history_events": [],
+      "started_text": "",
+      "parallel_power_available": false,
+      "overview_state": "",
+      "unresolved_tasks": false,
+      "saved_revision": "",
+      "count_unit": "",
+      "observed_active_task_count": 0,
+      "project_type": "service_aging",
+      "test_overview": {
+        "state": "running",
+        "target_hours": 168,
+        "elapsed_seconds": 99960,
+        "job_id": "DEMO-AGE-12",
+        "rows": [
+          {
+            "dut_id": "DUT-01",
+            "label": "DUT-01",
+            "collector": "lan_ping",
+            "source": "icmp",
+            "state": "healthy",
+            "checks": 96,
+            "success_rate": 1.0,
+            "last_success": 1795396680,
+            "consecutive_failures": 0,
+            "abnormal_seconds": 0,
+            "observed_seconds": 99740,
+            "last_heartbeat": 1795396800,
+            "last_observation": 1795396800,
+            "recoveries": 0,
+            "detail": "绑定网卡收到应答",
+            "packet_loss": 0.003
+          },
+          {
+            "dut_id": "DUT-02",
+            "label": "DUT-02",
+            "collector": "iptv",
+            "source": "jsonl",
+            "state": "abnormal",
+            "checks": 96,
+            "success_rate": 0.96875,
+            "last_success": 1795396680,
+            "consecutive_failures": 3,
+            "abnormal_seconds": 120,
+            "observed_seconds": 99740,
+            "last_heartbeat": 1795396800,
+            "last_observation": 1795396800,
+            "recoveries": 0,
+            "detail": "播放冻结",
+            "packet_loss": null
+          },
+          {
+            "dut_id": "DUT-03",
+            "label": "DUT-03",
+            "collector": "voice",
+            "source": "jsonl",
+            "state": "unknown",
+            "checks": 0,
+            "success_rate": null,
+            "last_success": null,
+            "consecutive_failures": 0,
+            "abnormal_seconds": 0,
+            "observed_seconds": 0,
+            "last_heartbeat": null,
+            "last_observation": null,
+            "recoveries": 0,
+            "detail": "等待近期观测",
+            "packet_loss": null
+          },
+          {
+            "dut_id": "DUT-04",
+            "label": "DUT-04",
+            "collector": "tr069",
+            "source": "unavailable",
+            "state": "unavailable",
+            "checks": 0,
+            "success_rate": null,
+            "last_success": null,
+            "consecutive_failures": 0,
+            "abnormal_seconds": 0,
+            "observed_seconds": 0,
+            "last_heartbeat": null,
+            "last_observation": null,
+            "recoveries": 0,
+            "detail": "尚无采集来源",
+            "packet_loss": null
+          }
+        ],
+        "dut_presence": [
+          {
+            "dut_id": "DUT-01",
+            "label": "DUT-01",
+            "subscribed": true,
+            "state": "online",
+            "last_observation": 1795396800,
+            "last_heartbeat": 1795396800,
+            "last_boot_id": "demo-1",
+            "last_boot_at": 1795396800,
+            "last_uptime_seconds": 99960,
+            "last_uptime_at": 1795396800,
+            "reboot_count": 0,
+            "last_reboot_at": null,
+            "detail": "采集端报告在线"
+          },
+          {
+            "dut_id": "DUT-02",
+            "label": "DUT-02",
+            "subscribed": true,
+            "state": "online",
+            "last_observation": 1795396800,
+            "last_heartbeat": 1795396800,
+            "last_boot_id": "demo-2",
+            "last_boot_at": 1795396800,
+            "last_uptime_seconds": 99960,
+            "last_uptime_at": 1795396800,
+            "reboot_count": 0,
+            "last_reboot_at": null,
+            "detail": "采集端报告在线"
+          },
+          {
+            "dut_id": "DUT-03",
+            "label": "DUT-03",
+            "subscribed": true,
+            "state": "unknown",
+            "last_observation": null,
+            "last_heartbeat": null,
+            "last_boot_id": null,
+            "last_boot_at": null,
+            "last_uptime_seconds": null,
+            "last_uptime_at": null,
+            "reboot_count": null,
+            "last_reboot_at": null,
+            "detail": "暂无近期设备观测"
+          },
+          {
+            "dut_id": "DUT-04",
+            "label": "DUT-04",
+            "subscribed": false,
+            "state": "unknown",
+            "last_observation": null,
+            "last_heartbeat": null,
+            "last_boot_id": null,
+            "last_boot_at": null,
+            "last_uptime_seconds": null,
+            "last_uptime_at": null,
+            "reboot_count": null,
+            "last_reboot_at": null,
+            "detail": "暂无近期设备观测"
+          }
+        ],
+        "feed_path": "示例项目 / history / aging-input / DEMO-AGE-12.jsonl",
+        "daily_checks": [
+          {
+            "kind": "daily",
+            "at": 1795396800,
+            "operator": "演示操作员",
+            "evidence": "LAN 连通，已记录 IPTV 异常"
+          }
+        ]
+      }
+    }
+  ],
+  "logs": [
+    {
+      "time": "14:38:42",
+      "level": "INFO",
+      "project_id": "preview-power",
+      "project_name": "千兆网关 · 开关机挂测",
+      "message": "CH01 下发本轮上电请求",
+      "run_id": "DEMO-PWR-07",
+      "channel": 1,
+      "raw": false,
+      "dut_id": "",
+      "step": "",
+      "job_id": "",
+      "batch_id": ""
+    },
+    {
+      "time": "14:38:46",
+      "level": "SUCCESS",
+      "project_id": "preview-power",
+      "project_name": "千兆网关 · 开关机挂测",
+      "message": "CH02 完成本轮检查 · 326 / 500 轮",
+      "run_id": "DEMO-PWR-07",
+      "channel": 2,
+      "raw": false,
+      "dut_id": "",
+      "step": "",
+      "job_id": "",
+      "batch_id": ""
+    },
+    {
+      "time": "14:38:49",
+      "level": "ERROR",
+      "project_id": "preview-power",
+      "project_name": "千兆网关 · 开关机挂测",
+      "message": "CH03 PON 注册超时 · 已记录失败",
+      "run_id": "DEMO-PWR-07",
+      "channel": 3,
+      "raw": false,
+      "dut_id": "",
+      "step": "",
+      "job_id": "",
+      "batch_id": ""
+    },
+    {
+      "time": "14:38:52",
+      "level": "WARN",
+      "project_id": "preview-power",
+      "project_name": "千兆网关 · 开关机挂测",
+      "message": "CH04 等待本轮重试 · 轮次保持 322",
+      "run_id": "DEMO-PWR-07",
+      "channel": 4,
+      "raw": false,
+      "dut_id": "",
+      "step": "",
+      "job_id": "",
+      "batch_id": ""
+    },
+    {
+      "time": "14:38:55",
+      "level": "INFO",
+      "project_id": "preview-aging",
+      "project_name": "双频网关 · 业务老化",
+      "message": "DUT-01 收到 LAN Ping 应答",
+      "run_id": "DEMO-AGE-12",
+      "channel": null,
+      "raw": false,
+      "dut_id": "",
+      "step": "",
+      "job_id": "",
+      "batch_id": ""
+    },
+    {
+      "time": "14:38:58",
+      "level": "WARN",
+      "project_id": "preview-aging",
+      "project_name": "双频网关 · 业务老化",
+      "message": "DUT-02 IPTV 观测报告播放冻结",
+      "run_id": "DEMO-AGE-12",
+      "channel": null,
+      "raw": false,
+      "dut_id": "",
+      "step": "",
+      "job_id": "",
+      "batch_id": ""
+    },
+    {
+      "time": "14:39:00",
+      "level": "INFO",
+      "project_id": "preview-aging",
+      "project_name": "双频网关 · 业务老化",
+      "message": "DUT-03 未收到近期在线心跳",
+      "run_id": "DEMO-AGE-12",
+      "channel": null,
+      "raw": false,
+      "dut_id": "",
+      "step": "",
+      "job_id": "",
+      "batch_id": ""
+    },
+    {
+      "time": "14:39:03",
+      "level": "INFO",
+      "project_id": "preview-queued",
+      "project_name": "光网关 · 升级验证",
+      "message": "等待串口 COM16 释放",
+      "run_id": "",
+      "channel": null,
+      "raw": false,
+      "dut_id": "",
+      "step": "",
+      "job_id": "",
+      "batch_id": ""
+    }
+  ],
+  "health": {
+    "worker_tick": 0.0,
+    "commands_pending": 0,
+    "command_limit": 32,
+    "logs_omitted": 0,
+    "log_write_failures": 0,
+    "log_write": [
+      "2026-11-23 09:20:00",
+      true
+    ],
+    "task_log_at": "2026-11-23 09:20:00",
+    "inventory_check": [
+      "2026-11-23 09:20:00",
+      true
+    ],
+    "resources": {
+      "sampled_at": 0.0,
+      "serial": 9,
+      "adapters": 8,
+      "other": 1,
+      "protection_unavailable": false
+    },
+    "pending_log_writes": 0,
+    "log_write_age": 0.0
+  }
+}

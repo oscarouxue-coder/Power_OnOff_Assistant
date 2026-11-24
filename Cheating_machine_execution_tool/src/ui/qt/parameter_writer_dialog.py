@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QPlainTextEdit, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
 )
 
+from src.ui.qt.blocker_review import ReviewFeedback, focus_widget
 from src.ui.qt.theme import button, label
 
 
@@ -83,7 +84,7 @@ class ParameterWriterDialog(QDialog):
         self.results.setReadOnly(True)
         self.results.setMinimumHeight(100)
         layout.addWidget(self.results, 1)
-        self.feedback = label('')
+        self.feedback = ReviewFeedback()
         self.feedback.setWordWrap(True)
         layout.addWidget(self.feedback)
         actions = QHBoxLayout()
@@ -176,7 +177,10 @@ class ParameterWriterDialog(QDialog):
         lines += [f"{item['vlan']} / {item['port']} / 第 {item['row']} 行 / MAC {item['mac']}"
                   for item in snapshot['targets']]
         self.results.setPlainText('\n'.join(lines))
-        self.feedback.clear()
+        if snapshot['ok']:
+            self.feedback.clear()
+        else:
+            self.feedback.show_review('参数表预检未通过', lambda: focus_widget(self.results))
 
     def apply_job(self, snapshot):
         self.active, self.stoppable = snapshot['active'], snapshot['stoppable']
@@ -218,7 +222,8 @@ class ParameterWriterDialog(QDialog):
         if self.busy:
             return
         if self.stoppable:
-            self.feedback.setText('写参正在执行。请停止批次并等待工厂模式清理完成。')
+            self.feedback.show_review('写参正在执行。请停止批次并等待工厂模式清理完成。',
+                                      lambda: focus_widget(self.results))
             return
         if self.settings() != self.saved:
             choice = QMessageBox.question(self, '保存写参设置', '保存本项目的写参设置后关闭？',
