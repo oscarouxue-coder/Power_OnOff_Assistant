@@ -751,6 +751,8 @@ python scripts\verify_baseline.py
 
 - Qt 本机电脑连续诊断沿用原 `pc` 会话、原模型工具资格、只读取证和停止状态。创建或重开窗口不会自行查询电脑环境。真实模型与本机网络取证仍待验收。[阶段记录](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/pc_diagnosis/REPORT.md)
 
+- **2026-11-25，Qt 掉线证据问答已通过 Windows 私有桌面合成验证。** 普通问答的明确 CH 提问须核对当前项目、老化任务、运行 ID 和唯一冻结通道。缺失、歧义、过期或切换时如实显示证据缺口或作废结果。Ping 观测不足以确认设备掉线或原因。匹配完整冻结目标的结构化回执方可显示查询完成，受理和完成状态分离。查询阶段显示本次候选及引用计数，停止本轮只取消该本地读请求。新回复仅在本机窗口展示。连续诊断补充受理、确认派发、取消未派发、未知派发按本机独立回执区分，确认须关联当前会话、诊断轮次及包含该补充的实际请求。历史及迟到快照不能改写已确认或取消终态；实际模型是否采纳未知。普通问答状态栏按实际本地查询或模型回复来源呈现已有请求编号和确认状态，证据不足与查询未完成分离，事件和正文流分别显示。[测试记录](Cheating_machine_execution_tool/validation/qt_chat_channel_evidence_20261125/REPORT.md)
+
 - Qt 16 通道模拟专项已通过。从 Qt 确认到原开关机子进程边界的请求与已保存配置一致，乱序回执仍归到对应通道，旧批次成功消息未覆盖本批次失败。包含实例配对的 Windows 候选已标准验包。§3 的真实通道时序、逐台 500 次、长挂与目标机验收继续待现场。[本批记录](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/instance_pairing/REPORT.md)
 
 - Qt 实例配对已接入原签发和兑换服务。签发沿用已保存的成员范围，每个码只允许成功兑换一次。提交时复核所选槽位身份。新登记实例初始禁用，通道与能力授权均为空。[模拟测试与源码边界](Cheating_machine_execution_tool/validation/pyside6_migration_20261118/instance_pairing/REPORT.md)

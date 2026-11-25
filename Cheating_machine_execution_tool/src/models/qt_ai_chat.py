@@ -37,6 +37,28 @@ class ChatMessageView:
     text: str
     created: str
     kind: str
+    reply_id: str = ''
+    stream_state: str = ''
+
+
+@dataclass(frozen=True)
+class ChatActivityView:
+    session_id: str
+    source: str
+    request_id: str
+    state: str
+    detail: str = ''
+
+    def status_message(self):
+        source = {'local_evidence': '本地证据查询', 'model_reply': '模型回复', 'conversation': '会话请求'}[self.source]
+        state = {'accepted': '已受理', 'running': '运行中', 'completed': '已完成',
+                 'cancelling': '正在取消', 'cancelled': '已取消', 'failed': '未完成',
+                 'rejected': '未受理', 'not_started': '未开始'}[self.state]
+        request = ('查询编号 #' if self.source == 'local_evidence' else '请求编号 ') + self.request_id if self.request_id else ''
+        detail = ' · '.join(part for part in (source, state, request, self.detail) if part)
+        if self.session_id:
+            detail += '\n会话 ' + self.session_id
+        return ChatMessageView('system', detail, '', 'error' if self.state in ('failed', 'rejected', 'not_started') else 'progress')
 
 
 @dataclass(frozen=True)
@@ -57,3 +79,6 @@ class ChatWorkspaceView:
     routing: bool = False
     retry_input: str = ''
     monitor_status: Optional[MonitorStatus] = None
+    ordinary_chat: bool = False
+    snapshot_generation: int = 0
+    activity: Optional[ChatActivityView] = None

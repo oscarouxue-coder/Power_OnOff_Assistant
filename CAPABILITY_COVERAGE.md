@@ -123,11 +123,11 @@
 | service_aging.start | 开始持续供电业务老化 | start_test | QtServiceAging / ServiceAging | service_aging.start | manual_control：仅 GUI，可追溯到本次确认的项目、DUT 和资源 | project/run/manual | test_qt_execution_adapter.py, test_service_aging.py；Windows/真实模型及设备待验收 |
 | service_aging.record | 记录现场观察、日检或期末检查 | _record | QtServiceAging / ServiceAging | service_aging.record | manual_control：仅 GUI，本机操作人提供实际观测和结果 | project/run/manual | test_service_aging.py；Windows/真实模型及设备待验收 |
 | service_aging.history | 查看及导出指定批次业务证据 | _export | ServiceAgingHistory | local_confirmation | manual_control：仅本机选择项目、批次和导出文件 | project/run/manual | test_service_aging.py, qt_project_wizard_probe.py；Windows/真实模型及设备待验收 |
-| service_aging.channel_evidence | 查看所选 DUT 的掉线证据 | open_evidence | read_channel_evidence / ServiceAgingHistory | service_aging.channel_evidence | manual_control：仅本机 GUI 在冻结的项目、批次和通道内读取已有观测 | project/run/manual | test_qt_channel_evidence.py, qt_channel_evidence_probe.py；Windows/真实模型及设备待验收 |
+| service_aging.channel_evidence | 查看所选 DUT 或普通聊天明确 CH 的掉线证据 | open_evidence | read_channel_evidence / ServiceAgingHistory | service_aging.channel_evidence | manual_control：仅本机 GUI 在冻结的项目、批次和通道内读取已有观测。普通聊天通过 _send_chat_evidence 核对明确 CH，带请求编号的结果仅当前窗口显示；停止本轮仅取消该本地读请求 | project/run/manual | test_qt_channel_evidence.py, qt_channel_evidence_probe.py；Windows/真实模型及设备待验收 |
 
 ## GUI动作审查
 
-当前审查快照包含 827 个按钮/菜单/绑定/变量回调。新增或改变入口会使门禁失败。
+当前审查快照包含 828 个按钮/菜单/绑定/变量回调。新增或改变入口会使门禁失败。
 界面辅助动作（窗口显隐/滚动/复制/显密/清屏等）不计业务覆盖；动态控件须结合运行测试复核。
 Qt 拦截提示的「前往确认」是本机定位动作，使用原请求项目与结构化目标打开配置、对象或任务视图。保存、执行和人工批准继续使用原业务入口及权限检查。
 

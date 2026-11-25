@@ -65,6 +65,9 @@ class DiagnosticStore:
                 payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS chat_messages(id INTEGER PRIMARY KEY, session_id TEXT NOT NULL,
                 payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS chat_supplement_receipts(
+                message_id INTEGER PRIMARY KEY, session_id TEXT NOT NULL, turn_id TEXT NOT NULL,
+                supplement_id TEXT UNIQUE NOT NULL, state TEXT NOT NULL, request_id TEXT);
             CREATE TABLE IF NOT EXISTS chat_groups(id INTEGER PRIMARY KEY, session_id TEXT NOT NULL,
                 payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS chat_evidence(id TEXT PRIMARY KEY, session_id TEXT NOT NULL,
@@ -74,6 +77,7 @@ class DiagnosticStore:
             CREATE TABLE IF NOT EXISTS monitor_contexts(id TEXT PRIMARY KEY, payload TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS chat_actions_session ON chat_actions(session_id);
             CREATE INDEX IF NOT EXISTS chat_messages_session ON chat_messages(session_id,id);
+            CREATE INDEX IF NOT EXISTS chat_supplement_session ON chat_supplement_receipts(session_id,turn_id);
             CREATE INDEX IF NOT EXISTS chat_groups_session ON chat_groups(session_id,id);
             CREATE INDEX IF NOT EXISTS chat_evidence_session ON chat_evidence(session_id);
         ''')
@@ -310,7 +314,7 @@ class DiagnosticStore:
             return payload
 
     def delete_chats(self, identifiers):
-        """仅删除指定会话的数据；整批校验和四张表的删除共用一次事务。"""
+        """仅删除指定会话的数据；整批校验与关联记录删除共用一次事务。"""
         identifiers = tuple(dict.fromkeys(identifiers))
         if not identifiers:
             return 0
@@ -319,19 +323,48 @@ class DiagnosticStore:
             for identifier in identifiers:
                 self.chat(identifier)  # 不允许失效选择造成部分删除。
             parameters = [(identifier,) for identifier in identifiers]
-            for table in ("chat_messages", "chat_groups", "chat_evidence", "chat_actions"):
+            for table in ("chat_supplement_receipts", "chat_messages", "chat_groups", "chat_evidence", "chat_actions"):
                 self.db.executemany("DELETE FROM " + table + " WHERE session_id=?", parameters)
             self.db.executemany("DELETE FROM chat_sessions WHERE id=?", parameters)
             self.db.executemany("DELETE FROM settings WHERE name=?",
                                 [("ai_display_title:chat:" + identifier,) for identifier in identifiers])
         return len(identifiers)
 
-    def append_chat(self, identifier, payload, group=False):
+    def append_chat(self, identifier, payload, group=False, *, supplement_receipt=None):
+        if supplement_receipt is not None:
+            if group or payload.get('role') != 'user' or not payload.get('diagnostic_supplement'):
+                raise ValueError('补充回执须绑定用户补充消息')
+            turn_id, supplement_id = supplement_receipt
+            with self.lock, self.db:
+                row = self.db.execute('INSERT INTO chat_messages(session_id,payload) VALUES(?,?)',
+                                      (identifier, json.dumps(payload, ensure_ascii=False)))
+                self.db.execute('INSERT INTO chat_supplement_receipts VALUES(?,?,?,?,?,NULL)',
+                                (row.lastrowid, identifier, turn_id, supplement_id, 'received'))
+            return
         table = "chat_groups" if group else "chat_messages"
         with self.lock:
             self.db.execute("INSERT INTO " + table + "(session_id,payload) VALUES(?,?)",
                             (identifier, json.dumps(payload, ensure_ascii=False)))
             self.db.commit()
+
+    def update_supplement_receipts(self, session, turn, identifiers, state, request_id=None):
+        if state not in ('confirmed', 'cancelled', 'not_dispatched', 'unconfirmed') or (state == 'confirmed') != bool(request_id):
+            raise ValueError('补充回执状态或请求编号无效')
+        updated = []
+        with self.lock, self.db:
+            for identifier in identifiers:
+                result = self.db.execute(
+                    'UPDATE chat_supplement_receipts SET state=?,request_id=? WHERE session_id=? AND turn_id=? '
+                    'AND supplement_id=? AND state=?',
+                    (state, request_id, session, turn, identifier, 'received'))
+                if result.rowcount == 1:
+                    updated.append(identifier)
+        return tuple(updated)
+
+    def interrupt_supplement_receipts(self, session):
+        with self.lock, self.db:
+            self.db.execute('UPDATE chat_supplement_receipts SET state=? WHERE session_id=? AND state=?',
+                            ('unconfirmed', session, 'received'))
 
     def save_action(self, action):
         with self.lock:

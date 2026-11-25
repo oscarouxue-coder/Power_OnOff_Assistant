@@ -34,8 +34,8 @@ _ROUTINE = tuple(re.compile(pattern) for pattern in (
     _SESSION + r'工具完成：(?:' + _COLLECTION_TOOL + r'|run_local_command|run_dut_command|'
                r'read_local_file|write_local_file|read_serial_status|update_diagnostic_plan)',
     _SESSION + r'连续诊断计划更新：\[[^\r\n]*\]',
-    _SESSION + r'收到诊断补充；下一安全检查点采用，不授予新操作权限',
-    _SESSION + r'已采用\d+条诊断补充，原始记录保留',
+    _SESSION + r'收到诊断补充；(?:下一安全检查点采用|等待下一安全检查点)，不授予新操作权限',
+    _SESSION + r'(?:已采用|已留存)\d+条诊断补充，原始记录保留',
     _SESSION + r'跳过重复诊断检查：\w+，证据=[0-9a-f]{32}',
     r'操作[0-9a-f]{8}已跳过独立审查：完全访问，授权=[0-9a-f]{32}',
     r'开始识别对话目标；仅发送目标标识和最近对话，不执行操作',

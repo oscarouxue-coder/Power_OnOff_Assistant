@@ -140,6 +140,26 @@ public class FakePython {
         self.assert_selected(configured)
         self.assertFalse(Path(str(active) + ".probes").exists())
 
+    def test_explicit_unicode_path_restores_legacy_console_encoding(self):
+        configured = self.fake(self.root / "custom & python/python.exe")
+        self.git("config", "--local", "linecheck.pythonExecutable", str(configured))
+        script = self.scripts / "check_console_encoding.ps1"
+        script.write_text(
+            "param($Root, $Expected)\n$ErrorActionPreference = 'Stop'\n"
+            ". (Join-Path $PSScriptRoot 'git_hook_python.ps1')\n"
+            "$original = [Console]::OutputEncoding\n"
+            "try {\n"
+            "    [Console]::OutputEncoding = [Text.Encoding]::GetEncoding(936)\n"
+            "    $profile = Resolve-LineCheckPython -RepoRoot $Root\n"
+            "    if ($profile.executable -cne $Expected) { throw 'Wrong interpreter' }\n"
+            "    if ([Console]::OutputEncoding.CodePage -ne 936) { throw 'Encoding changed' }\n"
+            "} finally { [Console]::OutputEncoding = $original }\n",
+            encoding="ascii")
+        result = self.powershell(script.name, self.root, configured)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(Path(str(configured) + ".probes").exists())
+        self.assertFalse(Path(str(configured) + ".calls").exists())
+
     def test_active_environment_precedes_repository_venv(self):
         active = self.fake(self.root / "active/Scripts/python.exe")
         lower = self.fake(self.root / ".venv/Scripts/python.exe")

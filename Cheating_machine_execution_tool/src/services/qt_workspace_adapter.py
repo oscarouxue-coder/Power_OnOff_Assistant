@@ -760,10 +760,11 @@ class QtWorkspaceAdapter:
         context = replace(self._context(project_id))
         cancel = threading.Event()
         if operation == 'channel_evidence':
-            from src.services.qt_channel_evidence import read_channel_evidence
-            target, cancel = options
+            from src.services.qt_channel_evidence import read_channel_evidence, read_chat_channel_evidence
+            target, cancel, *chat = options
             record = self._history_result_record(target.job_id)
-            future = self._history_reader.submit(read_channel_evidence, context, record, target, cancel)
+            reader = read_chat_channel_evidence if chat == [True] else read_channel_evidence
+            future = self._history_reader.submit(reader, context, record, target, cancel)
             self._history_reads[identifier] = (operation, context.identity, cancel, future)
             return
         self._emit('[任务历史] 开始读取：' + context.identity.name)

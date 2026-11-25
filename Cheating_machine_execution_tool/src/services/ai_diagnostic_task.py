@@ -2,6 +2,7 @@
 import hashlib
 import json
 import time
+import uuid
 
 from src.models.ai_batch import READ_ONLY_TOOLS
 
@@ -42,6 +43,11 @@ class DiagnosticTask:
         self.cache = {}
         self.results_seen = set()
         self.inputs = []
+        self.input_ids = []
+        self.turn_id = uuid.uuid4().hex
+        self.pending_supplements = set()
+        self.supplement_messages = {}
+        self.unconfirmed_supplements = set()
         self.accepting = True
         self.boundaries = []
         self.memory = {"goal": saved.get("goal") or question[:4000],
@@ -69,16 +75,21 @@ class DiagnosticTask:
             raise ValueError("本次诊断正在收尾，请结束后继续发送")
         if len(self.inputs) >= 8 or sum(map(len, self.inputs)) + len(text) > 65536:
             raise ValueError("待处理补充过多，请等待下一次检查后再发送")
+        identifier = uuid.uuid4().hex
         self.inputs.append(text)
+        self.input_ids.append(identifier)
+        self.pending_supplements.add(identifier)
         self.memory["corrections"] = (self.memory["corrections"] + [text[:4000]])[-8:]
+        return identifier
 
-    def take_inputs(self):
+    def take_inputs(self, *, with_ids=False):
         values, self.inputs = self.inputs, []
+        identifiers, self.input_ids = self.input_ids, []
         if values:
             self.stalled = 0
             self.cache.clear()  # 用户纠正后允许一次重新核对当前状态。
             self.results_seen.clear()
-        return values
+        return list(zip(identifiers, values)) if with_ids else values
 
     @staticmethod
     def fingerprint(name, params):

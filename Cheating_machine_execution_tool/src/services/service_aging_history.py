@@ -273,7 +273,7 @@ class ServiceAgingHistory:
         rows = [dict(r) for r in db.execute(sql + ' ORDER BY o.id DESC LIMIT ?', (*args, limit + 1))]
         return dict(rows=rows[:limit], next_before=rows[limit-1]['id'] if len(rows)>limit else None)
 
-    def channel_observations(self, job, revision, dut, stop):
+    def channel_observations(self, job, revision, dut, stop, *, current_only=False):
         """Bound rows, excerpt length, SQLite work and lock waits for a single local question."""
         if self.path.resolve() != self.path or not self.path.is_file():
             raise ValueError('本项目缺少可读取的老化历史')
@@ -297,6 +297,11 @@ class ServiceAgingHistory:
                 db.set_progress_handler(interrupt, 1000)
                 db.execute('PRAGMA query_only=ON')
                 db.execute('BEGIN')
+                if current_only:
+                    current = db.execute('SELECT job FROM runs WHERE project=? ORDER BY rowid DESC LIMIT 1',
+                                         (self.context.identity.project_id,)).fetchone()
+                    if current is None or current['job'] != job:
+                        raise ValueError('当前老化批次已变化，未读取观测')
                 run = self._run(db, job)
                 if run['revision'] != revision:
                     raise ValueError('观测记录与冻结批次版本不一致')

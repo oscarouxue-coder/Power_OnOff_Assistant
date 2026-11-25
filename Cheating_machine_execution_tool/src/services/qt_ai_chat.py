@@ -14,7 +14,7 @@ from src.models.ai_permissions import PERMISSION_LABELS
 from src.models.dependency_repair import maintenance_operation
 from src.models.project_review import ReviewRequired
 from src.models.ai_session_scope import session_scope, source_identity
-from src.models.qt_ai_chat import ChatMessageView, ChatSessionView, ChatWorkspaceView, is_model_identity_question
+from src.models.qt_ai_chat import ChatActivityView, ChatMessageView, ChatSessionView, ChatWorkspaceView, is_model_identity_question
 from src.models.qt_ai_cases import CASE_OPERATIONS
 from src.models.qt_ai_reports import REPORT_HANDOFF_OPERATIONS, REPORT_OPERATIONS
 from src.services.ai_conversation_service import AiConversationService
@@ -81,6 +81,7 @@ class QtLocalConversation(AiConversationService):
         self.execution = execution
         self.direct_authority = None
         self.reply_display = {}
+        self.aborted_reply_display = {}
         self.route_display = WeakKeyDictionary()
         super().__init__(diagnostic, context=execution.ai_evidence)
 
@@ -130,7 +131,16 @@ class QtLocalConversation(AiConversationService):
         if role == 'user' and not metadata.get('supplement'):
             with self.lock:
                 self.reply_display.pop(identifier, None)
+                self.aborted_reply_display.pop(identifier, None)
         super().message(identifier, role, text, kind, **metadata)
+
+    def _abort_draft(self, identifier, state):
+        with self.lock:
+            draft = self.drafts.get(identifier)
+            super()._abort_draft(identifier, state)
+            if draft and draft['reply_id'] and not draft['text']:
+                self.aborted_reply_display[identifier] = ChatActivityView(
+                    identifier, 'model_reply', draft['reply_id'], state, '没有生成可留存正文')
 
     def local_mode(self, session):
         return _local_chat_mode(session, self.context.run_id)
@@ -240,6 +250,7 @@ class QtAiChat:
         self.cursor = None
         self.closing = False
         self._last_view = None
+        self._snapshot_generation = 0
         self._intent_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix='qt-local-intent')
         self._intent = None
         self._route_errors = {}
@@ -428,6 +439,7 @@ class QtAiChat:
             self._route_errors.pop(identifier, None)
             with self.conversation.lock:
                 self.conversation.reply_display.pop(identifier, None)
+                self.conversation.aborted_reply_display.pop(identifier, None)
         remaining = [row for row in self.store.chats() if not row.get('batch_parent')]
         if self.selected and not any(row['id'] == self.selected for row in remaining):
             if remaining:
@@ -581,19 +593,52 @@ class QtAiChat:
         return '本轮暂无可核对的模型请求与用量'
 
     @staticmethod
-    def _message_view(message, mode):
+    def _message_view(message, mode, receipt=None):
         text = message['text']
         if message['role'] == 'user' and message.get('diagnostic_supplement') is True:
-            text = '诊断补充（已接收）\n' + text
+            state, supplement_id, request_id = receipt or (None, None, None)
+            label = {'confirmed': '已带入下一次请求', 'cancelled': '已取消，未派发',
+                     'not_dispatched': '未派发', 'unconfirmed': '派发未核实'}.get(state, '已接收')
+            if state == 'confirmed' and not (supplement_id and request_id):
+                label = '派发未核实'
+            identity = f'补充编号 {supplement_id}\n' if supplement_id else ''
+            if state == 'confirmed' and supplement_id and request_id:
+                identity += f'请求编号 {request_id}\n'
+            text = f'诊断补充（{label}）\n' + identity + text
         if (message['role'] == 'system' and message.get('kind') == 'progress'
                 and text == '已采用你的补充，调整后续诊断方向。'):
             text = '本次检查点已留存补充记录。'
         if (mode in ('report', 'archived', 'channel') and message['role'] == 'system' and text.startswith('会话已创建；')
                 and text.endswith('发送问题后按需采集。')):
             text = '会话已创建。'
-        return ChatMessageView(message['role'], text, message.get('created', ''), message.get('kind', 'text'))
+        return ChatMessageView(message['role'], text, message.get('created', ''), message.get('kind', 'text'),
+                               message.get('reply_id', ''), message.get('stream_state', ''))
+
+    @staticmethod
+    def _ordinary_activity(session, draft, stopping, routing, running, messages, aborted):
+        identifier = session['id']
+        if draft and draft.get('reply_id'):
+            state = 'cancelling' if stopping else 'running'
+            detail = ('已请求停止，等待本轮收尾' if stopping else
+                      '已收到流式正文' if draft['text'] else '已进入回复生成流程，等待正文')
+            return ChatActivityView(identifier, 'model_reply', draft['reply_id'], state, detail)
+        if routing:
+            return ChatActivityView(identifier, 'conversation', '', 'running', '正在识别目标，答复请求编号尚未分配')
+        latest = next((m for m in reversed(messages) if m.role != 'system'), None)
+        if latest and latest.role == 'assistant' and latest.reply_id and latest.stream_state in ('completed', 'cancelled', 'failed'):
+            detail = '完整正文已保存' if latest.stream_state == 'completed' else '已保留未完成正文'
+            return ChatActivityView(identifier, 'model_reply', latest.reply_id, latest.stream_state, detail)
+        if latest and latest.role == 'user' and aborted is not None:
+            return aborted
+        if running:
+            state = 'cancelling' if stopping else 'accepted'
+            detail = '已请求停止，等待本轮收尾' if stopping else '等待答复请求编号或会话结果'
+            return ChatActivityView(identifier, 'conversation', '', state, detail)
+        return None
 
     def snapshot(self, *, deleted=None):
+        self._snapshot_generation = getattr(self, '_snapshot_generation', 0) + 1
+        generation = self._snapshot_generation
         records = self.store.chats()
         sessions = [row for row in records if not row.get('batch_parent')]
         selected = next((row for row in sessions if row['id'] == self.selected), None)
@@ -608,15 +653,20 @@ class QtAiChat:
                           row['status'], row.get('origin', ''), row['created'], row['id'] in busy) for row in rows)
         if selected is None:
             local = tuple(m for sid, _, pair in self._identity_messages if not sid for m in pair)
-            self._last_view = ChatWorkspaceView(view_rows, '', local, deleted=deleted, monitor_status=self.diagnostic.monitor_status())
+            self._last_view = ChatWorkspaceView(view_rows, '', local, deleted=deleted, monitor_status=self.diagnostic.monitor_status(),
+                                                snapshot_generation=generation)
             return self._last_view
         # Read the draft and persisted messages on the same side of reply finalization.
         with self.conversation.lock, self.store.lock:
             draft = self.conversation.draft_message(self.selected) if self.cursor is None else None
             stop = self.conversation.running.get(self.selected)
             stopping = stop is not None and stop.is_set()
-            messages = self.store.db.execute('SELECT id,payload FROM chat_messages WHERE session_id=? AND id<? '
-                'ORDER BY id DESC LIMIT ?', (self.selected, self.cursor or 2**63-1, CHAT_PAGE + 1)).fetchall()
+            aborted = self.conversation.aborted_reply_display.get(self.selected)
+            running = self._is_running()
+            messages = self.store.db.execute('SELECT m.id,m.payload,r.state,r.supplement_id,r.request_id FROM chat_messages m '
+                'LEFT JOIN chat_supplement_receipts r ON r.message_id=m.id AND r.session_id=m.session_id '
+                'WHERE m.session_id=? AND m.id<? ORDER BY m.id DESC LIMIT ?',
+                (self.selected, self.cursor or 2**63-1, CHAT_PAGE + 1)).fetchall()
             status = self.store.db.execute(
                 """SELECT payload FROM chat_messages WHERE session_id=? AND
                    CASE WHEN json_valid(payload) THEN json_extract(payload,'$.role')='system'
@@ -630,8 +680,8 @@ class QtAiChat:
             if sid == self.selected:
                 local.setdefault(anchor, []).extend(pair)
         items = list(local.get(0, ())) if len(messages) <= CHAT_PAGE else []
-        for row_id, payload in reversed(messages[:CHAT_PAGE]):
-            items.append(self._message_view(json.loads(payload), mode))
+        for row_id, payload, state, supplement_id, request_id in reversed(messages[:CHAT_PAGE]):
+            items.append(self._message_view(json.loads(payload), mode, (state, supplement_id, request_id)))
             items.extend(local.get(row_id, ()))
         page = tuple(items)
         latest_status = self._message_view(json.loads(status[0]), mode) if status else None
@@ -648,11 +698,15 @@ class QtAiChat:
                 progress = '已收到本轮模型正文' if draft['text'] else '已进入模型调用，等待回复正文'
                 latest_status = ChatMessageView('system', progress, '', 'progress')
         next_page = messages[CHAT_PAGE - 1][0] if len(messages) > CHAT_PAGE else None
+        activity = None
+        if mode == 'general' and self.cursor is None and self.selected not in self._route_errors:
+            activity = self._ordinary_activity(selected, draft, stopping,
+                self._intent is not None and self._intent.origin == self.selected, running, page, aborted)
         self._last_view = ChatWorkspaceView(view_rows, self.selected, page, draft['text'] if draft else '',
-            self._context_text(), self._is_running(), bool(mode), next_page, history_analysis=mode in ('report', 'archived') or (mode == 'channel' and not passive and not self.conversation.collection_status(self.selected)['enabled']),
+            self._context_text(), running, bool(mode), next_page, history_analysis=mode in ('report', 'archived') or (mode == 'channel' and not passive and not self.conversation.collection_status(self.selected)['enabled']),
             deleted=deleted, latest_status=latest_status, pc_diagnosis=(mode == 'pc'), passive_serial=passive,
             routing=self._intent is not None, retry_input=self._route_errors.get(self.selected, ('', ''))[0],
-            monitor_status=self.diagnostic.monitor_status())
+            monitor_status=self.diagnostic.monitor_status(), ordinary_chat=mode == 'general', snapshot_generation=generation, activity=activity)
         return self._last_view
 
     def begin_close(self):

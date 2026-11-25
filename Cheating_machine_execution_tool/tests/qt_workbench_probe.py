@@ -1041,6 +1041,8 @@ class QtWorkbenchTests(unittest.TestCase):
 class QtProjectWorkspaceTests(unittest.TestCase):
     def setUp(self):
         from qt_execution_fakes import block_live_model_transport, install_native_fixture_locks
+        from src.core.ai_client import DiagnosticModelClient
+        self._offline_model_request = DiagnosticModelClient._request
         block_live_model_transport(self)
         install_native_fixture_locks(self)
         self.scope = install_qt_test_scope(self)
@@ -1829,6 +1831,149 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             self.assertTrue(chat.conversation.collection_status(dialog.view.selected)['enabled'])
             self.assertEqual(readings.call_count, 3)
 
+    def test_qt_supplement_receipts_survive_late_snapshots_and_only_confirm_next_transport(self):
+        import json
+        from dataclasses import replace
+        from functools import partial
+        from contextlib import ExitStack
+        from unittest.mock import Mock
+        from test_ai_core import FakeResponse, chat
+        from src.core.ai_client import DiagnosticModelClient
+        from src.models.ai_diagnostics import ProviderProfile
+        from src.services.ai_case_store import open_shared_cases
+        from src.services.ai_diagnostic_service import AiDiagnosticService
+        from src.services.ai_session_router import ROUTE_INSTRUCTIONS
+        from src.services.ai_store import profile_fingerprint
+
+        entered = [threading.Event() for _ in range(3)]
+        release = [threading.Event() for _ in range(3)]
+        body_entered, body_release = threading.Event(), threading.Event()
+        requests, routes = [], []
+        for event in (*release, body_release):
+            self.addCleanup(event.set)
+
+        class HeldResponse(FakeResponse):
+            def iter_content(inner, size):
+                body_entered.set()
+                if not body_release.wait(10):
+                    raise AssertionError('Fake body timeout')
+                yield from super().iter_content(size)
+
+        def transport(method, url, **kwargs):
+            if method == 'GET':
+                return FakeResponse({'data': []})
+            payload = kwargs['json']
+            messages = payload['messages']
+            if messages[0]['content'] == ROUTE_INSTRUCTIONS:
+                routes.append(1)
+                data = json.loads(messages[1]['content'])
+                current = data['current']
+                decision = dict(intent='continue', scope=current['scope'], channel=current['channel'],
+                                question=data['message'], clarification='')
+                return FakeResponse(chat(json.dumps(decision)))
+            index = len(requests)
+            if index >= len(entered):
+                raise AssertionError('unexpected diagnostic transport')
+            requests.append(payload)
+            entered[index].set()
+            if not release[index].wait(10):
+                raise AssertionError('Fake transport timeout')
+            return HeldResponse(chat('second response')) if index == 1 else FakeResponse(chat('first response'))
+
+        class Client(DiagnosticModelClient):
+            _request = self._offline_model_request
+            def __init__(inner, profile, key, redactor):
+                session = Mock()
+                session.request.side_effect = transport
+                super().__init__(profile, key, redactor, session=session)
+
+        with ExitStack() as stack:
+            stack.enter_context(patch('src.services.ai_project_store.default_ai_data_dir',
+                                      return_value=self.root / 'receipt-legacy'))
+            stack.enter_context(patch('src.services.ai_case_store.open_shared_cases',
+                side_effect=lambda emit: open_shared_cases(emit, root=self.root / 'receipt-cases')))
+            stack.enter_context(patch('src.services.qt_ai_chat.AiDiagnosticService',
+                side_effect=partial(AiDiagnosticService, client_factory=Client)))
+            live = stack.enter_context(patch('requests.sessions.Session.request',
+                                            side_effect=AssertionError('real model transport')))
+            try:
+                self.controller.submit('create', self.root / 'receipt-project', '补充回执专项')
+                self.wait_for(lambda: len(self.window.projects) == 1 and self.window.ai_chat_action.isEnabled())
+                project = self.window.selected_project
+                models = self.controller.adapter._service.models
+                profile = models.save_profile(ProviderProfile(model='fixture-receipt', context_tokens=65536), 'synthetic-fixture')
+                models.save_profile(replace(profile, capability='可自动诊断', tested_fingerprint=profile_fingerprint(profile)))
+                self.window.ai_chat_action.trigger()
+                windows = self.controller.ai_chat.windows
+                self.wait_for(lambda: project in windows and not windows[project].busy)
+                dialog = windows[project]
+                dialog.new_pc_action.trigger()
+                self.wait_for(lambda: dialog.view.pc_diagnosis and not dialog.busy)
+                session_id = dialog.view.selected
+                def send(text):
+                    dialog.composer.setPlainText(text)
+                    self.assertTrue(dialog.send_button.isEnabled())
+                    dialog.send_button.click()
+                send('合成问题 A')
+                self.wait_for(lambda: entered[0].is_set() and dialog.view.running and not dialog.view.routing and not dialog.busy)
+                old_a = dialog.view
+                for count in (1, 2):
+                    send('重复补充')
+                    self.wait_for(lambda: not dialog.busy and not dialog.view.routing and dialog.transcript.toPlainText().count('诊断补充（已接收）') == count)
+                received = dialog.view
+                dialog.show_view(old_a)
+                self.assertEqual(dialog.transcript.toPlainText().count('诊断补充（已接收）'), 2)
+                release[0].set()
+                self.wait_for(entered[1].is_set)
+                self.assertEqual(dialog.transcript.toPlainText().count('诊断补充（已接收）'), 2)
+                release[1].set()
+                self.wait_for(lambda: body_entered.is_set() and dialog.transcript.toPlainText().count('已带入下一次请求') == 2)
+                confirmed = dialog.transcript.toPlainText()
+                dialog.show_view(received)
+                dialog.show_view(old_a)
+                self.assertEqual(dialog.transcript.toPlainText(), confirmed)
+                dialog.stop_button.click()
+                body_release.set()
+                self.wait_for(lambda: not dialog.busy and not dialog.view.running)
+                self.assertEqual(dialog.transcript.toPlainText().count('已带入下一次请求'), 2)
+                self.assertEqual([sum(m.get('content') == '重复补充' for m in payload['messages']) for payload in requests], [0, 2])
+                send('合成问题 C')
+                self.wait_for(lambda: entered[2].is_set() and not dialog.busy and not dialog.view.routing and dialog.view.running)
+                send('取消前补充')
+                self.wait_for(lambda: not dialog.busy and not dialog.view.routing and '诊断补充（已接收）' in dialog.transcript.toPlainText())
+                cancel_snapshot = dialog.view
+                dialog.stop_button.click()
+                release[2].set()
+                self.wait_for(lambda: not dialog.busy and not dialog.view.running)
+                self.assertIn('诊断补充（已取消，未派发）', dialog.transcript.toPlainText())
+                dialog.show_view(cancel_snapshot)
+                self.assertIn('诊断补充（已取消，未派发）', dialog.transcript.toPlainText())
+                old_session = dialog.view
+                dialog.new_pc_action.trigger()
+                self.wait_for(lambda: not dialog.busy and dialog.view.selected != session_id)
+                dialog.show_view(old_session)
+                self.assertNotIn('重复补充', dialog.transcript.toPlainText())
+                self.assertNotEqual(dialog.view.selected, session_id)
+                dialog.sessions.setCurrentRow(next(i for i in range(dialog.sessions.count())
+                    if dialog.sessions.item(i).data(Qt.ItemDataRole.UserRole) == session_id))
+                self.wait_for(lambda: not dialog.busy and dialog.view.selected == session_id)
+                self.assertEqual(dialog.transcript.toPlainText().count('已带入下一次请求'), 2)
+                self.assertIn('已取消，未派发', dialog.transcript.toPlainText())
+                self.assertEqual(len(requests), 3)
+                self.assertEqual(len(routes), 5)
+                dialog.close()
+                self.wait_for(lambda: project not in windows)
+                self.window.ai_chat_action.trigger()
+                self.wait_for(lambda: project in windows and not windows[project].busy)
+                dialog = windows[project]
+                self.assertEqual(dialog.view.selected, session_id)
+                self.assertEqual(dialog.transcript.toPlainText().count('已带入下一次请求'), 2)
+                self.assertIn('已取消，未派发', dialog.transcript.toPlainText())
+                live.assert_not_called()
+            finally:
+                for event in (*release, body_release):
+                    event.set()
+
     def test_qt_periodic_refresh_reports_read_failure_without_blocking_other_actions(self):
         from PySide6.QtWidgets import QMessageBox
 
@@ -2042,6 +2187,75 @@ class QtProjectWorkspaceTests(unittest.TestCase):
                     self.assertIn('目标识别失败', dialog.latest_status.text())
                 submit.assert_not_called()
 
+    def test_qt_ordinary_reply_event_cancelled_without_body_keeps_request_identity(self):
+        from functools import partial
+        from src.core.ai_client import DiagnosticModelClient
+        from src.models.ai_diagnostics import ProviderProfile
+        from src.services.ai_case_store import open_shared_cases
+        from src.services.ai_diagnostic_service import AiDiagnosticService
+
+        entered, release = threading.Event(), threading.Event()
+        self.addCleanup(release.set)
+
+        class Client(DiagnosticModelClient):
+            from qt_execution_fakes import continue_chat_intent as complete
+
+            def complete_stream(inner, history, tools, stop, on_text=None):
+                if tools:
+                    raise AssertionError('ordinary reply received tools')
+                entered.set()
+                if not release.wait(8) or stop.is_set():
+                    raise InterruptedError('fixture cancellation')
+                raise AssertionError('fixture expected cancellation')
+
+        with patch('src.services.ai_project_store.default_ai_data_dir', return_value=self.root / 'event-legacy'), \
+                patch('src.services.ai_case_store.open_shared_cases',
+                      side_effect=lambda emit: open_shared_cases(emit, root=self.root / 'event-cases')), \
+                patch('src.services.qt_ai_chat.AiDiagnosticService', side_effect=partial(AiDiagnosticService, client_factory=Client)):
+            self.controller.submit('create', self.root / 'event-project', '会话状态专项')
+            self.wait_for(lambda: len(self.window.projects) == 1 and self.window.ai_chat_action.isEnabled())
+            project = self.window.selected_project
+            self.controller.adapter._service.models.save_profile(
+                ProviderProfile(model='event-fixture', context_tokens=65536), 'synthetic-fixture')
+            self.window.ai_chat_action.trigger()
+            windows = self.controller.ai_chat.windows
+            self.wait_for(lambda: project in windows and not windows[project].busy)
+            dialog = windows[project]
+            dialog.new_button.click()
+            self.wait_for(lambda: dialog.view and dialog.view.selected and not dialog.busy)
+            dialog.composer.setPlainText('合成无正文取消')
+            dialog.send_button.click()
+            try:
+                self.wait_for(lambda: entered.is_set() and dialog.view.activity is not None and
+                    dialog.view.activity.source == 'model_reply' and dialog.stop_button.isEnabled())
+                active = dialog.view
+                request_id = active.activity.request_id
+                self.assertTrue(request_id)
+                self.assertIn('模型回复 · 运行中', dialog.latest_status.toolTip())
+                self.assertIn(request_id, dialog.latest_status.toolTip())
+                self.assertIn('等待正文', dialog.latest_status.toolTip())
+                self.assertNotIn(request_id, dialog.transcript.toPlainText())
+                dialog.stop_button.click()
+                self.wait_for(lambda: dialog.view.activity is not None and dialog.view.activity.state == 'cancelling')
+                self.assertEqual(dialog.view.activity.request_id, request_id)
+            finally:
+                release.set()
+            self.wait_for(lambda: not dialog.busy and not dialog.view.running)
+            self.assertEqual(dialog.view.activity.state, 'cancelled')
+            self.assertEqual(dialog.view.activity.request_id, request_id)
+            self.assertIn('模型回复 · 已取消', dialog.latest_status.toolTip())
+            self.assertIn('没有生成可留存正文', dialog.latest_status.toolTip())
+            self.assertIn('fixture cancellation', dialog.latest_status.toolTip())
+            dialog.show_view(active)
+            self.assertEqual(dialog.view.activity.state, 'cancelled')
+            self.assertNotIn(request_id, dialog.transcript.toPlainText())
+            cancelled_view = dialog.view
+            dialog.new_button.click()
+            self.wait_for(lambda: not dialog.busy and dialog.view.selected != cancelled_view.selected)
+            dialog.show_view(cancelled_view)
+            self.assertNotIn(request_id, dialog.latest_status.toolTip())
+            self.assertNotEqual(dialog.view.selected, cancelled_view.selected)
+
     def test_qt_ai_chat_sends_and_reopens_original_persisted_history(self):
         from functools import partial
         from src.core.ai_client import DiagnosticModelClient
@@ -2096,6 +2310,11 @@ class QtProjectWorkspaceTests(unittest.TestCase):
                 self.assertFalse(dialog.feedback.text(), dialog.feedback.text())
                 self.assertIn('合成回复片段', dialog.transcript.toPlainText())
                 self.assertTrue(dialog.stop_button.isEnabled())
+                running_view = dialog.view
+                request_id = running_view.activity.request_id
+                self.assertIn('模型回复 · 运行中', dialog.latest_status.toolTip())
+                self.assertIn(request_id, dialog.latest_status.toolTip())
+                self.assertNotIn(request_id, dialog.transcript.toPlainText())
                 dialog.close()
                 self.wait_for(lambda: first not in chat.windows)
                 self.window.detail.tabs.setCurrentIndex(8)
@@ -2107,6 +2326,10 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             self.wait_for(lambda: '合成回复结果' in dialog.transcript.toPlainText() and not dialog.stop_button.isEnabled())
             self.assertIn('合成测试问题', dialog.transcript.toPlainText())
             self.assertNotIn('合成回复片段', dialog.transcript.toPlainText())
+            self.assertEqual(dialog.view.activity.request_id, request_id)
+            self.assertIn('模型回复 · 已完成', dialog.latest_status.toolTip())
+            dialog.show_view(running_view)
+            self.assertIn('模型回复 · 已完成', dialog.latest_status.toolTip())
             self.assertIn('65,536', dialog.usage.text())
             self.assertEqual(dialog.composer.toPlainText(), '')
             output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')

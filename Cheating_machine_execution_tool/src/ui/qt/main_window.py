@@ -1,7 +1,7 @@
 """Qt workbench shell. It owns views, never devices or test execution."""
 from datetime import datetime
 
-from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (QAbstractItemView, QGridLayout, QHBoxLayout, QLineEdit, QMainWindow, QMenu,
     QSplitter, QStackedWidget, QToolBar, QToolButton, QTreeView, QVBoxLayout, QWidget)
@@ -15,6 +15,8 @@ from src.ui.qt.theme import GAP, V13_PALETTE, WORKBENCH_QSS, assert_gui_thread, 
 
 
 class MainWindow(QMainWindow):
+    project_context_updated = Signal()
+
     def __init__(self, projects=(), logs=(), *, demo=True, refreshed=True, parent=None):
         super().__init__(parent)
         self._refreshed = refreshed
@@ -390,6 +392,7 @@ class MainWindow(QMainWindow):
         self.overview_button.setChecked(False)
         self.templates_button.setChecked(False)
         self.selected_project = project.project_id
+        self.project_context_updated.emit()
         return True
 
     def show_dashboard(self):
@@ -400,6 +403,7 @@ class MainWindow(QMainWindow):
         self.overview_button.setChecked(True)
         self.templates_button.setChecked(False)
         self.logs.set_scope()
+        self.project_context_updated.emit()
         self._layout_timer.start(0)
 
     def show_all_projects(self):
@@ -415,6 +419,7 @@ class MainWindow(QMainWindow):
         self.templates_button.setChecked(True)
         self.overview_button.setChecked(False)
         self.logs.set_scope()
+        self.project_context_updated.emit()
         self._layout_timer.start(0)
 
     def toggle_sidebar(self):

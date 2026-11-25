@@ -131,6 +131,7 @@ class AiConversationService:
         for session in self.store.chats():
             self.permissions.initialize(session["id"])
         for session in self.store.chats():
+            self.store.interrupt_supplement_receipts(session['id'])
             if session_scope(session) == "batch" and session.get("batch_request"):
                 self.store.update_chat(session["id"], batch_request=None)
             if session["status"] in ("处理中", "排队中", "等待操作员批准"):
@@ -170,13 +171,17 @@ class AiConversationService:
         with self.subscriber_lock:
             self.subscribers.discard(subscriber)
 
-    def message(self, identifier, role, text, kind="text", *, reply_id="", stream_state="", supplement=False):
+    def message(self, identifier, role, text, kind="text", *, reply_id="", stream_state="", supplement=False,
+                supplement_receipt=None):
         payload = asdict(ConversationMessage(role, text, kind))
         if reply_id:
             payload.update(reply_id=reply_id, stream_state=stream_state)
         if supplement:
             payload["diagnostic_supplement"] = True
-        self.store.append_chat(identifier, self.redactor.object(payload))
+        if supplement_receipt is None:
+            self.store.append_chat(identifier, self.redactor.object(payload))
+        else:
+            self.store.append_chat(identifier, self.redactor.object(payload), supplement_receipt=supplement_receipt)
         self.notify(identifier)
         if hasattr(self, "batch"):
             self.batch.project(identifier, role, text, kind)
@@ -422,10 +427,11 @@ class AiConversationService:
                 task = self.tasks.get(identifier)
                 if task is not None and not self.running[identifier].is_set() and diagnosis_only is not False:
                     self._profile(self.store.chat(identifier))
-                    task.supplement(text)
-                    self.message(identifier, "user", text, supplement=True)
+                    supplement_id = task.supplement(text)
+                    self.message(identifier, "user", text, supplement=True,
+                                 supplement_receipt=(task.turn_id, supplement_id))
                     self.store.update_chat(identifier, diagnostic_task=self.redactor.object(task.snapshot()))
-                    self.emit(f"会话{identifier[:8]}收到诊断补充；下一安全检查点采用，不授予新操作权限")
+                    self.emit(f"会话{identifier[:8]}收到诊断补充；等待下一安全检查点，不授予新操作权限")
                     return
                 raise ValueError("本轮仍在排查，请等待或停止本轮后再发送；本条问题未排队")
             session = self.store.chat(identifier)
@@ -588,6 +594,7 @@ class AiConversationService:
                     self.drafts.pop(identifier, None)
                     if task is not None:
                         task.accepting = False
+                        self._finish_supplement_receipts(identifier, task, stop)
                         task.memory["state"] = self.store.chat(identifier)["status"]
                         self.store.update_chat(identifier, diagnostic_task=self.redactor.object(task.snapshot()))
                 self.notify(identifier)
@@ -631,14 +638,59 @@ class AiConversationService:
 
     def _task_checkpoint(self, identifier, task, current):
         with self.lock:
-            inputs = task.take_inputs()
-            for text in inputs:
-                current.append({"role": "user", "content": text})
+            inputs = task.take_inputs(with_ids=True)
+            for supplement_id, text in inputs:
+                message = {"role": "user", "content": text}
+                current.append(message)
+                task.supplement_messages[id(message)] = supplement_id
             self.store.update_chat(identifier, diagnostic_task=self.redactor.object(task.snapshot()))
         if inputs:
-            self.message(identifier, "system", "已采用你的补充，调整后续诊断方向。", "progress")
-            self.emit(f"会话{identifier[:8]}已采用{len(inputs)}条诊断补充，原始记录保留")
+            self.message(identifier, "system", "本次检查点已留存补充记录。", "progress")
+            self.emit(f"会话{identifier[:8]}已留存{len(inputs)}条诊断补充，原始记录保留")
         return bool(inputs)
+
+    def _save_supplement_state(self, identifier, task, supplement_ids, state, request_id=None):
+        if not supplement_ids:
+            return
+        try:
+            updated = self.store.update_supplement_receipts(identifier, task.turn_id, supplement_ids, state, request_id)
+        except Exception:
+            self.emit(f'会话{identifier[:8]}补充回执保存失败，派发状态待核实')
+            return
+        task.pending_supplements.difference_update(updated)
+        if updated:
+            self.notify(identifier)
+
+    def _finish_supplement_receipts(self, identifier, task, stop):
+        uncertain = task.pending_supplements & task.unconfirmed_supplements
+        missing = task.pending_supplements - uncertain
+        self._save_supplement_state(identifier, task, uncertain, 'unconfirmed')
+        self._save_supplement_state(identifier, task, missing, 'cancelled' if stop.is_set() else 'not_dispatched')
+
+    def _complete_with_supplement_receipts(self, identifier, task, stop, reply_id, client, history, complete):
+        if task is None or not task.pending_supplements:
+            return complete()
+        positions = {index: task.supplement_messages[id(message)] for index, message in enumerate(history)
+                     if task.supplement_messages.get(id(message)) in task.pending_supplements}
+        if not positions:
+            return complete()
+        if not callable(getattr(type(client), 'observe_supplement_dispatch', None)):
+            task.unconfirmed_supplements.update(positions.values())
+            return complete()
+
+        def confirm(supplement_ids):
+            with self.lock:
+                draft = self.drafts.get(identifier)
+                if (self.running.get(identifier) is stop and self.tasks.get(identifier) is task
+                        and draft and draft['reply_id'] == reply_id):
+                    self._save_supplement_state(identifier, task, supplement_ids, 'confirmed', reply_id)
+
+        with client.observe_supplement_dispatch(history, positions, confirm) as observation:
+            try:
+                return complete()
+            finally:
+                if not observation.reached or observation.attempted:
+                    task.unconfirmed_supplements.update(positions.values())
 
     def _history(self, identifier):
         # 每组包含完整user/assistant/tool续接，不从工具调用中间截断。
@@ -845,9 +897,10 @@ class AiConversationService:
                         self.notify(identifier)
                         if streaming:
                             on_text = partial(self._draft, identifier, reply_id=reply_id, stop=stop)
-                            reply = client.complete_stream(history, tools, stop, on_text=on_text)
+                            complete = partial(client.complete_stream, history, tools, stop, on_text=on_text)
                         else:
-                            reply = client.complete(history, tools, stop)
+                            complete = partial(client.complete, history, tools, stop)
+                        reply = self._complete_with_supplement_receipts(identifier, task, stop, reply_id, client, history, complete)
                         draft = self.draft_message(identifier)
                         if draft and draft["text"] and not reply.text:
                             raise ValueError("模型流最终响应缺少已生成的正文；本轮未执行工具")

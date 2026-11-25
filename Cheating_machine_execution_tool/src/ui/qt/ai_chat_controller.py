@@ -1,19 +1,30 @@
 """Route Qt conversation input and the existing workspace refresh to one project."""
 import time
 import threading
+from dataclasses import dataclass
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QFormLayout, QHBoxLayout, QLabel, QMenu, QPlainTextEdit,
                                QPushButton, QToolBar, QToolButton)
 
 from src.models.project_review import ReviewRequired
-from src.models.qt_ai_chat import CHAT_MANAGEMENT
+from src.models.qt_ai_chat import CHAT_MANAGEMENT, ChatActivityView
 from src.models.workbench_presentation import LogView
-from src.services.qt_channel_evidence import EvidenceTarget
+from src.services.qt_channel_evidence import ChatEvidenceResult, EvidenceTarget, disconnect_question_channel
 from src.models.qt_ai_reports import REPORT_HANDOFF_OPERATIONS, ReportHandoffPreview
 from src.ui.qt.ai_case_dialog import AiCaseDialog
 from src.ui.qt.ai_chat_dialog import AiChatDialog
 from src.ui.qt.ai_report_dialog import AiReportDialog
+
+
+@dataclass(frozen=True)
+class _ChatEvidenceRequest:
+    identifier: int
+    dialog: AiChatDialog
+    session: str
+    question: str
+    target: EvidenceTarget
+    stop: threading.Event
 
 
 class AiChatController:
@@ -26,6 +37,8 @@ class AiChatController:
         self.polling = set()
         self.next_poll = 0.0
         self.evidence_dialog = None
+        self.chat_evidence = None
+        workspace.window.project_context_updated.connect(self._check_chat_evidence)
         toolbar = workspace.window.findChild(QToolBar, 'GlobalHeader')
         chat = workspace.window.ai_chat_action
         control = toolbar.widgetForAction(chat)
@@ -45,13 +58,14 @@ class AiChatController:
         chat.enabledChanged.connect(evidence.setEnabled)
         overflow.aboutToShow.connect(include_split_action)
 
-    def evidence_target(self):
+    def evidence_target(self, *, channel=None, project_id=None):
         window = self.workspace.window
         detail = window.detail
         project = self.workspace._current()
         panel = detail.test_type_panel
         if (self.workspace.closing or not self.workspace.ready or project is None
                 or window.pages.currentWidget() is not detail or detail.project is None
+                or (project_id is not None and project.project_id != project_id)
                 or project.project_id != window.selected_project or project.project_id != detail.project.project_id
                 or project.project_id != panel._project or project.project_id != window.logs.scope_id
                 or project.run_id != window.logs.run_id or project.run_id != detail.run_id.text()
@@ -64,18 +78,27 @@ class AiChatController:
                 or any(tuple((p.test_overview or {}).get(k) for k in fields) != binding
                        for p in (project, detail.project))):
             raise ValueError('缺少一致的持续老化批次和任务，请核对当前详情。')
-        selected = panel._selected()
-        if (not panel.table.isVisibleTo(detail) or not selected
-                or not any((r['dut_id'], r['collector']) == selected for r in data.get('rows', ()))):
-            raise ReviewRequired('invalid_target', '请在当前批次的业务检查表中选中一个 DUT。', 'project', 'business',
-                                 project_id=project.project_id)
-        mapping = data.get('evidence_channels', ())
-        matches = [channel for dut, channel in mapping if dut == selected[0]]
-        if (len(matches) != 1 or type(matches[0]) is not int or not 1 <= matches[0] <= 16
-                or sum(ch == matches[0] for _, ch in mapping) != 1
+        mapping = data.get('evidence_channels') or ()
+        rows = data.get('rows', ())
+        if channel is None:
+            selected = panel._selected()
+            if (not panel.table.isVisibleTo(detail) or not selected
+                    or not any((r['dut_id'], r['collector']) == selected for r in rows)):
+                raise ReviewRequired('invalid_target', '请在当前批次的业务检查表中选中一个 DUT。', 'project', 'business',
+                                     project_id=project.project_id)
+            matches = [(dut, ch) for dut, ch in mapping if dut == selected[0]]
+        else:
+            matches = [(dut, ch) for dut, ch in mapping if ch == channel]
+        if (len(matches) != 1
                 or any(p.test_overview.get('evidence_channels') != mapping for p in (project, detail.project))):
-            raise ValueError('批次缺少所选 DUT 的唯一通道映射，请核对运行快照。')
-        return EvidenceTarget(project.project_id, *binding, selected[0], matches[0])
+            raise ValueError('当前批次缺少目标的唯一通道映射，请核对运行快照。')
+        dut, number = matches[0]
+        if (not dut or type(number) is not int or not 1 <= number <= 16
+                or sum(ch == number for _, ch in mapping) != 1
+                or sum(key == dut for key, _ in mapping) != 1
+                or not any(row['dut_id'] == dut for row in rows)):
+            raise ValueError('当前批次缺少目标的唯一通道映射，请核对运行快照。')
+        return EvidenceTarget(project.project_id, *binding, dut, number)
 
     def open_evidence(self):
         try:
@@ -109,7 +132,7 @@ class AiChatController:
             dialog.model_settings_requested.connect(lambda: self.workspace.model_settings.open_for(project))
             dialog.reports_requested.connect(lambda: self.open_reports(project))
             dialog.cases_requested.connect(lambda: self.open_cases(project))
-            dialog.finished.connect(lambda _: self.windows.pop(identifier, None))
+            dialog.finished.connect(lambda _: self._chat_closed(dialog))
             if view is None and not self.submit(dialog, 'ai_chat_open', ()):
                 dialog.close()
                 return
@@ -162,9 +185,83 @@ class AiChatController:
         identifier = dialog.project_id
         return any(windows.get(identifier) is dialog for windows in (self.windows, self.report_windows, self.case_windows))
 
+    def _chat_closed(self, dialog):
+        self.windows.pop(dialog.project_id, None)
+        self._check_chat_evidence()
+
+    def _log_chat_evidence(self, dialog, channel, message, target=None):
+        self.workspace.window.logs.append_batch((LogView(time.strftime('%H:%M:%S'), 'INFO',
+            dialog.project_id, dialog.project_name, f'[Ai助手 · 本地证据] CH{channel:02d} · {message}',
+            run_id=target.job_id if target else '', job_id=target.job_id if target else '',
+            batch_id=target.run_id if target else '', dut_id=target.dut_id if target else '',
+            channel=channel if 1 <= channel <= 16 else None),))
+
+    def _send_chat_evidence(self, dialog, session, question, channel):
+        question = question.strip()
+        try:
+            target = self.evidence_target(channel=channel, project_id=dialog.project_id)
+        except ValueError as error:
+            self._log_chat_evidence(dialog, channel, '跳过查询：' + str(error))
+            dialog.show_local_evidence(question, '本地查询 · 未开始\n目标核对失败。' + str(error),
+                ChatActivityView(session, 'local_evidence', '', 'not_started', str(error)))
+        else:
+            stop = threading.Event()
+            identifier = self.workspace.submit('channel_evidence', target.project_id, target, stop, True)
+            if identifier is None:
+                dialog.show_local_evidence(question, '本地查询 · 未受理\n本地证据查询未受理，请重试。',
+                    ChatActivityView(session, 'local_evidence', '', 'rejected', '查询未受理'))
+                self._log_chat_evidence(dialog, channel, '查询未受理', target)
+            else:
+                self.chat_evidence = _ChatEvidenceRequest(identifier, dialog, session, question, target, stop)
+                dialog.set_local_evidence_pending(True)
+                dialog.show_local_evidence(question, f'本地查询 #{identifier} · 已受理\n'
+                    f'正在核对 CH{channel:02d} 的冻结映射及本批次观测…',
+                    ChatActivityView(session, 'local_evidence', str(identifier), 'accepted', '等待冻结目标与只读观测回执'))
+                self._log_chat_evidence(dialog, channel, f'请求 #{identifier} 开始核对批次与通道观测', target)
+        dialog.feedback.clear()
+        dialog.composer.clear()
+        return True
+
+    def _cancel_chat_evidence(self, request, reason):
+        self.chat_evidence = None
+        request.stop.set()
+        dialog, target = request.dialog, request.target
+        self._log_chat_evidence(dialog, target.channel, f'请求 #{request.identifier} 已取消：' + reason, target)
+        if self._is_open(dialog):
+            dialog.set_local_evidence_pending(False)
+            if dialog.view is not None and dialog.view.selected == request.session:
+                dialog.show_local_evidence(request.question, f'本地查询 #{request.identifier} · 已取消\n' + reason,
+                    ChatActivityView(request.session, 'local_evidence', str(request.identifier), 'cancelled', reason))
+
+    def _check_chat_evidence(self):
+        request = self.chat_evidence
+        if request is None:
+            return
+        dialog, target = request.dialog, request.target
+        opened = self._is_open(dialog)
+        if opened and dialog.view is not None and dialog.view.selected == request.session:
+            try:
+                if self.evidence_target(channel=target.channel, project_id=target.project_id) == target:
+                    return
+            except ValueError:
+                pass
+        self._cancel_chat_evidence(request, '上下文已变化，结果作废。请在当前项目与批次重新提问。')
+
     def submit(self, dialog, operation, args):
         if self.workspace.closing or not self._is_open(dialog):
             return False
+        if operation == 'ai_chat_cancel_local_evidence':
+            request = self.chat_evidence
+            if request is not None and request.dialog is dialog and args == (request.session,):
+                self._cancel_chat_evidence(request, '已请求停止本地查询，结果作废。')
+                return True
+            return False
+        if (operation == 'ai_chat_send' and dialog.view is not None
+                and dialog.view.ordinary_chat and not dialog.view.running):
+            session, question = args
+            channel = disconnect_question_channel(question)
+            if channel is not None and session == dialog.view.selected:
+                return self._send_chat_evidence(dialog, session, question, channel)
         identifier = self.workspace.submit(operation, dialog.project_id, *args)
         if identifier is None:
             return False
@@ -178,6 +275,32 @@ class AiChatController:
 
     def handle_result(self, result):
         if result.operation == 'channel_evidence':
+            self._check_chat_evidence()
+            request = self.chat_evidence
+            if request is not None and result.identifier == request.identifier:
+                if request.stop.is_set():
+                    self._cancel_chat_evidence(request, '已收到停止信号，结果作废。')
+                    return True
+                self.chat_evidence = None
+                dialog, target = request.dialog, request.target
+                payload = result.payload
+                error = result.error
+                if result.project_id != target.project_id or (not error and (
+                        not isinstance(payload, ChatEvidenceResult) or payload.target != target)):
+                    error = '返回的目标不一致或缺少核对回执，已丢弃结果。'
+                dialog.set_local_evidence_pending(False)
+                if error:
+                    answer = f'本地查询 #{request.identifier} · 未完成\n' + error
+                    log = f'请求 #{request.identifier} 查询失败：' + error
+                else:
+                    answer = payload.render(request.identifier)
+                    log = (f'请求 #{request.identifier} 查询完成：目标核对通过，候选 {payload.candidates} 条，'
+                           f'符合时效 {payload.valid} 条，引用 {len(payload.cited_ids)} 条；' + payload.outcome)
+                activity = ChatActivityView(request.session, 'local_evidence', str(request.identifier),
+                    'failed' if error else 'completed', error or payload.outcome)
+                dialog.show_local_evidence(request.question, answer, activity)
+                self._log_chat_evidence(dialog, target.channel, log, target)
+                return True
             dialog = self.evidence_dialog
             if dialog is not None and result.identifier == dialog.request_id:
                 dialog.finish(result)
@@ -227,12 +350,14 @@ class AiChatController:
                     dialog.feedback.setText('已转入排查会话，可继续分析留存材料')
                     self._show_chat(project, result.payload)
         else:
-            dialog.show_view(result.payload)
-            if result.operation == 'ai_chat_send':
+            if result.operation == 'ai_chat_send' and dialog.accepts_view(result.payload):
+                dialog.clear_local_evidence()
                 dialog.composer.clear()
+            dialog.show_view(result.payload)
         return True
 
     def poll(self, opened):
+        self._check_chat_evidence()
         if self.evidence_dialog is not None:
             self.evidence_dialog.check_context()
         now = time.monotonic()

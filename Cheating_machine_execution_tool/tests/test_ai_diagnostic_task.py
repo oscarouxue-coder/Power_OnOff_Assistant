@@ -136,6 +136,221 @@ class DiagnosticTaskTests(unittest.TestCase):
         self.assertIn("收到用户补充", json.dumps(group, ensure_ascii=False))
         self.assertFalse(self.service.tasks)
 
+    def supplement_receipts(self, session=None):
+        with self.store.lock:
+            return self.store.db.execute('SELECT turn_id,supplement_id,state,request_id FROM chat_supplement_receipts '
+                'WHERE session_id=? ORDER BY message_id', (session or self.id,)).fetchall()
+
+    def hold_first_response(self):
+        entered, release = threading.Event(), threading.Event()
+        original = self.diag.client_factory
+        def factory(*args):
+            client = original(*args)
+            request = client.session.request.side_effect
+            def blocked(method, *args, **kwargs):
+                response = request(method, *args, **kwargs)
+                if method == 'POST' and len(self.requests) == 1:
+                    entered.set()
+                    if not release.wait(5):
+                        raise AssertionError('fake barrier timeout')
+                return response
+            client.session.request.side_effect = blocked
+            return client
+        self.diag.client_factory = factory
+        return entered, release
+
+    def test_supplement_receipts_distinguish_duplicates_and_sessions_without_wire_metadata(self):
+        entered, release = self.hold_first_response()
+        other = self.service.create_session(None, self.profile, scope='pc', diagnosis_only=True)
+        self.responses.extend([chat('first'), chat('second'), chat('other')])
+        try:
+            self.service.send(self.id, 'question', diagnosis_only=True)
+            self.assertTrue(entered.wait(5))
+            self.service.send(self.id, 'duplicate fixture', diagnosis_only=True)
+            self.service.send(self.id, 'duplicate fixture', diagnosis_only=True)
+            self.assertEqual([r[2] for r in self.supplement_receipts()], ['received', 'received'])
+            self.service.send(other, 'other question', diagnosis_only=True)
+            self.service.send(other, 'other supplement', diagnosis_only=True)
+        finally:
+            release.set()
+        self.service.jobs.join()
+        a, b = self.supplement_receipts(), self.supplement_receipts(other)
+        self.assertEqual(len(a), 2)
+        self.assertEqual(len({r[1] for r in a}), 2)
+        self.assertEqual(len({r[0] for r in a}), 1)
+        self.assertEqual([r[2] for r in a], ['confirmed', 'confirmed'])
+        self.assertEqual(a[0][3], a[1][3])
+        self.assertTrue(a[0][3])
+        self.assertEqual(b[0][2], 'confirmed')
+        self.assertNotEqual(a[0][0], b[0][0])
+        self.assertNotEqual(a[0][3], b[0][3])
+        self.assertEqual(len(self.requests), 3)
+        counts = lambda text: [sum(m.get('content') == text for m in p['messages']) for p in self.requests]
+        self.assertEqual(counts('duplicate fixture'), [0, 2, 0])
+        self.assertEqual(counts('other supplement'), [0, 0, 1])
+        for identity in (a[0][1], a[1][1], a[0][0], a[0][3], b[0][1]):
+            self.assertNotIn(identity, json.dumps(self.requests))
+        for identity in (a[0][1], a[1][1], a[0][0], b[0][1]):
+            self.assertNotIn(identity, json.dumps(self.store.chat_items(self.id)))
+        self.assertIn(a[0][3], [m.get('reply_id') for m in self.store.chat_items(self.id)])
+        from src.services.ai_store import DiagnosticStore
+        reopened = DiagnosticStore(self.store.directory, self.store.cipher)
+        try:
+            self.assertEqual(reopened.db.execute('SELECT turn_id,supplement_id,state,request_id FROM '
+                'chat_supplement_receipts WHERE session_id=? ORDER BY message_id', (self.id,)).fetchall(), a)
+            self.assertEqual(reopened.update_supplement_receipts(self.id, a[0][0], [a[0][1]], 'confirmed', 'late'), ())
+        finally:
+            reopened.close()
+
+    def test_supplement_cancel_before_transport_leaves_no_dispatch_receipt(self):
+        entered, release = threading.Event(), threading.Event()
+        first, first_release = self.hold_first_response()
+        original = self.diag.client_factory
+        def factory(*args):
+            client = original(*args)
+            request = client._request
+            def blocked(method, *args, **kwargs):
+                if method == 'POST' and len(self.requests) == 1:
+                    entered.set()
+                    if not release.wait(5):
+                        raise AssertionError('fake dispatch barrier timeout')
+                return request(method, *args, **kwargs)
+            client._request = blocked
+            return client
+        self.diag.client_factory = factory
+        self.responses.append(chat('first'))
+        try:
+            self.service.send(self.id, 'question', diagnosis_only=True)
+            self.assertTrue(first.wait(5))
+            self.service.send(self.id, 'supplement before cancellation', diagnosis_only=True)
+            first_release.set()
+            self.assertTrue(entered.wait(5))
+            self.assertEqual(self.supplement_receipts()[0][2], 'received')
+            self.service.stop(self.id)
+        finally:
+            first_release.set()
+            release.set()
+        self.service.jobs.join()
+        self.assertEqual(len(self.requests), 1)
+        self.assertEqual(self.supplement_receipts()[0][2:], ('cancelled', None))
+
+    def test_supplement_cancel_after_confirmed_transport_keeps_receipt(self):
+        first, first_release = self.hold_first_response()
+        entered, release = threading.Event(), threading.Event()
+        class HeldResponse(FakeResponse):
+            def iter_content(inner, size):
+                entered.set()
+                if not release.wait(5):
+                    raise AssertionError('fake response barrier timeout')
+                yield from super().iter_content(size)
+        self.responses.extend([chat('first'), HeldResponse(chat('second'))])
+        try:
+            self.service.send(self.id, 'question', diagnosis_only=True)
+            self.assertTrue(first.wait(5))
+            self.service.send(self.id, 'supplement after dispatch', diagnosis_only=True)
+            first_release.set()
+            self.assertTrue(entered.wait(5))
+            before = self.supplement_receipts()
+            self.assertEqual(before[0][2], 'confirmed')
+            self.service.stop(self.id)
+        finally:
+            first_release.set()
+            release.set()
+        self.service.jobs.join()
+        self.assertEqual(len(self.requests), 2)
+        self.assertEqual(self.supplement_receipts(), before)
+
+    def test_supplement_compaction_cannot_match_an_identical_untracked_message(self):
+        task = DiagnosticTask('fixture')
+        identity = task.supplement('duplicate')
+        current = [{'role': 'user', 'content': 'initial'}]
+        self.service._task_checkpoint(self.id, task, current)
+        current.extend([{'role': 'assistant', 'content': 'old'}, {'role': 'user', 'content': 'duplicate'}])
+        task.boundaries = [1, 2, 3]
+        compacted = task.compact(current)
+        self.assertTrue(any(m.get('content') == 'duplicate' for m in compacted))
+        self.assertNotIn(id(current[1]), {id(m) for m in compacted})
+        client = Mock()
+        complete = Mock(return_value='unchanged')
+        self.assertEqual(self.service._complete_with_supplement_receipts(self.id, task, threading.Event(),
+            'request', client, compacted, complete), 'unchanged')
+        complete.assert_called_once_with()
+        self.assertIn(identity, task.pending_supplements)
+        self.assertFalse(task.unconfirmed_supplements)
+
+    def test_supplement_transport_observer_preserves_payload_for_both_protocols(self):
+        from dataclasses import replace
+        for protocol in ('chat_completions', 'responses'):
+            with self.subTest(protocol=protocol):
+                profile = replace(self.profile, protocol=protocol)
+                session = Mock()
+                response = chat('reply') if protocol == 'chat_completions' else {'output': [
+                    {'type': 'message', 'content': [{'type': 'output_text', 'text': 'reply'}]}]}
+                session.request.return_value = FakeResponse(response)
+                client = DiagnosticModelClient(profile, 'fixture', DiagnosticRedactor(), session=session)
+                history = [{'role': 'user', 'content': 'same'}, {'role': 'user', 'content': 'same'}]
+                expected = client.request_payload(history, ())
+                confirm = Mock()
+                with client.observe_supplement_dispatch(history, {1: 'second-id'}, confirm):
+                    client.complete(history)
+                self.assertEqual(session.request.call_args.kwargs['json'], expected)
+                confirm.assert_called_once_with(('second-id',))
+                confirm.reset_mock()
+                request = client._request
+                def altered(method, path, payload, *args):
+                    payload['input' if protocol == 'responses' else 'messages'][1] = {'role': 'user', 'content': 'different'}
+                    return request(method, path, payload, *args)
+                session.request.return_value = FakeResponse(response)
+                with patch.object(client, '_request', side_effect=altered):
+                    with client.observe_supplement_dispatch(history, {1: 'second-id'}, confirm):
+                        client.complete(history)
+                confirm.assert_not_called()
+                self.assertEqual(session.request.call_count, 2)
+                client.close()
+
+    def test_supplement_transport_exception_without_response_is_unconfirmed(self):
+        entered, release = self.hold_first_response()
+        self.responses.extend([chat('first'), RuntimeError('fixture transport exception')])
+        try:
+            self.service.send(self.id, 'question', diagnosis_only=True)
+            self.assertTrue(entered.wait(5))
+            self.service.send(self.id, 'unconfirmed fixture', diagnosis_only=True)
+        finally:
+            release.set()
+        self.service.jobs.join()
+        self.assertEqual(len(self.requests), 2)
+        self.assertEqual(self.supplement_receipts()[0][2:], ('unconfirmed', None))
+
+    def test_supplement_restart_and_delete_preserve_exact_local_rows(self):
+        payload = dict(role='user', text='fixture', kind='text', diagnostic_supplement=True)
+        self.store.append_chat(self.id, payload, supplement_receipt=('turn-a', 'supplement-a'))
+        other = self.service.create_session(None, self.profile, scope='pc', diagnosis_only=True)
+        self.store.append_chat(other, payload, supplement_receipt=('turn-b', 'supplement-b'))
+        self.assertEqual(self.store.update_supplement_receipts(other, 'turn-a', ['supplement-a'], 'confirmed', 'wrong'), ())
+        self.store.interrupt_supplement_receipts(self.id)
+        self.assertEqual(self.supplement_receipts()[0][2:], ('unconfirmed', None))
+        self.assertEqual(self.supplement_receipts(other)[0][2:], ('received', None))
+        self.assertEqual(self.store.update_supplement_receipts(self.id, 'turn-a', ['supplement-a'], 'confirmed', 'late'), ())
+        self.service.delete_sessions([self.id])
+        self.assertFalse(self.supplement_receipts())
+        self.assertEqual(self.supplement_receipts(other)[0][2:], ('received', None))
+
+    def test_supplement_budget_failure_and_terminal_cleanup_do_not_claim_dispatch(self):
+        from src.services.ai_context_budget import ContextCapacity
+        entered, release = self.hold_first_response()
+        self.responses.append(chat('first'))
+        with patch('src.services.ai_conversation_service.context_capacity', return_value=ContextCapacity(32768, 'fixture')):
+            try:
+                self.service.send(self.id, 'question', diagnosis_only=True)
+                self.assertTrue(entered.wait(5))
+                self.service.send(self.id, 'x' * 32000, diagnosis_only=True)
+            finally:
+                release.set()
+            self.service.jobs.join()
+        self.assertEqual(len(self.requests), 1)
+        self.assertEqual(self.supplement_receipts()[0][2:], ('not_dispatched', None))
+        self.assertEqual(self.store.chat(self.id)['status'], '失败，可继续')
+
     def test_stop_keeps_supplement_and_never_resumes_automatically(self):
         entered, release = threading.Event(), threading.Event()
         def collect(*args):
@@ -156,6 +371,7 @@ class DiagnosticTaskTests(unittest.TestCase):
         result = self.store.chat(self.id)
         self.assertEqual(result["status"], "已停止")
         self.assertIn("保留我的补充", result["diagnostic_task"]["corrections"])
+        self.assertEqual(self.supplement_receipts()[0][2:], ('cancelled', None))
         self.assertFalse(self.service.tasks)
         self.assertFalse(self.service.drafts)
 

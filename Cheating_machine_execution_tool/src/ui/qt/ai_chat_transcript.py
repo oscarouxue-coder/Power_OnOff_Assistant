@@ -99,7 +99,7 @@ class AiChatTranscript(QTextEdit):
         heading = QTextCharFormat()
         heading.setFontWeight(QFont.Weight.Bold)
         heading.setForeground(QColor(DANGER if kind == 'error' else BRAND))
-        name = {'user': '我', 'assistant': 'AI'}.get(role, role)
+        name = '本地证据' if kind == 'local_evidence' else {'user': '我', 'assistant': 'AI'}.get(role, role)
         title = QTextBlockFormat()
         title.setTopMargin(9 if cursor.position() else 0)
         if cursor.position():
@@ -109,7 +109,7 @@ class AiChatTranscript(QTextEdit):
         cursor.insertText(f'{name} · {stamp[:19].replace("T", " ")}', heading)
         body = QTextCharFormat()
         body.setForeground(QColor(DANGER if kind == 'error' else TEXT))
-        if role != 'assistant':
+        if role != 'assistant' or kind == 'local_evidence':
             cursor.insertBlock(QTextBlockFormat(), body)
             cursor.insertText(text, body)
             return

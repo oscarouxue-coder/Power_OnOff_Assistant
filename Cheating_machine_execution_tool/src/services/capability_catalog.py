@@ -247,9 +247,9 @@ def business_catalog():
         ('service_aging.history', '查看及导出指定批次业务证据', 'service_aging_history_dialog.py', '_export',
          'ServiceAgingHistory', 'local_confirmation', '仅本机选择项目、批次和导出文件',
          ['test_service_aging.py', 'qt_project_wizard_probe.py']),
-        ('service_aging.channel_evidence', '查看所选 DUT 的掉线证据', 'ai_chat_controller.py', 'open_evidence',
+        ('service_aging.channel_evidence', '查看所选 DUT 或普通聊天明确 CH 的掉线证据', 'ai_chat_controller.py', 'open_evidence',
          'read_channel_evidence / ServiceAgingHistory', 'service_aging.channel_evidence',
-         '仅本机 GUI 在冻结的项目、批次和通道内读取已有观测',
+         '仅本机 GUI 在冻结的项目、批次和通道内读取已有观测。普通聊天通过 _send_chat_evidence 核对明确 CH，带请求编号的结果仅当前窗口显示；停止本轮仅取消该本地读请求',
          ['test_qt_channel_evidence.py', 'qt_channel_evidence_probe.py']),
     )
     for identifier, name, filename, entry, service, capability, reason, tests in local_workflows:

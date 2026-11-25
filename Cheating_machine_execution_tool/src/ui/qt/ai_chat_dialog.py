@@ -1,7 +1,8 @@
 """Project-bound local conversation, using the original persisted chat records."""
 import json
 from PySide6.QtCore import QSignalBlocker, Qt, Signal
-from src.models.qt_ai_chat import is_model_identity_question
+from src.models.ai_conversation import timestamp
+from src.models.qt_ai_chat import ChatMessageView, is_model_identity_question
 from PySide6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QInputDialog, QListWidget, QListWidgetItem,
     QMenu, QMessageBox, QPlainTextEdit, QSizePolicy, QSplitter, QToolButton, QVBoxLayout, QWidget)
 
@@ -31,6 +32,9 @@ class AiChatDialog(QDialog):
         available = self.screen().availableGeometry()
         self.resize(min(940, int(available.width() * .94)), min(640, int(available.height() * .90)))
         self.view = None
+        self.local_evidence = ()
+        self.local_activity = None
+        self.local_evidence_pending = False
         self.busy = False
         layout = QVBoxLayout(self)
         header = QHBoxLayout()
@@ -106,7 +110,7 @@ class AiChatDialog(QDialog):
         body.addWidget(self.composer)
         actions = QHBoxLayout()
         actions.addStretch()
-        self.stop_button = button('停止本轮', lambda: self._submit('ai_chat_stop', self.view.selected), 'danger')
+        self.stop_button = button('停止本轮', self._stop, 'danger')
         self.send_button = button('发送', self._send, 'primary')
         actions.addWidget(self.stop_button)
         actions.addWidget(self.send_button)
@@ -141,7 +145,7 @@ class AiChatDialog(QDialog):
         self.composer.setEnabled(writable or empty_session)
         self.send_button.setEnabled((empty_session and is_model_identity_question(text)) or
                                     (writable and not view.routing and (view.pc_diagnosis or not view.running) and bool(text)))
-        self.stop_button.setEnabled(writable and view.running)
+        self.stop_button.setEnabled(self.local_evidence_pending or (writable and view.running))
         self.older.setEnabled(bool(usable and view.next_cursor))
         self.latest.setEnabled(bool(usable and view.selected))
 
@@ -150,6 +154,16 @@ class AiChatDialog(QDialog):
         if self.manager is not None:
             self.manager.set_busy(busy)
         self._sync()
+
+    def set_local_evidence_pending(self, pending):
+        self.local_evidence_pending = pending
+        self.set_busy(pending)
+
+    def _stop(self):
+        if self.local_evidence_pending:
+            self.action_requested.emit('ai_chat_cancel_local_evidence', (self.view.selected,))
+        else:
+            self._submit('ai_chat_stop', self.view.selected)
 
     def _manage(self):
         if self.manager is None:
@@ -201,9 +215,44 @@ class AiChatDialog(QDialog):
         if self.send_button.isEnabled():
             self._submit('ai_chat_send', self.view.selected, self.composer.toPlainText())
 
+    def show_local_evidence(self, question, answer, activity):
+        stamp = timestamp()
+        self.local_evidence = (ChatMessageView('user', question, stamp, 'text'),
+                               ChatMessageView('assistant', answer, stamp, 'local_evidence'))
+        self.local_activity = activity
+        self._show_transcript()
+        self._show_activity()
+
+    def clear_local_evidence(self):
+        self.local_evidence = ()
+        self.local_activity = None
+
+    def _show_activity(self):
+        activity = self.local_activity if self.local_evidence else self.view.activity
+        if activity is not None and activity.session_id == self.view.selected:
+            status = activity.status_message()
+            recent = self.view.latest_status
+            if activity.source != 'local_evidence' and recent is not None and recent.kind == 'error':
+                status = ChatMessageView(status.role, status.text + '\n会话最近错误：' + recent.text, status.created, status.kind)
+            self.latest_status.show_status(status)
+        else:
+            self.latest_status.show_status(self.view.latest_status)
+
+    def _show_transcript(self):
+        view = self.view
+        self.transcript.show_messages(view.selected, view.messages + self.local_evidence, view.draft)
+        self.usage.setText('本条为本地证据查询' if self.local_evidence else view.context)
+
+    def accepts_view(self, view):
+        prior = self.view
+        return not (prior is not None and view.snapshot_generation and prior.snapshot_generation
+                    and view.snapshot_generation < prior.snapshot_generation)
+
     def show_view(self, view):
         from dataclasses import asdict
         prior = self.view
+        if not self.accepts_view(view):
+            return
         self.view = view
         if self.monitor_dialog is not None and view.monitor_status is not None:
             self.monitor_dialog.update_status(asdict(view.monitor_status))
@@ -228,9 +277,10 @@ class AiChatDialog(QDialog):
                     self.sessions.addItem(item)
                     if row.identifier == view.selected:
                         self.sessions.setCurrentItem(item)
-        self.transcript.show_messages(view.selected, view.messages, view.draft)
-        if prior is None or prior.latest_status != view.latest_status:
-            self.latest_status.show_status(view.latest_status)
+        if prior is not None and prior.selected != view.selected:
+            self.clear_local_evidence()
+        self._show_transcript()
+        self._show_activity()
         if view.selected:
             row = self._selected_row()
             suffix = ' · 仅分析留存材料' if view.history_analysis else ('' if view.writable else ' · 仅查看历史')
@@ -242,7 +292,6 @@ class AiChatDialog(QDialog):
             self.status.setText(f'{row.target} · 会话配置：{row.model} · {status}' + suffix)
         else:
             self.status.setText('请选择会话或新建普通问答')
-        self.usage.setText(view.context)
         self.composer.setPlaceholderText('输入关于留存材料的问题' if view.history_analysis else '输入问题')
         self._sync()
 

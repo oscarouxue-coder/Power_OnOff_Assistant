@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from contextlib import contextmanager
 import copy
 import json
 import re
@@ -32,6 +33,15 @@ def request_url(base_url, path):
     return base + "/" + path
 
 
+class _SupplementDispatch:
+    def __init__(self, history, positions, confirm):
+        self.history, self.positions, self.confirm = history, positions, confirm
+        self.payload = None
+        self.matched = ()
+        self.reached = False
+        self.attempted = False
+
+
 class DiagnosticModelClient:
     def __init__(self, profile, key, redactor, session=None, emit=None):
         self.profile = profile
@@ -43,12 +53,28 @@ class DiagnosticModelClient:
             for scheme in ("http://", "https://"):
                 self.session.mount(scheme, SourceIpAdapter(profile.source_ip))
         self.emit = emit
+        self._supplement_dispatch = None
+
+    @contextmanager
+    def observe_supplement_dispatch(self, history, positions, confirm):
+        observation = _SupplementDispatch(history, positions, confirm)
+        previous = getattr(self, '_supplement_dispatch', None)
+        self._supplement_dispatch = observation
+        try:
+            yield observation
+        finally:
+            self._supplement_dispatch = previous
 
     def _emit(self, message):
         if self.emit is not None:
             self.emit(self.redactor.text(message))
 
     def _request(self, method, path, payload=None, stop=None, on_text=None):
+        observation = getattr(self, '_supplement_dispatch', None)
+        if observation is not None and observation.payload is not None and observation.payload is payload and method == 'POST':
+            observation.reached = True
+        else:
+            observation = None
         if stop is not None and stop.is_set():
             raise InterruptedError("诊断已取消")
         url = request_url(self.profile.base_url, path)
@@ -62,6 +88,15 @@ class DiagnosticModelClient:
                    f"配置源IP={self.profile.source_ip or '不指定（自动选择）'}")
         proxy = proxy_snapshot(self.session, url)
         try:
+            if observation is not None:
+                observation.attempted = True
+                try:
+                    inputs = payload.get('input' if self.profile.protocol == 'responses' else 'messages')
+                    if isinstance(inputs, list) and len(inputs) == len(observation.history):
+                        observation.matched = tuple(identifier for index, identifier in observation.positions.items()
+                            if inputs[index] == self.redactor.object(observation.history[index]))
+                except Exception:
+                    observation.matched = ()
             response = self.session.request(
                 method, url, headers={"Authorization": "Bearer " + self.key,
                                       "Content-Type": "application/json"},
@@ -69,6 +104,12 @@ class DiagnosticModelClient:
                 allow_redirects=False, stream=True,
             )
             try:
+                if observation is not None and observation.matched and 100 <= response.status_code <= 599:
+                    try:
+                        observation.confirm(observation.matched)
+                    except Exception:
+                        # Presentation metadata is never a condition for processing the original response.
+                        pass
                 if not 200 <= response.status_code < 300:
                     if response.status_code in (400, 413, 422) and self._context_error(response, stop):
                         raise ContextLengthError("服务返回上下文超限；请调整容量或缩短材料")
@@ -192,6 +233,9 @@ class DiagnosticModelClient:
         payload = self.request_payload(history, tools)
         if on_text is not None:
             payload["stream"] = True
+        observation = getattr(self, '_supplement_dispatch', None)
+        if observation is not None and observation.history is history:
+            observation.payload = payload
         response = self._request("POST", "responses" if profile.protocol == "responses" else "chat/completions",
                                  payload, stop, on_text)
         calls = []

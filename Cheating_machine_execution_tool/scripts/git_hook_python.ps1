@@ -53,8 +53,17 @@ function Get-LineCheckPythonProfile {
 function Resolve-LineCheckPython {
     param([string]$RepoRoot)
 
-    $configured = & git -C $RepoRoot config --local --get linecheck.pythonExecutable
-    $configExit = $LASTEXITCODE
+    # Git writes config values as UTF-8; Windows PowerShell decodes native
+    # stdout using the console code page (which may be a legacy code page).
+    $previousOutputEncoding = [Console]::OutputEncoding
+    try {
+        [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false, $true)
+        $configured = & git -C $RepoRoot config --local --get linecheck.pythonExecutable
+        $configExit = $LASTEXITCODE
+    }
+    finally {
+        [Console]::OutputEncoding = $previousOutputEncoding
+    }
     if ($configExit -notin @(0, 1)) { throw 'Unable to read repository Python configuration.' }
     if ($configExit -eq 0) {
         try {
