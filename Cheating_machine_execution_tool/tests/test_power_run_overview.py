@@ -9,7 +9,8 @@ import unittest
 from unittest.mock import patch
 
 from src.models.capabilities import CapabilityError
-from src.services.power_run_overview import PowerRunOverview, matching_power_overview
+from src.services.power_run_overview import PowerRunOverview, matching_power_overview, power_attention_records
+from src.models.workbench_presentation import ChannelView, ProjectView
 from src.services.project_power_plan import check_project_power_plan
 from src.services.project_profile_store import read_project_profile, write_project_profile
 from src.services.project_status_service import ProjectStatusService
@@ -34,7 +35,7 @@ class PowerRunOverviewTests(unittest.TestCase):
         self.db = sqlite3.connect(database)
         self.addCleanup(self.db.close)
         self.db.executescript("""
-            CREATE TABLE jobs(id TEXT PRIMARY KEY, capability TEXT, payload TEXT);
+            CREATE TABLE jobs(id TEXT PRIMARY KEY, capability TEXT, payload TEXT, state TEXT, stage TEXT, updated REAL, result TEXT);
             CREATE TABLE job_events(id INTEGER PRIMARY KEY, job_id TEXT, created REAL, stage TEXT, message TEXT);
         """)
 
@@ -44,14 +45,108 @@ class PowerRunOverviewTests(unittest.TestCase):
         self.ledger.begin(self.context, job, root, operation)
         self.ledger.update(job, state)
         with self.db:
-            self.db.execute('INSERT INTO jobs VALUES(?,?,?)', (job, operation,
-                json.dumps({'arguments': {'tasks': tasks, 'channel_ids': channels}})))
+            self.db.execute('INSERT INTO jobs VALUES(?,?,?,?,?,?,?)', (job, operation,
+                json.dumps({'arguments': {'tasks': tasks, 'channel_ids': channels}}), state, state, 40, 'null'))
         return self.ledger.records[job]
 
     def event(self, at, stage='aging', *, job='power', channel=1, **fields):
         with self.db:
             self.db.execute('INSERT INTO job_events(job_id,created,stage,message) VALUES(?,?,?,?)',
                             (job, at, stage, json.dumps(dict(fields, channel=channel))))
+
+    def attention_project(self, record, overview=None, **changes):
+        card = ProjectView(self.context.identity.project_id, '项目', '挂测', '—', 'failed',
+                           '失败', '—', '', None, '', 1, run_id=record['run_id'],
+                           project_type='power_cycle', channels=(ChannelView(1, 'unknown'),),
+                           test_overview=overview)
+        return replace(card, **changes)
+
+    def test_task_attention_reads_exact_failure_receipt_and_events_without_channel_failure(self):
+        record = self.create_job()
+        other = self.create_job('other')
+        with self.db:
+            self.db.execute('UPDATE jobs SET result=? WHERE id=?',
+                            (json.dumps({'error': '子任务 legacy_power_test 失败:电源初始化失败'}), 'power'))
+            self.db.execute('UPDATE jobs SET result=? WHERE id=?',
+                            (json.dumps({'error': '其他任务的错误'}), 'other'))
+            self.db.execute('INSERT INTO job_events(job_id,created,stage,message) VALUES(?,?,?,?)',
+                            ('power', 32, 'pipeline', '实际初始化回执：串口打开失败'))
+            self.db.execute('INSERT INTO job_events(job_id,created,stage,message) VALUES(?,?,?,?)',
+                            ('other', 33, 'pipeline', '其他任务事件'))
+        current = self.attention_project(record)
+        before = self.db.execute('SELECT * FROM jobs').fetchall()
+        entry, = power_attention_records(current, self.context, record)
+        self.assertEqual(entry.label, '任务')
+        self.assertIn('电源初始化失败', entry.reason)
+        self.assertIn('执行开关机测试', entry.stage)
+        self.assertIn('串口打开失败', entry.related_events[0])
+        self.assertTrue(entry.time)
+        self.assertEqual(before, self.db.execute('SELECT * FROM jobs').fetchall())
+        wrong, = power_attention_records(current, self.context, other)
+        self.assertNotIn('其他任务', wrong.reason)
+        self.assertFalse(wrong.related_events)
+        self.assertEqual(power_attention_records(replace(current, state='running'), self.context, record), ())
+        with self.db:
+            self.db.execute('UPDATE jobs SET result=? WHERE id=?', (json.dumps({'items': [
+                {'code': 'env_check', 'ok': False, 'detail': '模拟线路检查失败'},
+                {'code': 'serial_terminal', 'ok': True}]}), 'power'))
+        failed_subtask, = power_attention_records(current, self.context, record)
+        self.assertIn('模拟线路检查失败', failed_subtask.reason)
+        self.assertIn('环境线路检查', failed_subtask.event)
+
+    def test_current_channel_failure_and_recovery_are_independent_of_historical_count(self):
+        record = self.create_job()
+        with self.db:
+            self.db.execute('UPDATE jobs SET result=? WHERE id=?',
+                (json.dumps({'error': '子任务 legacy_power_test 失败:失败通道：[1]'}), 'power'))
+        view = PowerRunOverview()
+        self.event(10, completed=0, stage='aging', detail='第1轮执行中')
+        self.event(11, stage='history', cycle=1, status='failed', detail='PON 注册超时')
+        self.event(12, status='failed', detail='测试失败，详细信息请查看执行日志')
+        def current():
+            overview = view.snapshot(self.context, record, self.profile)
+            return power_attention_records(self.attention_project(record, overview), self.context, record)
+        entry, = current()
+        self.assertEqual((entry.channel, entry.cycle, entry.reason), (1, 1, 'PON 注册超时'))
+        self.assertTrue(entry.time)
+        self.assertIn('PON 注册超时', '\n'.join(entry.related_events))
+        self.event(13, stage='history', cycle=1, status='resume', detail='续跑开始')
+        self.event(14, status='running', detail='第1轮执行中')
+        resume = self.create_job('resume', operation='aging.resume', state='running')
+        active = self.attention_project(record, view.snapshot(self.context, record, self.profile),
+            run_id=resume['owner'], power_history_job=record['owner'], resume_detail='CH01 · 续跑中',
+            channels=(ChannelView(1, 'failed', detail='旧失败'),))
+        self.assertEqual(power_attention_records(active, self.context, resume), ())
+        long_reason = 'WiFi 验证失败：' + '原始错误细节' * 1600
+        self.event(15, stage='history', cycle=1, status='failed', detail=long_reason)
+        self.assertEqual(power_attention_records(replace(active,
+            test_overview=view.snapshot(self.context, record, self.profile)), self.context, resume), ())
+        self.event(15.5, status='failed', detail='测试失败，详细信息请查看执行日志')
+        entry, = current()
+        self.assertEqual(entry.reason, long_reason)
+        self.event(16, stage='history', cycle=1, status='resume', detail='再次续跑')
+        self.event(17, status='success', detail='所有测试项验证成功')
+        self.assertEqual(current(), ())
+        self.assertEqual(view.snapshot(self.context, record, self.profile)['rows'][0]['failure'], 1)
+
+    def test_missing_or_invalid_task_receipt_keeps_an_explicit_unknown_reason(self):
+        record = self.create_job()
+        current = self.attention_project(record)
+        with self.db:
+            self.db.execute('UPDATE jobs SET result=? WHERE id=?', ('invalid json', 'power'))
+        entry, = power_attention_records(current, self.context, record)
+        self.assertIn('无法读取', entry.reason)
+        self.assertFalse(entry.reason_recorded)
+        with self.db:
+            self.db.execute('UPDATE jobs SET result=? WHERE id=?', (json.dumps({'error': '已保留失败回执'}), 'power'))
+            self.db.execute('DROP TABLE job_events')
+        entry, = power_attention_records(current, self.context, record)
+        self.assertEqual(entry.reason, '已保留失败回执')
+        self.assertIn('暂无法读取', entry.related_events[0])
+        with self.db:
+            self.db.execute('DELETE FROM jobs WHERE id=?', ('power',))
+        entry, = power_attention_records(current, self.context, record)
+        self.assertIn('未找到匹配', entry.reason)
 
     def test_terminal_project_card_recovers_only_the_selected_batch_receipts_and_duration(self):
         from src.models.workbench_presentation import ProjectView

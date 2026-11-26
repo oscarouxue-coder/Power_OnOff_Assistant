@@ -1,0 +1,28 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 87, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_11edaa2c3fac4bfa9c1bbd015cf2eba9', 'framework': 'qt', 'platform': 'windows'}
+
+test_ambiguous_frozen_map_rejects_before_submit (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_chat_discards_result_after_batch_binding_changes (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_chat_keeps_identity_ordinary_and_continuous_diagnosis_routes (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_chat_missing_ambiguous_sparse_and_expired_stay_local (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_chat_reader_failure_never_displays_a_completed_stage (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_chat_requires_matching_structured_receipt_before_marking_complete (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_chat_stop_button_cancels_only_local_read_and_retry_discards_late_receipt (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_chat_switch_away_and_back_discards_old_receipt_and_keeps_new_query (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_chat_uses_explicit_channel_with_real_send_and_literal_evidence (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_failed_navigation_rejects_before_query_even_for_same_name (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_late_result_after_batch_switch_is_discarded (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_retry_while_cancelled_reader_is_still_exiting (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_same_channel_other_project_discards_inflight_answer (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_stop_retry_and_late_delivery_use_only_new_request (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_toolbar_primary_action_keeps_normal_chat_route (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_ui_requires_batch_and_selected_dut (qt_channel_evidence_probe.ChannelEvidenceEntryTests) ... ok
+test_qt_chat_formats_markdown_preserves_selection_and_uses_original_shortcuts (qt_workbench_probe.QtWorkbenchTests) ... ok
+test_qt_ai_chat_sends_and_reopens_original_persisted_history (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_pc_continuous_diagnosis_uses_local_scope_and_keeps_query_evidence (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_aging_history_pages_and_exports_only_the_bound_batch (qt_project_wizard_probe.ProjectWizardTests) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 21.613s
+
+OK

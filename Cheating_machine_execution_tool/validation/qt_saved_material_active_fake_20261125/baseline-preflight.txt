@@ -1,0 +1,27 @@
+2026-11-25 — 完整离线门禁执行前核对（仅静态，只读）
+
+本轮授权条件：所有完整门禁测试须能确认 Fake/隔离且无真实设备、模型、网络或真实配置/数据操作。不能保证则停止，不绕过，不新增排除项。
+
+已实际执行的独立静态检查（锁定 Qt CPython 3.9.10）：
+  python -X utf8 -m py_compile tests/qt_workbench_probe.py scripts/verify_qt_migration.py
+  exit 0
+  python -X utf8 scripts/verify_gui_test_coverage.py
+  GUI_TEST_COVERAGE_OK: 112 GUI construction sites reviewed
+  exit 0
+  python -X utf8 scripts/verify_capability_coverage.py
+  CAPABILITY_COVERAGE_OK
+  exit 0
+  git --no-optional-locks diff --check
+  exit 0（仅已有 LF/CRLF 换行提示）
+
+实际只读源文件核对（rg 查询 exit 0）：
+  scripts/verify_baseline.py:905-928 — 正常入口发现并执行全部 tests/test_*.py；非零退出保留错误尾部。
+  scripts/run_tests.py:27-56 — 原入口具有 Qt/Tk 窗口隔离，未找到覆盖全套测试的真实串口、网络或模型 I/O 禁止保证。
+  tests/test_ai_gateway.py:290-303 — Windows 上实建本机回环 TCP socket 并调用 PowerShell 网络探测；不是外部网关，但并非全 Fake 网络调用。
+  tests/test_qt_workspace_adapter.py:553-602 — 实际本机回环 WebSocket 连接测试。
+  tests/test_telnet_transport.py:13-14、tests/test_tftp_transport.py:43-44、140-174 — 实际本机回环 TCP/UDP socket。
+  tests/test_web_gateway_upgrade.py:291、320 — 包含实际浏览器和本机服务测试；未执行这些测试。本机回环不等于外部访问，也不据此声称其危险，但当前授权要求全套均可确认 Fake/隔离无真实 I/O。
+
+另在本轮执行过程中观察到其他任务新增未暂存的挂测/相关测试改动；未读取其真实数据、未改动或回退，不将其自动纳入本轮合成验证范围。
+
+结论：无法以现有统一门禁和当前并行工作区确认全部测试满足本轮严格 Fake/无真实操作条件，因此完整 scripts/verify_baseline.py 未启动，无该门禁退出码。不是执行失败，不标记通过。未修改或跳过测试、未绕过或降低任何门禁。

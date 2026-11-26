@@ -1,0 +1,25 @@
+Traceback (most recent call last):
+  File "<string>", line 9, in <module>
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\scripts\gui_test_process.py", line 86, in run_gui_child
+    raise AssertionError(f'GUI child offscreen failure: {evidence}\n{result.stdout}\n{result.stderr}')
+AssertionError: GUI child offscreen failure: {'passed': False, 'managed_windows': 4, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_ac17370b35164dd792fada2ffa876822', 'framework': 'qt', 'platform': 'windows', 'qt': {'passed': True, 'managed_windows': 4, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_ac17370b35164dd792fada2ffa876822', 'framework': 'qt', 'platform': 'windows'}}
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 4, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_ac17370b35164dd792fada2ffa876822', 'framework': 'qt', 'platform': 'windows'}
+
+test_qt_supplement_receipts_survive_late_snapshots_and_only_confirm_next_transport (qt_workbench_probe.QtProjectWorkspaceTests) ... FAIL
+
+======================================================================
+FAIL: test_qt_supplement_receipts_survive_late_snapshots_and_only_confirm_next_transport (qt_workbench_probe.QtProjectWorkspaceTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\qt_workbench_probe.py", line 1920, in test_qt_supplement_receipts_survive_late_snapshots_and_only_confirm_next_transport
+    send('重复补充')
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\qt_workbench_probe.py", line 1914, in send
+    self.assertTrue(dialog.send_button.isEnabled())
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 1 test in 2.720s
+
+FAILED (failures=1)
+

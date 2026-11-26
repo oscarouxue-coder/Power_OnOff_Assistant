@@ -169,7 +169,7 @@ class QtProjectWizardService:
                                 QtConfigurationService._replace(path, written[path])
                                 changed.append(path)
                         if final:
-                            self.workspace.projects.save(context)
+                            self.workspace.projects.save(context, require_power_registration=request is not None)
                     except Exception:
                         uncertain = context.identity.revision != old_revision
                         for path in reversed(changed if not uncertain else ()):

@@ -1,0 +1,34 @@
+[
+  [
+    [
+      "prior_queued"
+    ],
+    [
+      "destroyed_signal",
+      false,
+      true
+    ],
+    [
+      "deferred",
+      false,
+      false,
+      false
+    ]
+  ],
+  [
+    [
+      "prior_queued"
+    ],
+    [
+      "destroyed_signal",
+      false,
+      true
+    ],
+    [
+      "deferred",
+      false,
+      false,
+      false
+    ]
+  ]
+]

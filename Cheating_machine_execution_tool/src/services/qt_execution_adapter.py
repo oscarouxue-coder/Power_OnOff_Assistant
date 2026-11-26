@@ -376,13 +376,15 @@ class QtExecutionAdapter:
     def jobs_idle(self):
         return self.capabilities is None or self.capabilities.jobs.idle
 
-    def has_only_power_tasks(self, *, include_continuous=False):
+    def has_only_power_tasks(self, *, include_continuous=False, include_shared_power=False):
         if self.resume.has_waiting and self.jobs.get(self.power_log_job, {}).get('operation') != 'aging.start':
             return False
         if self.capabilities is None:
             return True
         jobs = self.capabilities.jobs
         allowed = ('aging.start', 'aging.resume', SERVICE_AGING_START) if include_continuous else ('aging.start', 'aging.resume')
+        if include_shared_power:
+            allowed += (SINGLE_POWER, 'firmware.upgrade')
         with jobs.lock:
             return all(self.jobs.get(key, {}).get('operation') in allowed
                        for key, thread in jobs.threads.items() if thread.is_alive())

@@ -1,0 +1,18 @@
+': 'windows'}
+CLOSE_REGRESSION_DENIED: {"requests.sessions.Session.request": 0, "serial.Serial": 0, "socket.create_connection": 0, "socket.getaddrinfo": 0, "socket.gethostbyname": 0, "socket.gethostbyname_ex": 0, "socket.gethostbyaddr": 0, "socket.socket.connect": 0, "socket.socket.connect_ex": 0, "socket.socket.send": 0, "socket.socket.sendall": 0, "socket.socket.sendto": 0, "socket.socket.bind": 0, "socket.socket.listen": 0, "socket.socket.accept": 0, "subprocess.Popen": 0, "os.startfile": 0}
+
+test_close_waits_for_actual_worker_cleanup (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_closed_workbench_releases_owner_refs_only_after_qt_disposal (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_closed_workbench_retains_owner_refs_when_final_archive_unconfirmed (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_configuration_save_busy_close_keeps_event_loop_responsive (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_manual_update_uses_verified_download_and_waits_for_cancel_cleanup (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_saved_material_error_and_cancel_leave_active_fake_power_job_unchanged (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_multi_channel_saved_material_summary_preserves_independent_and_cancelled_results (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_saved_material_summary_uses_selected_history_and_discards_late_reads (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_repairs_restart_only_after_worker_and_single_instance_are_closed (qt_workbench_probe.QtNativeGuardTests) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 18.032s
+
+OK
+

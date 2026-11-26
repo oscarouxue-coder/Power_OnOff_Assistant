@@ -1,0 +1,68 @@
+{
+  "cycles": 30,
+  "verified": 30,
+  "elapsed_seconds": 130.219,
+  "result_code": 0,
+  "displayed": 90,
+  "completed_reports": 60,
+  "cancelled_reports": 30,
+  "invalidated": 90,
+  "completed_channels": 180,
+  "cancelled_channels": 60,
+  "service_cancel_cycles": 30,
+  "service_cancel_channels": 90,
+  "service_opened": 60,
+  "service_closed": 60,
+  "all_closed": true,
+  "qt_ticks": 5761,
+  "pending_ticks": 1437,
+  "pending_per_cycle": [
+    41,
+    57
+  ],
+  "max_gap_ms": [
+    78.0,
+    109.0,
+    265.0
+  ],
+  "cycle_seconds": [
+    3.031,
+    4.016,
+    4.422
+  ],
+  "rss_mib": [
+    308.65,
+    314.96,
+    320.02,
+    325.74,
+    308.65,
+    328.7
+  ],
+  "process_handles": [
+    751,
+    983,
+    1240,
+    1500,
+    751,
+    1500
+  ],
+  "python_threads": [
+    1
+  ],
+  "baseline_memory": {
+    "rss_bytes": 41992192,
+    "process_handles": 196,
+    "python_threads": 1
+  },
+  "final_memory": {
+    "rss_bytes": 342347776,
+    "process_handles": 1500,
+    "python_threads": 1
+  },
+  "changed_source_files": [
+    "src/services/qt_workspace_adapter.py"
+  ],
+  "denied_calls": 0,
+  "managed_windows": 330,
+  "violations": []
+}

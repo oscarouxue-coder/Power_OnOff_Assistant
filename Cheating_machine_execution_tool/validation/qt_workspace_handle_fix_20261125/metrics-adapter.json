@@ -1,0 +1,2017 @@
+[
+  {
+    "cycle": 1,
+    "before": {
+      "t_seconds": 15.187,
+      "rss_bytes": 129748992,
+      "process_handles": 398,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 0,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0
+    },
+    "live": {
+      "t_seconds": 15.406,
+      "rss_bytes": 131481600,
+      "process_handles": 428,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 0,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 15.64,
+      "rss_bytes": 131473408,
+      "process_handles": 418,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 2,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 15.718,
+      "rss_bytes": 131473408,
+      "process_handles": 398,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 2,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 15.968,
+      "rss_bytes": 131473408,
+      "process_handles": 398,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 2,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 2,
+    "before": {
+      "t_seconds": 15.984,
+      "rss_bytes": 131477504,
+      "process_handles": 398,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 2,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 16.125,
+      "rss_bytes": 131530752,
+      "process_handles": 428,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 2,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 16.453,
+      "rss_bytes": 131477504,
+      "process_handles": 418,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 4,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 16.515,
+      "rss_bytes": 131477504,
+      "process_handles": 398,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 4,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 16.765,
+      "rss_bytes": 131477504,
+      "process_handles": 398,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 4,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 3,
+    "before": {
+      "t_seconds": 16.781,
+      "rss_bytes": 131477504,
+      "process_handles": 398,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 4,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 17.015,
+      "rss_bytes": 131530752,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 4,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 17.234,
+      "rss_bytes": 131477504,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 6,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 17.297,
+      "rss_bytes": 131477504,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 6,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 17.547,
+      "rss_bytes": 131477504,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 6,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 4,
+    "before": {
+      "t_seconds": 17.562,
+      "rss_bytes": 131477504,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 6,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 17.703,
+      "rss_bytes": 131530752,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 6,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 18.031,
+      "rss_bytes": 131477504,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 8,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 18.125,
+      "rss_bytes": 131477504,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 8,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 18.39,
+      "rss_bytes": 131477504,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 8,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 5,
+    "before": {
+      "t_seconds": 18.406,
+      "rss_bytes": 131477504,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 8,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 18.625,
+      "rss_bytes": 131530752,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 8,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 18.875,
+      "rss_bytes": 131477504,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 10,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 18.937,
+      "rss_bytes": 131477504,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 10,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 19.203,
+      "rss_bytes": 131477504,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 10,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 6,
+    "before": {
+      "t_seconds": 19.218,
+      "rss_bytes": 131485696,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 10,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 19.375,
+      "rss_bytes": 131538944,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 10,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 19.703,
+      "rss_bytes": 131485696,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 12,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 19.781,
+      "rss_bytes": 131485696,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 12,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 20.047,
+      "rss_bytes": 131362816,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 12,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 7,
+    "before": {
+      "t_seconds": 20.062,
+      "rss_bytes": 131391488,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 12,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 20.312,
+      "rss_bytes": 131444736,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 12,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 20.547,
+      "rss_bytes": 131391488,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 14,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 20.625,
+      "rss_bytes": 131391488,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 14,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 20.906,
+      "rss_bytes": 131391488,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 14,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 8,
+    "before": {
+      "t_seconds": 20.906,
+      "rss_bytes": 131403776,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 14,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 21.109,
+      "rss_bytes": 131457024,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 14,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 21.422,
+      "rss_bytes": 131403776,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 16,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 21.484,
+      "rss_bytes": 131403776,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 16,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 21.734,
+      "rss_bytes": 131403776,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 16,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 9,
+    "before": {
+      "t_seconds": 21.75,
+      "rss_bytes": 131403776,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 16,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 21.812,
+      "rss_bytes": 131457024,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 16,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 21.937,
+      "rss_bytes": 131403776,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 18,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 22.031,
+      "rss_bytes": 131403776,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 18,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 22.281,
+      "rss_bytes": 131403776,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 18,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 10,
+    "before": {
+      "t_seconds": 22.312,
+      "rss_bytes": 131403776,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 18,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 22.39,
+      "rss_bytes": 131457024,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 18,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 22.531,
+      "rss_bytes": 131403776,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 20,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 22.609,
+      "rss_bytes": 131403776,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 20,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 22.859,
+      "rss_bytes": 131403776,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 20,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 11,
+    "before": {
+      "t_seconds": 22.859,
+      "rss_bytes": 131416064,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 20,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 23.093,
+      "rss_bytes": 131473408,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 20,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 23.328,
+      "rss_bytes": 131420160,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 22,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 23.406,
+      "rss_bytes": 131420160,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 22,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 23.672,
+      "rss_bytes": 131420160,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 22,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 12,
+    "before": {
+      "t_seconds": 23.687,
+      "rss_bytes": 131432448,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 22,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 23.843,
+      "rss_bytes": 131485696,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 22,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 24.187,
+      "rss_bytes": 131432448,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 24,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 24.281,
+      "rss_bytes": 132210688,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 24,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 24.547,
+      "rss_bytes": 132210688,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 24,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 13,
+    "before": {
+      "t_seconds": 24.562,
+      "rss_bytes": 132210688,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 24,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 24.797,
+      "rss_bytes": 132263936,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 24,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 25.031,
+      "rss_bytes": 132210688,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 26,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 25.109,
+      "rss_bytes": 132210688,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 26,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 25.375,
+      "rss_bytes": 132210688,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 26,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 14,
+    "before": {
+      "t_seconds": 25.39,
+      "rss_bytes": 132218880,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 26,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 25.531,
+      "rss_bytes": 132268032,
+      "process_handles": 426,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 26,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 25.843,
+      "rss_bytes": 132218880,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 28,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 25.906,
+      "rss_bytes": 132218880,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 28,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 26.156,
+      "rss_bytes": 132218880,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 28,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 15,
+    "before": {
+      "t_seconds": 26.203,
+      "rss_bytes": 132231168,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 28,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 26.406,
+      "rss_bytes": 132284416,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 28,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 26.64,
+      "rss_bytes": 132231168,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 30,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 26.718,
+      "rss_bytes": 132231168,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 30,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 26.968,
+      "rss_bytes": 132231168,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 30,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 16,
+    "before": {
+      "t_seconds": 26.968,
+      "rss_bytes": 132231168,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 30,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 27.031,
+      "rss_bytes": 132284416,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 30,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 27.172,
+      "rss_bytes": 132231168,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 32,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 27.25,
+      "rss_bytes": 132231168,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 32,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 27.5,
+      "rss_bytes": 132231168,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 32,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 17,
+    "before": {
+      "t_seconds": 27.515,
+      "rss_bytes": 132235264,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 32,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 27.703,
+      "rss_bytes": 132284416,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 32,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 27.937,
+      "rss_bytes": 132235264,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 34,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 28.015,
+      "rss_bytes": 132235264,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 34,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 28.281,
+      "rss_bytes": 132235264,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 34,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 18,
+    "before": {
+      "t_seconds": 28.297,
+      "rss_bytes": 132235264,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 34,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 28.484,
+      "rss_bytes": 132288512,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 34,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 28.734,
+      "rss_bytes": 132235264,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 36,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 28.797,
+      "rss_bytes": 132235264,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 36,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 29.062,
+      "rss_bytes": 132235264,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 36,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 19,
+    "before": {
+      "t_seconds": 29.062,
+      "rss_bytes": 132251648,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 36,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 29.25,
+      "rss_bytes": 132304896,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 36,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 29.484,
+      "rss_bytes": 132251648,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 38,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 29.547,
+      "rss_bytes": 132251648,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 38,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 29.797,
+      "rss_bytes": 132251648,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 38,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  },
+  {
+    "cycle": 20,
+    "before": {
+      "t_seconds": 29.797,
+      "rss_bytes": 132251648,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 38,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "live": {
+      "t_seconds": 29.937,
+      "rss_bytes": 132300800,
+      "process_handles": 427,
+      "process_threads": 11,
+      "python_threads": 3,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 38,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "immediate": {
+      "t_seconds": 30.203,
+      "rss_bytes": 132251648,
+      "process_handles": 417,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 40,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 1,
+        "service": 1,
+        "writer": 1
+      }
+    },
+    "after_pump": {
+      "t_seconds": 30.265,
+      "rss_bytes": 132251648,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 40,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "after_gc": null,
+    "after_wait": {
+      "t_seconds": 30.531,
+      "rss_bytes": 132251648,
+      "process_handles": 397,
+      "process_threads": 9,
+      "python_threads": 1,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "qt_top_levels": 0,
+      "fixture_python_files_observed": 40,
+      "fixture_python_files_alive": 0,
+      "fixture_python_files_still_open": 0,
+      "fixture_python_files_untrackable": 0,
+      "component_refs_alive": {
+        "adapter": 0,
+        "service": 0,
+        "writer": 0
+      }
+    },
+    "gc_collected": null,
+    "worker_closed": true
+  }
+]

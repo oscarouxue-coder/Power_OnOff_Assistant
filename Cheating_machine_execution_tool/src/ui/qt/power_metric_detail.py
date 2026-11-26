@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox, QHeaderView, QPlainTextEdit,
                                QTableWidget, QTableWidgetItem, QVBoxLayout)
 
-from src.services.power_run_overview import matching_power_overview
+from src.services.power_run_overview import matching_power_overview, power_attention_records
 from src.ui.qt.theme import label
 
 
@@ -18,12 +18,13 @@ class PowerMetricDetailDialog(QDialog):
         title = POWER_METRIC_LABELS[metric]
         self.setWindowTitle(f'{project.name} · {title}详情')
         available = self.screen().availableGeometry()
-        self.resize(min(720, int(available.width() * .90)), min(400, int(available.height() * .85)))
+        width, height = (960, 560) if metric == 'attention' else (720, 400)
+        self.resize(min(width, int(available.width() * .90)), min(height, int(available.height() * .85)))
         layout = QVBoxLayout(self)
         overview = matching_power_overview(project)
         counts = {'success': project.success_text, 'failure': project.failure_text, 'attention': project.attention_text}
         scope = [project.run_id, f'{title} {counts[metric]}']
-        if metric != 'attention' and overview and project.run_id not in (overview['job_id'], overview.get('run_id')):
+        if overview and project.run_id not in (overview['job_id'], overview.get('run_id')):
             scope.append(f"原批次 {overview['job_id']}")
         summary = label(' · '.join(filter(None, scope)), 'muted')
         summary.setTextFormat(Qt.TextFormat.PlainText)
@@ -32,9 +33,13 @@ class PowerMetricDetailDialog(QDialog):
         layout.addWidget(summary)
 
         rows = overview.get('rows', ())
+        self.attention_records = None
         if metric == 'attention':
-            columns = ('DUT', '通道', '当前状态', '当前阶段', '原因')
-            entries = self._attention_rows(project, rows)
+            columns = ('DUT / 对象', '通道', '时间', '异常事件', '原因')
+            self.attention_records = (project.attention_records if project.attention_records is not None
+                                      else power_attention_records(project))
+            entries = [(row.label, self._channel(row.channel) if row.channel is not None else None,
+                        row.time, row.event, row.reason) for row in self.attention_records]
             empty = '当前暂无已记录的异常'
         elif metric == 'failure':
             columns = ('DUT', '通道', '失败轮数', '最近失败轮次', '原因')
@@ -60,7 +65,8 @@ class PowerMetricDetailDialog(QDialog):
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         header.setStretchLastSection(True)
-        for index, width in enumerate((120, 62, 100, 110)):
+        widths = (120, 62, 166, 180) if metric == 'attention' else (120, 62, 100, 110)
+        for index, width in enumerate(widths):
             self.table.setColumnWidth(index, width)
         for index, entry in enumerate(entries):
             for column, value in enumerate(entry):
@@ -70,9 +76,13 @@ class PowerMetricDetailDialog(QDialog):
         self.table.setVisible(self.has_records)
         if self.has_records:
             self.record_text = QPlainTextEdit(readOnly=True)
-            self.record_text.setAccessibleName(columns[-1])
-            self.record_text.setMaximumHeight(94)
-            layout.addWidget(self.record_text)
+            self.record_text.setAccessibleName('异常事件详情' if metric == 'attention' else columns[-1])
+            if metric == 'attention':
+                self.record_text.setMinimumHeight(100)
+                layout.addWidget(self.record_text, 2)
+            else:
+                self.record_text.setMaximumHeight(94)
+                layout.addWidget(self.record_text)
             self.table.currentCellChanged.connect(self._show_selected_record)
             self.table.setCurrentCell(0, 0)
         else:
@@ -86,28 +96,19 @@ class PowerMetricDetailDialog(QDialog):
     def _channel(number):
         return f'CH{number:02d}'
 
-    @classmethod
-    def _attention_rows(cls, project, rows):
-        if not project.attention_count:
-            return []
-        by_channel = {row['channel']: row for row in rows}
-        entries = []
-        for channel in project.channels:
-            if channel.state != 'failed':
-                continue
-            row = by_channel.get(channel.number, {})
-            entries.append((row.get('label'), cls._channel(channel.number), '失败', channel.stage,
-                            channel.detail or row.get('failure_reason') or '暂无具体原因'))
-        if entries:
-            return entries
-
-        state = '结果未知' if project.state == 'unknown' else project.state_text
-        pretest = project.pretest_run
-        reason = project.pipeline_detail or (pretest[3] if pretest[0] == project.run_id else '')
-        if not reason or reason in (state, project.state_text):
-            reason = '暂无具体原因'
-        return [('任务', None, state, project.task_stage, reason)]
-
     def _show_selected_record(self, row, *_):
+        if self.attention_records is not None and 0 <= row < len(self.attention_records):
+            record = self.attention_records[row]
+            lines = [f'异常事件：{record.event}', f'原因：{record.reason}']
+            if record.time:
+                lines.insert(0, f'时间：{record.time}')
+            if record.stage:
+                lines.append(f'执行阶段：{record.stage}')
+            if record.cycle:
+                lines.append(f'轮次：{record.cycle}')
+            if record.related_events:
+                lines.extend(('', '相关执行事件（原记录）', *record.related_events))
+            self.record_text.setPlainText('\n'.join(lines))
+            return
         item = self.table.item(row, self.table.columnCount() - 1)
         self.record_text.setPlainText(item.text() if item else '')

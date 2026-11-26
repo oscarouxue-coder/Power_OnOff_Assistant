@@ -459,12 +459,14 @@ class QtExecutionAdapterTests(unittest.TestCase):
                     self.wait_for(lambda: self.adapter.idle)
                 self.adapter.poll()
                 self.assertEqual(self.adapter.jobs[identifier]['status']['state'], 'succeeded')
-                self.assertEqual(calls, ['COM29'])
+                self.assertEqual(calls, ['COM29', 'COM29'])
                 self.assertEqual(fake.writes, [channel_power_frame(channel, action == 'up') for channel in (1, 7)])
                 self.assertEqual(waits, [1])
                 self.assertTrue(fake.closed)
                 self.assertIn('serial:com29', resources_during_io)
-                self.assertIn('serial:com102', resources_during_io)
+                self.assertNotIn('serial:com102', resources_during_io)
+                self.assertEqual({key for _, keys in self.workspace.resources.registrations.values() for key in keys},
+                                 {'power-channel:com102:1', 'power-channel:com102:7'})
                 self.assertFalse(self.workspace.resources.owners)
                 self.assertEqual(saved.read_bytes(), original)
                 self.assertFalse(self.engine.calls)
@@ -660,7 +662,10 @@ class QtExecutionAdapterTests(unittest.TestCase):
     def test_other_project_cannot_acquire_same_physical_resources(self):
         self.start()
         context = self.workspace.projects.create(self.root / 'other', '另一个模拟项目')
-        configure_project(self.workspace, context)
+        with self.assertRaises(CapabilityError):
+            configure_project(self.workspace, context)
+        # Separate power supply, but the same DUT serial/network resources.
+        configure_project(self.workspace, context, power_port='COM103')
         other = QtExecutionAdapter(self.workspace, context, self.events.append)
         try:
             confirmation = other.prepare('aging.start')
@@ -728,7 +733,7 @@ class QtExecutionAdapterTests(unittest.TestCase):
         other_context = self.workspace.projects.create(self.root / 'other', '独立模拟项目')
         configure_project(self.workspace, other_context, (3,))
         for context, power, host in ((self.context, 'COM9400', '192.0.2.200'),
-                                     (other_context, 'COM9500', '192.0.2.201')):
+                                     (other_context, 'COM9400', '192.0.2.201')):
             store = ChannelConfigStore(context.config_dir / 'network_card_ip.ini')
             channels = []
             for channel in store.load():
@@ -741,18 +746,18 @@ class QtExecutionAdapterTests(unittest.TestCase):
         self.workspace.status.attach(other_context)
         other_events = []
         other = QtExecutionAdapter(self.workspace, other_context, other_events.append)
-        started = {port: Event() for port in ('COM9400', 'COM9500')}
+        started = {number: Event() for number in (1, 3)}
         finish, observed = Event(), Event()
         requests = {}
 
         def run(request, emit, stop, **callbacks):
-            port = request.serial_port
-            requests[port] = request
-            callbacks['on_channel_progress'](request.channels[0].number, 3, 100, port)
-            started[port].set()
+            number = request.channels[0].number
+            requests[number] = request
+            callbacks['on_channel_progress'](number, 3, 100, request.serial_port)
+            started[number].set()
             while not finish.wait(.02):
                 if stop.is_set():
-                    if port == 'COM9400':
+                    if number == 1:
                         observed.set()
                     return LegacyPowerTestResult(False, '用户已停止执行开关机测试')
             return LegacyPowerTestResult(True, '模拟正常完成')
@@ -762,13 +767,16 @@ class QtExecutionAdapterTests(unittest.TestCase):
             with mock_power_interfaces(self.context, other_context), \
                     patch('src.services.legacy_power_test_service.run_legacy_power_test', side_effect=run):
                 first = self.adapter.confirm(self.adapter.prepare('aging.start').token)
-                self.assertTrue(started['COM9400'].wait(3))
+                self.assertTrue(started[1].wait(3))
                 second = other.confirm(other.prepare('aging.start').token)
-                self.assertTrue(started['COM9500'].wait(3))
+                self.assertTrue(started[3].wait(3))
                 self.assertNotEqual(first, second)
-                for context, port, numbers in ((self.context, 'COM9400', (1, 7)), (other_context, 'COM9500', (3,))):
-                    self.assertIn(context.root / 'runs', requests[port].tool_root.parents)
-                    self.assertEqual(tuple(channel.number for channel in requests[port].channels), numbers)
+                for context, numbers in ((self.context, (1, 7)), (other_context, (3,))):
+                    request = requests[numbers[0]]
+                    self.assertIn(context.root / 'runs', request.tool_root.parents)
+                    self.assertEqual(request.serial_port, 'COM9400')
+                    self.assertTrue(request.shared_power)
+                    self.assertEqual(tuple(channel.number for channel in request.channels), numbers)
                 self.adapter.stop(first)
                 self.assertTrue(observed.wait(3))
                 self.wait_for(lambda: self.adapter.idle)
@@ -873,12 +881,58 @@ class QtExecutionAdapterTests(unittest.TestCase):
         self.assertTrue(any(row['source'] == 'channel_result' for row in channel_evidence))
         self.assertTrue(all(row['channel'] == 16 for row in channel_evidence))
         self.assertIn(self.context.root / 'runs', request.tool_root.parents)
-        self.assertEqual(replace(request, tool_root=expected.tool_root), expected)
+        self.assertEqual(replace(request, tool_root=expected.tool_root), replace(expected, shared_power=True))
         view = self.resume_view(numbers)
         self.assertEqual((view.run_id, view.state), (identifier, 'failed'))
         self.assertEqual([(c.number, c.state, c.cycle, c.total) for c in view.channels],
                          [(n, 'success', 100, 100) for n in numbers[:-1]] + [(16, 'failed', 0, 100)])
         self.assertFalse(self.workspace.resources.owners)
+
+    def test_stopped_channel_projection_keeps_actual_rounds_and_resume_state(self):
+        from src.services import legacy_power_test_service as legacy
+        from test_legacy_power_test_service import _CompletedProcess, _FakeProcessContext
+
+        entered, release = Event(), Event()
+
+        class StoppedWorker(_CompletedProcess):
+            def start(self):
+                _, messages, _, _, run_id, *_ = self.args
+                for number in (1, 7):
+                    messages.put(dict(type='log', run_id=run_id, channel=number, source='result_file',
+                        message=f'2026-11-25 10:00:00: 通道{number}下挂的设备在第8次测试时正常'))
+                entered.set()
+                if not release.wait(3):
+                    raise AssertionError('stop was not requested')
+                for number in (1, 7):
+                    for kind in ('channel_result', 'channel_ready'):
+                        messages.put(dict(type=kind, run_id=run_id, channel=number, ok=False, cancelled=True))
+                messages.put(dict(type='result', run_id=run_id, ok=False, detail='用户已停止执行开关机测试'))
+                self._alive = False
+
+        context = _FakeProcessContext()
+        self.pipeline.stop()
+        with mock_power_interfaces(self.context), patch.object(legacy, 'multiprocessing') as multiprocessing, \
+                patch.object(context, 'Process', side_effect=StoppedWorker):
+            multiprocessing.get_context.return_value = context
+            identifier = self.adapter.confirm(self.adapter.prepare('aging.start').token)
+            try:
+                self.assertTrue(entered.wait(3))
+                self.adapter.stop(identifier)
+            finally:
+                release.set()
+            self.wait_for(lambda: self.adapter.idle)
+        view = self.resume_view()
+        self.assertEqual((view.run_id, view.state), (identifier, 'stopped'))
+        self.assertEqual([(c.number, c.state, c.cycle, c.total) for c in view.channels],
+                         [(1, 'stopped', 8, 100), (7, 'stopped', 8, 100)])
+        self.assertTrue(all(c.stage == '用户停止，保留已完成轮次' for c in view.channels))
+        self.assertEqual(self.adapter.jobs[identifier]['progress'], (8, 100))
+        session = self.adapter.resume.log_session(identifier)
+        self.assertIsNotNone(session)
+        self.assertEqual(session.completed, {1: 8, 7: 8})
+        self.assertEqual(session.cancelled, {1, 7})
+        self.assertFalse(session.failed)
+        self.assertTrue(all(not c.can_resume for c in view.channels))
 
     def test_running_targets_keep_saved_snapshot_after_external_draft_edit(self):
         from line_check_assistant.config_store import ChannelConfigStore

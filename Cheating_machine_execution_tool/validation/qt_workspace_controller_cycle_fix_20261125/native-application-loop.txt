@@ -1,0 +1,9 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 9, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_3b9082e2996c4a88adc4168d7d1c63a0', 'framework': 'qt', 'platform': 'windows'}
+
+test_application_return_destroys_widget_before_releasing_instance (__main__.run.<locals>.ActualLoop) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 2.146s
+
+OK

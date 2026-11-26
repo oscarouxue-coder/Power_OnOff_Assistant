@@ -1,5 +1,6 @@
 """Recovery tests use fake transports/devices; never open a real COM port."""
 import ast
+import datetime
 import queue
 import re
 import sys
@@ -462,6 +463,80 @@ class ResumeTests(unittest.TestCase):
         self.assertTrue(self.session.can_resume(5))
         self.assertEqual([item[2] for item in history], ['resume', 'failed'])
         self.assertEqual(calls, [(5, 4)])
+
+    def test_real_telnet_power_only_stop_and_completion_have_distinct_results(self):
+        path = Path(__file__).resolve().parents[1] / 'Auto_power_on_off_tool/test_case/powe_on_off_telnet.py'
+        method = next(n for n in ast.walk(ast.parse(path.read_text(encoding='utf-8')))
+                      if isinstance(n, ast.FunctionDef) and n.name == 'run_case')
+        clock = SimpleNamespace(sleep=lambda _: None, strftime=time.strftime, localtime=time.localtime, time=time.time)
+        env = dict(re=re, datetime=datetime, time=clock,
+                   TelnetClient=MagicMock(), PowerCommandCancelled=type('PowerCommandCancelled', (Exception,), {}),
+                   WifiConnectionCancelled=type('WifiConnectionCancelled', (Exception,), {}))
+        exec(compile(ast.Module(body=[method], type_ignores=[]), str(path), 'exec'), env)
+        for stop_at, expected in ((16, None), (17, None), (None, True)):
+            with self.subTest(stop_at=stop_at):
+                worker = MagicMock()
+                worker.test_number = 100
+                worker.config_file_path = 'test_project_config.ini'
+                worker.url = 'http://192.0.2.1'
+                worker.is_stop_requested.return_value = False
+                worker.selected_scheme_path.return_value = True
+                worker.cf.read_config_file.return_value = {}
+                worker.only_power_off_on = True
+                worker.create_command_exec_result_file.return_value = str(Path(self.temp.name) / 'power-only.log')
+                worker.sleep_time.side_effect = lambda *_: worker.sleep_time.call_count == stop_at
+                with patch('builtins.print'):
+                    result = env['run_case'](worker, '192.0.2.2', 5, threading.Event())
+                self.assertIs(result, expected)
+                messages = [call.args[0] for call in worker.show_signal[str].emit.call_args_list]
+                completed = [legacy._legacy_channel_progress_from_log(message, 100)
+                             for message in messages if '测试时正常' in message]
+                self.assertEqual([event[1] for event in completed], list(range(1, 101 if expected else 9)))
+                self.assertEqual(worker.send_email.send_email_without_attachments.call_count, int(bool(expected)))
+
+        worker = MagicMock()
+        worker.test_number = 100
+        worker.config_file_path = 'test_project_config.ini'
+        worker.url = 'http://192.0.2.1'
+        worker.is_stop_requested.return_value = False
+        worker.selected_scheme_path.return_value = True
+        worker.cf.read_config_file.return_value = {'fixture': 'expected'}
+        worker.only_power_off_on = False
+        worker.sleep_time.return_value = False
+        worker.get_current_flag.return_value = 0
+        worker.create_command_exec_result_file.return_value = str(Path(self.temp.name) / 'command-stop.log')
+        with patch('builtins.print'):
+            result = env['run_case'](worker, '192.0.2.2', 5, threading.Event(), start_cycle=9)
+        self.assertIsNone(result)
+        worker.show_signal[str].emit.assert_any_call('通道 5 发送手动停止的信号')
+        worker.execute_command_loop.assert_not_called()
+        worker.send_email.send_email_without_attachments.assert_not_called()
+
+    def test_real_ssh_completion_includes_last_round_even_when_resuming(self):
+        path = Path(__file__).resolve().parents[1] / 'Auto_power_on_off_tool/test_case/power_on_off_ssh.py'
+        method = next(n for n in ast.walk(ast.parse(path.read_text(encoding='utf-8')))
+                      if isinstance(n, ast.FunctionDef) and n.name == 'run_case')
+        clock = SimpleNamespace(sleep=lambda _: None, strftime=time.strftime, localtime=time.localtime, time=time.time)
+        env = dict(re=re, datetime=datetime, time=clock, SSHClient=MagicMock(),
+                   PowerCommandCancelled=type('PowerCommandCancelled', (Exception,), {}),
+                   PowerCommandError=type('PowerCommandError', (Exception,), {}))
+        exec(compile(ast.Module(body=[method], type_ignores=[]), str(path), 'exec'), env)
+        for total, start in ((100, 99), (100, 100), (1, 1)):
+            with self.subTest(total=total, start=start):
+                worker = MagicMock()
+                worker.test_number = total
+                worker.config_file_path = 'test_project_config.ini'
+                worker.url = 'http://192.0.2.1'
+                worker.selected_scheme_path.return_value = True
+                worker.cf.read_config_file.return_value = {}
+                worker.cmd_ping.cmd_ping_gen7.side_effect = [True] * (total - start + 1) + [False]
+                log = Path(self.temp.name) / 'ssh.log'
+                worker.create_command_exec_result_file.return_value = str(log)
+                with patch('builtins.print'):
+                    result = env['run_case'](worker, '192.0.2.2', 5, 1, start_cycle=start)
+                self.assertIs(result, True)
+                self.assertEqual(worker.cmd_ping.cmd_ping_gen7.call_count, total - start + 1)
+                self.assertIn(f'通道5下挂的设备在第{total}次测试时正常', log.read_text(encoding='utf-8'))
 
     def test_real_legacy_entry_starts_at_requested_cycle_and_keeps_old_log(self):
         for filename in ('powe_on_off_telnet.py', 'power_on_off_ssh.py'):

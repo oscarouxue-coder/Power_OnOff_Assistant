@@ -77,9 +77,8 @@ class FullPackageUpgradeItemResult:
 class UpgradePowerCycleCoordinator:
     """按程控电源 COM 口串行化短暂断电/上电帧，启动等待在锁外并行进行。
 
-    同时持有每条 COM 口的 `ProgrammablePowerSupply` 长连接，使同一批次内多个通道的
-    上下电复用同一个串口句柄，避免每台样机都 open/close 一次 COM。
-    调用方需在批次结束后调用 `close()`，或用 `with` 语法自动收尾。
+    同一批次复用供电控制对象，每条指令使用独立串口打开及关闭周期。
+    调用方仍在批次结束后调用 `close()`，或用 `with` 语法自动收尾。
     """
 
     def __init__(
@@ -102,7 +101,7 @@ class UpgradePowerCycleCoordinator:
     def __exit__(self, _exc_type, _exc_value, _traceback) -> None:
         self.close()
 
-    def _get_or_open_supply(
+    def _get_supply(
         self,
         port: str,
         on_output: Callable[[str], None] | None,
@@ -110,9 +109,7 @@ class UpgradePowerCycleCoordinator:
         with self._locks_guard:
             supply = self._supplies.get(port)
             if supply is None:
-                # supply 自身的 _on_output 会负责 emit 帧日志；这里只在 open/close 时各打一行。
                 supply = self._supply_factory(port, on_output=on_output)
-                supply.open()
                 self._supplies[port] = supply
             return supply
 
@@ -142,7 +139,7 @@ class UpgradePowerCycleCoordinator:
                 stop_control.checkpoint()
             command_started = self._monotonic()
             try:
-                supply = self._get_or_open_supply(port, on_output)
+                supply = self._get_supply(port, on_output)
                 supply.power_on_channels(
                     [channel],
                     on_channel_powered=on_channel_powered,

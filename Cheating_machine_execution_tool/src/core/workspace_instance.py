@@ -16,8 +16,12 @@ from src.core.ai_credentials import WindowsCredentialCipher
 from src.core.host_resource_lock import HostResourceLock, HostResourceBusy
 
 
+class WorkspaceInstanceError(RuntimeError):
+    """The workspace could not start or hand off to an existing instance."""
+
+
 class WorkspaceInstance:
-    def __init__(self, directory):
+    def __init__(self, directory, *, machine_wide=False):
         self.directory = Path(directory)
         session = ctypes.c_ulong()
         if os.name == 'nt':
@@ -26,6 +30,9 @@ class WorkspaceInstance:
         self.key = hashlib.sha256(identity.encode()).hexdigest()[:32]
         self.address = r'\\.\pipe\LineCheckWorkspace-' + self.key
         self.lease = HostResourceLock(['workspace:' + self.key], reentrant=False)
+        self.machine_lease = (HostResourceLock(['application:dutpilot'],
+                              namespace='workspace-instance-v1', reentrant=False)
+                              if machine_wide else None)
         self.listener = None
         self.stop = threading.Event()
         self.closing_requested = threading.Event()
@@ -46,13 +53,20 @@ class WorkspaceInstance:
                         if not connection.poll(3):
                             raise RuntimeError('现有工作区未确认接收请求')
                         if connection.recv_bytes(1024) != b'accepted':
-                            raise RuntimeError('现有工作区正在安全退出，请等待结束后重试')
+                            raise WorkspaceInstanceError('现有工作区正在安全退出，请等待结束后重试')
                     return False
+                except WorkspaceInstanceError:
+                    raise
                 except (OSError, EOFError, AuthenticationError, RuntimeError, ValueError) as exc:
                     last_error = exc
                     time.sleep(.1)
-            raise RuntimeError('已有工作区正在启动或无响应；未启动第二个实例：' + str(last_error)) from None
+            raise WorkspaceInstanceError('已有工作区正在启动或无响应；请稍后重试。') from last_error
         try:
+            if self.machine_lease is not None:
+                try:
+                    self.machine_lease.acquire()
+                except HostResourceBusy:
+                    raise WorkspaceInstanceError('此电脑已有 DUTPilot 正在运行，或无法取得系统单实例保护。请退出原实例或检查权限后重试。') from None
             self.directory.mkdir(parents=True, exist_ok=True)
             self.authkey = secrets.token_bytes(32)
             encrypted = WindowsCredentialCipher().encrypt(base64.b64encode(self.authkey).decode(), self.key)
@@ -62,7 +76,7 @@ class WorkspaceInstance:
             self.worker.start()
             return True
         except BaseException:
-            self.lease.close()
+            self.close()
             raise
 
     def _key_path(self):
@@ -81,31 +95,37 @@ class WorkspaceInstance:
                     value = json.loads(connection.recv_bytes(32768).decode('utf-8'))
                     if not isinstance(value, dict) or value.get('action') != 'open' or not isinstance(value.get('project'), str):
                         continue
-                    if self.closing_requested.is_set() and not self.stop.is_set():
+                    if self.stop.is_set():
+                        connection.send_bytes(b'closing')
+                        return
+                    if self.closing_requested.is_set():
                         connection.send_bytes(b'closing')
                         continue
-                    if not self.stop.is_set():
-                        self.requests.put_nowait(value)
+                    self.requests.put_nowait(value)
                     connection.send_bytes(b'accepted')
-                    if self.stop.is_set():
-                        return
             except (OSError, EOFError, AuthenticationError, ValueError, queue.Full):
                 # Invalid clients must not kill the authenticated listener. The
                 # owner sends a valid wake-up request before closing the handle.
-                continue
+                if self.stop.is_set():
+                    return
 
-    def close(self):
+    def close(self, *, release=True):
         if self.stop.is_set():
             return
         self.stop.set()
-        if self.listener:
-            try:
-                if self.worker.is_alive():
-                    with Client(self.address, family='AF_PIPE', authkey=self.authkey) as connection:
-                        connection.send_bytes(b'{"action":"open","project":""}')
-                        if connection.poll(3):
-                            connection.recv_bytes(1024)
-            except (OSError, EOFError):
-                pass
-            self.listener.close()
-        self.lease.close()
+        try:
+            if self.listener:
+                try:
+                    if getattr(self, 'worker', None) and self.worker.is_alive():
+                        with Client(self.address, family='AF_PIPE', authkey=self.authkey) as connection:
+                            connection.send_bytes(b'{"action":"open","project":""}')
+                            if connection.poll(3):
+                                connection.recv_bytes(1024)
+                except (OSError, EOFError, AuthenticationError):
+                    pass
+                self.listener.close()
+        finally:
+            if release:
+                self.lease.close()
+                if self.machine_lease is not None:
+                    self.machine_lease.close()

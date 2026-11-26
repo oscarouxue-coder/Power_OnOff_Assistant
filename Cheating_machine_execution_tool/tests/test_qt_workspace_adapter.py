@@ -16,8 +16,9 @@ SOURCE = Path(__file__).resolve().parents[1]
 
 class QtWorkspaceAdapterTests(unittest.TestCase):
     def setUp(self):
-        from qt_execution_fakes import block_live_model_transport
+        from qt_execution_fakes import block_live_model_transport, install_native_fixture_locks
         block_live_model_transport(self)
+        install_native_fixture_locks(self)
         self.temporary = tempfile.TemporaryDirectory(prefix='qt-project-')
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
@@ -892,6 +893,12 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         from src.services.workspace_event_log import read_workspace_events
         self.adapter.begin_close(update_logs_pending=True)
         self.assertTrue(self.adapter.wait_closed())
+        service = self.adapter._service
+        writer = self.adapter._log_writer
+        self.assertEqual(service.emit, self.adapter._emit)
+        self.assertIsNotNone(service.resources.recovery_context)
+        self.assertTrue(callable(writer.report))
+        self.assertTrue(callable(writer.associate))
         entered, release = threading.Event(), threading.Event()
         write = self.adapter._log_writer._write_text
         def slow(batch):
@@ -903,12 +910,22 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
                 self.adapter.record_update_log('更新取消末条原文')
                 self.assertTrue(entered.wait(2))
                 self.assertFalse(self.adapter.finish_log_close())
+                self.assertEqual(service.emit, self.adapter._emit)
+                self.assertTrue(callable(writer.associate))
                 self.assertEqual(self.adapter.health_snapshot().log_write_failures, 0)
             finally:
                 release.set()
                 self.adapter._log_writer.close()
         self.assertTrue(self.adapter.finish_log_close())
         self.assertEqual(read_workspace_events(self.root / 'workspace')[0]['message'], '更新取消末条原文')
+        self.assertIn('更新取消末条原文', (self.root / 'workspace/workspace.log').read_text(encoding='utf-8'))
+        self.assertIsNone(writer.report)
+        self.assertIsNone(writer.associate)
+        self.assertIsNone(service.resources.recovery_context)
+        self.assertNotEqual(service.emit, self.adapter._emit)
+        self.assertTrue(self.adapter.finish_log_close())
+        self.adapter.begin_close()
+        self.assertTrue(self.adapter.wait_closed())
 
     def test_display_backlog_limits_preserve_the_workspace_file(self):
         self.drain()
@@ -2900,6 +2917,46 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
             self.assertTrue(matches_project_filter(project, 'completed'))
             self.assertEqual(json.loads(run.read_text(encoding='utf-8')), record)
 
+    def test_reopened_project_attention_uses_its_own_failed_task_receipt(self):
+        import sqlite3
+        for index, reason in enumerate(('模拟电源初始化失败', '模拟通信失败')):
+            path = self.root / f'attention-{index}'
+            identifier = self.command('create', path, path.name).project_id
+            self.command('close', identifier)
+            run_id = f'{index + 1:032x}'
+            job_id = f'job-{index}'
+            run = path / 'runs' / run_id / 'run.json'
+            run.parent.mkdir(parents=True)
+            run.write_text(json.dumps(dict(project_id=identifier, run_id=run_id, owner=job_id,
+                state='failed', operation='aging.start', created_at=1, started_at=2,
+                finished_at=3, updated_at=3)), encoding='utf-8')
+            database = path / 'history/ai/business/capability_jobs.sqlite3'
+            database.parent.mkdir(parents=True, exist_ok=True)
+            from contextlib import closing
+            with closing(sqlite3.connect(database)) as db, db:
+                db.executescript('''CREATE TABLE jobs(id TEXT PRIMARY KEY, capability TEXT, state TEXT,
+                    stage TEXT, updated REAL, result TEXT, payload TEXT);
+                    CREATE TABLE job_events(id INTEGER PRIMARY KEY, job_id TEXT, created REAL, stage TEXT, message TEXT);''')
+                db.execute('INSERT INTO jobs VALUES(?,?,?,?,?,?,?)', (job_id, 'aging.start', 'failed',
+                    'failed', 3, json.dumps(dict(error=reason if index == 0 else '失败通道：[1]')),
+                    json.dumps(dict(arguments=dict(channel_ids=[1])))))
+                db.execute('INSERT INTO job_events(job_id,created,stage,message) VALUES(?,?,?,?)',
+                           (job_id, 2, 'pipeline', reason))
+                if index == 1:
+                    db.execute('INSERT INTO job_events(job_id,created,stage,message) VALUES(?,?,?,?)',
+                               (job_id, 2.5, 'history', json.dumps(dict(channel=1, cycle=8, status='failed', detail=reason))))
+                    db.execute('INSERT INTO job_events(job_id,created,stage,message) VALUES(?,?,?,?)',
+                               (job_id, 2.6, 'aging', json.dumps(dict(channel=1, status='failed', detail='测试失败，详细信息请查看执行日志'))))
+            self.command('open', path)
+            view = next(p for p in self.projects if p.project_id == identifier)
+            self.assertEqual(view.attention_count, 1)
+            entry, = view.attention_records
+            self.assertEqual(entry.reason, reason)
+            self.assertIn(reason, entry.related_events[0])
+            self.assertEqual(entry.channel, None if index == 0 else 1)
+        self.assertEqual({p.attention_records[0].reason for p in self.projects},
+                         {'模拟电源初始化失败', '模拟通信失败'})
+
     def test_overview_reopens_unchecked_pretest_only_with_matching_project_job_evidence(self):
         import sqlite3
         path = self.root / 'overview-history'
@@ -3136,10 +3193,15 @@ class QtWorkspaceAdapterTests(unittest.TestCase):
         self.wait_for(lambda: (0, 'close_rejected') in self.results)
         self.assertEqual(session.read_bytes(), previous)
         self.assertFalse(self.adapter.closed.is_set())
+        self.assertFalse(self.adapter._service.release_closed_callbacks())
+        self.assertEqual(self.adapter._service.emit, self.adapter._emit)
+        self.assertTrue(callable(self.adapter._log_writer.report))
         self.assertIn(b'unsaved test draft', config.read_bytes())
         self.adapter.begin_close({identifier: 'discard'})
         self.assertTrue(self.adapter.wait_closed(5))
         self.assertEqual(config.read_bytes(), original)
+        self.assertIsNone(self.adapter._log_writer.report)
+        self.assertIsNone(self.adapter._service.resources.recovery_context)
 
     def test_invalid_operations_preserve_configuration_and_emit_failure(self):
         path = self.root / 'invalid'

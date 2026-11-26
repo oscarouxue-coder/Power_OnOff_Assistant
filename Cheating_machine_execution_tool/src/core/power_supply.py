@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import re
+import threading
 import time
+from collections import deque
+from contextlib import contextmanager
 from collections.abc import Callable, Iterable
 from typing import Protocol
 
 import serial
-from src.core.host_resource_lock import HostResourceLock
+from src.core.host_resource_lock import HostResourceBusy, HostResourceLock
 
 
 POWER_SUPPLY_BAUDRATE = 19200
@@ -33,6 +36,56 @@ class PowerSupplyError(RuntimeError):
     """程控电源串口通信失败。"""
 
 
+_queue_condition = threading.Condition()
+_port_queues = {}
+
+
+@contextmanager
+def power_frame_access(port, *, stopped=lambda: False, timeout=30.0, on_wait=lambda: None):
+    """Serialize one physical write, including open/close, across workers."""
+    from src.core.host_resource_lock import physical_key
+    port = physical_key('power:' + port).split(':', 1)[1]
+    deadline = time.monotonic() + timeout
+    ticket = object()
+    guard = None
+    waiting = False
+    with _queue_condition:
+        queue = _port_queues.setdefault(port, deque())
+        queue.append(ticket)
+    try:
+        while True:
+            if stopped():
+                raise PowerSupplyError('等待程控电源期间已停止，未下发指令')
+            if time.monotonic() >= deadline:
+                raise PowerSupplyError(f'等待程控电源 {port.upper()} 超时，未下发指令')
+            with _queue_condition:
+                first = queue[0] is ticket
+            if first:
+                candidate = HostResourceLock(['power:' + port], namespace='power-frame-v1', reentrant=False)
+                try:
+                    guard = candidate.acquire()
+                except HostResourceBusy:
+                    pass
+                else:
+                    break
+            if not waiting:
+                on_wait()
+                waiting = True
+            with _queue_condition:
+                _queue_condition.wait(0.05)
+        if stopped():
+            raise PowerSupplyError('等待程控电源期间已停止，未下发指令')
+        yield
+    finally:
+        if guard is not None:
+            guard.close()
+        with _queue_condition:
+            queue.remove(ticket)
+            if not queue:
+                _port_queues.pop(port, None)
+            _queue_condition.notify_all()
+
+
 def channel_power_frame(channel: int, powered_on: bool) -> bytes:
     """返回旧 Auto_Power_On_Off_Tool 使用的单通道开关帧。"""
     if not 1 <= channel <= 16:
@@ -54,6 +107,7 @@ class ProgrammablePowerSupply:
         sleep_fn: Callable[[float], None] = time.sleep,
         on_output: OutputCallback | None = None,
         on_write_attempt: Callable[[], None] | None = None,
+        stopped: Callable[[], bool] = lambda: False,
     ) -> None:
         normalized_port = port.strip().upper()
         if not re.fullmatch(r"COM\d+", normalized_port):
@@ -66,11 +120,11 @@ class ProgrammablePowerSupply:
         self._sleep = sleep_fn
         self._on_output = on_output
         self._on_write_attempt = on_write_attempt
+        self._stopped = stopped
         self._serial: SerialPort | None = None
         self._host_resource_lock = None
 
     def __enter__(self) -> "ProgrammablePowerSupply":
-        self.open()
         return self
 
     def __exit__(self, _exc_type, _exc_value, _traceback) -> None:
@@ -124,7 +178,6 @@ class ProgrammablePowerSupply:
     ) -> list[int]:
         """逐通道断电再上电；调用方可覆盖两个阶段的等待时间。"""
         selected = _normalize_channels(channels)
-        self.open()
         for channel in selected:
             self._write_frame(channel_power_frame(channel, False), f"关闭通道 {channel}")
             self._sleep(float(off_delay_seconds))
@@ -147,6 +200,12 @@ class ProgrammablePowerSupply:
         """仅关闭指定通道，不发送全断电指令。"""
         return self._set_channels_power(channels, powered_on=False)
 
+    def write_channel(self, channel: int, powered_on: bool) -> None:
+        action = '开启' if powered_on else '关闭'
+        message = f"下发程控电源指令：{self.port}，CH{channel}，{'上电' if powered_on else '下电'}"
+        self._write_frame(channel_power_frame(channel, powered_on), f'{action}通道 {channel}',
+                          success_message=message)
+
     def _set_channels_power(
         self,
         channels: Iterable[int],
@@ -155,7 +214,6 @@ class ProgrammablePowerSupply:
         on_channel_powered: ChannelPoweredCallback | None = None,
     ) -> list[int]:
         selected = _normalize_channels(channels)
-        self.open()
         for index, channel in enumerate(selected):
             if index:
                 self._sleep(POWER_ON_FRAME_INTERVAL_SECONDS)
@@ -165,7 +223,19 @@ class ProgrammablePowerSupply:
                 on_channel_powered(channel)
         return selected
 
-    def _write_frame(self, frame: bytes, action: str) -> None:
+    def _write_frame(self, frame: bytes, action: str, *, success_message: str | None = None) -> None:
+        if self._serial is None:
+            with power_frame_access(self.port, stopped=self._stopped,
+                                    on_wait=lambda: self._emit(f'等待程控电源串口：{self.port}')):
+                self.open()
+                try:
+                    self._write_open_frame(frame, action, success_message=success_message)
+                finally:
+                    self.close()
+        else:
+            self._write_open_frame(frame, action, success_message=success_message)
+
+    def _write_open_frame(self, frame: bytes, action: str, *, success_message: str | None = None) -> None:
         if self._serial is None:
             raise PowerSupplyError("程控电源串口未打开。")
         if self._on_write_attempt is not None:
@@ -176,7 +246,11 @@ class ProgrammablePowerSupply:
             raise PowerSupplyError(f"{action}失败：{exc}") from exc
         if written != len(frame):
             raise PowerSupplyError(f"{action}写入不完整：期望 {len(frame)} 字节，实际 {written} 字节。")
-        self._emit(f"{action}：{' '.join(f'{value:02X}' for value in frame)}")
+        flush = getattr(self._serial, 'flush', None)
+        if flush is not None:
+            flush()
+        self._emit(success_message if success_message is not None else
+                   f"{action}：{' '.join(f'{value:02X}' for value in frame)}")
 
     def _emit(self, message: str) -> None:
         if self._on_output:

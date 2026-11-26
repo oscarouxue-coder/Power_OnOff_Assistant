@@ -1,0 +1,95 @@
+{
+  "head": "69887ae5f4dafdf109cb80e7a21cbeafa6f574fb",
+  "cached": [],
+  "scoped": [
+    "Cheating_machine_execution_tool/src/services/qt_power_logs.py",
+    "Cheating_machine_execution_tool/tests/test_qt_log_history.py",
+    "Cheating_machine_execution_tool/tests/qt_workbench_probe.py"
+  ],
+  "files": {
+    "ACCEPTANCE_BASELINE.md": {
+      "worktree_sha256": "940253517842ca7d4dc298bd2c3f355b44c3a8a0539e6606d439505607982212",
+      "diff_sha256": "25746afa8051897eb83fa2062c2fce3dee92e1bf8e921f5b7c6d58f691a8b0e6"
+    },
+    "CAPABILITY_COVERAGE.md": {
+      "worktree_sha256": "b1b595845f696b4b59492dabb653cb5769d4140eedcba6a16f684f7cf9273832",
+      "diff_sha256": "bee8ac200c8a85605e4a1c24cc6e60158785e2d5ce08a5a853c9ba3acc603336"
+    },
+    "Cheating_machine_execution_tool/Auto_power_on_off_tool/test_case/powe_on_off_telnet.py": {
+      "worktree_sha256": "90cdffc1cf7bf123ac903b3955b43ee1b61390de3a261b82fc08e5bb73826a9b",
+      "diff_sha256": "d91c952a81e1a1ae43fd0660825dec47addd513e6e2feed38f47c78b4cfdd78d"
+    },
+    "Cheating_machine_execution_tool/Auto_power_on_off_tool/test_case/power_on_off_ssh.py": {
+      "worktree_sha256": "d75c97d7c839c99589b2ebe415e436ed3624ea201f383723ec7127dd8976fc4b",
+      "diff_sha256": "f15a1b898b11a411f82c3ea1a10b3c3dfdf9d0f4cf439f16b88affe583b1acc1"
+    },
+    "Cheating_machine_execution_tool/line_check_assistant_README.md": {
+      "worktree_sha256": "45c9f3acf0a2881e2fbfdcd30ea70d184d6b932ca28928d6ef08d252ce95ae7a",
+      "diff_sha256": "d9d6f0df7adac42ecd8e8572d094d88ad49d0a5dd466299caaffb877d5f9b2b7"
+    },
+    "Cheating_machine_execution_tool/scripts/capability_gui_actions.json": {
+      "worktree_sha256": "2d9ff2eeb50332dbd4b755598b6116bbb5a9fa55a86c132fab633c21b9b67c3d",
+      "diff_sha256": "dceb535946dfc4dbbfd55656db23fec3c6a796e523c7acbd3fbbd75ef0ba87fc"
+    },
+    "Cheating_machine_execution_tool/scripts/verify_qt_migration.py": {
+      "worktree_sha256": "9a6eecd54a2202acbd565a1fe178e283be9e783041d0b5d68f93c000465e50ba",
+      "diff_sha256": "a5ecc74cc349ed089118d543ec619612f4ac839564f95524a96c88833764e533"
+    },
+    "Cheating_machine_execution_tool/src/models/qt_log_history.py": {
+      "worktree_sha256": "6c3465037bb2c59281653b14cd20c632cc230ea0246c7b724c5dc29887fcba77",
+      "diff_sha256": "f54be6b67e53860703df87bcfdaa052f0eab68b1f52129d18554cb9aca703e97"
+    },
+    "Cheating_machine_execution_tool/src/services/capability_catalog.py": {
+      "worktree_sha256": "b03fb2077f30c5ff2f7214576ff6a0a32c6b8c08fbf193b361d474077b8c473f",
+      "diff_sha256": "44e32ca0f02d0e5abdcff54b6ad11aa180d2d7f548204710696f4238a09c3b04"
+    },
+    "Cheating_machine_execution_tool/src/services/legacy_power_test_service.py": {
+      "worktree_sha256": "581daba99184868dfe611f03a62fefa84049f08a65f933f4cd500969f80ccd69",
+      "diff_sha256": "6a0cbe2677ffac906ce39bd2453f91e7fe2cb9962d19bf5e26bf4c145d42a574"
+    },
+    "Cheating_machine_execution_tool/src/services/qt_power_logs.py": {
+      "worktree_sha256": "b8b71dd12b8f492f08776a2dd9536fb79f3531c6c2d6d8f2e391673c3e905f61",
+      "diff_sha256": "2c5833a37911039e2f097bee99738da686005280c3aa49cff62dcedaf9b49155"
+    },
+    "Cheating_machine_execution_tool/src/services/qt_workspace_adapter.py": {
+      "worktree_sha256": "d225b16b749bf918e21a3f114608563eeb0f503462c25a63210c8497827e5a70",
+      "diff_sha256": "d0c18c8580bc4922f1e9514a7293cdb1ef66b55d6c6e884cd47bb0e0e8bcb60f"
+    },
+    "Cheating_machine_execution_tool/src/ui/qt/log_history_dialog.py": {
+      "worktree_sha256": "c7492873b6fd6a0fecfde2f5d142fd5c9f7cb8fd1b6e8dbec49ef47abb227e39",
+      "diff_sha256": "cfc0f2e39415a29b13738e866c61e48553cdf09f1a36e76ecf5f581aa22107a7"
+    },
+    "Cheating_machine_execution_tool/tests/qt_workbench_probe.py": {
+      "worktree_sha256": "d44f795c6ec1705f2b045f2ab4334c0782d6e32e8b93fd1f92d81c48d4ebc546",
+      "diff_sha256": "844aa2c2d1400facfb91c1880eaba1c1f30bb7105c5ea04773be2b581db3a678"
+    },
+    "Cheating_machine_execution_tool/tests/test_legacy_power_test_service.py": {
+      "worktree_sha256": "977432865ba85cd8e137a3535acf9ea211711a00d9641383e9d8ba61521cb711",
+      "diff_sha256": "a8d73d9cf50e439d341f603c4cad3a625af27b8f060b441671dcccbf1075b6e8"
+    },
+    "Cheating_machine_execution_tool/tests/test_power_test_resume.py": {
+      "worktree_sha256": "a7e65c095f783d8ee82809bbc63fdc7365b23d6d162a4486c6a3710b79be1958",
+      "diff_sha256": "e8e9931adc408ea339b7c9b014da0692110f22ce9b4e170a25a83a8b6281c953"
+    },
+    "Cheating_machine_execution_tool/tests/test_power_test_wifi.py": {
+      "worktree_sha256": "72555d9d4694a2165714b95eb413c5db901499da3b8d759d040baec61f4cf470",
+      "diff_sha256": "b7f1bc38533815f32f453b59382034b516b3854168d35bc05abc98bfa4eb070b"
+    },
+    "Cheating_machine_execution_tool/tests/test_qt_execution_adapter.py": {
+      "worktree_sha256": "8efe3bc8519b20ab60871677465e73e763c54777cfd2ba41ce252c8efcd4ffce",
+      "diff_sha256": "b24ee7173dac008ee32b2355b91b54ccc50e8d62258b98901f5ee20d66dd2d58"
+    },
+    "Cheating_machine_execution_tool/tests/test_qt_log_history.py": {
+      "worktree_sha256": "b38de9ce94f3d52d0dc709b32327e6e5a55a991ae03e9fb52310ef9de0e887d8",
+      "diff_sha256": "4c6f11fc1c9420f30d0ad860e5ae2bb9fee2c9be2d6b0e6c14c31eee8453a3d4"
+    },
+    "DEVELOPMENT_LOG.md": {
+      "worktree_sha256": "ec0fd6c91b9943c22702688e26b882895741f3b851cbab2b4a834f5f8b7fc59f",
+      "diff_sha256": "0f99a9f2b82aad99f7f81d85f5a8e794321a821be995edadf39f057eae386f67"
+    },
+    "PROJECT_STATUS.md": {
+      "worktree_sha256": "58424fbcac3f966f48acdb379b581ea72a04c9fe5f0f0b5fa11127332b28d276",
+      "diff_sha256": "7c475257dc5df9104b871de0d7bc101f6b46ea95126e5d8b3e52e6ec83e2346e"
+    }
+  }
+}

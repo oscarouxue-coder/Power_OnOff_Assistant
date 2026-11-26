@@ -1,0 +1,112 @@
+{
+  "mode": "held",
+  "scale": "1.25",
+  "events": [
+    {
+      "ms": 14510.124,
+      "label": "job_worker_enter",
+      "thread": "worker"
+    },
+    {
+      "ms": 15980.096,
+      "label": "project_status_terminal_enter",
+      "thread": "worker",
+      "state": "succeeded",
+      "owner_held": true
+    },
+    {
+      "ms": 15982.878,
+      "label": "project_status_terminal_return",
+      "thread": "worker",
+      "state": "succeeded",
+      "owner_held": true
+    },
+    {
+      "ms": 16958.206,
+      "label": "resource_release_enter",
+      "thread": "worker",
+      "owner_held": true
+    },
+    {
+      "ms": 16966.915,
+      "label": "terminal_job_read",
+      "thread": "worker",
+      "owner_held": true
+    },
+    {
+      "ms": 16968.214,
+      "label": "terminal_snapshot_published",
+      "thread": "worker",
+      "owner_held": true,
+      "can_start": false,
+      "active_tasks": 0
+    },
+    {
+      "ms": 17056.099,
+      "label": "terminal_ui_observed",
+      "thread": "gui",
+      "owner_held": true,
+      "can_start": false,
+      "active_tasks": 0
+    },
+    {
+      "ms": 17056.119,
+      "label": "blocked_start_checked",
+      "thread": "gui",
+      "owner_held": true,
+      "can_start": false,
+      "parallel_available": false,
+      "button_enabled": false,
+      "returned_none": true,
+      "preparations_unchanged": true,
+      "fake_calls_unchanged": true
+    },
+    {
+      "ms": 17056.26,
+      "label": "synthetic_hold_finished",
+      "thread": "worker",
+      "blocked_start_observed": true
+    },
+    {
+      "ms": 17068.357,
+      "label": "resource_release_return",
+      "thread": "worker",
+      "owner_held": false
+    },
+    {
+      "ms": 17068.456,
+      "label": "job_worker_return",
+      "thread": "worker",
+      "owner_held": false
+    },
+    {
+      "ms": 17071.837,
+      "label": "original_resource_assertion",
+      "thread": "gui",
+      "owner_held": false,
+      "owners_empty": true
+    }
+  ],
+  "code": 0,
+  "diagnostic_pass": true,
+  "denied_calls": {
+    "requests.sessions.Session.request": 0,
+    "serial.Serial": 0,
+    "socket.create_connection": 0,
+    "socket.getaddrinfo": 0,
+    "socket.gethostbyname": 0,
+    "socket.gethostbyname_ex": 0,
+    "socket.gethostbyaddr": 0,
+    "socket.socket.connect": 0,
+    "socket.socket.connect_ex": 0,
+    "socket.socket.send": 0,
+    "socket.socket.sendall": 0,
+    "socket.socket.sendto": 0,
+    "socket.socket.bind": 0,
+    "socket.socket.listen": 0,
+    "socket.socket.accept": 0,
+    "subprocess.Popen": 0,
+    "os.startfile": 0
+  },
+  "elapsed_seconds": 17.161
+}

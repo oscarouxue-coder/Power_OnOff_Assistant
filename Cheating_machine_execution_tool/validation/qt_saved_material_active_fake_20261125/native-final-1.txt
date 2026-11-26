@@ -1,0 +1,10 @@
+GUI_TEST_COVERAGE_OK
+ACTIVE_FAKE_HISTORY_EVIDENCE: {"running_state": "running", "running_progress": 68, "running_result": null, "original_events": 7, "final_events": 10, "original_event_prefix_preserved": true, "final_state": "succeeded", "final_ok": true, "final_items_ok": [true], "final_output_marker": true, "stop_observed": false, "resources_released": true, "original_history_unchanged": true, "physical_serial_calls": 0, "blocked_network_calls": 0}
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 6, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_1bda340e5375465fb92a30e3d2636cdf', 'framework': 'qt', 'platform': 'windows'}
+
+test_qt_saved_material_error_and_cancel_leave_active_fake_power_job_unchanged (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 4.335s
+
+OK

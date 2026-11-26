@@ -1,0 +1,12 @@
+FAKE_CANCEL receipt exists; second reply ID allocated; transport POST count remains 1
+FAKE_DISPATCH_COUNTS 3; duplicated input slots 0/2/0; other session 0/0/1; two DB rows; no input IDs
+FAKE_TERMINAL supplement retained in group; transport POST count 1; no automatic replay
+
+test_cancel_after_usage_observer_before_second_transport (__main__.TransportBoundaryAudit) ... ok
+test_duplicate_content_and_other_session_at_fake_transport (__main__.TransportBoundaryAudit) ... ok
+test_response_failure_finalizes_received_supplement_without_dispatch (__main__.TransportBoundaryAudit) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 1.781s
+
+OK

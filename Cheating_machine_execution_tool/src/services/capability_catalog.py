@@ -251,6 +251,18 @@ def business_catalog():
          'read_channel_evidence / ServiceAgingHistory', 'service_aging.channel_evidence',
          '仅本机 GUI 在冻结的项目、批次和通道内读取已有观测。普通聊天通过 _send_chat_evidence 核对明确 CH，带请求编号的结果仅当前窗口显示；停止本轮仅取消该本地读请求',
          ['test_qt_channel_evidence.py', 'qt_channel_evidence_probe.py']),
+        ('history.material_summary', '汇总选定批次通道的本地留存结果文件', 'log_history_dialog.py', '_request_summary',
+         'summarize_history_materials / summarize_history_materials_batch / qt_power_logs', 'history.material_summary',
+         '仅本机 GUI 从同一已核对历史批次选择一至十六个原通道，逐通道复用既有有界只读能力；原文正文不展开，不提供模型或远端能力',
+         ['test_qt_log_history.py', 'qt_workbench_probe.py']),
+        ('history.material_report_save', '保存当前已生成的本地历史报告', 'log_history_dialog.py', '_request_save_report',
+         'save_material_report / qt_power_logs', 'history.material_report_save',
+         '仅本机 GUI 明确保存已核对批次的生成回执，不接受任意正文、路径或重跑，不提供模型或远端能力',
+         ['test_qt_log_history.py', 'qt_workbench_probe.py']),
+        ('history.material_reports', '查看选定历史批次已保存报告', 'log_history_dialog.py', '_request_saved_reports',
+         'read_material_reports / qt_power_logs', 'history.material_reports',
+         '仅本机 GUI 在所选项目任务及原运行范围中查看保存的历史报告，不读取原资料或执行任务',
+         ['test_qt_log_history.py', 'qt_workbench_probe.py']),
     )
     for identifier, name, filename, entry, service, capability, reason, tests in local_workflows:
         result.append(dict(feature_id=identifier, name=name, gui_file='src/ui/qt/' + filename, gui_entry=entry,

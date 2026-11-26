@@ -1,0 +1,11 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 5, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_8a71afc06e3648f29beb4a52b7e29ddd', 'framework': 'qt', 'platform': 'windows'}
+CLOSE_REGRESSION_DENIED: {"requests.sessions.Session.request": 0, "serial.Serial": 0, "socket.create_connection": 0, "socket.getaddrinfo": 0, "socket.gethostbyname": 0, "socket.gethostbyname_ex": 0, "socket.gethostbyaddr": 0, "socket.socket.connect": 0, "socket.socket.connect_ex": 0, "socket.socket.send": 0, "socket.socket.sendall": 0, "socket.socket.sendto": 0, "socket.socket.bind": 0, "socket.socket.listen": 0, "socket.socket.accept": 0, "subprocess.Popen": 0, "os.startfile": 0}
+
+test_saved_usage_is_not_shown_after_project_reopen (__main__.main.<locals>.HistoricalContextBaseline) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 2.700s
+
+OK
+

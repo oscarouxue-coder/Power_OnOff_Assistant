@@ -1,0 +1,11 @@
+GUI_TEST_COVERAGE_OK
+test_power_channel_registration_rejects_overlap_and_releases_on_close (test_project_management.ProjectManagementTests) ... ok
+test_existing_conflicting_project_opens_without_owning_conflicting_channel (test_project_management.ProjectManagementTests) ... ok
+test_stale_channel_claim_clears_only_after_project_and_worker_exit (test_project_management.ProjectManagementTests) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 1.756s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}
+CLOSE_REGRESSION_DENIED: {"requests.sessions.Session.request": 0, "serial.Serial": 0, "socket.create_connection": 0, "socket.getaddrinfo": 0, "socket.gethostbyname": 0, "socket.gethostbyname_ex": 0, "socket.gethostbyaddr": 0, "socket.socket.connect": 0, "socket.socket.connect_ex": 0, "socket.socket.send": 0, "socket.socket.sendall": 0, "socket.socket.sendto": 0, "socket.socket.bind": 0, "socket.socket.listen": 0, "socket.socket.accept": 0, "subprocess.Popen": 0, "os.startfile": 0}

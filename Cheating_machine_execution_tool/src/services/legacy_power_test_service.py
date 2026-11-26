@@ -132,6 +132,7 @@ class LegacyPowerTestRequest:
     wifi_security_source: str = "auto"
     wireless_ping_enable: bool = False
     wireless_ping_target: str = ""
+    shared_power: bool = False
 
 
 @dataclass(frozen=True)
@@ -158,8 +159,13 @@ ChannelStatusOutput = Callable[[int, str, str], None]
 ChannelHistoryOutput = Callable[[int, int, str, str], None]
 
 
-def _format_power_frame(payload) -> str:
-    return " ".join(f"{byte:02X}" for byte in bytes(payload))
+def _format_power_frame(port: str, payload) -> str:
+    frame = bytes(payload)
+    if len(frame) == 6 and 1 <= frame[4] <= 16 and frame[2] in (0xA0, 0xA1):
+        powered_on = frame[2] == 0xA0
+        if frame == channel_power_frame(frame[4], powered_on):
+            return f"{port}，CH{frame[4]}，{'上电' if powered_on else '下电'}"
+    return f"{port}，非单通道指令：{frame.hex(' ').upper()}"
 
 
 def _should_forward_legacy_log(level: str, text: str, source: str) -> bool:
@@ -726,7 +732,7 @@ def _run_legacy_power_test(
             elif message_type == "channel_result":
                 channel_number = int(message.get("channel", 0))
                 ok = bool(message.get("ok"))
-                if not 1 <= channel_number <= 16:
+                if channel_number not in completed_by_channel:
                     continue
                 finished_channels.add(channel_number)
                 wifi_failures = wifi_history.finish(
@@ -737,8 +743,13 @@ def _run_legacy_power_test(
                     if on_channel_history is not None:
                         on_channel_history(channel_number, cycle, status, detail)
                 if message.get("cancelled"):
+                    detail = "用户停止，保留已完成轮次"
+                    completed = completed_by_channel[channel_number]
+                    if on_channel_progress is not None:
+                        on_channel_progress(channel_number, completed, request.number_of_tests, detail)
                     if on_channel_status is not None:
-                        on_channel_status(channel_number, "stopped", "用户停止WiFi测试，保留已完成轮次")
+                        on_channel_status(channel_number, "stopped", detail)
+                    emit(f"[执行开关机测试] 通道 {channel_number} 已停止，保留已完成 {completed}/{request.number_of_tests} 轮。")
                     continue
                 if ok:
                     status, detail = "success", "所有测试项验证成功"
@@ -1110,27 +1121,63 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
             {
                 "type": "stage",
                 "message": (
-                    f"打开程控电源串口 {request.serial_port}/{request.baud_rate}；"
+                    f"程控电源串口 {request.serial_port}/{request.baud_rate}；"
+                    + ("按指令打开、发送、关闭；" if request.shared_power else "打开串口；")
                     + ("初始化仅断电已勾选通道。"
                        if initialize_power else "单通道恢复：跳过初始化断电。")
                 ),
             }
         )
-        serial_client = Serial(request.serial_port, request.baud_rate, logger, timeout=5)
-        serial_client.is_open()
-        original_serial_write = serial_client.write
+        if request.shared_power:
+            from src.core.power_supply import ProgrammablePowerSupply, PowerSupplyError
 
-        def write_with_execution_log(payload):
-            frame = bytes(payload)
-            message_queue.put(
-                {
-                    "type": "stage",
-                    "message": "下发程控电源指令：" + _format_power_frame(frame),
-                }
-            )
-            return original_serial_write(payload)
+            def forward_shared_power_output(message):
+                if not message.startswith(('已打开程控电源串口：', '已关闭程控电源串口：')):
+                    message_queue.put({'type': 'stage', 'message': message})
 
-        serial_client.write = write_with_execution_log
+            class SharedPowerSerial:
+                def __init__(self):
+                    self.frames = {channel_power_frame(item.number, enabled)
+                        for item in request.channels for enabled in (False, True)}
+                    self.supply = ProgrammablePowerSupply(request.serial_port, baudrate=int(request.baud_rate),
+                        on_output=forward_shared_power_output,
+                        stopped=stop_event.is_set)
+
+                def write(self, payload):
+                    frame = bytes(payload)
+                    try:
+                        if frame not in self.frames:
+                            raise PowerSupplyError('拒绝未登记通道或全通道程控电源指令')
+                        self.supply.write_channel(frame[4], frame[2] == 0xA0)
+                    except Exception as exc:
+                        message_queue.put({
+                            'type': 'log', 'level': 'error',
+                            'message': f'程控电源操作异常：{_format_power_frame(request.serial_port, frame)}，{exc}',
+                        })
+                        raise
+
+                def serial_close(self):
+                    self.supply.close()
+
+                close = serial_close
+
+            serial_client = SharedPowerSerial()
+        else:
+            serial_client = Serial(request.serial_port, request.baud_rate, logger, timeout=5)
+            serial_client.is_open()
+            original_serial_write = serial_client.write
+
+            def write_with_execution_log(payload):
+                frame = bytes(payload)
+                message_queue.put(
+                    {
+                        "type": "stage",
+                        "message": "下发程控电源指令：" + _format_power_frame(request.serial_port, frame),
+                    }
+                )
+                return original_serial_write(payload)
+
+            serial_client.write = write_with_execution_log
 
         common_args = (
             serial_client,
@@ -1246,7 +1293,7 @@ def _legacy_start_all_worker(request, message_queue, stop_event, control_queue=N
                         **kwargs,
                     )
                 channel_results[channel.number] = bool(result)
-                cancelled = result is None and stop_event.is_set()
+                cancelled = result is None
                 if cancelled:
                     cancelled_channels.add(channel.number)
                 message_queue.put(

@@ -15,7 +15,24 @@ from src.models.qt_device_inventory import ResourceLeaseEntry
 from src.services.host_resource_fence import HostResourceFence
 
 
-PHYSICAL_PREFIXES = ("serial:", "power:", "adapter:", "olt:", "pon:", "wifi:", "tftp:", "dut:", "adb:")
+PHYSICAL_PREFIXES = ("serial:", "power:", "power-channel:", "adapter:", "olt:", "pon:", "wifi:", "tftp:", "dut:", "adb:")
+
+
+def power_channel_keys(port, numbers):
+    if not port:
+        return ()
+    normalized = physical_key('power:' + port).split(':', 1)[1]
+    return tuple(f'power-channel:{normalized}:{number}' for number in sorted(set(numbers)))
+
+
+def power_registration_owner(project_id, key):
+    return f'power-registration:{project_id}:{key}'
+
+
+def power_registration_enabled(config_dir):
+    from src.services.project_profile_store import read_project_profile
+    profile = read_project_profile(config_dir)
+    return not profile or profile.get('test_type') != 'service_aging'
 
 
 def host_resource_directory():
@@ -38,6 +55,7 @@ class WorkspaceResources:
     def __init__(self, directory):
         self.lock = threading.RLock()
         self.owners = {}
+        self.registrations = {}
         self.labels = {}
         self.guards = {}
         self.fence = HostResourceFence(directory)
@@ -86,6 +104,33 @@ class WorkspaceResources:
             result.add(key)
         return tuple(sorted(result))
 
+    def check_power_selection(self, project_id, port, numbers):
+        keys = set(power_channel_keys(port, numbers))
+        if not keys:
+            return
+        for entry in self.lease_entries():
+            if entry.resource_key in keys and entry.project_id != project_id:
+                number = int(entry.resource_key.rsplit(':', 1)[1])
+                name = entry.project_name or '其他项目或待核实任务'
+                raise ReviewRequired('resource_busy', f'{port.upper()} CH{number:02d} 已由“{name}”占用',
+                                     'channels', 'enabled', channels=(number,), reference=entry.resource_key)
+
+    def rename_power_registrations(self, project_id, name):
+        with self.lock:
+            changed = [owner for owner, (project, _) in self.registrations.items()
+                       if project == project_id and self.labels[owner] != name]
+            if not changed:
+                return
+            try:
+                with self.fence.db:
+                    self.fence.db.executemany('UPDATE workspace_owners SET label=? WHERE owner=?',
+                                              [(name, owner) for owner in changed])
+            except sqlite3.Error:
+                self.emit('[电源通道登记] 项目名称更新失败，原登记仍受保护')
+                return
+            for owner in changed:
+                self.labels[owner] = name
+
     def acquire(self, owner, project_id, label, keys):
         keys = self.keys(keys)
         with self.lock:
@@ -99,31 +144,75 @@ class WorkspaceResources:
                 self.recover_stale(project_id, keys, strict=True)
             elif group in self.uncertain:
                 raise ReviewRequired('host_result_unknown', '本项目存在未核实操作，请先核实任务结果', 'project', 'task')
-            for key in keys:
-                for held, (project, held_keys) in self.owners.items():
-                    if project != project_id and key in held_keys:
-                        raise ReviewRequired("resource_busy", "资源 " + key + " 正由项目“" + self.labels[held] + "”使用",
-                                             'inventory', reference=key)
-            previous = self.owners.get(owner)
-            keys = tuple(sorted(set(keys) | set(previous[1] if previous else ())))
-            guard = HostResourceLock(keys).acquire()
-            try:
-                self.fence.acquire(group, keys)
-            except BaseException:
-                guard.close()
-                raise
-            old = self.guards.pop(owner, None)
-            self.guards[owner] = guard
-            self.owners[owner], self.labels[owner] = (project_id, keys), label
-            with self.fence.db:
-                self.fence.db.execute('INSERT OR REPLACE INTO workspace_owners(owner,group_id,state,label,keys) VALUES(?,?,?,?,?)',
-                                     (owner, group, 'active', label, json.dumps(keys)))
-            if old:
-                old.close()
+            # Whole-port users and registered channel users must never overlap.
+            # The shared admission gate covers the check and durable publication
+            # even when another application instance is admitting a project.
+            ports = {key.split(':')[1] for key in keys if key.startswith(('serial:', 'power-channel:'))}
+            with HostResourceLock(['power-admission:' + port for port in ports], reentrant=False):
+                self._acquire_locked(owner, project_id, label, keys, group)
+
+    def _acquire_locked(self, owner, project_id, label, keys, group):
+        rows = tuple(self.fence.db.execute('SELECT resource,owner FROM fence'))
+        for key in keys:
+            if key.startswith('power-channel:'):
+                port = key.split(':')[1]
+                if any(held == 'serial:' + port for held, _ in rows):
+                    raise ReviewRequired('resource_busy', f'程控电源 {port.upper()} 存在整口占用，请等待释放', 'inventory', reference=key)
+                if not owner.startswith('power-registration:'):
+                    registration = power_registration_owner(project_id, key)
+                    if registration not in self.registrations:
+                        raise ReviewRequired('resource_busy', f'{key} 未登记为本项目通道，请检查并保存环境配置', 'channels', 'enabled', reference=key)
+            elif key.startswith('serial:'):
+                prefix = 'power-channel:' + key.split(':')[1] + ':'
+                if any(held.startswith(prefix) for held, _ in rows):
+                    raise ReviewRequired('resource_busy', f'{key} 已登记为程控电源，禁止整口占用', 'inventory', reference=key)
+        for key in keys:
+            for held, (project, held_keys) in {**self.owners, **self.registrations}.items():
+                if project != project_id and key in held_keys:
+                    raise ReviewRequired("resource_busy", "资源 " + key + " 正由项目“" + self.labels[held] + "”使用",
+                                         'inventory', reference=key)
+        target = self.registrations if owner.startswith('power-registration:') else self.owners
+        previous = target.get(owner)
+        keys = tuple(sorted(set(keys) | set(previous[1] if previous else ())))
+        guard = HostResourceLock(keys).acquire()
+        try:
+            self.fence.acquire(group, keys)
+        except BaseException:
+            guard.close()
+            raise
+        old = self.guards.pop(owner, None)
+        self.guards[owner] = guard
+        target[owner], self.labels[owner] = (project_id, keys), label
+        with self.fence.db:
+            self.fence.db.execute('INSERT OR REPLACE INTO workspace_owners(owner,group_id,state,label,keys) VALUES(?,?,?,?,?)',
+                                 (owner, group, 'active', label, json.dumps(keys)))
+        if old:
+            old.close()
 
     @property
     def automatic_recovery(self):
         return self.recovery_context is not None
+
+    def recover_released_power_projects(self):
+        """Reconcile closed foreign projects before displaying their channel claims."""
+        if not self.automatic_recovery:
+            return
+        with self.lock:
+            groups = {group for (group,) in self.fence.db.execute(
+                "SELECT group_id FROM workspace_owners "
+                "WHERE owner LIKE 'power-registration:%' AND state != 'done'")
+                if not group.startswith(self.run_id + ':')}
+        for group in groups:
+            _, separator, project_id = group.partition(':')
+            if not separator or not project_id:
+                continue
+            try:
+                # Do not run potentially expensive worker checks for a live project.
+                with HostResourceLock(['project:' + project_id], reentrant=False):
+                    pass
+            except HostResourceBusy:
+                continue
+            self.recover_stale(project_id)
 
     @staticmethod
     def _owner_keys(payload, fallback):
@@ -143,7 +232,7 @@ class WorkspaceResources:
                 "SELECT owner,group_id,state,keys FROM workspace_owners WHERE state != 'done'").fetchall()
             groups = defaultdict(list)
             for owner, group, state, payload in records:
-                if owner not in self.owners and (state == 'unknown' or not group.startswith(self.run_id + ':')):
+                if owner not in self.owners and owner not in self.registrations and (state == 'unknown' or not group.startswith(self.run_id + ':')):
                     groups[group].append((owner, state, payload))
             fences = defaultdict(set)
             for key, group in self.fence.db.execute('SELECT resource,owner FROM fence'):
@@ -220,7 +309,8 @@ class WorkspaceResources:
                 return True
             if not self.inventory_ready and any(key.startswith('adapter:') for key in keys):
                 return True
-            return any(project != project_id and keys.intersection(held) for project, held in self.owners.values())
+            return any(project != project_id and keys.intersection(held)
+                       for project, held in (*self.owners.values(), *self.registrations.values()))
 
     def extend_adapter_owner(self, owner, bindings):
         """Add verified alias/GUID pairs to the same live project admission."""
@@ -241,11 +331,13 @@ class WorkspaceResources:
         with self.lock:
             rows = set()
             assigned = defaultdict(set)
-            for owner, (project, keys) in self.owners.items():
+            active = {**self.owners, **self.registrations}
+            for owner, (project, keys) in active.items():
                 group = self.run_id + ':' + project
                 assigned[group].update(keys)
                 for key in keys:
-                    rows.add(ResourceLeaseEntry(key, project, self.labels.get(owner, ''), owner, 'held'))
+                    rows.add(ResourceLeaseEntry(key, project, self.labels.get(owner, ''), owner,
+                                                'registered' if owner in self.registrations else 'held'))
 
             # Both halves read one SQLite snapshot. Old completed jobs never imply a
             # current reservation, and per-job key lists cannot outlive their fence.
@@ -266,7 +358,7 @@ class WorkspaceResources:
                     continue
                 if name:
                     names[group].add(name)
-                if owner in self.owners and group == self.run_id + ':' + self.owners[owner][0]:
+                if owner in active and group == self.run_id + ':' + active[owner][0]:
                     continue
                 try:
                     owned = json.loads(payload) if payload is not None else None
@@ -317,7 +409,8 @@ class WorkspaceResources:
 
     def release(self, owner, uncertain=False):
         with self.lock:
-            previous = self.owners.pop(owner, None)
+            self.owners.pop(owner, None)
+            self.registrations.pop(owner, None)
             row = self.fence.db.execute('SELECT group_id FROM workspace_owners WHERE owner=?', (owner,)).fetchone()
             group = row[0] if row else None
             if group:
@@ -360,5 +453,7 @@ class WorkspaceResources:
         with self.lock:
             for owner in tuple(self.owners):
                 self.release(owner, uncertain=True)
+            for owner in tuple(self.registrations):
+                self.release(owner)
             self._lease_reader.close()
             self.fence.db.close()

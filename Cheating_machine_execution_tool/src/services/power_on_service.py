@@ -86,6 +86,7 @@ def turn_on_selected_channels(
     on_output: Callable[[str], None] | None = None,
     on_channel_powered: Callable[[int], None] | None = None,
     on_write_attempt: Callable[[], None] | None = None,
+    stopped: Callable[[], bool] | None = None,
     serial_factory: SerialFactory | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> CommandResult:
@@ -98,6 +99,7 @@ def turn_on_selected_channels(
         on_output=on_output,
         on_channel_powered=on_channel_powered,
         on_write_attempt=on_write_attempt,
+        stopped=stopped,
         serial_factory=serial_factory,
         sleep_fn=sleep_fn,
     )
@@ -109,6 +111,7 @@ def turn_off_selected_channels(
     *,
     on_output: Callable[[str], None] | None = None,
     on_write_attempt: Callable[[], None] | None = None,
+    stopped: Callable[[], bool] | None = None,
     serial_factory: SerialFactory | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> CommandResult:
@@ -119,6 +122,7 @@ def turn_off_selected_channels(
         powered_on=False,
         on_output=on_output,
         on_write_attempt=on_write_attempt,
+        stopped=stopped,
         serial_factory=serial_factory,
         sleep_fn=sleep_fn,
     )
@@ -133,6 +137,7 @@ def _set_selected_channels_power(
     on_output: Callable[[str], None] | None = None,
     on_channel_powered: Callable[[int], None] | None = None,
     on_write_attempt: Callable[[], None] | None = None,
+    stopped: Callable[[], bool] | None = None,
     serial_factory: SerialFactory | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> CommandResult:
@@ -157,6 +162,8 @@ def _set_selected_channels_power(
         }
         if on_write_attempt is not None:
             options["on_write_attempt"] = on_write_attempt
+        if stopped is not None:
+            options["stopped"] = stopped
         if serial_factory is not None:
             options["serial_factory"] = serial_factory
         with ProgrammablePowerSupply(serial_port, **options) as supply:

@@ -38,7 +38,7 @@
 
 - 多项目主程序验收：在主源码目录执行 `python run_dutpilot_qt.py`，通过项目菜单新建或打开验收项目。操作及现场记录见[验收清单](Cheating_machine_execution_tool/validation/multi_project_completion_20261117/ACCEPTANCE_CHECKLIST.md)。自动化结果不代替可见Windows或真实设备验收。
 
-- 单实例多项目入口：启动源码后使用可收起项目侧栏或“项目”菜单，新建/打开/保存独立项目；旧目录通过“导入旧配置目录”迁入，操作见主源码操作员说明。本轮源码改造的验证和待验收边界见`PROJECT_STATUS.md`及`ACCEPTANCE_BASELINE.md §2.18`。
+- 单实例多项目入口：正式 EXE 整机最多一个工作台（新构建后生效），源码工作台可独立调试并与正式版共存，各自保留同用户会话重复启动唤起机制。使用可收起项目侧栏或“项目”菜单，新建/打开/保存独立项目；旧目录通过“导入旧配置目录”迁入，操作见主源码操作员说明。本轮源码改造的验证和待验收边界见`PROJECT_STATUS.md`及`ACCEPTANCE_BASELINE.md §2.18`。
 
 - 主源码与运行目录：`Cheating_machine_execution_tool/`
 - Qt 源码入口：`Cheating_machine_execution_tool/run_dutpilot_qt.py`

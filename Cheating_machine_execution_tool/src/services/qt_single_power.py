@@ -7,6 +7,7 @@ from src.models.capabilities import CapabilityError, CapabilitySpec, object_sche
 from src.models.project_review import ReviewRequired
 from src.models.channel_resource_options import POWER_SERIAL_OPTIONS
 from src.services.power_on_service import turn_off_selected_channels, turn_on_selected_channels
+from src.services.workspace_resources import power_channel_keys, power_registration_enabled
 
 
 CAPABILITY = 'power.qt_single'
@@ -99,10 +100,14 @@ class QtSinglePower:
             if named:
                 adapters = execution._verify_nics(named, target.binding)
             resources.extend('adapter:' + aliases[number].casefold() for number in named)
-            resources.append('serial:' + target.port)
             configured = normalize_com_port(data['power_serial_port'])
-            if configured and configured != target.port:
-                resources.append('power:' + configured)
+            if (execution.workspace.projects.power_resources is not None and configured == target.port
+                    and power_registration_enabled(execution.context.saved_root / 'Auto_power_on_off_tool/config')):
+                resources.extend(power_channel_keys(target.port, numbers))
+            else:
+                # Preserve the explicit alternate-port selection on unregistered
+                # COMs; host admission rejects any registered power port.
+                resources.append('serial:' + target.port)
 
         def run(context):
             context.stop.checkpoint()
@@ -119,10 +124,10 @@ class QtSinglePower:
             context.event('power', f'调用原单次{POWER_ACTIONS[target.action]}服务：{target.port}，通道 {numbers}')
             engine = turn_on_selected_channels if target.action == 'up' else turn_off_selected_channels
             result = engine(target.port, numbers, on_output=lambda line: context.event('power', line),
-                            on_write_attempt=mark_write_attempt)
+                            on_write_attempt=mark_write_attempt, stopped=context.stop.is_set)
             state, message = 'succeeded', result.message
             if not result.ok:
-                state = 'unknown' if context.dispatched else 'failed'
+                state = 'unknown' if context.dispatched else 'stopped' if context.stop.is_set() else 'failed'
                 if not context.dispatched:
                     message += '；程控电源指令未下发'
             context.event('power', message)

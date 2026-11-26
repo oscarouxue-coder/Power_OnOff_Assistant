@@ -27,11 +27,15 @@ from scripts.gui_test_process import run_gui_child
 class QtNativeGuardTests(unittest.TestCase):
     def test_existing_workspace_receives_open_request_without_second_gui(self):
         from src.ui.qt.application import run_workspace, runtime_root
-        with patch('src.core.workspace_instance.WorkspaceInstance') as lease:
-            lease.return_value.start.return_value = False
-            self.assertEqual(run_workspace('project.linecheck.json'), 0)
-            lease.return_value.start.assert_called_once_with('project.linecheck.json')
-            lease.return_value.close.assert_called_once()
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {'LOCALAPPDATA': directory}):
+            for frozen, name in ((True, 'workspace'), (False, 'workspace-source')):
+                with self.subTest(frozen=frozen), patch.object(sys, 'frozen', frozen, create=True), \
+                        patch('src.core.workspace_instance.WorkspaceInstance') as lease:
+                    lease.return_value.start.return_value = False
+                    self.assertEqual(run_workspace('project.linecheck.json'), 0)
+                    lease.assert_called_once_with(Path(directory) / 'LineCheckAssistant' / name, machine_wide=frozen)
+                    lease.return_value.start.assert_called_once_with('project.linecheck.json')
+                    lease.return_value.close.assert_called_once()
         portable = Path(__file__).resolve().parent / '测试便携目录'
         with patch.object(sys, 'frozen', True, create=True), patch.object(sys, 'executable', str(portable / 'DUTPilot.exe')), \
              patch.object(sys, '_MEIPASS', str(portable / 'bundled'), create=True):
@@ -68,11 +72,42 @@ class QtNativeGuardTests(unittest.TestCase):
             create_app.return_value.exec.side_effect = lambda: order.append('gui') or 0
             workspace.return_value.feishu_repair.restart_requested = True
             workspace.return_value.adapter.wait_closed.side_effect = lambda _: order.append('worker') or True
+            workspace.return_value.dispose_closed_window.side_effect = lambda: order.append('dispose') or True
             instance.return_value.close.side_effect = lambda: order.append('instance')
             restart.side_effect = lambda *args, **kwargs: order.append('restart')
             self.assertEqual(run_workspace(), 0)
-        self.assertEqual(order, ['gui', 'worker', 'instance', 'restart'])
+        self.assertEqual(order, ['gui', 'worker', 'dispose', 'instance', 'restart'])
         restart.assert_called_once_with(runtime_root(), tuple(arguments[1:]), cwd=os.getcwd())
+
+    def test_forwarded_project_activates_existing_workspace(self):
+        import queue
+        from src.ui.qt.application import run_workspace
+
+        with patch('src.core.workspace_instance.WorkspaceInstance') as instance, \
+                patch('src.ui.qt.application._create_application') as create_app, \
+                patch('src.ui.qt.application.MainWindow') as window, \
+                patch('src.ui.qt.workspace_controller.WorkspaceController') as workspace:
+            instance.return_value.requests = queue.Queue()
+            instance.return_value.requests.put(dict(action='open', project='project.linecheck.json'))
+            controller = workspace.return_value
+            controller.ready = True
+            controller.closing = False
+            controller.adapter.wait_closed.return_value = True
+            controller.feishu_repair.restart_requested = False
+            window.return_value.isMinimized.return_value = True
+
+            def receive_request():
+                controller.timer.timeout.connect.call_args.args[0]()
+                return 0
+
+            create_app.return_value.exec.side_effect = receive_request
+            self.assertEqual(run_workspace(), 0)
+            controller.open_project.assert_called_once_with('project.linecheck.json')
+            window.return_value.showNormal.assert_called_once()
+            window.return_value.raise_.assert_called_once()
+            window.return_value.activateWindow.assert_called_once()
+            controller.adapter.record_workspace_activation.assert_called_once_with(True)
+            instance.return_value.close.assert_called_once()
 
 
 class ComponentShowcaseTests(unittest.TestCase):
@@ -1524,6 +1559,8 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.wait_for(lambda: stopping.is_set() and self.controller.adapter.closed.is_set())
         self.assertTrue(self.window.isVisible())
         self.assertFalse(app_update.worker.idle)
+        self.assertFalse(self.controller._release_destroyed_workspace())
+        self.assertIs(app_update.workspace, self.controller)
         release.set()
         self.wait_for(lambda: app_update.worker.idle and not self.window.isVisible())
         self.assertFalse(pending.exists())
@@ -1532,6 +1569,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         log = (self.root / 'workspace' / 'workspace.log').read_text(encoding='utf-8')
         self.assertIn('操作已取消', log)
         self.assertIn('SHA256 校验失败', log)
+        self.assertFalse(self.controller._workspace_refs_released)
 
     def test_native_new_project_dialog_calls_original_store_and_switches_without_tasks(self):
         from qt_project_wizard_probe import complete_new_dialog
@@ -2256,6 +2294,78 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             self.assertNotIn(request_id, dialog.latest_status.toolTip())
             self.assertNotEqual(dialog.view.selected, cancelled_view.selected)
 
+    def test_qt_reopened_chat_displays_only_its_saved_context_usage_as_history(self):
+        from src.models.ai_diagnostics import ProviderProfile
+        from src.services.ai_case_store import open_shared_cases
+
+        with patch('src.services.ai_project_store.default_ai_data_dir', return_value=self.root / 'legacy-chat'), \
+             patch('src.services.ai_case_store.open_shared_cases',
+                   side_effect=lambda emit: open_shared_cases(emit, root=self.root / 'chat-cases')):
+            root = self.root / 'historical-context'
+            self.controller.submit('create', root, '合成历史用量')
+            self.wait_for(lambda: len(self.window.projects) == 1 and self.window.ai_chat_action.isEnabled())
+            project = self.window.selected_project
+            self.controller.adapter._service.models.save_profile(
+                ProviderProfile(model='fixture-context', context_tokens=65536), 'synthetic-context-key')
+            self.window.ai_chat_action.trigger()
+            chat = self.controller.ai_chat
+            self.wait_for(lambda: project in chat.windows and not chat.windows[project].busy)
+            dialog = chat.windows[project]
+            store = self.controller.adapter._model_settings.stores[project]
+            snapshot = dict(identity=dict(capacity=65536), state='completed', basis='reply',
+                source='api', input_tokens=12, output_tokens=3, total_tokens=15,
+                updated='2026-11-25T10:00:00+08:00')
+            estimated = dict(identity=dict(capacity=0), state='cancelled', basis='input',
+                source='estimate', input_tokens=27, output_tokens=None, total_tokens=27,
+                updated='2026-11-25T10:01:00+08:00')
+            sessions = []
+            for value in (snapshot, estimated, None):
+                previous = dialog.view.selected
+                dialog.new_button.click()
+                self.wait_for(lambda: dialog.view.selected and dialog.view.selected != previous and not dialog.busy)
+                identifier = dialog.view.selected
+                sessions.append(identifier)
+                if value is not None:
+                    store.update_chat(identifier, context_usage=value)
+            dialog.close()
+            self.wait_for(lambda: project not in chat.windows)
+            self.controller.submit('close', project, 'discard')
+            self.wait_for(lambda: not self.window.projects)
+            self.controller.submit('open', root)
+            self.wait_for(lambda: self.window.selected_project == project and self.window.ai_chat_action.isEnabled())
+            self.window.ai_chat_action.trigger()
+            self.wait_for(lambda: project in chat.windows and not chat.windows[project].busy)
+            dialog = chat.windows[project]
+
+            def select(identifier):
+                row = next(i for i, view in enumerate(dialog.view.sessions) if view.identifier == identifier)
+                dialog.sessions.setCurrentRow(row)
+                self.wait_for(lambda: dialog.view.selected == identifier and not dialog.busy)
+                self.assertFalse(dialog.view.running)
+
+            select(sessions[0])
+            historical = dialog.view
+            self.assertIn('已保存历史用量（非当前请求）', dialog.usage.text())
+            self.assertIn('接口返回：输入 12，输出 3，合计 15 Token', dialog.usage.text())
+            self.assertIn('记录当时上限 65,536', dialog.usage.text())
+            select(sessions[1])
+            self.assertIn('UTF-8 字节估算', dialog.usage.text())
+            self.assertIn('输入约 27 Token', dialog.usage.text())
+            self.assertIn('完整回复用量未知', dialog.usage.text())
+            self.assertIn('原请求取消', dialog.usage.text())
+            self.assertNotIn('合计 15', dialog.usage.text())
+            select(sessions[2])
+            self.assertIn('已保存历史用量未知', dialog.usage.text())
+            dialog.show_view(historical)
+            self.assertEqual(dialog.view.selected, sessions[2])
+            self.assertNotIn('合计 15', dialog.usage.text())
+            select(sessions[0])
+            self.assertIn('合计 15', dialog.usage.text())
+            reopened = self.controller.adapter._model_settings.stores[project]
+            self.assertEqual(reopened.chat(sessions[0])['context_usage'], snapshot)
+            self.assertEqual(reopened.chat(sessions[1])['context_usage'], estimated)
+            self.assertFalse(reopened.chat(sessions[2]).get('context_usage'))
+
     def test_qt_ai_chat_sends_and_reopens_original_persisted_history(self):
         from functools import partial
         from src.core.ai_client import DiagnosticModelClient
@@ -2312,6 +2422,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
                 self.assertTrue(dialog.stop_button.isEnabled())
                 running_view = dialog.view
                 request_id = running_view.activity.request_id
+                self.assertIn('当前答复请求记录', dialog.usage.text())
                 self.assertIn('模型回复 · 运行中', dialog.latest_status.toolTip())
                 self.assertIn(request_id, dialog.latest_status.toolTip())
                 self.assertNotIn(request_id, dialog.transcript.toPlainText())
@@ -2331,6 +2442,7 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             dialog.show_view(running_view)
             self.assertIn('模型回复 · 已完成', dialog.latest_status.toolTip())
             self.assertIn('65,536', dialog.usage.text())
+            self.assertIn('非当前请求', dialog.usage.text())
             self.assertEqual(dialog.composer.toPlainText(), '')
             output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
             if output:
@@ -3443,6 +3555,8 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         workspace = self.controller.adapter._service
         project = self.window.projects[0].project_id
         stopping, finished = threading.Event(), threading.Event()
+        closing_states = []
+        self.controller.closing_changed.connect(closing_states.append)
 
         class PlatformTransport:
             def begin_close(self):
@@ -3456,9 +3570,12 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             try:
                 self.window.close()
                 self.wait_for(stopping.is_set)
+                self.assertEqual(closing_states, [True])
                 self.assertTrue(self.window.isVisible())
                 self.assertIn(project, workspace.projects.opened)
                 self.assertFalse(self.controller.adapter.closed.is_set())
+                self.assertFalse(self.controller._release_destroyed_workspace())
+                self.assertIs(self.controller.log_history.workspace, self.controller)
                 output = os.environ.get('DUTPILOT_QT_CAPTURE_DIRECTORY')
                 if output:
                     self.assertTrue(self.window.grab().save(str(Path(output)/'workspace-closing.png')))
@@ -3468,6 +3585,49 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.assertFalse(workspace.projects.opened)
         self.wait_for(lambda: not self.window.isVisible())
         self.assertFalse(self.controller.adapter.thread.is_alive())
+
+    def test_closed_workbench_releases_owner_refs_only_after_qt_disposal(self):
+        from shiboken6 import isValid
+
+        controller = self.controller
+        children = tuple(getattr(controller, name) for name in controller._WORKSPACE_OWNERS)
+        self.assertEqual(len(children), 12)
+        self.assertTrue(all(child.workspace is controller for child in children))
+        self.assertFalse(controller.dispose_closed_window())
+        queued = []
+        QTimer.singleShot(0, lambda: queued.append(all(child.workspace is controller for child in children)))
+        self.window.close()
+        self.wait_for(lambda: not self.window.isVisible() and controller.adapter.closed.is_set() and
+                      not controller.adapter.thread.is_alive())
+        self.assertEqual(queued, [True])
+        self.assertTrue(isValid(self.window))
+        self.assertFalse(controller._release_destroyed_workspace())
+        self.assertTrue(all(child.workspace is controller for child in children))
+        self.assertTrue(self.doCleanups())  # original QtTestScope destroys the window and children
+        self.app.processEvents()
+        self.assertFalse(isValid(self.window))
+        self.assertFalse(isValid(controller))
+        self.assertFalse(isValid(controller.timer))
+        self.assertTrue(controller._workspace_refs_released)
+        self.assertTrue(all(child.workspace is None for child in children))
+        self.assertTrue(controller.dispose_closed_window())
+        self.assertTrue(controller._release_destroyed_workspace())
+
+    def test_closed_workbench_retains_owner_refs_when_final_archive_unconfirmed(self):
+        controller = self.controller
+        writer = controller.adapter._log_writer
+        self.assertTrue(writer.flush())
+        with patch.object(writer, '_write_text', side_effect=OSError('synthetic write failure')), \
+             patch('src.services.workspace_event_log._write_events', side_effect=OSError('synthetic archive failure')):
+            self.window.close()
+            self.wait_for(lambda: not self.window.isVisible() and controller.adapter.closed.is_set() and
+                          not controller.adapter.thread.is_alive())
+        self.assertTrue(callable(writer.report))
+        self.assertFalse(controller.dispose_closed_window())
+        self.assertTrue(self.doCleanups())
+        self.app.processEvents()
+        self.assertFalse(controller._workspace_refs_released)
+        self.assertTrue(all(getattr(controller, name).workspace is controller for name in controller._WORKSPACE_OWNERS))
 
     def _configured_execution(self, numbers=(1, 7)):
         from qt_execution_fakes import ControlledPipeline, configure_project
@@ -3549,13 +3709,13 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             self.assertEqual(project.test_type, '单次下电')
             self.assertEqual(project.configuration[0], ('本次电源操作', (('动作', '下电'), ('本次电源口', 'COM106'))))
             self.assertIn(('程控电源串口', 'COM102'), dict(project.configuration)['基础参数'])
-            self.assertEqual(ports, ['COM106'])
+            self.assertEqual(ports, ['COM106', 'COM106'])
             self.assertEqual(fake.writes, [channel_power_frame(channel, False) for channel in (1, 7)])
             self.assertEqual(waits, [1])
             capture(self.window, 'single-power-completion.png')
             review('', '无串口指令', QMessageBox.StandardButton.Yes)
             self.wait_for(lambda: self.window.projects[0].state_text == '已确认手动重启')
-            self.assertEqual(ports, ['COM106'])
+            self.assertEqual(ports, ['COM106', 'COM106'])
         self.assertFalse(pipeline.calls)
 
     def test_qt_parameter_window_real_preflight_cancel_and_safe_stop(self):
@@ -6163,6 +6323,8 @@ class QtProjectWorkspaceTests(unittest.TestCase):
                 self.assertFalse(dialog.close())
                 self.window.close()
                 self.assertFalse(self.controller.closing)
+                self.assertFalse(self.controller.dispose_closed_window())
+                self.assertIs(self.controller.log_history.workspace, self.controller)
                 ticks = []
                 QTimer.singleShot(0, lambda: ticks.append(True))
                 self.app.processEvents()
@@ -6283,6 +6445,655 @@ class QtProjectWorkspaceTests(unittest.TestCase):
         self.assertFalse(dialog.stop_action.isEnabled())
         self.assertNotIn('现场核实结果…', [action.text() for action in dialog.job_menu.actions()])
         self.assertEqual(database.read_bytes(), original)
+
+    def test_qt_saved_material_error_and_cancel_leave_active_fake_power_job_unchanged(self):
+        from contextlib import ExitStack
+        from types import SimpleNamespace
+        from PySide6.QtWidgets import QMessageBox
+        from src.services.capability_jobs import CapabilityJobs
+        from src.services.qt_archived_logs import _read_page
+        from src.services.qt_power_logs import summarize_history_materials
+        from test_qt_log_history import MaterialReadOverlapProbe, QtLogHistoryTests
+        import serial
+
+        engine, project = self._configured_execution(numbers=(1, 7))
+        workspace = self.controller.adapter._service
+        context = workspace.projects.opened[project]
+        historical = 'fixture-history-before-active-power'
+        jobs = CapabilityJobs(context.history / 'ai/business', SimpleNamespace())
+        try:
+            QtLogHistoryTests.insert_job(jobs, historical, 1795040100)
+            with jobs.db:
+                jobs.db.execute('UPDATE jobs SET payload=? WHERE id=?',
+                                (json.dumps({'arguments': {'channel_ids': [1, 7]}}), historical))
+        finally:
+            jobs.close()
+        old_run = workspace.projects.snapshot(context)
+        workspace.status.begin(context, historical, old_run, 'aging.start')
+        workspace.status.update(historical, 'succeeded')
+        paths = {}
+        for channel in (1, 7):
+            directory = old_run / f'Auto_power_on_off_tool/test_results/device_{channel}'
+            directory.mkdir(parents=True)
+            path = directory / f'device_{channel}_wifi_20261120221001.log'
+            path.write_text(f'2026-11-20 22:10:01.123456 [INFO] [WiFi] 通道{channel} 第1轮 fixture\n', encoding='utf-8')
+            paths[channel] = path
+        old_bytes = {p: p.read_bytes() for p in (*paths.values(), old_run / 'run.json')}
+        entered, release = threading.Event(), threading.Event()
+        self.addCleanup(release.set)
+
+        with ExitStack() as stack:
+            deny = []
+            for endpoint in ('requests.sessions.Session.request', 'socket.create_connection',
+                             'socket.socket.connect', 'socket.socket.connect_ex', 'socket.socket.send',
+                             'socket.socket.sendall', 'socket.socket.sendto', 'socket.getaddrinfo',
+                             'socket.socket.bind', 'socket.socket.listen'):
+                deny.append(stack.enter_context(patch(endpoint, side_effect=AssertionError('live I/O forbidden'))))
+            stack.enter_context(patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes))
+            self.wait_for(self.window.detail.start_button.isEnabled)
+            QTest.mouseClick(self.window.detail.start_button, Qt.MouseButton.LeftButton)
+            try:
+                self.wait_for(engine.started.is_set)
+                self.wait_for(lambda: self.window.projects[0].state == 'running' and self.window.projects[0].progress == 68)
+                active = self.window.projects[0].run_id
+                self.assertNotEqual(active, historical)
+                active_store = self.controller.adapter._executions[project].capabilities.jobs
+                self.assertEqual(len(engine.calls), 1)
+                active_context, _ = engine.calls[0]
+
+                def job_snapshot():
+                    with active_store.lock:
+                        row = active_store._row(active)
+                        events = tuple(active_store.db.execute('SELECT stage,message FROM job_events WHERE job_id=? ORDER BY id', (active,)))
+                    return row['state'], row['result'], events
+
+                before = job_snapshot()
+                leases = dict(workspace.resources.owners)
+                self.assertEqual(before[:2], ('running', None))
+                self.assertTrue(any('fixture stage' in message for _, message in before[2]))
+                self.assertTrue(leases)
+
+                def unchanged():
+                    self.assertEqual(job_snapshot(), before)
+                    self.assertEqual(dict(workspace.resources.owners), leases)
+                    self.assertEqual((self.window.projects[0].run_id, self.window.projects[0].state,
+                                      self.window.projects[0].progress), (active, 'running', 68))
+                    self.assertFalse(active_context.stop_event.is_set())
+                    self.assertFalse(engine.stop_observed.is_set())
+                    self.assertEqual(len(engine.calls), 1)
+
+                self.controller.history_action.trigger()
+                history = self.controller.log_history
+                self.wait_for(lambda: project in history.windows and history.windows[project].jobs.findData(historical) >= 0)
+                dialog = history.windows[project]
+                dialog.jobs.setCurrentIndex(dialog.jobs.findData(historical))
+                self.wait_for(dialog.result_files_action.isEnabled)
+                dialog.result_files_action.trigger()
+                self.wait_for(lambda: dialog.result_files_dialog is not None)
+                files = dialog.result_files_dialog
+                first, other = (next(files.files.item(i) for i in range(files.files.count())
+                                     if files.files.item(i).data(Qt.ItemDataRole.UserRole) == paths[n]) for n in (1, 7))
+                QTest.mouseClick(files.files.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                                 files.files.visualItemRect(first).center())
+                QTest.mouseClick(files.files.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ControlModifier,
+                                 files.files.visualItemRect(other).center())
+                self.assertEqual([row.channel for row in files.summary_target().channels], [1, 7])
+
+                overlap = MaterialReadOverlapProbe(tuple(paths.values()), tuple(paths.values()))
+                with overlap.patch_open():
+                    files.summary_action.trigger()
+                    self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
+                self.assertIn('已完成核对 2 个', files.summary.toPlainText())
+                self.assertEqual(overlap.evidence(), dict(peak=2, workers=2, active=0, opened=2, closed=2, all_closed=True))
+                unchanged()
+
+                def unreadable(path, *args):
+                    if path == paths[7]:
+                        raise PermissionError('fixture history read failure')
+                    return _read_page(path, *args)
+
+                with patch('src.services.qt_archived_logs._read_page', side_effect=unreadable):
+                    files.summary_action.trigger()
+                    self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
+                self.assertIn('CH07 · 已完成核对 · 无可读资料', files.summary.toPlainText())
+                self.assertIn('无法读取 1 份', files.summary.toPlainText())
+                self.assertIn(paths[1].name + '@0:1', files.summary.toPlainText())
+                unchanged()
+
+                first_done = threading.Event()
+
+                def delayed(ctx, record, target, stop):
+                    if target.channel == 1:
+                        result = summarize_history_materials(ctx, record, target, stop)
+                        first_done.set()
+                        return result
+                    if target.channel == 7:
+                        if not first_done.wait(10):
+                            raise AssertionError('first channel did not complete')
+                        entered.set()
+                        if not release.wait(15):
+                            raise AssertionError('fixture history reader not released')
+                    return summarize_history_materials(ctx, record, target, stop)
+
+                with patch('src.services.qt_power_logs.summarize_history_materials', side_effect=delayed):
+                    files.summary_action.trigger()
+                    self.wait_for(entered.is_set)
+                    unchanged()
+                    files.summary_cancel.click()
+                    self.assertTrue(files.summary_pending)
+                    release.set()
+                    self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
+                self.assertIn('已完成核对 1 个', files.summary.toPlainText())
+                self.assertIn('CH07 · 已取消', files.summary.toPlainText())
+                self.assertIn(paths[1].name + '@0:1', files.summary.toPlainText())
+                unchanged()
+                files.close()
+                dialog.close()
+                self.wait_for(lambda: not self.controller.adapter._history_reads and not history.summary_requests)
+                unchanged()
+
+                engine.finish.set()
+                self.wait_for(lambda: self.window.projects[0].state == 'completed'
+                              and active_store.idle and not workspace.resources.owners)
+                state, result, events = job_snapshot()
+                self.assertEqual(state, 'succeeded')
+                self.assertTrue(result['ok'])
+                self.assertEqual(result['state'], 'succeeded')
+                self.assertEqual([item['ok'] for item in result['items']], [True])
+                self.assertEqual(events[:len(before[2])], before[2])
+                self.assertTrue(any('fixture result' in message for _, message in events))
+                self.assertFalse(engine.stop_observed.is_set())
+                self.assertFalse(workspace.resources.owners)
+                self.assertEqual(old_bytes, {p: p.read_bytes() for p in old_bytes})
+                serial.Serial.assert_not_called()
+                for guard in deny:
+                    guard.assert_not_called()
+                print('ACTIVE_FAKE_HISTORY_EVIDENCE: ' + json.dumps(dict(
+                    running_state=before[0], running_progress=68, running_result=before[1],
+                    original_events=len(before[2]), final_events=len(events),
+                    original_event_prefix_preserved=events[:len(before[2])] == before[2],
+                    final_state=state, final_ok=result['ok'], final_items_ok=[item['ok'] for item in result['items']],
+                    final_output_marker=any('fixture result' in message for _, message in events),
+                    stop_observed=engine.stop_observed.is_set(), resources_released=not workspace.resources.owners,
+                    original_history_unchanged=old_bytes == {p: p.read_bytes() for p in old_bytes},
+                    physical_serial_calls=serial.Serial.call_count, blocked_network_calls=sum(guard.call_count for guard in deny),
+                    parallel_reads=overlap.evidence())))
+            finally:
+                release.set()
+                engine.finish.set()
+                engine.release_stop.set()
+
+    def test_qt_multi_channel_saved_material_summary_preserves_independent_and_cancelled_results(self):
+        from dataclasses import replace
+        from types import SimpleNamespace
+        from src.services.capability_jobs import CapabilityJobs
+        from src.services.qt_archived_logs import _read_page
+        from src.services.qt_power_logs import summarize_history_materials, summarize_history_materials_batch
+        from src.services.qt_workspace_adapter import ProjectCommandResult
+        from test_qt_log_history import MaterialReadOverlapProbe, QtLogHistoryTests
+
+        self.controller.submit('create', self.root / '多通道汇总', '留存项目')
+        self.wait_for(lambda: len(self.window.projects) == 1)
+        project = self.window.selected_project
+        workspace = self.controller.adapter._service
+        context = workspace.projects.opened[project]
+        jobs = CapabilityJobs(context.history / 'ai/business', SimpleNamespace())
+        old, newer = 'fixture-summary-batch-a', 'fixture-summary-batch-b'
+        runs, paths = {}, {}
+        try:
+            for order, job in enumerate((old, newer), 1):
+                QtLogHistoryTests.insert_job(jobs, job, 1795040100 + order)
+                with jobs.db:
+                    jobs.db.execute('UPDATE jobs SET payload=? WHERE id=?',
+                                    (json.dumps({'arguments': {'channel_ids': [7, 8, 9]}}), job))
+                run = workspace.projects.snapshot(context)
+                workspace.status.begin(context, job, run, 'aging.start')
+                workspace.status.update(job, 'succeeded')
+                runs[job] = run
+                paths[job] = {}
+                for channel in (7, 8, 9):
+                    directory = run / f'Auto_power_on_off_tool/test_results/device_{channel}'
+                    directory.mkdir(parents=True)
+                    wifi = directory / f'device_{channel}_wifi_2026112022100{order}.log'
+                    wifi.write_text(f'2026-11-20 22:10:0{order}.123456 [WARN] [WiFi] 通道{channel} 第{order}轮 fixture-private\n',
+                                    encoding='utf-8')
+                    paths[job][channel] = [wifi]
+                    if channel != 8:
+                        power = directory / f'device_{channel}_command_results_2026112022100{order}.log'
+                        power.write_text(f'通道 {channel} ping 通\n', encoding='utf-8')
+                        paths[job][channel].append(power)
+        finally:
+            jobs.close()
+        originals = {p: p.read_bytes() for items in paths.values() for group in items.values() for p in group}
+        originals.update({run / 'run.json': (run / 'run.json').read_bytes() for run in runs.values()})
+        database = jobs.directory / 'capability_jobs.sqlite3'
+        originals[database] = database.read_bytes()
+        self.controller.submit('create', self.root / '另一个项目', '另一项目')
+        self.wait_for(lambda: len(self.window.projects) == 2 and self.window.selected_project != project)
+        other = self.window.selected_project
+        self.window.select_project(project)
+        self.controller.history_action.trigger()
+        history = self.controller.log_history
+        self.wait_for(lambda: project in history.windows and history.windows[project].result_files_action.isEnabled())
+        dialog = history.windows[project]
+
+        def open_files(job):
+            dialog.jobs.setCurrentIndex(dialog.jobs.findData(job))
+            self.wait_for(dialog.result_files_action.isEnabled)
+            dialog.result_files_action.trigger()
+            self.wait_for(lambda: dialog.result_files_dialog is not None)
+            return dialog.result_files_dialog
+
+        def select_channels(files, job, channels):
+            for index, channel in enumerate(channels):
+                path = paths[job][channel][0]
+                item = next(files.files.item(i) for i in range(files.files.count())
+                            if files.files.item(i).data(Qt.ItemDataRole.UserRole) == path)
+                files.files.scrollToItem(item)
+                QTest.mouseClick(files.files.viewport(), Qt.MouseButton.LeftButton,
+                                 Qt.KeyboardModifier.ControlModifier if index else Qt.KeyboardModifier.NoModifier,
+                                 files.files.visualItemRect(item).center())
+            self.assertEqual([row.channel for row in files.summary_target().channels], list(channels))
+            self.assertFalse(files.open_button.isEnabled())
+            files.files.customContextMenuRequested.emit(files.files.visualItemRect(item).center())
+            self.wait_for(files.file_menu.isVisible)
+            self.assertEqual(len(files.files.selectedItems()), len(channels))
+            files.file_menu.hide()
+
+        files = open_files(old)
+        select_channels(files, old, (7, 8, 9))
+        overlap = MaterialReadOverlapProbe(tuple(path for group in paths[old].values() for path in group),
+                                           (paths[old][7][1], paths[old][8][0]))
+
+        def unreadable(path, *args):
+            if path == paths[old][9][0]:
+                raise PermissionError('fixture')
+            return _read_page(path, *args)
+
+        with overlap.patch_open(), patch('src.services.qt_archived_logs._read_page', side_effect=unreadable):
+            files.summary_action.trigger()
+            self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
+        text = files.summary.toPlainText()
+        for expected in (project, runs[old].name, '选定 3 个通道', '已完成核对 3 个',
+                         '其中资料缺失或读取失败 2 个', 'CH07 · 已完成核对', 'CH08 · 已完成核对',
+                         'CH09 · 已完成核对', paths[old][7][0].name + '@0:1',
+                         paths[old][8][0].name + '@0:1', paths[old][9][1].name + '@0:1',
+                         '读取 1 份，缺失 0 份，无法读取 1 份'):
+            self.assertIn(expected, text)
+        self.assertNotIn(paths[old][9][0].name + '@', text)
+        self.assertNotIn(runs[newer].name, text)
+        self.assertNotIn('fixture-private', text)
+        self.assertEqual(overlap.evidence(), dict(peak=2, workers=2, active=0, opened=4, closed=4, all_closed=True))
+        self.assertLess(text.index('CH07 · 已完成核对'), text.index('CH08 · 已完成核对'))
+        self.assertLess(text.index('CH08 · 已完成核对'), text.index('CH09 · 已完成核对'))
+        print('MATERIAL_PARALLEL_QT_EVIDENCE: ' + json.dumps(overlap.evidence()))
+
+        started, release = threading.Event(), threading.Event()
+        first_done = threading.Event()
+        self.addCleanup(release.set)
+        calls = []
+
+        def delayed_channel(ctx, record, row, stop):
+            calls.append(row.channel)
+            if row.channel == 7:
+                result = summarize_history_materials(ctx, record, row, stop)
+                first_done.set()
+                return result
+            if row.channel == 8:
+                if not first_done.wait(10):
+                    raise AssertionError('first channel did not complete')
+                started.set()
+                if not release.wait(15):
+                    raise AssertionError('fixture release missing')
+            return summarize_history_materials(ctx, record, row, stop)
+
+        with patch('src.services.qt_power_logs.summarize_history_materials', side_effect=delayed_channel):
+            files.summary_action.trigger()
+            self.wait_for(started.is_set)
+            files.summary_cancel.click()
+            self.assertTrue(files.summary_pending)
+            self.assertFalse(files.summary_cancel.isEnabled())
+            release.set()
+            self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
+        self.assertCountEqual(calls, [7, 8])
+        text = files.summary.toPlainText()
+        self.assertIn('已完成核对 1 个', text)
+        self.assertIn('已取消 2 个', text)
+        self.assertIn(paths[old][7][0].name + '@0:1', text)
+        self.assertIn('CH08 · 已取消', text)
+        self.assertIn('CH09 · 已取消', text)
+        self.assertNotIn(paths[old][8][0].name + '@', text)
+
+        late, late_stops = [], []
+        started.clear()
+        release.clear()
+
+        def delayed_batch(ctx, record, target, stop):
+            late_stops.append(stop)
+            started.set()
+            if not release.wait(15):
+                raise AssertionError('fixture release missing')
+            result = summarize_history_materials_batch(ctx, record, target, threading.Event())
+            first = result.entries[0]
+            stale = replace(result, entries=(replace(first, summary=replace(first.summary, text='LATE OLD REPORT')),
+                                             *result.entries[1:]))
+            late.append(stale)
+            return stale
+
+        with patch('src.services.qt_power_logs.summarize_history_materials_batch', side_effect=delayed_batch):
+            files.summary_action.trigger()
+            self.wait_for(started.is_set)
+            old_request = next(iter(history.summary_requests))
+            self.window.select_project(other)
+            self.window.select_project(project)
+            self.assertFalse(files.summary_pending)
+            self.assertFalse(files.summary.isVisible())
+            release.set()
+            self.wait_for(lambda: not self.controller.adapter._history_reads)
+            self.assertFalse(files.summary.isVisible())
+
+        started.clear()
+        release.clear()
+        with patch('src.services.qt_power_logs.summarize_history_materials_batch', side_effect=delayed_batch):
+            files.summary_action.trigger()
+            self.wait_for(started.is_set)
+            files.close()
+            self.assertTrue(late_stops[-1].is_set())
+            self.assertFalse(history.summary_requests)
+            release.set()
+            self.wait_for(lambda: not self.controller.adapter._history_reads)
+        files = open_files(old)
+        select_channels(files, old, (7, 8, 9))
+
+        started.clear()
+        release.clear()
+        with patch('src.services.qt_power_logs.summarize_history_materials_batch', side_effect=delayed_batch):
+            files.summary_action.trigger()
+            self.wait_for(started.is_set)
+            dialog.jobs.setCurrentIndex(dialog.jobs.findData(newer))
+            dialog.jobs.setCurrentIndex(dialog.jobs.findData(old))
+            self.assertFalse(files.summary_pending)
+            self.assertIn('作废', files.feedback.text())
+            files.close()
+            release.set()
+            self.wait_for(lambda: not self.controller.adapter._history_reads and not dialog.busy)
+        files = open_files(newer)
+        select_channels(files, newer, (7, 8))
+        files.summary_action.trigger()
+        self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
+        actual = files.summary.toPlainText()
+        self.assertIn(runs[newer].name, actual)
+        self.assertIn('选定 2 个通道', actual)
+        self.assertNotIn(runs[old].name, actual)
+        self.assertTrue(history.handle_result(ProjectCommandResult(old_request, 'history_material_batch_summary', project, '', late[0])))
+        self.assertEqual(actual, files.summary.toPlainText())
+        self.assertNotIn('LATE OLD REPORT', actual)
+        self.assertNotIn(project, self.controller.adapter._executions)
+        self.assertEqual(originals, {p: p.read_bytes() for p in originals})
+
+    def test_qt_saved_material_report_reopens_exact_history_without_source_read(self):
+        from types import SimpleNamespace
+        from src.services.capability_jobs import CapabilityJobs
+        from src.models.qt_log_history import SavedMaterialReports
+        from test_qt_log_history import QtLogHistoryTests
+
+        root = self.root / 'persisted-material'
+        self.controller.submit('create', root, '合成留存报告')
+        self.wait_for(lambda: len(self.window.projects) == 1)
+        project = self.window.selected_project
+        workspace = self.controller.adapter._service
+        context = workspace.projects.opened[project]
+        job, separate = 'fixture-report-save', 'fixture-empty-batch'
+        jobs = CapabilityJobs(context.history / 'ai/business', SimpleNamespace())
+        try:
+            for identifier, order in ((job, 1795040200), (separate, 1795040100)):
+                QtLogHistoryTests.insert_job(jobs, identifier, order)
+                with jobs.db:
+                    jobs.db.execute('UPDATE jobs SET payload=? WHERE id=?',
+                                    (json.dumps({'arguments': {'channel_ids': [7]}}), identifier))
+        finally:
+            jobs.close()
+        run = workspace.projects.snapshot(context)
+        workspace.status.begin(context, job, run, 'aging.start')
+        workspace.status.update(job, 'succeeded')
+        other_run = workspace.projects.snapshot(context)
+        workspace.status.begin(context, separate, other_run, 'aging.start')
+        workspace.status.update(separate, 'succeeded')
+        folder = run / 'Auto_power_on_off_tool/test_results/device_7'
+        folder.mkdir(parents=True)
+        power = folder / 'device_7_command_results_20261120221001.log'
+        power.write_text('通道 7 ping 通\nfixture-private-body\n', encoding='utf-8')
+        original = power.read_bytes()
+        self.controller.history_action.trigger()
+        history = self.controller.log_history
+        self.wait_for(lambda: project in history.windows and history.windows[project].result_files_action.isEnabled())
+        dialog = history.windows[project]
+        dialog.jobs.setCurrentIndex(dialog.jobs.findData(job))
+        self.wait_for(lambda: dialog.result_files_action.isEnabled())
+        self.assertEqual(dialog.jobs.currentData(), job)
+        dialog.result_files_action.trigger()
+        self.wait_for(lambda: dialog.result_files_dialog is not None)
+        files = dialog.result_files_dialog
+        self.assertFalse(files.save_report_action.isEnabled())
+        files.summary_action.trigger()
+        self.wait_for(lambda: files.summary.isVisible() and files.save_report_action.isEnabled())
+        self.assertIn('缺失 1 份', files.summary.toPlainText())
+        self.assertNotIn('fixture-private-body', files.summary.toPlainText())
+        with patch('src.services.qt_power_logs.atomic_json', side_effect=OSError('fixture')):
+            files.save_report_action.trigger()
+            self.wait_for(lambda: not files.save_pending and '未保存' in files.feedback.text())
+        self.assertTrue(files.save_report_action.isEnabled())
+        with patch('src.services.qt_archived_logs._read_page', side_effect=AssertionError('source reread')):
+            files.save_report_action.trigger()
+            self.wait_for(lambda: '已保存历史报告' in files.feedback.text())
+        self.assertFalse(files.save_report_action.isEnabled())
+        files.close()
+        self.wait_for(lambda: dialog.result_files_dialog is None)
+        dialog.saved_reports_action.trigger()
+        self.wait_for(lambda: dialog.saved_reports_dialog is not None)
+        view = dialog.saved_reports_dialog
+        self.assertEqual(view.reports.count(), 1)
+        text = view.body.toPlainText()
+        for value in (project, job, run.name, 'CH07', power.name + '@0:1', '缺失 1 份', '不代表实时状态', '未重新读取资料'):
+            self.assertIn(value, text)
+        self.assertNotIn('fixture-private-body', text)
+        view.close()
+        dialog.jobs.setCurrentIndex(dialog.jobs.findData(separate))
+        self.wait_for(lambda: dialog.saved_reports_action.isEnabled())
+        dialog.saved_reports_action.trigger()
+        self.wait_for(lambda: dialog.saved_reports_dialog is not None)
+        self.assertEqual(dialog.saved_reports_dialog.reports.count(), 0)
+        dialog.saved_reports_dialog.close()
+        dialog.close()
+        self.wait_for(lambda: project not in history.windows)
+        self.controller.submit('close', project, 'discard')
+        self.wait_for(lambda: not self.window.projects)
+        self.controller.submit('open', root)
+        self.wait_for(lambda: self.window.selected_project == project)
+        self.controller.history_action.trigger()
+        self.wait_for(lambda: project in history.windows and history.windows[project].saved_reports_action.isEnabled())
+        dialog = history.windows[project]
+        dialog.jobs.setCurrentIndex(dialog.jobs.findData(job))
+        self.wait_for(lambda: dialog.saved_reports_action.isEnabled())
+        self.assertEqual(dialog.jobs.currentData(), job)
+        with patch('src.services.qt_archived_logs._read_page', side_effect=AssertionError('source reread')):
+            dialog.saved_reports_action.trigger()
+            self.wait_for(lambda: dialog.saved_reports_dialog is not None)
+        self.assertEqual(dialog.saved_reports_dialog.body.toPlainText(), text)
+        restored_view = dialog.saved_reports_dialog
+        saved_page = SavedMaterialReports(restored_view.run_id,
+            (restored_view.reports.item(0).data(Qt.ItemDataRole.UserRole),))
+        dialog.saved_reports_dialog.close()
+
+        self.controller.submit('create', self.root / 'other-persisted', '另一合成项目')
+        self.wait_for(lambda: len(self.window.projects) == 2 and self.window.selected_project != project)
+        other = self.window.selected_project
+        self.window.select_project(project)
+        self.wait_for(lambda: self.window.selected_project == project and dialog.saved_reports_action.isEnabled())
+        self.assertEqual(dialog.jobs.currentData(), job)
+        entered, release = threading.Event(), threading.Event()
+        observed = []
+        self.addCleanup(release.set)
+        def delayed(ctx, record, identifier, stop):
+            observed.append((ctx.identity.project_id, record.get('run_id'), identifier, stop))
+            entered.set()
+            release.wait(5)
+            return saved_page
+        with patch('src.services.qt_power_logs.read_material_reports', side_effect=delayed):
+            dialog.saved_reports_action.trigger()
+            self.assertTrue(history.report_requests)
+            self.wait_for(entered.is_set)
+            self.assertEqual(observed[0][:3], (project, run.name, job))
+            self.window.select_project(other)
+            release.set()
+            self.wait_for(lambda: not self.controller.adapter._history_reads and not history.report_requests)
+        self.assertTrue(observed[0][3].is_set())
+        self.assertIsNone(dialog.saved_reports_dialog)
+        self.assertEqual(power.read_bytes(), original)
+        self.assertFalse(self.controller.adapter._executions)
+
+    def test_qt_saved_material_summary_uses_selected_history_and_discards_late_reads(self):
+        from dataclasses import replace
+        from types import SimpleNamespace
+        from src.services.capability_jobs import CapabilityJobs
+        from src.services.qt_power_logs import summarize_history_materials
+        from test_qt_log_history import QtLogHistoryTests
+
+        self.controller.submit('create', self.root / '汇总项目', '留存项目')
+        self.wait_for(lambda: len(self.window.projects) == 1)
+        project = self.window.selected_project
+        workspace = self.controller.adapter._service
+        context = workspace.projects.opened[project]
+        jobs = CapabilityJobs(context.history / 'ai/business', SimpleNamespace())
+        job = 'fixture-saved-summary'
+        try:
+            QtLogHistoryTests.insert_job(jobs, job, 1795040100)
+            with jobs.db:
+                jobs.db.execute('UPDATE jobs SET payload=? WHERE id=?',
+                                (json.dumps({'arguments': {'channel_ids': [7, 8]}}), job))
+        finally:
+            jobs.close()
+        run = workspace.projects.snapshot(context)
+        workspace.status.begin(context, job, run, 'aging.start')
+        workspace.status.update(job, 'succeeded')
+        directory = run / 'Auto_power_on_off_tool/test_results/device_7'
+        directory.mkdir(parents=True)
+        power = directory / 'device_7_command_results_20261120221001.log'
+        wifi = directory / 'device_7_wifi_20261120221001.log'
+        power.write_text('通道 7 ping 通\nfixture-private-body\n', encoding='utf-8')
+        wifi.write_text('2026-11-20 22:10:01.123456 [WARN] [WiFi] 通道7 第3轮 fixture-private-body\n', encoding='utf-8')
+        other_file = directory.with_name('device_8') / 'device_8_wifi_20261120.log'
+        other_file.parent.mkdir()
+        other_file.write_text('other-channel-fixture\n', encoding='utf-8')
+        before = {p: p.read_bytes() for p in (power, wifi, other_file, run / 'run.json', jobs.directory / 'capability_jobs.sqlite3')}
+        self.controller.submit('create', self.root / '另一项目', '另一留存项目')
+        self.wait_for(lambda: len(self.window.projects) == 2 and self.window.selected_project != project)
+        other = self.window.selected_project
+        self.window.select_project(project)
+        self.controller.history_action.trigger()
+        history = self.controller.log_history
+        self.wait_for(lambda: project in history.windows and history.windows[project].result_files_action.isEnabled())
+        dialog = history.windows[project]
+        self.assertEqual(dialog.jobs.currentData(), job)
+        dialog.result_files_action.trigger()
+        self.wait_for(lambda: dialog.result_files_dialog is not None)
+        files = dialog.result_files_dialog
+        row = next(i for i in range(files.files.count()) if files.files.item(i).data(Qt.ItemDataRole.UserRole) == power)
+        files.files.setCurrentRow(row)
+        files.files.customContextMenuRequested.emit(files.files.visualItemRect(files.files.currentItem()).center())
+        self.wait_for(files.file_menu.isVisible)
+        files.file_menu.hide()
+        files.summary_action.trigger()
+        self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
+        text = files.summary.toPlainText()
+        for expected in (project, run.name, job, 'CH07', power.name + '@0:1', wifi.name + '@0:1',
+                         '第3轮，记录等级 WARN', '读取 2 份', '故障原因及当前设备状态未知'):
+            self.assertIn(expected, text)
+        for marker in ('fixture-private-body', 'other-channel-fixture', other_file.name):
+            self.assertNotIn(marker, text)
+        self.assertTrue(files.summary.isReadOnly())
+        self.assertTrue(files.open_button.isEnabled())
+
+        other_row = next(i for i in range(files.files.count()) if files.files.item(i).data(Qt.ItemDataRole.UserRole) == other_file)
+        files.files.setCurrentRow(other_row)
+        self.assertFalse(files.summary.isVisible())
+        files.summary_action.trigger()
+        self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
+        self.assertIn('CH08', files.summary.toPlainText())
+        self.assertIn('读取 1 份，缺失 1 份', files.summary.toPlainText())
+        self.assertNotIn(power.name, files.summary.toPlainText())
+        files.files.setCurrentRow(row)
+
+        from src.services.qt_archived_logs import _read_page
+
+        def unreadable(path, *args):
+            if path == power:
+                raise PermissionError('fixture')
+            return _read_page(path, *args)
+
+        with patch('src.services.qt_archived_logs._read_page', side_effect=unreadable):
+            files.summary_action.trigger()
+            self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
+            self.assertIn('读取 1 份，缺失 0 份，无法读取 1 份', files.summary.toPlainText())
+            self.assertIn(wifi.name + '@0:1', files.summary.toPlainText())
+
+        started, release = threading.Event(), threading.Event()
+        self.addCleanup(release.set)
+        calls = []
+
+        def delayed(ctx, record, target, stop):
+            calls.append(stop)
+            if len(calls) == 1:
+                started.set()
+                if not release.wait(5):
+                    raise AssertionError('fixture release missing')
+                stale = summarize_history_materials(ctx, record, target, threading.Event())
+                return replace(stale, text='LATE OLD REPORT')
+            return summarize_history_materials(ctx, record, target, stop)
+
+        with patch('src.services.qt_power_logs.summarize_history_materials', side_effect=delayed):
+            files.summary_action.trigger()
+            self.wait_for(started.is_set)
+            self.assertTrue(files.summary_cancel.isVisible())
+            files.summary_cancel.click()
+            self.assertTrue(calls[0].is_set())
+            self.assertFalse(files.summary_pending)
+            files.summary_action.trigger()
+            release.set()
+            self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
+            self.assertEqual(len(calls), 2)
+            self.assertNotIn('LATE OLD REPORT', files.summary.toPlainText())
+
+        started.clear()
+        release.clear()
+        calls.clear()
+        with patch('src.services.qt_power_logs.summarize_history_materials', side_effect=delayed):
+            files.summary_action.trigger()
+            self.wait_for(started.is_set)
+            self.window.select_project(other)
+            self.window.select_project(project)
+            self.assertTrue(calls[0].is_set())
+            self.assertFalse(files.summary_pending)
+            self.assertFalse(files.summary.isVisible())
+            self.assertIn('作废', files.feedback.text())
+            release.set()
+            self.wait_for(lambda: not self.controller.adapter._history_reads)
+            self.assertFalse(files.summary.isVisible())
+
+        started.clear()
+        release.clear()
+        calls.clear()
+        with patch('src.services.qt_power_logs.summarize_history_materials', side_effect=delayed):
+            files.summary_action.trigger()
+            self.wait_for(started.is_set)
+            files.close()
+            self.assertTrue(calls[0].is_set())
+            self.assertIsNone(dialog.result_files_dialog)
+            release.set()
+            self.wait_for(lambda: not self.controller.adapter._history_reads)
+            self.assertFalse(history.summary_requests)
+        self.assertNotIn(project, self.controller.adapter._executions)
+        self.assertEqual(before, {p: p.read_bytes() for p in before})
 
     def test_qt_history_result_files_open_selected_snapshot_after_workspace_restart(self):
         from types import SimpleNamespace
@@ -6740,6 +7551,17 @@ class QtProjectWorkspaceTests(unittest.TestCase):
             dialog.device_ip.setText('192.168.1.1')
             dialog.power_port.setCurrentIndex(dialog.power_port.findText('COM102'))
             row = dialog.rows[0]
+            from src.models.qt_device_inventory import ResourceLeaseEntry
+            dialog.set_power_claims((ResourceLeaseEntry('power-channel:com102:1', 'other-project',
+                                                        '占用项目', 'fixture', 'registered'),))
+            self.assertFalse(row.enabled.isEnabled())
+            self.assertIn('占用项目', row.enabled.toolTip())
+            dialog.select_all(True)
+            self.assertFalse(row.enabled.isChecked())
+            self.assertTrue(dialog.rows[1].enabled.isChecked())
+            dialog.select_all(False)
+            dialog.set_power_claims(())
+            self.assertTrue(row.enabled.isEnabled())
             row.vlan.setCurrentText('VLAN122')
             row.port.setCurrentText('COM1200')
             row.enabled.setChecked(True)

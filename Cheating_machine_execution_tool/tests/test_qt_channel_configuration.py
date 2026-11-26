@@ -17,6 +17,8 @@ SOURCE = Path(__file__).resolve().parents[1]
 
 class QtChannelConfigurationTests(unittest.TestCase):
     def setUp(self):
+        from qt_execution_fakes import install_native_fixture_locks
+        install_native_fixture_locks(self)
         self.temporary = tempfile.TemporaryDirectory(prefix='qt-channel-')
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)

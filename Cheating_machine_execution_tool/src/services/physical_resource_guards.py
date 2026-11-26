@@ -162,12 +162,13 @@ def guard_upgrade(function):
     @wraps(function)
     def run(requests, *args, **kwargs):
         requests = tuple(requests)
+        shared_power = kwargs.pop('shared_power', False)
         keys = []
         for request in requests:
             for kind, field in (("adapter", "server_interface"), ("adapter", "adapter_alias"),
                                 ("serial", "serial_port"), ("power", "power_serial_port")):
                 value = getattr(request, field, "")
-                if value:
+                if value and not (kind == 'power' and shared_power):
                     keys.append(kind + ":" + value)
         with HostResourceLock(keys):
             return function(requests, *args, **kwargs)

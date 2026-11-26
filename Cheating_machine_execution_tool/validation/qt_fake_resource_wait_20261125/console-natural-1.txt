@@ -1,0 +1,9 @@
+, {"ms": 16050.624, "label": "job_worker_return", "thread": "worker", "owner_held": false}, {"ms": 16188.846, "label": "terminal_job_read", "thread": "worker", "owner_held": false}, {"ms": 16190.078, "label": "terminal_snapshot_published", "thread": "worker", "owner_held": false, "can_start": true, "active_tasks": 0}, {"ms": 16300.999, "label": "terminal_ui_observed", "thread": "gui", "owner_held": false, "can_start": true, "active_tasks": 0}, {"ms": 16301.008, "label": "terminal_ui_can_start", "thread": "gui", "owner_held": false}, {"ms": 16301.284, "label": "original_resource_assertion", "thread": "gui", "owner_held": false, "owners_empty": true}], "code": 0, "diagnostic_pass": true, "denied_calls": {"requests.sessions.Session.request": 0, "serial.Serial": 0, "socket.create_connection": 0, "socket.getaddrinfo": 0, "socket.gethostbyname": 0, "socket.gethostbyname_ex": 0, "socket.gethostbyaddr": 0, "socket.socket.connect": 0, "socket.socket.connect_ex": 0, "socket.socket.send": 0, "socket.socket.sendall": 0, "socket.socket.sendto": 0, "socket.socket.bind": 0, "socket.socket.listen": 0, "socket.socket.accept": 0, "subprocess.Popen": 0, "os.startfile": 0}, "elapsed_seconds": 16.463}
+
+test_qt_saved_material_error_and_cancel_leave_active_fake_power_job_unchanged (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 4.358s
+
+OK
+

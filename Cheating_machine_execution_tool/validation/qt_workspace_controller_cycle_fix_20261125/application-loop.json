@@ -1,0 +1,73 @@
+{
+  "rows": [
+    {
+      "cycle": 1,
+      "state": {
+        "window_destroyed": true,
+        "controller_destroyed": true,
+        "terminal_refs_released": true,
+        "worker_closed": true
+      },
+      "handles": 711,
+      "python_threads": 1,
+      "weakrefs": {
+        "window": 0,
+        "controller": 0,
+        "adapter": 0
+      }
+    },
+    {
+      "cycle": 2,
+      "state": {
+        "window_destroyed": true,
+        "controller_destroyed": true,
+        "terminal_refs_released": true,
+        "worker_closed": true
+      },
+      "handles": 713,
+      "python_threads": 1,
+      "weakrefs": {
+        "window": 0,
+        "controller": 0,
+        "adapter": 0
+      }
+    },
+    {
+      "cycle": 3,
+      "state": {
+        "window_destroyed": true,
+        "controller_destroyed": true,
+        "terminal_refs_released": true,
+        "worker_closed": true
+      },
+      "handles": 713,
+      "python_threads": 1,
+      "weakrefs": {
+        "window": 0,
+        "controller": 0,
+        "adapter": 0
+      }
+    }
+  ],
+  "denied": {
+    "requests.sessions.Session.request": 0,
+    "serial.Serial": 0,
+    "socket.create_connection": 0,
+    "socket.getaddrinfo": 0,
+    "socket.gethostbyname": 0,
+    "socket.gethostbyname_ex": 0,
+    "socket.gethostbyaddr": 0,
+    "socket.socket.connect": 0,
+    "socket.socket.connect_ex": 0,
+    "socket.socket.send": 0,
+    "socket.socket.sendall": 0,
+    "socket.socket.sendto": 0,
+    "socket.socket.bind": 0,
+    "socket.socket.listen": 0,
+    "socket.socket.accept": 0,
+    "subprocess.Popen": 0,
+    "os.startfile": 0
+  },
+  "elapsed_seconds": 12.656,
+  "result": 0
+}

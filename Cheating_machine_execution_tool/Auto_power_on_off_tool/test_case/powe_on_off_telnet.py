@@ -479,7 +479,7 @@ class PowerOnOffTelnet(QThread):
         """
                :param network_card_ip: 网卡IP
                :param power_num: 对应的程控电源口序号
-               :return:
+               :return: True 已完成目标轮次，False 测试失败，None 用户停止
         """
         if stop_event is None:
             stop_event = self._stop_event
@@ -564,7 +564,7 @@ class PowerOnOffTelnet(QThread):
                             if sleep_result:
                                 self.show_signal[str].emit(
                                     f'通道 {power_num} 发送手动停止的信号')
-                                return True
+                                return None
                         # 队列处理发命令
                         commandturple = (self.power_control.power_on, self.ser, int(power_num))
                         self.power_control.producer(commandturple)
@@ -575,10 +575,12 @@ class PowerOnOffTelnet(QThread):
                         if sleep_result:
                             self.show_signal[str].emit(
                                 f'通道 {power_num} 发送手动停止的信号')
-                            return True
+                            return None
 
                         if self.only_power_off_on:
                             f.write(f'The device of channel {power_num} only power off on {times} times\n'.encode())
+                            self.show_signal[str].emit(
+                                f'{datetime.datetime.now()}: 通道{power_num}下挂的设备在第{times}次测试时正常')
                             if times == self.test_number:
                                 self.logger.info(
                                     f'The device of channel {power_num} of programmable power supply  restarts {self.test_number} times, please replace the device！')
@@ -651,7 +653,7 @@ class PowerOnOffTelnet(QThread):
                                         if run_flag == 0:
                                             self.show_signal[str].emit(
                                                 f'通道 {power_num} 发送手动停止的信号')
-                                            return True
+                                            return None
                                         if 'wait_time' in key and 'retry_times' not in key:
                                             list1 = key.rsplit(' ', maxsplit=1)
                                             print('xxxxxxxxxxxxxxx', list1[0])
@@ -718,7 +720,7 @@ class PowerOnOffTelnet(QThread):
                                             if sleep_result:
                                                 self.show_signal[str].emit(
                                                     f'通道 {power_num} 发送手动停止的信号')
-                                                return True
+                                                return None
                                             # 防止telnet打开之后又自动关闭
                                             if not self.open_telnet_enable(network_card_ip, self.url, f, retry_times,
                                                                            interval_time, power_num):
@@ -970,7 +972,7 @@ class PowerOnOffTelnet(QThread):
                         f.write(f'{timestamp} :本次测试之后等待：{self.wait_command_done}s后断电\n'.encode())
                     else:
                         time.sleep(1)
-                        return True
+                        return None
                 except PowerCommandCancelled:
                     self.run_status_list[power_num - 1] = 0
                     return None
@@ -992,6 +994,8 @@ class PowerOnOffTelnet(QThread):
                     if dingtalk_result is not True:
                         self.show_signal_error[str].emit(f'dingTalk 发送消息失败 ：{dingtalk_result}\n')
                     return False
+
+            return None
 
     def check_status_code(self, power_num, code, f, attempts=1):
         """

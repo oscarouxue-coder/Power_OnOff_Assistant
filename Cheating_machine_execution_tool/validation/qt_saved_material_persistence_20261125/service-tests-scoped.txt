@@ -1,0 +1,39 @@
+GUI_TEST_COVERAGE_OK
+test_cancelled_history_read_skips_missing_database_and_closes_new_connection (test_qt_log_history.QtLogHistoryTests) ... ok
+test_channel_retry_history_pages_original_rounds_and_filters_before_limiting (test_qt_log_history.QtLogHistoryTests) ... ok
+test_full_job_filter_pages_matches_and_shows_original_long_record_excerpt (test_qt_log_history.QtLogHistoryTests) ... ok
+test_jobs_and_events_page_by_project_and_task_without_repeating_inserted_rows (test_qt_log_history.QtLogHistoryTests) ... ok
+test_legacy_runs_distinguish_pending_and_reviewed_unknown_without_mutating_ledger (test_qt_log_history.QtLogHistoryTests) ... ok
+test_legacy_runs_page_equal_timestamps_without_jobs_or_other_projects (test_qt_log_history.QtLogHistoryTests) ... ok
+test_material_batch_cancel_preserves_completed_channel_and_marks_rest_without_read (test_qt_log_history.QtLogHistoryTests) ... ok
+test_material_batch_cancel_while_two_real_fixture_reads_overlap_closes_both (test_qt_log_history.QtLogHistoryTests) ... ok
+test_material_batch_rejects_mixed_and_duplicate_scope_before_any_source_read (test_qt_log_history.QtLogHistoryTests) ... ok
+test_material_batch_reports_three_channels_independently_and_keeps_valid_results (test_qt_log_history.QtLogHistoryTests) ... ok
+test_material_batch_whole_channel_failure_does_not_erase_other_channel_results (test_qt_log_history.QtLogHistoryTests) ... ok
+test_material_summary_is_bounded_and_stops_before_next_source (test_qt_log_history.QtLogHistoryTests) ... ok
+test_material_summary_reads_two_saved_sources_with_exact_scope_and_citations (test_qt_log_history.QtLogHistoryTests) ... ok
+test_material_summary_refuses_wal_and_oversized_binding_without_source_reads (test_qt_log_history.QtLogHistoryTests) ... ok
+test_material_summary_rejects_wrong_project_batch_channel_or_filename_before_read (test_qt_log_history.QtLogHistoryTests) ... ok
+test_material_summary_separates_missing_unreadable_and_keeps_other_result (test_qt_log_history.QtLogHistoryTests) ... ok
+test_missing_database_and_large_or_unstructured_records (test_qt_log_history.QtLogHistoryTests) ... ok
+test_power_results_revalidate_the_saved_run_and_original_channels (test_qt_log_history.QtLogHistoryTests) ... ok
+test_saved_material_report_cancel_failure_and_corrupt_record_are_independent (test_qt_log_history.QtLogHistoryTests) ... ok
+test_saved_material_report_exact_scope_round_trip_without_source_reread (test_qt_log_history.QtLogHistoryTests) ... ok
+test_short_job_query_honors_cancel_and_long_event_scan_interrupts_sqlite (test_qt_log_history.QtLogHistoryTests) ... ok
+test_workspace_startup_failure_reports_existing_instance (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_frozen_and_source_default_to_workspace_and_keep_explicit_previews (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_missing_qt_forwards_arguments_once_or_reports_setup (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_native_verification_keeps_timeout_diagnostics_and_checks_every_scale (test_qt_migration_contract.QtMigrationContractTests) ... MATERIAL_PARALLEL_CANCEL_EVIDENCE: {"peak": 2, "workers": 2, "active": 0, "opened": 2, "closed": 2, "all_closed": true}
+MATERIAL_PARALLEL_SERVICE_EVIDENCE: {"peak": 2, "workers": 2, "active": 0, "opened": 4, "closed": 4, "all_closed": true}
+QT_NATIVE_SCALE 1 FAIL
+QT_NATIVE_SCALE 1.25 FAIL
+QT_NATIVE_SCALE 1.5 FAIL
+ok
+test_display_unknowns_are_not_defaulted_to_normal_or_zero (test_qt_migration_contract.QtMigrationContractTests) ... ok
+
+----------------------------------------------------------------------
+Ran 26 tests in 4.623s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}
+CLOSE_REGRESSION_DENIED: {"requests.sessions.Session.request": 0, "serial.Serial": 0, "socket.create_connection": 0, "socket.getaddrinfo": 0, "socket.gethostbyname": 0, "socket.gethostbyname_ex": 0, "socket.gethostbyaddr": 0, "socket.socket.connect": 0, "socket.socket.connect_ex": 0, "socket.socket.send": 0, "socket.socket.sendall": 0, "socket.socket.sendto": 0, "socket.socket.bind": 0, "socket.socket.listen": 0, "socket.socket.accept": 0, "subprocess.Popen": 0, "os.startfile": 0}

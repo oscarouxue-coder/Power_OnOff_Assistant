@@ -9,7 +9,7 @@ from src.models.channel_resource_options import (
 from src.services.adapter_rename_service import ADAPTER_NAME_HINT, adapter_has_numeric_suffix
 from src.services.qt_channel_configuration import DUT_CHANNEL_DETAILS
 from src.ui.qt.blocker_review import ReviewFeedback, focus_widget
-from src.ui.qt.theme import BACKGROUND, DANGER, assert_gui_thread, button, card, label
+from src.ui.qt.theme import BACKGROUND, DANGER, MUTED, assert_gui_thread, button, card, label
 
 
 class ChannelRow(QWidget):
@@ -108,6 +108,8 @@ class ChannelConfigurationDialog(QDialog):
         self.resources_refreshing = False
         self.adapters, self.ports = [], []
         self.rows = []
+        self.power_claims = ()
+        self.blocked_power_channels = set()
         self.dut_edits = {}
         self.assignments = {}
         outer = QVBoxLayout(self)
@@ -188,6 +190,7 @@ class ChannelConfigurationDialog(QDialog):
             self.dirty = True
             self.feedback.setText('有未保存的通道修改')
             self._update_source_ips()
+            self._update_power_claims()
 
     def _update_source_ips(self):
         for row in self.rows:
@@ -283,13 +286,39 @@ class ChannelConfigurationDialog(QDialog):
 
     def select_all(self, selected):
         for row in self.rows:
-            row.enabled.setChecked(selected)
+            if not selected or row.number not in self.blocked_power_channels:
+                row.enabled.setChecked(selected)
+
+    def set_power_claims(self, entries):
+        claims = tuple(entry for entry in entries if entry.resource_key.startswith('power-channel:'))
+        if claims != self.power_claims:
+            self.power_claims = claims
+            self._update_power_claims()
+
+    def _update_power_claims(self):
+        from src.core.host_resource_lock import physical_key
+        port = self.power_port.currentText().strip()
+        prefix = 'power-channel:' + physical_key('power:' + port).split(':', 1)[1] + ':' if port else ''
+        blocked = {}
+        if prefix and not self.service_aging:
+            for entry in self.power_claims:
+                if entry.resource_key.startswith(prefix) and entry.project_id != self.draft.project_id:
+                    blocked[int(entry.resource_key.rsplit(':', 1)[1])] = entry.project_name or '其他项目或待核实任务'
+        self.blocked_power_channels = set(blocked)
+        for row in self.rows:
+            name = blocked.get(row.number)
+            # Existing conflicting saved selections may be cleared, but never
+            # newly selected while another project owns the channel.
+            row.enabled.setEnabled(not name or row.enabled.isChecked())
+            row.enabled.setToolTip(f'程控电源通道已由“{name}”占用' if name else '')
+            row.enabled.setStyleSheet(f'QCheckBox {{ color: {MUTED}; }}' if name else '')
 
     def set_service_aging(self, value):
         self.service_aging = value
         self.power_label.setVisible(not value)
         self.power_port.setVisible(not value)
         self._update_options()
+        self._update_power_claims()
 
     def set_busy(self, value):
         self.busy = value
@@ -394,6 +423,8 @@ class ChannelConfigurationDialog(QDialog):
     def _power_port_changed(self, _value):
         if not self._loading and not self.show_all_resources.isChecked():
             self._update_channel_options()
+        if not self._loading:
+            self._update_power_claims()
 
     def _resource_mode_changed(self, show_all):
         self._update_options()

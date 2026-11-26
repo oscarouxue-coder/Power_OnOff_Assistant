@@ -1,0 +1,30 @@
+{
+  "synthetic": true,
+  "persisted": {
+    "report_id": "18d409a3b271433393f4084dc4a6dcc1",
+    "project_id": "project-a",
+    "job_id": "saved-batch",
+    "run_id": "22222222222222222222222222222222",
+    "channels": [
+      7,
+      8,
+      9
+    ],
+    "generated_at": "2026-11-25T22:14:23+08:00",
+    "historical_state": "succeeded",
+    "historical_at": "2026-11-19T06:15:23+08:00",
+    "saved_at": "2026-11-25T22:14:23+08:00",
+    "text": "项目 project-a\n任务 saved-batch\n批次 22222222222222222222222222222222\n\n选定 3 个通道；已完成核对 3 个（其中资料缺失或读取失败 2 个），无法核对 0 个，已取消 0 个。\n各通道分别核对，历史观测不代表实时状态；故障原因及当前设备状态未知。\n\nCH07 · 已完成核对 · 已读取选定资料\n\n项目 project-a\n任务 saved-batch\n批次 22222222222222222222222222222222\nCH07\n\n仅汇总选定的留存文件末页（每份最多 120 行 / 128 KiB），不代表实时状态。\n引用格式：文件名@页首字节偏移:页内行号；正文不展开。\n\n开关机结果 · device_7_command_results_20261120220100.log · 已读取 3 行，明确标记 1 条\n\n引用 device_7_command_results_20261120220100.log@0:1 · 时间未知 · 原文记录 Ping 通；不代表实时连通或设备在线\n\nWiFi 记录 · device_7_wifi_20261120220100.log · 已读取 2 行，明确标记 1 条\n\n引用 device_7_wifi_20261120220100.log@0:1 · 2026-11-20 22:01:01.123456（原日志本地时间） · 第2轮，记录等级 ERROR；业务结果未知\n\n汇总结果：读取 2 份，缺失 0 份，无法读取 0 份。\n以上仅为留存记录；故障原因及当前设备状态未知。\n\nCH08 · 已完成核对 · 部分资料缺失或读取失败\n\n项目 project-a\n任务 saved-batch\n批次 22222222222222222222222222222222\nCH08\n\n仅汇总选定的留存文件末页（每份最多 120 行 / 128 KiB），不代表实时状态。\n引用格式：文件名@页首字节偏移:页内行号；正文不展开。\n\n开关机结果 · 缺少已列出的留存文件\n\nWiFi 记录 · device_8_wifi_20261120220100.log · 已读取 1 行，明确标记 1 条\n\n引用 device_8_wifi_20261120220100.log@0:1 · 2026-11-20 22:02:01.123456（原日志本地时间） · 第4轮，记录等级 INFO；业务结果未知\n\n汇总结果：读取 1 份，缺失 1 份，无法读取 0 份。\n以上仅为留存记录；故障原因及当前设备状态未知。\n\nCH09 · 已完成核对 · 部分资料缺失或读取失败\n\n项目 project-a\n任务 saved-batch\n批次 22222222222222222222222222222222\nCH09\n\n仅汇总选定的留存文件末页（每份最多 120 行 / 128 KiB），不代表实时状态。\n引用格式：文件名@页首字节偏移:页内行号；正文不展开。\n\n开关机结果 · device_9_command_results_20261120220100.log · 已读取 1 行，明确标记 1 条\n\n引用 device_9_command_results_20261120220100.log@0:1 · 时间未知 · 原文记录 Ping 通；不代表实时连通或设备在线\n\nWiFi 记录 · device_9_wifi_20261120220100.log · 无法读取\n\n汇总结果：读取 1 份，缺失 0 份，无法读取 1 份。\n以上仅为留存记录；故障原因及当前设备状态未知。"
+  },
+  "source_rereads": 0,
+  "original_unchanged": true,
+  "denied_calls": {
+    "requests.sessions.Session.request": 0,
+    "serial.Serial": 0,
+    "socket.create_connection": 0,
+    "socket.socket.connect": 0,
+    "socket.getaddrinfo": 0,
+    "subprocess.Popen": 0,
+    "os.startfile": 0
+  }
+}

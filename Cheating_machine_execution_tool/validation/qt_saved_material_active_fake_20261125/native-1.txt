@@ -1,0 +1,9 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 6, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_3d180b19c0134848ab6c3fb4299308c7', 'framework': 'qt', 'platform': 'windows'}
+
+test_qt_saved_material_error_and_cancel_leave_active_fake_power_job_unchanged (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 4.346s
+
+OK

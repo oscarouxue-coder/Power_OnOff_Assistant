@@ -1,0 +1,20 @@
+GUI_TEST_COVERAGE_OK
+test_daily_rollover_restart_filters_original_text_and_stable_keyset_paging (test_workspace_event_log.WorkspaceEventLogTests) ... ok
+test_blocked_disk_keeps_admission_bounded_and_close_waits_for_both_archives (test_workspace_event_log.WorkspaceEventLogTests) ... ok
+test_unconfirmed_final_archive_does_not_release_callback_ownership (test_workspace_event_log.WorkspaceEventLogTests) ... ok
+test_one_sink_failure_preserves_original_and_two_sink_failure_reports_on_recovery (test_workspace_event_log.WorkspaceEventLogTests) ... ok
+test_empty_and_invalid_queries_never_create_files (test_workspace_event_log.WorkspaceEventLogTests) ... ok
+test_health_tracks_actual_log_failure_and_recovery_separately_from_task_logs (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_update_worker_can_log_after_business_close_and_window_waits_for_disk (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_close_workspace_interrupts_active_sql_scan_and_settles_each_read_once (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_unconfirmed_dirty_close_keeps_worker_and_data_until_explicit_choice (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_session_restores_only_open_projects_in_order_and_remembers_empty_dashboard (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_session_write_failure_keeps_last_clean_exit_and_releases_projects (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+test_display_backlog_limits_preserve_the_workspace_file (test_qt_workspace_adapter.QtWorkspaceAdapterTests) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 4.319s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}
+CLOSE_REGRESSION_DENIED: {"requests.sessions.Session.request": 0, "serial.Serial": 0, "socket.create_connection": 0, "socket.getaddrinfo": 0, "socket.gethostbyname": 0, "socket.gethostbyname_ex": 0, "socket.gethostbyaddr": 0, "socket.socket.connect": 0, "socket.socket.connect_ex": 0, "socket.socket.send": 0, "socket.socket.sendall": 0, "socket.socket.sendto": 0, "socket.socket.bind": 0, "socket.socket.listen": 0, "socket.socket.accept": 0, "subprocess.Popen": 0, "os.startfile": 0}

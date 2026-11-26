@@ -29,7 +29,7 @@
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple
@@ -140,6 +140,7 @@ class PipelineContext:
     # 仅本次全流程有效：总确认后允许升级/写参跳过各自确认框，不写入本机配置。
     unattended_execution: bool = False
     power_resource_owner: Optional[tuple] = None
+    shared_power: bool = False
     standalone_power_run: Optional['StandalonePowerRun'] = None
 
     @property
@@ -759,6 +760,8 @@ class PipelineOrchestrator:
             ),
         )
         diagnostic_options = {}
+        if self.ctx.shared_power:
+            request = replace(request, shared_power=True)
         diagnostic_observer = _get_attr(self.ctx.app, "_observe_ai_power_event", None)
         if callable(diagnostic_observer):
             diagnostic_options["diagnostic_observer"] = diagnostic_observer

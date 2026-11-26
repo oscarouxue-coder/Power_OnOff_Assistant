@@ -1,0 +1,29 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\scripts\gui_test_process.py", line 86, in run_gui_child
+    raise AssertionError(f'GUI child offscreen failure: {evidence}\n{result.stdout}\n{result.stderr}')
+AssertionError: GUI child offscreen failure: {'passed': False, 'managed_windows': 29, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_185d85697a66440e85ccab650e46b8e5', 'framework': 'qt', 'platform': 'windows', 'qt': {'passed': True, 'managed_windows': 29, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_185d85697a66440e85ccab650e46b8e5', 'framework': 'qt', 'platform': 'windows'}}
+GUI_TEST_COVERAGE_OK
+MATERIAL_PARALLEL_QT_EVIDENCE: {"peak": 2, "workers": 2, "active": 0, "opened": 4, "closed": 4, "all_closed": true}
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 29, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_185d85697a66440e85ccab650e46b8e5', 'framework': 'qt', 'platform': 'windows'}
+CLOSE_REGRESSION_DENIED: {"requests.sessions.Session.request": 0, "serial.Serial": 0, "socket.create_connection": 0, "socket.getaddrinfo": 0, "socket.gethostbyname": 0, "socket.gethostbyname_ex": 0, "socket.gethostbyaddr": 0, "socket.socket.connect": 0, "socket.socket.connect_ex": 0, "socket.socket.send": 0, "socket.socket.sendall": 0, "socket.socket.sendto": 0, "socket.socket.bind": 0, "socket.socket.listen": 0, "socket.socket.accept": 0, "subprocess.Popen": 0, "os.startfile": 0}
+
+test_qt_saved_material_report_reopens_exact_history_without_source_read (qt_workbench_probe.QtProjectWorkspaceTests) ... FAIL
+test_qt_saved_material_summary_uses_selected_history_and_discards_late_reads (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_multi_channel_saved_material_summary_preserves_independent_and_cancelled_results (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+======================================================================
+FAIL: test_qt_saved_material_report_reopens_exact_history_without_source_read (qt_workbench_probe.QtProjectWorkspaceTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\qt_workbench_probe.py", line 6866, in test_qt_saved_material_report_reopens_exact_history_without_source_read
+    self.wait_for(entered.is_set)
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\qt_workbench_probe.py", line 1242, in wait_for
+    self.fail('Qt project result did not arrive: ' + self.window.statusBar().currentMessage() +
+AssertionError: Qt project result did not arrive:  / 
+
+----------------------------------------------------------------------
+Ran 3 tests in 17.518s
+
+FAILED (failures=1)
+

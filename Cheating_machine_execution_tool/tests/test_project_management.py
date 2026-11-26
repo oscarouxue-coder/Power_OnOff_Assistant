@@ -30,6 +30,92 @@ class ProjectManagementTests(unittest.TestCase):
     def create(self, name='项目 A'):
         return self.store.create(self.root / name, name)
 
+    def test_power_channel_registration_rejects_overlap_and_releases_on_close(self):
+        from line_check_assistant.config_store import ChannelConfig, ChannelConfigStore
+        resources = WorkspaceResources(self.root / 'power-resources')
+        self.store.power_resources = resources
+        self.addCleanup(resources.close)
+        self.addCleanup(self.close_projects)
+        first, second = self.create('A'), self.create('B')
+        port = 'COM99123'
+
+        def configure(context, numbers):
+            ChannelConfigStore(context.config_dir / 'network_card_ip.ini').save(
+                [ChannelConfig(f'channel_{n}') for n in numbers], port)
+            self.store.save(context)
+
+        configure(first, (1,))
+        configure(second, (2,))
+        self.assertEqual({entry.resource_key: entry.project_id for entry in resources.lease_entries()},
+                         {'power-channel:com99123:1': first.identity.project_id,
+                          'power-channel:com99123:2': second.identity.project_id})
+        self.store.rename(first, 'A-改名')
+        self.assertEqual(next(entry.project_name for entry in resources.lease_entries()
+                              if entry.project_id == first.identity.project_id), 'A-改名')
+        with self.assertRaises(CapabilityError):
+            configure(second, (1, 3))
+        self.assertEqual(len(resources.registrations), 2)
+        with self.assertRaises(CapabilityError):
+            resources.acquire('raw', second.identity.project_id, 'B', ('serial:COM99123',))
+        self.store.close(first)
+        configure(second, (1, 3))
+        self.assertEqual({entry.resource_key for entry in resources.lease_entries()},
+                         {'power-channel:com99123:1', 'power-channel:com99123:3'})
+
+    def test_existing_conflicting_project_opens_without_owning_conflicting_channel(self):
+        from line_check_assistant.config_store import ChannelConfig, ChannelConfigStore
+        database = self.root / 'power-shared-resources'
+        resources = WorkspaceResources(database)
+        another_instance = WorkspaceResources(database)
+        self.store.power_resources = resources
+        self.addCleanup(resources.close)
+        self.addCleanup(another_instance.close)
+        self.addCleanup(self.close_projects)
+        old_store = ProjectStore(SOURCE)
+        archived = old_store.create(self.root / 'old', '旧项目')
+        a = self.create('A')
+        for context, store in ((archived, old_store), (a, self.store)):
+            ChannelConfigStore(context.config_dir / 'network_card_ip.ini').save([ChannelConfig('channel_1')], 'COM99124')
+            store.save(context)
+        old_store.close(archived)
+        reopened = self.store.open(archived.root)
+        self.assertEqual(reopened.identity.revision, archived.identity.revision)
+        self.assertEqual(len(resources.registrations), 1)
+        key = 'power-channel:com99124:1'
+        with self.assertRaises(CapabilityError):
+            resources.acquire('job', reopened.identity.project_id, reopened.identity.name, (key,))
+        with self.assertRaises(CapabilityError):
+            another_instance.acquire('power-registration:foreign:' + key, 'foreign', '另一个实例', (key,))
+        self.store.close(a)
+        self.store.save(reopened)
+        self.assertEqual({entry.project_id for entry in resources.lease_entries()}, {reopened.identity.project_id})
+
+    def test_stale_channel_claim_clears_only_after_project_and_worker_exit(self):
+        from src.services.workspace_resources import power_registration_owner
+        context = self.create('中断项目')
+        project_id = context.identity.project_id
+        database = self.root / 'power-crash-resources'
+        previous, current = WorkspaceResources(database), WorkspaceResources(database)
+        self.addCleanup(previous.close)
+        self.addCleanup(current.close)
+        key = 'power-channel:com99125:1'
+        owner = power_registration_owner(project_id, key)
+        previous.acquire(owner, project_id, context.identity.name, (key,))
+        current.recovery_context = lambda identifier: (context, False) if identifier == project_id else (None, False)
+        # The project is still open, so even an absent worker must not release it.
+        with patch('src.services.power_worker_lifetime.power_worker_notice', return_value='') as notice:
+            current.recover_released_power_projects()
+            notice.assert_not_called()
+        self.assertEqual(len(current.lease_entries()), 1)
+        self.store.close(context)
+        previous.guards[owner].close()  # Simulate loss of the instance handles, preserving the durable record.
+        with patch('src.services.power_worker_lifetime.power_worker_notice', return_value='原子进程仍在运行'):
+            current.recover_released_power_projects()
+        self.assertEqual(len(current.lease_entries()), 1)
+        with patch('src.services.power_worker_lifetime.power_worker_notice', return_value=''):
+            current.recover_released_power_projects()
+        self.assertEqual(current.lease_entries(), ())
+
     def test_new_project_uses_sanitized_defaults_not_local_bindings(self):
         context = self.create()
         from line_check_assistant.config_store import ChannelConfigStore

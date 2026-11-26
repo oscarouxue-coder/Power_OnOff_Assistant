@@ -62,6 +62,55 @@ class ProjectStore:
         self.opened = {}
         self.leases = {}
         self.import_backups = {}
+        self.power_resources = None
+
+    def _power_keys(self, directory):
+        from line_check_assistant.config_store import ChannelConfigStore
+        from src.services.workspace_resources import power_channel_keys, power_registration_enabled
+        if not power_registration_enabled(directory):
+            return ()
+        store = ChannelConfigStore(directory / 'network_card_ip.ini')
+        return power_channel_keys(store.load_power_serial_port(),
+            (int(row.section.rsplit('_', 1)[1]) for row in store.load() if row.enabled))
+
+    def _power_registrations(self, context):
+        if self.power_resources is None:
+            return set()
+        prefix = 'power-registration:' + context.identity.project_id + ':'
+        with self.power_resources.lock:
+            return {owner for owner in self.power_resources.registrations if owner.startswith(prefix)}
+
+    def _register_power(self, context, directory, *, allow_conflicts=False):
+        from src.models.capabilities import CapabilityError
+        from src.services.workspace_resources import power_registration_owner
+        if self.power_resources is None:
+            return set(), set()
+        original = self._power_registrations(context)
+        desired = {power_registration_owner(context.identity.project_id, key): key for key in self._power_keys(directory)}
+        added = set()
+        try:
+            for owner, key in desired.items():
+                if owner in original:
+                    continue
+                try:
+                    self.power_resources.acquire(owner, context.identity.project_id, context.identity.name, (key,))
+                except (HostResourceBusy, CapabilityError) as exc:
+                    if not allow_conflicts:
+                        raise
+                    self.emit(f'[电源通道登记] {context.identity.name} {key} 未登记：{exc}')
+                else:
+                    added.add(owner)
+                    self.emit(f'[电源通道登记] {context.identity.name} 已登记 {key}')
+        except BaseException:
+            for owner in added:
+                self.power_resources.release(owner)
+            raise
+        return added, original - desired.keys()
+
+    def _release_power(self, context, owners):
+        for owner in owners:
+            self.power_resources.release(owner)
+            self.emit(f'[电源通道登记] {context.identity.name} 已释放 {owner.split(":", 2)[-1]}')
 
     def create(self, directory, name, *, import_directory=None, _configuration_copy=False, profile=None):
         root = Path(directory).resolve()
@@ -175,6 +224,11 @@ class ProjectStore:
                     raise
                 context.root = root
                 self.opened[identity.project_id], self.leases[identity.project_id] = context, lease
+                try:
+                    self._register_power(context, context.saved_root / 'Auto_power_on_off_tool/config', allow_conflicts=True)
+                except BaseException:
+                    self.close(context)
+                    raise
         except BaseException as error:
             self.emit("[项目管理] 项目创建失败：" + name)
             if new_destination and not isinstance(error, (WizardCreateError, HostResourceBusy)):
@@ -327,15 +381,30 @@ class ProjectStore:
                 lease.close()
                 raise
             self.opened[identity.project_id], self.leases[identity.project_id] = context, lease
+            try:
+                self._register_power(context, context.saved_root / 'Auto_power_on_off_tool/config', allow_conflicts=True)
+            except BaseException:
+                self.close(context)
+                raise
         return context
 
     def dirty(self, context):
         return configuration_digest(context.config_dir) != configuration_digest(
             context.saved_root / "Auto_power_on_off_tool/config")
 
-    def save(self, context):
+    def save(self, context, *, require_power_registration=False):
         with self.lock:
-            self._commit(context)
+            unchanged_power = not require_power_registration and self.power_resources is not None and self._power_keys(context.config_dir) == self._power_keys(
+                context.saved_root / 'Auto_power_on_off_tool/config')
+            added, removed = self._register_power(context, context.config_dir, allow_conflicts=unchanged_power)
+            try:
+                self._commit(context)
+            except BaseException:
+                self._release_power(context, added)
+                raise
+            self._release_power(context, removed)
+            if self.power_resources is not None:
+                self.power_resources.rename_power_registrations(context.identity.project_id, context.identity.name)
         self.emit("[项目管理] 已保存：" + context.identity.name + "；版本=" + context.identity.revision)
 
     def _commit(self, context, initial=False):
@@ -429,6 +498,7 @@ class ProjectStore:
 
     def close(self, context):
         with self.lock:
+            self._release_power(context, self._power_registrations(context))
             self.opened.pop(context.identity.project_id, None)
             lease = self.leases.pop(context.identity.project_id, None)
             if lease:

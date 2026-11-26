@@ -1,5 +1,185 @@
 # 开发记录
 
+## 2026-11-26 - 明确 Qt 聊天目标核对失败提示
+
+- 类型：优化
+- 背景：负责人截图显示通道会话中的普通问题得到既有目标不一致提示；不能由截图判定本次识别结果或旧提示是否残留。
+- 完成内容：仅在 Qt 已收到原目标不一致拒绝并展示最新页时，错误前显示当前所选会话原有目标标签，保留原拒绝文案并显式说明本条未通过核对、未自动切换；不把会话标签当成当前设备核验，不删除失败问题或修改原清除时机。未改目标识别、路由、验证、模型、授权、执行或测试规则。
+- 修改文件：`Cheating_machine_execution_tool/src/services/qt_ai_chat.py`、`DEVELOPMENT_LOG.md`，新增 `Cheating_machine_execution_tool/validation/qt_chat_target_error_display_20261126/target_error_probe.py` 及 `REPORT.md`。
+- 验证方法：原 `scripts/run_tests.py` 的单进程入口只跑 `target_error_probe.TargetErrorDisplayProbe`，完全临时数据及假会话对象，只注入已有错误，不调用路由；原始字节编译和差异核查。
+- 验证结果：1/1 通过，1.262s，GUI 预检通过、窗口/违规 0，受保护外部 I/O 调用 0；两个同名通道标签、跨会话与旧页、其他错误、失败输入及原清理语义保持。[专项报告](Cheating_machine_execution_tool/validation/qt_chat_target_error_display_20261126/REPORT.md)
+- 后续待办：截图的原识别返回值/目标快照未核实，根因不作推定；Qt 原生实际显示及真实模型均未验收，完整基线未运行。
+
+## 2026-11-26 - 美化 Qt 聊天圆角气泡
+
+- 类型：优化
+- 背景：负责人要求现有左右聊天气泡更美观、圆弧角、颜色克制且阅读间距自然。
+- 完成内容：①仍用原 QTextEdit 文档及游标，按真实消息标题标记分组，使用 Qt QPainter 绘制圆角背景（非不受支持的文档 CSS），随后保持原文本、选区、代码及流式绘制；相邻同角色仍独立。②沿用浅绿色/中性浅灰及原宽度规则，消息间距由 9 调至 12px，标题底部间距 2px；无新增窗口、按钮、依赖及业务行为。③同步操作员简述，原格式投影的色彩断言适配为实际绘制分层断言。
+- 修改文件：`Cheating_machine_execution_tool/src/ui/qt/ai_chat_transcript.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/validation/qt_chat_bubbles_20261126/bubble_projection_probe.py`，新增 `Cheating_machine_execution_tool/validation/qt_chat_rounded_bubbles_20261126/rounded_bubble_probe.py`、`REPORT.md`。
+- 验证方法：现有 Qt 解释器单进程经 `scripts/run_tests.py` 执行 `rounded_bubble_probe.RoundedBubbleProbe`、`bubble_projection_probe.ChatBubbleProjectionProbe`、`long_text_probe.LongTextProbe`；原始字节编译和差异检查。
+- 验证结果：8/8 通过（2 新增、6 原布局/极长内容专项），1.037s，预检和运行时报告通过、窗口/违规 0、受保护外部 I/O 调用 0。使用真实 Qt QImage/QPainter 验证圆角四角透明、中心角色背景色；结构/位置为合成布局投影，不是正式窗口像素。[专项报告](Cheating_machine_execution_tool/validation/qt_chat_rounded_bubbles_20261126/REPORT.md)
+- 后续待办：正式 Qt 原生私有桌面、实际滚动/选区及窗口截图仍因禁止子进程未验收；未运行完整门禁或真实环境。
+
+## 2026-11-26 - 平滑聊天气泡窄宽临界过渡
+
+- 类型：BUG 修复
+- 背景：左右聊天气泡边距投影在 319→320px 时因限宽比例突变，长消息正文可用宽度由 266 降至 231px，出现加宽窗口反而收窄的可复现展示问题。
+- 完成内容：①只调整窄宽限宽过渡，在宽屏规则追上窄窗末值前保留原末值；维持原角色、颜色、短消息、文字换行及 Markdown。②补超过四万字符的不中断中文、URL 和普通文本的流式/历史一致性合成检查；300 字仅用于宽度测量前缀，正文完整保留。
+- 修改文件：`Cheating_machine_execution_tool/src/ui/qt/ai_chat_transcript.py`、`DEVELOPMENT_LOG.md`，新增 `Cheating_machine_execution_tool/validation/qt_chat_bubbles_width_20261126/long_text_probe.py` 及 `REPORT.md`。
+- 验证方法：锁定 Qt 解释器经 `scripts/run_tests.py` 单进程执行 `long_text_probe.LongTextProbe`，原始字节编译及差异核对，禁外部 I/O；不重复原 17 项。
+- 验证结果：2/2 新合成测试通过，0.983s，GUI 覆盖预检/运行时报告通过、窗口和违规均 0、受保护外部 I/O 调用 0。319→320px 现为 266→267px；280–500px 两角色的长消息宽度投影无下降。[专项报告](Cheating_machine_execution_tool/validation/qt_chat_bubbles_width_20261126/REPORT.md)
+- 后续待办：Qt 原生实际换行、尺寸及视觉仍因禁止子进程而未验收；未运行完整门禁或真实环境。
+
+## 2026-11-26 - 调整 Qt 聊天消息左右布局
+
+- 类型：优化
+- 背景：负责人要求聊天窗口中我的消息右侧、AI 回复左侧，长文与窄窗口仍可阅读。
+- 完成内容：①仅修改现有 QTextEdit 正文展示，按原角色设置左右边距、限宽、紧凑短消息和现有设计色，气泡内部正文统一左对齐；窗口改变宽度时只重排块格式。②保留系统状态独立展示、共享安全 Markdown、代码、用户原文、原历史顺序及增量流式尾部逻辑，不改会话保存、输入、模型、权限或挂测流程。③操作员文档同步简短说明。
+- 修改文件：`Cheating_machine_execution_tool/src/ui/qt/ai_chat_transcript.py`、`Cheating_machine_execution_tool/line_check_assistant_README.md`、`DEVELOPMENT_LOG.md`，新增 `Cheating_machine_execution_tool/validation/qt_chat_bubbles_20261126/bubble_projection_probe.py`、`REPORT.md`。
+- 验证方法：锁定 Qt 开发解释器单进程运行原 `scripts/run_tests.py`，仅 `bubble_projection_probe.ChatBubbleProjectionProbe` 和 `test_ai_chat_markdown`；原始字节编译、差异核对。
+- 验证结果：最终 17 项通过（4 项 Qt 实际格式对象/记录型游标投影、13 项共同 Markdown 回归），1.081s，GUI 覆盖预检通过，两原 Tk 离屏受管窗口、违规 0，受保护外部 I/O 调用 0；无 Qt 主窗、无原生截图。 [专项报告](Cheating_machine_execution_tool/validation/qt_chat_bubbles_20261126/REPORT.md)
+- 后续待办：本轮禁止外部子进程，未执行真实 Qt 私有桌面三档、像素、选择/滚动及长文原生渲染验收，也未执行完整基线、真实模型/设备/长期现场。保留此前完整门禁未通过结论。
+
+## 2026-11-26 - 保留普通问答无正文取消的历史编号
+
+- 类型：BUG 修复
+- 背景：原 Qt 普通问答已能在当次会话显示无正文取消的真实回复 ID，但项目重开后临时记录丢失。负责人批准仅补本地持久化终态。
+- 完成内容：①仅在已有真实回复 ID、无正文且取消终态成立的本地普通问答中，沿用会话 JSON 保存最近一条取消回执；绑定原会话和原用户消息行，标记无正文。②恢复时校验当前会话、消息行、状态和 ID，不把旧回执套到新问题；不产生助手消息或模型历史，旧记录、无编号、非普通问答、失败与部分正文沿用原语义。③写入或日志失败不干扰原取消收尾，未经保存的终态只留在当次内存。未改数据库表、模型调用、工具、权限及挂测引擎。
+- 修改文件：`Cheating_machine_execution_tool/src/services/qt_ai_chat.py`、`Cheating_machine_execution_tool/tests/test_qt_ai_turn_display.py`、`DEVELOPMENT_LOG.md`、`Cheating_machine_execution_tool/validation/qt_empty_reply_cancel_20261126/REPORT.md`。
+- 验证方法：在主源码目录用原 `scripts/run_tests.py` 的单进程入口和禁止外部 I/O 的合成夹具，执行 `test_qt_ai_turn_display`、`test_ai_context_usage.UsageMathTests` 以及该模块两个取消/重开定向用例；原始字节编译、差异与工作区保护核对。
+- 验证结果：最终 17 项通过（2.820s），GUI 覆盖预检通过，受保护的外部 I/O 调用 0，GUI 违规 0、窗口 0；两个 Python 文件编译通过。真实临时 SQLite 关闭后使用新 store/会话对象恢复原 ID；不是跨进程原生测试。[专项报告](Cheating_machine_execution_tool/validation/qt_empty_reply_cancel_20261126/REPORT.md)
+- 后续待办：本轮明确禁止外部子进程，未执行原生 Qt 三档、跨进程或完整基线；没有 L1/L2/L3 结论。仅显示最近一次匹配用户消息的无正文取消，并非新增逐轮审计台账；不回填旧 ID。
+
+## 2026-11-25 - 显示 Qt 会话已保存的历史上下文用量
+
+- 类型：显示优化 / P1-P2 局部验证。正式 Qt 合成重开项目时，现有会话数据库仍含用量快照，但用量区仅显示暂无；复用原保存记录，明确历史与当前请求、接口返回与 UTF-8 估算、无完整回复用量、当时容量与未知。失败/取消后历史回复计数的请求关联不能核实时不猜测；不读取当前模型配置、不重估、不新增持久或传输行为。
+- 修改文件：主源码 `src/services/qt_ai_chat.py`；`tests/test_qt_ai_turn_display.py`、`tests/qt_workbench_probe.py`、`scripts/verify_qt_migration.py`、操作员说明及本记录。[独立证据](Cheating_machine_execution_tool/validation/qt_chat_historical_context_20261125/REPORT.md)。
+- 验证：改前真实 Qt 合成重开 1 项明确复现，改后相同对照 1 项显示原 12/3/15 Token 历史报告；最终服务 14 项，100%、125%、150% Windows 私有桌面各 4 项通过（历史会话重开/切换、原流式回答、取消、补充五态及迟到），每档 25 个受管窗口，隔离违规 0。4 Python 文件编译和限定差异检查通过；保护的真实外部 I/O 调用 0、过程 PNG 0。
+- 范围：仅 L0 本地显示，不调整模型/工具/transport、设备、挂测规则、权限或已存数据格式；未运行完整基线、L1/L2/L3、打包、暂存、提交或推送。无正文取消的原回复 ID 仅在原会话实例内记忆，新实例不能凭历史用量猜测请求 ID，未扩大持久契约。
+
+## 2026-11-25 - 修正历史报告 Fake 挂测资源等待断言
+
+- 类型：测试调整。按独立时序审计及负责人确认，只将 `tests/qt_workbench_probe.py` 中原在途 Fake 挂测组合的有限等待改为界面已完成、原任务 worker 已退出且资源 owners 已为空同时满足；保留原 6 秒等待、全部结果/资源/保护/不变性断言与生产代码。之所以再核对 worker 退出，是资源 owners 先于原 release 完整返回清除。
+- 验证：100% 自然运行 1 项、100%/125%/150% 有界延迟原生各 1 项通过，原资源未释放时按钮禁用、原开始入口拒绝且无新准备/任务，释放及 worker 结束后原断言才执行；四项通过，24 个原生受管窗口，违规及实际外部 I/O 保护调用均 0。初版只等 owners 的额外诊断收尾顺序未通过，补强等待后四项全过。编译/限定差异检查通过。[独立证据](Cheating_machine_execution_tool/validation/qt_fake_resource_wait_20261125/REPORT.md)
+- 范围：只改测试条件及本记录，未修改生产、挂测、规则、权限或 P0/P1，未运行完整基线、真实设备、模型或长期现场，未提交和打包。过程 PNG 0。
+
+## 2026-11-25 - 保存并重新查看 Qt 本地历史汇总报告
+
+- 类型：功能 / P1 合成验证。任务历史批次结果窗提供右键显式保存已生成、未取消且原范围匹配的本地报告；原任务右键查看保存记录，保留引用、历史状态、生成/保存时间和缺失/失败，不重查源文件或执行任务。固定项目历史目录、有界独立记录、不覆盖旧报告；原项目/任务/运行及当前请求精确核对，迟到结果不进入新范围。仅 GUI 本机服务，不提供模型或远端能力。
+- 修改文件：主源码 `src/models/qt_log_history.py`、`src/services/qt_power_logs.py`、`src/services/qt_workspace_adapter.py`、`src/ui/qt/log_history_dialog.py`、`src/services/capability_catalog.py`；`tests/test_qt_log_history.py`、`tests/qt_workbench_probe.py`、`scripts/verify_qt_migration.py`、`scripts/capability_gui_actions.json`、操作员说明、根能力覆盖、状态及本记录。[证据](Cheating_machine_execution_tool/validation/qt_saved_material_persistence_20261125/REPORT.md)。
+- 验证：历史服务 21 项及直接相关迁移契约 5 项，合计 26/26；Windows 私有桌面 100%、125%、150% 各 3/3、每档 29 个受管窗口违规 0，含原单通道/多通道原生回归。实际保存失败、重试、项目关闭重开、无源重读、异批次空结果、切项目取消迟到及原字节不变。合成三通道保存/恢复样本、8 Python 文件编译和能力覆盖通过。真实外部 I/O 保护调用 0；扩展契约试跑另有一项原子进程导入测试被保护拒绝，未绕过，最终仅选 5 个无实际子进程契约。初次原生新夹具批次顺序及迟到构造问题修正后通过，原 P0 断言保留。过程 PNG 0。
+- 范围：仅 L0，不运行完整基线、不构建/暂存/提交/推送，不访问真实项目数据、凭据、模型、网络或设备；不修改挂测规则、引擎或资源断言等待。实际工作台阅读、L1/L2/L3 未验收。保留其他并行工作。
+
+## 2026-11-25 - 修复 Qt 终态子控制器循环引用
+
+- 类型：BUG 修复 / L0 合成专项。保持原工作区任务、资源、会话和软件更新末条日志收尾；正式关闭且 Qt 主窗口、控制器、定时器全部销毁后，方解除 12 个常驻子控制器的失效反向引用，关闭拒绝、在途任务及归档未确认均不清理。应用事件循环返回、worker 退出且重启标志读取后，仅交付合法关闭窗口自身 DeferredDelete；不使用生产强制 GC、不改业务引擎/设备/权限。
+- 修改文件：主源码 `src/ui/qt/workspace_controller.py`、`src/ui/qt/application.py`；`tests/qt_workbench_probe.py` 及本记录。[独立证据](Cheating_machine_execution_tool/validation/qt_workspace_controller_cycle_fix_20261125/REPORT.md)。
+- 实测：空工作区 30 轮总句柄 706–710，末次诊断 GC 706→706；含实际合成多通道报告的工作区 30 轮 708–721，末次 708→703，均 23 类跟踪对象弱引用正常归零，报告 worker 0；固定报告窗 60 轮 753→770、关闭后 749；直接销毁与实际应用循环各 3 轮通过。终态对象修复验证通过，不将剩余 5 个未知句柄归因或宣称长期无泄漏。
+- 验证：修改前原生挂点预检 1 项/2 轮；修改后服务 12 项，100%、125%、150% 原生各 9 项及 5 项综合对照，共 44 项、126 轮、573 个受管窗口，隔离违规 0。首次并行跑 125%、150% 各有 1 项原 Fake 挂测完成/资源登记释放断言失败，随后未改挂测或测试断言、串行独立复跑各全过；根因未确认，保留时序观察。三 Python 文件编译、限定差异检查通过，保护的外部 I/O 入口调用 0。过程 PNG 生成及清理 0。
+- 范围：不运行完整基线、不构建、暂存、提交或推送，不操作真实模型、设备或现场数据；L1/L2/L3 未开展，保留既有服务层修复及其他工作区变更。
+
+## 2026-11-25 - 修复已关闭工作区服务回指延迟回收
+
+- 类型：BUG 修复 / 合成专项验证。业务及原资源关闭成功后，Qt 等待后台任务完全退出、日志写入器实际结束且末批归档已确认，才解除无效的 adapter/service/logger 引用；保留延迟更新末条日志、双归档失败反馈、退出拒绝及重复关闭语义。独立服务关闭后仅释放已失效回调和已关闭平台池所有权，不修改资源恢复、挂测、权限或实际 I/O。
+- 修改文件：主源码 `src/services/qt_workspace_adapter.py`、`src/services/workspace_service.py`、`src/services/workspace_event_log.py`；`tests/test_qt_workspace_adapter.py`、`tests/test_workspace_event_log.py`；本记录及 [独立专项证据](Cheating_machine_execution_tool/validation/qt_workspace_handle_fix_20261125/FINAL_REPORT.md)。
+- 验证：合成服务/资源专项 15 项通过；Windows 私有桌面 100%、125%、150% 各 4 项通过，包含真实 Qt 入口 Fake worker 关闭、在途 Fake 挂测与本地报告隔离、取消及迟到结果。组件和报告重复对照合计 160 轮，34 项测试通过；全部 61 项、510 个受管窗口，违规 0。五个 Python 文件原字节编译及限定差异检查通过。受保护外部 I/O 调用 0，过程 PNG 生成及清理均 0。
+- 实测独立 adapter/service 各 20 轮不逐轮主动 GC，总句柄收尾 397–398，弱引用全部释放，末次诊断 GC 不再减少句柄；完整空工作区 30 轮仍有末次 GC 729→706 的延迟保留，含报告完整重建 30 轮 748→882（范围 740–1011，中间有正常自动回落），固定报告窗 60 轮 753→770、关闭后 749。未证实完整 Qt 图无需 GC 收尾，不宣称永久泄漏已完全解决；后续 UI 所有权定位需独立批准。
+- 范围：仅 L0，本轮未运行完整基线、未构建、提交、推送或操作真实设备/模型；L1/L2/L3 未开展。保留其他并行修改及上一轮冲突、定位证据。
+
+## 2026-11-25 - 修复 Qt 当前异常详情的失败原因和事件显示
+
+- 类型：BUG 修复 / 界面优化。原详情页任务级失败只读全流程或预测试摘要，普通开关机任务及历史重开未完整展示原失败回执。
+- 按当前项目及原任务身份只读查询 Job 的终态结果和近期事件；通道增量投影保留发生时间、阶段、轮次、完整原因和相关历史。过程历史中的错误不能单独判定当前通道失败，已明确恢复的通道退出当前异常，原批次终态和失败轮次保留。无类型档案的旧项目按原请求通道编号恢复，缺失/读取失败明确提示。详情表显示 DUT/对象、通道、时间、异常事件、原因，选中行下方可复制完整原因与相关事件。复用原打开详情的主执行日志记录，未增加设备操作。
+- 修改文件：主源码 `src/models/workbench_presentation.py`、`src/services/power_run_overview.py`、`src/services/qt_workspace_adapter.py`、`src/ui/qt/power_metric_detail.py`、`tests/test_power_run_overview.py`、`tests/test_qt_workspace_adapter.py`、`tests/qt_visual_preview_probe.py`、能力覆盖清单 `scripts/capability_gui_actions.json`；根 `CAPABILITY_COVERAGE.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md` 及操作员说明 `line_check_assistant_README.md`。
+- 验证结果：19 项相关回归通过，覆盖同项目不同任务、双项目历史重开、任务级回执、原通道原因、同轮次再次失败、过程异常与终态隔离、续跑、超过 8192 字符的完整内容及缺失/损坏记录。Windows 私有桌面 100%、125%、150% 各 3 项原生用例通过，每档 19 个受管窗口、隔离违规 0。Python 局部编译、能力覆盖及 `git diff --check` 通过。过程 PNG 生成和清理均为 0。
+- 验证入口：主源码目录 `python scripts/run_tests.py test_power_run_overview`，另运行 `test_qt_workspace_adapter` 的历史任务回执及预测试恢复两项、`test_qt_execution_adapter` 的环境失败及续跑两项路径、`test_qt_migration_contract`；通过 `run_gui_child(..., framework='qt', native_render=True)` 三档执行 `qt_visual_preview_probe.ProjectOverviewTests` 的三项指标详情相关用例。
+- 待现场核对：截图中的原任务未在本机最近项目记录中定位，需在实际项目中重开详情核对。本轮未变更设备命令、判据、停止及资源保护，未运行完整基线、构建或发布 EXE，未操作真实设备。保留并行工作区其他修改。
+
+## 2026-11-25 - 支持程控电源跨项目按通道共享
+
+- 类型：功能 / 优化
+- 背景：项目 A 与项目 B 需要使用同一程控电源不同通道。旧挂测启动后长期持有整口 COM，无法利用样机断电、启动及检测等待阶段，且配置阶段缺少全局电源通道归属显示。
+- 完成内容：① 复用主机锁和资源保护数据库按 COM/CH 登记，打开及保存时登记，冲突旧项目保留配置并阻止执行，停止任务保留登记，安全关闭或保存解绑释放；重启及刷新时核实旧项目及工作进程后恢复失效登记。② 正式挂测、续跑、单次上下电、全流程和升级受控入口改用逐帧打开、发送、关闭保护，保留原等待、命令、目标范围、停止及结果判据；同 COM 串行等待，未下发挂测/单次上下电指令可取消。③ Qt 环境配置按 COM 动态置灰其他项目的通道、悬停显示项目名称、全选跳过、预览及提交通道冲突复核；设备资源监控显示登记及发送状态。④ 补足模拟 COM 资源隔离，生产全局锁保持。
+- 修改文件（主源码目录相对路径）：`src/core/host_resource_lock.py`、`src/core/power_supply.py`；`src/services/workspace_resources.py`、`src/services/workspace_service.py`、`src/services/project_store.py`、`src/services/resource_lease_service.py`、`src/services/capability_device_services.py`、`src/services/capability_service.py`、`src/services/pipeline_orchestrator.py`、`src/services/legacy_power_test_service.py`、`src/services/power_on_service.py`、`src/services/qt_single_power.py`、`src/services/physical_resource_guards.py`、`src/services/serial_upgrade_service.py`、`src/services/qt_channel_configuration.py`、`src/services/qt_project_wizard_service.py`、`src/services/qt_execution_adapter.py`、`src/services/qt_workspace_adapter.py`；`src/ui/qt/channel_configuration_dialog.py`、`src/ui/qt/workspace_controller.py`、`src/ui/qt/device_inventory_dialog.py`；`tests/test_power_supply.py`、`tests/test_legacy_power_initialization.py`、`tests/test_project_management.py`、`tests/qt_execution_fakes.py`、`tests/test_qt_execution_adapter.py`、`tests/test_serial_upgrade_service.py`、`tests/test_qt_channel_configuration.py`、`tests/test_qt_workspace_adapter.py`、`tests/test_qt_dut_configuration.py`、`tests/qt_workbench_probe.py`；`scripts/capability_gui_actions.json`、操作员说明及根目录能力矩阵、项目状态、验收基线和开发记录。
+- 验证方法：相关 `scripts/run_tests.py` 专项、`python scripts/verify_baseline.py`、`python scripts/verify_capability_coverage.py --update`、`python scripts/verify_qt_migration.py --output validation/power_channel_sharing_20261125/final`、局部编译、差异检查。
+- 验证结果：最终相关 302 项通过，能力覆盖、局部编译及差异检查通过；第二次完整基线 3471 项及 287 个必跑测试通过。最终 Windows 原生私有桌面 100%、125%、150% 每档 160 项，共 480 项通过，每档 743 个受管窗口，隔离违规和缺少必跑项均为 0。首轮基线受并行源码变更影响，第三次受并行 Fake 同名 COM 实际锁竞争影响；第四次执行 3473 项未通过，6 项断言失败、14 项错误，涉及本机活动 VLAN116 资源、并行能力清单变化与 Tk 焦点/心跳测试。只读核对 VLAN116 和 COM102 CH01 保护为 active，保留实际任务及生产保护，最新完整基线待资源释放与工作区稳定后复验。[阶段报告](Cheating_machine_execution_tool/validation/power_channel_sharing_20261125/REPORT.md)
+- 截图清理：核对本批验证目录、Git 跟踪及报告引用，877 张过程 PNG 全部移入回收站，保留原生测试文本、JSON 和报告，未改其他验证或现场证据。
+- 后续待办：真实程控电源跨项目共享、长期无人值守及样机升级现场复验。未构建或发布 EXE。
+
+## 2026-11-25 - 精简共享程控电源指令日志
+
+- 类型：优化
+- 背景：正式开关机测试每次操作重复显示准备指令、打开串口、下发指令、关闭串口四条日志。
+- 完成内容：共享电源串口模式仅在实际写入完成后按原格式输出一条指令下发日志；串口等待、操作异常及实际 COM、物理 CH、动作和失败原因继续保留。串口互斥、开启/写入/关闭顺序、命令报文及停止逻辑不变。
+- 修改文件：主源码 `src/services/legacy_power_test_service.py`、`tests/test_legacy_power_initialization.py`、`line_check_assistant_README.md`，根 `ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`。
+- 验证方法：`python scripts/run_tests.py test_legacy_power_initialization test_legacy_power_test_service test_power_supply`；`python -m py_compile src/services/legacy_power_test_service.py tests/test_legacy_power_initialization.py`；相关文件 `git diff --check`。
+- 验证结果：52 项专项测试通过，覆盖 Telnet/SSH 两类流程、上电下电、模拟指令失败与逐帧串口开关顺序；编译通过。本轮未运行完整基线、未构建、未操作真实设备。
+- 后续待办：现场日志显示确认。
+
+## 2026-11-25 - 限制正式版整机单实例并隔离源码工作区
+
+- 类型：功能 / 启动保护
+- 正式 EXE 在工作台与服务创建前取得固定主机全局非重入锁，跨目录及 Windows 用户会话互斥。同用户会话继续认证 IPC，重复启动或项目文件请求唤起对应窗口并记录执行日志；跨会话占用或保护失败提示退出原实例后重试。退出确认后拒绝新转发，安全收尾完成才释放，异常退出由系统回收。源码工作台不取得正式版锁，同会话源码重复启动仍转发。
+- 正式版保留 `workspace`，源码版采用 `workspace-source`；首次使用时只读迁移近期项目、模型及加密凭据、当前钉钉/飞书配置并关闭导入连接和通知。各自会话及远程授权独立，旧会话与任务无需迁移；原项目文件及共用主机保护数据库、项目身份锁、设备资源锁继续使用原业务路径。初始化及转发结果写入主执行日志。
+- 修改文件：主源码 `run_dutpilot_qt.py`、`src/core/workspace_instance.py`、`src/services/workspace_service.py`、`src/services/qt_workspace_adapter.py`、`src/ui/qt/application.py`、`src/ui/qt/workspace_controller.py`、`tests/test_workspace_instance.py`、`tests/test_qt_migration_contract.py`、`tests/qt_workbench_probe.py`、`scripts/verify_qt_migration.py`；根 `README.md`、`PROJECT_STATUS.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md` 及主源码 `line_check_assistant_README.md`。
+- 验证方法：主源码目录运行 `python scripts/run_tests.py test_workspace_instance test_qt_migration_contract test_project_management.ProjectManagementTests.test_duplicate_open_and_second_writer_are_rejected test_project_management.ProjectManagementTests.test_four_projects_same_filename_save_and_snapshot_are_isolated test_multi_project_business_validation`；经 `run_gui_child(..., framework='qt', native_render=True)` 三档缩放运行 `QtNativeGuardTests` 的实例转发、项目唤起、重启顺序三项及 `QtProjectWorkspaceTests.test_close_waits_for_actual_worker_cleanup`；相关 Python 文件逐项 `py_compile`、`git diff --check`。
+- 验证结果：19 项专项通过（其中 Qt 验证器故意模拟失败的契约用例输出的 `QT_NATIVE_SCALE … FAIL` 为测试输入，最终 unittest 通过），覆盖两个独立合成进程并发竞争唯一持有者、持有者异常结束后重新启动、源/正式版转发隔离、退出收尾拒绝、DPAPI 配置迁移与原文件字节不变以及相同主机保护数据库、四项目 Fake 并发业务及项目锁。100%、125%、150% 原生各 4 项通过，每档 3 个受管窗口、隔离违规 0。编译及差异检查通过。过程 PNG 生成及清理均为 0。
+- 后续待办：新正式包目标 Windows 双击及真实跨用户/远程桌面互斥复验待确认。本轮未运行完整基线或全部 Qt 迁移矩阵，未构建、运行或发布 EXE，未连接真实设备、平台或模型。保留其他并行工作区修改。
+
+## 2026-11-25 - 优化开关机程控电源指令日志
+
+- 类型：优化
+- 背景：负责人要求主界面不再用十六进制报文显示正常单通道电源指令，改为实际 COM、物理 CH 和上电/下电动作。
+- 完成内容：① Telnet/SSH 正式测试及初始化断电统一显示例如 `下发程控电源指令：COM101，CH2，上电`；② 共享串口准备日志采用相同目标格式，实际写入完成后显示下发日志；异常、未回读状态及未知报文诊断保留；③ 未修改发送字节、选中通道、锁、等待时序或停止行为，其他电源业务日志不变。
+- 修改文件：
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/src/core/power_supply.py`
+  - `Cheating_machine_execution_tool/tests/test_legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/tests/test_legacy_power_initialization.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`
+  - `ACCEPTANCE_BASELINE.md`
+  - `DEVELOPMENT_LOG.md`
+- 验证方法：在主源码目录运行 `python scripts/run_tests.py test_legacy_power_test_service test_legacy_power_initialization test_power_supply`，对上述四个 Python 文件执行 `python -m py_compile`，检查本轮文件的 Git 差异格式。
+- 验证结果：52 项专项测试通过，GUI 隔离违规 0，局部编译及差异检查通过。覆盖两组 COM、CH1～CH16、上下电、两种通信方式、共享/非共享模式、原始指令字节及共享串口写入失败。未执行完整基线、真实程控电源操作或打包，既有验收状态不变。
+- 后续待办：负责人在下一次实际任务中核对主界面新格式。
+
+## 2026-11-25 - 验证历史报告与在途 Fake 挂测隔离
+
+- 补齐 P0C 并发验收：新增正式 Qt 原生 `test_qt_saved_material_error_and_cancel_leave_active_fake_power_job_unchanged`，复用已有 `ControlledPipeline` 及临时合成工程，在原挂测 Fake 运行中对历史批次两通道报告模拟单份读取错误、并发取消及关闭；全程核对原任务状态、结果、事件和资源所有者不变，随后原任务正常成功，输出前缀及原历史字节保持、资源释放。真实串口及受保护网络入口均零调用。仅改测试及原生必跑登记，不改生产逻辑、挂测引擎或权限。
+- Windows 私有桌面 100%、125%、150% 最终各 1 项通过，每档 6 个受管窗口、隔离违规 0；原任务 68/100 进度、7 条原事件保持，完成后 10 条事件、`succeeded/ok=true`。局部编译、能力覆盖、GUI 预检（112 个构造点）及差异检查退出 0。完整基线预检确认原套件含真实本机回环及浏览器类测试，且并行工作区有其他挂测改动，无法保证本轮明确的全 Fake/无真实操作条件，按授权停止完整门禁，不将其标为执行或通过，不绕过。保留已有验证及其他改动；过程 PNG 生成及清理 0。[实测及预检](Cheating_machine_execution_tool/validation/qt_saved_material_active_fake_20261125/REPORT.md)
+
+## 2026-11-25 - 修复开关机停止轮次误报
+
+- 类型：BUG 修复
+- 背景：负责人反馈配置 100 轮的多通道任务实际仅完成 8 轮，部分通道却显示“已完成 100 轮 · 所有测试项验证成功”。源码定位到 Telnet 手动停止路径返回 `True`，上层将其作为全部成功并补满轮次；同时发现 SSH 在当前轮次递增后判断完成，存在少执行最后一轮的问题。
+- 完成内容：① Telnet/SSH 统一成功、失败、取消返回值，保留原停止和设备操作边界；SSH 在当前轮次实际完成后判断是否达到目标。② 仅上下电每轮主动上报正常完成，保留原文件格式。③ 上层取消事件保留实际已完成轮次并输出停止日志，不新增失败历史；Qt 通道状态、总进度和续跑资格沿用原事件与会话。
+- 修改文件：
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/test_case/powe_on_off_telnet.py`
+  - `Cheating_machine_execution_tool/Auto_power_on_off_tool/test_case/power_on_off_ssh.py`
+  - `Cheating_machine_execution_tool/src/services/legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/tests/test_legacy_power_test_service.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_resume.py`
+  - `Cheating_machine_execution_tool/tests/test_power_test_wifi.py`
+  - `Cheating_machine_execution_tool/tests/test_qt_execution_adapter.py`
+  - `Cheating_machine_execution_tool/line_check_assistant_README.md`、`ACCEPTANCE_BASELINE.md`、`DEVELOPMENT_LOG.md`
+- 验证方法：主源码目录执行 `python scripts/run_tests.py test_legacy_power_test_service test_power_test_resume test_power_test_wifi test_legacy_power_initialization test_power_test_wifi_logs test_qt_execution_adapter`；补查 Qt 停止后的续跑会话、Telnet 指令前停止、编排器及 Tk 原状态专项；修改的 Python 文件逐项 `py_compile` 并检查差异格式。
+- 验证结果：首轮专项 164 项通过；追加 Qt 会话计数断言后单项复验通过；Telnet 指令前停止及编排器、Tk 相关专项 54 项通过（含重复用例）；离屏隔离违规 0。真实引擎方法使用模拟业务/电源对象及临时文件，覆盖 8/100 停止、正常 100/100、失败保持进度、SSH 1/1 和最后一轮续跑；Qt 原服务事件投影确认已停止且保留 8/100，取消通道无失败续跑资格。本轮未运行完整基线、未打包、未连接真实设备。
+- 后续待办：Windows 可见 Qt 源码版及真实设备停止、正常完成路径待负责人复验。过程 PNG 生成及清理均为 0。
+
+## 2026-11-25 - 支持既有资料多通道独立汇总
+
+- P0B 开工前只读核对 P0A：同范围两份资料可读、缺失和单份读取失败已在报告及保留测试中验证；相互冲突佐证触发可解释报告变化的专门对照未覆盖，未重复新增 P0A 用例。本地历史多通道汇总原未实现。
+- 在既有「批次结果文件」窗口启用 Ctrl 多选，同一项目/任务/批次最多 16 个明确通道；每通道复用原 P0A 只读服务与两份末页限制。不串结果，不扩大正文、根因或实时状态判断；资料缺失/读取失败与整通道无法核对分开。手动取消仅保留已完成的通道报告，剩余通道取消；改选、切项目/批次、关窗作废本次在途结果。原单选及打开文件入口保持。
+- 修改原历史结果模型、`qt_power_logs.py`、`qt_workspace_adapter.py`、`log_history_dialog.py`、能力及相关测试登记。58 项相关回归（含 5 项 Qt 迁移契约）通过；Windows 私有桌面 100%、125%、150% 各 23 项通过，每档 113 个受管窗口、违规 0。新增服务 4 项、原生 1 项，覆盖三通道正常+缺失+失败、整通道失败、保留取消结果、两通道新批次及迟到隔离。合成原始文件、批次清单和任务库字节不变；原单通道、报告、普通流式及补充回执复验通过。过程 PNG 生成及清理均为 0。
+- 本轮未开展 L1/L2/L3、完整基线或打包，不新增依赖、不改变挂测引擎或权限、无 Git 写入。[范围及实际合成报告](Cheating_machine_execution_tool/validation/qt_saved_material_batch_20261125/REPORT.md)
+
+## 2026-11-25 - 汇总所选通道本地留存资料
+
+- S0/G0 小步增强。先在原 69887ae5 运行明确范围、关闭/取消、迟到、跨项目及旧报告回归，40 项服务及 18 项 Windows 私有桌面通过。随后在原 Qt 批次结果文件右键入口，限定显式项目、任务、运行快照与单一 CH，仅汇总选中文件及同通道另一类按文件名倒序的第一份留存文件。
+- 复用已有任务/批次目录核对和有界归档末页读取；结果含来源、页内引用、原时间或未知、明确记录标记、缺失和无法读取计数。仅投影已知 Ping 通记录和 WiFi 等级/轮次记录，不展开自由正文，不推断根因或实时/业务状态。取消、切项目、改选、关窗作废本次读取；主执行日志仅记录编号、阶段和计数。不新增模型、设备、命令、网络或新依赖，不改原挂测引擎及原日志打开入口。
+- 修改 `src/models/qt_log_history.py`、`src/services/qt_power_logs.py`、`src/services/qt_workspace_adapter.py`、`src/services/capability_catalog.py`、`src/ui/qt/log_history_dialog.py`，相关测试/Qt 原生必跑登记、能力清单和说明。最终另补意外 WAL 格式拒绝及快照读取上限，49 项相关服务回归通过；100%、125%、150% Windows 私有桌面各 20 项通过，每档 93 个受管窗口、隔离违规 0。原合成批次日志、任务库及快照字节不变；原单 CH 问答、历史文件打开和留存报告入口复验通过。过程 PNG 生成及清理均为 0。[证据与边界](Cheating_machine_execution_tool/validation/qt_saved_material_summary_20261125/REPORT.md)
+- 本轮仅 L0，未开展真实模型、设备、长时现场、完整基线、Git 写入或打包。
+
 ## 2026-11-25 - 修复 Git 钩子中文解释器路径读取
 
 - 上次提交完整基线 3,443 项测试中，两项 Git 钩子环境用例因中文路径无法定位解释器而失败。使用临时合成仓库复现：Windows PowerShell 的 CP936 将 Git 配置值的 UTF-8 字节误解码；切换为 UTF-8 后路径与原值一致、文件存在。

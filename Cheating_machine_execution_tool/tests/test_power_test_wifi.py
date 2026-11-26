@@ -284,7 +284,7 @@ class IntegrationTests(unittest.TestCase):
         helper = legacy_tests.LegacyPowerTestServiceTests()
         result, states, history, progress, logs = helper._run_status_messages([
             dict(type='channel_result', channel=2, ok=False, cancelled=True, attempt=1)])
-        self.assertEqual(states, [(2, 'stopped', '用户停止WiFi测试，保留已完成轮次')])
+        self.assertEqual(states, [(2, 'stopped', '用户停止，保留已完成轮次')])
         self.assertEqual(history, [])
         self.assertTrue(all(event[1] == 0 for event in progress))
 

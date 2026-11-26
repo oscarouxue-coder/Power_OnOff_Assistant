@@ -1,0 +1,402 @@
+{
+  "empty": {
+    "baseline": {
+      "process_handles": 398,
+      "gdi_objects": 14,
+      "user_objects": 19,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 153.87
+    },
+    "first_immediate": {
+      "process_handles": 735,
+      "gdi_objects": 18,
+      "user_objects": 23,
+      "process_threads": 10,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 217.52
+    },
+    "first_wait": {
+      "process_handles": 710,
+      "gdi_objects": 18,
+      "user_objects": 21,
+      "process_threads": 10,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 218.3
+    },
+    "last_immediate": {
+      "process_handles": 734,
+      "gdi_objects": 18,
+      "user_objects": 22,
+      "process_threads": 10,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 224.0
+    },
+    "last_wait": {
+      "process_handles": 709,
+      "gdi_objects": 18,
+      "user_objects": 20,
+      "process_threads": 10,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 224.0
+    },
+    "final": {
+      "process_handles": 709,
+      "gdi_objects": 18,
+      "user_objects": 20,
+      "process_threads": 10,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 224.01
+    },
+    "gc_release": [
+      25,
+      25.0,
+      25
+    ],
+    "wait_range": [
+      709,
+      710
+    ],
+    "elapsed": 41.688,
+    "cycles": 20,
+    "worker_closed": true,
+    "observed_files": 40,
+    "untrackable": 0,
+    "denied": 0,
+    "managed_windows": 61,
+    "violations": [],
+    "changed": []
+  },
+  "window": {
+    "baseline": {
+      "process_handles": 398,
+      "gdi_objects": 14,
+      "user_objects": 19,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 153.58
+    },
+    "first_immediate": {
+      "process_handles": 708,
+      "gdi_objects": 18,
+      "user_objects": 23,
+      "process_threads": 10,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 216.03
+    },
+    "first_wait": {
+      "process_handles": 708,
+      "gdi_objects": 18,
+      "user_objects": 21,
+      "process_threads": 10,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 214.32
+    },
+    "last_immediate": {
+      "process_handles": 707,
+      "gdi_objects": 18,
+      "user_objects": 22,
+      "process_threads": 10,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 217.17
+    },
+    "last_wait": {
+      "process_handles": 707,
+      "gdi_objects": 18,
+      "user_objects": 20,
+      "process_threads": 10,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 217.17
+    },
+    "final": {
+      "process_handles": 707,
+      "gdi_objects": 18,
+      "user_objects": 20,
+      "process_threads": 10,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 217.19
+    },
+    "gc_release": [
+      0,
+      0.0,
+      0
+    ],
+    "wait_range": [
+      707,
+      708
+    ],
+    "elapsed": 41.86,
+    "cycles": 20,
+    "worker_closed": true,
+    "observed_files": 0,
+    "untrackable": 0,
+    "denied": 0,
+    "managed_windows": 61,
+    "violations": [],
+    "changed": []
+  },
+  "adapter": {
+    "baseline": {
+      "process_handles": 398,
+      "gdi_objects": 14,
+      "user_objects": 19,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 153.36
+    },
+    "first_immediate": {
+      "process_handles": 420,
+      "gdi_objects": 14,
+      "user_objects": 19,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 153.9
+    },
+    "first_wait": {
+      "process_handles": 398,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 154.68
+    },
+    "last_immediate": {
+      "process_handles": 419,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 155.99
+    },
+    "last_wait": {
+      "process_handles": 397,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 155.99
+    },
+    "final": {
+      "process_handles": 397,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 156.0
+    },
+    "gc_release": [
+      22,
+      22.0,
+      23
+    ],
+    "wait_range": [
+      397,
+      398
+    ],
+    "elapsed": 35.938,
+    "cycles": 20,
+    "worker_closed": true,
+    "observed_files": 40,
+    "untrackable": 0,
+    "denied": 0,
+    "managed_windows": 1,
+    "violations": [],
+    "changed": []
+  },
+  "service": {
+    "baseline": {
+      "process_handles": 398,
+      "gdi_objects": 14,
+      "user_objects": 19,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 155.7
+    },
+    "first_immediate": {
+      "process_handles": 405,
+      "gdi_objects": 14,
+      "user_objects": 19,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 156.77
+    },
+    "first_wait": {
+      "process_handles": 398,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 156.77
+    },
+    "last_immediate": {
+      "process_handles": 404,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 156.82
+    },
+    "last_wait": {
+      "process_handles": 397,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 156.82
+    },
+    "final": {
+      "process_handles": 397,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 156.88
+    },
+    "gc_release": [
+      7,
+      7.0,
+      7
+    ],
+    "wait_range": [
+      397,
+      398
+    ],
+    "elapsed": 30.281,
+    "cycles": 20,
+    "worker_closed": true,
+    "observed_files": 0,
+    "untrackable": 0,
+    "denied": 0,
+    "managed_windows": 1,
+    "violations": [],
+    "changed": []
+  },
+  "resources": {
+    "baseline": {
+      "process_handles": 398,
+      "gdi_objects": 14,
+      "user_objects": 19,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 155.41
+    },
+    "first_immediate": {
+      "process_handles": 400,
+      "gdi_objects": 14,
+      "user_objects": 19,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 155.98
+    },
+    "first_wait": {
+      "process_handles": 398,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 155.98
+    },
+    "last_immediate": {
+      "process_handles": 399,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 155.79
+    },
+    "last_wait": {
+      "process_handles": 397,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 155.79
+    },
+    "final": {
+      "process_handles": 397,
+      "gdi_objects": 14,
+      "user_objects": 18,
+      "process_threads": 9,
+      "python_threads": 1,
+      "qt_top_levels": 0,
+      "fixture_python_files_still_open": 0,
+      "rss_bytes": 155.8
+    },
+    "gc_release": [
+      0,
+      0.0,
+      0
+    ],
+    "wait_range": [
+      397,
+      398
+    ],
+    "elapsed": 29.719,
+    "cycles": 20,
+    "worker_closed": true,
+    "observed_files": 0,
+    "untrackable": 0,
+    "denied": 0,
+    "managed_windows": 1,
+    "violations": [],
+    "changed": []
+  }
+}

@@ -120,6 +120,7 @@ class WorkspaceEventWriter:
         self.closing = False
         self.thread = None
         self.progress_at = None
+        self._archive_drained = False
 
     def start(self, directory):
         self.directory = Path(directory).resolve()
@@ -174,6 +175,18 @@ class WorkspaceEventWriter:
         self.begin_close()
         if self.thread is not None:
             self.thread.join()
+        self.release_closed_callbacks()
+
+    def release_closed_callbacks(self):
+        """Release ownership only after the original writer has drained and stopped."""
+        with self.condition:
+            if not self.closing or (self.thread is not None and self.thread.is_alive()):
+                return False
+            if (self.pending or self.overflow or self.finished != self.accepted or
+                    (self.thread is not None and not self._archive_drained)):
+                return False
+            self.report = self.associate = None
+            return True
 
     def _write_text(self, batch):
         with _local(self.directory / 'workspace.log').open('a', encoding='utf-8') as stream:
@@ -185,6 +198,7 @@ class WorkspaceEventWriter:
             with self.condition:
                 self.condition.wait_for(lambda: self.pending or self.overflow or self.closing)
                 if not self.pending and not self.overflow and self.closing:
+                    self._archive_drained = not unreported
                     return
                 size = min(len(self.pending), 128)
                 batch = [self.pending.popleft() for _ in range(size)]

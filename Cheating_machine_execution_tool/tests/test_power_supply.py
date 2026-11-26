@@ -35,6 +35,56 @@ class FakeClock:
 
 
 class PowerSupplyTests(unittest.TestCase):
+    def test_each_frame_closes_before_original_wait_and_another_project_can_send(self):
+        opened = []
+        events = []
+
+        def factory(**kwargs):
+            self.assertTrue(all(port.closed for port in opened))
+            port = FakeSerial()
+            opened.append(port)
+            return port
+
+        second = ProgrammablePowerSupply('COM99421', serial_factory=factory, sleep_fn=lambda _: None)
+
+        def wait(seconds):
+            self.assertTrue(all(port.closed for port in opened))
+            events.append(seconds)
+            if seconds == 1.5:
+                second.turn_on_channels([2])
+
+        first = ProgrammablePowerSupply('COM99421', serial_factory=factory, sleep_fn=wait)
+        first.power_on_channels([1])
+        self.assertEqual([port.writes for port in opened], [[channel_power_frame(1, False)],
+            [channel_power_frame(2, True)], [channel_power_frame(1, True)]])
+        self.assertTrue(all(port.closed for port in opened))
+        self.assertEqual(events, [1.5, 3])
+
+    def test_waiting_frame_is_cancelled_without_open_or_write(self):
+        from threading import Event, Thread
+        from src.core.power_supply import power_frame_access
+
+        stopped, waiting = Event(), Event()
+        opened, errors = [], []
+        supply = ProgrammablePowerSupply('COM99422', serial_factory=lambda **kwargs: opened.append(kwargs),
+            stopped=stopped.is_set, on_output=lambda message: waiting.set() if '等待' in message else None)
+
+        def run():
+            try:
+                supply.turn_on_channels([2])
+            except Exception as error:
+                errors.append(str(error))
+
+        with power_frame_access('COM99422'):
+            worker = Thread(target=run)
+            worker.start()
+            self.assertTrue(waiting.wait(2))
+            stopped.set()
+            worker.join(2)
+            self.assertFalse(worker.is_alive())
+        self.assertEqual(opened, [])
+        self.assertIn('未下发指令', errors[0])
+
     def test_failed_close_keeps_same_process_from_reusing_port(self):
         from src.core.host_resource_lock import HostResourceBusy, HostResourceLock
 

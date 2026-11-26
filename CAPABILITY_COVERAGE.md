@@ -2,7 +2,7 @@
 
 本表由 scripts/verify_capability_coverage.py 生成；登记、自动化验证和现场验收分别判断。
 
-业务清单 117 项；已有接口 66 项；部分接入 16 项；待接入 5 项；人工控制面 30 项。
+业务清单 120 项；已有接口 66 项；部分接入 16 项；待接入 5 项；人工控制面 33 项。
 现有诊断/交互接口不代表该组所有管理动作已开放；部分接入见限制列，不将分组数字称为最终覆盖率。
 
 | 功能ID | GUI业务 | 真实入口 | 业务实现 | AI接口 | 状态/限制 | 资源/风险 | 自动化测试入口 |
@@ -124,10 +124,13 @@
 | service_aging.record | 记录现场观察、日检或期末检查 | _record | QtServiceAging / ServiceAging | service_aging.record | manual_control：仅 GUI，本机操作人提供实际观测和结果 | project/run/manual | test_service_aging.py；Windows/真实模型及设备待验收 |
 | service_aging.history | 查看及导出指定批次业务证据 | _export | ServiceAgingHistory | local_confirmation | manual_control：仅本机选择项目、批次和导出文件 | project/run/manual | test_service_aging.py, qt_project_wizard_probe.py；Windows/真实模型及设备待验收 |
 | service_aging.channel_evidence | 查看所选 DUT 或普通聊天明确 CH 的掉线证据 | open_evidence | read_channel_evidence / ServiceAgingHistory | service_aging.channel_evidence | manual_control：仅本机 GUI 在冻结的项目、批次和通道内读取已有观测。普通聊天通过 _send_chat_evidence 核对明确 CH，带请求编号的结果仅当前窗口显示；停止本轮仅取消该本地读请求 | project/run/manual | test_qt_channel_evidence.py, qt_channel_evidence_probe.py；Windows/真实模型及设备待验收 |
+| history.material_summary | 汇总选定批次通道的本地留存结果文件 | _request_summary | summarize_history_materials / summarize_history_materials_batch / qt_power_logs | history.material_summary | manual_control：仅本机 GUI 从同一已核对历史批次选择一至十六个原通道，逐通道复用既有有界只读能力；原文正文不展开，不提供模型或远端能力 | project/run/manual | test_qt_log_history.py, qt_workbench_probe.py；Windows/真实模型及设备待验收 |
+| history.material_report_save | 保存当前已生成的本地历史报告 | _request_save_report | save_material_report / qt_power_logs | history.material_report_save | manual_control：仅本机 GUI 明确保存已核对批次的生成回执，不接受任意正文、路径或重跑，不提供模型或远端能力 | project/run/manual | test_qt_log_history.py, qt_workbench_probe.py；Windows/真实模型及设备待验收 |
+| history.material_reports | 查看选定历史批次已保存报告 | _request_saved_reports | read_material_reports / qt_power_logs | history.material_reports | manual_control：仅本机 GUI 在所选项目任务及原运行范围中查看保存的历史报告，不读取原资料或执行任务 | project/run/manual | test_qt_log_history.py, qt_workbench_probe.py；Windows/真实模型及设备待验收 |
 
 ## GUI动作审查
 
-当前审查快照包含 828 个按钮/菜单/绑定/变量回调。新增或改变入口会使门禁失败。
+当前审查快照包含 845 个按钮/菜单/绑定/变量回调。新增或改变入口会使门禁失败。
 界面辅助动作（窗口显隐/滚动/复制/显密/清屏等）不计业务覆盖；动态控件须结合运行测试复核。
 Qt 拦截提示的「前往确认」是本机定位动作，使用原请求项目与结构化目标打开配置、对象或任务视图。保存、执行和人工批准继续使用原业务入口及权限检查。
 

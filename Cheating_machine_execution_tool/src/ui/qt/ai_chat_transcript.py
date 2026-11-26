@@ -2,12 +2,105 @@
 from datetime import datetime
 from html import escape
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont, QTextBlockFormat, QTextCharFormat, QTextCursor
+from PySide6.QtCore import Qt, QRectF, Signal
+from PySide6.QtGui import QColor, QFont, QPainter, QTextBlockFormat, QTextCharFormat, QTextCursor, QTextFormat, QTextOption
 from PySide6.QtWidgets import QLabel, QPlainTextEdit, QSizePolicy, QTextEdit
 
-from src.ui.qt.theme import BACKGROUND, BRAND, DANGER, MUTED, TEXT
+from src.ui.qt.theme import BACKGROUND, BRAND, DANGER, MUTED, TEXT, V13_PALETTE
 from src.utils.ai_chat_markdown import parse_markdown
+
+
+_MESSAGE_ROLE = QTextFormat.Property.UserProperty.value
+_MESSAGE_INDENT = _MESSAGE_ROLE + 1
+_MESSAGE_WIDTH = _MESSAGE_ROLE + 2
+_MESSAGE_START = _MESSAGE_ROLE + 3
+
+
+def _message_margins(role, width, indent=0, natural_width=0):
+    """Leave the opposite side empty; the text inside both bubbles is left aligned."""
+    width = max(1, int(width))
+    edge_limit = 8
+    edge = min(edge_limit, width // 20)
+    available = width - edge * 2
+    # Preserve the last compact-width limit until the normal wide ratio catches
+    # up, so crossing 320 px never makes an existing long message narrower.
+    compact_limit = min(available * 88 // 100, (320 - edge_limit * 2) * 88 // 100)
+    limit = max(1, available * 76 // 100, compact_limit)
+    bubble = min(limit, max(min(150, limit), natural_width or limit))
+    gap = available - bubble
+    left = edge + (gap if role == 'user' else 0)
+    right = edge + (gap if role == 'assistant' else 0)
+    # Retain Markdown indentation where there is room without squeezing the text
+    # out of a narrow chat viewport (including long code and unbroken words).
+    indent = min(max(0, indent), width // 4, max(0, width - left - right - 48))
+    return left + indent, right
+
+
+def _message_block(role, width, indent=0, natural_width=0):
+    block = QTextBlockFormat()
+    block.setAlignment(Qt.AlignmentFlag.AlignLeft)
+    block.setProperty(_MESSAGE_ROLE, role)
+    block.setProperty(_MESSAGE_INDENT, indent)
+    block.setProperty(_MESSAGE_WIDTH, natural_width)
+    left, right = _message_margins(role, width, indent, natural_width)
+    block.setLeftMargin(left)
+    block.setRightMargin(right)
+    return block
+
+
+def _bubble_color(role):
+    if role == 'user':
+        return QColor(V13_PALETTE.hover_background)
+    if role == 'assistant':
+        return QColor(V13_PALETTE.neutral.background)
+    return None
+
+
+def _bubble_regions(document, viewport_width):
+    """Group native laid-out paragraphs by message heading, not adjacent roles."""
+    width = document.textWidth()
+    if width <= 0:
+        width = viewport_width
+    margin = document.documentMargin()
+    layout = document.documentLayout()
+
+    def region(role, first, last):
+        style = first.blockFormat()
+        left = max(0, margin + style.leftMargin() - 5)
+        right = min(width, width - margin - style.rightMargin() + 5)
+        top = max(0, layout.blockBoundingRect(first).top() - 3)
+        bottom = layout.blockBoundingRect(last).bottom() + 3
+        return role, QRectF(left, top, max(0, right - left), max(0, bottom - top))
+
+    first = last = None
+    active_role = None
+    block = document.begin()
+    while block.isValid():
+        style = block.blockFormat()
+        role = style.property(_MESSAGE_ROLE)
+        start = style.property(_MESSAGE_START) is True
+        if start or role != active_role:
+            if first is not None:
+                yield region(active_role, first, last)
+            first = last = None
+            active_role = None
+            if start and _bubble_color(role) is not None:
+                active_role, first, last = role, block, block
+        elif first is not None:
+            last = block
+        block = block.next()
+    if first is not None:
+        yield region(active_role, first, last)
+
+
+def _draw_rounded_bubble(painter, role, rect):
+    color = _bubble_color(role)
+    if color is None or rect.isEmpty():
+        return
+    radius = min(10.0, rect.width() / 2, rect.height() / 2)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(color)
+    painter.drawRoundedRect(rect, radius, radius)
 
 
 class AiChatStatusLabel(QLabel):
@@ -64,10 +157,70 @@ class AiChatTranscript(QTextEdit):
         self.setReadOnly(True)
         self.setAcceptRichText(False)
         self.setUndoRedoEnabled(False)
+        self.setWordWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
         self._session = ''
         self._messages = ()
         self._draft = ''
         self._tail = 0
+        self._layout_width = max(1, self.viewport().width())
+
+    def paintEvent(self, event):
+        # The viewport already has its normal widget background. Paint message
+        # backgrounds first; the original QTextEdit then draws text, selection,
+        # caret and code spans over them, without replacing the native editor.
+        if hasattr(self, '_layout_width'):
+            painter = QPainter(self.viewport())
+            if painter.isActive():
+                try:
+                    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                    painter.setClipRect(event.rect())
+                    x = self.horizontalScrollBar().value()
+                    y = self.verticalScrollBar().value()
+                    painter.translate(-x, -y)
+                    visible = QRectF(event.rect()).translated(x, y)
+                    for role, rect in _bubble_regions(self.document(), self.viewport().width()):
+                        if rect.intersects(visible):
+                            _draw_rounded_bubble(painter, role, rect)
+                finally:
+                    painter.end()
+        super().paintEvent(event)
+
+    def resizeEvent(self, event):
+        ready = hasattr(self, '_layout_width')
+        if ready:
+            scroll = self.verticalScrollBar()
+            position, stick = scroll.value(), scroll.value() >= scroll.maximum()
+        super().resizeEvent(event)
+        if not ready:
+            return
+        width = max(1, self.viewport().width())
+        if width == self._layout_width:
+            return
+        self._reflow_message_blocks(width)
+        scroll.setValue(scroll.maximum() if stick else min(position, scroll.maximum()))
+
+    def _reflow_message_blocks(self, width):
+        self._layout_width = width
+        # Reflow only formats, not text. Keep the existing cursor/selection and
+        # incremental draft boundary intact when the chat window is resized.
+        block = self.document().begin()
+        cursor = QTextCursor(self.document())
+        cursor.beginEditBlock()
+        try:
+            while block.isValid():
+                style = block.blockFormat()
+                role = style.property(_MESSAGE_ROLE)
+                if role is not None:
+                    left, right = _message_margins(role, width, style.property(_MESSAGE_INDENT) or 0,
+                                                  style.property(_MESSAGE_WIDTH) or 0)
+                    if (style.leftMargin(), style.rightMargin()) != (left, right):
+                        style.setLeftMargin(left)
+                        style.setRightMargin(right)
+                        cursor.setPosition(block.position())
+                        cursor.setBlockFormat(style)
+                block = block.next()
+        finally:
+            cursor.endEditBlock()
 
     def show_messages(self, session, messages, draft):
         messages = tuple(message for message in messages if message.role != 'system')
@@ -100,35 +253,45 @@ class AiChatTranscript(QTextEdit):
         heading.setFontWeight(QFont.Weight.Bold)
         heading.setForeground(QColor(DANGER if kind == 'error' else BRAND))
         name = '本地证据' if kind == 'local_evidence' else {'user': '我', 'assistant': 'AI'}.get(role, role)
-        title = QTextBlockFormat()
-        title.setTopMargin(9 if cursor.position() else 0)
+        heading_text = f'{name} · {stamp[:19].replace("T", " ")}'
+        metrics = self.fontMetrics()
+        # Short messages occupy a compact bubble; long ones wrap within the
+        # viewport limit. Measuring a capped prefix is sufficient for that limit.
+        natural_width = 24 + max(metrics.horizontalAdvance(heading_text),
+            max((metrics.horizontalAdvance(line[:300]) for line in text.splitlines()), default=0))
+        title = _message_block(role, self._layout_width, natural_width=natural_width)
+        title.setProperty(_MESSAGE_START, True)
+        title.setTopMargin(12 if cursor.position() else 0)
+        title.setBottomMargin(2)
         if cursor.position():
             cursor.insertBlock(title, heading)
         else:
             cursor.setBlockFormat(title)
-        cursor.insertText(f'{name} · {stamp[:19].replace("T", " ")}', heading)
+        cursor.insertText(heading_text, heading)
         body = QTextCharFormat()
         body.setForeground(QColor(DANGER if kind == 'error' else TEXT))
         if role != 'assistant' or kind == 'local_evidence':
-            cursor.insertBlock(QTextBlockFormat(), body)
+            cursor.insertBlock(_message_block(role, self._layout_width, natural_width=natural_width), body)
             cursor.insertText(text, body)
             return
         for line in parse_markdown(text):
-            self._insert_markdown_line(cursor, line, body)
+            self._insert_markdown_line(cursor, line, body, natural_width)
 
-    def _insert_markdown_line(self, cursor, line, body):
-        block = QTextBlockFormat()
+    def _insert_markdown_line(self, cursor, line, body, natural_width):
+        indent = 0
         style = QTextCharFormat(body)
         if line.kind in ('h1', 'h2'):
-            block.setTopMargin(5)
             style.setFontWeight(QFont.Weight.Bold)
             style.setFontPointSize(self.fontInfo().pointSizeF() + (2 if line.kind == 'h1' else 1))
         elif line.kind.startswith('code'):
-            block.setLeftMargin(12)
+            indent = 12
             style.setFontFamilies(['Consolas'])
             style.setBackground(QColor(BACKGROUND))
         elif line.marker:
-            block.setLeftMargin(8 + min(24, line.indent) * self.fontMetrics().horizontalAdvance(' '))
+            indent = 8 + min(24, line.indent) * self.fontMetrics().horizontalAdvance(' ')
+        block = _message_block('assistant', self._layout_width, indent, natural_width)
+        if line.kind in ('h1', 'h2'):
+            block.setTopMargin(5)
         cursor.insertBlock(block, style)
         cursor.insertText(line.marker, style)
         for value, flags in line.spans:

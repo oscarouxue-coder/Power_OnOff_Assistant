@@ -257,7 +257,10 @@ class ProjectOverviewTests(unittest.TestCase):
         self.assertIn('当前异常详情', dialog.windowTitle())
         self.assertEqual(dialog.table.rowCount(), 1)
         self.assertEqual(dialog.table.item(0, 1).text(), 'CH03')
-        self.assertEqual(dialog.record_text.toPlainText(), 'PON 注册超时')
+        self.assertIn('PON 注册超时', dialog.record_text.toPlainText())
+        self.assertEqual(dialog.table.horizontalHeaderItem(3).text(), '异常事件')
+        self.assertIn('第321轮验证失败', dialog.table.item(0, 3).text())
+        self.assertTrue(dialog.record_text.isReadOnly())
         self.assertEqual(self.window.logs.entries[-1].project_id, self.power.project_id)
         self.assertIn('打开当前异常详情 · 已显示记录', self.window.logs.entries[-1].message)
         self.window.select_project(self.aging.project_id)
@@ -290,16 +293,39 @@ class ProjectOverviewTests(unittest.TestCase):
         self.assertIn('暂无可显示的记录', self.window.logs.entries[-1].message)
         QTest.mouseClick(attention, Qt.MouseButton.LeftButton)
         dialog = detail._metric_dialog
-        self.assertEqual([dialog.table.item(0, col).text() for col in range(3)], ['任务', '—', '结果待核实'])
-        self.assertEqual(dialog.record_text.toPlainText(), '升级回执中断')
+        self.assertEqual([dialog.table.item(0, col).text() for col in range(4)], ['任务', '—', '—', '结果未知'])
+        self.assertIn('升级回执中断', dialog.record_text.toPlainText())
+        self.assertIn('结果待核实', dialog.record_text.toPlainText())
         without_reason = replace(unknown, pipeline_detail='', progress_text='查看样机升级窗口')
         self.window.set_projects((self.idle, without_reason, self.aging))
         self.assertIs(detail._metric_dialog, dialog)
         QTest.mouseClick(attention, Qt.MouseButton.LeftButton)
         self.assertIsNot(detail._metric_dialog, dialog)
-        self.assertEqual(detail._metric_dialog.record_text.toPlainText(), '暂无具体原因')
+        self.assertIn('未保存具体失败原因', detail._metric_dialog.record_text.toPlainText())
         self.window.show_dashboard()
         self.assertIsNone(detail._metric_dialog)
+
+    def test_current_attention_shows_full_scoped_received_events(self):
+        from src.models.workbench_presentation import AttentionView
+        reason = '电源初始化失败：' + '模拟原始错误细节' * 100
+        entry = AttentionView('任务', None, '2026-11-25 10:25:36', '开关机挂测失败', reason,
+                              '初始化', related_events=('2026-11-25 10:25:35 · 原回执',))
+        channel = AttentionView('DUT03', 3, '2026-11-25 10:25:36', '第8轮验证失败', 'PON 注册超时', '校验', 8)
+        power = replace(self.power, attention_count=2, attention_records=(entry, channel))
+        self.window.set_projects((self.idle, power, self.aging))
+        self.window.select_project(power.project_id)
+        QTest.mouseClick(self.window.detail.cycle_metrics.cards[-1], Qt.MouseButton.LeftButton)
+        dialog = self.window.detail._metric_dialog
+        self.assertEqual(dialog.table.rowCount(), 2)
+        self.assertEqual(dialog.table.item(0, 2).text(), entry.time)
+        self.assertLessEqual(dialog.width(), dialog.screen().availableGeometry().width())
+        self.assertLessEqual(dialog.height(), dialog.screen().availableGeometry().height())
+        self.assertIn(reason, dialog.record_text.toPlainText())
+        self.assertIn('原回执', dialog.record_text.toPlainText())
+        dialog.table.setCurrentCell(1, 0)
+        self.assertIn('轮次：8', dialog.record_text.toPlainText())
+        self.assertIn('PON 注册超时', dialog.record_text.toPlainText())
+        self.assertNotIn(reason, dialog.record_text.toPlainText())
 
     def test_running_overview_distinguishes_power_and_continuous_aging(self):
         detail = self.window.detail

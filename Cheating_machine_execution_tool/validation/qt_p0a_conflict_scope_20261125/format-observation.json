@@ -1,0 +1,30 @@
+{
+  "synthetic": true,
+  "genuine_conflict_constructible": false,
+  "observation_count": 5,
+  "observations": {
+    "existing_positive_marker": [
+      "时间未知",
+      "原文记录 Ping 通；不代表实时连通或设备在线"
+    ],
+    "hypothetical_negative_not_supported": null,
+    "hypothetical_timestamped_positive_not_supported": null,
+    "same_time_wifi_header_info": [
+      "2026-11-20 22:10:01.123456（原日志本地时间）",
+      "第3轮，记录等级 INFO；业务结果未知"
+    ],
+    "same_time_wifi_header_error": [
+      "2026-11-20 22:10:01.123456（原日志本地时间）",
+      "第3轮，记录等级 ERROR；业务结果未知"
+    ]
+  },
+  "denied_calls": {
+    "requests.sessions.Session.request": 0,
+    "serial.Serial": 0,
+    "socket.create_connection": 0,
+    "socket.socket.connect": 0,
+    "socket.getaddrinfo": 0,
+    "subprocess.Popen": 0,
+    "os.startfile": 0
+  }
+}

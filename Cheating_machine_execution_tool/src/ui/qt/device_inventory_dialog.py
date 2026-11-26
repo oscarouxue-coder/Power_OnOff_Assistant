@@ -8,9 +8,9 @@ from src.models.project_profile import adb_serial_from_key
 from src.ui.qt.theme import button, label
 
 
-RESOURCE_TYPES = {'serial': '串口 / 电源口', 'adapter': '网卡', 'dut': 'DUT', 'olt': 'OLT',
+RESOURCE_TYPES = {'serial': '串口 / 电源口', 'power-channel': '程控电源通道', 'adapter': '网卡', 'dut': 'DUT', 'olt': 'OLT',
                   'pon': 'PON', 'wifi': 'WiFi', 'tftp': 'TFTP', 'adb': 'ADB'}
-LEASE_STATES = {'held': '已持有', 'unresolved': '受保护'}
+LEASE_STATES = {'held': '已持有', 'unresolved': '受保护', 'registered': '已登记'}
 
 
 def _table(columns, flexible):
@@ -144,7 +144,8 @@ class DeviceInventoryDialog(QDialog):
         elif entries:
             held = sum(entry.state == 'held' for entry in entries)
             unresolved = sum(entry.state == 'unresolved' for entry in entries)
-            summary = f'已持有 {held} 条 · 受保护 {unresolved} 条'
+            registered = sum(entry.state == 'registered' for entry in entries)
+            summary = f'已持有 {held} 条 · 受保护 {unresolved} 条' + (f' · 已登记 {registered} 条' if registered else '')
         else:
             summary = '本次采样没有活动租约或保护记录'
         self.resource_status.setText(summary)

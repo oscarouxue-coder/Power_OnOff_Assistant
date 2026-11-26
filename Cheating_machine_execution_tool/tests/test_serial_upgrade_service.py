@@ -559,9 +559,8 @@ class SerialUpgradeControllerTests(unittest.TestCase):
                 (UPGRADE_POWER_OFF_DELAY_SECONDS, UPGRADE_POWER_ON_DELAY_SECONDS),
             ],
         )
-        # supply 在两次调用之间被复用 —— 同一 COM 只 open 一次。
-        self.assertEqual(supply_open_count, 1)
-        # close 还没发生，由调用方负责；这里 sanity-check supply 仍处于 opened 状态。
+        # 控制器不预先长期开口，实际供电类负责每帧打开、关闭。
+        self.assertEqual(supply_open_count, 0)
         self.assertTrue(all(callable(s.close) for s in coordinator._supplies.values()))
 
     def test_parallel_power_cycle_coordinator_closes_supplies_on_close(self):
@@ -589,7 +588,7 @@ class SerialUpgradeControllerTests(unittest.TestCase):
         coordinator.power_on_channel("COM106", 1, wait_seconds=0)
         coordinator.power_on_channel("COM107", 2, wait_seconds=0)
 
-        self.assertEqual(sorted(opened), ["COM106", "COM107"])
+        self.assertEqual(opened, [])
         coordinator.close()
         self.assertEqual(sorted(closed), ["COM106", "COM107"])
         # 再次关闭幂等。

@@ -51,7 +51,7 @@ def install_native_fixture_locks(test):
     return bench
 
 
-def configure_project(workspace, context, numbers=(1, 7)):
+def configure_project(workspace, context, numbers=(1, 7), power_port='COM102'):
     (context.config_dir / 'config.ini').write_text('''[config]
 test_project = test_project_config.ini
 [ui_defaults]
@@ -76,7 +76,7 @@ enable = 0
     channels = [ChannelConfig('channel_' + str(n), vlan_name='VLAN' + str(100 + n),
         adapter_alias='VLAN' + str(100 + n), serial_port='COM' + str(n),
         network_card_ip='192.0.2.' + str(n), device_manage_ip='192.0.2.200') for n in numbers]
-    ChannelConfigStore(context.config_dir / 'network_card_ip.ini').save(channels, 'COM102')
+    ChannelConfigStore(context.config_dir / 'network_card_ip.ini').save(channels, power_port)
     workspace.projects.save(context)
     return tuple(AdapterIdentity(c.adapter_alias, 'fixture-guid-' + c.section, 'Up') for c in channels)
 

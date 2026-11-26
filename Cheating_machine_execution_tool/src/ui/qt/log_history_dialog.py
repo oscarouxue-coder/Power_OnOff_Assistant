@@ -1,11 +1,14 @@
 """Project-bound viewer for one page of original job events at a time."""
 from dataclasses import replace
+from threading import Event
 from PySide6.QtCore import QEvent, QSignalBlocker, Qt, Signal
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QHBoxLayout, QHeaderView, QListWidget,
-                               QListWidgetItem, QMenu, QMessageBox, QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem,
+                               QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem,
                                QVBoxLayout, QWidget)
 
-from src.models.qt_log_history import HistoryEventFilter
+from src.models.qt_log_history import (HistoryEventFilter, HistoryMaterialBatchSummary, HistoryMaterialBatchTarget,
+                                      HistoryMaterialSummary, HistoryMaterialTarget, SavedMaterialReport,
+                                      SavedMaterialReports)
 from src.services.qt_power_logs import POWER_HISTORY_CAPABILITIES
 from src.services.workbench_status_service import TASK_NAMES
 from src.ui.qt.log_panel import LogPanel
@@ -18,9 +21,17 @@ JOB_STATES = {'queued': '记录为等待', 'running': '记录为运行中', 'sto
 
 class HistoryResultFilesDialog(QDialog):
     open_requested = Signal(object)
+    summary_requested = Signal(object)
+    summary_cancelled = Signal()
+    summary_scope_changed = Signal()
+    save_report_requested = Signal(int, object)
 
     def __init__(self, parent, job, files):
         super().__init__(parent)
+        self.project_id, self.job, self.entries = parent.project_id, job, tuple(files)
+        self.summary_pending = False
+        self._generated_report = None
+        self.save_pending = False
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowModality(Qt.WindowModality.WindowModal)
         self.setWindowTitle('批次结果文件 · ' + parent.project_name)
@@ -32,11 +43,26 @@ class HistoryResultFilesDialog(QDialog):
         layout.addWidget(batch)
         self.files = QListWidget()
         self.files.setAccessibleName('批次结果文件')
-        for entry in files:
+        self.files.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.files.setToolTip('Ctrl 多选通道或文件，右键汇总；同通道同类型最多选一份')
+        for entry in self.entries:
             item = QListWidgetItem(entry.label, self.files)
             item.setData(Qt.ItemDataRole.UserRole, entry.path)
+            item.setData(Qt.ItemDataRole.UserRole + 1, entry)
         self.files.setCurrentRow(0)
+        self.files.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.files.customContextMenuRequested.connect(self._file_menu)
+        self.file_menu = QMenu(self.files)
+        self.summary_action = self.file_menu.addAction('汇总所选通道留存资料…', self._request_summary)
+        self.save_report_action = self.file_menu.addAction('保存本次留存报告', self._request_save_report)
+        self.save_report_action.setEnabled(False)
+        self.summary_action.setToolTip('可 Ctrl 多选；每通道选中文件及未选的另一类文件（文件名倒序第一份）；仅读取末页')
         layout.addWidget(self.files, 1)
+        self.summary = QPlainTextEdit()
+        self.summary.setAccessibleName('留存资料汇总')
+        self.summary.setReadOnly(True)
+        self.summary.hide()
+        layout.addWidget(self.summary, 2)
         self.feedback = label('', 'muted')
         self.feedback.setWordWrap(True)
         layout.addWidget(self.feedback)
@@ -44,19 +70,139 @@ class HistoryResultFilesDialog(QDialog):
         actions.addStretch()
         self.open_button = button('打开文件', self._open, 'primary')
         actions.addWidget(self.open_button)
+        self.summary_cancel = button('取消本次读取', self.summary_cancelled.emit)
+        self.summary_cancel.hide()
+        actions.addWidget(self.summary_cancel)
         actions.addWidget(button('关闭', self.close))
         layout.addLayout(actions)
+        self.files.itemSelectionChanged.connect(self._summary_selection_changed)
 
     def _open(self):
-        item = self.files.currentItem()
-        if item:
-            self.open_requested.emit(item.data(Qt.ItemDataRole.UserRole))
+        items = self.files.selectedItems()
+        if len(items) == 1:
+            self.open_requested.emit(items[0].data(Qt.ItemDataRole.UserRole))
 
     def set_busy(self, busy):
         self.files.setEnabled(not busy)
-        self.open_button.setEnabled(not busy)
+        self.open_button.setEnabled(not busy and len(self.files.selectedItems()) == 1)
         if busy:
             self.feedback.setText('正在打开结果文件…')
+
+    def _file_menu(self, point):
+        if not self.summary_pending and not self.save_pending and self.files.currentItem() is not None:
+            item = self.files.itemAt(point)
+            if item is not None and not item.isSelected():
+                self.files.setCurrentItem(item)
+            self.file_menu.popup(self.files.viewport().mapToGlobal(point))
+
+    def _summary_selection_changed(self, *_):
+        if self.summary_pending or self.save_pending:
+            self.summary_scope_changed.emit()
+        self._generated_report = None
+        self.save_report_action.setEnabled(False)
+        self.open_button.setEnabled(self.files.isEnabled() and len(self.files.selectedItems()) == 1)
+        self.summary.clear()
+        self.summary.hide()
+
+    def summary_target(self):
+        groups = {}
+        run = None
+        for item in self.files.selectedItems():
+            entry = item.data(Qt.ItemDataRole.UserRole + 1)
+            if entry is None or entry.channel is None or not entry.run_id or entry.kind not in ('command_results', 'wifi'):
+                return None
+            if run is not None and entry.run_id != run:
+                return None
+            run = entry.run_id
+            group = groups.setdefault(entry.channel, {})
+            if entry.kind in group:
+                return None
+            group[entry.kind] = entry.path.name
+        if not groups:
+            return None
+        for candidate in self.entries:
+            if candidate.channel in groups and candidate.run_id == run:
+                groups[candidate.channel].setdefault(candidate.kind, candidate.path.name)
+        targets = tuple(HistoryMaterialTarget(self.project_id, self.job, run, channel,
+                                             names.get('command_results', ''), names.get('wifi', ''))
+                        for channel, names in sorted(groups.items()))
+        return targets[0] if len(targets) == 1 else HistoryMaterialBatchTarget(self.project_id, self.job, run, targets)
+
+    def _request_summary(self):
+        target = self.summary_target()
+        if target is not None and not self.summary_pending and not self.save_pending:
+            self.summary_requested.emit(target)
+        elif not self.summary_pending:
+            self.feedback.setText('请选择同一批次的通道；每通道同类文件最多选一份。')
+
+    def set_summary_pending(self, pending):
+        self.summary_pending = pending
+        self.set_busy(pending)
+        self.summary_action.setEnabled(not pending)
+        self.summary_cancel.setVisible(pending)
+        self.summary_cancel.setEnabled(pending)
+        if pending:
+            self._generated_report = None
+            self.save_report_action.setEnabled(False)
+            self.summary.clear()
+            self.summary.hide()
+
+    def show_summary(self, identifier, summary):
+        self.set_summary_pending(False)
+        self.summary.setPlainText(f'留存资料汇总 #{identifier}\n\n' + summary.text)
+        self.summary.show()
+        if not isinstance(summary, HistoryMaterialBatchSummary) or (summary.completed_count and not summary.cancelled_count):
+            self._generated_report = (identifier, summary.target)
+            self.save_report_action.setEnabled(True)
+        self.feedback.setText('已取消未完成的通道；已完成的结果保留。' if isinstance(summary, HistoryMaterialBatchSummary)
+                              and summary.cancelled_count else '已完成本次核对；缺失或无法读取的资料见报告。')
+
+    def _request_save_report(self):
+        if (self._generated_report is not None and not self.summary_pending and not self.save_pending
+                and self._generated_report[1] == self.summary_target()):
+            self.save_report_requested.emit(*self._generated_report)
+
+    def set_save_pending(self, pending, *, saved=False):
+        self.save_pending = pending
+        self.set_busy(pending)
+        self.summary_action.setEnabled(not pending)
+        if saved:
+            self._generated_report = None
+        self.save_report_action.setEnabled(not pending and self._generated_report is not None)
+
+
+class SavedMaterialReportsDialog(QDialog):
+    def __init__(self, parent, job, page):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setWindowModality(Qt.WindowModality.WindowModal)
+        self.setWindowTitle('已保存留存报告 · ' + parent.project_name)
+        self.job, self.run_id = job, page.run_id
+        available = self.screen().availableGeometry()
+        self.resize(min(850, int(available.width() * .94)), min(660, int(available.height() * .90)))
+        layout = QVBoxLayout(self)
+        self.reports = QListWidget()
+        self.reports.setAccessibleName('已保存留存报告')
+        self.body = QPlainTextEdit()
+        self.body.setReadOnly(True)
+        self.body.setAccessibleName('历史报告正文')
+        self.feedback = label(f'已保存 {len(page.reports)} 份；无法读取 {page.invalid_count} 份', 'muted')
+        for report in page.reports:
+            item = QListWidgetItem(report.saved_at + ' · ' + ', '.join(f'CH{n:02d}' for n in report.channels), self.reports)
+            item.setData(Qt.ItemDataRole.UserRole, report)
+        self.reports.currentItemChanged.connect(self._show_report)
+        layout.addWidget(self.reports, 1)
+        layout.addWidget(self.body, 3)
+        layout.addWidget(self.feedback)
+        layout.addWidget(button('关闭', self.close))
+        self.reports.setCurrentRow(0)
+
+    def _show_report(self, current, previous):
+        report = current.data(Qt.ItemDataRole.UserRole) if current else None
+        self.body.setPlainText(f'保存记录 {report.report_id}\n历史状态 {report.historical_state} · {report.historical_at}'
+                               f'\n生成时间 {report.generated_at}\n保存时间 {report.saved_at}'
+                               '\n已保存历史报告，不代表实时状态；未重新读取资料。\n\n' + report.text
+                               if isinstance(report, SavedMaterialReport) else '')
 
 
 class LogHistoryDialog(QDialog):
@@ -65,6 +211,7 @@ class LogHistoryDialog(QDialog):
     events_requested = Signal(str, object, object)
     stop_requested = Signal(str)
     result_files_requested = Signal(str)
+    saved_reports_requested = Signal(str)
 
     def __init__(self, project, parent=None):
         super().__init__(parent)
@@ -76,6 +223,7 @@ class LogHistoryDialog(QDialog):
         self.page_filter = HistoryEventFilter()
         self.busy = False
         self.result_files_dialog = None
+        self.saved_reports_dialog = None
         self.setMinimumSize(650, 390)
         available = self.screen().availableGeometry()
         self.resize(min(1050, int(available.width() * .94)), min(680, int(available.height() * .90)))
@@ -106,6 +254,7 @@ class LogHistoryDialog(QDialog):
         self.job_menu = QMenu(self.jobs)
         self.stop_action = self.job_menu.addAction('请求安全停止…', self._request_stop)
         self.result_files_action = self.job_menu.addAction('查看批次结果文件…', self._request_result_files)
+        self.saved_reports_action = self.job_menu.addAction('查看已保存留存报告…', self._request_saved_reports)
         jobs_bar.addWidget(self.jobs, 1)
         self.newest_jobs = button('最新任务', lambda: self.jobs_requested.emit(None))
         self.older_jobs = button('更早任务', lambda: self.jobs_requested.emit(self.jobs_cursor))
@@ -196,7 +345,7 @@ class LogHistoryDialog(QDialog):
         self.feedback.setText(f'本页 {len(page.entries)} 条' if page.entries else '该项目没有旧工作台运行记录')
 
     def _job_menu(self, point):
-        if self.stop_action.isEnabled() or self.result_files_action.isEnabled():
+        if self.stop_action.isEnabled() or self.result_files_action.isEnabled() or self.saved_reports_action.isEnabled():
             self.job_menu.popup(self.jobs.mapToGlobal(point))
 
     def _request_stop(self):
@@ -212,6 +361,10 @@ class LogHistoryDialog(QDialog):
     def _request_result_files(self):
         if self.result_files_action.isEnabled():
             self.result_files_requested.emit(self.jobs.currentData())
+
+    def _request_saved_reports(self):
+        if self.saved_reports_action.isEnabled():
+            self.saved_reports_requested.emit(self.jobs.currentData())
 
     @staticmethod
     def _job_title(job, state):
@@ -237,6 +390,7 @@ class LogHistoryDialog(QDialog):
         can_view_files = job_menu_ready and row.capability in POWER_HISTORY_CAPABILITIES
         self.stop_action.setEnabled(can_stop)
         self.result_files_action.setEnabled(can_view_files)
+        self.saved_reports_action.setEnabled(can_view_files)
         tip = ('\n右键查看任务操作' if can_stop or can_view_files else '')
         self.jobs.setToolTip(row.job_id + tip if row else '')
         if busy:
@@ -306,6 +460,9 @@ class LogHistoryController:
         self.workspace = workspace
         self.windows = {}
         self.requests = {}
+        self.summary_requests = {}
+        self.report_requests = {}
+        workspace.window.project_context_updated.connect(self._summary_context_changed)
 
     def open(self):
         project = self.workspace._current()
@@ -323,8 +480,17 @@ class LogHistoryController:
         dialog.events_requested.connect(lambda job, before, filters: self._submit(dialog, 'history_events', before, job, filters))
         dialog.stop_requested.connect(lambda job: self._submit(dialog, 'job_stop_active', job))
         dialog.result_files_requested.connect(lambda job: self._submit(dialog, 'history_result_files', job))
+        dialog.saved_reports_requested.connect(lambda job: self._read_saved_reports(dialog, job))
+        dialog.jobs.currentIndexChanged.connect(lambda *_: self._summary_context_changed())
+        dialog.source.currentIndexChanged.connect(lambda *_: self._summary_context_changed())
         dialog.logs.export_requested.connect(lambda entries, description: self.workspace.export_logs(entries, description, dialog))
-        dialog.finished.connect(lambda _: self.windows.pop(project.project_id, None))
+        def finished(_):
+            if dialog.result_files_dialog is not None:
+                self._cancel_summary(dialog.result_files_dialog, '', display=False)
+            self.windows.pop(project.project_id, None)
+            self._cancel_report_requests(dialog)
+
+        dialog.finished.connect(finished)
         dialog.show()
         self._submit(dialog, 'history_jobs', None)
 
@@ -339,6 +505,60 @@ class LogHistoryController:
             dialog.logs.set_export_enabled(False)
 
     def handle_result(self, result):
+        if result.operation in ('history_material_report_save', 'history_material_reports'):
+            request = self.report_requests.pop(result.identifier, None)
+            if request is None:
+                return True
+            dialog, files, target, generation, stop = request
+            if not self._report_matches(dialog, files, target, generation) or stop.is_set():
+                return True
+            if result.project_id != dialog.project_id:
+                return True
+            if files is not None:
+                payload = result.payload
+                matched = isinstance(payload, SavedMaterialReport) and (
+                    payload.project_id, payload.job_id, payload.run_id) == (target.project_id, target.job_id, target.run_id)
+                files.set_save_pending(False, saved=not result.error and matched)
+                files.feedback.setText('报告未保存：' + result.error if result.error else
+                                       '已保存历史报告。可从任务菜单查看。' if matched else '报告保存回执范围不符。')
+            elif result.error:
+                dialog.feedback.setText('保存报告无法读取：' + result.error)
+            elif isinstance(result.payload, SavedMaterialReports) and all(
+                    (row.project_id, row.job_id, row.run_id) == (dialog.project_id, target, result.payload.run_id)
+                    for row in result.payload.reports):
+                old = dialog.saved_reports_dialog
+                if old is not None:
+                    old.close()
+                view = SavedMaterialReportsDialog(dialog, target, result.payload)
+                dialog.saved_reports_dialog = view
+                view.finished.connect(lambda _: setattr(dialog, 'saved_reports_dialog', None))
+                view.show()
+            else:
+                dialog.feedback.setText('保存报告回执范围不符。')
+            return True
+        if result.operation in ('history_material_summary', 'history_material_batch_summary'):
+            request = self.summary_requests.pop(result.identifier, None)
+            if request is None:
+                return True
+            dialog, files, target, generation, stop = request
+            batch = isinstance(target, HistoryMaterialBatchTarget)
+            if ((stop.is_set() and not batch) or self.workspace.closing or self.windows.get(target.project_id) is not dialog
+                    or dialog.result_files_dialog is not files):
+                return True
+            files.set_summary_pending(False)
+            if (not self._summary_matches(dialog, files, target, generation)
+                    or result.project_id != target.project_id):
+                files.feedback.setText('选定范围已变化，汇总结果作废。')
+            elif result.error:
+                files.feedback.setText('汇总未完成：' + result.error)
+            elif (batch and (result.operation != 'history_material_batch_summary'
+                             or not isinstance(result.payload, HistoryMaterialBatchSummary) or not result.payload.matches(target))
+                  or not batch and (result.operation != 'history_material_summary'
+                                    or not isinstance(result.payload, HistoryMaterialSummary) or result.payload.target != target)):
+                files.feedback.setText('汇总回执与选定范围不符，未显示结果。')
+            else:
+                files.show_summary(result.identifier, result.payload)
+            return True
         request = self.requests.pop(result.identifier, None)
         if request is None:
             return False
@@ -390,12 +610,116 @@ class LogHistoryController:
                 files.set_busy(True)
 
         def finished(_):
+            self._cancel_summary(files, '', display=False)
+            self._cancel_report_requests(dialog, files)
             dialog.result_files_dialog = None
             dialog.set_busy(dialog.busy)
 
         files.open_requested.connect(open_file)
+        files.summary_requested.connect(lambda target: self._start_summary(dialog, files, target))
+        files.save_report_requested.connect(lambda original, target: self._save_material_report(dialog, files, original, target))
+        files.summary_cancelled.connect(lambda: self._request_summary_cancel(files))
+        files.summary_scope_changed.connect(lambda: self._cancel_summary(files, '选定范围已变化，汇总结果作废。'))
         files.finished.connect(finished)
         files.show()
+
+    def _report_matches(self, dialog, files, target, generation):
+        if self.workspace.closing or self.windows.get(dialog.project_id) is not dialog:
+            return False
+        if files is not None:
+            return self._summary_matches(dialog, files, target, generation)
+        return (self.workspace.window.selected_project == dialog.project_id
+                and dialog.source_generation == generation and dialog.jobs.currentData() == target)
+
+    def _save_material_report(self, dialog, files, original, target):
+        generation = dialog.source_generation
+        if not self._report_matches(dialog, files, target, generation) or files.save_pending:
+            return
+        stop = Event()
+        identifier = self.workspace.submit('history_material_report_save', dialog.project_id, original, target, stop)
+        if identifier is not None:
+            self.report_requests[identifier] = (dialog, files, target, generation, stop)
+            files.set_save_pending(True)
+            files.feedback.setText('正在保存已生成的报告…')
+
+    def _read_saved_reports(self, dialog, job):
+        generation = dialog.source_generation
+        if not self._report_matches(dialog, None, job, generation):
+            return
+        self._cancel_report_requests(dialog)
+        stop = Event()
+        identifier = self.workspace.submit('history_material_reports', dialog.project_id, job, stop)
+        if identifier is not None:
+            self.report_requests[identifier] = (dialog, None, job, generation, stop)
+            dialog.feedback.setText('正在读取已保存报告…')
+
+    def _cancel_report_requests(self, dialog, files=None):
+        for identifier, (owner, window, _, _, stop) in tuple(self.report_requests.items()):
+            if owner is dialog and (files is None or window is files):
+                stop.set()
+                self.report_requests.pop(identifier, None)
+
+    def _summary_matches(self, dialog, files, target, generation):
+        return (self.workspace.window.selected_project == target.project_id
+                and dialog.source_generation == generation and dialog.jobs.currentData() == target.job_id
+                and dialog.result_files_dialog is files and files.summary_target() == target)
+
+    def _start_summary(self, dialog, files, target):
+        generation = dialog.source_generation
+        if (self.workspace.closing or dialog.busy or files.summary_pending
+                or not self._summary_matches(dialog, files, target, generation)):
+            files.feedback.setText('项目、任务或所选通道已变化，未开始汇总。')
+            return
+        stop = Event()
+        batch = isinstance(target, HistoryMaterialBatchTarget)
+        operation = 'history_material_batch_summary' if batch else 'history_material_summary'
+        identifier = self.workspace.submit(operation, dialog.project_id, target, stop)
+        if identifier is None:
+            files.feedback.setText('本次汇总未受理。')
+            return
+        self.summary_requests[identifier] = (dialog, files, target, generation, stop)
+        files.set_summary_pending(True)
+        scope = f'{len(target.channels)} 个选定通道' if batch else f'CH{target.channel:02d}'
+        files.feedback.setText(f'请求 #{identifier} · 正在只读核对 {scope} 留存资料…')
+
+    def _request_summary_cancel(self, files):
+        for _, owner, target, _, stop in tuple(self.summary_requests.values()):
+            if owner is files and isinstance(target, HistoryMaterialBatchTarget):
+                stop.set()
+                files.summary_cancel.setEnabled(False)
+                files.feedback.setText('已请求取消；等待已完成通道的结果，其余通道将标记未完成。')
+                return
+        self._cancel_summary(files, '已取消本次只读汇总。')
+
+    def _cancel_summary(self, files, reason, *, display=True):
+        for identifier, (_, owner, _, _, stop) in tuple(self.summary_requests.items()):
+            if owner is files:
+                stop.set()
+                del self.summary_requests[identifier]
+                if display:
+                    files.set_summary_pending(False)
+                    files.feedback.setText(reason)
+
+    def _summary_context_changed(self):
+        for dialog, files, target, generation, _ in tuple(self.summary_requests.values()):
+            if not self._summary_matches(dialog, files, target, generation):
+                self._cancel_summary(files, '选定范围已变化，汇总结果作废。')
+        for identifier, (dialog, files, target, generation, stop) in tuple(self.report_requests.items()):
+            if not self._report_matches(dialog, files, target, generation):
+                stop.set()
+                self.report_requests.pop(identifier, None)
+                if files is not None and dialog.result_files_dialog is files:
+                    files.set_save_pending(False)
+                    files.feedback.setText('选定范围已变化，本次保存回执不再显示。')
+        for dialog in tuple(self.windows.values()):
+            view = dialog.saved_reports_dialog
+            if view is not None and (self.workspace.window.selected_project != dialog.project_id
+                                     or dialog.jobs.currentData() != view.job):
+                view.close()
+            files = dialog.result_files_dialog
+            if files is not None and self.workspace.window.selected_project != dialog.project_id:
+                files._generated_report = None
+                files.save_report_action.setEnabled(False)
 
     def set_export_enabled(self, enabled):
         for dialog in self.windows.values():

@@ -1,0 +1,8 @@
+PYTHON_COMPILE_OK 8
+CAPABILITY_COVERAGE_OK
+GUI_TEST_COVERAGE_OK: 112 GUI construction sites reviewed
+DIFF_CHECK OK
+GUI_ACTION_FILE_CHANGES src/ui/qt/ai_chat_controller.py, src/ui/qt/ai_chat_dialog.py
+REPORT_LINKS_OK true
+PRIVATE_DESKTOP_EVIDENCE true
+GENERATED_PNG 0

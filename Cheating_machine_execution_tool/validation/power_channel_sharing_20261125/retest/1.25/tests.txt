@@ -1,0 +1,10 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 10, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_3be9ea9ab7774d95929a04a0175cffd8', 'framework': 'qt', 'platform': 'windows'}
+
+test_qt_single_power_uses_selected_port_and_requires_local_confirmation (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_channel_resources_filter_and_refresh_without_editing_the_draft (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 5.721s
+
+OK

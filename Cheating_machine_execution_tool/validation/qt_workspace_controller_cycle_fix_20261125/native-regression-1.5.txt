@@ -1,0 +1,20 @@
+GUI_TEST_COVERAGE_OK
+ACTIVE_FAKE_HISTORY_EVIDENCE: {"running_state": "running", "running_progress": 68, "running_result": null, "original_events": 7, "final_events": 10, "original_event_prefix_preserved": true, "final_state": "succeeded", "final_ok": true, "final_items_ok": [true], "final_output_marker": true, "stop_observed": false, "resources_released": true, "original_history_unchanged": true, "physical_serial_calls": 0, "blocked_network_calls": 0, "parallel_reads": {"peak": 2, "workers": 2, "active": 0, "opened": 2, "closed": 2, "all_closed": true}}
+MATERIAL_PARALLEL_QT_EVIDENCE: {"peak": 2, "workers": 2, "active": 0, "opened": 4, "closed": 4, "all_closed": true}
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 42, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_cb3f3f15eefa4596b64e2953c7fa53b5', 'framework': 'qt', 'platform': 'windows'}
+CLOSE_REGRESSION_DENIED: {"requests.sessions.Session.request": 0, "serial.Serial": 0, "socket.create_connection": 0, "socket.getaddrinfo": 0, "socket.gethostbyname": 0, "socket.gethostbyname_ex": 0, "socket.gethostbyaddr": 0, "socket.socket.connect": 0, "socket.socket.connect_ex": 0, "socket.socket.send": 0, "socket.socket.sendall": 0, "socket.socket.sendto": 0, "socket.socket.bind": 0, "socket.socket.listen": 0, "socket.socket.accept": 0, "subprocess.Popen": 0, "os.startfile": 0}
+
+test_close_waits_for_actual_worker_cleanup (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_closed_workbench_releases_owner_refs_only_after_qt_disposal (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_closed_workbench_retains_owner_refs_when_final_archive_unconfirmed (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_configuration_save_busy_close_keeps_event_loop_responsive (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_manual_update_uses_verified_download_and_waits_for_cancel_cleanup (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_saved_material_error_and_cancel_leave_active_fake_power_job_unchanged (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_multi_channel_saved_material_summary_preserves_independent_and_cancelled_results (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_saved_material_summary_uses_selected_history_and_discards_late_reads (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_repairs_restart_only_after_worker_and_single_instance_are_closed (qt_workbench_probe.QtNativeGuardTests) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 18.032s
+
+OK

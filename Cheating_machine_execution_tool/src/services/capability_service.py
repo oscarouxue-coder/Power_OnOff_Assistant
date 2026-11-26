@@ -136,6 +136,16 @@ class CapabilityService:
         # Only the host-owned firmware editor can supply this keyword; it is not in UPGRADE_SCHEMA.
         manual = {"local_manual_restart": True} if local_manual_restart else {}
         prepared = self.upgrades.validate(arguments, authority, **manual)
+        from src.services.workspace_resources import power_channel_keys, power_registration_enabled
+        shared_power = bool(self.resources.coordinator is not None and self.resources.coordinator.automatic_recovery
+                            and self.project_context is not None and power_registration_enabled(
+                                self.project_context.saved_root / 'Auto_power_on_off_tool/config'))
+        if shared_power:
+            prepared['resources'] = [key for key in prepared['resources'] if not key.startswith('power:')]
+            for request in prepared['requests']:
+                port = getattr(request, 'power_serial_port', '')
+                if port:
+                    prepared['resources'].extend(power_channel_keys(port, (request.power_channel,)))
         def recheck():
             current = self.upgrades.validate(arguments, authority, **manual)
             if current["binding"] != prepared["binding"]:
@@ -176,7 +186,7 @@ class CapabilityService:
                     context.event(phases.get(target, 'engine'), line)
             items = self.upgrade_dispatch(requests, self.manager,
                 parallel_count=prepared["arguments"]["parallel_count"], on_output=output,
-                stop_control=context.stop)
+                stop_control=context.stop, **({'shared_power': True} if shared_power else {}))
             result = upgrade_result(items)
             context.event('engine_result', '原业务引擎返回；刷写/上线判据以原引擎结果为准')
             # An ordinary engine failure may be post-flash and cannot establish rollback.

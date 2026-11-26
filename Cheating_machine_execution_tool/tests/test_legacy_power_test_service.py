@@ -216,7 +216,7 @@ class _HistoryProcessContext(_FakeProcessContext):
 
 
 class LegacyPowerTestServiceTests(unittest.TestCase):
-    def _run_status_messages(self, messages):
+    def _run_status_messages(self, messages, total=5):
         class StatusProcess(_HistoryCompletedProcess):
             def start(self):
                 for message in messages:
@@ -232,7 +232,7 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
             request = replace(prepare_legacy_power_test_request(
                 _write_config_tree(Path(temp_dir)),
                 (LegacyPowerChannel(2, "192.168.1.102"), LegacyPowerChannel(7, "192.168.1.107")),
-            ), number_of_tests=5)
+            ), number_of_tests=total)
         statuses, history, progress, emitted = [], [], [], []
         result = run_legacy_power_test(
             request, emitted.append, _FakeEvent(), process_context=StatusContext(),
@@ -241,6 +241,31 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
             on_channel_progress=lambda *event: progress.append(event),
         )
         return result, statuses, history, progress, emitted
+
+    def test_cancelled_channel_keeps_eight_completed_rounds_and_other_channel_result(self):
+        def message(channel, cycle):
+            return dict(type='log', source='result_file', level='info',
+                        message=f'2026-11-25 10:00:00: 通道{channel}下挂的设备在第{cycle}次测试时正常')
+
+        _, states, history, progress, logs = self._run_status_messages([
+            message(2, 8), message(7, 100),
+            dict(type='channel_result', channel=2, ok=False, cancelled=True),
+            dict(type='channel_result', channel=7, ok=True),
+        ], total=100)
+        self.assertEqual({number: (completed, total) for number, completed, total, _ in progress},
+                         {2: (8, 100), 7: (100, 100)})
+        self.assertEqual({number: state for number, state, _ in states}, {2: 'stopped', 7: 'success'})
+        self.assertEqual(history, [])
+        self.assertTrue(any('通道 2 已停止，保留已完成 8/100 轮' in line for line in logs))
+
+    def test_failed_channel_never_fills_unfinished_rounds(self):
+        _, states, _, progress, _ = self._run_status_messages([
+            dict(type='log', source='result_file', level='info',
+                 message='2026-11-25 10:00:00: 通道2下挂的设备在第8次测试时正常'),
+            dict(type='channel_result', channel=2, ok=False),
+        ], total=100)
+        self.assertEqual([event[1] for event in progress if event[0] == 2], [0, 8])
+        self.assertEqual(states[-1][:2], (2, 'failed'))
 
     def test_normal_cycle_and_start_logs_report_explicit_channel_states(self):
         self.assertEqual(service_module._legacy_channel_status_from_log(
@@ -433,10 +458,16 @@ class LegacyPowerTestServiceTests(unittest.TestCase):
             self.assertEqual(emitted.count(f"[旧工具Logs][ERROR] {text}"), 1)
 
     def test_power_frame_is_rendered_in_execution_log_format(self) -> None:
-        self.assertEqual(
-            service_module._format_power_frame(bytes((0x55, 0x00, 0xAD, 0x00, 0x00, 0xAD))),
-            "55 00 AD 00 00 AD",
-        )
+        for port in ("COM101", "COM106"):
+            for channel in range(1, 17):
+                for powered_on, action in ((True, "上电"), (False, "下电")):
+                    with self.subTest(port=port, channel=channel, action=action):
+                        frame = service_module.channel_power_frame(channel, powered_on)
+                        self.assertEqual(service_module._format_power_frame(port, frame),
+                                         f"{port}，CH{channel}，{action}")
+        for payload in ("55 00 AD 00 00 AD", "55 01 A0 00 02 00", "55 01"):
+            self.assertEqual(service_module._format_power_frame("COM101", bytes.fromhex(payload)),
+                             f"COM101，非单通道指令：{payload}")
 
     def test_prepare_request_loads_old_start_all_settings_without_gui(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

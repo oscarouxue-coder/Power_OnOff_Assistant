@@ -138,6 +138,7 @@ class QtWorkspaceAdapter:
         # Admission is bounded by the same workspace command tickets as foreground operations.
         self._history_reader = ThreadPoolExecutor(max_workers=1, thread_name_prefix='qt-job-history')
         self._history_reads = {}
+        self._material_report_cache = {}
         self._model_settings = None
         self._ai_chats = {}
         self._executions = {}
@@ -169,7 +170,8 @@ class QtWorkspaceAdapter:
                              'single_power_options', 'forget_recent', 'instance_status', 'remote_scope_read', 'remote_scope_save',
                              'imported_connection_choices', 'imported_connection_select',
                              *WIZARD_COMMANDS,
-                             'service_aging_record', 'channel_evidence',
+                             'service_aging_record', 'channel_evidence', 'history_material_summary', 'history_material_batch_summary',
+                             'history_material_report_save', 'history_material_reports',
                              *GATEWAY_OPERATIONS,
                              *FEISHU_REPAIR_OPERATIONS,
                              *PLATFORM_CONFIG_OPERATIONS,
@@ -321,6 +323,15 @@ class QtWorkspaceAdapter:
                 for key in held:
                     if key.startswith(('serial:', 'power:', 'adapter:')):
                         owners.setdefault(key, set()).add(resources.labels.get(owner, project_id))
+            from src.core.host_resource_lock import HostResourceBusy, HostResourceLock
+            power_ports = {entry.resource_key.split(':')[1] for entry in entries
+                           if entry.resource_key.startswith('power-channel:')}
+            for port in power_ports:
+                try:
+                    with HostResourceLock(['power:' + port], namespace='power-frame-v1', reentrant=False):
+                        pass
+                except HostResourceBusy:
+                    owners.setdefault('serial:' + port, set()).add('程控电源指令执行中')
             leases = DeviceLeaseView(tuple((key, tuple(sorted(names))) for key, names in sorted(owners.items())),
                                      datetime.now(), sample.protection_unavailable, entries)
         finally:
@@ -343,7 +354,15 @@ class QtWorkspaceAdapter:
 
     def finish_log_close(self):
         """The GUI polls after the separate update worker finishes its final cancellation log."""
-        return self._log_writer.begin_close()
+        finished = self._log_writer.begin_close()
+        if finished and self.closed.is_set():
+            self._release_closed_callbacks()
+        return finished
+
+    def _release_closed_callbacks(self):
+        service = getattr(self, '_service', None)
+        if service is not None and self._log_writer.release_closed_callbacks():
+            service.release_closed_callbacks()
 
     def _emit(self, message, level='INFO'):
         # Original project management emits names/operations, not credential
@@ -354,6 +373,12 @@ class QtWorkspaceAdapter:
 
     def record_update_log(self, message):
         self._record(LogView(datetime.now().strftime('%H:%M:%S'), 'INFO', '', '软件更新', message))
+
+    def record_workspace_activation(self, project_requested):
+        message = '收到重复启动请求，已唤起现有工作台'
+        if project_requested:
+            message += '，已提交项目打开请求'
+        self._emit('[项目管理] ' + message)
 
     def record_review(self, identifier, message, level):
         with self.lock:
@@ -564,6 +589,7 @@ class QtWorkspaceAdapter:
         if not self._service.prepare_project_close(context) or self._cancel_history(project_id):
             self._project_closes[project_id] = choice
             return
+        self._material_report_cache.pop(project_id, None)
         if self._platform_configuration is not None:
             self._platform_configuration.close_bindings(project_id)
             if not self._platform_configuration.close_trials(project_id):
@@ -605,9 +631,11 @@ class QtWorkspaceAdapter:
     def _parallel_test_allowed(context, operation, others):
         if not others:
             return True
+        if operation == 'power.qt_single':
+            return all(item.has_only_power_tasks(include_shared_power=True) for item in others)
         if operation not in ('aging.start', 'aging.resume', 'service_aging.start'):
             return False
-        if operation != 'service_aging.start' and all(item.has_only_power_tasks() for item in others):
+        if operation != 'service_aging.start' and all(item.has_only_power_tasks(include_shared_power=True) for item in others):
             return True
         if not all(item.has_only_power_tasks(include_continuous=True) for item in others):
             return False
@@ -720,6 +748,7 @@ class QtWorkspaceAdapter:
                 previous.adapters_at if reading.adapters is None else checked_at,
                 reading.ports is None, reading.adapters is None)
         resources = self._service.resources
+        resources.recover_released_power_projects()
         idle = all(execution.idle for execution in self._executions.values())
         with resources.lock:
             register = (idle and not resources.owners
@@ -767,6 +796,35 @@ class QtWorkspaceAdapter:
             future = self._history_reader.submit(reader, context, record, target, cancel)
             self._history_reads[identifier] = (operation, context.identity, cancel, future)
             return
+        if operation in ('history_material_summary', 'history_material_batch_summary'):
+            from src.services.qt_power_logs import summarize_history_materials, summarize_history_materials_batch
+            target, cancel = options
+            record = self._history_result_record(target.job_id)
+            self._material_report_cache[project_id] = (identifier, target, None)
+            batch = operation == 'history_material_batch_summary'
+            scope = f'{len(target.channels)} 个选定通道' if batch else f'CH{target.channel:02d}'
+            self._emit(f'[留存资料汇总] 请求 #{identifier} · {context.identity.name} · {scope} · 开始只读核对')
+            reader = summarize_history_materials_batch if batch else summarize_history_materials
+            future = self._history_reader.submit(reader, context, record, target, cancel)
+            self._history_reads[identifier] = (operation, context.identity, cancel, future)
+            return
+        if operation in ('history_material_report_save', 'history_material_reports'):
+            from src.services.qt_power_logs import read_material_reports, save_material_report
+            if operation == 'history_material_report_save':
+                original, target, cancel = options
+                cached = self._material_report_cache.get(project_id)
+                if cached is None or cached[:2] != (original, target) or cached[2] is None:
+                    raise ValueError('没有匹配的已生成历史报告，未保存')
+                snapshot = cached[2]
+                future = self._history_reader.submit(save_material_report, context,
+                    self._history_result_record(snapshot.job_id), snapshot, cancel)
+            else:
+                job, cancel = options
+                future = self._history_reader.submit(read_material_reports, context,
+                    self._history_result_record(job), job, cancel)
+            self._emit(f'[留存报告] 请求 #{identifier} · {context.identity.name} · 已受理')
+            self._history_reads[identifier] = (operation, context.identity, cancel, future)
+            return
         self._emit('[任务历史] 开始读取：' + context.identity.name)
         if operation in AGING_HISTORY:
             from src.services.service_aging import ServiceAging
@@ -802,7 +860,8 @@ class QtWorkspaceAdapter:
             del self._history_reads[identifier]
             error = ''
             page = None
-            if cancel.is_set() and (operation != 'aging_history_export' or future.cancelled()):
+            if cancel.is_set() and (operation not in ('aging_history_export', 'history_material_batch_summary',
+                                                       'history_material_report_save') or future.cancelled()):
                 error = '项目或工作区正在关闭，已取消任务历史读取'
             else:
                 try:
@@ -818,11 +877,45 @@ class QtWorkspaceAdapter:
                         page = replace(page, entries=tuple(
                             replace(row, state='unknown') if row.state in ('running', 'queued', 'stop_requested')
                             and row.job_id not in active else row for row in page.entries))
+                except InterruptedError:
+                    error = '本次本地历史操作已取消'
                 except ValueError as problem:
                     error = str(problem)
                 except Exception:
-                    error = '项目历史暂时无法读取，请核对数据库后重试'
+                    error = ('保存报告失败，请核对项目存储目录后重试' if operation == 'history_material_report_save' else
+                             '项目历史暂时无法读取，请核对数据库后重试')
             if operation == 'channel_evidence':
+                self.results.put_nowait(ProjectCommandResult(identifier, operation, project.project_id, error, page))
+                continue
+            if operation == 'history_material_summary':
+                from src.models.qt_log_history import HistoryMaterialSummary
+                if not error and not isinstance(page, HistoryMaterialSummary):
+                    error = '本地汇总缺少有效结果回执'
+                    page = None
+                detail = ('已取消' if cancel.is_set() else '未完成' if error else
+                          f'已汇总：读取 {page.read_count} 份，缺失 {page.missing_count} 份，无法读取 {page.failed_count} 份')
+                self._emit(f'[留存资料汇总] 请求 #{identifier} · {project.name} · {detail}', 'WARN' if error else 'INFO')
+                if not error and not cancel.is_set():
+                    self._cache_material_report(identifier, project.project_id, page)
+                self.results.put_nowait(ProjectCommandResult(identifier, operation, project.project_id, error, page))
+                continue
+            if operation == 'history_material_batch_summary':
+                from src.models.qt_log_history import HistoryMaterialBatchSummary
+                if not error and (not isinstance(page, HistoryMaterialBatchSummary) or not page.matches(page.target)):
+                    error = '本地多通道汇总缺少有效结果回执'
+                    page = None
+                detail = ('已取消' if error and cancel.is_set() else '未完成' if error else
+                          f'已核对 {page.completed_count} 个，无法核对 {page.failed_count} 个，已取消 {page.cancelled_count} 个')
+                self._emit(f'[留存资料汇总] 请求 #{identifier} · {project.name} · {detail}', 'WARN' if error else 'INFO')
+                if not error and not cancel.is_set():
+                    self._cache_material_report(identifier, project.project_id, page)
+                self.results.put_nowait(ProjectCommandResult(identifier, operation, project.project_id, error, page))
+                continue
+            if operation in ('history_material_report_save', 'history_material_reports'):
+                detail = ('未完成：' + error if error else
+                          '已保存生成报告' if operation == 'history_material_report_save' else
+                          f'已读取 {len(page.reports)} 份已保存报告，{page.invalid_count} 份无法读取')
+                self._emit(f'[留存报告] 请求 #{identifier} · {project.name} · {detail}', 'WARN' if error else 'INFO')
                 self.results.put_nowait(ProjectCommandResult(identifier, operation, project.project_id, error, page))
                 continue
             if error:
@@ -833,6 +926,18 @@ class QtWorkspaceAdapter:
             else:
                 self._emit(f'[任务历史] 已读取 {len(page.entries)} 条：{project.name}')
             self.results.put_nowait(ProjectCommandResult(identifier, operation, project.project_id, error, page))
+
+    def _cache_material_report(self, identifier, project_id, summary):
+        from src.services.qt_power_logs import material_report_snapshot
+        cached = self._material_report_cache.get(project_id)
+        if cached is None or cached[:2] != (identifier, summary.target):
+            return
+        try:
+            snapshot = material_report_snapshot(self._context(project_id),
+                self._history_result_record(summary.target.job_id), summary)
+        except (OSError, ValueError, RuntimeError, TypeError):
+            return  # original read result remains available
+        self._material_report_cache[project_id] = (identifier, summary.target, snapshot)
 
     def _request_archive(self, identifier, operation, args):
         from src.services.qt_archived_logs import read_serial_log, read_workspace_log, serial_log_files
@@ -1163,7 +1268,7 @@ class QtWorkspaceAdapter:
             if execution.closing or self._closing.is_set():
                 raise ValueError('工作区正在退出，升级操作未执行')
             if operation in ('upgrade_preview', 'upgrade_execute', 'upgrade_save') and any(
-                    key != context.identity.project_id and not item.idle for key, item in self._executions.items()):
+                    not item.has_only_power_tasks(include_shared_power=True) for item in self._other_active(context.identity.project_id)):
                 raise ValueError('当前Qt阶段仅准入一个设备任务，请等待其它项目收尾')
             return execution.upgrade_command(operation[len('upgrade_'):], args[1])
         if operation.startswith('parameter_'):
@@ -1468,6 +1573,23 @@ class QtWorkspaceAdapter:
                 record = (next((row for row in records if row.get('owner') == project.run_id), {})
                           if execution and project.run_id in execution.jobs else latest)
                 project = replace(project, started_text=_started_text(record))
+                if project.project_type != 'service_aging':
+                    from src.services.power_run_overview import PowerRunOverview, power_attention_records
+                    fallback = None
+                    power_record = record
+                    if record.get('operation') == 'aging.resume' and project.resume_detail:
+                        power_record = next((row for row in records if row.get('owner') == project.power_history_job), {})
+                    if not project.project_type and power_record.get('operation') in ('aging.start', 'pipeline.start'):
+                        # Older projects may have original channel receipts but no typed DUT profile.
+                        if project.project_id not in self._power_overviews:
+                            self._power_overviews[project.project_id] = PowerRunOverview()
+                        overview = self._power_overviews[project.project_id]
+                        try:
+                            fallback = overview.snapshot(context, power_record, None, attention_only=True)
+                        except (OSError, ValueError, sqlite3.DatabaseError):
+                            pass  # The task-level detail still reports readable original receipts.
+                    attention = power_attention_records(project, context, record, fallback)
+                    project = replace(project, attention_records=attention, attention_count=len(attention))
             active_jobs = sum(job['state'] in ('queued', 'running', 'stop_requested', 'stopping')
                               for job in runtime_jobs)
             project = replace(project, overview_state=self._overview_state(project, latest, runtime_jobs, execution),
@@ -1523,7 +1645,7 @@ class QtWorkspaceAdapter:
             return False
         self._complete_inventory()
         self._poll_archive(cancel=True)
-        self._service.close()
+        self._service.close(defer_callback_release=True)
         try:
             self._service.write_session(self._session_at_exit)
         except OSError as error:
@@ -1649,7 +1771,8 @@ class QtWorkspaceAdapter:
                 deferred = False
                 previous_ids = set(self._service.projects.opened)
                 try:
-                    if operation == 'channel_evidence':
+                    if operation in ('channel_evidence', 'history_material_summary', 'history_material_batch_summary',
+                                     'history_material_report_save', 'history_material_reports'):
                         project_id = args[0]
                         try:
                             self._request_history(identifier, operation, args)
@@ -1657,7 +1780,13 @@ class QtWorkspaceAdapter:
                         except ValueError as error:
                             error_text = str(error)
                         except Exception:
-                            error_text = '本地只读查询未能受理，请核对项目状态后重试'
+                            error_text = ('本地历史操作未能受理，请核对项目状态后重试'
+                                          if operation in ('history_material_report_save', 'history_material_reports')
+                                          else '本地只读查询未能受理，请核对项目状态后重试')
+                        if operation in ('history_material_summary', 'history_material_batch_summary') and error_text:
+                            self._emit(f'[留存资料汇总] 请求 #{identifier} · 未受理', 'WARN')
+                        if operation in ('history_material_report_save', 'history_material_reports') and error_text:
+                            self._emit(f'[留存报告] 请求 #{identifier} · 未受理', 'WARN')
                         continue
                     self._flush_window_placements()
                     if operation in FEISHU_REPAIR_OPERATIONS:
@@ -1829,4 +1958,5 @@ class QtWorkspaceAdapter:
                     self.results.put_nowait(ProjectCommandResult(request, 'close', project_id, '工作区已退出，未确认项目关闭完成'))
             if not self._update_logs_pending:
                 self._log_writer.close()
+                self._release_closed_callbacks()
             self.closed.set()

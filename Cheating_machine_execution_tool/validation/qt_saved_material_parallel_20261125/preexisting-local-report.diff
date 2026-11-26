@@ -1,0 +1,978 @@
+diff --git a/Cheating_machine_execution_tool/src/services/qt_power_logs.py b/Cheating_machine_execution_tool/src/services/qt_power_logs.py
+index 311f5bbb..9d971215 100644
+--- a/Cheating_machine_execution_tool/src/services/qt_power_logs.py
++++ b/Cheating_machine_execution_tool/src/services/qt_power_logs.py
+@@ -1,12 +1,18 @@
+ """Open a local operator's channel log through the Windows file association."""
+ from contextlib import closing
++from dataclasses import asdict
++from datetime import datetime
+ import json
+ import os
+ from pathlib import Path
+ import re
+ import sqlite3
++import stat
+ 
+-from src.models.qt_log_history import ArchivedLogFile
++from src.models.capabilities import CapabilitySpec, object_schema
++from src.models.qt_log_history import (ArchivedLogFile, HistoryMaterialBatchSummary, HistoryMaterialBatchTarget,
++                                      HistoryMaterialChannelResult, HistoryMaterialSummary, HistoryMaterialTarget)
++from src.services.capability_registry import CapabilityRegistry
+ from src.services.power_test_log_service import latest_power_test_result_log
+ from src.services.project_store import ProjectStore
+ from src.services.qt_log_history import job_database_path
+@@ -56,11 +62,20 @@ def open_channel_log(context, number, kind, *, run_root=None, session=None):
+     return _launch(path)
+ 
+ 
+-def _history_directories(context, job_id, record):
++def _history_directories(context, job_id, record, *, summary=False):
+     """Bind the job's original channels to its project-owned run snapshot."""
+     database = job_database_path(context)
+     if not database.is_file():
+         raise ValueError('该项目的任务历史库不存在')
++    if summary:
++        # Even SQLite mode=ro can create WAL sidecars. The original job store
++        # uses the rollback journal; never open an unexpected WAL for summary.
++        if database.stat().st_nlink > 1:
++            raise ValueError('任务历史库不是独立文件，未读取留存资料')
++        with database.open('rb') as source:
++            source.seek(18)
++            if source.read(2) == b'\x02\x02':
++                raise ValueError('任务历史库采用 WAL 格式，未打开数据库')
+     try:
+         with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True, timeout=.25)) as connection:
+             row = connection.execute('SELECT capability,payload FROM jobs WHERE id=?', (job_id,)).fetchone()
+@@ -88,7 +103,16 @@ def _history_directories(context, job_id, record):
+     if record.get('_path') != manifest or manifest.resolve() != manifest:
+         raise ValueError('运行快照路径已变化或重定向')
+     try:
+-        data = json.loads(manifest.read_text(encoding='utf-8'))
++        if summary:
++            if manifest.stat().st_nlink > 1:
++                raise ValueError('运行快照不是独立文件')
++            with manifest.open('rb') as source:
++                raw = source.read(256 * 1024 + 1)
++            if len(raw) > 256 * 1024:
++                raise ValueError('运行快照超出读取上限')
++            data = json.loads(raw.decode('utf-8'))
++        else:
++            data = json.loads(manifest.read_text(encoding='utf-8'))
+         matches = (data['owner'], data['project_id'], data['run_id'], data['operation'])
+     except (OSError, ValueError, TypeError, KeyError) as error:
+         raise ValueError('运行快照记录不存在或无法读取') from error
+@@ -117,7 +141,8 @@ def history_result_files(context, job_id, record):
+                 kind = _history_file_type(item.name, number)
+                 if kind and item.is_file(follow_symlinks=False):
+                     title = '开关机结果' if kind == 'command_results' else 'WiFi 记录'
+-                    files.append(ArchivedLogFile(directory / item.name, f'CH{number:02d} · {title} · {item.name}'))
++                    files.append(ArchivedLogFile(directory / item.name, f'CH{number:02d} · {title} · {item.name}',
++                                                 number, record['run_id'], kind))
+     return tuple(files)
+ 
+ 
+@@ -128,3 +153,158 @@ def open_history_result_file(context, job_id, record, path):
+         raise ValueError('该文件不属于选定批次及通道')
+     _launch(path)
+     return number
++
++
++_WIFI_HEADER = re.compile(r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6}) '
++                          r'\[(INFO|DEBUG|WARN|WARNING|ERROR|CRITICAL|SUCCESS)\] '
++                          r'\[WiFi\] 通道(\d{1,2}) 第(\d{1,9})轮(?: |$)')
++
++
++def _material_observation(kind, line, channel):
++    # Result files can contain command output and credentials. Only project
++    # known record markers; never copy arbitrary bodies into the summary.
++    if kind == 'command_results' and re.fullmatch(fr'通道 {channel} ping 通', line):
++        return '时间未知', '原文记录 Ping 通；不代表实时连通或设备在线'
++    if kind == 'wifi':
++        match = _WIFI_HEADER.match(line)
++        if match and int(match[3]) == channel:
++            try:
++                datetime.strptime(match[1], '%Y-%m-%d %H:%M:%S.%f')
++            except ValueError:
++                return None
++            return match[1] + '（原日志本地时间）', f'第{int(match[4])}轮，记录等级 {match[2]}；业务结果未知'
++    return None
++
++
++def _material_names(target):
++    names = (('command_results', '开关机结果', target.power_name), ('wifi', 'WiFi 记录', target.wifi_name))
++    if not any(name for _, _, name in names) or any(
++            name and _history_file_type(name, target.channel) != kind for kind, _, name in names):
++        raise ValueError('留存文件与所选批次或通道不符')
++    return names
++
++
++def _summarize_materials(args, binding):
++    from src.services.qt_archived_logs import _read_page
++
++    context, record, stop = binding
++    target = HistoryMaterialTarget(**args)
++    if stop.is_set():
++        raise InterruptedError()
++    if (context.identity.project_id != target.project_id or not record
++            or record.get('run_id') != target.run_id):
++        raise ValueError('项目或选定批次已变化，未读取留存资料')
++    directories = _history_directories(context, target.job_id, record, summary=True)
++    directory = next((path for path, number in directories.items() if number == target.channel), None)
++    if directory is None:
++        raise ValueError('该通道不属于所选批次，未读取留存资料')
++    names = _material_names(target)
++    lines = [f'项目 {target.project_id}\n任务 {target.job_id}\n批次 {target.run_id}\nCH{target.channel:02d}',
++             '仅汇总选定的留存文件末页（每份最多 120 行 / 128 KiB），不代表实时状态。'
++             '\n引用格式：文件名@页首字节偏移:页内行号；正文不展开。']
++    read = missing = failed = 0
++    for kind, title, name in names:
++        if stop.is_set():
++            raise InterruptedError()
++        if not name:
++            missing += 1
++            lines.append(title + ' · 缺少已列出的留存文件')
++            continue
++        path = directory / name
++        try:
++            if path.resolve() != path or path.is_symlink():
++                raise ValueError('文件已重定向')
++            try:
++                info = path.stat()
++            except FileNotFoundError:
++                missing += 1
++                lines.append(f'{title} · {name} · 文件缺失')
++                continue
++            if not stat.S_ISREG(info.st_mode) or info.st_nlink > 1:
++                raise ValueError('不是独立普通结果文件')
++            page = _read_page(path, None, target.project_id)
++        except (OSError, ValueError, RuntimeError):
++            failed += 1
++            lines.append(f'{title} · {name} · 无法读取')
++            continue
++        if stop.is_set():
++            raise InterruptedError()
++        read += 1
++        start = page.next_cursor.offset if page.next_cursor else 0
++        observations = []
++        for index, entry in enumerate(page.entries, 1):
++            if ('跨页长行片段' in page.note or
++                    (index == len(page.entries) and '最后一行可能仍在写入' in page.note)):
++                continue
++            observation = _material_observation(kind, entry.message, target.channel)
++            if observation:
++                observations.append((index, *observation))
++        lines.append(f'{title} · {name} · 已读取 {len(page.entries)} 行，明确标记 {len(observations)} 条'
++                     + ('（有更早内容未读取）' if page.next_cursor else '')
++                     + ('\n' + page.note if page.note else ''))
++        for index, stamp, observation in observations[-6:]:
++            lines.append(f'引用 {name}@{start}:{index} · {stamp} · {observation}')
++        if not observations:
++            lines.append('本页没有可引用的明确观察；未展开原文。')
++        elif len(observations) > 6:
++            lines.append(f'其余 {len(observations) - 6} 条明确标记未展开。')
++    if stop.is_set():
++        raise InterruptedError()
++    lines.append(f'汇总结果：读取 {read} 份，缺失 {missing} 份，无法读取 {failed} 份。'
++                 '\n以上仅为留存记录；故障原因及当前设备状态未知。')
++    return HistoryMaterialSummary(target, '\n\n'.join(lines), read, missing, failed)
++
++
++_SUMMARY_ID = 'history.material_summary'
++_SUMMARY_REGISTRY = CapabilityRegistry()
++_SUMMARY_FIELDS = {key: dict(type='string', minLength=1, maxLength=128)
++                   for key in ('project_id', 'job_id', 'run_id')}
++_SUMMARY_FIELDS.update(channel=dict(type='integer', minimum=1, maximum=16),
++                       power_name=dict(type='string', maxLength=255), wifi_name=dict(type='string', maxLength=255))
++_SUMMARY_REGISTRY.register(CapabilitySpec(_SUMMARY_ID, '汇总选定通道留存资料', '本机只读取证结果',
++    object_schema(_SUMMARY_FIELDS, tuple(_SUMMARY_FIELDS)), _summarize_materials, sources=('gui',)))
++
++
++def summarize_history_materials(context, record, target, stop):
++    args = asdict(target)
++    spec = _SUMMARY_REGISTRY.validate(_SUMMARY_ID, args)
++    return spec.handler(args, (context, record, stop))
++
++
++def summarize_history_materials_batch(context, record, target, stop):
++    """One finite, explicitly selected set; each channel uses the original reader."""
++    if (not isinstance(target, HistoryMaterialBatchTarget) or not isinstance(target.channels, tuple)
++            or not 2 <= len(target.channels) <= 16
++            or context.identity.project_id != target.project_id or not record
++            or record.get('run_id') != target.run_id):
++        raise ValueError('项目、批次或选定通道范围不符，未读取留存资料')
++    seen = set()
++    for row in target.channels:
++        if (not isinstance(row, HistoryMaterialTarget)
++                or (row.project_id, row.job_id, row.run_id) != (target.project_id, target.job_id, target.run_id)):
++            raise ValueError('选定通道不属于同一项目及批次')
++        _SUMMARY_REGISTRY.validate(_SUMMARY_ID, asdict(row))
++        _material_names(row)
++        if row.channel in seen:
++            raise ValueError('选定通道重复，未读取留存资料')
++        seen.add(row.channel)
++    if not stop.is_set():
++        directories = _history_directories(context, target.job_id, record, summary=True)
++        if not seen.issubset(set(directories.values())):
++            raise ValueError('选定通道不属于原批次，未读取留存资料')
++    results = []
++    for row in target.channels:
++        if stop.is_set():
++            results.append(HistoryMaterialChannelResult(row, 'cancelled'))
++            continue
++        try:
++            summary = summarize_history_materials(context, record, row, stop)
++            if not isinstance(summary, HistoryMaterialSummary) or summary.target != row:
++                raise ValueError('本通道汇总回执不符')
++        except InterruptedError:
++            results.append(HistoryMaterialChannelResult(row, 'cancelled'))
++        except Exception:
++            results.append(HistoryMaterialChannelResult(row, 'cancelled' if stop.is_set() else 'failed'))
++        else:
++            results.append(HistoryMaterialChannelResult(row, 'completed', summary))
++    return HistoryMaterialBatchSummary(target, tuple(results))
+diff --git a/Cheating_machine_execution_tool/tests/qt_workbench_probe.py b/Cheating_machine_execution_tool/tests/qt_workbench_probe.py
+index 1e525aff..dc020eee 100644
+--- a/Cheating_machine_execution_tool/tests/qt_workbench_probe.py
++++ b/Cheating_machine_execution_tool/tests/qt_workbench_probe.py
+@@ -6284,6 +6284,503 @@ class QtProjectWorkspaceTests(unittest.TestCase):
+         self.assertNotIn('现场核实结果…', [action.text() for action in dialog.job_menu.actions()])
+         self.assertEqual(database.read_bytes(), original)
+ 
++    def test_qt_saved_material_error_and_cancel_leave_active_fake_power_job_unchanged(self):
++        from contextlib import ExitStack
++        from types import SimpleNamespace
++        from PySide6.QtWidgets import QMessageBox
++        from src.services.capability_jobs import CapabilityJobs
++        from src.services.qt_archived_logs import _read_page
++        from src.services.qt_power_logs import summarize_history_materials
++        from test_qt_log_history import QtLogHistoryTests
++        import serial
++
++        engine, project = self._configured_execution(numbers=(1, 7))
++        workspace = self.controller.adapter._service
++        context = workspace.projects.opened[project]
++        historical = 'fixture-history-before-active-power'
++        jobs = CapabilityJobs(context.history / 'ai/business', SimpleNamespace())
++        try:
++            QtLogHistoryTests.insert_job(jobs, historical, 1795040100)
++            with jobs.db:
++                jobs.db.execute('UPDATE jobs SET payload=? WHERE id=?',
++                                (json.dumps({'arguments': {'channel_ids': [1, 7]}}), historical))
++        finally:
++            jobs.close()
++        old_run = workspace.projects.snapshot(context)
++        workspace.status.begin(context, historical, old_run, 'aging.start')
++        workspace.status.update(historical, 'succeeded')
++        paths = {}
++        for channel in (1, 7):
++            directory = old_run / f'Auto_power_on_off_tool/test_results/device_{channel}'
++            directory.mkdir(parents=True)
++            path = directory / f'device_{channel}_wifi_20261120221001.log'
++            path.write_text(f'2026-11-20 22:10:01.123456 [INFO] [WiFi] 通道{channel} 第1轮 fixture\n', encoding='utf-8')
++            paths[channel] = path
++        old_bytes = {p: p.read_bytes() for p in (*paths.values(), old_run / 'run.json')}
++        entered, release = threading.Event(), threading.Event()
++        self.addCleanup(release.set)
++
++        with ExitStack() as stack:
++            deny = []
++            for endpoint in ('requests.sessions.Session.request', 'socket.create_connection',
++                             'socket.socket.connect', 'socket.socket.connect_ex', 'socket.socket.send',
++                             'socket.socket.sendall', 'socket.socket.sendto', 'socket.getaddrinfo',
++                             'socket.socket.bind', 'socket.socket.listen'):
++                deny.append(stack.enter_context(patch(endpoint, side_effect=AssertionError('live I/O forbidden'))))
++            stack.enter_context(patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes))
++            self.wait_for(self.window.detail.start_button.isEnabled)
++            QTest.mouseClick(self.window.detail.start_button, Qt.MouseButton.LeftButton)
++            try:
++                self.wait_for(engine.started.is_set)
++                self.wait_for(lambda: self.window.projects[0].state == 'running' and self.window.projects[0].progress == 68)
++                active = self.window.projects[0].run_id
++                self.assertNotEqual(active, historical)
++                active_store = self.controller.adapter._executions[project].capabilities.jobs
++                self.assertEqual(len(engine.calls), 1)
++                active_context, _ = engine.calls[0]
++
++                def job_snapshot():
++                    with active_store.lock:
++                        row = active_store._row(active)
++                        events = tuple(active_store.db.execute('SELECT stage,message FROM job_events WHERE job_id=? ORDER BY id', (active,)))
++                    return row['state'], row['result'], events
++
++                before = job_snapshot()
++                leases = dict(workspace.resources.owners)
++                self.assertEqual(before[:2], ('running', None))
++                self.assertTrue(any('fixture stage' in message for _, message in before[2]))
++                self.assertTrue(leases)
++
++                def unchanged():
++                    self.assertEqual(job_snapshot(), before)
++                    self.assertEqual(dict(workspace.resources.owners), leases)
++                    self.assertEqual((self.window.projects[0].run_id, self.window.projects[0].state,
++                                      self.window.projects[0].progress), (active, 'running', 68))
++                    self.assertFalse(active_context.stop_event.is_set())
++                    self.assertFalse(engine.stop_observed.is_set())
++                    self.assertEqual(len(engine.calls), 1)
++
++                self.controller.history_action.trigger()
++                history = self.controller.log_history
++                self.wait_for(lambda: project in history.windows and history.windows[project].jobs.findData(historical) >= 0)
++                dialog = history.windows[project]
++                dialog.jobs.setCurrentIndex(dialog.jobs.findData(historical))
++                self.wait_for(dialog.result_files_action.isEnabled)
++                dialog.result_files_action.trigger()
++                self.wait_for(lambda: dialog.result_files_dialog is not None)
++                files = dialog.result_files_dialog
++                first, other = (next(files.files.item(i) for i in range(files.files.count())
++                                     if files.files.item(i).data(Qt.ItemDataRole.UserRole) == paths[n]) for n in (1, 7))
++                QTest.mouseClick(files.files.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
++                                 files.files.visualItemRect(first).center())
++                QTest.mouseClick(files.files.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ControlModifier,
++                                 files.files.visualItemRect(other).center())
++                self.assertEqual([row.channel for row in files.summary_target().channels], [1, 7])
++
++                def unreadable(path, *args):
++                    if path == paths[7]:
++                        raise PermissionError('fixture history read failure')
++                    return _read_page(path, *args)
++
++                with patch('src.services.qt_archived_logs._read_page', side_effect=unreadable):
++                    files.summary_action.trigger()
++                    self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
++                self.assertIn('CH07 · 已完成核对 · 无可读资料', files.summary.toPlainText())
++                self.assertIn('无法读取 1 份', files.summary.toPlainText())
++                self.assertIn(paths[1].name + '@0:1', files.summary.toPlainText())
++                unchanged()
++
++                def delayed(ctx, record, target, stop):
++                    if target.channel == 7:
++                        entered.set()
++                        if not release.wait(15):
++                            raise AssertionError('fixture history reader not released')
++                    return summarize_history_materials(ctx, record, target, stop)
++
++                with patch('src.services.qt_power_logs.summarize_history_materials', side_effect=delayed):
++                    files.summary_action.trigger()
++                    self.wait_for(entered.is_set)
++                    unchanged()
++                    files.summary_cancel.click()
++                    self.assertTrue(files.summary_pending)
++                    release.set()
++                    self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
++                self.assertIn('已完成核对 1 个', files.summary.toPlainText())
++                self.assertIn('CH07 · 已取消', files.summary.toPlainText())
++                self.assertIn(paths[1].name + '@0:1', files.summary.toPlainText())
++                unchanged()
++                files.close()
++                dialog.close()
++                self.wait_for(lambda: not self.controller.adapter._history_reads and not history.summary_requests)
++                unchanged()
++
++                engine.finish.set()
++                self.wait_for(lambda: self.window.projects[0].state == 'completed')
++                state, result, events = job_snapshot()
++                self.assertEqual(state, 'succeeded')
++                self.assertTrue(result['ok'])
++                self.assertEqual(result['state'], 'succeeded')
++                self.assertEqual([item['ok'] for item in result['items']], [True])
++                self.assertEqual(events[:len(before[2])], before[2])
++                self.assertTrue(any('fixture result' in message for _, message in events))
++                self.assertFalse(engine.stop_observed.is_set())
++                self.assertFalse(workspace.resources.owners)
++                self.assertEqual(old_bytes, {p: p.read_bytes() for p in old_bytes})
++                serial.Serial.assert_not_called()
++                for guard in deny:
++                    guard.assert_not_called()
++                print('ACTIVE_FAKE_HISTORY_EVIDENCE: ' + json.dumps(dict(
++                    running_state=before[0], running_progress=68, running_result=before[1],
++                    original_events=len(before[2]), final_events=len(events),
++                    original_event_prefix_preserved=events[:len(before[2])] == before[2],
++                    final_state=state, final_ok=result['ok'], final_items_ok=[item['ok'] for item in result['items']],
++                    final_output_marker=any('fixture result' in message for _, message in events),
++                    stop_observed=engine.stop_observed.is_set(), resources_released=not workspace.resources.owners,
++                    original_history_unchanged=old_bytes == {p: p.read_bytes() for p in old_bytes},
++                    physical_serial_calls=serial.Serial.call_count, blocked_network_calls=sum(guard.call_count for guard in deny))))
++            finally:
++                release.set()
++                engine.finish.set()
++                engine.release_stop.set()
++
++    def test_qt_multi_channel_saved_material_summary_preserves_independent_and_cancelled_results(self):
++        from dataclasses import replace
++        from types import SimpleNamespace
++        from src.services.capability_jobs import CapabilityJobs
++        from src.services.qt_archived_logs import _read_page
++        from src.services.qt_power_logs import summarize_history_materials, summarize_history_materials_batch
++        from src.services.qt_workspace_adapter import ProjectCommandResult
++        from test_qt_log_history import QtLogHistoryTests
++
++        self.controller.submit('create', self.root / '多通道汇总', '留存项目')
++        self.wait_for(lambda: len(self.window.projects) == 1)
++        project = self.window.selected_project
++        workspace = self.controller.adapter._service
++        context = workspace.projects.opened[project]
++        jobs = CapabilityJobs(context.history / 'ai/business', SimpleNamespace())
++        old, newer = 'fixture-summary-batch-a', 'fixture-summary-batch-b'
++        runs, paths = {}, {}
++        try:
++            for order, job in enumerate((old, newer), 1):
++                QtLogHistoryTests.insert_job(jobs, job, 1795040100 + order)
++                with jobs.db:
++                    jobs.db.execute('UPDATE jobs SET payload=? WHERE id=?',
++                                    (json.dumps({'arguments': {'channel_ids': [7, 8, 9]}}), job))
++                run = workspace.projects.snapshot(context)
++                workspace.status.begin(context, job, run, 'aging.start')
++                workspace.status.update(job, 'succeeded')
++                runs[job] = run
++                paths[job] = {}
++                for channel in (7, 8, 9):
++                    directory = run / f'Auto_power_on_off_tool/test_results/device_{channel}'
++                    directory.mkdir(parents=True)
++                    wifi = directory / f'device_{channel}_wifi_2026112022100{order}.log'
++                    wifi.write_text(f'2026-11-20 22:10:0{order}.123456 [WARN] [WiFi] 通道{channel} 第{order}轮 fixture-private\n',
++                                    encoding='utf-8')
++                    paths[job][channel] = [wifi]
++                    if channel != 8:
++                        power = directory / f'device_{channel}_command_results_2026112022100{order}.log'
++                        power.write_text(f'通道 {channel} ping 通\n', encoding='utf-8')
++                        paths[job][channel].append(power)
++        finally:
++            jobs.close()
++        originals = {p: p.read_bytes() for items in paths.values() for group in items.values() for p in group}
++        originals.update({run / 'run.json': (run / 'run.json').read_bytes() for run in runs.values()})
++        database = jobs.directory / 'capability_jobs.sqlite3'
++        originals[database] = database.read_bytes()
++        self.controller.submit('create', self.root / '另一个项目', '另一项目')
++        self.wait_for(lambda: len(self.window.projects) == 2 and self.window.selected_project != project)
++        other = self.window.selected_project
++        self.window.select_project(project)
++        self.controller.history_action.trigger()
++        history = self.controller.log_history
++        self.wait_for(lambda: project in history.windows and history.windows[project].result_files_action.isEnabled())
++        dialog = history.windows[project]
++
++        def open_files(job):
++            dialog.jobs.setCurrentIndex(dialog.jobs.findData(job))
++            self.wait_for(dialog.result_files_action.isEnabled)
++            dialog.result_files_action.trigger()
++            self.wait_for(lambda: dialog.result_files_dialog is not None)
++            return dialog.result_files_dialog
++
++        def select_channels(files, job, channels):
++            for index, channel in enumerate(channels):
++                path = paths[job][channel][0]
++                item = next(files.files.item(i) for i in range(files.files.count())
++                            if files.files.item(i).data(Qt.ItemDataRole.UserRole) == path)
++                files.files.scrollToItem(item)
++                QTest.mouseClick(files.files.viewport(), Qt.MouseButton.LeftButton,
++                                 Qt.KeyboardModifier.ControlModifier if index else Qt.KeyboardModifier.NoModifier,
++                                 files.files.visualItemRect(item).center())
++            self.assertEqual([row.channel for row in files.summary_target().channels], list(channels))
++            self.assertFalse(files.open_button.isEnabled())
++            files.files.customContextMenuRequested.emit(files.files.visualItemRect(item).center())
++            self.wait_for(files.file_menu.isVisible)
++            self.assertEqual(len(files.files.selectedItems()), len(channels))
++            files.file_menu.hide()
++
++        files = open_files(old)
++        select_channels(files, old, (7, 8, 9))
++
++        def unreadable(path, *args):
++            if path == paths[old][9][0]:
++                raise PermissionError('fixture')
++            return _read_page(path, *args)
++
++        with patch('src.services.qt_archived_logs._read_page', side_effect=unreadable):
++            files.summary_action.trigger()
++            self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
++        text = files.summary.toPlainText()
++        for expected in (project, runs[old].name, '选定 3 个通道', '已完成核对 3 个',
++                         '其中资料缺失或读取失败 2 个', 'CH07 · 已完成核对', 'CH08 · 已完成核对',
++                         'CH09 · 已完成核对', paths[old][7][0].name + '@0:1',
++                         paths[old][8][0].name + '@0:1', paths[old][9][1].name + '@0:1',
++                         '读取 1 份，缺失 0 份，无法读取 1 份'):
++            self.assertIn(expected, text)
++        self.assertNotIn(paths[old][9][0].name + '@', text)
++        self.assertNotIn(runs[newer].name, text)
++        self.assertNotIn('fixture-private', text)
++
++        started, release = threading.Event(), threading.Event()
++        self.addCleanup(release.set)
++        calls = []
++
++        def delayed_channel(ctx, record, row, stop):
++            calls.append(row.channel)
++            if row.channel == 8:
++                started.set()
++                if not release.wait(15):
++                    raise AssertionError('fixture release missing')
++            return summarize_history_materials(ctx, record, row, stop)
++
++        with patch('src.services.qt_power_logs.summarize_history_materials', side_effect=delayed_channel):
++            files.summary_action.trigger()
++            self.wait_for(started.is_set)
++            files.summary_cancel.click()
++            self.assertTrue(files.summary_pending)
++            self.assertFalse(files.summary_cancel.isEnabled())
++            release.set()
++            self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
++        self.assertEqual(calls, [7, 8])
++        text = files.summary.toPlainText()
++        self.assertIn('已完成核对 1 个', text)
++        self.assertIn('已取消 2 个', text)
++        self.assertIn(paths[old][7][0].name + '@0:1', text)
++        self.assertIn('CH08 · 已取消', text)
++        self.assertIn('CH09 · 已取消', text)
++        self.assertNotIn(paths[old][8][0].name + '@', text)
++
++        late, late_stops = [], []
++        started.clear()
++        release.clear()
++
++        def delayed_batch(ctx, record, target, stop):
++            late_stops.append(stop)
++            started.set()
++            if not release.wait(15):
++                raise AssertionError('fixture release missing')
++            result = summarize_history_materials_batch(ctx, record, target, threading.Event())
++            first = result.entries[0]
++            stale = replace(result, entries=(replace(first, summary=replace(first.summary, text='LATE OLD REPORT')),
++                                             *result.entries[1:]))
++            late.append(stale)
++            return stale
++
++        with patch('src.services.qt_power_logs.summarize_history_materials_batch', side_effect=delayed_batch):
++            files.summary_action.trigger()
++            self.wait_for(started.is_set)
++            old_request = next(iter(history.summary_requests))
++            self.window.select_project(other)
++            self.window.select_project(project)
++            self.assertFalse(files.summary_pending)
++            self.assertFalse(files.summary.isVisible())
++            release.set()
++            self.wait_for(lambda: not self.controller.adapter._history_reads)
++            self.assertFalse(files.summary.isVisible())
++
++        started.clear()
++        release.clear()
++        with patch('src.services.qt_power_logs.summarize_history_materials_batch', side_effect=delayed_batch):
++            files.summary_action.trigger()
++            self.wait_for(started.is_set)
++            files.close()
++            self.assertTrue(late_stops[-1].is_set())
++            self.assertFalse(history.summary_requests)
++            release.set()
++            self.wait_for(lambda: not self.controller.adapter._history_reads)
++        files = open_files(old)
++        select_channels(files, old, (7, 8, 9))
++
++        started.clear()
++        release.clear()
++        with patch('src.services.qt_power_logs.summarize_history_materials_batch', side_effect=delayed_batch):
++            files.summary_action.trigger()
++            self.wait_for(started.is_set)
++            dialog.jobs.setCurrentIndex(dialog.jobs.findData(newer))
++            dialog.jobs.setCurrentIndex(dialog.jobs.findData(old))
++            self.assertFalse(files.summary_pending)
++            self.assertIn('作废', files.feedback.text())
++            files.close()
++            release.set()
++            self.wait_for(lambda: not self.controller.adapter._history_reads and not dialog.busy)
++        files = open_files(newer)
++        select_channels(files, newer, (7, 8))
++        files.summary_action.trigger()
++        self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
++        actual = files.summary.toPlainText()
++        self.assertIn(runs[newer].name, actual)
++        self.assertIn('选定 2 个通道', actual)
++        self.assertNotIn(runs[old].name, actual)
++        self.assertTrue(history.handle_result(ProjectCommandResult(old_request, 'history_material_batch_summary', project, '', late[0])))
++        self.assertEqual(actual, files.summary.toPlainText())
++        self.assertNotIn('LATE OLD REPORT', actual)
++        self.assertNotIn(project, self.controller.adapter._executions)
++        self.assertEqual(originals, {p: p.read_bytes() for p in originals})
++
++    def test_qt_saved_material_summary_uses_selected_history_and_discards_late_reads(self):
++        from dataclasses import replace
++        from types import SimpleNamespace
++        from src.services.capability_jobs import CapabilityJobs
++        from src.services.qt_power_logs import summarize_history_materials
++        from test_qt_log_history import QtLogHistoryTests
++
++        self.controller.submit('create', self.root / '汇总项目', '留存项目')
++        self.wait_for(lambda: len(self.window.projects) == 1)
++        project = self.window.selected_project
++        workspace = self.controller.adapter._service
++        context = workspace.projects.opened[project]
++        jobs = CapabilityJobs(context.history / 'ai/business', SimpleNamespace())
++        job = 'fixture-saved-summary'
++        try:
++            QtLogHistoryTests.insert_job(jobs, job, 1795040100)
++            with jobs.db:
++                jobs.db.execute('UPDATE jobs SET payload=? WHERE id=?',
++                                (json.dumps({'arguments': {'channel_ids': [7, 8]}}), job))
++        finally:
++            jobs.close()
++        run = workspace.projects.snapshot(context)
++        workspace.status.begin(context, job, run, 'aging.start')
++        workspace.status.update(job, 'succeeded')
++        directory = run / 'Auto_power_on_off_tool/test_results/device_7'
++        directory.mkdir(parents=True)
++        power = directory / 'device_7_command_results_20261120221001.log'
++        wifi = directory / 'device_7_wifi_20261120221001.log'
++        power.write_text('通道 7 ping 通\nfixture-private-body\n', encoding='utf-8')
++        wifi.write_text('2026-11-20 22:10:01.123456 [WARN] [WiFi] 通道7 第3轮 fixture-private-body\n', encoding='utf-8')
++        other_file = directory.with_name('device_8') / 'device_8_wifi_20261120.log'
++        other_file.parent.mkdir()
++        other_file.write_text('other-channel-fixture\n', encoding='utf-8')
++        before = {p: p.read_bytes() for p in (power, wifi, other_file, run / 'run.json', jobs.directory / 'capability_jobs.sqlite3')}
++        self.controller.submit('create', self.root / '另一项目', '另一留存项目')
++        self.wait_for(lambda: len(self.window.projects) == 2 and self.window.selected_project != project)
++        other = self.window.selected_project
++        self.window.select_project(project)
++        self.controller.history_action.trigger()
++        history = self.controller.log_history
++        self.wait_for(lambda: project in history.windows and history.windows[project].result_files_action.isEnabled())
++        dialog = history.windows[project]
++        self.assertEqual(dialog.jobs.currentData(), job)
++        dialog.result_files_action.trigger()
++        self.wait_for(lambda: dialog.result_files_dialog is not None)
++        files = dialog.result_files_dialog
++        row = next(i for i in range(files.files.count()) if files.files.item(i).data(Qt.ItemDataRole.UserRole) == power)
++        files.files.setCurrentRow(row)
++        files.files.customContextMenuRequested.emit(files.files.visualItemRect(files.files.currentItem()).center())
++        self.wait_for(files.file_menu.isVisible)
++        files.file_menu.hide()
++        files.summary_action.trigger()
++        self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
++        text = files.summary.toPlainText()
++        for expected in (project, run.name, job, 'CH07', power.name + '@0:1', wifi.name + '@0:1',
++                         '第3轮，记录等级 WARN', '读取 2 份', '故障原因及当前设备状态未知'):
++            self.assertIn(expected, text)
++        for marker in ('fixture-private-body', 'other-channel-fixture', other_file.name):
++            self.assertNotIn(marker, text)
++        self.assertTrue(files.summary.isReadOnly())
++        self.assertTrue(files.open_button.isEnabled())
++
++        other_row = next(i for i in range(files.files.count()) if files.files.item(i).data(Qt.ItemDataRole.UserRole) == other_file)
++        files.files.setCurrentRow(other_row)
++        self.assertFalse(files.summary.isVisible())
++        files.summary_action.trigger()
++        self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
++        self.assertIn('CH08', files.summary.toPlainText())
++        self.assertIn('读取 1 份，缺失 1 份', files.summary.toPlainText())
++        self.assertNotIn(power.name, files.summary.toPlainText())
++        files.files.setCurrentRow(row)
++
++        from src.services.qt_archived_logs import _read_page
++
++        def unreadable(path, *args):
++            if path == power:
++                raise PermissionError('fixture')
++            return _read_page(path, *args)
++
++        with patch('src.services.qt_archived_logs._read_page', side_effect=unreadable):
++            files.summary_action.trigger()
++            self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
++            self.assertIn('读取 1 份，缺失 0 份，无法读取 1 份', files.summary.toPlainText())
++            self.assertIn(wifi.name + '@0:1', files.summary.toPlainText())
++
++        started, release = threading.Event(), threading.Event()
++        self.addCleanup(release.set)
++        calls = []
++
++        def delayed(ctx, record, target, stop):
++            calls.append(stop)
++            if len(calls) == 1:
++                started.set()
++                if not release.wait(5):
++                    raise AssertionError('fixture release missing')
++                stale = summarize_history_materials(ctx, record, target, threading.Event())
++                return replace(stale, text='LATE OLD REPORT')
++            return summarize_history_materials(ctx, record, target, stop)
++
++        with patch('src.services.qt_power_logs.summarize_history_materials', side_effect=delayed):
++            files.summary_action.trigger()
++            self.wait_for(started.is_set)
++            self.assertTrue(files.summary_cancel.isVisible())
++            files.summary_cancel.click()
++            self.assertTrue(calls[0].is_set())
++            self.assertFalse(files.summary_pending)
++            files.summary_action.trigger()
++            release.set()
++            self.wait_for(lambda: files.summary.isVisible() and not files.summary_pending)
++            self.assertEqual(len(calls), 2)
++            self.assertNotIn('LATE OLD REPORT', files.summary.toPlainText())
++
++        started.clear()
++        release.clear()
++        calls.clear()
++        with patch('src.services.qt_power_logs.summarize_history_materials', side_effect=delayed):
++            files.summary_action.trigger()
++            self.wait_for(started.is_set)
++            self.window.select_project(other)
++            self.window.select_project(project)
++            self.assertTrue(calls[0].is_set())
++            self.assertFalse(files.summary_pending)
++            self.assertFalse(files.summary.isVisible())
++            self.assertIn('作废', files.feedback.text())
++            release.set()
++            self.wait_for(lambda: not self.controller.adapter._history_reads)
++            self.assertFalse(files.summary.isVisible())
++
++        started.clear()
++        release.clear()
++        calls.clear()
++        with patch('src.services.qt_power_logs.summarize_history_materials', side_effect=delayed):
++            files.summary_action.trigger()
++            self.wait_for(started.is_set)
++            files.close()
++            self.assertTrue(calls[0].is_set())
++            self.assertIsNone(dialog.result_files_dialog)
++            release.set()
++            self.wait_for(lambda: not self.controller.adapter._history_reads)
++            self.assertFalse(history.summary_requests)
++        self.assertNotIn(project, self.controller.adapter._executions)
++        self.assertEqual(before, {p: p.read_bytes() for p in before})
++
+     def test_qt_history_result_files_open_selected_snapshot_after_workspace_restart(self):
+         from types import SimpleNamespace
+         from src.services.capability_jobs import CapabilityJobs
+diff --git a/Cheating_machine_execution_tool/tests/test_qt_log_history.py b/Cheating_machine_execution_tool/tests/test_qt_log_history.py
+index 9899e192..bcf14072 100644
+--- a/Cheating_machine_execution_tool/tests/test_qt_log_history.py
++++ b/Cheating_machine_execution_tool/tests/test_qt_log_history.py
+@@ -8,10 +8,11 @@ import unittest
+ from unittest.mock import patch
+ 
+ from src.models.project import ProjectContext, ProjectIdentity
+-from src.models.qt_log_history import HistoryEventFilter
++from src.models.qt_log_history import HistoryEventFilter, HistoryMaterialBatchTarget, HistoryMaterialTarget
+ from src.services.capability_jobs import CapabilityJobs
+ from src.services.qt_log_history import EVENTS_PER_PAGE, JOBS_PER_PAGE, MAX_MESSAGE_CHARS, read_channel_history, read_log_history
+-from src.services.qt_power_logs import history_result_files, open_history_result_file
++from src.services.qt_power_logs import (history_result_files, open_history_result_file, summarize_history_materials,
++                                       summarize_history_materials_batch)
+ from src.services.project_status_service import ProjectStatusService
+ 
+ 
+@@ -35,6 +36,218 @@ class QtLogHistoryTests(unittest.TestCase):
+                 (identifier, identifier, '', 'private-principal', '', 'aging.start', 'succeeded', '',
+                  order, order, '{"credential":"fixture-private"}', 'null'))
+ 
++    def material_fixture(self, context, job='saved-batch', run_id='2' * 32, channels=(7, 8)):
++        jobs = self.open_jobs(context)
++        self.insert_job(jobs, job, 1)
++        with jobs.db:
++            jobs.db.execute('UPDATE jobs SET payload=? WHERE id=?',
++                            (json.dumps({'arguments': {'channel_ids': list(channels)}}), job))
++        run = context.root / 'runs' / run_id
++        directory = run / 'Auto_power_on_off_tool/test_results/device_7'
++        directory.mkdir(parents=True)
++        record = dict(owner=job, project_id=context.identity.project_id, run_id=run_id, operation='aging.start')
++        manifest = run / 'run.json'
++        manifest.write_text(json.dumps(record), encoding='utf-8')
++        power = directory / 'device_7_command_results_20261120220100.log'
++        wifi = directory / 'device_7_wifi_20261120220100.log'
++        power.write_text('通道 7 ping 通\n通道 8 ping 通\nfixture-secret-never-copy\n', encoding='utf-8')
++        wifi.write_text('2026-11-20 22:01:01.123456 [ERROR] [WiFi] 通道7 第2轮 fixture-secret-never-copy\n'
++                        '2026-11-20 22:01:02.123456 [INFO] [WiFi] 通道8 第3轮 foreign-channel\n', encoding='utf-8')
++        target = HistoryMaterialTarget(context.identity.project_id, job, run_id, 7, power.name, wifi.name)
++        return target, dict(record, _path=manifest), power, wifi, jobs.directory / 'capability_jobs.sqlite3'
++
++    def material_batch_fixture(self):
++        from dataclasses import replace
++        first, record, power, wifi, database = self.material_fixture(self.project, channels=(7, 8, 9))
++        folder = power.parent.parent
++        eight = folder / 'device_8/device_8_wifi_20261120220100.log'
++        nine_power = folder / 'device_9/device_9_command_results_20261120220100.log'
++        nine_wifi = folder / 'device_9/device_9_wifi_20261120220100.log'
++        eight.parent.mkdir()
++        nine_power.parent.mkdir()
++        eight.write_text('2026-11-20 22:02:01.123456 [INFO] [WiFi] 通道8 第4轮 fixture\n', encoding='utf-8')
++        nine_power.write_text('通道 9 ping 通\n', encoding='utf-8')
++        nine_wifi.write_text('2026-11-20 22:03:01.123456 [WARN] [WiFi] 通道9 第5轮 fixture\n', encoding='utf-8')
++        second = replace(first, channel=8, power_name='', wifi_name=eight.name)
++        third = replace(first, channel=9, power_name=nine_power.name, wifi_name=nine_wifi.name)
++        return (HistoryMaterialBatchTarget(first.project_id, first.job_id, first.run_id, (first, second, third)),
++                record, (power, wifi, eight, nine_power, nine_wifi, database, record['_path']))
++
++    def test_material_batch_reports_three_channels_independently_and_keeps_valid_results(self):
++        from src.services.qt_archived_logs import _read_page
++        target, record, paths = self.material_batch_fixture()
++        originals = {p: p.read_bytes() for p in paths}
++
++        def read(path, *args):
++            if path == paths[4]:
++                raise PermissionError('fixture')
++            return _read_page(path, *args)
++
++        with patch('src.services.qt_archived_logs._read_page', side_effect=read):
++            self.material_fixture(self.other)
++            summary = summarize_history_materials_batch(self.project, record, target, Event())
++        self.assertTrue(summary.matches(target))
++        self.assertEqual((summary.completed_count, summary.failed_count, summary.cancelled_count), (3, 0, 0))
++        rows = [row.summary for row in summary.entries]
++        self.assertEqual([(r.read_count, r.missing_count, r.failed_count) for r in rows], [(2, 0, 0), (1, 1, 0), (1, 0, 1)])
++        self.assertIn('第2轮，记录等级 ERROR', rows[0].text)
++        self.assertIn('第4轮，记录等级 INFO', rows[1].text)
++        self.assertIn(paths[3].name + '@0:1', rows[2].text)
++        self.assertNotIn(paths[2].name, rows[0].text)
++        self.assertNotIn(paths[0].name, rows[1].text)
++        self.assertNotIn(paths[4].name + '@', rows[2].text)
++        self.assertIn('其中资料缺失或读取失败 2 个', summary.text)
++        self.assertIn('故障原因及当前设备状态未知', summary.text)
++        self.assertEqual(originals, {p: p.read_bytes() for p in paths})
++
++    def test_material_batch_rejects_mixed_and_duplicate_scope_before_any_source_read(self):
++        from dataclasses import replace
++        target, record, _ = self.material_batch_fixture()
++        first, second, third = target.channels
++        cases = (replace(target, channels=(first, replace(second, project_id='project-b'))),
++                 replace(target, channels=(first, replace(second, run_id='8' * 32))),
++                 replace(target, channels=(first, replace(second, job_id='other-job'))),
++                 replace(target, channels=(first, first)),
++                 replace(target, channels=(first, replace(second, wifi_name='../not-a-source.log'))),
++                 replace(target, channels=(first, replace(second, channel=10, wifi_name='device_10_wifi_20261120.log'))))
++        with patch('src.services.qt_archived_logs._read_page', side_effect=AssertionError('unexpected source read')):
++            for selected in cases:
++                with self.subTest(selected=selected), self.assertRaises(ValueError):
++                    summarize_history_materials_batch(self.project, record, selected, Event())
++
++    def test_material_batch_cancel_preserves_completed_channel_and_marks_rest_without_read(self):
++        target, record, _ = self.material_batch_fixture()
++        stop = Event()
++        calls = []
++
++        def read(context, saved, row, cancel):
++            calls.append(row.channel)
++            if row.channel == 8:
++                stop.set()
++            return summarize_history_materials(context, saved, row, cancel)
++
++        with patch('src.services.qt_power_logs.summarize_history_materials', side_effect=read):
++            result = summarize_history_materials_batch(self.project, record, target, stop)
++            self.assertEqual(calls, [7, 8])
++            self.assertEqual([r.state for r in result.entries], ['completed', 'cancelled', 'cancelled'])
++            self.assertIsNotNone(result.entries[0].summary)
++            self.assertIsNone(result.entries[1].summary)
++            self.assertIn('已取消 2 个', result.text)
++            self.assertIn('CH09 · 已取消', result.text)
++            calls.clear()
++            cancelled = summarize_history_materials_batch(self.project, record, target, stop)
++            self.assertEqual(calls, [])
++            self.assertEqual(cancelled.cancelled_count, 3)
++
++    def test_material_batch_whole_channel_failure_does_not_erase_other_channel_results(self):
++        from dataclasses import replace
++        target, record, _ = self.material_batch_fixture()
++
++        def read(context, saved, row, cancel):
++            if row.channel == 8:
++                raise ValueError('fixture failed')
++            return summarize_history_materials(context, saved, row, cancel)
++
++        with patch('src.services.qt_power_logs.summarize_history_materials', side_effect=read):
++            result = summarize_history_materials_batch(self.project, record, target, Event())
++        self.assertEqual([r.state for r in result.entries], ['completed', 'failed', 'completed'])
++        self.assertIn('CH08 · 无法核对', result.text)
++        self.assertIn('第5轮，记录等级 WARN', result.entries[2].summary.text)
++        self.assertFalse(replace(result, entries=(result.entries[1], *result.entries[1:])).matches(target))
++
++    def test_material_summary_reads_two_saved_sources_with_exact_scope_and_citations(self):
++        target, record, power, wifi, database = self.material_fixture(self.project)
++        self.material_fixture(self.other)
++        before = {p: p.read_bytes() for p in (power, wifi, database, record['_path'])}
++        with patch('src.services.qt_power_logs._launch', side_effect=AssertionError('unexpected launch')):
++            summary = summarize_history_materials(self.project, record, target, Event())
++        self.assertEqual((summary.read_count, summary.missing_count, summary.failed_count), (2, 0, 0))
++        self.assertEqual(summary.target, target)
++        self.assertIn(power.name + '@0:1', summary.text)
++        self.assertIn(wifi.name + '@0:1', summary.text)
++        self.assertIn('2026-11-20 22:01:01.123456', summary.text)
++        self.assertIn('第2轮，记录等级 ERROR', summary.text)
++        self.assertIn('时间未知', summary.text)
++        self.assertIn('故障原因及当前设备状态未知', summary.text)
++        for marker in ('fixture-secret-never-copy', 'foreign-channel', '第3轮', '通道 8'):
++            self.assertNotIn(marker, summary.text)
++        self.assertEqual(before, {p: p.read_bytes() for p in before})
++
++    def test_material_summary_rejects_wrong_project_batch_channel_or_filename_before_read(self):
++        from dataclasses import replace
++        target, record, _, _, _ = self.material_fixture(self.project)
++        self.material_fixture(self.other)
++        with patch('src.services.qt_archived_logs._read_page', side_effect=AssertionError('unexpected read')):
++            for context, selected in ((self.other, target), (self.project, replace(target, run_id='3' * 32)),
++                                      (self.project, replace(target, channel=8)),
++                                      (self.project, replace(target, wifi_name='../other.log'))):
++                with self.subTest(selected=selected), self.assertRaises(ValueError):
++                    summarize_history_materials(context, record, selected, Event())
++
++    def test_material_summary_separates_missing_unreadable_and_keeps_other_result(self):
++        from dataclasses import replace
++        from src.services.qt_archived_logs import _read_page
++        target, record, power, wifi, _ = self.material_fixture(self.project)
++        missing = summarize_history_materials(self.project, record, replace(target, wifi_name=''), Event())
++        self.assertEqual((missing.read_count, missing.missing_count, missing.failed_count), (1, 1, 0))
++        self.assertIn('缺少已列出的留存文件', missing.text)
++
++        def read(path, *args):
++            if path == power:
++                raise PermissionError('fixture private path')
++            return _read_page(path, *args)
++
++        with patch('src.services.qt_archived_logs._read_page', side_effect=read):
++            partial = summarize_history_materials(self.project, record, target, Event())
++        self.assertEqual((partial.read_count, partial.missing_count, partial.failed_count), (1, 0, 1))
++        self.assertIn('无法读取', partial.text)
++        self.assertIn(wifi.name + '@0:1', partial.text)
++        self.assertNotIn('fixture private path', partial.text)
++
++    def test_material_summary_is_bounded_and_stops_before_next_source(self):
++        from src.services.qt_archived_logs import _read_page
++        target, record, power, _, _ = self.material_fixture(self.project)
++        power.write_text('通道 7 ping 通\n' * 200 + '通道 7 ping 通', encoding='utf-8')
++        summary = summarize_history_materials(self.project, record, target, Event())
++        self.assertIn('已读取 120 行', summary.text)
++        self.assertIn('有更早内容未读取', summary.text)
++        self.assertEqual(summary.text.count('引用 ' + power.name), 6)
++        self.assertIn('明确标记 119 条', summary.text)
++        stop = Event()
++
++        def read(path, *args):
++            stop.set()
++            return _read_page(path, *args)
++
++        with patch('src.services.qt_archived_logs._read_page', side_effect=read) as reader:
++            with self.assertRaises(InterruptedError):
++                summarize_history_materials(self.project, record, target, stop)
++            reader.assert_called_once()
++        with patch('src.services.qt_archived_logs._read_page', side_effect=AssertionError('unexpected read')):
++            with self.assertRaises(InterruptedError):
++                summarize_history_materials(self.project, record, target, stop)
++
++    def test_material_summary_refuses_wal_and_oversized_binding_without_source_reads(self):
++        from dataclasses import replace
++        target, record, _, _, _ = self.material_fixture(self.project)
++        database = self.other.history / 'ai/business/capability_jobs.sqlite3'
++        database.parent.mkdir(parents=True)
++        header = bytearray(100)
++        header[18:20] = b'\x02\x02'
++        database.write_bytes(header)
++        foreign = replace(target, project_id=self.other.identity.project_id)
++        with patch('src.services.qt_power_logs.sqlite3.connect', side_effect=AssertionError('unexpected SQLite open')):
++            with self.assertRaisesRegex(ValueError, 'WAL'):
++                summarize_history_materials(self.other, dict(record, project_id=foreign.project_id), foreign, Event())
++        self.assertEqual(database.read_bytes(), bytes(header))
++        self.assertEqual(tuple(database.parent.iterdir()), (database,))
++
++        with record['_path'].open('ab') as stream:
++            stream.write(b' ' * (256 * 1024))
++        with patch('src.services.qt_archived_logs._read_page', side_effect=AssertionError('unexpected read')):
++            with self.assertRaisesRegex(ValueError, '运行快照'):
++                summarize_history_materials(self.project, record, target, Event())
++
+     def test_jobs_and_events_page_by_project_and_task_without_repeating_inserted_rows(self):
+         jobs = self.open_jobs(self.project)
+         other = self.open_jobs(self.other)

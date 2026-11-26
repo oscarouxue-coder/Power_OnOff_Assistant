@@ -2,6 +2,7 @@
 import json
 import os
 import sqlite3
+import sys
 from pathlib import Path
 
 from src.models.project import PROJECT_FILE, ProjectContext, ProjectIdentity
@@ -9,8 +10,62 @@ from src.services.project_store import ProjectStore, atomic_json
 from src.services.workspace_resources import WorkspaceResources, host_resource_directory
 
 
-def workspace_data_dir():
-    return Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'LineCheckAssistant' / 'workspace'
+def workspace_data_dir(*, frozen=None):
+    packaged = getattr(sys, 'frozen', False) if frozen is None else frozen
+    name = 'workspace' if packaged else 'workspace-source'
+    return Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'LineCheckAssistant' / name
+
+
+def initialize_source_workspace(directory, app_dir, emit):
+    """Import reusable configuration once, without copying runtime state or authority."""
+    from src.core.host_resource_lock import HostResourceLock
+    from src.services.ai_project_store import initialize_project
+    from src.services.dingtalk_remote_store import RemoteConfigStore
+    from src.services.feishu_remote_store import FeishuConfigStore
+
+    directory = Path(directory)
+    previous = directory.with_name('workspace')
+    marker = directory / 'source_workspace_initialized.json'
+    with HostResourceLock(['configuration:' + str(directory.resolve())], reentrant=False):
+        if marker.exists():
+            return
+        emit('[项目管理] 初始化独立源码工作区')
+        failures = 0
+        recent = previous / 'recent_projects.json'
+        try:
+            if recent.is_file() and not (directory / recent.name).exists():
+                value = json.loads(recent.read_text(encoding='utf-8'))
+                if not isinstance(value, list) or not all(isinstance(item, dict) and
+                        isinstance(item.get('path'), str) for item in value):
+                    raise ValueError('最近项目格式无效')
+                atomic_json(directory / recent.name, value)
+                emit('[项目管理] 已保留最近项目')
+        except (OSError, ValueError):
+            failures += 1
+            emit('[项目管理] 最近项目导入失败，请手动打开项目')
+        legacy_models = previous / 'models' / 'diagnostics.sqlite3'
+        try:
+            if legacy_models.is_file():
+                initialize_project(directory / 'models', legacy=legacy_models)
+                emit('[项目管理] 已保留模型配置及加密凭据')
+        except (OSError, ValueError, sqlite3.Error):
+            failures += 1
+            emit('[项目管理] 模型配置导入失败，请重新核对模型配置')
+        for kind, factory in (('钉钉', RemoteConfigStore), ('飞书', FeishuConfigStore)):
+            incoming = factory(app_dir, directory=previous / 'platforms')
+            target = factory(app_dir, directory=directory / 'platforms')
+            try:
+                if incoming.path.is_file() and not target.path.exists():
+                    value = dict(incoming.load(), enabled=False)
+                    if factory is FeishuConfigStore:
+                        value.update(group_enabled=False, p2p_enabled=False, push_enabled=False)
+                    target.save(value)
+                    emit('[项目管理] 已保留' + kind + '配置，接入及通知保持停用')
+            except (OSError, ValueError, RuntimeError):
+                failures += 1
+                emit('[项目管理] ' + kind + '配置导入失败，请重新核对配置')
+        atomic_json(marker, dict(completed=True, failures=failures))
+        emit('[项目管理] 源码工作区初始化完成' + (f'，{failures} 项配置需手动核对' if failures else ''))
 
 
 class WorkspaceService:
@@ -19,6 +74,9 @@ class WorkspaceService:
         self.directory = Path(directory) if directory else workspace_data_dir()
         self.directory.mkdir(parents=True, exist_ok=True)
         self.emit = emit
+        self._closed = False
+        if directory is None and not getattr(sys, 'frozen', False):
+            initialize_source_workspace(self.directory, self.source_root, emit)
         from src.services.project_status_service import ProjectStatusService
         self.status = ProjectStatusService(emit)
         self.checked_interrupted_workers = set()
@@ -102,6 +160,12 @@ class WorkspaceService:
     def enable_automatic_resource_recovery(self):
         self.resources.recovery_context = self._resource_project
         self.resources.emit = lambda message: self.emit(message)
+        if self.projects.power_resources is None:
+            self.projects.power_resources = self.resources
+            self.resources.recover_released_power_projects()
+            for context in tuple(self.projects.opened.values()):
+                self.projects._register_power(context, context.saved_root / 'Auto_power_on_off_tool/config',
+                                              allow_conflicts=True)
         self.status.archive_interrupted = True
 
     def project_worker_notice(self, context):
@@ -457,7 +521,9 @@ class WorkspaceService:
                 (self.gateway_runtime is None or self.gateway_runtime.idle) and
                 (self._management is None or self._management.idle))
 
-    def close(self):
+    def close(self, *, defer_callback_release=False):
+        if self._closed:
+            return
         if self.projects.opened:
             raise RuntimeError('仍有打开的项目，不能关闭工作区')
         if self._models is not None:
@@ -467,3 +533,18 @@ class WorkspaceService:
         if self.gateway_runtime:
             self.gateway_runtime.close()
         self.resources.close()
+        self._closed = True
+        if not defer_callback_release:
+            self.release_closed_callbacks()
+
+    def release_closed_callbacks(self):
+        """Closed workspace only; the Qt owner defers this until its log is drained."""
+        if not self._closed:
+            return False
+        noop = lambda text: None
+        self.emit = self.projects.emit = self.status.emit = noop
+        self.resources.recovery_context = None
+        self.resources.emit = noop
+        # All pools have closed. Drop their ownership, not their admission policies.
+        self.platforms.clear()
+        return True

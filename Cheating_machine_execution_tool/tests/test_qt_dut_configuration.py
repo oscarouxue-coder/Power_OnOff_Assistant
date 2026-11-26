@@ -19,6 +19,8 @@ SOURCE = Path(__file__).resolve().parents[1]
 
 class QtDutConfigurationTests(unittest.TestCase):
     def setUp(self):
+        from qt_execution_fakes import install_native_fixture_locks
+        install_native_fixture_locks(self)
         self.temp = tempfile.TemporaryDirectory(prefix='qt-dut-')
         self.addCleanup(self.temp.cleanup)
         root = Path(self.temp.name)

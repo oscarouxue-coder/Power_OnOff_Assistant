@@ -1,0 +1,9 @@
+"ms": 17211.719, "label": "blocked_start_checked", "thread": "gui", "owner_held": true, "can_start": false, "parallel_available": false, "button_enabled": false, "returned_none": true, "preparations_unchanged": true, "fake_calls_unchanged": true}, {"ms": 17211.846, "label": "synthetic_hold_finished", "thread": "worker", "blocked_start_observed": true}, {"ms": 17228.28, "label": "resource_release_return", "thread": "worker", "owner_held": false}, {"ms": 17228.411, "label": "job_worker_return", "thread": "worker", "owner_held": false}, {"ms": 17242.51, "label": "original_resource_assertion", "thread": "gui", "owner_held": false, "owners_empty": true}], "code": 0, "diagnostic_pass": true, "denied_calls": {"requests.sessions.Session.request": 0, "serial.Serial": 0, "socket.create_connection": 0, "socket.getaddrinfo": 0, "socket.gethostbyname": 0, "socket.gethostbyname_ex": 0, "socket.gethostbyaddr": 0, "socket.socket.connect": 0, "socket.socket.connect_ex": 0, "socket.socket.send": 0, "socket.socket.sendall": 0, "socket.socket.sendto": 0, "socket.socket.bind": 0, "socket.socket.listen": 0, "socket.socket.accept": 0, "subprocess.Popen": 0, "os.startfile": 0}, "elapsed_seconds": 17.339}
+
+test_qt_saved_material_error_and_cancel_leave_active_fake_power_job_unchanged (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 4.331s
+
+OK
+

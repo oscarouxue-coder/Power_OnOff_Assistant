@@ -219,7 +219,13 @@ class DeviceCapabilities:
             if port:
                 resources.append("serial:" + port.upper())
         if snapshot.get('power_serial_port') and identifier.startswith(('power.', 'aging.', 'pipeline.')):
-            resources.append('power:' + snapshot['power_serial_port'].upper())
+            coordinator = self.service.resources.coordinator
+            from src.services.workspace_resources import power_channel_keys, power_registration_enabled
+            if (coordinator is not None and coordinator.automatic_recovery and project is not None
+                    and power_registration_enabled(project.saved_root / 'Auto_power_on_off_tool/config')):
+                resources.extend(power_channel_keys(snapshot['power_serial_port'], arguments['channel_ids']))
+            else:
+                resources.append('power:' + snapshot['power_serial_port'].upper())
         if identifier.startswith(('aging.', 'pipeline.')):
             if resume and parent is not None:
                 session = parent.power_test_resume_session
@@ -257,12 +263,17 @@ class DeviceCapabilities:
             if not snapshot.get("power_serial_port"):
                 raise CapabilityError("missing_power_port", "未配置程控电源COM，不会自动选择")
             context.stop.checkpoint()
-            context.event("power", "按现有电源业务执行明确目标", dispatched=True)
+            context.event("power", "按现有电源业务执行明确目标")
+            def mark_write_attempt():
+                if not context.dispatched:
+                    context.event('power', '开始写入程控电源指令', dispatched=True)
             # Complete an admitted power sequence; do not kill a half-finished combination.
             result = (turn_on_selected_channels if enabled else turn_off_selected_channels)(
                 snapshot["power_serial_port"], arguments["channel_ids"],
-                on_output=lambda line: context.event("power", line))
-            return dict(ok=result.ok, state="succeeded" if result.ok else "unknown", message=result.message)
+                on_output=lambda line: context.event("power", line), on_write_attempt=mark_write_attempt,
+                stopped=context.stop.is_set)
+            state = 'succeeded' if result.ok else 'unknown' if context.dispatched else 'stopped' if context.stop.is_set() else 'failed'
+            return dict(ok=result.ok, state=state, message=result.message)
         return self._job("power.on" if enabled else "power.off", arguments, authority, run)
 
     def _pipeline_start(self, arguments, authority):
@@ -282,8 +293,12 @@ class DeviceCapabilities:
                 OnuRegistrationConfig(), legacy_tool_root=getattr(context, 'configuration_root', self.root) / "Auto_power_on_off_tool", stop_event=context.stop.event)
             if 'legacy_power_test' in tasks:
                 leases = self.service.resources
+                from src.services.workspace_resources import power_registration_enabled
                 if leases.coordinator is not None or leases.fence is not None:
                     config.power_resource_owner = (leases.coordinator or leases.fence, context.job_id)
+                config.shared_power = bool(leases.coordinator is not None and leases.coordinator.automatic_recovery
+                                           and self.service.project_context is not None and power_registration_enabled(
+                                               self.service.project_context.saved_root / 'Auto_power_on_off_tool/config'))
             try:
                 context.event("pipeline", "复用原编排器，保留版本预检/WiFi/停止/测试判据", dispatched=True)
                 hold = self.gui_pipeline_power_scope if authority.source == "gui" and "legacy_power_test" in tasks else None

@@ -18,6 +18,14 @@ def physical_key(key):
     if not separator or not value.strip():
         raise ValueError("资源标识不能为空")
     kind, value = kind.casefold(), value.strip().casefold()
+    if kind == 'power-channel':
+        port, separator, number = value.rpartition(':')
+        if not separator or not number.isdecimal() or not 1 <= int(number) <= 16:
+            raise ValueError('程控电源通道资源标识无效')
+        normalized = physical_key('power:' + port).split(':', 1)[1]
+        if not re.fullmatch(r'com\d+', normalized):
+            raise ValueError('程控电源串口资源标识无效')
+        return f'power-channel:{normalized}:{int(number)}'
     if kind in ("serial", "power"):
         value = value.removeprefix("\\\\.\\")
         if re.fullmatch(r"com\d+", value):

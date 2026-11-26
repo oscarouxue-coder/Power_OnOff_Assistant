@@ -1,0 +1,15 @@
+GUI_TEST_COVERAGE_OK
+MATERIAL_PARALLEL_QT_EVIDENCE: {"peak": 2, "workers": 2, "active": 0, "opened": 4, "closed": 4, "all_closed": true}
+ACTIVE_FAKE_HISTORY_EVIDENCE: {"running_state": "running", "running_progress": 68, "running_result": null, "original_events": 7, "final_events": 10, "original_event_prefix_preserved": true, "final_state": "succeeded", "final_ok": true, "final_items_ok": [true], "final_output_marker": true, "stop_observed": false, "resources_released": true, "original_history_unchanged": true, "physical_serial_calls": 0, "blocked_network_calls": 0, "parallel_reads": {"peak": 2, "workers": 2, "active": 0, "opened": 2, "closed": 2, "all_closed": true}}
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 43, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_0e3503277da141eaa372ce74776c60a3', 'framework': 'qt', 'platform': 'windows'}
+
+test_qt_saved_material_summary_uses_selected_history_and_discards_late_reads (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_multi_channel_saved_material_summary_preserves_independent_and_cancelled_results (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_saved_material_error_and_cancel_leave_active_fake_power_job_unchanged (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_history_result_files_open_selected_snapshot_after_workspace_restart (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_reopens_original_task_history_and_pages_with_project_isolation (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 19.959s
+
+OK

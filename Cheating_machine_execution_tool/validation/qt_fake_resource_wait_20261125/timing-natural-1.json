@@ -1,0 +1,100 @@
+{
+  "mode": "natural",
+  "scale": "1",
+  "events": [
+    {
+      "ms": 13801.278,
+      "label": "job_worker_enter",
+      "thread": "worker"
+    },
+    {
+      "ms": 15232.296,
+      "label": "project_status_terminal_enter",
+      "thread": "worker",
+      "state": "succeeded",
+      "owner_held": true
+    },
+    {
+      "ms": 15234.395,
+      "label": "project_status_terminal_return",
+      "thread": "worker",
+      "state": "succeeded",
+      "owner_held": true
+    },
+    {
+      "ms": 16031.643,
+      "label": "resource_release_enter",
+      "thread": "worker",
+      "owner_held": true
+    },
+    {
+      "ms": 16049.997,
+      "label": "resource_release_return",
+      "thread": "worker",
+      "owner_held": false
+    },
+    {
+      "ms": 16050.624,
+      "label": "job_worker_return",
+      "thread": "worker",
+      "owner_held": false
+    },
+    {
+      "ms": 16188.846,
+      "label": "terminal_job_read",
+      "thread": "worker",
+      "owner_held": false
+    },
+    {
+      "ms": 16190.078,
+      "label": "terminal_snapshot_published",
+      "thread": "worker",
+      "owner_held": false,
+      "can_start": true,
+      "active_tasks": 0
+    },
+    {
+      "ms": 16300.999,
+      "label": "terminal_ui_observed",
+      "thread": "gui",
+      "owner_held": false,
+      "can_start": true,
+      "active_tasks": 0
+    },
+    {
+      "ms": 16301.008,
+      "label": "terminal_ui_can_start",
+      "thread": "gui",
+      "owner_held": false
+    },
+    {
+      "ms": 16301.284,
+      "label": "original_resource_assertion",
+      "thread": "gui",
+      "owner_held": false,
+      "owners_empty": true
+    }
+  ],
+  "code": 0,
+  "diagnostic_pass": true,
+  "denied_calls": {
+    "requests.sessions.Session.request": 0,
+    "serial.Serial": 0,
+    "socket.create_connection": 0,
+    "socket.getaddrinfo": 0,
+    "socket.gethostbyname": 0,
+    "socket.gethostbyname_ex": 0,
+    "socket.gethostbyaddr": 0,
+    "socket.socket.connect": 0,
+    "socket.socket.connect_ex": 0,
+    "socket.socket.send": 0,
+    "socket.socket.sendall": 0,
+    "socket.socket.sendto": 0,
+    "socket.socket.bind": 0,
+    "socket.socket.listen": 0,
+    "socket.socket.accept": 0,
+    "subprocess.Popen": 0,
+    "os.startfile": 0
+  },
+  "elapsed_seconds": 16.463
+}

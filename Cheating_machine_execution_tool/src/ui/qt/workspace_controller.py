@@ -3,9 +3,11 @@ from datetime import datetime
 from importlib.util import find_spec
 from pathlib import Path
 import time
-from PySide6.QtCore import QObject, QTimer, Qt
+from weakref import ref
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QTimer, Qt, Signal
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QFileDialog, QInputDialog, QMenu, QMessageBox, QToolBar, QToolButton
+from shiboken6 import isValid
 from src.models.workbench_presentation import LogView
 from src.models.project_review import ReviewTarget
 from src.services.qt_single_power import CAPABILITY as SINGLE_POWER
@@ -22,6 +24,11 @@ from src.ui.qt.window_placement import current_placement, restore_placement
 
 
 class WorkspaceController(QObject):
+    closing_changed = Signal(bool)
+    _WORKSPACE_OWNERS = ('blocker_review', 'project_wizard', 'parameter_writer', 'onu_query',
+                         'log_history', 'aging_history', 'channel_history', 'archived_logs',
+                         'model_settings', 'ai_chat', 'app_update', 'feishu_repair')
+
     def __init__(self, window, source_root, *, directory=None, adapter=None, start_configured_gateway=False):
         super().__init__(window)
         self.window = window
@@ -31,6 +38,7 @@ class WorkspaceController(QObject):
         self.ready = False
         self.closing = False
         self._allow_close = False
+        self._workspace_refs_released = False
         self._next_refresh = time.monotonic() + 1
         self._next_health = self._next_refresh - 1
         self._last_gui_poll = None
@@ -181,6 +189,57 @@ class WorkspaceController(QObject):
         self.timer.timeout.connect(self.poll)
         self.timer.start()
         self._sync_actions()
+        owner = ref(self)
+
+        def after_window_destroyed(*_):
+            def release():
+                controller = owner()
+                if controller is not None:
+                    controller._release_destroyed_workspace()
+            # QWidget.destroyed is emitted before all of its children have
+            # been destroyed; never detach a child reference in that signal.
+            if QCoreApplication.instance() is not None and not QCoreApplication.closingDown():
+                QTimer.singleShot(0, release)
+
+        window.destroyed.connect(after_window_destroyed)
+
+    def _terminal_shutdown_complete(self):
+        if (not self.closing or not self._allow_close or not self.adapter.closed.is_set()
+                or self.adapter.thread.is_alive() or self.app_update.worker.pending_work):
+            return False
+        service = getattr(self.adapter, '_service', None)
+        writer = self.adapter._log_writer
+        return (getattr(service, '_closed', False) and
+                writer.report is None and writer.associate is None)
+
+    def _release_destroyed_workspace(self):
+        """Only the dead Qt object graph may lose its Python owner backrefs."""
+        if self._workspace_refs_released:
+            return True
+        if (not self._terminal_shutdown_complete() or isValid(self.window)
+                or isValid(self) or isValid(self.timer)):
+            return False
+        for name in self._WORKSPACE_OWNERS:
+            child = getattr(self, name)
+            if child.workspace is self:
+                child.workspace = None
+        self._workspace_refs_released = True
+        return True
+
+    def dispose_closed_window(self):
+        """Finalize a successful workspace close after the application loop exits."""
+        if self._workspace_refs_released:
+            return True
+        if not self._terminal_shutdown_complete():
+            return False
+        if isValid(self.window):
+            if self.window.isVisible():
+                return False
+            self.window.deleteLater()
+            # The main event loop has ended. Deliver only this closed window's
+            # deferred deletion, not arbitrary queued application events.
+            QCoreApplication.sendPostedEvents(self.window, QEvent.Type.DeferredDelete)
+        return self._release_destroyed_workspace()
 
     def open_instance_status(self):
         if not self.ready or self.closing:
@@ -1254,6 +1313,11 @@ class WorkspaceController(QObject):
             self._gui_gap_peak = max(self._gui_gap_peak or 0, (now - self._last_gui_poll) * 1000)
         self._last_gui_poll = now
         projects, logs, results = self.adapter.take_updates()
+        if self.configuration_editors:
+            _, leases = self.adapter.device_inventory_snapshot()
+            for dialog in tuple(self.configuration_editors.values()):
+                if getattr(dialog, 'editor_kind', '') == 'channels':
+                    dialog.set_power_claims(leases.entries)
         self._log_batch_peak = max(self._log_batch_peak, len(logs))
         if now >= self._next_health:
             self.window.dashboard.system_health.update_status(self.adapter.health_snapshot(),
@@ -1356,6 +1420,7 @@ class WorkspaceController(QObject):
                     continue
                 if result.operation == 'close_rejected':
                     self.closing = False
+                    self.closing_changed.emit(False)
                     self.feishu_repair.cancel_restart()
                     self.parameter_writer.set_closing(False)
                     self.onu_query.set_closing(False)
@@ -1519,6 +1584,7 @@ class WorkspaceController(QObject):
         for identifier in choices:
             self._remember_tool_windows(identifier)
         self.closing = True
+        self.closing_changed.emit(True)
         self.app_update.begin_close()
         self.parameter_writer.set_closing(True)
         self.onu_query.set_closing(True)

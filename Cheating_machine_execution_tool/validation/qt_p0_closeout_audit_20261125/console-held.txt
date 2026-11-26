@@ -1,0 +1,26 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\scripts\gui_test_process.py", line 86, in run_gui_child
+    raise AssertionError(f'GUI child offscreen failure: {evidence}\n{result.stdout}\n{result.stderr}')
+AssertionError: GUI child offscreen failure: {'passed': False, 'managed_windows': 6, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_3de69f2aefbc4d34aab9d579ec8c0ee7', 'framework': 'qt', 'platform': 'windows', 'qt': {'passed': True, 'managed_windows': 6, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_3de69f2aefbc4d34aab9d579ec8c0ee7', 'framework': 'qt', 'platform': 'windows'}}
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 6, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_3de69f2aefbc4d34aab9d579ec8c0ee7', 'framework': 'qt', 'platform': 'windows'}
+TIMING_RESULT: {"mode": "held", "events": [{"ms": 12903.8, "label": "job_worker_enter", "thread": "worker"}, {"ms": 14342.766, "label": "project_status_terminal_enter", "thread": "worker", "state": "succeeded", "owner_held": true}, {"ms": 14350.996, "label": "project_status_terminal_return", "thread": "worker", "state": "succeeded", "owner_held": true}, {"ms": 15124.903, "label": "resource_release_enter", "thread": "worker", "owner_held": true}, {"ms": 15125.947, "label": "terminal_job_read", "thread": "worker", "owner_held": true}, {"ms": 15127.261, "label": "terminal_snapshot_published", "thread": "worker", "owner_held": true, "can_start": false, "active_tasks": 0}, {"ms": 15153.878, "label": "terminal_ui_observed", "thread": "gui", "owner_held": true, "can_start": false, "active_tasks": 0}, {"ms": 15154.357, "label": "original_resource_assertion", "thread": "gui", "owner_held": true, "owners_empty": false}, {"ms": 15154.703, "label": "synthetic_hold_finished", "thread": "worker", "assertion_observed": true}, {"ms": 15181.339, "label": "resource_release_return", "thread": "worker", "owner_held": false}, {"ms": 15181.413, "label": "job_worker_return", "thread": "worker", "owner_held": false}], "code": 1, "denied_calls": {"requests.sessions.Session.request": 0, "serial.Serial": 0, "socket.create_connection": 0, "socket.getaddrinfo": 0, "socket.gethostbyname": 0, "socket.gethostbyname_ex": 0, "socket.gethostbyaddr": 0, "socket.socket.connect": 0, "socket.socket.connect_ex": 0, "socket.socket.send": 0, "socket.socket.sendall": 0, "socket.socket.sendto": 0, "socket.socket.bind": 0, "socket.socket.listen": 0, "socket.socket.accept": 0, "subprocess.Popen": 0, "os.startfile": 0}, "elapsed_seconds": 15.325}
+
+test_qt_saved_material_error_and_cancel_leave_active_fake_power_job_unchanged (qt_workbench_probe.QtProjectWorkspaceTests) ... FAIL
+
+======================================================================
+FAIL: test_qt_saved_material_error_and_cancel_leave_active_fake_power_job_unchanged (qt_workbench_probe.QtProjectWorkspaceTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "F:\Aouxue\Power_OnOff_Assistant\Cheating_machine_execution_tool\tests\qt_workbench_probe.py", line 6531, in test_qt_saved_material_error_and_cancel_leave_active_fake_power_job_unchanged
+    self.assertFalse(workspace.resources.owners)
+  File "validation\qt_p0_closeout_audit_20261125\timing_probe.py", line 142, in check
+    return original_assert(case, expr, *args, **kwargs)
+AssertionError: {'9b9b9dad7cba4510842ec1b914f0b392': ('ee4984df-cf8f-436b-96ec-203d4c6eb707', ('adapter:fixture-guid-channel_1', 'adapter:fixture-guid-channel_7', 'adapter:vlan101', 'adapter:vlan107', 'power-channel:com102:1', 'power-channel:com102:7', 'serial:com1', 'serial:com7'))} is not false
+
+----------------------------------------------------------------------
+Ran 1 test in 3.838s
+
+FAILED (failures=1)
+

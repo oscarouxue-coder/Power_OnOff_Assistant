@@ -28,6 +28,19 @@ class ChannelView:
 
 
 @dataclass(frozen=True)
+class AttentionView:
+    label: str
+    channel: Optional[int]
+    time: str
+    event: str
+    reason: str
+    stage: str = ''
+    cycle: Optional[int] = None
+    related_events: Tuple[str, ...] = ()
+    reason_recorded: bool = True
+
+
+@dataclass(frozen=True)
 class ProjectView:
     project_id: str
     name: str
@@ -73,6 +86,7 @@ class ProjectView:
     observed_active_task_count: int = 0
     project_type: str = ''
     test_overview: Optional[dict] = None
+    attention_records: Optional[Tuple[AttentionView, ...]] = None
 
     @property
     def overview_task_count(self):

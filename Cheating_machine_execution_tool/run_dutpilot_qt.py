@@ -78,7 +78,12 @@ def main(argv=None):
         return run_demo()
     # A running workspace may have a different working directory from this caller.
     project = os.path.abspath(args.project) if args.project else None
-    return run_workspace(project)
+    from src.core.workspace_instance import WorkspaceInstanceError
+    try:
+        return run_workspace(project)
+    except WorkspaceInstanceError as error:
+        report_startup_error(str(error))
+        return 1
 
 
 if __name__ == '__main__':

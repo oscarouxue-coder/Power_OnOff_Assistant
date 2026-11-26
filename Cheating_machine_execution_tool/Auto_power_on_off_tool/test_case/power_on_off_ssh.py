@@ -202,7 +202,7 @@ class PowerOnOffSsh(QThread):
         :param network_card_ip: 网卡IP
         :param power_num: 对应的程控电源口序号
         :param flag: 运行的标志，为时运行，为0时停止
-        :return:
+        :return: True 已完成目标轮次，False 测试失败，None 用户停止
         """
         times = start_cycle
 
@@ -364,8 +364,6 @@ class PowerOnOffSsh(QThread):
                                                                            self.recv_email)
                             # time.sleep(create_float_num(3))  # 给个随机时间试试
                             return False
-                        times += 1
-
                         if times == self.test_number:
                             self.logger.info(
                                 f'The device of channel {power_num} of programmable power supply  restarts {self.test_number} times, please replace the device！')
@@ -378,6 +376,7 @@ class PowerOnOffSsh(QThread):
                             return True
 
                             # return False  # 8.25
+                        times += 1
                         timestamp = time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime(time.time()))
                         file.write(f'{timestamp}指令执行完成，等待：{self.wait_command_done}s后断电\n'.encode())
                         time.sleep(self.wait_command_done)
@@ -386,7 +385,7 @@ class PowerOnOffSsh(QThread):
                     else:
                         # continue
                         self.logger.info(f'{power_num} stop func')
-                        return False
+                        return None
                 except PowerCommandCancelled:
                     self.run_status_list[power_num - 1] = 0
                     return None

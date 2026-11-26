@@ -16,6 +16,19 @@ from src.models.workbench_presentation import ChannelView, ProjectView
 
 
 class QtMigrationContractTests(unittest.TestCase):
+    def test_workspace_startup_failure_reports_existing_instance(self):
+        import run_dutpilot_qt
+        from src.core.workspace_instance import WorkspaceInstanceError
+
+        app = ModuleType('src.ui.qt.application')
+        app.run_workspace = Mock(side_effect=WorkspaceInstanceError('此电脑已有 DUTPilot 正在运行'))
+        app.run_demo = app.run_showcase = app.run_visual_preview = Mock()
+        with patch.dict(sys.modules, {'src.ui.qt.application': app}), \
+                patch.object(sys, 'frozen', True, create=True), \
+                patch.object(run_dutpilot_qt, 'report_startup_error') as report:
+            self.assertEqual(run_dutpilot_qt.main([]), 1)
+        report.assert_called_once_with('此电脑已有 DUTPilot 正在运行')
+
     def test_frozen_and_source_default_to_workspace_and_keep_explicit_previews(self):
         import run_dutpilot_qt
 

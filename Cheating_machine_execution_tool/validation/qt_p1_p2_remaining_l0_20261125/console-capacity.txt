@@ -1,0 +1,10 @@
+anaged_windows': 5, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_c4e0bbe6e2854936aa24daf3b090a391', 'framework': 'qt', 'platform': 'windows'}
+REMAINING_L0_EVIDENCE: {"saved_capacity": 65536, "changed_synthetic_capacity": 131072, "displayed": "已保存历史用量（非当前请求）\n接口返回：输入 12，输出 3，合计 15 Token · 记录当时上限 65,536 Token\n记录时间 2026-11-25T10:00:00+08:00；不代表当前配置或当前请求。", "unknown_displayed": "当前无可核对的模型请求；已保存历史用量未知", "historical_unchanged": true, "running": false, "mode": "capacity", "result_code": 0, "denied_calls": {"requests.sessions.Session.request": 0, "serial.Serial": 0, "socket.create_connection": 0, "socket.getaddrinfo": 0, "socket.gethostbyname": 0, "socket.gethostbyname_ex": 0, "socket.gethostbyaddr": 0, "socket.socket.connect": 0, "socket.socket.connect_ex": 0, "socket.socket.send": 0, "socket.socket.sendall": 0, "socket.socket.sendto": 0, "socket.socket.bind": 0, "socket.socket.listen": 0, "socket.socket.accept": 0, "subprocess.Popen": 0, "os.startfile": 0}}
+
+test_capacity (__main__.run.<locals>.RemainingCase) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 3.038s
+
+OK
+

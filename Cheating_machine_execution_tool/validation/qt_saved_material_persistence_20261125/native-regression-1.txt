@@ -1,0 +1,13 @@
+GUI_TEST_COVERAGE_OK
+MATERIAL_PARALLEL_QT_EVIDENCE: {"peak": 2, "workers": 2, "active": 0, "opened": 4, "closed": 4, "all_closed": true}
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 29, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_386eb8bf9b454644b932875d5717e562', 'framework': 'qt', 'platform': 'windows'}
+CLOSE_REGRESSION_DENIED: {"requests.sessions.Session.request": 0, "serial.Serial": 0, "socket.create_connection": 0, "socket.getaddrinfo": 0, "socket.gethostbyname": 0, "socket.gethostbyname_ex": 0, "socket.gethostbyaddr": 0, "socket.socket.connect": 0, "socket.socket.connect_ex": 0, "socket.socket.send": 0, "socket.socket.sendall": 0, "socket.socket.sendto": 0, "socket.socket.bind": 0, "socket.socket.listen": 0, "socket.socket.accept": 0, "subprocess.Popen": 0, "os.startfile": 0}
+
+test_qt_saved_material_report_reopens_exact_history_without_source_read (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_saved_material_summary_uses_selected_history_and_discards_late_reads (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_multi_channel_saved_material_summary_preserves_independent_and_cancelled_results (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 11.492s
+
+OK

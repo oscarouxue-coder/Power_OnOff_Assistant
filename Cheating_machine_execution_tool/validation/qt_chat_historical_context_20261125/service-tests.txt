@@ -1,0 +1,22 @@
+GUI_TEST_COVERAGE_OK
+test_context_display_does_not_use_old_values_as_current_or_cross_session (test_qt_ai_turn_display.TurnDisplayTests) ... ok
+test_identity_requires_a_single_supported_question (test_qt_ai_turn_display.TurnDisplayTests) ... ok
+test_late_usage_cannot_replace_another_request_or_session (test_qt_ai_turn_display.TurnDisplayTests) ... ok
+test_only_a_displayable_model_id_is_returned (test_qt_ai_turn_display.TurnDisplayTests) ... ok
+test_only_queue_receipts_label_a_supplement (test_qt_ai_turn_display.TurnDisplayTests) ... ok
+test_ordinary_event_uses_real_receipts_and_leaves_identity_unassigned_before_reply (test_qt_ai_turn_display.TurnDisplayTests) ... ok
+test_saved_context_display_preserves_source_basis_and_unknowns (test_qt_ai_turn_display.TurnDisplayTests) ... ok
+test_both_protocols_use_input_plus_output_without_summing_billing_metadata (test_ai_context_usage.UsageMathTests) ... ok
+test_missing_or_malformed_usage_estimates_both_sides_including_tool_arguments (test_ai_context_usage.UsageMathTests) ... ok
+test_zero_usage_is_valid_and_reserves_are_not_used_tokens (test_ai_context_usage.UsageMathTests) ... ok
+test_failed_retries_keep_one_previous_completed_snapshot (test_ai_context_usage.UsageMathTests) ... ok
+test_cancel_keeps_completed_usage_and_restart_recovers_it_without_recomputing (test_ai_context_usage.UsageConversationTests) ... ok
+test_restart_marks_interrupted_request_cancelled_and_recovers_previous_result (test_ai_context_usage.UsageConversationTests) ... ok
+test_old_session_unknown_capacity_and_budget_failure_do_not_invent_actual_usage (test_ai_context_usage.UsageConversationTests) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 2.397s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}
+CLOSE_REGRESSION_DENIED: {"requests.sessions.Session.request": 0, "serial.Serial": 0, "socket.create_connection": 0, "socket.getaddrinfo": 0, "socket.gethostbyname": 0, "socket.gethostbyname_ex": 0, "socket.gethostbyaddr": 0, "socket.socket.connect": 0, "socket.socket.connect_ex": 0, "socket.socket.send": 0, "socket.socket.sendall": 0, "socket.socket.sendto": 0, "socket.socket.bind": 0, "socket.socket.listen": 0, "socket.socket.accept": 0, "subprocess.Popen": 0, "os.startfile": 0}

@@ -1,0 +1,78 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 17, 'violations': [], 'isolation': 'offscreen', 'desktop': None}
+
+test_chat_analysis_uses_only_cited_presence_and_actual_observation_order (test_qt_channel_evidence.ChannelEvidenceTests) ... ok
+test_chat_does_not_infer_recurrence_from_record_id_order_alone (test_qt_channel_evidence.ChannelEvidenceTests) ... ok
+test_chat_excludes_expired_and_future_observations_and_caps_citations (test_qt_channel_evidence.ChannelEvidenceTests) ... ok
+test_chat_receipt_counts_exact_bounded_candidates_and_citations (test_qt_channel_evidence.ChannelEvidenceTests) ... ok
+test_chat_refuses_a_previously_valid_snapshot_after_a_new_run (test_qt_channel_evidence.ChannelEvidenceTests) ... ok
+test_cross_project_batch_and_dut_never_mix (test_qt_channel_evidence.ChannelEvidenceTests) ... ok
+test_frozen_snapshot_duplicate_is_rejected_before_reading_observations (test_qt_channel_evidence.ChannelEvidenceTests) ... ok
+test_missing_future_and_stale_are_distinguished (test_qt_channel_evidence.ChannelEvidenceTests) ... ok
+test_ping_has_time_source_id_but_no_device_offline_inference (test_qt_channel_evidence.ChannelEvidenceTests) ... ok
+test_question_recognizes_only_a_single_explicit_disconnect_question (test_qt_channel_evidence.ChannelEvidenceTests) ... ok
+test_read_limits_and_unchanged_files (test_qt_channel_evidence.ChannelEvidenceTests) ... ok
+test_sources_remain_data_and_interleaved_heartbeat_supports_recurrence (test_qt_channel_evidence.ChannelEvidenceTests) ... ok
+test_stopped_and_missing_history_never_open_or_create_database (test_qt_channel_evidence.ChannelEvidenceTests) ... ok
+test_wal_database_is_left_without_sidecars (test_qt_channel_evidence.ChannelEvidenceTests) ... ok
+test_identity_requires_a_single_supported_question (test_qt_ai_turn_display.TurnDisplayTests) ... ok
+test_late_usage_cannot_replace_another_request_or_session (test_qt_ai_turn_display.TurnDisplayTests) ... ok
+test_only_a_displayable_model_id_is_returned (test_qt_ai_turn_display.TurnDisplayTests) ... ok
+test_only_queue_receipts_label_a_supplement (test_qt_ai_turn_display.TurnDisplayTests) ... ok
+test_ask_user_waits_then_preserves_plan_when_answered (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_budget_requests_final_advice_without_additional_tools (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_diagnosis_hides_and_blocks_modifications_even_with_full_access (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_duplicate_failure_is_not_executed_again_and_task_concludes (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_empty_final_response_does_not_claim_diagnostic_advice (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_inflight_supplement_skips_unstarted_checks_and_is_used_next_round (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_memory_plan_and_quoted_evidence_survive_next_request (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_more_than_five_rounds_and_ten_calls_without_protocol_loss (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_pc_scope_uses_only_pc_tools_and_preserves_other_permissions (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_restart_marks_task_interrupted_and_does_not_replay_queries (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_stop_keeps_supplement_and_never_resumes_automatically (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_time_budget_cancels_unapproved_login_without_connecting (test_ai_diagnostic_task.DiagnosticTaskTests) ... ok
+test_chat_stream_assembles_fragmented_tools_and_reasoning (test_ai_diagnostic_task.StreamTests) ... ok
+test_json_only_provider_is_accepted_without_resubmitting (test_ai_diagnostic_task.StreamTests) ... ok
+test_responses_stream_uses_completed_canonical_output (test_ai_diagnostic_task.StreamTests) ... ok
+test_split_model_key_never_appears_in_previews (test_ai_diagnostic_task.StreamTests) ... ok
+test_stop_closes_stream_without_finalizing_tools (test_ai_diagnostic_task.StreamTests) ... ok
+test_truncated_stream_never_returns_executable_calls (test_ai_diagnostic_task.StreamTests) ... ok
+test_menu_sends_diagnostic_task_and_progress_is_on_demand (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_new_session_failure_preserves_selection_and_draft (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_new_session_first_send_stays_in_new_general_session (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_new_session_is_first_and_creates_blank_without_stopping_old_work (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_new_session_menu_disables_during_routing_and_callback_guards_it (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_new_session_rejects_unsaved_profile_and_shutdown_without_creating (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_stream_preview_is_not_persisted_and_final_text_replaces_it (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_task_progress_does_not_pollute_main_log_summary (test_ai_diagnostic_task.TaskUiTests) ... ok
+test_budgets_duplicate_checks_and_supplement_invalidation (test_ai_diagnostic_task.TaskUnitTests) ... ok
+test_different_queries_with_no_new_evidence_also_stop (test_ai_diagnostic_task.TaskUnitTests) ... ok
+test_plan_requires_existing_evidence_and_keeps_observations_separate (test_ai_diagnostic_task.TaskUnitTests) ... ok
+test_bindings_are_rechecked_before_start_and_each_packet (test_service_aging.ServiceAgingTests) ... ok
+test_daily_final_records_cross_midnight_and_target_duration_never_grant_acceptance (test_service_aging.ServiceAgingTests) ... ok
+test_interruption_and_long_gaps_never_extend_uptime_or_auto_restart (test_service_aging.ServiceAgingTests) ... ok
+test_job_owns_snapshot_and_leases_until_stop_and_project_dut_keys_conflict (test_service_aging.ServiceAgingTests) ... ok
+test_missing_interface_keeps_manual_and_unavailable_sources_distinct (test_service_aging.ServiceAgingTests) ... ok
+test_probe_health_intervals_heartbeat_and_loss_require_actual_consecutive_observations (test_service_aging.ServiceAgingTests) ... ok
+test_raw_probe_binds_ipv4_and_interface_before_send_and_never_falls_back (test_service_aging.ServiceAgingTests) ... ok
+test_seven_daily_inspections_are_separate_from_continuous_verification_and_export_in_full (test_service_aging.ServiceAgingTests) ... ok
+test_burst_larger_than_a_reader_page_drains_in_one_sampling_tick (test_service_aging_feed.ServiceAgingFeedTests) ... ok
+test_durable_dedup_time_and_restart_do_not_bridge_missing_evidence (test_service_aging_feed.ServiceAgingFeedTests) ... ok
+test_job_reads_only_frozen_subscription_and_keeps_manual_evidence_separate (test_service_aging_feed.ServiceAgingFeedTests) ... ok
+test_legacy_history_without_feed_table_can_read_export_and_stays_unmodified (test_service_aging_feed.ServiceAgingFeedTests) ... ok
+test_manifest_conflict_keeps_icmp_and_manual_working_then_retries_file_input (test_service_aging_feed.ServiceAgingFeedTests) ... ok
+test_presence_uses_frozen_dut_online_evidence_and_detects_proven_boot_changes_across_gaps (test_service_aging_feed.ServiceAgingFeedTests) ... ok
+test_real_jsonl_presence_updates_only_the_named_dut_and_keeps_metadata_after_stop (test_service_aging_feed.ServiceAgingFeedTests) ... ok
+test_declared_adb_change_invalidates_only_its_dut_environment_receipt (test_project_preparation.ProjectPreparationTests) ... ok
+test_dirty_draft_concurrent_begin_and_interrupted_job (test_project_preparation.ProjectPreparationTests) ... ok
+test_environment_channel_starts_without_sn_but_still_requires_evidence (test_project_preparation.ProjectPreparationTests) ... ok
+test_exact_onu_sn_and_both_wifi_bands_missing_receipts_do_not_pass (test_project_preparation.ProjectPreparationTests) ... ok
+test_execution_and_verification_bind_to_current_dut_attempt_and_configuration (test_project_preparation.ProjectPreparationTests) ... ok
+test_only_exact_original_job_after_attempt_can_complete_automatic_execution (test_project_preparation.ProjectPreparationTests) ... ok
+test_preparation_emits_once_with_original_text_and_source_target (test_project_preparation.ProjectPreparationTests) ... ok
+test_type_dependencies_manual_skip_and_gate (test_project_preparation.ProjectPreparationTests) ... ok
+
+----------------------------------------------------------------------
+Ran 70 tests in 17.062s
+
+OK

@@ -1,0 +1,47 @@
+{
+  "pid": 22060,
+  "project_id": "ecc6e10c-7276-40e4-9cef-dfb77e92db69",
+  "job_id": "fixture-cross-process-report",
+  "run_id": "4b31aa068b10471c91d3754766e90e85",
+  "report": {
+    "report_id": "c6b7d57b4a1b41398ef4156bec81ff34",
+    "project_id": "ecc6e10c-7276-40e4-9cef-dfb77e92db69",
+    "job_id": "fixture-cross-process-report",
+    "run_id": "4b31aa068b10471c91d3754766e90e85",
+    "channels": [
+      7
+    ],
+    "generated_at": "2026-11-25T23:43:53+08:00",
+    "historical_state": "succeeded",
+    "historical_at": "2026-11-25T23:43:53+08:00",
+    "saved_at": "2026-11-25T23:43:53+08:00",
+    "text": "项目 ecc6e10c-7276-40e4-9cef-dfb77e92db69\n任务 fixture-cross-process-report\n批次 4b31aa068b10471c91d3754766e90e85\nCH07\n\n仅汇总选定的留存文件末页（每份最多 120 行 / 128 KiB），不代表实时状态。\n引用格式：文件名@页首字节偏移:页内行号；正文不展开。\n\n开关机结果 · device_7_command_results_20261120221001.log · 已读取 2 行，明确标记 1 条\n\n引用 device_7_command_results_20261120221001.log@0:1 · 时间未知 · 原文记录 Ping 通；不代表实时连通或设备在线\n\nWiFi 记录 · 缺少已列出的留存文件\n\n汇总结果：读取 1 份，缺失 1 份，无法读取 0 份。\n以上仅为留存记录；故障原因及当前设备状态未知。"
+  },
+  "body": "保存记录 c6b7d57b4a1b41398ef4156bec81ff34\n历史状态 succeeded · 2026-11-25T23:43:53+08:00\n生成时间 2026-11-25T23:43:53+08:00\n保存时间 2026-11-25T23:43:53+08:00\n已保存历史报告，不代表实时状态；未重新读取资料。\n\n项目 ecc6e10c-7276-40e4-9cef-dfb77e92db69\n任务 fixture-cross-process-report\n批次 4b31aa068b10471c91d3754766e90e85\nCH07\n\n仅汇总选定的留存文件末页（每份最多 120 行 / 128 KiB），不代表实时状态。\n引用格式：文件名@页首字节偏移:页内行号；正文不展开。\n\n开关机结果 · device_7_command_results_20261120221001.log · 已读取 2 行，明确标记 1 条\n\n引用 device_7_command_results_20261120221001.log@0:1 · 时间未知 · 原文记录 Ping 通；不代表实时连通或设备在线\n\nWiFi 记录 · 缺少已列出的留存文件\n\n汇总结果：读取 1 份，缺失 1 份，无法读取 0 份。\n以上仅为留存记录；故障原因及当前设备状态未知。",
+  "record_sha256": "cbe337afedb4693a1a1771a1136cabace92fe5971f91df78b6ba67c16f23f857",
+  "source_sha256": "47fd8ce2e452d18ac475c4f3774116272674dc7cfaf0491592fa64d3062ccfb5",
+  "source_relative": "runs\\4b31aa068b10471c91d3754766e90e85\\Auto_power_on_off_tool\\test_results\\device_7\\device_7_command_results_20261120221001.log",
+  "source_rereads": 0,
+  "closed_normally": true,
+  "mode": "writer",
+  "result_code": 0,
+  "denied_calls": {
+    "requests.sessions.Session.request": 0,
+    "serial.Serial": 0,
+    "socket.create_connection": 0,
+    "socket.getaddrinfo": 0,
+    "socket.gethostbyname": 0,
+    "socket.gethostbyname_ex": 0,
+    "socket.gethostbyaddr": 0,
+    "socket.socket.connect": 0,
+    "socket.socket.connect_ex": 0,
+    "socket.socket.send": 0,
+    "socket.socket.sendall": 0,
+    "socket.socket.sendto": 0,
+    "socket.socket.bind": 0,
+    "socket.socket.listen": 0,
+    "socket.socket.accept": 0,
+    "subprocess.Popen": 0,
+    "os.startfile": 0
+  }
+}

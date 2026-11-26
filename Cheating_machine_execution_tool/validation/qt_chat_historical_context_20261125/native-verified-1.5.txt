@@ -1,0 +1,13 @@
+GUI_TEST_COVERAGE_OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 25, 'violations': [], 'isolation': 'private_desktop', 'desktop': 'DUTPilot_render_04bb7f413a0c4cbf90c40617f98d3b43', 'framework': 'qt', 'platform': 'windows'}
+CLOSE_REGRESSION_DENIED: {"requests.sessions.Session.request": 0, "serial.Serial": 0, "socket.create_connection": 0, "socket.getaddrinfo": 0, "socket.gethostbyname": 0, "socket.gethostbyname_ex": 0, "socket.gethostbyaddr": 0, "socket.socket.connect": 0, "socket.socket.connect_ex": 0, "socket.socket.send": 0, "socket.socket.sendall": 0, "socket.socket.sendto": 0, "socket.socket.bind": 0, "socket.socket.listen": 0, "socket.socket.accept": 0, "subprocess.Popen": 0, "os.startfile": 0}
+
+test_qt_reopened_chat_displays_only_its_saved_context_usage_as_history (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_ai_chat_sends_and_reopens_original_persisted_history (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_ordinary_reply_event_cancelled_without_body_keeps_request_identity (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+test_qt_supplement_receipts_survive_late_snapshots_and_only_confirm_next_transport (qt_workbench_probe.QtProjectWorkspaceTests) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 14.965s
+
+OK

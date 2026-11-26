@@ -264,6 +264,9 @@ class QtChannelConfiguration:
         after = prepare_channel_environment(before, edits, self.context.working_root, preserve=bool(profile))
         if aging:
             after['power_serial_port'] = before['power_serial_port']
+        elif self.workspace.projects.power_resources is not None:
+            self.workspace.resources.check_power_selection(self.context.identity.project_id, after['power_serial_port'],
+                (int(row['section'].rsplit('_', 1)[1]) for row in after['channels'] if row['enabled']))
         assignment_rows = arguments.get('assignments', ())
         assignments = {row['dut_id']: row['number'] for row in assignment_rows}
         unbound = set()
@@ -362,7 +365,7 @@ class QtChannelConfiguration:
                     if pending['profile']:
                         write_project_profile(self.context.config_dir, pending['profile'])
                         profile_published = True
-                    self.workspace.projects.save(self.context)
+                    self.workspace.projects.save(self.context, require_power_registration=True)
                 except Exception as error:
                     revision_changed = self.context.identity.revision != old_revision
                     uncertain = revision_changed or getattr(error, 'code', '') == 'channel_view_rollback_failed'
@@ -392,6 +395,8 @@ class QtChannelConfiguration:
                     except OSError:
                         self.cache = None
                         uncertain = True
+                    if isinstance(error, ReviewRequired) and not uncertain:
+                        raise
                     raise CapabilityError('channel_save_unknown' if uncertain else 'channel_save_failed',
                         f'通道恢复未完成，请检查 {self.path.name}、{profile_path.name} 和项目版本 {old_revision[:12]}' if uncertain else
                         '通道提交失败，未覆盖其它写入或已恢复原草稿；请重新加载并核对') from None

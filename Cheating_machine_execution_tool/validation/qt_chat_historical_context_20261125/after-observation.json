@@ -1,0 +1,11 @@
+{
+  "persisted_usage_present": true,
+  "saved_source": "api",
+  "saved_counts": [
+    12,
+    3,
+    15
+  ],
+  "displayed": "已保存历史用量（非当前请求）\n接口返回：输入 12，输出 3，合计 15 Token · 记录当时上限 65,536 Token\n记录时间 2026-11-25T10:00:00+08:00；不代表当前配置或当前请求。",
+  "running": false
+}

@@ -1,0 +1,15 @@
+GUI_TEST_COVERAGE_OK
+test_display_unknowns_are_not_defaulted_to_normal_or_zero (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_frozen_and_source_default_to_workspace_and_keep_explicit_previews (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_missing_qt_forwards_arguments_once_or_reports_setup (test_qt_migration_contract.QtMigrationContractTests) ... ok
+test_native_verification_keeps_timeout_diagnostics_and_checks_every_scale (test_qt_migration_contract.QtMigrationContractTests) ... QT_NATIVE_SCALE 1 FAIL
+QT_NATIVE_SCALE 1.25 FAIL
+QT_NATIVE_SCALE 1.5 FAIL
+ok
+test_ui_package_no_longer_eagerly_imports_tk (test_qt_migration_contract.QtMigrationContractTests) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 1.039s
+
+OK
+GUI_RUNTIME_REPORT: {'passed': True, 'managed_windows': 0, 'violations': [], 'isolation': 'offscreen', 'desktop': None}

@@ -72,14 +72,18 @@ def run_workspace(project_path=None):
     from src.services.workspace_service import workspace_data_dir
     from src.ui.qt.workspace_controller import WorkspaceController
     source_root = runtime_root()
-    instance = WorkspaceInstance(workspace_data_dir())
+    instance = WorkspaceInstance(workspace_data_dir(), machine_wide=getattr(sys, 'frozen', False))
     restart = None
+    safe_to_release = True
     try:
         if not instance.start(project_path):
             return 0
         app = _create_application()
         window = MainWindow(demo=False)
+        safe_to_release = False
         controller = WorkspaceController(window, source_root, start_configured_gateway=True)
+        controller.closing_changed.connect(lambda closing: instance.closing_requested.set()
+                                           if closing else instance.closing_requested.clear())
         source_arguments = tuple(sys.argv[1:])
         source_cwd = Path.cwd()
         if project_path:
@@ -100,8 +104,11 @@ def run_workspace(project_path=None):
                     break
                 if request['project']:
                     controller.open_project(request['project'])
-                window.showNormal()
+                if window.isMinimized():
+                    window.showNormal()
                 window.raise_()
+                window.activateWindow()
+                controller.adapter.record_workspace_activation(bool(request['project']))
         controller.timer.timeout.connect(forwarded)
         available = app.primaryScreen().availableGeometry()
         window.resize(min(1600, int(available.width() * .94)), min(900, int(available.height() * .92)))
@@ -109,10 +116,15 @@ def run_workspace(project_path=None):
         result = app.exec()
         if not controller.adapter.wait_closed(5):
             raise RuntimeError('项目文件操作尚未结束，不能确认工作区已安全退出')
+        safe_to_release = True
         if controller.feishu_repair.restart_requested:
             restart = (source_arguments, source_cwd)
+        controller.dispose_closed_window()
     finally:
-        instance.close()
+        if safe_to_release:
+            instance.close()
+        else:
+            instance.close(release=False)
     if restart is not None:
         from src.core.source_restart import launch_restart_helper, report_restart_failure
         try:

@@ -2,6 +2,7 @@
 from concurrent.futures import Future, ThreadPoolExecutor
 import threading
 from dataclasses import dataclass
+from datetime import datetime
 import json
 import queue
 import re
@@ -76,6 +77,62 @@ def _display_model(model, redactor):
     return model
 
 
+def _saved_context_text(snapshot):
+    """Display only the already persisted historical usage, never current configuration."""
+    unknown = '当前无可核对的模型请求；已保存历史用量未知'
+    if not isinstance(snapshot, dict):
+        return unknown
+    basis, source, state = (snapshot.get(key) for key in ('basis', 'source', 'state'))
+    incoming, outgoing, total = (snapshot.get(key) for key in ('input_tokens', 'output_tokens', 'total_tokens'))
+    if not all(type(value) is int and value >= 0 for value in (incoming, total)):
+        return unknown
+    if basis == 'reply' and state in ('completed', 'failed', 'cancelled') and source in ('api', 'estimate'):
+        if type(outgoing) is not int or outgoing < 0 or incoming + outgoing != total:
+            return unknown
+        approx = '' if source == 'api' else '约 '
+        numbers = f'输入 {approx}{incoming:,}，输出 {approx}{outgoing:,}，合计 {approx}{total:,} Token'
+        note = ('；保存状态为失败，回复计数与该次状态的对应关系未核实' if state == 'failed' else
+                '；保存状态为取消，回复计数与该次状态的对应关系未核实' if state == 'cancelled' else '')
+    elif (basis == 'input' and source == 'estimate' and state in ('requesting', 'failed', 'cancelled')
+          and outgoing is None and incoming == total):
+        numbers = f'输入约 {incoming:,} Token，完整回复用量未知'
+        note = {'requesting': '；原记录为请求中，结果未核实', 'failed': '；原请求失败',
+                'cancelled': '；原请求取消'}[state]
+    else:
+        return unknown
+    identity = snapshot.get('identity')
+    capacity = identity.get('capacity') if isinstance(identity, dict) else None
+    limit = (f'记录当时上限 {capacity:,} Token' if type(capacity) is int and capacity > 0
+             else '记录当时上限未知')
+    try:
+        when = datetime.fromisoformat(snapshot.get('updated', ''))
+        if when.tzinfo is None:
+            raise ValueError()
+        stamp = when.isoformat(timespec='seconds')
+    except (ValueError, TypeError, OverflowError):
+        stamp = '未知'
+    origin = '接口返回' if source == 'api' else 'UTF-8 字节估算'
+    return (f'已保存历史用量（非当前请求）{note}\n{origin}：{numbers} · {limit}'
+            f'\n记录时间 {stamp}；不代表当前配置或当前请求。')
+
+
+def _saved_empty_cancel_activity(session, latest_message):
+    """Only the actual last ordinary question may recover its saved empty cancellation."""
+    record = session.get('last_empty_reply_cancel')
+    if not isinstance(record, dict) or latest_message is None:
+        return None
+    message_id, role = latest_message
+    reply_id = record.get('reply_id')
+    if (role != 'user' or type(message_id) is not int or message_id <= 0 or
+            type(record.get('user_message_id')) is not int or record['user_message_id'] != message_id or
+            record.get('session_id') != session['id'] or record.get('state') != 'cancelled' or
+            record.get('no_body') is not True or not isinstance(reply_id, str) or
+            not re.fullmatch(r'[0-9a-f]{32}', reply_id)):
+        return None
+    return ChatActivityView(session['id'], 'model_reply', reply_id, 'cancelled',
+                            '历史记录：没有生成可留存正文')
+
+
 class QtLocalConversation(AiConversationService):
     def __init__(self, diagnostic, execution):
         self.execution = execution
@@ -120,7 +177,7 @@ class QtLocalConversation(AiConversationService):
                 limit = f'上限 {capacity:,} Token，占比 {approx}{tenths // 10}.{tenths % 10}%'
             else:
                 limit = '上限未知'
-            self.reply_display[identifier] = (stop, f'本轮最近一次答复请求模型：{model} · 服务端实际型号：未确认\n{source}：{numbers} · {limit}')
+            self.reply_display[identifier] = (stop, f'答复请求模型：{model} · 服务端实际型号：未确认\n{source}：{numbers} · {limit}')
 
     def local_display(self, identifier, text):
         with self.lock:
@@ -141,6 +198,32 @@ class QtLocalConversation(AiConversationService):
             if draft and draft['reply_id'] and not draft['text']:
                 self.aborted_reply_display[identifier] = ChatActivityView(
                     identifier, 'model_reply', draft['reply_id'], state, '没有生成可留存正文')
+                if state == 'cancelled':
+                    self._save_empty_reply_cancel(identifier, draft['reply_id'])
+
+    def _save_empty_reply_cancel(self, identifier, reply_id):
+        # A session-only display receipt, never a chat message or model history.
+        try:
+            with self.store.lock, self.store.db:
+                session = self.store.chat(identifier)
+                if self.local_mode(session) != 'general':
+                    return
+                last = self.store.db.execute(
+                    """SELECT id, json_extract(payload,'$.role') FROM chat_messages WHERE session_id=? AND
+                       CASE WHEN json_valid(payload) THEN json_extract(payload,'$.role')!='system' ELSE 0 END
+                       ORDER BY id DESC LIMIT 1""", (identifier,)).fetchone()
+                if last is None or last[1] != 'user' or not re.fullmatch(r'[0-9a-f]{32}', reply_id):
+                    return
+                self.store.update_chat(identifier, last_empty_reply_cancel=dict(
+                    session_id=identifier, user_message_id=last[0], reply_id=reply_id,
+                    state='cancelled', no_body=True))
+        except Exception:
+            # The original cancellation still finishes; do not invent a durable receipt.
+            try:
+                self.emit('普通问答取消历史保存失败；仅保留当前会话取消状态。')
+            except Exception:
+                # A secondary presentation/log failure must not interrupt cancellation.
+                pass
 
     def local_mode(self, session):
         return _local_chat_mode(session, self.context.run_id)
@@ -580,7 +663,7 @@ class QtAiChat:
         with self.conversation.lock:
             return self.selected in self.conversation.running or self.selected in self.conversation.executors
 
-    def _context_text(self):
+    def _context_text(self, session=None, running=False):
         if self.cursor is not None:
             return ''
         with self.conversation.lock:
@@ -589,8 +672,15 @@ class QtAiChat:
             receipt = self.conversation.reply_display.get(self.selected)
             active = self.conversation.running.get(self.selected)
             if receipt and (active is None or active is receipt[0]):
-                return receipt[1]
-        return '本轮暂无可核对的模型请求与用量'
+                if receipt[0] is None:
+                    return receipt[1]
+                heading = ('当前答复请求记录' if active is receipt[0] else
+                           '此会话上次答复请求记录（非当前请求）')
+                return heading + '\n' + receipt[1]
+            if active is not None or running:
+                return '本轮暂无可核对的模型请求与用量'
+        return _saved_context_text(session.get('context_usage') if isinstance(session, dict)
+                                   and session.get('id') == self.selected else None)
 
     @staticmethod
     def _message_view(message, mode, receipt=None):
@@ -680,14 +770,26 @@ class QtAiChat:
             if sid == self.selected:
                 local.setdefault(anchor, []).extend(pair)
         items = list(local.get(0, ())) if len(messages) <= CHAT_PAGE else []
+        latest_message = None
         for row_id, payload, state, supplement_id, request_id in reversed(messages[:CHAT_PAGE]):
-            items.append(self._message_view(json.loads(payload), mode, (state, supplement_id, request_id)))
+            item = self._message_view(json.loads(payload), mode, (state, supplement_id, request_id))
+            items.append(item)
+            if item.role != 'system':
+                latest_message = (row_id, item.role)
             items.extend(local.get(row_id, ()))
         page = tuple(items)
         latest_status = self._message_view(json.loads(status[0]), mode) if status else None
         if self.cursor is None and self.selected in self._route_errors:
             text, reason = self._route_errors[self.selected]
-            latest_status = ChatMessageView('system', '目标识别失败：' + reason, '', 'error')
+            detail = '目标识别失败：' + reason
+            if reason == '当前会话与识别目标不一致或目标已变化，请明确切换目标':
+                # This is only the selected conversation's existing display
+                # label, not a newly validated or inferred device identity.
+                row = next((row for row in view_rows if row.identifier == self.selected), None)
+                if row is not None and row.target:
+                    detail = f'目标识别失败（当前所选会话：{row.target}）：{reason}'
+                detail += '\n本条未通过目标核对，未自动切换会话。'
+            latest_status = ChatMessageView('system', detail, '', 'error')
             page += (ChatMessageView('user', self.diagnostic.redactor.text(text), '', 'text'), latest_status)
         if self._intent is not None and self._intent.origin == self.selected and self.cursor is None:
             page += (ChatMessageView('user', self.diagnostic.redactor.text(self._intent.text), '', 'text'),)
@@ -700,10 +802,12 @@ class QtAiChat:
         next_page = messages[CHAT_PAGE - 1][0] if len(messages) > CHAT_PAGE else None
         activity = None
         if mode == 'general' and self.cursor is None and self.selected not in self._route_errors:
+            if aborted is None and not running:
+                aborted = _saved_empty_cancel_activity(selected, latest_message)
             activity = self._ordinary_activity(selected, draft, stopping,
                 self._intent is not None and self._intent.origin == self.selected, running, page, aborted)
         self._last_view = ChatWorkspaceView(view_rows, self.selected, page, draft['text'] if draft else '',
-            self._context_text(), running, bool(mode), next_page, history_analysis=mode in ('report', 'archived') or (mode == 'channel' and not passive and not self.conversation.collection_status(self.selected)['enabled']),
+            self._context_text(selected, running), running, bool(mode), next_page, history_analysis=mode in ('report', 'archived') or (mode == 'channel' and not passive and not self.conversation.collection_status(self.selected)['enabled']),
             deleted=deleted, latest_status=latest_status, pc_diagnosis=(mode == 'pc'), passive_serial=passive,
             routing=self._intent is not None, retry_input=self._route_errors.get(self.selected, ('', ''))[0],
             monitor_status=self.diagnostic.monitor_status(), ordinary_chat=mode == 'general', snapshot_generation=generation, activity=activity)

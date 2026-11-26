@@ -90,6 +90,8 @@ class WorkspaceEventLogTests(unittest.TestCase):
             closer = threading.Thread(target=lambda: (writer.close(), closed.set()))
             closer.start()
             self.assertFalse(closed.wait(.05))
+            self.assertFalse(writer.release_closed_callbacks())
+            self.assertTrue(callable(writer.report))
             release.set()
             closer.join(3)
             self.assertTrue(closed.is_set())
@@ -100,6 +102,19 @@ class WorkspaceEventLogTests(unittest.TestCase):
         self.assertEqual(sum(report[3] for report in self.reports), 1)
         self.assertFalse(writer.offer(self.entry('late')))
         self.assertEqual(writer.pending_snapshot(), (0, 0.))
+        self.assertIsNone(writer.report)
+        self.assertTrue(writer.release_closed_callbacks())
+        writer.close()
+
+    def test_unconfirmed_final_archive_does_not_release_callback_ownership(self):
+        writer = self.writer()
+        with patch.object(writer, '_write_text', side_effect=OSError('synthetic write failure')), \
+                patch('src.services.workspace_event_log._write_events', side_effect=OSError('synthetic archive failure')):
+            self.assertTrue(writer.offer(self.entry('final')))
+            writer.close()
+        self.assertFalse(writer.release_closed_callbacks())
+        self.assertTrue(callable(writer.report))
+        self.assertTrue(self.reports[-1][1])
 
     def test_one_sink_failure_preserves_original_and_two_sink_failure_reports_on_recovery(self):
         writer = self.writer()

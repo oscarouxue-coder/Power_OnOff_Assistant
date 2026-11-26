@@ -1,0 +1,1622 @@
+[
+  {
+    "cycle": "test_cycle_001",
+    "elapsed_seconds": 4.016,
+    "verified": true,
+    "before": {
+      "rss_bytes": 324558848,
+      "process_handles": 211,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 323641344,
+      "process_handles": 751,
+      "python_threads": 1
+    },
+    "qt_ticks": 210,
+    "pending_ticks": 56,
+    "max_timer_gap_ms": 203.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_002",
+    "elapsed_seconds": 3.031,
+    "verified": true,
+    "before": {
+      "rss_bytes": 323645440,
+      "process_handles": 751,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 325804032,
+      "process_handles": 775,
+      "python_threads": 1
+    },
+    "qt_ticks": 167,
+    "pending_ticks": 46,
+    "max_timer_gap_ms": 188.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_003",
+    "elapsed_seconds": 3.984,
+    "verified": true,
+    "before": {
+      "rss_bytes": 325804032,
+      "process_handles": 775,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 325648384,
+      "process_handles": 801,
+      "python_threads": 1
+    },
+    "qt_ticks": 183,
+    "pending_ticks": 42,
+    "max_timer_gap_ms": 219.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_004",
+    "elapsed_seconds": 4.063,
+    "verified": true,
+    "before": {
+      "rss_bytes": 325648384,
+      "process_handles": 801,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 326037504,
+      "process_handles": 827,
+      "python_threads": 1
+    },
+    "qt_ticks": 195,
+    "pending_ticks": 43,
+    "max_timer_gap_ms": 219.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_005",
+    "elapsed_seconds": 4.047,
+    "verified": true,
+    "before": {
+      "rss_bytes": 326037504,
+      "process_handles": 827,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 327094272,
+      "process_handles": 853,
+      "python_threads": 1
+    },
+    "qt_ticks": 192,
+    "pending_ticks": 47,
+    "max_timer_gap_ms": 94.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_006",
+    "elapsed_seconds": 3.843,
+    "verified": true,
+    "before": {
+      "rss_bytes": 327094272,
+      "process_handles": 853,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 327262208,
+      "process_handles": 879,
+      "python_threads": 1
+    },
+    "qt_ticks": 193,
+    "pending_ticks": 44,
+    "max_timer_gap_ms": 78.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_007",
+    "elapsed_seconds": 3.938,
+    "verified": true,
+    "before": {
+      "rss_bytes": 327274496,
+      "process_handles": 879,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 328044544,
+      "process_handles": 905,
+      "python_threads": 1
+    },
+    "qt_ticks": 174,
+    "pending_ticks": 45,
+    "max_timer_gap_ms": 203.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_008",
+    "elapsed_seconds": 3.953,
+    "verified": true,
+    "before": {
+      "rss_bytes": 328044544,
+      "process_handles": 905,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 328900608,
+      "process_handles": 931,
+      "python_threads": 1
+    },
+    "qt_ticks": 184,
+    "pending_ticks": 44,
+    "max_timer_gap_ms": 203.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_009",
+    "elapsed_seconds": 4.031,
+    "verified": true,
+    "before": {
+      "rss_bytes": 328929280,
+      "process_handles": 931,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 329302016,
+      "process_handles": 957,
+      "python_threads": 1
+    },
+    "qt_ticks": 200,
+    "pending_ticks": 55,
+    "max_timer_gap_ms": 94.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_010",
+    "elapsed_seconds": 4.016,
+    "verified": true,
+    "before": {
+      "rss_bytes": 329318400,
+      "process_handles": 957,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 330260480,
+      "process_handles": 983,
+      "python_threads": 1
+    },
+    "qt_ticks": 199,
+    "pending_ticks": 46,
+    "max_timer_gap_ms": 109.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_011",
+    "elapsed_seconds": 4.062,
+    "verified": true,
+    "before": {
+      "rss_bytes": 330268672,
+      "process_handles": 983,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 331190272,
+      "process_handles": 1009,
+      "python_threads": 1
+    },
+    "qt_ticks": 191,
+    "pending_ticks": 43,
+    "max_timer_gap_ms": 219.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_012",
+    "elapsed_seconds": 4.0,
+    "verified": true,
+    "before": {
+      "rss_bytes": 331198464,
+      "process_handles": 1009,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 331329536,
+      "process_handles": 1035,
+      "python_threads": 1
+    },
+    "qt_ticks": 201,
+    "pending_ticks": 56,
+    "max_timer_gap_ms": 94.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_013",
+    "elapsed_seconds": 3.891,
+    "verified": true,
+    "before": {
+      "rss_bytes": 331366400,
+      "process_handles": 1035,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 331587584,
+      "process_handles": 1058,
+      "python_threads": 1
+    },
+    "qt_ticks": 196,
+    "pending_ticks": 45,
+    "max_timer_gap_ms": 94.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_014",
+    "elapsed_seconds": 4.047,
+    "verified": true,
+    "before": {
+      "rss_bytes": 331624448,
+      "process_handles": 1058,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 332025856,
+      "process_handles": 1084,
+      "python_threads": 1
+    },
+    "qt_ticks": 176,
+    "pending_ticks": 44,
+    "max_timer_gap_ms": 250.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_015",
+    "elapsed_seconds": 4.25,
+    "verified": true,
+    "before": {
+      "rss_bytes": 332058624,
+      "process_handles": 1084,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 332656640,
+      "process_handles": 1110,
+      "python_threads": 1
+    },
+    "qt_ticks": 210,
+    "pending_ticks": 47,
+    "max_timer_gap_ms": 156.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_016",
+    "elapsed_seconds": 3.75,
+    "verified": true,
+    "before": {
+      "rss_bytes": 332705792,
+      "process_handles": 1110,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 332988416,
+      "process_handles": 1136,
+      "python_threads": 1
+    },
+    "qt_ticks": 186,
+    "pending_ticks": 57,
+    "max_timer_gap_ms": 78.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_017",
+    "elapsed_seconds": 3.984,
+    "verified": true,
+    "before": {
+      "rss_bytes": 333045760,
+      "process_handles": 1136,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 333660160,
+      "process_handles": 1162,
+      "python_threads": 1
+    },
+    "qt_ticks": 191,
+    "pending_ticks": 55,
+    "max_timer_gap_ms": 78.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_018",
+    "elapsed_seconds": 3.735,
+    "verified": true,
+    "before": {
+      "rss_bytes": 333717504,
+      "process_handles": 1162,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 334163968,
+      "process_handles": 1188,
+      "python_threads": 1
+    },
+    "qt_ticks": 175,
+    "pending_ticks": 45,
+    "max_timer_gap_ms": 109.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_019",
+    "elapsed_seconds": 4.078,
+    "verified": true,
+    "before": {
+      "rss_bytes": 334229504,
+      "process_handles": 1188,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 338362368,
+      "process_handles": 1214,
+      "python_threads": 1
+    },
+    "qt_ticks": 212,
+    "pending_ticks": 54,
+    "max_timer_gap_ms": 78.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_020",
+    "elapsed_seconds": 4.172,
+    "verified": true,
+    "before": {
+      "rss_bytes": 338362368,
+      "process_handles": 1214,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 335560704,
+      "process_handles": 1240,
+      "python_threads": 1
+    },
+    "qt_ticks": 195,
+    "pending_ticks": 45,
+    "max_timer_gap_ms": 109.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_021",
+    "elapsed_seconds": 4.0,
+    "verified": true,
+    "before": {
+      "rss_bytes": 335659008,
+      "process_handles": 1240,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 339595264,
+      "process_handles": 1266,
+      "python_threads": 1
+    },
+    "qt_ticks": 195,
+    "pending_ticks": 56,
+    "max_timer_gap_ms": 94.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_022",
+    "elapsed_seconds": 3.766,
+    "verified": true,
+    "before": {
+      "rss_bytes": 339599360,
+      "process_handles": 1266,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 336969728,
+      "process_handles": 1292,
+      "python_threads": 1
+    },
+    "qt_ticks": 171,
+    "pending_ticks": 44,
+    "max_timer_gap_ms": 94.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_023",
+    "elapsed_seconds": 4.109,
+    "verified": true,
+    "before": {
+      "rss_bytes": 337104896,
+      "process_handles": 1292,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 337313792,
+      "process_handles": 1318,
+      "python_threads": 1
+    },
+    "qt_ticks": 211,
+    "pending_ticks": 47,
+    "max_timer_gap_ms": 78.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_024",
+    "elapsed_seconds": 4.422,
+    "verified": true,
+    "before": {
+      "rss_bytes": 337436672,
+      "process_handles": 1318,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 341377024,
+      "process_handles": 1344,
+      "python_threads": 1
+    },
+    "qt_ticks": 211,
+    "pending_ticks": 45,
+    "max_timer_gap_ms": 265.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_025",
+    "elapsed_seconds": 3.797,
+    "verified": true,
+    "before": {
+      "rss_bytes": 341377024,
+      "process_handles": 1344,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 341753856,
+      "process_handles": 1370,
+      "python_threads": 1
+    },
+    "qt_ticks": 185,
+    "pending_ticks": 45,
+    "max_timer_gap_ms": 93.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_026",
+    "elapsed_seconds": 4.016,
+    "verified": true,
+    "before": {
+      "rss_bytes": 341753856,
+      "process_handles": 1370,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 342441984,
+      "process_handles": 1396,
+      "python_threads": 1
+    },
+    "qt_ticks": 201,
+    "pending_ticks": 55,
+    "max_timer_gap_ms": 109.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_027",
+    "elapsed_seconds": 4.125,
+    "verified": true,
+    "before": {
+      "rss_bytes": 342441984,
+      "process_handles": 1396,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 339611648,
+      "process_handles": 1422,
+      "python_threads": 1
+    },
+    "qt_ticks": 199,
+    "pending_ticks": 41,
+    "max_timer_gap_ms": 94.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_028",
+    "elapsed_seconds": 4.078,
+    "verified": true,
+    "before": {
+      "rss_bytes": 339734528,
+      "process_handles": 1422,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 343470080,
+      "process_handles": 1448,
+      "python_threads": 1
+    },
+    "qt_ticks": 182,
+    "pending_ticks": 46,
+    "max_timer_gap_ms": 234.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_029",
+    "elapsed_seconds": 4.422,
+    "verified": true,
+    "before": {
+      "rss_bytes": 343470080,
+      "process_handles": 1448,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 344670208,
+      "process_handles": 1474,
+      "python_threads": 1
+    },
+    "qt_ticks": 213,
+    "pending_ticks": 54,
+    "max_timer_gap_ms": 218.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  },
+  {
+    "cycle": "test_cycle_030",
+    "elapsed_seconds": 3.61,
+    "verified": true,
+    "before": {
+      "rss_bytes": 344670208,
+      "process_handles": 1474,
+      "python_threads": 1
+    },
+    "after": {
+      "rss_bytes": 341565440,
+      "process_handles": 1500,
+      "python_threads": 1
+    },
+    "qt_ticks": 163,
+    "pending_ticks": 45,
+    "max_timer_gap_ms": 93.0,
+    "callback_errors": [],
+    "displayed_reports": [
+      {
+        "request_id": 8,
+        "selected": 3,
+        "completed": 3,
+        "failed": 0,
+        "cancelled": 0
+      },
+      {
+        "request_id": 9,
+        "selected": 3,
+        "completed": 1,
+        "failed": 0,
+        "cancelled": 2
+      },
+      {
+        "request_id": 19,
+        "selected": 2,
+        "completed": 2,
+        "failed": 0,
+        "cancelled": 0
+      }
+    ],
+    "invalidated_requests": 3,
+    "service_overlap_cancel": {
+      "channels_cancelled": 3,
+      "peak": 2,
+      "workers": 2,
+      "active": 0,
+      "opened": 2,
+      "closed": 2,
+      "all_closed": true
+    },
+    "history_worker_closed": true,
+    "remaining_material_workers": []
+  }
+]

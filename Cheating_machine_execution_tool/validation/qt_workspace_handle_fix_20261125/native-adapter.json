@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "managed_windows": 1,
+  "violations": [],
+  "isolation": "private_desktop",
+  "desktop": "DUTPilot_render_472d7fcc73764d9f897d57cc1ed900ee",
+  "framework": "qt",
+  "platform": "windows",
+  "qt": {
+    "passed": true,
+    "managed_windows": 1,
+    "violations": [],
+    "isolation": "private_desktop",
+    "desktop": "DUTPilot_render_472d7fcc73764d9f897d57cc1ed900ee",
+    "framework": "qt",
+    "platform": "windows"
+  }
+}

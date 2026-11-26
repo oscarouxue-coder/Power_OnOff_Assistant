@@ -1,0 +1,9 @@
+ 时间未知 · 原文记录 Ping 通；不代表实时连通或设备在线\n\nWiFi 记录 · 缺少已列出的留存文件\n\n汇总结果：读取 1 份，缺失 1 份，无法读取 0 份。\n以上仅为留存记录；故障原因及当前设备状态未知。", "record_sha256": "cbe337afedb4693a1a1771a1136cabace92fe5971f91df78b6ba67c16f23f857", "source_sha256": "47fd8ce2e452d18ac475c4f3774116272674dc7cfaf0491592fa64d3062ccfb5", "source_relative": "runs\\4b31aa068b10471c91d3754766e90e85\\Auto_power_on_off_tool\\test_results\\device_7\\device_7_command_results_20261120221001.log", "source_rereads": 0, "closed_normally": true, "mode": "writer", "result_code": 0, "denied_calls": {"requests.sessions.Session.request": 0, "serial.Serial": 0, "socket.create_connection": 0, "socket.getaddrinfo": 0, "socket.gethostbyname": 0, "socket.gethostbyname_ex": 0, "socket.gethostbyaddr": 0, "socket.socket.connect": 0, "socket.socket.connect_ex": 0, "socket.socket.send": 0, "socket.socket.sendall": 0, "socket.socket.sendto": 0, "socket.socket.bind": 0, "socket.socket.listen": 0, "socket.socket.accept": 0, "subprocess.Popen": 0, "os.startfile": 0}}
+
+test_writer (__main__.run.<locals>.RemainingCase) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 2.341s
+
+OK
+

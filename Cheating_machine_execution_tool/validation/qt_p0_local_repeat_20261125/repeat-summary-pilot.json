@@ -1,0 +1,61 @@
+{
+  "cycles_requested": 1,
+  "cycles_recorded": 1,
+  "elapsed_seconds": 15.984,
+  "result_code": 0,
+  "baseline_memory": {
+    "rss_bytes": 41926656,
+    "process_handles": 196,
+    "python_threads": 1
+  },
+  "final_memory": {
+    "rss_bytes": 419352576,
+    "process_handles": 751,
+    "python_threads": 1
+  },
+  "changed_source_files": [],
+  "source_hashes_before": {
+    "src/services/qt_power_logs.py": "e4e31a0aa11bef4b33fe1fb9dafcbd9b69f73df73dca86114eec759340f47cec",
+    "src/services/qt_archived_logs.py": "08ec9b450a55cbd188796df06231d5e2b7487186570ab106398299236a736d72",
+    "src/services/qt_log_history.py": "aaf66925c42a189f65f58156684fff9ae47ea64cc0edc4f97041072df7f4192f",
+    "src/services/qt_workspace_adapter.py": "d225b16b749bf918e21a3f114608563eeb0f503462c25a63210c8497827e5a70",
+    "src/ui/qt/log_history_dialog.py": "c7492873b6fd6a0fecfde2f5d142fd5c9f7cb8fd1b6e8dbec49ef47abb227e39",
+    "src/models/qt_log_history.py": "6c3465037bb2c59281653b14cd20c632cc230ea0246c7b724c5dc29887fcba77",
+    "tests/test_qt_log_history.py": "0730f83bc6eba2155ab9b34910935c58daba930b1d7802f8379497e65272737c",
+    "tests/qt_workbench_probe.py": "eaf3d568e9ef7d6f05dba4d4d20418dd2386c492c69d27783e6328e0a3a3ff19",
+    "scripts/run_tests.py": "388b7b3cc5b2c5c75bebc8f9cce57430ca907cd4904e4c72b3bd552fd6e91810",
+    "scripts/run_gui_child.py": "f97020c0362b2d82c5ee928cbfd06aca01429ab4ad0a43b2c9572aa87e7fbca2"
+  },
+  "source_hashes_after": {
+    "src/services/qt_power_logs.py": "e4e31a0aa11bef4b33fe1fb9dafcbd9b69f73df73dca86114eec759340f47cec",
+    "src/services/qt_archived_logs.py": "08ec9b450a55cbd188796df06231d5e2b7487186570ab106398299236a736d72",
+    "src/services/qt_log_history.py": "aaf66925c42a189f65f58156684fff9ae47ea64cc0edc4f97041072df7f4192f",
+    "src/services/qt_workspace_adapter.py": "d225b16b749bf918e21a3f114608563eeb0f503462c25a63210c8497827e5a70",
+    "src/ui/qt/log_history_dialog.py": "c7492873b6fd6a0fecfde2f5d142fd5c9f7cb8fd1b6e8dbec49ef47abb227e39",
+    "src/models/qt_log_history.py": "6c3465037bb2c59281653b14cd20c632cc230ea0246c7b724c5dc29887fcba77",
+    "tests/test_qt_log_history.py": "0730f83bc6eba2155ab9b34910935c58daba930b1d7802f8379497e65272737c",
+    "tests/qt_workbench_probe.py": "eaf3d568e9ef7d6f05dba4d4d20418dd2386c492c69d27783e6328e0a3a3ff19",
+    "scripts/run_tests.py": "388b7b3cc5b2c5c75bebc8f9cce57430ca907cd4904e4c72b3bd552fd6e91810",
+    "scripts/run_gui_child.py": "f97020c0362b2d82c5ee928cbfd06aca01429ab4ad0a43b2c9572aa87e7fbca2"
+  },
+  "denied_call_counts": {
+    "requests.sessions.Session.request": 0,
+    "serial.Serial": 0,
+    "socket.create_connection": 0,
+    "socket.getaddrinfo": 0,
+    "socket.gethostbyname": 0,
+    "socket.gethostbyname_ex": 0,
+    "socket.gethostbyaddr": 0,
+    "socket.socket.connect": 0,
+    "socket.socket.connect_ex": 0,
+    "socket.socket.send": 0,
+    "socket.socket.sendall": 0,
+    "socket.socket.sendto": 0,
+    "socket.socket.bind": 0,
+    "socket.socket.listen": 0,
+    "socket.socket.accept": 0,
+    "subprocess.Popen": 0,
+    "os.startfile": 0
+  },
+  "metrics": "cycle-metrics-pilot.json"
+}
